@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/transfer/verify/tsk_ab12cd34ef56gh78ij90kl12mn34op56"},
+ "response":{"status":200,"body":{"status":true,"message":"Transfer retrieved","data":{"reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","amount":100000,"currency":"NGN","status":"success","transfer_code":"TRF_v5tip3zx8nna9o78"}}}}

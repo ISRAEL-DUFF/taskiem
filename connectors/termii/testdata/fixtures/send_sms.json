@@ -1,0 +1,3 @@
+{"request":{"method":"POST","path":"/api/sms/send",
+  "body":{"api_key":"TLtest","to":"2348012345678","from":"Taskiem","sms":"Payroll PR-10 paid","type":"plain","channel":"dnd"}},
+ "response":{"status":200,"body":{"message_id":"9122821270554876574","message":"Successfully Sent","balance":9,"user":"Peter Mcleish"}}}

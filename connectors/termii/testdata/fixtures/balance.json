@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/api/get-balance","query":{"api_key":"TLtest"}},
+ "response":{"status":200,"body":{"user":"Taskiem","balance":1200.5,"currency":"NGN"}}}

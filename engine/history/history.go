@@ -85,6 +85,7 @@ type ScheduledPayload struct {
 	Kind        string `json:"kind"`
 	Queue       string `json:"queue,omitempty"`
 	Connector   string `json:"connector,omitempty"`
+	Connection  string `json:"connection,omitempty"`
 	Action      string `json:"action,omitempty"`
 	Input       any    `json:"input,omitempty"`
 	Seed        string `json:"seed,omitempty"`     // idempotency seed; empty means the run id

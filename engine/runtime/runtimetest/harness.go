@@ -3,6 +3,7 @@ package runtimetest
 import (
 	"context"
 	"crypto/sha256"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -12,7 +13,9 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
+	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -24,6 +27,10 @@ type Env struct {
 	Provider *Provider
 	Tenant   uuid.UUID
 	Secrets  runtime.MapSecrets
+	Vault    *secrets.Vault
+	// Egress allows loopback so tests can reach httptest servers; every
+	// other non-public address is still refused.
+	Egress *egress.Guard
 }
 
 // New creates an engine environment; it skips without a test database.
@@ -36,7 +43,13 @@ func New(t testing.TB) *Env {
 		t.Fatal(err)
 	}
 	tn := d.SeedTenant(t, nil)
-	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg}, Registry: reg, Provider: prov, Tenant: tn.ID, Secrets: runtime.MapSecrets{}}
+	kms, err := secrets.NewLocalKMS(map[string][]byte{"root": make([]byte, 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard := &egress.Guard{Blocked: func(a netip.Addr) bool { return !a.IsLoopback() && egress.BlockedAddr(a) }}
+	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg}, Registry: reg, Provider: prov, Tenant: tn.ID,
+		Secrets: runtime.MapSecrets{}, Vault: &secrets.Vault{Pool: d.App, KMS: kms, RootKey: "root"}, Egress: guard}
 }
 
 // Publish stores a published workflow version and returns its workflow id.
@@ -77,8 +90,8 @@ func (e *Env) Start(t testing.TB, wf uuid.UUID, trigger any) runtime.RunRef {
 
 // Worker returns a worker for the connector queue.
 func (e *Env) Worker(id string) *runtime.Worker {
-	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: e.Secrets, ID: id, Queue: "connector",
-		Lease: 30 * time.Second, CallTimeout: 200 * time.Millisecond}
+	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: e.Secrets, Connections: e.Vault, Egress: e.Egress,
+		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: 200 * time.Millisecond}
 }
 
 // Scheduler returns a scheduler.

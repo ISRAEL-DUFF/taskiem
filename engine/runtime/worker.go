@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
 )
@@ -42,6 +44,11 @@ func (m MapSecrets) Get(_ context.Context, _ uuid.UUID, _ string, name string) (
 	return v, nil
 }
 
+// Connections resolves connector credentials for a tenant and environment.
+type Connections interface {
+	Credentials(ctx context.Context, tenant uuid.UUID, environment, connector, name string) (map[string]string, error)
+}
+
 // Hooks inject faults for the crash-recovery suite. A hook returning an
 // error makes the worker abandon the task at that point, as if the process
 // died: nothing more is written and the lease is left to expire.
@@ -52,10 +59,13 @@ type Hooks struct {
 
 // Worker claims tasks from one queue and executes them.
 type Worker struct {
-	Store       *Store
-	Registry    *connector.Registry
-	Secrets     Secrets
-	HTTP        *http.Client
+	Store    *Store
+	Registry *connector.Registry
+	Secrets  Secrets
+	// Egress guards every outbound connection (spec 14.2).
+	Egress *egress.Guard
+	// Connections supplies connector credentials; secrets.Vault implements it.
+	Connections Connections
 	ID          string
 	Queue       string
 	Concurrency int
@@ -82,8 +92,8 @@ func (w *Worker) defaults() {
 	if w.CallTimeout <= 0 {
 		w.CallTimeout = 30 * time.Second
 	}
-	if w.HTTP == nil {
-		w.HTTP = &http.Client{Timeout: 30 * time.Second}
+	if w.Egress == nil {
+		w.Egress = &egress.Guard{Logger: w.Logger}
 	}
 	if w.Logger == nil {
 		w.Logger = slog.Default()
@@ -571,7 +581,11 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	}
 	rctx, cancel := context.WithTimeout(ctx, w.CallTimeout)
 	defer cancel()
-	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: w.HTTP})
+	hc, err := w.client(ctx, p, w.CallTimeout)
+	if err != nil {
+		return history.Event{}, err
+	}
+	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
@@ -627,8 +641,16 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		if err != nil {
 			return failed(p.c, "fatal", err.Error(), "fail")
 		}
+		hc, err := w.client(ctx, p, w.CallTimeout)
+		if err != nil {
+			return failed(p.c, "fatal", err.Error(), "fail")
+		}
+		dial, err := w.dialer(ctx, p, creds)
+		if err != nil {
+			return failed(p.c, "fatal", err.Error(), "fail")
+		}
 		var resp connector.Response
-		resp, err = p.conn.Actions[p.action].Execute(ctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: w.HTTP})
+		resp, err = p.conn.Actions[p.action].Execute(ctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
 		if err != nil {
 			return w.classify(p, err)
 		}
@@ -687,24 +709,81 @@ func collectSecrets(v any, into map[string]bool) {
 	}
 }
 
-// credentials loads a connection's credential fields as secrets named
-// "<connector>.<connection>.<field>".
+// credentials loads the step's connection credentials and checks the
+// manifest's required fields are present.
 func (w *Worker) credentials(ctx context.Context, p *plan) (map[string]string, error) {
-	out := map[string]string{}
-	if p.conn == nil {
-		return out, nil
+	if p.conn == nil || p.conn.Manifest.Auth.Type == "none" {
+		return map[string]string{}, nil
+	}
+	if w.Connections == nil {
+		return nil, fmt.Errorf("no connection store configured")
+	}
+	creds, err := w.Connections.Credentials(ctx, p.c.tenant, p.env, p.conn.Manifest.ID, p.sched.Connection)
+	if err != nil {
+		return nil, err
 	}
 	for _, f := range p.conn.Manifest.Auth.Fields {
-		v, err := w.Secrets.Get(ctx, p.c.tenant, p.env, p.conn.Manifest.ID+".default."+f.Key)
-		if err != nil {
-			if f.Required != nil && !*f.Required {
-				continue
+		if creds[f.Key] == "" && (f.Required == nil || *f.Required) {
+			return nil, fmt.Errorf("connection is missing %q", f.Key)
+		}
+	}
+	return creds, nil
+}
+
+// connectionHost in a manifest's egress_hosts stands for the host the
+// tenant configured on the connection (databases, SFTP servers).
+const connectionHost = "${connection.host}"
+
+// policy is the egress policy for this task: a connector may reach only its
+// manifest's hosts; an http step or sandbox fetch only the tenant's
+// allow-list for the environment.
+func (w *Worker) policy(ctx context.Context, p *plan, creds map[string]string) (egress.Policy, error) {
+	pol := egress.Policy{Tenant: p.c.tenant.String()}
+	if p.conn != nil {
+		pol.Purpose = "connector:" + p.conn.Manifest.ID
+		for _, h := range p.conn.Manifest.Hosts() {
+			if h == connectionHost {
+				h = creds["host"]
 			}
+			if h != "" {
+				pol.Hosts = append(pol.Hosts, h)
+			}
+		}
+		return pol, nil
+	}
+	hosts, err := w.Store.EgressHosts(ctx, p.c.tenant, p.env)
+	if err != nil {
+		return pol, err
+	}
+	pol.Hosts, pol.Purpose = hosts, p.stepType+"_step"
+	return pol, nil
+}
+
+// client returns an egress-guarded HTTP client for this task.
+func (w *Worker) client(ctx context.Context, p *plan, timeout time.Duration) (*http.Client, error) {
+	creds := map[string]string{}
+	if p.conn != nil {
+		var err error
+		if creds, err = w.credentials(ctx, p); err != nil {
 			return nil, err
 		}
-		out[f.Key] = v
 	}
-	return out, nil
+	pol, err := w.policy(ctx, p, creds)
+	if err != nil {
+		return nil, err
+	}
+	return w.Egress.Client(pol, timeout), nil
+}
+
+// dialer returns an egress-guarded dial function for this task.
+func (w *Worker) dialer(ctx context.Context, p *plan, creds map[string]string) (func(context.Context, string, string) (net.Conn, error), error) {
+	pol, err := w.policy(ctx, p, creds)
+	if err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return w.Egress.DialContext(ctx, pol, network, addr)
+	}, nil
 }
 
 // heartbeat extends the lease while the task runs and cancels the task's

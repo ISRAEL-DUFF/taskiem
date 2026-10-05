@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -19,6 +20,9 @@ type Request struct {
 	Attempt        int
 	Logger         *slog.Logger
 	HTTP           *http.Client
+	// Dial opens egress-guarded TCP connections for connectors that do not
+	// speak HTTP (databases, SFTP).
+	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // Response is a handler's result.

@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/transfer"},
+ "response":{"status":400,"body":{"status":false,"message":"Your balance is not enough to fulfil this request"}}}

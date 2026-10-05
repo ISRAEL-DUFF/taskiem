@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/transaction/verify/T685312322670591"},
+ "response":{"status":200,"body":{"status":true,"message":"Verification successful","data":{"reference":"T685312322670591","amount":20000,"currency":"NGN","status":"success","gateway_response":"Successful"}}}}

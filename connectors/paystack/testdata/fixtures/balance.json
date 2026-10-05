@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/balance","headers":{"Authorization":"Bearer sk_test_xyz"}},
+ "response":{"status":200,"body":{"status":true,"message":"Balances retrieved","data":[{"currency":"NGN","balance":5000000}]}}}

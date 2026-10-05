@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/transfer"},
+ "response":{"status":502,"body":{"status":false,"message":"Bad gateway"}}}

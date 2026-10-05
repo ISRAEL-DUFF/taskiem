@@ -49,8 +49,8 @@ type StartRequest struct {
 	Version     int
 	Environment string
 	Trigger     any
-	Env         map[string]any
-	TriggerID   string // with DedupKey, makes starting idempotent (spec 8.2)
+	Env         map[string]any // nil loads the environment's tenant variables
+	TriggerID   string         // with DedupKey, makes starting idempotent (spec 8.2)
 	DedupKey    string
 }
 
@@ -83,6 +83,11 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 		if err := tx.QueryRow(ctx, `INSERT INTO runs (id, tenant_id, workflow_id, version, environment, started_at) VALUES ($1, $2, $3, $4, $5, now()) RETURNING started_at`,
 			ref.ID, req.TenantID, req.WorkflowID, req.Version, req.Environment).Scan(&startedAt); err != nil {
 			return err
+		}
+		if req.Env == nil {
+			if req.Env, err = variables(ctx, tx, req.TenantID, req.Environment); err != nil {
+				return err
+			}
 		}
 		pins := map[string]string{}
 		if s.Registry != nil {

@@ -1,0 +1,46 @@
+manifest: connector/v1
+id: termii
+version: 1.0.0
+name: Termii
+description: SMS and messaging across Africa.
+category: messaging
+regions: [NG, GH, KE, ZA, UG, TZ, RW]
+auth:
+  type: api_key
+  fields:
+    - { key: api_key, label: API key, secret: true }
+    - { key: sender_id, label: Default sender ID, required: false }
+  test: { action: check_balance }
+rate_limit: { requests: 20, per: 1s, scope: connection }
+base_url: https://api.ng.termii.com
+egress_hosts: ["api.ng.termii.com", "*.termii.com"]
+actions:
+  send_sms:
+    title: Send SMS
+    description: Termii has no idempotency key or delivery-status lookup by our reference, so a send whose outcome is unknown is parked, never repeated.
+    class: unsafe_write
+    input:
+      type: object
+      required: [to, sms]
+      properties:
+        to:      { type: string, description: Recipient in international format without +, e.g. 2348012345678 }
+        sms:     { type: string, maxLength: 918 }
+        from:    { type: string, description: Sender ID; defaults to the connection's sender_id }
+        channel: { type: string, enum: [generic, dnd, whatsapp], default: generic }
+    output:
+      type: object
+      properties:
+        message_id: { type: string }
+        message:    { type: string }
+        balance:    { type: number }
+    pii:
+      - { field: to, category: phone }
+  check_balance:
+    title: Check balance
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        balance:  { type: number }
+        currency: { type: string }

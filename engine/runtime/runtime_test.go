@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
@@ -285,5 +288,81 @@ func TestCompensationRunsOnFailure(t *testing.T) {
 	h := events(t, e, ref)
 	if count(h, history.CompensationCompleted, "") != 1 || e.Provider.Executions(ref.ID.String()+":refund") != 1 {
 		t.Errorf("compensation: %s", types(h))
+	}
+}
+
+func TestHTTPStepThroughEgressAllowList(t *testing.T) {
+	e := rt.New(t)
+	var gotKey, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotKey, gotAuth = r.Header.Get("Idempotency-Key"), r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"amount":1500}`))
+	}))
+	defer srv.Close()
+	e.Secrets["api_token"] = "tok_123"
+	if err := e.Store.SetVariable(ctx, e.Tenant, "prod", "partner_url", srv.URL); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"post","type":"http","retry":{"max":0},"config":{"method":"POST","url":"=env.partner_url + '/credit'",
+	  "headers":{"Authorization":"='Bearer ' + secrets.api_token"},"body":{"n":1},"class":"idempotent_write","idempotency_header":"Idempotency-Key"}},
+	  {"id":"out","type":"transform","needs":["post"],"config":{"output":"=steps.post.output.body.amount"}}`, ""))
+
+	// Not on the allow-list: denied, fatal.
+	denied, _, err := e.Store.StartRun(ctx, runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: 1, Environment: "prod", Trigger: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Drain(t)
+	if st := e.Status(t, denied); st != "failed" || gotKey != "" {
+		t.Fatalf("unlisted host should be refused before any request: %s %q", st, gotKey)
+	}
+
+	if err := e.Store.AllowEgress(ctx, e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	ok, _, err := e.Store.StartRun(ctx, runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: 1, Environment: "prod", Trigger: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Drain(t)
+	if st := e.Status(t, ok); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ok)))
+	}
+	if !strings.HasPrefix(gotKey, "tsk_") || gotAuth != "Bearer tok_123" {
+		t.Errorf("headers: key %q auth %q", gotKey, gotAuth)
+	}
+	h := events(t, e, ok)
+	for _, ev := range h {
+		if strings.Contains(string(ev.Payload), "tok_123") {
+			t.Errorf("secret value leaked into %s", ev.Type)
+		}
+	}
+}
+
+func TestConnectorCredentialsFromConnections(t *testing.T) {
+	e := rt.New(t)
+	var seen string
+	conn := e.Provider.Connector()
+	conn.Manifest.ID = "authpay"
+	conn.Manifest.Auth.Type = "api_key"
+	conn.Manifest.Auth.Fields = []connector.AuthField{{Key: "secret_key"}}
+	verify := conn.Actions["verify"]
+	conn.Actions["verify"] = connector.ActionFunc(func(c context.Context, r connector.Request) (connector.Response, error) {
+		seen = r.Credentials["secret_key"]
+		return verify.Execute(c, r)
+	})
+	if err := e.Registry.Register(conn); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "authpay", "main", "api_key", map[string]string{"secret_key": "sk_test_9"}, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"pay","type":"connector","connector":"authpay@1","action":"transfer","input":{"amount":1,"logical_id":"x"}},
+	  {"id":"check","type":"connector","connector":"authpay@1","action":"verify","needs":["pay"],"input":{"reference":"=steps.pay.output.reference"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" || seen != "sk_test_9" {
+		t.Errorf("status %s, credential %q: %s", st, seen, types(events(t, e, ref)))
 	}
 }

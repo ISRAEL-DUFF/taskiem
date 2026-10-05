@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/api/sms/send"},
+ "response":{"status":400,"body":{"code":"fail","message":"ApplicationSenderId not found for applicationId: 1 and senderName: Unknown"}}}

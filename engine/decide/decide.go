@@ -930,7 +930,7 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 	var err error
 	switch s.Type {
 	case "connector":
-		p.Connector, p.Action = s.Connector, s.Action
+		p.Connector, p.Action, p.Connection = s.Connector, s.Action, s.Connection
 		p.Input, err = engine.Resolve(orEmpty(s.Input), act, true)
 	case "http":
 		c := s.HTTP

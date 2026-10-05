@@ -4,15 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"syscall"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/expr"
 )
@@ -60,9 +58,13 @@ func (w *Worker) doHTTP(ctx context.Context, p *plan, in any) (any, error) {
 	if strings.HasPrefix(p.field, "header:") && p.key != "" {
 		req.Header.Set(strings.TrimPrefix(p.field, "header:"), p.key)
 	}
-	resp, err := w.HTTP.Do(req)
+	hc, err := w.client(ctx, p, w.CallTimeout)
 	if err != nil {
-		return nil, classifyTransport(err)
+		return nil, err
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, connector.ClassifyTransport(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxHTTPBody+1))
@@ -84,19 +86,4 @@ func (w *Worker) doHTTP(ctx context.Context, p *plan, in any) (any, error) {
 		return nil, fmt.Errorf("http %d: %w", resp.StatusCode, effects.ErrFatal)
 	}
 	return out, nil
-}
-
-// classifyTransport decides whether a transport error proves nothing was sent.
-func classifyTransport(err error) error {
-	var dnsErr *net.DNSError
-	var opErr *net.OpError
-	switch {
-	case errors.As(err, &dnsErr):
-		return fmt.Errorf("%w: %w", err, effects.ErrNotSent)
-	case errors.Is(err, syscall.ECONNREFUSED):
-		return fmt.Errorf("%w: %w", err, effects.ErrNotSent)
-	case errors.As(err, &opErr) && opErr.Op == "dial":
-		return fmt.Errorf("%w: %w", err, effects.ErrNotSent)
-	}
-	return fmt.Errorf("%w: %w", err, effects.ErrUnknownOutcome)
 }
