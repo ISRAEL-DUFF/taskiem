@@ -119,6 +119,17 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 	return ref, created, err
 }
 
+// Definition returns a stored workflow version's parsed definition.
+func (s *Store) Definition(ctx context.Context, tenant, workflowID uuid.UUID, version int) (*wd.Definition, error) {
+	var d *wd.Definition
+	err := dbTx(ctx, s, tenant, func(tx pgx.Tx) error {
+		var err error
+		d, err = s.definition(ctx, tx, workflowID, version)
+		return err
+	})
+	return d, err
+}
+
 func (s *Store) definition(ctx context.Context, tx pgx.Tx, workflowID uuid.UUID, version int) (*wd.Definition, error) {
 	key := workflowID.String() + "/" + strconv.Itoa(version)
 	if d, ok := s.defs.Load(key); ok {
@@ -473,13 +484,38 @@ const SignalTTL = 7 * 24 * time.Hour
 // DeliverSignal hands an external event to every run waiting for it, or
 // buffers it. It returns the runs it woke.
 func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, event, correlation string, payload any) ([]uuid.UUID, error) {
+	woke, _, err := s.deliverSignal(ctx, tenant, event, correlation, "", payload)
+	return woke, err
+}
+
+// DeliverSignalOnce is DeliverSignal for provider deliveries that may
+// repeat: a dedupKey already received for this event is ignored, in the
+// same transaction that delivers it. It reports whether it was new.
+func (s *Store) DeliverSignalOnce(ctx context.Context, tenant uuid.UUID, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+	return s.deliverSignal(ctx, tenant, event, correlation, dedupKey, payload)
+}
+
+func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+	fresh := true
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var woke []uuid.UUID
 	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		woke = woke[:0]
+		woke, fresh = woke[:0], true
+		if dedupKey != "" {
+			// The receipt marks the delivery as seen; no run is started (uuid.Nil).
+			tag, err := tx.Exec(ctx, `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+				tenant, "signal/"+event, dedupKey, uuid.Nil)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() == 0 {
+				fresh = false
+				return nil
+			}
+		}
 		if err := signalLock(ctx, tx, tenant, event, correlation); err != nil {
 			return err
 		}
@@ -522,7 +558,7 @@ func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, event, corr
 		}
 		return nil
 	})
-	return woke, err
+	return woke, fresh, err
 }
 
 // DecideApproval records a decision on an open approval step. Policy checks

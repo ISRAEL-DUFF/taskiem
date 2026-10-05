@@ -134,3 +134,23 @@ func TestRetentionArchivesThenPurges(t *testing.T) {
 		t.Errorf("archive unreadable: %v", err)
 	}
 }
+
+func TestRetentionPurgesApprovals(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"ok","type":"approval","config":{"role":"officer"}}`, `{"retention":"1s"}`))
+	ref := e.Start(t, wf, map[string]any{})
+	if err := e.Store.DecideApproval(ctx, ref, "ok", "approved", "checker", "web"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1200 * time.Millisecond)
+	s := e.Scheduler()
+	s.Archiver = runtime.FileArchiver{Dir: t.TempDir()}
+	if n, err := s.PurgeExpired(ctx, 10); err != nil || n != 1 {
+		t.Fatalf("purged %d: %v", n, err)
+	}
+	var left int
+	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM approvals WHERE run_id = $1`, ref.ID).Scan(&left)
+	if left != 0 {
+		t.Errorf("%d approvals left", left)
+	}
+}

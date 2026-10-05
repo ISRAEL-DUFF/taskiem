@@ -82,7 +82,7 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 		case len(ms) == 0:
 			return fmt.Errorf("no active %s connection in %s: %w", connector, env, ErrNotFound)
 		case len(ms) > 1:
-			return fmt.Errorf("%d active %s connections in %s; name one with the step's connection field", len(ms), connector, env)
+			return fmt.Errorf("%d active %s connections in %s; name one with the step's connection field: %w", len(ms), connector, env, ErrAmbiguous)
 		}
 		if ms[0].ref == nil {
 			return nil

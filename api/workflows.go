@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -66,6 +67,9 @@ func (s *Server) check(doc []byte) []problem {
 		}
 	}
 	walk(def.Steps)
+	if err := ingest.Check(def, s.Registry); err != nil {
+		out = append(out, problem{"/trigger", err.Error()})
+	}
 	return out
 }
 
@@ -342,6 +346,17 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(ctx, `UPDATE workflows SET active_version = $2 WHERE id = $1`, wf, v); err != nil {
 			return err
 		}
+		d, err := wd.Load(def)
+		if err != nil {
+			return err
+		}
+		if err := ingest.Sync(ctx, tx, p.TenantID, wf, v, d, s.Registry, time.Now()); err != nil {
+			var pgErr interface{ SQLState() string }
+			if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
+				return fmt.Errorf("%w: another workflow already uses this webhook path", errConflict)
+			}
+			return err
+		}
 		return auditTx(r, tx, "workflow.publish", fmt.Sprintf("%s/%d", wf, v), map[string]any{"digest": digest})
 	})
 	if errors.Is(err, errInvalid) {
@@ -416,4 +431,59 @@ func nonNil[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+type triggerInfo struct {
+	ID          uuid.UUID  `json:"id"`
+	Environment string     `json:"environment"`
+	Type        string     `json:"type"`
+	Version     int        `json:"version"`
+	Path        *string    `json:"path,omitempty"`
+	Auth        *string    `json:"auth,omitempty"`
+	SecretName  *string    `json:"secret_name,omitempty"`
+	Connector   *string    `json:"connector,omitempty"`
+	Trigger     *string    `json:"trigger,omitempty"`
+	Cron        *string    `json:"cron,omitempty"`
+	Timezone    *string    `json:"timezone,omitempty"`
+	NextFireAt  *time.Time `json:"next_fire_at,omitempty"`
+	URL         string     `json:"url,omitempty"`
+}
+
+// listTriggers shows where a published workflow listens: webhook and
+// connector URLs (relative to the edge host), and the next scheduled fire.
+func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
+	wf, err := uuid.Parse(chi.URLParam(r, "wf"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	p := principalFrom(r.Context())
+	var out []triggerInfo
+	err = s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, next_fire_at
+			FROM triggers WHERE workflow_id = $1 ORDER BY environment`, wf)
+		if err != nil {
+			return err
+		}
+		out, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (triggerInfo, error) {
+			var t triggerInfo
+			err := row.Scan(&t.ID, &t.Environment, &t.Type, &t.Version, &t.Path, &t.Auth, &t.SecretName, &t.Connector, &t.Trigger, &t.Cron, &t.Timezone, &t.NextFireAt)
+			return t, err
+		})
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	for i, t := range out {
+		base := "/hooks/" + p.TenantID.String()
+		switch {
+		case t.Path != nil:
+			out[i].URL = base + *t.Path + "?env=" + t.Environment
+		case t.Connector != nil:
+			out[i].URL = base + "/connectors/" + *t.Connector + "/" + *t.Trigger + "?env=" + t.Environment
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"triggers": nonNil(out)})
 }

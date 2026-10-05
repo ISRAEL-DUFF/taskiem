@@ -18,6 +18,9 @@ import (
 // ErrNotFound means no such secret or connection is visible.
 var ErrNotFound = errors.New("not found")
 
+// ErrAmbiguous means several connections match and none was named.
+var ErrAmbiguous = errors.New("ambiguous connection")
+
 // Vault stores secrets and connection credentials.
 type Vault struct {
 	Pool    *pgxpool.Pool

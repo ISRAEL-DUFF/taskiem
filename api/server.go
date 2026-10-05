@@ -80,6 +80,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit)).Post("/workflows/{wf}/versions", s.createVersion)
 			r.With(s.need(PermWorkflowEdit)).Put("/workflows/{wf}/versions/{v}/layout", s.putLayout)
 			r.With(s.need(PermWorkflowPublish)).Post("/workflows/{wf}/versions/{v}/publish", s.publish)
+			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/triggers", s.listTriggers)
 			r.With(s.need(PermWorkflowEdit)).Post("/validate", s.validate)
 
 			r.With(s.need(PermRunStart)).Post("/workflows/{wf}/runs", s.startRun)

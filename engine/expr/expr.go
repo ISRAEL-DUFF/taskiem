@@ -32,9 +32,13 @@ type Engine struct {
 }
 
 // New returns an engine with the standard roots and extensions.
-func New() (*Engine, error) {
+func New() (*Engine, error) { return NewWithRoots(Roots...) }
+
+// NewWithRoots returns an engine whose expressions may reference only the
+// given variables (connector manifests evaluate over "body" and "headers").
+func NewWithRoots(roots ...string) (*Engine, error) {
 	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes()}
-	for _, r := range Roots {
+	for _, r := range roots {
 		opts = append(opts, cel.Variable(r, cel.DynType))
 	}
 	env, err := cel.NewEnv(opts...)
@@ -47,6 +51,15 @@ func New() (*Engine, error) {
 // MustNew is New for package-level engines.
 func MustNew() *Engine {
 	e, err := New()
+	if err != nil {
+		panic(err)
+	}
+	return e
+}
+
+// MustNewWithRoots is NewWithRoots for package-level engines.
+func MustNewWithRoots(roots ...string) *Engine {
+	e, err := NewWithRoots(roots...)
 	if err != nil {
 		panic(err)
 	}
