@@ -269,8 +269,9 @@ func Normalize(v any) any {
 
 // Refs are the variables an expression reads.
 type Refs struct {
-	Roots map[string]bool // top-level identifiers used
-	Steps map[string]bool // ids selected directly from steps (steps.<id>)
+	Roots   map[string]bool // top-level identifiers used
+	Steps   map[string]bool // ids selected directly from steps (steps.<id>)
+	Secrets map[string]bool // names selected directly from secrets (secrets.<name>)
 }
 
 // References parses an expression and reports which roots and step ids it

@@ -1,0 +1,289 @@
+package runtime_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/runtime"
+	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
+)
+
+var ctx = context.Background()
+
+func wfDoc(steps, settings string) string {
+	if settings == "" {
+		settings = "{}"
+	}
+	return `{"schema":"wd/v1","id":"wf_t","version":1,"name":"t","trigger":{"type":"manual"},"steps":[` + steps + `],"settings":` + settings + `}`
+}
+
+const payOne = `{"id":"pay","type":"connector","connector":"fakepay@1","action":"transfer",
+  "input":{"amount":"=trigger.amount","logical_id":"=run.id + ':pay'"},"retry":{"max":5,"initial":"10ms","backoff":"fixed"}}`
+
+func events(t *testing.T, e *rt.Env, ref runtime.RunRef) []history.Event {
+	t.Helper()
+	h, err := e.Store.RunHistory(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+func count(h []history.Event, typ, step string) int {
+	n := 0
+	for _, ev := range h {
+		if ev.Type == typ && (step == "" || ev.StepID == step) {
+			n++
+		}
+	}
+	return n
+}
+
+func types(h []history.Event) string {
+	var b strings.Builder
+	for _, ev := range h {
+		b.WriteString(ev.Type + "(" + ev.StepID + ") ")
+	}
+	return b.String()
+}
+
+func TestPaymentRunEndToEnd(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(payOne+`,{"id":"done","type":"transform","needs":["pay"],"config":{"output":"=steps.pay.output.status"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{"amount": 150000})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	h := events(t, e, ref)
+	if count(h, history.EffectIntent, "pay") != 1 || e.Provider.Executions(ref.ID.String()+":pay") != 1 {
+		t.Errorf("want one intent and one execution: %s", types(h))
+	}
+	var intent history.IntentPayload
+	for _, ev := range h {
+		if ev.Type == history.EffectIntent {
+			_ = json.Unmarshal(ev.Payload, &intent)
+		}
+		if ev.Origin == "" {
+			t.Errorf("event %d has no origin", ev.Seq)
+		}
+	}
+	if !strings.HasPrefix(intent.Key, "tsk_") || len(intent.Key) != 36 {
+		t.Errorf("idempotency key %q", intent.Key)
+	}
+}
+
+func TestDuplicateTriggerReturnsSameRun(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(payOne, ""))
+	req := runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: 1, Environment: "prod", Trigger: map[string]any{"amount": 1}, TriggerID: "hook", DedupKey: "evt_1"}
+	a, created1, err := e.Store.StartRun(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, created2, err := e.Store.StartRun(ctx, req)
+	if err != nil || !created1 || created2 || a.ID != b.ID {
+		t.Errorf("dedup: %v %v %v %v %v", a.ID, b.ID, created1, created2, err)
+	}
+}
+
+func TestRetryableErrorThenSuccess(t *testing.T) {
+	e := rt.New(t)
+	var calls atomic.Int32
+	e.Provider.Faults = func(string) rt.Fault {
+		if calls.Add(1) <= 2 {
+			return rt.FailBefore
+		}
+		return rt.NoFault
+	}
+	wf := e.Publish(t, wfDoc(payOne, ""))
+	ref := e.Start(t, wf, map[string]any{"amount": 1})
+	rt.WaitFor(t, 10*time.Second, "completion", func() bool { e.Drain(t); return e.Status(t, ref) == "completed" })
+	h := events(t, e, ref)
+	if count(h, history.RetryScheduled, "pay") != 2 || e.Provider.Executions(ref.ID.String()+":pay") != 1 {
+		t.Errorf("want 2 retries, 1 execution: %s", types(h))
+	}
+}
+
+func TestUnknownOutcomeOnIdempotentWriteRetriesSameKey(t *testing.T) {
+	e := rt.New(t)
+	var calls atomic.Int32
+	e.Provider.Faults = func(string) rt.Fault {
+		if calls.Add(1) == 1 {
+			return rt.FailAfter // executed, but the worker does not know
+		}
+		return rt.NoFault
+	}
+	wf := e.Publish(t, wfDoc(payOne, ""))
+	ref := e.Start(t, wf, map[string]any{"amount": 1})
+	rt.WaitFor(t, 10*time.Second, "completion", func() bool { e.Drain(t); return e.Status(t, ref) == "completed" })
+	h := events(t, e, ref)
+	keys := map[string]bool{}
+	for _, ev := range h {
+		if ev.Type == history.EffectIntent {
+			var p history.IntentPayload
+			_ = json.Unmarshal(ev.Payload, &p)
+			keys[p.Key] = true
+		}
+	}
+	if len(keys) != 1 || e.Provider.Executions(ref.ID.String()+":pay") != 1 {
+		t.Errorf("want one key reused and one execution, got keys=%v executions=%d", keys, e.Provider.Executions(ref.ID.String()+":pay"))
+	}
+}
+
+func TestReconcilableWriteReconcilesInsteadOfResending(t *testing.T) {
+	e := rt.New(t)
+	var calls atomic.Int32
+	e.Provider.Faults = func(a string) rt.Fault {
+		if a == "transfer" && calls.Add(1) == 1 {
+			return rt.FailAfter
+		}
+		return rt.NoFault
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"pay","type":"connector","connector":"fakepay@1","action":"bank_transfer",
+	  "input":{"amount":1,"logical_id":"=run.id"},"retry":{"max":3,"initial":"10ms","backoff":"fixed"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	rt.WaitFor(t, 10*time.Second, "completion", func() bool { e.Drain(t); return e.Status(t, ref) == "completed" })
+	if n := e.Provider.Executions(ref.ID.String()); n != 1 {
+		t.Errorf("provider without dedup executed %d times; reconcile should have prevented a resend", n)
+	}
+	h := events(t, e, ref)
+	var p history.CompletedPayload
+	for _, ev := range h {
+		if ev.Type == history.StepCompleted && ev.StepID == "pay" {
+			_ = json.Unmarshal(ev.Payload, &p)
+		}
+	}
+	if !p.Reconciled {
+		t.Errorf("completion should be marked reconciled: %s", types(h))
+	}
+}
+
+func TestUnsafeWriteUnknownOutcomeParks(t *testing.T) {
+	e := rt.New(t)
+	e.Provider.Faults = func(string) rt.Fault { return rt.FailAfter }
+	wf := e.Publish(t, wfDoc(`{"id":"sms","type":"connector","connector":"fakepay@1","action":"notify","input":{"logical_id":"=run.id"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "needs_reconciliation" {
+		t.Errorf("status %s", st)
+	}
+	if n := e.Provider.Executions(ref.ID.String()); n != 1 {
+		t.Errorf("unsafe write executed %d times; must never be retried after an unknown outcome", n)
+	}
+}
+
+func TestCrashAfterIntentIsRecoveredWithoutDuplicate(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(payOne, ""))
+	ref := e.Start(t, wf, map[string]any{"amount": 1})
+	crashing := e.Worker("crashy")
+	crashing.Lease = 300 * time.Millisecond
+	crashing.Hooks = &runtime.Hooks{AfterCall: func(string, int) error { return errors.New("kill -9") }}
+	if _, err := crashing.RunOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if e.Provider.Executions(ref.ID.String()+":pay") != 1 || e.Status(t, ref) != "running" {
+		t.Fatal("setup: the effect should have happened without being recorded")
+	}
+	time.Sleep(400 * time.Millisecond) // lease expires
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	if n := e.Provider.Executions(ref.ID.String() + ":pay"); n != 1 {
+		t.Errorf("executed %d times after crash recovery", n)
+	}
+}
+
+func TestSignalsBufferedAndLive(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"settle","type":"signal","config":{"event":"fakepay@1:transfer","correlation":"=trigger.ref","timeout":"1h"}},
+	  {"id":"out","type":"transform","needs":["settle"],"config":{"output":"=steps.settle.output.status"}}`, ""))
+
+	// Live: the run waits first.
+	live := e.Start(t, wf, map[string]any{"ref": "R1"})
+	woke, err := e.Store.DeliverSignal(ctx, e.Tenant, "fakepay@1:transfer", "R1", map[string]any{"status": "success"})
+	if err != nil || len(woke) != 1 {
+		t.Fatalf("deliver: %v %v", woke, err)
+	}
+	if st := e.Status(t, live); st != "completed" {
+		t.Errorf("live signal: %s %s", st, types(events(t, e, live)))
+	}
+
+	// Buffered: the signal arrives before the run exists.
+	if woke, err := e.Store.DeliverSignal(ctx, e.Tenant, "fakepay@1:transfer", "R2", map[string]any{"status": "reversed"}); err != nil || len(woke) != 0 {
+		t.Fatalf("buffer: %v %v", woke, err)
+	}
+	early := e.Start(t, wf, map[string]any{"ref": "R2"})
+	if st := e.Status(t, early); st != "completed" {
+		t.Errorf("buffered signal not consumed: %s %s", st, types(events(t, e, early)))
+	}
+}
+
+func TestApprovalDecision(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"ok","type":"approval","config":{"role":"officer","timeout":"24h"}},`+
+		strings.Replace(payOne, `"id":"pay",`, `"id":"pay","needs":["ok"],"when":"=steps.ok.output.decision == 'approved'",`, 1), ""))
+	ref := e.Start(t, wf, map[string]any{"amount": 1})
+	if err := e.Store.DecideApproval(ctx, ref, "nope", "approved", "u", "web"); err == nil {
+		t.Error("deciding a non-existent approval should fail")
+	}
+	if err := e.Store.DecideApproval(ctx, ref, "ok", "approved", "checker", "web"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Store.DecideApproval(ctx, ref, "ok", "rejected", "checker", "web"); err == nil {
+		t.Error("an approval can be decided only once")
+	}
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" || e.Provider.Executions(ref.ID.String()+":pay") != 1 {
+		t.Errorf("status %s: %s", st, types(events(t, e, ref)))
+	}
+}
+
+func TestWaitTimerAndRunTimeout(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"w","type":"wait","config":{"duration":"1s"}},{"id":"x","type":"transform","needs":["w"],"config":{"output":1}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	rt.WaitFor(t, 5*time.Second, "wait step", func() bool { e.Drain(t); return e.Status(t, ref) == "completed" })
+
+	slow := e.Publish(t, wfDoc(`{"id":"w","type":"wait","config":{"duration":"1h"}}`, `{"timeout":"1s"}`))
+	ref2 := e.Start(t, slow, map[string]any{})
+	rt.WaitFor(t, 5*time.Second, "run timeout", func() bool { e.Drain(t); return e.Status(t, ref2) == "failed" })
+}
+
+func TestCancelStopsRun(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"w","type":"wait","config":{"duration":"1h"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	if err := e.Store.CancelRun(ctx, ref, "u1"); err != nil {
+		t.Fatal(err)
+	}
+	if st := e.Status(t, ref); st != "cancelled" {
+		t.Errorf("status %s", st)
+	}
+	var timers int
+	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM timers WHERE run_id = $1 AND fired_at IS NULL`, ref.ID).Scan(&timers)
+	if timers != 0 {
+		t.Errorf("%d timers left after cancel", timers)
+	}
+}
+
+func TestCompensationRunsOnFailure(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"pay","type":"connector","connector":"fakepay@1","action":"transfer",
+	   "input":{"amount":1,"logical_id":"=run.id + ':pay'"},"compensate":{"action":"refund","input":{"logical_id":"=run.id + ':refund'"}}},
+	  {"id":"boom","type":"http","needs":["pay"],"config":{"method":"GET","url":"http://127.0.0.1:1/unreachable"},"retry":{"max":0}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	rt.WaitFor(t, 10*time.Second, "failure", func() bool { e.Drain(t); return e.Status(t, ref) == "failed" })
+	h := events(t, e, ref)
+	if count(h, history.CompensationCompleted, "") != 1 || e.Provider.Executions(ref.ID.String()+":refund") != 1 {
+		t.Errorf("compensation: %s", types(h))
+	}
+}

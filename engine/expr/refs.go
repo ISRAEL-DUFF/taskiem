@@ -6,7 +6,7 @@ import (
 )
 
 func refsOf(a *cel.Ast) Refs {
-	r := Refs{Roots: map[string]bool{}, Steps: map[string]bool{}}
+	r := Refs{Roots: map[string]bool{}, Steps: map[string]bool{}, Secrets: map[string]bool{}}
 	root := a.NativeRep().Expr()
 	celast.PreOrderVisit(root, celast.NewExprVisitor(func(e celast.Expr) {
 		switch e.Kind() {
@@ -14,17 +14,26 @@ func refsOf(a *cel.Ast) Refs {
 			r.Roots[e.AsIdent()] = true
 		case celast.SelectKind:
 			s := e.AsSelect()
-			if op := s.Operand(); op.Kind() == celast.IdentKind && op.AsIdent() == "steps" {
-				r.Steps[s.FieldName()] = true
+			if op := s.Operand(); op.Kind() == celast.IdentKind {
+				switch op.AsIdent() {
+				case "steps":
+					r.Steps[s.FieldName()] = true
+				case "secrets":
+					r.Secrets[s.FieldName()] = true
+				}
 			}
 		case celast.CallKind:
 			// steps["id"] index form
 			c := e.AsCall()
 			if c.FunctionName() == "_[_]" && len(c.Args()) == 2 {
-				if op := c.Args()[0]; op.Kind() == celast.IdentKind && op.AsIdent() == "steps" {
+				if op := c.Args()[0]; op.Kind() == celast.IdentKind && (op.AsIdent() == "steps" || op.AsIdent() == "secrets") {
 					if lit := c.Args()[1]; lit.Kind() == celast.LiteralKind {
 						if s, ok := lit.AsLiteral().Value().(string); ok {
-							r.Steps[s] = true
+							if op.AsIdent() == "steps" {
+								r.Steps[s] = true
+							} else {
+								r.Secrets[s] = true
+							}
 						}
 					}
 				}
