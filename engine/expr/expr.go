@@ -184,7 +184,7 @@ func native(v ref.Val) (any, error) {
 	case types.Timestamp:
 		return t.Time.UTC().Format(time.RFC3339Nano), nil
 	case types.Duration:
-		return t.Duration.String(), nil
+		return t.String(), nil
 	}
 	if v.Type() == types.OptionalType {
 		o := v.(*types.Optional)
@@ -243,11 +243,11 @@ func DecodeJSON(b []byte) (any, error) {
 	if err := dec.Decode(&v); err != nil {
 		return nil, err
 	}
-	return Normalize(v), nil
+	return Normalise(v), nil
 }
 
-// Normalize converts json.Number values to int64 or float64, recursively.
-func Normalize(v any) any {
+// Normalise converts json.Number values to int64 or float64, recursively.
+func Normalise(v any) any {
 	switch t := v.(type) {
 	case json.Number:
 		if i, err := t.Int64(); err == nil {
@@ -257,11 +257,11 @@ func Normalize(v any) any {
 		return f
 	case map[string]any:
 		for k, c := range t {
-			t[k] = Normalize(c)
+			t[k] = Normalise(c)
 		}
 	case []any:
 		for i, c := range t {
-			t[i] = Normalize(c)
+			t[i] = Normalise(c)
 		}
 	}
 	return v

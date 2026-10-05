@@ -60,6 +60,11 @@ type Worker struct {
 	Queue       string
 	Concurrency int
 	Lease       time.Duration
+	// CallTimeout bounds every provider call, measured for writes from when
+	// EffectIntent was recorded. A worker never starts a write after that
+	// deadline, and reconcile concludes "not found" only once it has
+	// passed, so a stalled worker cannot send after another has re-sent.
+	CallTimeout time.Duration
 	Hooks       *Hooks
 	Logger      *slog.Logger
 }
@@ -73,6 +78,9 @@ func (w *Worker) defaults() {
 	}
 	if w.Lease <= 0 {
 		w.Lease = 60 * time.Second
+	}
+	if w.CallTimeout <= 0 {
+		w.CallTimeout = 30 * time.Second
 	}
 	if w.HTTP == nil {
 		w.HTTP = &http.Client{Timeout: 30 * time.Second}
@@ -200,6 +208,9 @@ var errFenced = errors.New("fenced: lease lost")
 // errAbandoned is a simulated crash from a hook.
 var errAbandoned = errors.New("abandoned")
 
+// errPostpone asks for the task to be requeued until p.intentAt + CallTimeout.
+var errPostpone = errors.New("postpone")
+
 type mode int
 
 const (
@@ -223,6 +234,7 @@ type plan struct {
 	group    int
 	key      string
 	keyIn    effects.KeyInput
+	intentAt time.Time // when the EffectIntent in force was recorded (database clock)
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -254,6 +266,9 @@ func (w *Worker) execute(ctx context.Context, c claim) error {
 		result = failed(c, "unknown_outcome", "an earlier attempt may have reached the provider and the action cannot be safely retried", "park")
 	case modeReconcile:
 		result, err = w.reconcile(ctx, p)
+		if errors.Is(err, errPostpone) {
+			return w.postpone(ctx, p, p.intentAt.Add(w.CallTimeout))
+		}
 		if errors.Is(err, errAbandoned) || errors.Is(err, errFenced) {
 			return nil
 		}
@@ -303,6 +318,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		found := false
 		var intents []history.IntentPayload
 		var intentAttempts []int
+		var intentTimes []time.Time
 		outcomes := map[int]history.Error{}
 		for _, e := range hist {
 			if e.StepID != c.step {
@@ -332,6 +348,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				}
 				intents = append(intents, ip)
 				intentAttempts = append(intentAttempts, e.Attempt)
+				intentTimes = append(intentTimes, e.RecordedAt)
 			}
 		}
 		if !found {
@@ -361,6 +378,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if n := len(intents); n > 0 {
 			last, lastAttempt := intents[n-1], intentAttempts[n-1]
 			p.group = last.AttemptGroup
+			p.intentAt = intentTimes[n-1]
 			var next effects.Next
 			if prev, ok := outcomes[lastAttempt]; ok && lastAttempt != c.attempt {
 				next = effects.AfterError(p.class, kindOf(prev.Kind))
@@ -467,8 +485,10 @@ func (w *Worker) recordIntent(ctx context.Context, tx pgx.Tx, p *plan) error {
 	if _, err := appendEvent(ctx, tx, p.c.run, history.StepStarted, p.c.step, p.c.attempt, map[string]any{"worker": w.ID}, history.OriginWorker); err != nil {
 		return err
 	}
-	_, err := appendEvent(ctx, tx, p.c.run, history.EffectIntent, p.c.step, p.c.attempt, payload, history.OriginWorker)
-	return err
+	if _, err := appendEvent(ctx, tx, p.c.run, history.EffectIntent, p.c.step, p.c.attempt, payload, history.OriginWorker); err != nil {
+		return err
+	}
+	return tx.QueryRow(ctx, `SELECT now()`).Scan(&p.intentAt) // equals the intent's recorded_at
 }
 
 func (w *Worker) recordFailure(ctx context.Context, tx pgx.Tx, p *plan, kind, msg string) error {
@@ -489,6 +509,16 @@ func (w *Worker) finishTask(ctx context.Context, tx pgx.Tx, c claim) (bool, erro
 	return ok, err
 }
 
+// postpone releases the task back to the queue, available at a later time,
+// without recording an outcome.
+func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
+	return db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE tasks SET lease_owner = NULL, lease_until = NULL, available_at = $4
+			WHERE id = $1 AND lease_owner = $2 AND lease_epoch = $3`, p.c.task, w.ID, p.c.epoch, at)
+		return err
+	})
+}
+
 // finish releases the task and records the outcome, if any, under the fence.
 func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) error {
 	return db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
@@ -502,7 +532,7 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		if result == nil {
 			return nil
 		}
-		if _, err := appendEvent(ctx, tx, p.c.run, result.Type, result.StepID, result.Attempt, json.RawMessage(result.Payload), history.OriginWorker); err != nil {
+		if _, err := appendEvent(ctx, tx, p.c.run, result.Type, result.StepID, result.Attempt, result.Payload, history.OriginWorker); err != nil {
 			return err
 		}
 		if result.Type == history.StepFailed {
@@ -525,6 +555,12 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if action == nil {
 		return failed(p.c, "unknown_outcome", "no reconcile action", "park"), nil
 	}
+	if time.Now().Before(p.intentAt.Add(w.CallTimeout)) {
+		// The attempt that wrote the intent may still be talking to the
+		// provider; "not found" now would not be trustworthy. Requeue the
+		// task for after the deadline without spending a retry.
+		return history.Event{}, errPostpone
+	}
 	field := p.field
 	if field == "" || strings.HasPrefix(field, "header:") {
 		field = "reference"
@@ -533,7 +569,9 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if err != nil {
 		return failed(p.c, "fatal", err.Error(), "fail"), nil
 	}
-	resp, err := action.Execute(ctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: w.HTTP})
+	rctx, cancel := context.WithTimeout(ctx, w.CallTimeout)
+	defer cancel()
+	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: w.HTTP})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
@@ -566,6 +604,15 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 	if err != nil {
 		return failed(p.c, "fatal", err.Error(), "fail")
 	}
+	deadline := time.Now().Add(w.CallTimeout)
+	if p.class.IsWrite() {
+		deadline = p.intentAt.Add(w.CallTimeout)
+		if !time.Now().Before(deadline) {
+			return w.classify(p, fmt.Errorf("call deadline passed before sending: %w", effects.ErrNotSent))
+		}
+	}
+	ctx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
 	var out any
 	switch {
 	case p.conn != nil:

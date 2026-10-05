@@ -128,7 +128,7 @@ func TestBranch(t *testing.T) {
 			t.Errorf("status %s: path %v, want %s (%s)", status, got, path, s.types())
 		}
 		if s.has(history.StepCompleted, "credit") != (path == "paid") {
-			t.Errorf("status %s: credit ran = %v", status, !(path == "paid"))
+			t.Errorf("status %s: credit ran = %v", status, path != "paid")
 		}
 	}
 }

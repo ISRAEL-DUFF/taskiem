@@ -76,7 +76,7 @@ func NewProvider() *Provider {
 // RandomFaults returns a fault function with the given probabilities.
 func RandomFaults(seed uint64, before, after float64) func(string) Fault {
 	var mu sync.Mutex
-	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
+	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // deterministic test fault injection
 	return func(action string) Fault {
 		if action == "verify" {
 			return NoFault

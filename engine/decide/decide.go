@@ -282,8 +282,6 @@ const (
 	failed  // failed with nothing left to handle it
 )
 
-func (s status) terminal() bool { return s >= completed }
-
 // scope is one list of steps evaluated under a prefix (foreach iterations add
 // "<foreach>[i]." to the prefix).
 type scope struct {
@@ -594,12 +592,12 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 	}
 	r := retryPolicy(s)
 	if n > r.max {
-		d.finalize(inst, f, e, fmt.Sprintf("gave up after %d attempts", n))
+		d.finalise(inst, f, e, fmt.Sprintf("gave up after %d attempts", n))
 		return failed
 	}
 	delay := backoff(r, n, d.runID(), inst)
 	if r.maxDuration > 0 && d.now.Add(delay).Sub(f.firstSchedAt) > r.maxDuration {
-		d.finalize(inst, f, e, "retry budget exhausted")
+		d.finalise(inst, f, e, "retry budget exhausted")
 		return failed
 	}
 	if !start {
@@ -613,9 +611,9 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 	return running
 }
 
-// finalize records that a worker failure is final, so later passes and
+// finalise records that a worker failure is final, so later passes and
 // replays do not reconsider it.
-func (d *decider) finalize(inst string, f *facts, e history.Error, why string) {
+func (d *decider) finalise(inst string, f *facts, e history.Error, why string) {
 	e.Message = e.Message + " (" + why + ")"
 	e.Next = "fail"
 	d.emit(history.StepFailed, inst, f.lastAttempt, history.FailedPayload{Error: e})
@@ -658,11 +656,11 @@ func (d *decider) approvalProgress(s *wd.Step, inst string, f *facts) status {
 func (d *decider) branchProgress(sc scope, s *wd.Step, inst string, f *facts, start bool) status {
 	path := *f.control.Path
 	var steps []*wd.Step
-	switch {
-	case path == "":
+	switch path {
+	case "":
 		d.emit(history.StepCompleted, inst, 0, history.CompletedPayload{Output: map[string]any{"path": nil, "steps": map[string]any{}}})
 		return completed
-	case path == "default":
+	case "default":
 		steps = s.Branch.Default.Steps
 	default:
 		for _, p := range s.Branch.Paths {

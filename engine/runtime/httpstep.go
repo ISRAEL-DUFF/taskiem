@@ -47,7 +47,7 @@ func (w *Worker) doHTTP(ctx context.Context, p *plan, in any) (any, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
-		return nil, fmt.Errorf("%v: %w", err, effects.ErrFatal)
+		return nil, fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -67,7 +67,7 @@ func (w *Worker) doHTTP(ctx context.Context, p *plan, in any) (any, error) {
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxHTTPBody+1))
 	if err != nil {
-		return nil, fmt.Errorf("read response: %v: %w", err, effects.ErrUnknownOutcome)
+		return nil, fmt.Errorf("read response: %w: %w", err, effects.ErrUnknownOutcome)
 	}
 	if len(raw) > maxHTTPBody {
 		return nil, fmt.Errorf("response larger than %d bytes: %w", maxHTTPBody, effects.ErrFatal)
@@ -92,11 +92,11 @@ func classifyTransport(err error) error {
 	var opErr *net.OpError
 	switch {
 	case errors.As(err, &dnsErr):
-		return fmt.Errorf("%v: %w", err, effects.ErrNotSent)
+		return fmt.Errorf("%w: %w", err, effects.ErrNotSent)
 	case errors.Is(err, syscall.ECONNREFUSED):
-		return fmt.Errorf("%v: %w", err, effects.ErrNotSent)
+		return fmt.Errorf("%w: %w", err, effects.ErrNotSent)
 	case errors.As(err, &opErr) && opErr.Op == "dial":
-		return fmt.Errorf("%v: %w", err, effects.ErrNotSent)
+		return fmt.Errorf("%w: %w", err, effects.ErrNotSent)
 	}
-	return fmt.Errorf("%v: %w", err, effects.ErrUnknownOutcome)
+	return fmt.Errorf("%w: %w", err, effects.ErrUnknownOutcome)
 }

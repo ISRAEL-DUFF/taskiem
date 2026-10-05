@@ -334,7 +334,7 @@ func endRun(ctx context.Context, tx pgx.Tx, run uuid.UUID, status string) error 
 func signalLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, event, correlation string) error {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(tenant.String() + "\x00" + event + "\x00" + correlation))
-	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(h.Sum64()))
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(h.Sum64())) //nolint:gosec // bit-for-bit reinterpretation as a lock key
 	return err
 }
 

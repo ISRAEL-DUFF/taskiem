@@ -77,7 +77,8 @@ func (e *Env) Start(t testing.TB, wf uuid.UUID, trigger any) runtime.RunRef {
 
 // Worker returns a worker for the connector queue.
 func (e *Env) Worker(id string) *runtime.Worker {
-	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: e.Secrets, ID: id, Queue: "connector", Lease: 30 * time.Second}
+	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: e.Secrets, ID: id, Queue: "connector",
+		Lease: 30 * time.Second, CallTimeout: 200 * time.Millisecond}
 }
 
 // Scheduler returns a scheduler.
