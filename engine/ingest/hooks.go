@@ -11,13 +11,16 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -25,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
 // Secrets reads an environment secret (webhook HMAC keys and tokens).
@@ -82,7 +86,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.Post("/{tenant}/*", h.webhook)
 		h.router = rt
 	})
-	h.router.ServeHTTP(w, r)
+	kind := "webhook"
+	if strings.Contains(r.URL.Path, "/connectors/") {
+		kind = "connector"
+	}
+	ctx, span := telemetry.Tracer().Start(r.Context(), "ingest "+kind)
+	defer span.End()
+	ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+	h.router.ServeHTTP(ww, r.WithContext(ctx))
+	span.SetAttributes(attribute.Int("http.status_code", ww.Status()))
+	telemetry.Ingest.WithLabelValues(kind, strconv.Itoa(ww.Status())).Inc()
 }
 
 func reply(w http.ResponseWriter, status int, v any) {

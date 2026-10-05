@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,12 +18,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
 // Server serves the API.
@@ -55,7 +58,7 @@ func (s *Server) Handler() http.Handler {
 		s.Logger = slog.Default()
 	}
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, s.realIP, s.recoverer, securityHeaders)
+	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
 	if s.Ingest != nil {
@@ -110,6 +113,7 @@ func (s *Server) Handler() http.Handler {
 
 			r.With(s.need(PermAuditRead)).Get("/audit", s.listAudit)
 			r.With(s.need(PermAuditRead)).Get("/audit/verify", s.verifyAudit)
+			r.With(s.need(PermAuditRead)).Get("/audit/export", s.exportAudit)
 			r.With(s.need(PermPIIErase)).Post("/pii/erase", s.erase)
 		})
 	})
@@ -140,6 +144,26 @@ func (s *Server) realIP(next http.Handler) http.Handler {
 			}
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// observe records a span and metrics per request, labelled by route
+// pattern (never by raw path, which carries ids).
+func observe(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ctx, span := telemetry.Tracer().Start(r.Context(), "http "+r.Method)
+		defer span.End()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r.WithContext(ctx))
+		route := "unmatched"
+		if rc := chi.RouteContext(r.Context()); rc != nil && rc.RoutePattern() != "" {
+			route = rc.RoutePattern()
+		}
+		span.SetName(r.Method + " " + route)
+		span.SetAttributes(attribute.Int("http.status_code", ww.Status()))
+		telemetry.HTTPRequests.WithLabelValues(route, r.Method, strconv.Itoa(ww.Status())).Inc()
+		telemetry.HTTPSeconds.WithLabelValues(route).Observe(time.Since(start).Seconds())
 	})
 }
 

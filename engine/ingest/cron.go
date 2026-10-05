@@ -11,6 +11,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
 // Cron fires schedule triggers (role "scheduler"). Each fire starts a run
@@ -82,6 +83,7 @@ func (c *Cron) Tick(ctx context.Context) (int, error) {
 		}
 		if fired {
 			n++
+			telemetry.Ingest.WithLabelValues("schedule", "fired").Inc()
 		}
 	}
 	return n, nil

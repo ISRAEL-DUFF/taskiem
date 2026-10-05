@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -329,6 +330,23 @@ func (s *Server) verifyAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"intact": broken == nil, "first_broken_seq": broken})
+}
+
+// exportAudit streams the tenant's chain as JSON lines for the offline
+// verifier (`taskiem audit verify FILE`).
+func (s *Server) exportAudit(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Content-Disposition", `attachment; filename="audit-`+p.TenantID.String()+`.jsonl"`)
+	err := s.tx(r, func(tx pgx.Tx) error {
+		if err := auditTx(r, tx, "audit.export", p.TenantID.String(), nil); err != nil {
+			return err
+		}
+		return audit.Export(r.Context(), tx, p.TenantID.String(), w)
+	})
+	if err != nil {
+		s.Logger.Error("audit export failed", "err", err)
+	}
 }
 
 // --- erasure ---

@@ -11,6 +11,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
 // Scheduler fires timers, recovers expired leases, and sweeps runs left
@@ -25,6 +26,9 @@ type Scheduler struct {
 	// Archiver receives runs past retention before they are purged; nil
 	// disables purging.
 	Archiver Archiver
+	// SweepOnly limits the scheduler to deciding swept runs: the
+	// "orchestrator" role, when it runs apart from the "scheduler" role.
+	SweepOnly bool
 
 	lastPartitions, lastPurge time.Time
 }
@@ -68,6 +72,12 @@ func (s *Scheduler) Tick(ctx context.Context) (TickStats, error) {
 	s.defaults()
 	var st TickStats
 	var errs []error
+	if s.SweepOnly {
+		n, err := s.sweep(ctx)
+		st.RunsSwept = n
+		telemetry.RunsSwept.Add(float64(n))
+		return st, err
+	}
 	n, err := s.fireTimers(ctx)
 	st.TimersFired = n
 	errs = append(errs, err)
@@ -91,6 +101,9 @@ func (s *Scheduler) Tick(ctx context.Context) (TickStats, error) {
 			s.lastPartitions = time.Now()
 		}
 	}
+	telemetry.TimersFired.Add(float64(st.TimersFired))
+	telemetry.LeasesRecovered.Add(float64(st.LeasesRecovered))
+	telemetry.RunsSwept.Add(float64(st.RunsSwept))
 	return st, errors.Join(errs...)
 }
 

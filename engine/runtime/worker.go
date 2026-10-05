@@ -16,6 +16,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -25,6 +27,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sandbox"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -80,6 +83,10 @@ type Worker struct {
 	CallTimeout time.Duration
 	Hooks       *Hooks
 	Logger      *slog.Logger
+	// Drain is how long in-flight steps may run on after shutdown begins
+	// before they are cancelled (spec 15.4); default 30s. Nothing new is
+	// claimed once shutdown begins.
+	Drain time.Duration
 }
 
 func (w *Worker) defaults() {
@@ -132,6 +139,28 @@ func (w *Worker) Run(ctx context.Context) error {
 		return err
 	}
 	defer stop()
+	// In-flight steps outlive ctx by up to Drain, so a shutdown does not
+	// abort provider calls midway and leave outcomes unknown.
+	execCtx, cancelExec := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelExec()
+	drain := w.Drain
+	if drain <= 0 {
+		drain = 30 * time.Second
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-execCtx.Done():
+			return
+		}
+		t := time.NewTimer(drain)
+		defer t.Stop()
+		select {
+		case <-t.C:
+			cancelExec()
+		case <-execCtx.Done():
+		}
+	}()
 	work := make(chan claim)
 	free := make(chan struct{}, w.Concurrency)
 	for i := 0; i < w.Concurrency; i++ {
@@ -143,7 +172,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		go func() {
 			defer wg.Done()
 			for c := range work {
-				if err := w.execute(ctx, c); err != nil && ctx.Err() == nil {
+				if err := w.execute(execCtx, c); err != nil && execCtx.Err() == nil {
 					w.Logger.Error("task failed to execute", "run", c.run, "step", c.step, "attempt", c.attempt, "err", err)
 				}
 				free <- struct{}{}
@@ -262,6 +291,25 @@ type plan struct {
 // execute runs one claimed task: prepare (and record intent), call, record
 // the outcome, decide inline.
 func (w *Worker) execute(ctx context.Context, c claim) error {
+	start := time.Now()
+	ctx, span := telemetry.Tracer().Start(ctx, "step "+c.step, trace.WithAttributes(
+		telemetry.TenantID.String(c.tenant.String()), telemetry.RunID.String(c.run.String()), telemetry.StepID.String(c.step)))
+	defer span.End()
+	target, outcome := "unknown", "error"
+	defer func() {
+		telemetry.Steps.WithLabelValues(w.Queue, target, outcome).Inc()
+		telemetry.StepSeconds.WithLabelValues(w.Queue, target).Observe(time.Since(start).Seconds())
+		span.SetAttributes(attribute.String("outcome", outcome))
+	}()
+	err := w.run(ctx, c, &target, &outcome)
+	if err != nil {
+		span.RecordError(err)
+	}
+	return err
+}
+
+// run is execute's body; it reports the step's target and outcome.
+func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stopBeat := w.heartbeat(ctx, c, cancel)
@@ -270,10 +318,16 @@ func (w *Worker) execute(ctx context.Context, c claim) error {
 	p, err := w.prepare(ctx, c)
 	if err != nil {
 		if errors.Is(err, errFenced) {
+			*outcome = "fenced"
 			return nil
 		}
 		return err
 	}
+	*target = p.stepType
+	if p.conn != nil {
+		*target = p.conn.Ref()
+	}
+	*outcome = "abandoned"
 	if p.mode == modeSend && p.class.IsWrite() && w.Hooks != nil && w.Hooks.AfterIntent != nil {
 		if err := w.Hooks.AfterIntent(c.step, c.attempt); err != nil {
 			return nil
@@ -283,12 +337,14 @@ func (w *Worker) execute(ctx context.Context, c claim) error {
 	var result history.Event
 	switch p.mode {
 	case modeDone:
+		*outcome = "already_recorded"
 		return w.finish(ctx, p, nil)
 	case modePark:
 		result = failed(c, "unknown_outcome", "an earlier attempt may have reached the provider and the action cannot be safely retried", "park")
 	case modeReconcile:
 		result, err = w.reconcile(ctx, p)
 		if errors.Is(err, errPostpone) {
+			*outcome = "postponed"
 			return w.postpone(ctx, p, p.intentAt.Add(w.CallTimeout))
 		}
 		if errors.Is(err, errAbandoned) || errors.Is(err, errFenced) {
@@ -305,6 +361,12 @@ func (w *Worker) execute(ctx context.Context, c claim) error {
 		if err := w.Hooks.AfterCall(c.step, c.attempt); err != nil {
 			return nil
 		}
+	}
+	*outcome = "completed"
+	if result.Type == history.StepFailed {
+		var fp history.FailedPayload
+		_ = json.Unmarshal(result.Payload, &fp)
+		*outcome = "failed_" + fp.Error.Next
 	}
 	return w.finish(ctx, p, &result)
 }

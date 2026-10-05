@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/argon2"
 
 	"github.com/israel-duff/taskiem/engine/db"
@@ -353,15 +354,24 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if req.Tenant == "" || !strings.Contains(req.Email, "@") || len(req.Password) < 12 {
-		writeErr(w, http.StatusBadRequest, "tenant, a valid email, and a password of at least 12 characters are required")
+	tenant, user, err := CreateTenant(r.Context(), s.Store.Pool, req.Tenant, req.Email, req.Name, req.Password)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
-	tenant, user := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
-	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		ctx := r.Context()
+	writeJSON(w, http.StatusCreated, map[string]any{"tenant_id": tenant, "user_id": user})
+}
+
+// CreateTenant creates a tenant with its owner, a default workspace, and
+// the dev and prod environments (signup, and `taskiem bootstrap`).
+func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string) (tenant, user uuid.UUID, err error) {
+	if name == "" || !strings.Contains(email, "@") || len(password) < 12 {
+		return uuid.Nil, uuid.Nil, fmt.Errorf("%w: tenant, a valid email, and a password of at least 12 characters are required", errBadRequest)
+	}
+	tenant, user = uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
+	err = db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var exists bool
-		if err := s.Store.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_auth_find_user($1))`, req.Email).Scan(&exists); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_auth_find_user($1))`, email).Scan(&exists); err != nil {
 			return err
 		}
 		if exists {
@@ -371,8 +381,8 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 			q    string
 			args []any
 		}{
-			{`INSERT INTO tenants (id, name, plan_id) VALUES ($1, $2, $3)`, []any{tenant, req.Tenant, uuid.Nil}},
-			{`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, []any{user, req.Email, req.Name, hashPassword(req.Password)}},
+			{`INSERT INTO tenants (id, name, plan_id) VALUES ($1, $2, $3)`, []any{tenant, name, uuid.Nil}},
+			{`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, []any{user, email, userName, hashPassword(password)}},
 			{`INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'owner')`, []any{tenant, user}},
 			{`INSERT INTO workspaces (id, tenant_id, name) VALUES ($1, $2, 'Default')`, []any{uuid.Must(uuid.NewV7()), tenant}},
 			{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{tenant}},
@@ -385,11 +395,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'tenant.create', $3, '{}')`, tenant, user.String(), tenant.String())
 		return err
 	})
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"tenant_id": tenant, "user_id": user})
+	return tenant, user, err
 }
 
 // --- members and API keys ---

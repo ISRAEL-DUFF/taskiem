@@ -1,5 +1,6 @@
-// Command taskiem is the single Taskiem binary. In Phase 0 it migrates the
-// database and validates contracts; the engine roles arrive in Phase 1.
+// Command taskiem is the single Taskiem binary: it migrates the database,
+// validates contracts, runs any engine role (spec 15.4), and verifies audit
+// exports.
 package main
 
 import (
@@ -8,10 +9,16 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
+	"github.com/israel-duff/taskiem/api"
+	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -25,7 +32,11 @@ const usage = `taskiem — workflow automation engine
 Usage:
   taskiem migrate [--dsn DSN]        apply database migrations (as the schema owner)
   taskiem validate FILE...           validate workflow definitions (*.wd.json) and connector manifests (*.yaml)
-  taskiem serve --role ROLE          run an engine role: api, edge, orchestrator, scheduler, worker, all
+  taskiem serve [--role ROLE]        run an engine role: api, edge, orchestrator, scheduler, worker, all (default)
+  taskiem bootstrap --tenant NAME --email EMAIL
+                                     create the first tenant and its owner (password from $TASKIEM_BOOTSTRAP_PASSWORD)
+  taskiem audit verify FILE          verify an audit export (GET /v1/audit/export) offline
+  taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 `
 
@@ -50,7 +61,15 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case "validate":
 		return validate(args[1:], stdout)
 	case "serve":
-		return serve(args[1:])
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return serve(ctx, args[1:])
+	case "bootstrap":
+		return bootstrap(args[1:], stdout)
+	case "audit":
+		return auditCmd(args[1:], stdout)
+	case "healthcheck":
+		return healthcheck()
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return nil
@@ -118,16 +137,72 @@ func validate(files []string, stdout io.Writer) error {
 	return nil
 }
 
-var roles = map[string]bool{"api": true, "edge": true, "orchestrator": true, "scheduler": true, "worker": true, "all": true}
-
-func serve(args []string) error {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	role := fs.String("role", "all", "api, edge, orchestrator, scheduler, worker, or all")
+func bootstrap(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("bootstrap", flag.ContinueOnError)
+	tenant := fs.String("tenant", "", "tenant name")
+	email := fs.String("email", "", "owner's email")
+	name := fs.String("name", "", "owner's name")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if !roles[*role] {
-		return fmt.Errorf("serve: unknown role %q", *role)
+	pw := os.Getenv("TASKIEM_BOOTSTRAP_PASSWORD")
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("bootstrap: %w", err)
 	}
-	return fmt.Errorf("serve: role %q is built in Phase 1; Phase 0 provides migrate and validate", *role)
+	ctx := context.Background()
+	pool, err := openPool(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("bootstrap: %w", err)
+	}
+	defer pool.Close()
+	t, u, err := api.CreateTenant(ctx, pool, *tenant, *email, *name, pw)
+	if err != nil {
+		return fmt.Errorf("bootstrap: %w", err)
+	}
+	fmt.Fprintf(stdout, "tenant %s\nowner  %s (%s)\n", t, u, *email)
+	return nil
+}
+
+func auditCmd(args []string, stdout io.Writer) error {
+	if len(args) != 2 || args[0] != "verify" {
+		return errors.New("usage: taskiem audit verify FILE (an export from GET /v1/audit/export; - for stdin)")
+	}
+	var r io.Reader = os.Stdin
+	if args[1] != "-" {
+		f, err := os.Open(args[1])
+		if err != nil {
+			return err
+		}
+		defer func() { _ = f.Close() }()
+		r = f
+	}
+	res, err := audit.Verify(r)
+	if err != nil {
+		return err
+	}
+	if res.FirstBroken != 0 {
+		return fmt.Errorf("audit chain BROKEN at entry %d: %s (%d entries verified before it)", res.FirstBroken, res.Reason, res.Entries)
+	}
+	fmt.Fprintf(stdout, "audit chain intact: %d entries, every hash and link recomputed\n", res.Entries)
+	return nil
+}
+
+// healthcheck probes the local API's /readyz, for container health checks
+// in images without a shell.
+func healthcheck() error {
+	addr := env("TASKIEM_LISTEN", ":8080")
+	if strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1" + addr
+	}
+	c := &http.Client{Timeout: 3 * time.Second}
+	resp, err := c.Get("http://" + addr + "/readyz")
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("readyz: %s", resp.Status)
+	}
+	return nil
 }
