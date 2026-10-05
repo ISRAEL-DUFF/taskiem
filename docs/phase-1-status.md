@@ -35,7 +35,7 @@ Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, 
 | Egress | Per-call allow-lists (connectors: manifest hosts; http steps and sandbox fetch: tenant rules per environment); SSRF blocking incl. metadata, IPv4-mapped, DNS rebinding; guarded redirects; logged | `engine/egress` |
 | Secrets | Envelope encryption: AES-256-GCM per value, tenant KEKs wrapped by a KMS root key (local or OpenBao transit, tested against OpenBao 2.4.1), rotation re-wraps data keys, audited | `engine/secrets` |
 | Configuration | Connections with encrypted credentials, tenant variables snapshotted into each run, egress rules | migration 00008, `engine/runtime/config.go` |
-| Dogfood | The iSpend top-up reconciliation flow runs end to end against real Postgres and fake Paystack/iSpend servers | `e2e/` |
+| Dogfood | The first iSpend top-up reconciliation draft ran end to end against real Postgres and fake Paystack/iSpend servers (now an example; see milestone 3) | `e2e/` |
 
 ## Milestone 3: what exists
 
@@ -49,7 +49,13 @@ Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, 
 | Operations | `taskiem serve --role api\|edge\|orchestrator\|scheduler\|worker\|all` configured from the environment, graceful shutdown with a worker drain window; Prometheus metrics (requests, ingest, steps, queue depth and age, timers, lease expiries, sweeps); OpenTelemetry traces over OTLP; `taskiem bootstrap`; Docker image with the web app; Compose stack with OpenBao transit, verified end to end | `cmd/taskiem`, `engine/telemetry`, `deploy/`, `Dockerfile`, [operations](operations.md) |
 | Web app | Sign-in; workflow list; canvas editor (React Flow) with step palette, dependency editing, connector input forms generated from manifest schemas, trigger and run settings, JSON view, published endpoints; run list and inspector; approvals inbox; connections; secrets, variables, egress; audit log with verification and export; members and API keys | `web/` |
 
-**Dogfood workflows, end to end in tests** (`e2e/`): the Payrolla disbursement runs through the API and the edge (signed webhook, duplicate delivery returns the same run, balance check, maker-checker approval in which the workflow's author is refused, three transfers with idempotency seeds, one settled later by a signed Paystack webhook, report posted to Payrolla, recipient codes sealed at rest, replay verified); the ops alert starts from a Paystack `transfer.failed` webhook, ignores the retry and `transfer.success`, and sends one SMS through Termii and one Slack post; the iSpend reconciliation runs as in milestone 2.
+**Dogfood workflows, end to end in tests** (`e2e/`), all on iswallet, the group's wallet provider ([integration](integrations/iswallet.md)); the first drafts assumed Paystack and were rewritten once iswallet's answers arrived:
+
+- **Payrolla disbursement** runs through the API and the edge: signed webhook, a duplicate delivery returns the same run, balance check, maker-checker approval in which the workflow's author is refused, then two wallet transfers and one bank payout with idempotency seeds. One transfer's response is lost after the money moved; the retry is answered from iswallet's replay cache and the employee is paid once. The payout settles on a signed iswallet webhook (a forged one is refused), the report is posted to Payrolla, account details are sealed at rest, and replay is verified.
+- **Ops payout-failure alert** starts from iswallet's `wallet.outflow.failed` webhook, ignores the redelivery and `confirmed`, and sends one SMS through Termii and one Slack post.
+- **iSpend credit exceptions** starts from iswallet's `wallet.credit.rejected` and `wallet.credit.reversed` webhooks, notifies iSpend's API idempotently and posts to Slack, and ignores redeliveries and ordinary credits.
+
+The milestone 2 iSpend top-up reconciliation draft is now an example workflow (`flows/examples/`): iSpend tops up through iswallet, which settles deposits itself.
 
 **Browser test** (`web/e2e`, CI job `web`): signs in, creates a workflow, adds a code step on the canvas, publishes, starts a run, sees it complete in the inspector, and verifies the audit chain, against the real binary and a fresh database.
 

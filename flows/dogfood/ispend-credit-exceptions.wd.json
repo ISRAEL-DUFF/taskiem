@@ -1,0 +1,62 @@
+{
+  "schema": "wd/v1",
+  "id": "wf_ispendCreditExceptions",
+  "version": 1,
+  "name": "iSpend: handle rejected and reversed wallet credits",
+  "description": "When iswallet refuses a customer's top-up (refunding the sender) or claws back a credit it had already posted, tells iSpend so it can update the customer's wallet view and receipt, and alerts ops.",
+  "trigger": {
+    "type": "connector_event",
+    "config": {
+      "connector": "iswallet@1",
+      "trigger": "credit_event",
+      "events": ["wallet.credit.rejected", "wallet.credit.reversed"]
+    }
+  },
+  "steps": [
+    {
+      "id": "describe",
+      "type": "transform",
+      "config": {
+        "output": {
+          "kind": "=trigger.event == 'wallet.credit.reversed' ? 'reversed' : 'rejected'",
+          "wallet_id": "=trigger.body.wallet_id",
+          "amount_kobo": "=has(trigger.body.data.amount) ? trigger.body.data.amount : 0",
+          "text": "='iSpend top-up ' + (trigger.event == 'wallet.credit.reversed' ? 'REVERSED after it was credited' : 'rejected and refunded to the sender') + ': wallet ' + trigger.body.wallet_id + (has(trigger.body.data.amount) ? ', ' + string(double(trigger.body.data.amount) / 100.0) + ' NGN' : '') + ', event ' + trigger.body.id"
+        }
+      }
+    },
+    {
+      "id": "notify_ispend",
+      "type": "http",
+      "needs": ["describe"],
+      "config": {
+        "method": "POST",
+        "url": "=env.ispend_api_url + '/internal/wallet-credit-exceptions'",
+        "headers": { "Authorization": "='Bearer ' + secrets.ispend_api_token" },
+        "body": {
+          "event_id": "=trigger.body.id",
+          "kind": "=steps.describe.output.kind",
+          "wallet_id": "=steps.describe.output.wallet_id",
+          "amount_kobo": "=steps.describe.output.amount_kobo",
+          "occurred_at": "=trigger.body.occurred_at",
+          "iswallet": "=trigger.body.data"
+        },
+        "class": "idempotent_write",
+        "idempotency_header": "Idempotency-Key"
+      },
+      "retry": { "max": 10, "backoff": "exponential", "initial": "5s", "max_delay": "10m" }
+    },
+    {
+      "id": "post_slack",
+      "type": "http",
+      "needs": ["describe"],
+      "config": {
+        "method": "POST",
+        "url": "=secrets.ops_slack_webhook_url",
+        "body": { "text": "=steps.describe.output.text" },
+        "class": "unsafe_write"
+      }
+    }
+  ],
+  "settings": { "timeout": "24h" }
+}

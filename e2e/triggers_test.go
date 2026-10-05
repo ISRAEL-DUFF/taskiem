@@ -306,6 +306,88 @@ func TestOpsPayoutFailureAlertEndToEnd(t *testing.T) {
 	}
 }
 
+func TestISpendCreditExceptionsEndToEnd(t *testing.T) {
+	var mu sync.Mutex
+	var notices []map[string]any
+	var keys []string
+	var slack []string
+	ispend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		mu.Lock()
+		if r.URL.Path == "/internal/wallet-credit-exceptions" && r.Header.Get("Authorization") == "Bearer isp_token" {
+			notices = append(notices, in)
+			keys = append(keys, r.Header.Get("Idempotency-Key"))
+		}
+		mu.Unlock()
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer ispend.Close()
+	slackSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		mu.Lock()
+		slack = append(slack, in["text"].(string))
+		mu.Unlock()
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer slackSrv.Close()
+
+	s := newStack(t, builtin.Options{})
+	tenant := s.must(t, 201, "", "POST", "/v1/signup", map[string]any{"tenant": "iSpend", "email": "ops@ispend.test", "password": "correct horse battery"})["tenant_id"].(string)
+	owner := s.login(t, "ops@ispend.test")
+	s.must(t, 201, owner, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "iswallet@1", "name": "ispend",
+		"credentials": map[string]string{"api_key": "isw_ispend", "webhook_secret": "whsec_ispend"}})
+	s.must(t, 204, owner, "PUT", "/v1/variables/prod/ispend_api_url", map[string]any{"value": ispend.URL})
+	s.must(t, 204, owner, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "127.0.0.1"})
+	s.Secrets["ispend_api_token"] = "isp_token"
+	s.Secrets["ops_slack_webhook_url"] = slackSrv.URL + "/services/T/B/X"
+	_, hook := s.publishFile(t, owner, "ispend-credit-exceptions.wd.json")
+	if hook != "/hooks/"+tenant+"/connectors/iswallet@1/credit_event?env=prod" {
+		t.Fatalf("hook %q", hook)
+	}
+	hook += "&connection=ispend"
+	post := func(id, typ string, data map[string]any) map[string]any {
+		body, hdr := creditEvent(id, typ, "w_cust_7", data, "whsec_ispend")
+		return s.must(t, 202, "", "POST", hook, body, hdr...)
+	}
+	if n := len(post("evt_rej", "wallet.credit.rejected", map[string]any{"amount": 1500000, "source_ref": "VA-44"})["runs"].([]any)); n != 1 {
+		t.Fatalf("rejected credit started %d runs", n)
+	}
+	post("evt_rej", "wallet.credit.rejected", map[string]any{"amount": 1500000, "source_ref": "VA-44"}) // redelivery
+	post("evt_rev", "wallet.credit.reversed", map[string]any{"txn_id": "txn_9", "reversal_reference": "RV-1"})
+	if n := len(post("evt_ok", "wallet.credit.posted", map[string]any{"amount": 500000, "txn_id": "txn_10"})["runs"].([]any)); n != 0 {
+		t.Errorf("a normal credit started %d runs", n)
+	}
+	rt.WaitFor(t, 15*time.Second, "notices", func() bool {
+		s.Drain(t)
+		mu.Lock()
+		defer mu.Unlock()
+		return len(notices) >= 2 && len(slack) >= 2
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(notices) != 2 || len(slack) != 2 {
+		t.Fatalf("notices %v, slack %v", notices, slack)
+	}
+	byKind := map[string]map[string]any{}
+	for _, n := range notices {
+		byKind[n["kind"].(string)] = n
+	}
+	if r := byKind["rejected"]; r == nil || r["amount_kobo"] != float64(1500000) || r["event_id"] != "evt_rej" || r["wallet_id"] != "w_cust_7" {
+		t.Errorf("rejected notice %v", byKind["rejected"])
+	}
+	if r := byKind["reversed"]; r == nil || r["amount_kobo"] != float64(0) || r["iswallet"].(map[string]any)["reversal_reference"] != "RV-1" {
+		t.Errorf("reversed notice %v", byKind["reversed"])
+	}
+	if keys[0] == "" || keys[0] == keys[1] {
+		t.Errorf("idempotency keys %v", keys)
+	}
+	if !strings.Contains(strings.Join(slack, "|"), "iSpend top-up rejected and refunded to the sender: wallet w_cust_7, 15000 NGN, event evt_rej") {
+		t.Errorf("slack %v", slack)
+	}
+}
+
 func toJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)

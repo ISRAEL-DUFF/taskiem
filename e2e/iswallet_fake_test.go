@@ -148,3 +148,13 @@ func (f *fakeIswallet) event(o map[string]any, eventType, secret string) (body [
 // failNextTransferTo makes the next transfer to wallet lose its response as
 // a 500 after the money has moved. Call with f.mu held.
 func (f *fakeIswallet) failNextTransferTo(wallet string) { f.failWallet = wallet }
+
+// creditEvent builds a signed credit webhook delivery.
+func creditEvent(id, eventType, wallet string, data map[string]any, secret string) (body []byte, headers []string) {
+	body, _ = json.Marshal(map[string]any{"id": id, "event_type": eventType, "schema_version": "v1",
+		"occurred_at": "2026-10-05T09:15:40Z", "wallet_id": wallet, "data": data})
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = io.WriteString(mac, ts+"."+string(body))
+	return body, []string{"X-iSpend-Signature", "sha256=" + hex.EncodeToString(mac.Sum(nil)), "X-iSpend-Timestamp", ts}
+}

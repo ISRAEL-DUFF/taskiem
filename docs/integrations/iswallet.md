@@ -38,6 +38,12 @@ iswallet has no lookup by our key yet (§0.1), and its replay cache lasts 24 hou
 - `RATE_LIMITED`, `CUSTODY_UNAVAILABLE`, `SUBACCOUNT_SYNCING`, `LIQUIDITY_EXHAUSTED` and 503 are retried; limits, insufficient funds, `OUTFLOW_REJECTED` and other 4xx fail the step with iswallet's code and request id.
 - A payout iswallet marks `unresolved` sends no event; the waiting step times out (72 hours in the Payrolla flow) and the run fails for an operator. `reversed` can arrive days after `confirmed`; the ops alert workflow listens for it.
 
+## Workflows using it
+
+- `flows/dogfood/payrolla-salary-disbursement.wd.json`: transfers and payouts, waiting on `outflow_event`.
+- `flows/dogfood/ops-payout-failure-alert.wd.json`: `outflow_event` (failed, reversed).
+- `flows/dogfood/ispend-credit-exceptions.wd.json`: `credit_event` (rejected, reversed).
+
 ## Limits to plan for (§0.3, §A3)
 
 - A new wallet is TIER_1: ₦50,000 per transaction **and per day** for bank payouts. Upgrade the Payrolla funding wallet's KYC tier before the pilot. Wallet-to-wallet transfers are bound by the per-transaction limit only.

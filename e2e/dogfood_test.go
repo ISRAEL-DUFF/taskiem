@@ -23,7 +23,7 @@ import (
 
 var ctx = context.Background()
 
-func TestISpendTopupReconciliation(t *testing.T) {
+func TestTopupReconciliationExample(t *testing.T) {
 	e := rt.New(t)
 	paystack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ref := strings.TrimPrefix(r.URL.Path, "/transaction/verify/")
@@ -74,7 +74,7 @@ func TestISpendTopupReconciliation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	doc, err := os.ReadFile("../flows/dogfood/ispend-topup-reconciliation.wd.json")
+	doc, err := os.ReadFile("../flows/examples/topup-reconciliation-postgres-paystack.wd.json")
 	if err != nil {
 		t.Fatal(err)
 	}
