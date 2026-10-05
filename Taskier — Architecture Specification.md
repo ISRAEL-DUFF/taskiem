@@ -1,10 +1,10 @@
-# Workflow Automation Platform — Architecture Specification
+# Taskier — Architecture Specification
 
 Oct 5, 2026 · @EaziDeFi
 
 ## 1. Overview
 
-The platform is a workflow automation engine that regulated businesses can trust with money movement. It is built from scratch in Go on PostgreSQL, owns all of its code, and is hosted in Nigeria. It combines a visual builder with a durable execution core, compliance controls, and first-class African integrations.
+Taskier (working name, pending trademark search; see section 18.2) is a workflow automation engine that regulated businesses can trust with money movement. It is built from scratch in Go on PostgreSQL, owns all of its code, and is hosted in Nigeria. It combines a visual builder with a durable execution core, compliance controls, and first-class African integrations.
 
 ### 1.1 Target users
 
@@ -46,7 +46,39 @@ The platform is a workflow automation engine that regulated businesses can trust
 
 The platform is one Go binary that runs as any of five roles, with PostgreSQL as the single source of truth for state, queueing, and audit. A small install runs every role in one process; a large one scales each role independently behind a load balancer.
 
-&#91;embedded content: system architecture · 4 layers, 1 binary\]
+```mermaid
+flowchart TB
+  subgraph Clients["Clients and providers"]
+    WEB["Web app / embedded builder"]
+    CLI[CLI and SDKs]
+    WA["WhatsApp / USSD"]
+    PROV[Provider webhooks]
+  end
+  subgraph Edge["Edge layer"]
+    API["api: public REST API"]
+    ING["edge: trigger ingest + fast path"]
+  end
+  subgraph Core["Core layer"]
+    ORC["orchestrator: decide()"]
+    SCH["scheduler: timers, cron, lease recovery, retention"]
+    WRK["worker: connectors, sandbox, AI"]
+  end
+  subgraph Data["Data layer"]
+    PG[("PostgreSQL: state, queue, audit")]
+    OBJ[("S3-compatible object storage")]
+    KMS[("OpenBao / KMS")]
+  end
+  EGR[Egress proxy] --> EXT[External APIs]
+  WEB & CLI --> API
+  WA & PROV --> ING
+  API & ING --> PG
+  ORC <--> PG
+  SCH <--> PG
+  WRK <--> PG
+  WRK --> OBJ
+  WRK --> KMS
+  WRK --> EGR
+```
 
 Requests flow top to bottom: clients and providers hit the edge, the edge records events, the core decides and executes, and every outbound call leaves through the egress proxy.
 
@@ -68,8 +100,8 @@ Requests flow top to bottom: clients and providers hit the edge, the edge record
 1. A provider webhook arrives at ingest, which verifies the signature and checks the dedup key.
 2. Ingest writes `RunStarted` and triggers the first orchestrator pass in one transaction, then returns 202.
 3. The orchestrator reads the history, decides the first step is ready, and writes `StepScheduled` plus a task.
-4. A worker claims the task with `SKIP LOCKED`, writes `EffectIntent`, and calls the provider through the egress proxy with a deterministic idempotency key.
-5. The worker writes `StepCompleted`; the orchestrator wakes, decides the next step, and the loop repeats.
+4. A worker claims the task with `SKIP LOCKED`, receiving a lease epoch (fencing token); it writes `EffectIntent` and calls the provider through the egress proxy with a deterministic idempotency key.
+5. The worker writes `StepCompleted`, which is accepted only if its lease epoch is still current (section 4.3); the orchestrator wakes, decides the next step, and the loop repeats.
 6. At an approval step the orchestrator writes `ApprovalRequested`; the run sleeps at zero cost until a signed decision arrives from the web or WhatsApp.
 7. When no steps remain, the orchestrator writes `RunCompleted`.
 
@@ -82,7 +114,7 @@ Requests flow top to bottom: clients and providers hit the edge, the edge record
 | Cloud at scale | Workers split by queue (connector, sandbox, AI, dedicated tenants); read replicas for inspector queries; queue moved to NATS JetStream if needed |
 | Enterprise dedicated | Single-tenant stack in the customer's chosen region or on their infrastructure |
 
-Scheduler instances use a Postgres advisory-lock lease for leader election, so only one fires timers at a time while others stand by.
+Scheduler instances use a session-level Postgres advisory lock for leader election, so only one fires timers at a time while others stand by. The lock is held on a dedicated, direct connection (never through a transaction-pooling proxy such as PgBouncer), and the leader re-checks it before each batch so a lost connection cannot leave two leaders.
 
 ## 3. Workflow definition format
 
@@ -129,13 +161,15 @@ A WD is a directed graph of steps plus metadata. Loops and parallelism are expli
         "amount": "=trigger.body.amount_kobo",
         "recipient": "=trigger.body.recipient_code"
       },
-      "effect": { "idempotency": "=run.id + ':pay'" }
+      "effect": { "idempotency_seed": "=trigger.body.loan_id" }
     }
   ],
   "types": { "LoanApproved": { "type": "object", "properties": { } } },
   "settings": { "timeout": "72h", "concurrency_key": "=trigger.body.borrower_id" }
 }
 ```
+
+`effect.idempotency_seed` is optional. When set, it replaces the run id in the idempotency key, so a business identifier (here the loan id) deduplicates the payment across runs as well as within one. The engine always derives and encodes the final key itself (section 4.4); a workflow never supplies a raw provider reference.
 
 ### 3.2 Step types
 
@@ -180,7 +214,7 @@ Each run has an ordered event log in `run_events`. Events are immutable and sequ
 
 | Event | Written when |
 | --- | --- |
-| `RunStarted` | Trigger accepted; records WD version, inputs, trigger metadata |
+| `RunStarted` | Trigger accepted; records WD version, the exact resolved connector versions (for example `paystack@1.4.0`), inputs, trigger metadata |
 | `StepScheduled` | Orchestrator decides a step is ready |
 | `StepStarted` | A worker claims the step's task |
 | `EffectIntent` | Just before a side-effecting call; records idempotency key and request digest |
@@ -204,7 +238,9 @@ The orchestrator runs whenever a run receives a new event. It locks the run row,
 PostgreSQL is the queue in v1, which removes a moving part and keeps events and tasks transactionally consistent.
 
 - Workers claim with `SELECT … FOR UPDATE SKIP LOCKED`, ordered by priority then `available_at`.
-- A claim sets a lease (default 60 s). Long steps heartbeat to extend it; an expired lease makes the task claimable again.
+- A claim sets a lease (default 60 s) and increments the task's `lease_epoch`, which the worker carries as a fencing token. Long steps heartbeat to extend the lease; an expired lease makes the task claimable again.
+- **Fencing.** Every write a worker makes for a task (`StepStarted`, `EffectIntent`, `StepCompleted`, `StepFailed`, heartbeats) runs `UPDATE tasks … WHERE id = $1 AND lease_epoch = $2 AND lease_owner = $3` in the same transaction. If no row matches, the lease was lost: the transaction rolls back, the worker abandons the step, and its result is discarded. A stalled worker that wakes after its lease expired can therefore never record a result over the worker that replaced it.
+- Claiming is cross-tenant, so it runs through the narrow dispatch path in section 5.3, not as an ordinary tenant-scoped query.
 - `LISTEN/NOTIFY` wakes idle workers instantly; polling every 1 s is the fallback.
 - Tasks carry `tenant_id` and a queue name, so tenants and workload classes (connector calls, code sandbox, AI) can get dedicated worker pools.
 - Exit path: if sustained load exceeds what one primary handles, the queue interface swaps to NATS JetStream without changing the orchestrator.
@@ -220,7 +256,21 @@ Delivery is at-least-once, so a step can run twice after a crash. Effects are ma
 | `reconcilable_write` | Bank transfer that can be queried by reference | Call the connector's `reconcile` action first; re-issue only if the provider confirms it never happened |
 | `unsafe_write` | Provider with no key and no status API | Never auto-retry an unknown outcome; park the step in `needs_reconciliation` and alert a human |
 
-The idempotency key defaults to `tenant:run_id:step_id:attempt_group` and is derived, never random, so a replay produces the same key. An `EffectIntent` event is committed before every write call, so after a crash the engine knows a call may have left the building.
+**Key derivation.** The idempotency key is derived, never random, so a replay produces the same key:
+
+```
+key_material  = tenant_id ‖ seed ‖ step_id ‖ attempt_group
+seed          = effect.idempotency_seed if declared, else run_id
+attempt_group = 0, incremented only when a human or the repair flow
+                deliberately re-issues an effect the provider confirmed
+                never happened (reconcile result "not_found")
+```
+
+Automatic retries keep the same `attempt_group`, so every retry of one logical effect reuses one key. Forks inherit the parent run's seed for copied steps, so a forked run never pays twice for a step the parent already completed.
+
+**Key encoding.** Providers restrict reference formats; Paystack, for example, accepts only lowercase `a-z`, `0-9`, `_` and `-`, 16–50 characters. The key is therefore never sent raw. The engine computes `sha256(key_material)` and the connector manifest's `idempotency` block (section 6.1) encodes it to fit the provider: by default lowercase base32 truncated to 32 characters (160 bits), with an optional prefix. The raw key material and the encoded reference are both recorded in `EffectIntent`, so support staff can map a provider reference back to its run and step.
+
+**Intent before effect.** An `EffectIntent` event is committed (under the fencing check in section 4.3) before every write call, so after a crash the engine knows a call may have left the building. Before any write, the worker checks for an earlier `EffectIntent` for the same key with no matching `StepCompleted`; if one exists, the outcome is unknown and the action class decides: `idempotent_write` re-sends with the same key, `reconcilable_write` reconciles first, and `unsafe_write` parks in `needs_reconciliation` without calling the provider again.
 
 ### 4.5 Retries and errors
 
@@ -230,7 +280,7 @@ The idempotency key defaults to `tenant:run_id:step_id:attempt_group` and is der
 
 ### 4.6 Timers, signals, and approvals
 
-- `timers` table holds `fire_at`; the scheduler role claims due timers with `SKIP LOCKED` and appends `TimerFired`.
+- `timers` table holds `fire_at`; the scheduler role claims due timers with `SKIP LOCKED` through the dispatch path (section 5.3) and appends `TimerFired` under the owning tenant's scope.
 - Signals match runs by `(tenant, correlation_key)`. A signal that arrives before the run is waiting is buffered, never dropped.
 - Approvals are a signal type with a governance policy attached (section 9).
 
@@ -246,7 +296,9 @@ A step may declare a `compensate` action, for example `reverse_transfer` for `tr
 
 ### 4.9 Payloads
 
-Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-compatible object storage (MinIO when self-hosted), referenced by content hash, encrypted per tenant. PII fields are redacted in the copy shown in the UI and logs (section 9).
+Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-compatible object storage (SeaweedFS when self-hosted), referenced by content hash, encrypted per tenant. PII fields are redacted in the copy shown in the UI and logs (section 9).
+
+PII values are never stored in plaintext in either place. Before an event is written, every declared or detected PII field (section 9.3) is replaced by an envelope `{"$pii": "<category>", "subject": "<subject id>", "ct": "<ciphertext>"}` encrypted under that data subject's key in `subject_keys`. Non-PII fields stay plaintext JSONB so they remain queryable. Workers and the orchestrator decrypt envelopes in memory when an expression needs the value; this is what makes erasure by crypto-shredding possible (section 9.4).
 
 ### 4.10 Replay, fork, and cancel
 
@@ -260,7 +312,7 @@ Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-co
 | --- | --- |
 | Step dispatch latency (queue to worker) | p95 under 50 ms |
 | Sustained step throughput, one Postgres primary | 500 steps/s |
-| Run history retention | 90 days hot, then archived to object storage |
+| Run history retention | 90 days hot after the run ends, then archived to object storage |
 | Recovery after worker crash | Lease expiry, default 60 s |
 
 These are design targets to validate with load tests in Phase 1, not measured figures.
@@ -276,8 +328,8 @@ All state lives in PostgreSQL 16+, with every tenant-owned table carrying `tenan
 | Identity and tenancy | `tenants`, `users`, `memberships`, `roles`, `role_permissions`, `api_keys`, `sessions` |
 | Embedding | `embed_apps`, `end_users`, `end_user_tokens` |
 | Definitions | `workflows`, `workflow_versions`, `environments`, `triggers`, `variables` |
-| Execution | `runs`, `run_events`, `tasks`, `timers`, `signals`, `concurrency_slots`, `payload_blobs` |
-| Governance | `approval_policies`, `approvals`, `approval_decisions`, `audit_log`, `redaction_rules` |
+| Execution | `runs`, `run_events`, `tasks`, `timers`, `signals`, `trigger_receipts`, `concurrency_slots`, `payload_blobs` |
+| Governance | `approval_policies`, `approvals`, `approval_decisions`, `audit_log`, `audit_chain_heads`, `redaction_rules`, `subject_keys` |
 | Connectors | `connectors`, `connector_versions`, `connections`, `secrets`, `oauth_states` |
 | Channels | `whatsapp_numbers`, `chat_sessions`, `chat_bindings` |
 | Billing | `plans`, `subscriptions`, `usage_snapshots` |
@@ -290,7 +342,7 @@ CREATE TABLE tenants (
   parent_id     uuid REFERENCES tenants(id),   -- set for embedded sub-tenants
   name          text NOT NULL,
   region        text NOT NULL DEFAULT 'ng-lagos',
-  plan_id       uuid NOT NULL,
+  plan_id       uuid NOT NULL,                 -- FK to plans added by the billing migration
   status        text NOT NULL DEFAULT 'active',
   created_at    timestamptz NOT NULL DEFAULT now()
 );
@@ -332,23 +384,30 @@ CREATE TABLE runs (
   forked_from_seq bigint,
   last_seq        bigint NOT NULL DEFAULT 0,
   started_at      timestamptz NOT NULL,
-  ended_at        timestamptz
+  ended_at        timestamptz,
+  retain_until    timestamptz                 -- set when the run ends: ended_at + plan retention
 );
 CREATE INDEX ON runs (tenant_id, workflow_id, started_at DESC);
 CREATE INDEX ON runs (tenant_id, correlation_key) WHERE correlation_key IS NOT NULL;
+CREATE INDEX ON runs (retain_until) WHERE retain_until IS NOT NULL;
 
+-- Partitioned by the run's start time, not the event's write time, so all events
+-- of one run live in one partition. The partition key must be part of the primary
+-- key; run_started_at is constant per run, so (run_id, seq) stays unique in effect,
+-- and seq is allocated from runs.last_seq under the run row lock.
 CREATE TABLE run_events (
-  run_id        uuid   NOT NULL,
-  seq           bigint NOT NULL,
-  tenant_id     uuid   NOT NULL,
-  type          text   NOT NULL,
-  step_id       text,
-  attempt       int,
-  payload       jsonb,                         -- inline up to 256 KB
-  payload_ref   bytea,                         -- content hash in object storage
-  recorded_at   timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (run_id, seq)
-) PARTITION BY RANGE (recorded_at);           -- monthly partitions
+  run_id         uuid        NOT NULL,
+  seq            bigint      NOT NULL,
+  run_started_at timestamptz NOT NULL,         -- copied from runs.started_at
+  tenant_id      uuid        NOT NULL,
+  type           text        NOT NULL,
+  step_id        text,
+  attempt        int,
+  payload        jsonb,                        -- inline up to 256 KB; PII as encrypted envelopes
+  payload_ref    bytea,                        -- content hash in object storage
+  recorded_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (run_id, seq, run_started_at)
+) PARTITION BY RANGE (run_started_at);        -- monthly partitions
 
 CREATE TABLE tasks (
   id            uuid PRIMARY KEY,
@@ -361,9 +420,18 @@ CREATE TABLE tasks (
   available_at  timestamptz NOT NULL,
   lease_owner   text,
   lease_until   timestamptz,
+  lease_epoch   bigint NOT NULL DEFAULT 0,     -- fencing token, incremented on every claim
   UNIQUE (run_id, step_id, attempt)
 );
 CREATE INDEX ON tasks (queue, priority, available_at) WHERE lease_owner IS NULL;
+
+CREATE TABLE secrets (
+  id            uuid PRIMARY KEY,
+  tenant_id     uuid NOT NULL,
+  ciphertext    bytea NOT NULL,                -- AES-256-GCM, data key wrapped by tenant KEK
+  key_version   int   NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
 
 CREATE TABLE connections (
   id            uuid PRIMARY KEY,
@@ -377,32 +445,42 @@ CREATE TABLE connections (
   expires_at    timestamptz
 );
 
-CREATE TABLE secrets (
-  id            uuid PRIMARY KEY,
+CREATE TABLE subject_keys (
   tenant_id     uuid NOT NULL,
-  ciphertext    bytea NOT NULL,                -- AES-256-GCM, data key wrapped by tenant KEK
-  key_version   int   NOT NULL,
-  created_at    timestamptz NOT NULL DEFAULT now()
+  subject_id    text NOT NULL,                 -- stable pseudonymous id, e.g. hmac(tenant_key, bvn)
+  wrapped_key   bytea,                         -- data key wrapped by tenant KEK; NULL once shredded
+  shredded_at   timestamptz,
+  PRIMARY KEY (tenant_id, subject_id)
 );
 
 CREATE TABLE audit_log (
   id            bigserial PRIMARY KEY,
   tenant_id     uuid NOT NULL,
+  chain_seq     bigint NOT NULL,               -- gapless per tenant
   actor_type    text NOT NULL,                 -- user | api_key | system | ai | end_user
   actor_id      text NOT NULL,
   action        text NOT NULL,                 -- workflow.publish, approval.decide, secret.read ...
   target        text NOT NULL,
-  detail        jsonb NOT NULL,
+  detail        jsonb NOT NULL,                -- never raw PII: ids, digests, redacted values only
   prev_hash     bytea NOT NULL,
   hash          bytea NOT NULL,                -- sha256(prev_hash || canonical(row))
-  at            timestamptz NOT NULL DEFAULT now()
+  at            timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, chain_seq)
+);
+
+CREATE TABLE audit_chain_heads (
+  tenant_id     uuid PRIMARY KEY,
+  chain_seq     bigint NOT NULL,
+  head_hash     bytea  NOT NULL
 );
 ```
 
 ### 5.3 Isolation rules
 
-- Every connection sets `SET LOCAL app.tenant_id` at transaction start; RLS policies compare against it.
+- Every transaction sets `SET LOCAL app.tenant_scope` at start: an array of tenant ids the caller may touch. RLS policies check `tenant_id = ANY(current_setting('app.tenant_scope')::uuid[])`. For an ordinary user or API key the scope is their own tenant only.
+- **Tenant hierarchy.** A partner's scope includes its sub-tenants only when the call comes through the partner admin API (section 13.4) with the `subtenant.read` or `subtenant.manage` permission. The API computes the scope from `tenants.parent_id` at authentication, and each cross-tenant access is written to both the partner's and the sub-tenant's audit log. Partner users acting in the partner's own workspace never get sub-tenant ids in scope, which keeps sub-tenant data isolated from them by default.
 - The application role cannot bypass RLS. Only migrations and the platform-admin role can, and their use is itself audited.
+- **Dispatch path.** Workers, the orchestrator, and the scheduler must find work across all tenants. They do this only through a small set of `SECURITY DEFINER` functions owned by a `taskier_dispatch` role: `claim_tasks(queue, worker_id, n)`, `claim_due_timers(n)`, `claim_runs_to_orchestrate(n)`, and `recover_expired_leases()`. Each function claims rows with `SKIP LOCKED`, returns only routing columns (ids, `tenant_id`, step id, lease epoch), and touches no payloads. The caller then opens a normal transaction with `app.tenant_scope` set to that row's single tenant before reading history, secrets, or payloads, so all data access stays under RLS. These functions are fixed in migrations, reviewed like security code, and covered by the RLS bypass tests.
 - `audit_log` and `run_events` grant `INSERT` and `SELECT` only; `UPDATE` and `DELETE` are revoked from every application role.
 - Large tenants can be moved to a dedicated database by tenant id; the data model never assumes tenants share a database.
 
@@ -430,7 +508,11 @@ actions:
   transfer:
     title: Send transfer
     class: idempotent_write
-    idempotency: { field: reference, max_length: 100 }
+    idempotency:
+      field: reference
+      encoding: base32_lower      # engine-derived sha256, encoded to the provider's rules
+      length: 32                  # Paystack: 16–50 chars of [a-z0-9_-]
+      prefix: "tsk_"
     reconcile: verify_transfer
     compensate: null
     input:
@@ -462,10 +544,10 @@ triggers:
 ### 6.2 What the manifest declares
 
 - **Action class** (`read`, `idempotent_write`, `reconcilable_write`, `unsafe_write`) drives the engine's retry behaviour in section 4.4. A write without a class is rejected at registration.
-- **Idempotency and reconcile hooks** tell the engine where to put the key and which action confirms an unknown outcome.
+- **Idempotency and reconcile hooks** tell the engine where to put the key, how to encode it within the provider's charset and length limits (section 4.4), and which action confirms an unknown outcome. Registration rejects an encoding whose output cannot satisfy the declared limits.
 - **Compensation** names the reversing action, if one exists.
 - **PII fields** feed the redaction engine in section 9.
-- **Rate limits** are enforced by a token bucket per connection, shared across all workers via Postgres or Redis.
+- **Rate limits** are enforced by a token bucket per connection, shared across all workers via Postgres, or Valkey once it is deployed (section 17).
 - **Input and output schemas** (JSON Schema) power canvas forms, code SDK types, and AI builder validation.
 - **Trigger correlation** maps inbound webhooks to waiting runs.
 
@@ -497,7 +579,7 @@ The same interface is exported to WASM through a thin host ABI, so a third-party
 
 ### 6.4 Versioning and testing
 
-- Connectors follow semver. Workflows pin a major version (`paystack@1`); minor and patch upgrades apply automatically.
+- Connectors follow semver. Workflows pin a major version (`paystack@1`); minor and patch upgrades apply automatically to **new** runs only. Each run records the exact resolved versions in `RunStarted` and executes every step on them, so a run waiting days on an approval never switches connector code midway. Workers keep every version still referenced by a live run loaded; a version is unloaded only once no non-terminal run pins it.
 - A major version change never auto-applies. The platform flags affected workflows and the AI builder proposes migrations.
 - Each connector ships recorded fixtures. CI replays them against handlers, and a nightly job runs live sandbox calls where providers offer test modes.
 - A contract-drift monitor compares live responses against output schemas and raises an alert when a provider changes shape; this feeds AI repair (section 12).
@@ -506,15 +588,15 @@ The same interface is exported to WASM through a thin host ABI, so a third-party
 
 | Category | Connectors | Phase |
 | --- | --- | --- |
-| Payments | Paystack, Flutterwave, Moniepoint, Interswitch, Opay, Remita | 1–2 |
+| Payments | Paystack (1); Flutterwave, Moniepoint, Interswitch, Opay, Remita (2) | 1–2 |
 | Banking rails | NIBSS NIP (via licensed partner), bank statement APIs, virtual accounts | 2 |
 | Open banking | Mono, Okra, Stitch | 2 |
-| Identity and KYC | Smile ID, Dojah, Prembly, Youverify, NIN/BVN lookups | 1–2 |
-| Messaging | WhatsApp Business Platform, Termii, Africa's Talking, SMS gateways | 1 |
+| Identity and KYC | Smile ID or Dojah (1); the other, Prembly, Youverify, NIN/BVN lookups (2) | 1–2 |
+| Messaging | Termii (1); WhatsApp Business Platform send, Africa's Talking SMS (2) | 1–2 |
 | USSD | Africa's Talking USSD, aggregator gateways | 3 |
 | Mobile money | M-Pesa, MTN MoMo, Airtel Money | 3 |
 | Tax and statutory | FIRS/NTA e-filing where APIs exist, PFA pension remittance | 3 |
-| Global essentials | Postgres, MySQL, HTTP, Gmail, Google Sheets, Slack, S3, SFTP | 1 |
+| Global essentials | Postgres, HTTP (1); MySQL, Gmail, Google Sheets, Slack, S3, SFTP (2) | 1–2 |
 
 Availability of some APIs (NIBSS, tax portals) depends on partner agreements. Each needs confirming before it is committed to a phase.
 
@@ -623,6 +705,8 @@ channels: [web, email, whatsapp]
 
 - Every privileged action (login, publish, approval, secret access, connection change, role change, data export) appends to `audit_log`.
 - Each row stores `hash = sha256(prev_hash ‖ canonical(row))`, forming a per-tenant chain. Any edit or deletion breaks the chain and is detectable.
+- **Serialised appends.** An append runs in one transaction: `SELECT … FROM audit_chain_heads WHERE tenant_id = $1 FOR UPDATE`, compute the new row with `chain_seq + 1` and the head hash as `prev_hash`, insert it, and update the head. The row lock orders concurrent writers per tenant without blocking other tenants, and `UNIQUE (tenant_id, chain_seq)` makes a fork in the chain impossible. Expected per-tenant audit volume (privileged actions, not run steps) is far below what one row lock sustains; if a tenant ever exceeds it, appends are batched by a single writer per tenant.
+- **No PII in the chain.** `detail` holds ids, digests, amounts, and redacted values only, never raw PII, so erasure (section 9.4) never has to touch a hashed row.
 - A daily job computes the chain head and anchors it outside the database (signed and emailed to the tenant's compliance contact, and stored in write-once object storage).
 - A verifier endpoint and CLI let an auditor re-check the full chain independently.
 - Export to SIEM tools via syslog, webhook, or S3 in JSON lines.
@@ -639,7 +723,10 @@ Redaction applies to the UI, logs, traces, AI prompts, and exports. Raw values s
 ### 9.4 Retention and erasure
 
 - Per-workflow retention policy for run payloads (for example 30 days), separate from the audit log (minimum 7 years, configurable).
-- Erasure requests under the Nigeria Data Protection Act 2023 crypto-shred the subject's payload data by destroying its per-subject data key, while keeping the non-personal audit skeleton intact.
+- **Retention counts from the end of a run, never its start.** When a run reaches a terminal state, `runs.retain_until` is set to `ended_at` plus the plan or workflow retention. A daily job archives runs past `retain_until` to object storage and deletes their events; a monthly `run_events` partition is dropped only once every run in it has been archived. Non-terminal runs are never touched, so a run waiting on a long approval or timer keeps its full history however long it waits.
+- **Bounded run lifetime.** `settings.timeout` may not exceed the plan maximum (90 days on standard tiers, configurable on Enterprise), so no partition is held open indefinitely.
+- **Erasure.** Requests under the Nigeria Data Protection Act 2023 crypto-shred the subject's data by destroying its key in `subject_keys`. Because PII is encrypted per subject before it is written (section 4.9), this makes every PII envelope for that subject unreadable in place, in events, blobs, archives, and backups, without editing any immutable row. The non-personal skeleton of runs and the audit chain stays intact and verifiable.
+- **Erasure and in-flight runs.** If the subject has non-terminal runs, erasure first asks an operator to let them finish or cancel them; it is never applied under a running workflow. After erasure, replay of an affected run still yields the same commands for every decision that did not read the erased values; decisions that did are reported as `replay_blocked:erased` rather than replayed, and the determinism suite treats shredded runs as out of scope.
 
 ### 9.5 Data residency
 
@@ -660,8 +747,8 @@ The canvas and code stay in sync because both compile to the same WD, and code i
 TypeScript first (most automation authors know it), Go second for backend teams.
 
 ```ts
-import { workflow, webhook, step, approval } from "@platform/sdk";
-import { smileid, paystack } from "@platform/connectors";
+import { workflow, webhook, step, approval } from "@taskier/sdk";
+import { smileid, paystack } from "@taskier/connectors";
 
 export default workflow("disburse-approved-loan", {
   trigger: webhook({ path: "/loans/approved", auth: "hmac" }),
@@ -689,22 +776,22 @@ The WD JSON is always committed alongside the `.flow.ts` file, so the repo stays
 ### 10.3 Git integration
 
 - Tenants connect a GitHub, GitLab, or Bitbucket repository per environment through an app installation with scoped permissions.
-- Repo layout: `flows/`, `policies/`, `connectors/` (custom), `tests/`, and `platform.yaml` for environment mapping.
+- Repo layout: `flows/`, `policies/`, `connectors/` (custom), `tests/`, and `taskier.yaml` for environment mapping.
 - Two modes per environment: **platform-led** (publishing in the UI opens a pull request) or **Git-led** (merging to a branch deploys to that environment, and the UI becomes read-only for it).
 - Every workflow version records its commit SHA; every audit entry for a publish links the commit.
 
 ### 10.4 CLI and local development
 
-The CLI (working name `flowctl`) is a single Go binary.
+The CLI (`taskier`) is a single Go binary.
 
 | Command | Purpose |
 | --- | --- |
-| `flowctl validate` | Schema, expression, and policy checks |
-| `flowctl test` | Run workflow tests with mocked connector outputs |
-| `flowctl dev` | Local engine with SQLite or embedded Postgres, hot reload, recorded fixtures |
-| `flowctl diff --env prod` | Show what a deploy would change |
-| `flowctl deploy --env staging` | Publish through the API, subject to approval policy |
-| `flowctl runs tail` | Stream live run events |
+| `taskier validate` | Schema, expression, and policy checks |
+| `taskier test` | Run workflow tests with mocked connector outputs |
+| `taskier dev` | Local engine on embedded Postgres (the engine needs `SKIP LOCKED`, RLS, `LISTEN/NOTIFY` and partitioning, so SQLite is not supported), hot reload, recorded fixtures |
+| `taskier diff --env prod` | Show what a deploy would change |
+| `taskier deploy --env staging` | Publish through the API, subject to approval policy |
+| `taskier runs tail` | Stream live run events |
 
 ### 10.5 Workflow tests
 
@@ -835,9 +922,9 @@ Partners embed the builder and run views inside their own product.
 
 1. **Register** an `embed_app` with allowed origins, branding tokens, and the connectors and templates their customers may use.
 2. **Mint** a short-lived end-user token on the partner's server through the platform API, carrying `end_user_id`, sub-tenant, and permissions. No platform login is needed for the end user.
-3. **Render** the embedded builder as a web component (`<platform-builder token="…">`) or iframe, themed with the partner's colours, fonts, and domain.
+3. **Render** the embedded builder as a web component (`<taskier-builder token="…">`) or iframe, themed with the partner's colours, fonts, and domain.
 4. **Bridge** the partner's own API as a pre-authenticated connector, so end users automate the partner's product without handling credentials.
-5. **Observe** through the partner admin API and webhooks: end-user workflows, run outcomes, usage per sub-tenant.
+5. **Observe** through the partner admin API and webhooks: end-user workflows, run outcomes, usage per sub-tenant. This API is the only path by which a partner reaches sub-tenant data; its tenant scope and dual audit trail are defined in section 5.3.
 
 A **headless mode** exposes the same capabilities through API only, for partners who want to build their own UI on top of the engine. White-label tiers remove all platform branding, including in emails and WhatsApp templates.
 
@@ -889,7 +976,7 @@ Two audiences need visibility: tenants need to see what their workflows did, and
 - Traces span ingest → orchestrator → task → connector call, with `tenant_id`, `run_id`, and `step_id` attributes.
 - Metrics in Prometheus format: queue depth and age by queue, lease expiries, orchestrator latency, connector error rates by provider, Postgres replication lag.
 - Logs are structured JSON, PII-redacted at the logger.
-- Stack for self-hosting: Prometheus, Grafana, Loki, and Tempo, all open source and runnable in-region.
+- Stack for self-hosting: Prometheus, Grafana, Loki, and Tempo, all open source and runnable in-region. Grafana, Loki, and Tempo are AGPL and are run only as optional separate services under the licence policy in section 17.
 
 ### 15.3 Service-level objectives
 
@@ -932,7 +1019,7 @@ Prices in naira for each tier are an open question (section 18); the numbers abo
 
 - **Concurrency** uses the same `concurrency_slots` mechanism as section 4.8, keyed by tenant. Excess runs queue, they are never rejected.
 - **Throughput** uses a token bucket per tenant in the task dispatcher; workers skip a tenant's tasks when its bucket is empty.
-- **Retention** is enforced by partition-dropping and archive jobs.
+- **Retention** is enforced by archive jobs that count from each run's end, with partitions dropped only once empty (section 9.4); waiting runs are never pruned.
 - **Compute** for sandboxes is metered in CPU-seconds for fairness; sustained overuse triggers a conversation and an upgrade path, never a silent hard stop.
 - **Pass-through costs** (WhatsApp templates beyond the allowance, premium AI models) are billed at cost and shown transparently.
 
@@ -942,7 +1029,14 @@ Platform cost is driven by peak concurrency and storage, both of which are cappe
 
 ## 17. Technology stack
 
-The platform's own code is 100% original, and it depends only on permissively licensed libraries (MIT, Apache 2.0, BSD, MPL for separate services). A CI licence scanner blocks any copyleft or source-available dependency from entering the codebase, which protects the clean-room position.
+The platform's own code is 100% original, and it depends only on permissively licensed libraries. A CI licence scanner blocks any copyleft or source-available dependency from entering the codebase, which protects the clean-room position. The licence policy has two tiers:
+
+| Tier | Allowed licences | Applies to |
+| --- | --- | --- |
+| Linked or bundled | MIT, Apache 2.0, BSD, ISC, PostgreSQL | Anything compiled into the binary, the web app, the SDKs, or the connector SDK |
+| Separate services | The above, plus MPL 2.0 and AGPL 3.0 | Unmodified upstream software run as its own process or container and reached only over a network protocol (OpenBao, Grafana, Loki, Tempo). Never linked, never patched, never required for the engine to run |
+
+AGPL services are limited to optional operational tooling: the core install (engine, Postgres, object storage, secrets) contains no AGPL component, and a self-hosted customer can swap the observability stack for any OpenTelemetry-compatible backend.
 
 | Layer | Choice | Licence | Notes |
 | --- | --- | --- | --- |
@@ -959,11 +1053,11 @@ The platform's own code is 100% original, and it depends only on permissively li
 | Queue at scale | NATS JetStream | Apache 2.0 | Phase 4 option |
 | Secrets service | OpenBao | MPL 2.0 | Run as a separate service |
 | Auth | go-webauthn, own OIDC/SAML integration | BSD | Passkeys first |
-| Telemetry | OpenTelemetry, Prometheus, Grafana stack | Apache 2.0 / AGPL services | Grafana stack runs as separate services, not linked |
+| Telemetry | OpenTelemetry, Prometheus, Grafana stack | Apache 2.0 / AGPL 3.0 (separate-service tier) | Grafana, Loki, Tempo run as separate, unmodified, optional services; never linked |
 | Frontend | React, TypeScript, Vite | MIT |  |
 | Canvas | React Flow (xyflow) | MIT | Used as a library dependency |
 | Code editor | Monaco | MIT | WD and code step editing |
-| CLI | Go, cobra | Apache 2.0 | `flowctl` |
+| CLI | Go, cobra | Apache 2.0 | `taskier` |
 | Deploy | Docker, Helm, Kubernetes | Apache 2.0 | Compose for single-node |
 
 HashiCorp Vault and Redis are deliberately avoided because of their source-available licence changes; OpenBao and Valkey are the community forks under permissive or weak-copyleft terms. Licence terms change, so the scanner's allow-list should be reviewed each quarter.
@@ -987,7 +1081,7 @@ The biggest risk is scope: eight pillars is several products' worth of work, so 
 
 ### 18.2 Open questions
 
-- [ ] Product name and trademark search in Nigeria and key markets.
+- [ ] Trademark search for the working name Taskier in Nigeria and key markets; confirm or replace it before Phase 4 filing.
 - [ ] Naira price points per tier.
 - [ ] Which regulated partner provides NIBSS access, and on what terms?
 - [ ] Exact CBN and NDPA control requirements to map in compliance reporting (counsel review).
