@@ -321,6 +321,7 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 		"employees": []any{
 			map[string]any{"employee_id": "e1", "net_pay_kobo": 100000, "wallet_id": "w_e1"},
 			map[string]any{"employee_id": "e2", "net_pay_kobo": 200000, "bank_code": "044", "account_number": "0690000031", "account_name": "Ada Obi"},
+			map[string]any{"employee_id": "e3", "net_pay_kobo": 900000, "wallet_id": "w_e3"},
 		},
 	}})
 	if !s.has(history.StepCompleted, "summarise") {
@@ -331,7 +332,7 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 	}
 	s.complete("check_balance", map[string]any{"balances": []any{map[string]any{"currency": "NGN", "available": 9000000, "total": 9100000}}})
 	subj := s.payload(history.ApprovalRequested, "approve")["subject"].(map[string]any)
-	if subj["available_kobo"] != int64(9000000) || subj["employees"] != int64(2) || subj["paid_to_bank"] != int64(1) {
+	if subj["available_kobo"] != int64(9000000) || subj["employees"] != int64(3) || subj["paid_to_bank"] != int64(1) {
 		t.Fatalf("approval subject %v", subj)
 	}
 	s.external(history.ApprovalDecided, "approve", 0, history.ApprovalDecidedPayload{Decision: "approved", DecidedBy: "checker"}, history.OriginAPI)
@@ -349,6 +350,11 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 		t.Fatalf("payout payload %v", b)
 	}
 	s.complete("pay_all[0].to_wallet", map[string]any{"status": "completed", "txn_id": "txn_1"})
+	// iswallet refuses e3's transfer; the payroll carries on.
+	s.external(history.StepFailed, "pay_all[2].to_wallet", 1, history.FailedPayload{Error: history.Error{Kind: "fatal", Message: "iswallet 422 EXCEEDS_SINGLE_TXN_LIMIT", Next: "fail"}}, history.OriginWorker)
+	if !s.has(history.StepCompleted, "pay_all[2].wallet_failed") {
+		t.Fatalf("refused payment not recorded: %s", s.types())
+	}
 	if !s.has(history.StepSkipped, "pay_all[0].settle") {
 		t.Errorf("a wallet transfer has nothing to wait for: %s", s.types())
 	}
@@ -362,8 +368,16 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 	}
 	rp := s.payload(history.StepScheduled, "report")
 	if in := rp["input"].(map[string]any); in["headers"].(map[string]any)["Authorization"] != "='Bearer ' + secrets.payrolla_api_token" ||
-		in["url"] != "https://payrolla.example/payrolls/PR-10/disbursement-report" || len(in["body"].(map[string]any)["results"].([]any)) != 2 {
+		in["url"] != "https://payrolla.example/payrolls/PR-10/disbursement-report" || len(in["body"].(map[string]any)["results"].([]any)) != 3 {
 		t.Errorf("report input %v", in)
+	}
+	body := rp["input"].(map[string]any)["body"].(map[string]any)
+	if body["paid"] != int64(2) || body["failed"] != int64(1) {
+		t.Errorf("report counts %v", body)
+	}
+	failure := body["results"].([]any)[2].(map[string]any)["wallet_failed"].(map[string]any)
+	if failure["employee_id"] != "e3" || !strings.Contains(failure["error"].(map[string]any)["message"].(string), "EXCEEDS_SINGLE_TXN_LIMIT") {
+		t.Errorf("failure record %v", failure)
 	}
 	s.complete("report", map[string]any{"status": 200})
 	if s.last().Type != history.RunCompleted {

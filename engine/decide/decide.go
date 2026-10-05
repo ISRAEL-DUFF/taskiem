@@ -779,11 +779,22 @@ func (d *decider) onError(sc scope, s *wd.Step, inst string, start bool) status 
 }
 
 // outputs collects the outputs of a scope's settled steps, keyed by step id.
+// outputs collects a scope's results by step id: completed steps' outputs
+// and, for a failed step whose on_error flow handled it, that flow's
+// outputs (so a foreach iteration reports what went wrong, not nothing).
 func (d *decider) outputs(sc scope) map[string]any {
 	out := map[string]any{}
 	for _, s := range sc.steps {
-		if f, ok := d.facts[sc.prefix+s.ID]; ok && f.completed {
+		f, ok := d.facts[sc.prefix+s.ID]
+		if !ok {
+			continue
+		}
+		if f.completed {
 			out[s.ID] = f.output
+		} else if f.finalFailure != nil && s.OnError != nil {
+			for k, v := range d.outputs(scope{prefix: sc.prefix, steps: s.OnError.Steps}) {
+				out[k] = v
+			}
 		}
 	}
 	return out

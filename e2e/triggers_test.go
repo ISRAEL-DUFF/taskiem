@@ -116,6 +116,7 @@ func mac(h func() hash.Hash, key string, body []byte) string {
 func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	isw := newFakeIswallet()
 	isw.balances["w_company"] = 900_000_000
+	isw.limit = 40_000_000 // ₦400,000 per transaction: Dayo's ₦450,000 is refused
 	// Ada's transfer reaches iswallet and moves money, but its response is
 	// lost as a 500: the retry must be answered from the replay cache.
 	iswallet := httptest.NewServer(isw)
@@ -150,10 +151,11 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 		t.Fatalf("webhook url %q", hook)
 	}
 
-	payroll := []byte(`{"payroll_id":"PR-2026-09","period":"September 2026","funding_wallet_id":"w_company","total_kobo":90000000,"employees":[
+	payroll := []byte(`{"payroll_id":"PR-2026-09","period":"September 2026","funding_wallet_id":"w_company","total_kobo":135000000,"employees":[
 	  {"employee_id":"E1","net_pay_kobo":30000000,"wallet_id":"w_ada"},
 	  {"employee_id":"E2","net_pay_kobo":35000000,"bank_code":"044","account_number":"0690000031","account_name":"Bola Ade"},
-	  {"employee_id":"E3","net_pay_kobo":25000000,"wallet_id":"w_chi"}]}`)
+	  {"employee_id":"E3","net_pay_kobo":25000000,"wallet_id":"w_chi"},
+	  {"employee_id":"E4","net_pay_kobo":45000000,"wallet_id":"w_dayo"}]}`)
 	sig := "sha256=" + mac(sha256.New, "payrolla-hook-key", payroll)
 	first := s.must(t, 202, anon, "POST", hook, payroll, "X-Taskiem-Signature", sig)
 	again := s.must(t, 202, anon, "POST", hook, payroll, "X-Taskiem-Signature", sig)
@@ -169,7 +171,7 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 		t.Fatal("money moved before approval")
 	}
 	inbox := s.must(t, 200, cfo, "GET", "/v1/approvals", nil)["approvals"].([]any)
-	if len(inbox) != 1 || !strings.Contains(toJSON(inbox), `"total_kobo":90000000`) || !strings.Contains(toJSON(inbox), `"available_kobo":900000000`) || !strings.Contains(toJSON(inbox), `"paid_to_bank":1`) {
+	if len(inbox) != 1 || !strings.Contains(toJSON(inbox), `"total_kobo":135000000`) || !strings.Contains(toJSON(inbox), `"available_kobo":900000000`) || !strings.Contains(toJSON(inbox), `"paid_to_bank":1`) {
 		t.Fatalf("approver inbox: %s", toJSON(inbox))
 	}
 	s.must(t, 403, owner, "POST", "/v1/approvals/"+run+"/approve", map[string]any{"decision": "approved"}) // wrote the workflow
@@ -224,7 +226,12 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	isw.mu.Unlock()
 	mu.Lock()
 	if len(reports) != 1 || reports[0]["path"] != "/payrolls/PR-2026-09/disbursement-report" || reports[0]["auth"] != "Bearer pr_token" {
-		t.Errorf("reports: %v", reports)
+		t.Fatalf("reports: %v", reports)
+	}
+	// Dayo's refused transfer did not stop the others, and the report says so.
+	rb := reports[0]["body"].(map[string]any)
+	if rb["paid"] != float64(3) || rb["failed"] != float64(1) || !strings.Contains(toJSON(rb["results"]), `"employee_id":"E4"`) || !strings.Contains(toJSON(rb["results"]), "EXCEEDS_SINGLE_TXN_LIMIT") {
+		t.Errorf("report body: %s", toJSON(rb))
 	}
 	mu.Unlock()
 

@@ -15,11 +15,11 @@ All three validate against `schemas/wd-v1.schema.json` and the semantic rules in
 1. Summarise the payroll and read the funding wallet's available NGN balance.
 2. Pause for maker-checker approval by a `payroll_approver`, showing the total, headcount, how many are paid to banks, and the balance. Rejection or a 24-hour timeout ends the run with nothing paid.
 3. Pay each employee, at most 5 at a time: by wallet transfer when they have an iswallet wallet (instant, final, free), otherwise by bank payout, then wait up to 72 hours for iswallet's confirmation. The idempotency seed is `payroll_id:employee_id`.
-4. Post the per-employee results back to Payrolla.
+4. Post the results back to Payrolla: how many were paid and how many failed, and one entry per employee in payroll order, either the payment or a failure record with the employee id and iswallet's error.
 
 **Must never happen.** An employee paid twice for one payroll; a payment before approval; an approver who triggered or wrote the workflow approving it.
 
-**Known behaviour to agree with Payrolla.** A payment refused by iswallet (a limit, insufficient funds, a rejected account) stops new payments in that run and fails it, so someone decides before the rest is paid; payments already made stand. A confirmed bank payout cannot be reversed by API.
+**When a payment fails.** A payment iswallet refuses (a limit, insufficient funds, a rejected account), a bank payout iswallet reports as failed, or one it does not confirm within 72 hours, is recorded as failed for that employee and does not stop the others; Payrolla gets every failure in the report and decides what to do. A payment whose outcome is unknown is different: the run waits in `needs_reconciliation` until an operator checks iswallet's ledger, because reporting it as failed could lead to paying twice. A confirmed bank payout cannot be reversed by API.
 
 ## 2. iSpend credit exceptions — `ispend-credit-exceptions.wd.json`
 
