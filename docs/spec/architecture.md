@@ -274,9 +274,11 @@ Automatic retries keep the same `attempt_group`, so every retry of one logical e
 
 **Intent before effect.** An `EffectIntent` event is committed (under the fencing check in section 4.3) before every write call, so after a crash the engine knows a call may have left the building. Before any write, the worker checks for an earlier `EffectIntent` for the same key with no matching `StepCompleted`; if one exists, the outcome is unknown and the action class decides: `idempotent_write` re-sends with the same key, `reconcilable_write` reconciles first, and `unsafe_write` parks in `needs_reconciliation` without calling the provider again.
 
+**Call deadlines.** A write's call must start before `EffectIntent` time plus the call timeout, and reconcile trusts a provider's "not found" only after that deadline, so a worker that stalls past its lease can never send after another worker has reconciled and re-sent (decision 0009).
+
 ### 4.5 Retries and errors
 
-- Errors are classified as `retryable` (timeouts, 5xx, 429 honouring `Retry-After`), `fatal` (validation, 4xx auth), or `unknown_outcome` (connection dropped after send).
+- Errors are classified as `retryable` (timeouts before send, 429 and 503 honouring `Retry-After`), `fatal` (validation, 4xx auth), or `unknown_outcome` (connection dropped after send, and 500/502/504, after which the provider may have acted). A write that failed with an unknown outcome parks for an operator, rather than failing, if its retries run out.
 - Per-step policy: max attempts, backoff (fixed or exponential with jitter computed from the run id, keeping replay deterministic), and a max total duration.
 - Exhausted retries route to the step's `on_error` path if declared, else fail the run and start compensation.
 

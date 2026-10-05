@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/v1/outflows","headers":{"Idempotency-Key":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}},
+ "response":{"status":500,"headers":{"X-Request-ID":"req_custody_unavailable"},"body":{"error":{"code":"CUSTODY_UNAVAILABLE","message":"custody_unavailable","request_id":"req_custody_unavailable","doc_url":"https://docs.ispend.io/errors/CUSTODY_UNAVAILABLE"}}}}

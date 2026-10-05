@@ -1,5 +1,24 @@
-# Single-node development stack (spec 2.3). Not for production.
+# Single-node stack (spec 2.3, 15.4): Postgres, OpenBao for envelope
+# encryption, and Taskiem running every role in one process. For development
+# and small self-hosted installs; production runs roles separately with
+# Postgres HA (docs/operations.md).
+#
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#   docker compose -f deploy/docker-compose.yml run --rm -e TASKIEM_BOOTSTRAP_PASSWORD='change me please' \
+#       taskiem bootstrap --tenant "My company" --email me@example.com
+#   open http://localhost:8080
 name: taskiem
+
+x-taskiem-env: &taskiem-env
+  TASKIEM_DATABASE_URL: postgres://postgres:postgres@postgres:5432/taskiem?sslmode=disable
+  TASKIEM_KMS: openbao
+  TASKIEM_OPENBAO_ADDR: http://openbao:8200
+  TASKIEM_OPENBAO_TOKEN: dev
+  TASKIEM_KMS_KEY: taskiem
+  TASKIEM_ARCHIVE_DIR: /var/lib/taskiem/archive
+  TASKIEM_WEB_DIR: /web
+  # Plain HTTP on localhost; set true behind TLS.
+  TASKIEM_SECURE_COOKIES: "false"
 
 services:
   postgres:
@@ -14,28 +33,55 @@ services:
       interval: 2s
       retries: 30
 
+  # Secrets and transit encryption (spec 14.1). Dev mode: in-memory, unsealed,
+  # root token "dev"; keys are lost on restart, and with them every secret.
+  openbao:
+    image: openbao/openbao:2.4.1
+    command: ["server", "-dev", "-dev-root-token-id=dev", "-dev-listen-address=0.0.0.0:8200"]
+    # Not published: only Taskiem talks to it (docker compose exec openbao bao ...).
+    cap_add: [IPC_LOCK]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8200/v1/sys/health"]
+      interval: 2s
+      retries: 30
+
+  openbao-init:
+    image: openbao/openbao:2.4.1
+    environment: { BAO_ADDR: "http://openbao:8200", BAO_TOKEN: dev }
+    entrypoint: ["sh", "-c", "bao secrets enable transit 2>/dev/null; bao write -f transit/keys/taskiem"]
+    depends_on:
+      openbao: { condition: service_healthy }
+
   migrate:
     build: { context: .., args: { VERSION: dev } }
     command: ["migrate"]
-    environment:
-      TASKIEM_DATABASE_URL: postgres://postgres:postgres@postgres:5432/taskiem?sslmode=disable
+    environment: *taskiem-env
     depends_on:
       postgres: { condition: service_healthy }
 
-  # S3-compatible object storage for large payloads (spec 4.9).
+  taskiem:
+    build: { context: .., args: { VERSION: dev } }
+    command: ["serve", "--role", "all"]
+    environment: *taskiem-env
+    ports: ["8080:8080", "9090:9090"]
+    volumes: [archive:/var/lib/taskiem/archive]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      openbao-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "/taskiem", "healthcheck"]
+      interval: 5s
+      retries: 20
+
+  # S3-compatible object storage for large payloads (spec 4.9); not used yet.
   seaweedfs:
     image: chrislusf/seaweedfs:latest
     command: ["server", "-s3", "-dir=/data"]
     ports: ["8333:8333"]
     volumes: [seaweed:/data]
-
-  # Secrets and transit encryption (spec 14.1). Dev mode: in-memory, unsealed, root token "dev".
-  openbao:
-    image: openbao/openbao:latest
-    command: ["server", "-dev", "-dev-root-token-id=dev", "-dev-listen-address=0.0.0.0:8200"]
-    ports: ["8200:8200"]
-    cap_add: [IPC_LOCK]
+    profiles: [storage]
 
 volumes:
   pgdata: {}
   seaweed: {}
+  archive: {}

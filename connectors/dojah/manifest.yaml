@@ -1,0 +1,65 @@
+manifest: connector/v1
+id: dojah
+version: 1.0.0
+name: Dojah
+description: Identity verification (KYC) for Nigeria and other African markets.
+category: identity
+regions: [NG, GH, KE, ZA, UG]
+auth:
+  type: api_key
+  fields:
+    - { key: app_id, label: App ID }
+    - { key: secret_key, label: Secret key, secret: true }
+    - { key: sandbox, label: "Use the sandbox (true/false)", required: false }
+  test: { action: check_balance }
+rate_limit: { requests: 10, per: 1s, scope: connection }
+base_url: https://api.dojah.io
+egress_hosts: ["api.dojah.io", "sandbox.dojah.io"]
+actions:
+  lookup_bvn:
+    title: Look up BVN
+    class: read
+    input:
+      type: object
+      required: [bvn]
+      properties:
+        bvn:           { type: string, pattern: "^[0-9]{11}$" }
+        include_image: { type: boolean, default: false, description: The photo is large and personal; omitted unless asked for }
+    output:
+      type: object
+      properties:
+        bvn:           { type: string }
+        first_name:    { type: string }
+        middle_name:   { type: string }
+        last_name:     { type: string }
+        date_of_birth: { type: string }
+        gender:        { type: string }
+        phone_number1: { type: string }
+        image:         { type: string }
+    pii:
+      - { field: bvn, category: bvn }
+  lookup_nin:
+    title: Look up NIN
+    class: read
+    input:
+      type: object
+      required: [nin]
+      properties:
+        nin: { type: string, pattern: "^[0-9]{11}$" }
+    output:
+      type: object
+      properties:
+        nin:          { type: string }
+        first_name:   { type: string }
+        last_name:    { type: string }
+        date_of_birth: { type: string }
+    pii:
+      - { field: nin, category: nin }
+  check_balance:
+    title: Check wallet balance
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        wallet_balance: { type: string }

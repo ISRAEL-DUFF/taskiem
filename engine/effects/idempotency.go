@@ -18,13 +18,8 @@ const keyDomain = "taskiem/idem/v1"
 type KeyInput struct {
 	TenantID     string // canonical lowercase UUID
 	Seed         string // effect.idempotency_seed value, or the run id
-	StepID       string // WD step id; see ForeachStepID
+	StepID       string // step instance id, or the plain step id when a seed is declared
 	AttemptGroup int    // 0, incremented only on reconcile not_found or manual re-issue
-}
-
-// ForeachStepID is the step id used for a foreach body step without its own seed.
-func ForeachStepID(stepID string, index int) string {
-	return stepID + "[" + strconv.Itoa(index) + "]"
 }
 
 // Digest returns SHA-256 over the domain-separated key material.

@@ -6,6 +6,7 @@ package connector
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -20,22 +21,33 @@ var schema = schemacheck.New("https://schemas.taskiem.dev/connector/v1.json", sc
 
 // Manifest is the subset of a connector/v1 manifest the engine reads.
 type Manifest struct {
-	ID       string             `json:"id"`
-	Version  string             `json:"version"`
-	Name     string             `json:"name"`
-	Auth     Auth               `json:"auth"`
-	Actions  map[string]Action  `json:"actions"`
-	Triggers map[string]Trigger `json:"triggers"`
+	ID       string                 `json:"id"`
+	Version  string                 `json:"version"`
+	Name     string                 `json:"name"`
+	Auth     Auth                   `json:"auth"`
+	BaseURL  string                 `json:"base_url"`
+	Egress   []string               `json:"egress_hosts"`
+	Actions  map[string]ActionSpec  `json:"actions"`
+	Triggers map[string]TriggerSpec `json:"triggers"`
 }
 
 type Auth struct {
-	Type string `json:"type"`
-	Test *struct {
+	Type   string      `json:"type"`
+	Fields []AuthField `json:"fields"`
+	Test   *struct {
 		Action string `json:"action"`
 	} `json:"test"`
 }
 
-type Action struct {
+// AuthField is one credential a connection supplies.
+type AuthField struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Secret   bool   `json:"secret"`
+	Required *bool  `json:"required"`
+}
+
+type ActionSpec struct {
 	Title       string          `json:"title"`
 	Class       effects.Class   `json:"class"`
 	Idempotency *effects.Spec   `json:"idempotency"`
@@ -60,12 +72,6 @@ func (p *PIIField) UnmarshalJSON(b []byte) error {
 	}
 	type plain PIIField
 	return json.Unmarshal(b, (*plain)(p))
-}
-
-type Trigger struct {
-	Type        string   `json:"type"`
-	Events      []string `json:"events"`
-	Correlation string   `json:"correlation"`
 }
 
 // Parse validates a YAML or JSON manifest and returns it, or every problem found.
@@ -153,4 +159,38 @@ func inputProperties(schema json.RawMessage) map[string]bool {
 		out[k] = true
 	}
 	return out
+}
+
+// MustParse parses a manifest or panics; for connectors compiled into the binary.
+func MustParse(src []byte) *Manifest {
+	m, probs := Parse(src)
+	if len(probs) > 0 {
+		panic("connector manifest: " + strings.Join(probs, "; "))
+	}
+	return m
+}
+
+// Hosts are the hosts this connector may reach: egress_hosts, or else the
+// base_url host.
+func (m *Manifest) Hosts() []string {
+	if len(m.Egress) > 0 {
+		return m.Egress
+	}
+	if u, err := url.Parse(m.BaseURL); err == nil && u.Hostname() != "" {
+		return []string{u.Hostname()}
+	}
+	return nil
+}
+
+// OverrideBaseURL points the connector at another endpoint (a provider
+// sandbox, a test server) and makes that endpoint's host the only one it may
+// reach. It is platform configuration, never tenant input.
+func (m *Manifest) OverrideBaseURL(base string) {
+	if base == "" {
+		return
+	}
+	m.BaseURL = base
+	if u, err := url.Parse(base); err == nil && u.Hostname() != "" {
+		m.Egress = []string{u.Hostname()}
+	}
 }

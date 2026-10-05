@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/v1/outflows","headers":{"Idempotency-Key":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}},
+ "response":{"status":202,"body":{"outflow_id":"8d40","operation_id":"8d40","wallet_id":"6f1e","amount":4500000,"currency":"NGN","status":"pending","fee":5350,"net_amount":4500000,"provider_reference":""}}}

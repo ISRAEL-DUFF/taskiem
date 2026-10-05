@@ -1,47 +1,48 @@
-# Dogfood workflows (Phase 0 drafts)
+# Dogfood workflows
 
-These are the three Phase 1 acceptance workflows required by gate G0. They are **drafts written from the build plan's examples**; each owner must confirm the payloads, endpoints, and roles against the real product before Phase 1 starts. Assumptions to confirm are listed per workflow.
+These are the three Phase 1 acceptance workflows required by gate G0. All the group's products move money through **iswallet**; the Paystack-based first drafts were rewritten on 5 October 2026 once iswallet's answers arrived. Each owner confirms the payloads, endpoints, and roles against the real product before go-live. Assumptions to confirm are listed per workflow.
 
 All three validate against `schemas/wd-v1.schema.json` and the semantic rules in `docs/contracts/wd-v1.md` (`go test ./engine/wd/...`).
 
 ## 1. Payrolla salary disbursement — `payrolla-salary-disbursement.wd.json`
 
-**Trigger.** Payrolla posts `payroll_id`, `period`, `total_kobo`, and `employees[]` (id, net pay in kobo, Paystack recipient code) to the webhook once a payroll is approved in Payrolla. Duplicate deliveries of the same `payroll_id` return the original run.
+**Provider.** iswallet ([integration](../../docs/integrations/iswallet.md)). Payrolla pays from its company wallet on iswallet.
+
+**Trigger.** Payrolla posts `payroll_id`, `period`, `funding_wallet_id`, `total_kobo`, and `employees[]` to the webhook once a payroll is approved in Payrolla, signed with HMAC-SHA256. Each employee has either an iswallet `wallet_id` or bank details (`bank_code`, `account_number`, `account_name`). Duplicate deliveries of the same `payroll_id` return the original run.
 
 **Expected behaviour.**
 
-1. Summarise the payroll and read the Paystack NGN balance (read-only, retried freely).
-2. Pause for maker-checker approval by a `payroll_approver`, showing the total, headcount, and balance. Rejection or a 24h timeout ends the run with no transfers.
-3. On approval, pay each employee with a Paystack transfer, at most 5 at a time. The idempotency seed is `payroll_id:employee_id`, so re-running or forking the run never pays an employee twice for the same payroll.
-4. For transfers Paystack reports as `pending`, wait up to 24h for the `transfer.success`, `transfer.failed`, or `transfer.reversed` webhook.
-5. Post the per-employee results back to Payrolla.
+1. Summarise the payroll and read the funding wallet's available NGN balance.
+2. Pause for maker-checker approval by a `payroll_approver`, showing the total, headcount, how many are paid to banks, and the balance. Rejection or a 24-hour timeout ends the run with nothing paid.
+3. Pay each employee, at most 5 at a time: by wallet transfer when they have an iswallet wallet (instant, final, free), otherwise by bank payout, then wait up to 72 hours for iswallet's confirmation. The idempotency seed is `payroll_id:employee_id`.
+4. Post the results back to Payrolla: how many were paid and how many failed, and one entry per employee in payroll order, carrying the employee id and either the payment or a failure record with iswallet's error. A rejected or expired approval is reported too. The contract with Payrolla is [docs/integrations/payrolla.md](../../docs/integrations/payrolla.md).
 
-**Must never happen.** An employee paid twice for one payroll; a transfer before approval; an approver who triggered the payroll approving it.
+**Must never happen.** An employee paid twice for one payroll; a payment before approval; an approver who triggered or wrote the workflow approving it.
 
-**Assumptions to confirm.** Payrolla's webhook payload and HMAC secret; a report endpoint on Payrolla's API; that Paystack transfer OTP is disabled for the API integration (otherwise transfers return `otp`); the role name.
+**When a payment fails.** A payment iswallet refuses (a limit, insufficient funds, a rejected account), a bank payout iswallet reports as failed, or one it does not confirm within 72 hours, is recorded as failed for that employee and does not stop the others; Payrolla gets every failure in the report and decides what to do. A payment whose outcome is unknown is different: the run waits in `needs_reconciliation` until an operator checks iswallet's ledger, because reporting it as failed could lead to paying twice. A confirmed bank payout cannot be reversed by API.
 
-## 2. iSpend wallet top-up reconciliation — `ispend-topup-reconciliation.wd.json`
+## 2. iSpend credit exceptions — `ispend-credit-exceptions.wd.json`
 
-**Trigger.** Every 15 minutes (Africa/Lagos). Runs never overlap: `concurrency_key` is constant and the run timeout (14m) is shorter than the interval.
+**Why this workflow.** iSpend customers top up by bank transfer to an iswallet virtual account, and iswallet credits the wallet within seconds, so there is nothing pending to chase. What goes wrong silently is the exception: a top-up iswallet refuses and refunds to the sender (`wallet.credit.rejected`), where the customer's money left their bank and no credit arrives, and a credit iswallet claws back after posting it (`wallet.credit.reversed`), where iSpend may already have issued a receipt.
 
-**Expected behaviour.**
+**Trigger.** iswallet's `credit_event` webhook for those two events, on the iSpend connection. Redeliveries are dropped on the event id; ordinary `wallet.credit.posted` events are ignored.
 
-1. Read up to 500 top-ups still `pending` after 15 minutes from iSpend's database through a read-only connection.
-2. For each (10 at a time), verify the charge with Paystack.
-3. Paid in full → mark the top-up complete in iSpend, which credits the wallet. Paid a different amount → flag it for a human. Failed, abandoned, or reversed → mark it failed. Still pending → leave it for the next run.
+**Expected behaviour.** Describe the exception, then in parallel tell iSpend (`POST {ispend_api_url}/internal/wallet-credit-exceptions` with the event id, kind, wallet, amount and iswallet's data, sent with an `Idempotency-Key`) and post it to the ops Slack channel.
 
-**Must never happen.** A wallet credited twice for one Paystack reference (every write uses the reference as its idempotency seed and iSpend's endpoint honours `Idempotency-Key`); a wallet credited for an amount that differs from what was paid.
+**Must never happen.** A rejected or reversed credit that iSpend never hears about.
 
-**Assumptions to confirm.** Table and column names; that iSpend exposes idempotent `complete`, `flag`, and `fail` endpoints; a read-only database user for Taskiem.
+**Assumptions to confirm with iSpend.** The endpoint and its payload (iSpend builds it; it must honour `Idempotency-Key`); what iSpend does with it (void the receipt, update the wallet view, tell the customer). The exact fields iswallet sends on `wallet.credit.reversed` (the answers list "credit identifiers + reversal reference"; the whole `data` object is forwarded, and the amount is 0 when absent).
 
-## 3. Ops transfer-failure alert — `ops-transfer-failure-alert.wd.json`
+**Later.** A daily reconciliation of iswallet's transaction list against iSpend's records, and an alert on parked credits once iswallet exposes a count to client keys (their §H item 7).
 
-**Trigger.** Paystack `transfer.failed` or `transfer.reversed` webhook, deduplicated on reference plus event.
+## 3. Ops payout-failure alert — `ops-payout-failure-alert.wd.json`
 
-**Expected behaviour.** Build one message, then in parallel send it by SMS to the on-call number (Termii) and post it to the ops Slack channel.
+**Trigger.** iswallet's `wallet.outflow.failed` or `wallet.outflow.reversed` webhook (a reversal can come days after a payout was confirmed). Redeliveries are dropped on the event id.
 
-**Must never happen.** A failed transfer with no alert.
+**Expected behaviour.** Build one message, then send it by SMS to the on-call number (Termii) and post it to the ops Slack channel.
 
-**Open finding for Phase 1.** Termii SMS and Slack incoming webhooks have no idempotency key or status API, so both are `unsafe_write`: an unknown outcome parks the step in `needs_reconciliation` rather than retrying. That is right for money and wrong for alerts, where a duplicate is harmless but a missing alert is not. Phase 1 should decide whether to add a per-step opt-in (for example `effect.duplicates: tolerable`) that lets an `unsafe_write` retry an unknown outcome. Recorded in `docs/contracts/action-classes.md`.
+**Must never happen.** A failed or reversed payout with no alert.
+
+**Open finding for Phase 1.** Termii SMS and Slack incoming webhooks have no idempotency key or status API, so both are `unsafe_write`: an unknown outcome parks the step in `needs_reconciliation` rather than retrying. That is right for money and wrong for alerts, where a duplicate is harmless but a missing alert is not. Recorded in `docs/contracts/action-classes.md`.
 
 **Assumptions to confirm.** On-call phone and Slack webhook held as tenant variables and secrets; Termii sender and channel.

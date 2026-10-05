@@ -123,6 +123,22 @@ func TestInvalid(t *testing.T) {
 		"parallel with one branch": {
 			`{"id":"p","type":"parallel","config":{"branches":[{"name":"x","steps":[{"id":"y","type":"wait","config":{"duration":"1s"}}]}]}}`,
 			`schema:`},
+		"reads a step outside needs": {
+			`{"id":"a","type":"transform","config":{"output":1}},
+			 {"id":"b","type":"transform","config":{"output":"=steps.a.output"}}`,
+			`steps.a may not have run before b`},
+		"reads an unknown step": {
+			`{"id":"a","type":"transform","config":{"output":"=steps.zz.output"}}`,
+			`unknown step "zz"`},
+		"secret mixed with data": {
+			`{"id":"a","type":"http","config":{"method":"GET","url":"=secrets.base + trigger.body.path"}}`,
+			`may not read anything else`},
+		"item outside foreach": {
+			`{"id":"a","type":"transform","config":{"output":"=item.x"}}`,
+			`only available inside a foreach`},
+		"undeclared variable": {
+			`{"id":"a","type":"transform","config":{"output":"=foo.bar"}}`,
+			`undeclared`},
 		"bad duration": {
 			`{"id":"a","type":"wait","config":{"duration":"5 minutes"}}`,
 			`schema:`},
@@ -137,6 +153,18 @@ func TestInvalid(t *testing.T) {
 			}
 			t.Errorf("want a problem containing %q, got %v", c.want, probs)
 		})
+	}
+}
+
+func TestTransitiveAndEnclosingReferencesAllowed(t *testing.T) {
+	ok := doc(`{"id":"a","type":"transform","config":{"output":1}},
+	  {"id":"b","type":"transform","needs":["a"],"config":{"output":"=steps.a.output"}},
+	  {"id":"f","type":"foreach","needs":["b"],"config":{"items":"=[1,2]","steps":[
+	    {"id":"x","type":"transform","config":{"output":"=steps.a.output + item + index"}},
+	    {"id":"y","type":"transform","needs":["x"],"config":{"output":"=steps.x.output"}}]}},
+	  {"id":"c","type":"transform","needs":["f"],"config":{"output":"=size(steps.f.output) + steps.a.output"}}`)
+	if p := Validate(ok); len(p) > 0 {
+		t.Fatalf("unexpected problems: %v", p)
 	}
 }
 

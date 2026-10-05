@@ -31,10 +31,7 @@ func TestValidateReportsProblems(t *testing.T) {
 	}
 }
 
-func TestServeIsNotYetBuilt(t *testing.T) {
-	if err := run([]string{"serve", "--role", "worker"}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "Phase 1") {
-		t.Errorf("got %v", err)
-	}
+func TestServeRejectsUnknownRole(t *testing.T) {
 	if err := run([]string{"serve", "--role", "nope"}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "unknown role") {
 		t.Errorf("got %v", err)
 	}

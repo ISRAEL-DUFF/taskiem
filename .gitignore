@@ -4,3 +4,9 @@ bin/
 *.prof
 .npm-licences.json
 npm-licences.json
+bao
+bao.tgz
+bao.log
+web/dist/
+web/test-results/
+web/playwright-report/

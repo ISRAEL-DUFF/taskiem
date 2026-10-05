@@ -31,6 +31,15 @@ jobs:
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
+      - name: Start OpenBao (transit engine for the secrets tests)
+        run: |
+          curl -sSL -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz
+          tar xzf bao.tgz bao
+          ./bao server -dev -dev-root-token-id=dev -dev-listen-address=127.0.0.1:8200 > bao.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8200/v1/sys/health >/dev/null && break; sleep 1; done
+          curl -sf -H "X-Vault-Token: dev" -X POST -d '{"type":"transit"}' http://127.0.0.1:8200/v1/sys/mounts/transit
+          curl -sf -H "X-Vault-Token: dev" -X POST http://127.0.0.1:8200/v1/transit/keys/taskiem-root
+          echo "TASKIEM_TEST_OPENBAO_ADDR=http://127.0.0.1:8200" >> "$GITHUB_ENV"
       - name: Unit and database tests
         run: go test -count=1 ./...
       - name: Validate contracts and dogfood workflows
@@ -52,6 +61,56 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+  # The web app in a real browser against the real binary (web/e2e).
+  web:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @taskiem/web build
+      - run: pnpm --filter @taskiem/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @taskiem/web e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: web/test-results/
+
+  # The image builds and the Compose stack comes up healthy.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and start the stack
+        run: docker compose -f deploy/docker-compose.yml up -d --build --wait taskiem
+      - name: Bootstrap and sign in
+        run: |
+          docker compose -f deploy/docker-compose.yml run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD='ci password 123' taskiem bootstrap --tenant CI --email ci@example.com
+          curl -sf -H 'Content-Type: application/json' -d '{"email":"ci@example.com","password":"ci password 123"}' http://127.0.0.1:8080/v1/auth/login
+          curl -sf http://127.0.0.1:8080/ | grep -q '<div id="root">'
+      - if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs
+
   licences:
     runs-on: ubuntu-latest
     steps:
@@ -71,7 +130,7 @@ jobs:
   # Signed builds and SBOM (build plan Phase 0). Runs on main only.
   release-build:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [go, typescript, licences]
+    needs: [go, typescript, web, docker, licences]
     runs-on: ubuntu-latest
     permissions:
       contents: read

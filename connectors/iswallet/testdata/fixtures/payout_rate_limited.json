@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/v1/outflows","headers":{"Idempotency-Key":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}},
+ "response":{"status":429,"headers":{"X-Request-ID":"req_rate_limited"},"body":{"error":{"code":"RATE_LIMITED","message":"rate_limited","request_id":"req_rate_limited","doc_url":"https://docs.ispend.io/errors/RATE_LIMITED"}}}}

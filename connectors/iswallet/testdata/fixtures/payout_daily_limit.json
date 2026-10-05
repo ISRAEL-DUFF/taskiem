@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/v1/outflows","headers":{"Idempotency-Key":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}},
+ "response":{"status":422,"headers":{"X-Request-ID":"req_daily_limit"},"body":{"error":{"code":"EXCEEDS_DAILY_LIMIT","message":"daily_limit","request_id":"req_daily_limit","doc_url":"https://docs.ispend.io/errors/EXCEEDS_DAILY_LIMIT"}}}}

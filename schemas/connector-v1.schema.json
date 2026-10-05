@@ -176,10 +176,15 @@
           "additionalProperties": false,
           "required": ["scheme"],
           "properties": {
-            "scheme": { "enum": ["hmac_sha256", "hmac_sha512", "bearer", "basic", "none"] },
+            "scheme": { "enum": ["hmac_sha256", "hmac_sha512", "hmac_sha256_timestamped", "bearer", "basic", "none"] },
             "header": { "type": "string" },
-            "secret_field": { "$ref": "#/$defs/name" }
-          }
+            "secret_field": { "$ref": "#/$defs/name" },
+            "timestamp_header": { "type": "string", "description": "hmac_sha256_timestamped: header with the unix-seconds timestamp; the signed string is '<timestamp>.<raw body>'." },
+            "tolerance": { "$ref": "#/$defs/duration", "description": "hmac_sha256_timestamped: reject timestamps further than this from now (default 5m)." }
+          },
+          "allOf": [
+            { "if": { "properties": { "scheme": { "const": "hmac_sha256_timestamped" } } }, "then": { "required": ["header", "timestamp_header"] } }
+          ]
         },
         "events": { "type": "array", "items": { "type": "string" } },
         "event_type": { "$ref": "#/$defs/expr" },

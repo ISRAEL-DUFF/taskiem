@@ -194,9 +194,3 @@ func TestVectors(t *testing.T) {
 		}
 	}
 }
-
-func TestForeachStepID(t *testing.T) {
-	if got := ForeachStepID("pay_employee", 3); got != "pay_employee[3]" {
-		t.Errorf("got %q", got)
-	}
-}

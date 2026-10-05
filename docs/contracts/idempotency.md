@@ -9,7 +9,8 @@ digest   = SHA-256(material)
 ```
 
 - `tenant_id` and `run_id` are canonical lowercase UUID strings. `0x00` separators make the encoding unambiguous; a seed containing `0x00` is rejected.
-- `step_id` is the WD step id. Inside a `foreach`, it is `<step_id>[<index>]` unless the step declares a seed, since the seed is then expected to identify the item.
+- `step_id` is the step **instance** id that decide records, such as `pay` or, inside a `foreach`, `pay_all[3].pay_employee` (nested loops chain: `outer[1].inner[2].pay`). When the step declares `effect.idempotency_seed`, it is the plain step id instead (`pay_employee`), because the seed is expected to identify the item and the key should stay stable across runs and forks.
+- Compensating actions use `compensate:<instance id>`.
 - `attempt_group` starts at 0 and increments only when a reconcile returns `not_found` or a human explicitly re-issues the effect. Automatic retries keep it.
 - Forked runs reuse the parent's `run_id` as the seed for steps copied from the parent, so a fork never re-pays a completed step.
 
