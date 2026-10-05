@@ -12,3 +12,5 @@ One file per decision, numbered in order: `NNNN-short-title.md`. Each entry reco
 | [0006](0006-working-name.md) | Working name Taskiem | Accepted, pending trademark search |
 | [0007](0007-licence-policy.md) | Two-tier licence policy | Accepted |
 | [0008](0008-wd-v1-control-flow.md) | Nested sub-flows for branch, parallel and foreach | Accepted |
+| [0009](0009-write-call-deadlines.md) | Call deadlines for writes | Accepted |
+| [0010](0010-secret-only-expressions.md) | Expressions that read secrets read nothing else | Accepted |

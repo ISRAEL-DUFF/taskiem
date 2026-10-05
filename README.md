@@ -4,9 +4,9 @@ A workflow automation engine that regulated businesses can trust with money move
 
 *Taskiem is a working name, pending a trademark search.*
 
-## Status: Phase 0 (Foundations)
+## Status: Phase 1 (Internal MVP)
 
-See [Phase 0 status](docs/phase-0-status.md) for progress against gate G0.
+See [Phase 1 status](docs/phase-1-status.md). The engine core passes the determinism and crash-recovery suites at G1 scale. Phase 0's remaining people items are in [Phase 0 status](docs/phase-0-status.md).
 
 | Start here | |
 | --- | --- |

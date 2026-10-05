@@ -57,7 +57,8 @@ func New(t testing.TB) *DB {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	d := &DB{DSN: dsn, Admin: pool(t, dsn, ""), App: pool(t, dsn, "taskiem_app"), Dispatch: pool(t, dsn, "taskiem_dispatch")}
+	// Small pools: CI's Postgres allows 100 connections and test packages run in parallel.
+	d := &DB{DSN: dsn, Admin: pool(t, dsn, "", 4), App: pool(t, dsn, "taskiem_app", 16), Dispatch: pool(t, dsn, "taskiem_dispatch", 2)}
 	t.Cleanup(func() {
 		d.Admin.Close()
 		d.App.Close()
@@ -72,12 +73,12 @@ func New(t testing.TB) *DB {
 	return d
 }
 
-func pool(t testing.TB, dsn, role string) *pgxpool.Pool {
+func pool(t testing.TB, dsn, role string, size int32) *pgxpool.Pool {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.MaxConns = 32
+	cfg.MaxConns = size
 	if role != "" {
 		cfg.AfterConnect = func(ctx context.Context, c *pgx.Conn) error {
 			_, err := c.Exec(ctx, "SET ROLE "+role)
