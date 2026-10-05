@@ -93,6 +93,18 @@ func (r *Registry) Get(ref string) (*Connector, bool) {
 	return c, ok
 }
 
+// List returns every registered connector, by ref.
+func (r *Registry) List() []*Connector {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*Connector, 0, len(r.m))
+	for _, c := range r.m {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Ref() < out[j].Ref() })
+	return out
+}
+
 // Pins returns "id@major" -> exact version for every registered connector.
 func (r *Registry) Pins() map[string]string {
 	r.mu.RLock()

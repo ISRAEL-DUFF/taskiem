@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -121,8 +122,11 @@ func audit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actor, action, targ
 }
 
 func actorType(actor string) string {
-	if actor == "system" {
+	switch {
+	case actor == "system":
 		return "system"
+	case strings.HasPrefix(actor, "key:"):
+		return "api_key"
 	}
 	return "user"
 }

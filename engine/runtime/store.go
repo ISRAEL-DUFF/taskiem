@@ -54,6 +54,7 @@ type StartRequest struct {
 	Environment string
 	Trigger     any
 	Env         map[string]any // nil loads the environment's tenant variables
+	StartedBy   string         // user, API key, or trigger that started the run (separation of duties)
 	TriggerID   string         // with DedupKey, makes starting idempotent (spec 8.2)
 	DedupKey    string
 }
@@ -84,8 +85,8 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 			}
 		}
 		var startedAt time.Time
-		if err := tx.QueryRow(ctx, `INSERT INTO runs (id, tenant_id, workflow_id, version, environment, started_at) VALUES ($1, $2, $3, $4, $5, now()) RETURNING started_at`,
-			ref.ID, req.TenantID, req.WorkflowID, req.Version, req.Environment).Scan(&startedAt); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO runs (id, tenant_id, workflow_id, version, environment, started_at, started_by) VALUES ($1, $2, $3, $4, $5, now(), NULLIF($6, '')) RETURNING started_at`,
+			ref.ID, req.TenantID, req.WorkflowID, req.Version, req.Environment, req.StartedBy).Scan(&startedAt); err != nil {
 			return err
 		}
 		if req.Env == nil {
@@ -259,7 +260,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			if _, err := appendEvent(ctx, tx, ref.ID, ev.Type, ev.StepID, ev.Attempt, sealed, history.OriginDecide); err != nil {
 				return err
 			}
-			then, err := s.applyEffects(ctx, tx, run, def, ev)
+			then, err := s.applyEffects(ctx, tx, run, def, ev, sealed)
 			if err != nil {
 				return fmt.Errorf("apply %s(%s): %w", ev.Type, ev.StepID, err)
 			}
@@ -283,7 +284,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 // applyEffects performs the side effects an event implies: tasks, timers,
 // signal waits, run status. It may return a follow-up that appends further
 // events once decide's batch is written.
-func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, ev decide.NewEvent) (func() error, error) {
+func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, ev decide.NewEvent, sealed any) (func() error, error) {
 	tenant := run.ref.TenantID
 	switch ev.Type {
 	case history.StepScheduled:
@@ -317,12 +318,49 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		}
 	case history.ApprovalRequested:
 		p := ev.Payload.(history.ApprovalRequestedPayload)
+		var subject any
+		if m, ok := sealed.(map[string]any); ok {
+			subject = m["subject"]
+		}
+		subj, _ := json.Marshal(subject)
+		required := p.Count
+		if required <= 0 {
+			required = 1
+		}
+		var timeoutAt *time.Time
+		if p.TimeoutAt != "" {
+			t, err := history.ParseTime(p.TimeoutAt)
+			if err != nil {
+				return nil, err
+			}
+			timeoutAt = &t
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO approvals (tenant_id, run_id, step_id, role, policy, required, subject, timeout_at)
+			VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8)
+			ON CONFLICT (run_id, step_id) DO UPDATE SET role = EXCLUDED.role, timeout_at = EXCLUDED.timeout_at, status = 'open', requested_at = now()`,
+			tenant, run.ref.ID, ev.StepID, p.Role, p.Policy, required, subj, timeoutAt); err != nil {
+			return nil, err
+		}
 		if p.TimeoutAt != "" {
 			at, err := history.ParseTime(p.TimeoutAt)
 			if err != nil {
 				return nil, err
 			}
 			return nil, insertTimer(ctx, tx, tenant, run.ref.ID, ev.StepID, "approval_timeout", at)
+		}
+	case history.StepCompleted:
+		// Closes an approval, if this step was one (decision or timeout).
+		if out, ok := ev.Payload.(history.CompletedPayload).Output.(map[string]any); ok {
+			if d, _ := out["decision"].(string); d != "" {
+				st := d
+				if out["reason"] == "timeout" {
+					st = "expired"
+				}
+				if _, err := tx.Exec(ctx, `UPDATE approvals SET status = $3, closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
+					run.ref.ID, ev.StepID, st); err != nil {
+					return nil, err
+				}
+			}
 		}
 	case history.StepFailed:
 		p := ev.Payload.(history.FailedPayload)
@@ -369,6 +407,9 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM concurrency_slots WHERE run_id = $1`, run); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND status = 'open'`, run); err != nil {
 		return err
 	}
 

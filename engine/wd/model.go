@@ -6,9 +6,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/israel-duff/taskiem/engine/expr"
+	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 )
 
 // Definition is a parsed, validated wd/v1 document.
@@ -28,6 +30,9 @@ type Definition struct {
 
 	byID   map[string]*Step
 	parent map[string]*Step // nested step id -> enclosing control (or on_error owner) step
+
+	inputsOnce sync.Once
+	inputs     *schemacheck.Schema
 }
 
 type Trigger struct {
@@ -369,4 +374,27 @@ func (d *Definition) InputsSchema() (schema any, types map[string]any) {
 		schema, _ = expr.DecodeJSON(d.RawInputs.Schema)
 	}
 	return schema, types
+}
+
+// ValidateInputs checks a run's input (trigger.body) against the inputs
+// schema, resolving "#/types/..." references. No schema accepts anything.
+func (d *Definition) ValidateInputs(body []byte) []string {
+	d.inputsOnce.Do(func() {
+		if d.RawInputs == nil || len(d.RawInputs.Schema) == 0 {
+			return
+		}
+		var root map[string]any
+		if err := json.Unmarshal(d.RawInputs.Schema, &root); err != nil {
+			return
+		}
+		if len(d.RawTypes) > 0 {
+			root["types"] = d.RawTypes
+		}
+		raw, _ := json.Marshal(root)
+		d.inputs = schemacheck.New("https://schemas.taskiem.dev/inputs/"+d.ID+".json", raw)
+	})
+	if d.inputs == nil {
+		return nil
+	}
+	return d.inputs.Validate(body)
 }
