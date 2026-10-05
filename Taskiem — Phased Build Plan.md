@@ -1,8 +1,8 @@
-# Taskier — Phased Build Plan
+# Taskiem — Phased Build Plan
 
 Oct 5, 2026 · @EaziDeFi
 
-Taskier (working name) reaches public launch in five gated phases over roughly 16 months (68 weeks), with the trust and compliance core proven inside holdco products before anything is sold. Each phase ends at a gate with measurable criteria; the next phase starts only when the gate passes. Phase durations include the time each gate's own soak or availability window needs, so a gate is never scheduled to pass before its criteria can be measured.
+Taskiem (working name) reaches public launch in five gated phases over roughly 16 months (68 weeks), with the trust and compliance core proven inside holdco products before anything is sold. Each phase ends at a gate with measurable criteria; the next phase starts only when the gate passes. Phase durations include the time each gate's own soak or availability window needs, so a gate is never scheduled to pass before its criteria can be measured.
 
 ## Roadmap
 
@@ -32,9 +32,9 @@ Phase 0 sets up the legal, technical, and process ground so that everything buil
 ### Scope
 
 - **Clean-room setup.** Written clean-room policy (section "Working practices"), contributor IP assignment agreements, CI licence scanner with an allow-list, and a decision log for every design choice that resembles an existing product.
-- **Naming.** Run trademark searches for the working name Taskier in Nigeria (and Ghana, Kenya if targeted), with a shortlist of alternatives in case it is not clear.
+- **Naming.** Run trademark searches for the working name Taskiem in Nigeria (and Ghana, Kenya if targeted), with a shortlist of alternatives in case it is not clear.
 - **Repository and CI.** Monorepo (`engine/`, `web/`, `sdk/`, `connectors/`, `deploy/`), Go and TypeScript linting, unit test runners, SBOM generation, signed builds.
-- **Schema v0.** Migrations for tenants, users, memberships, workflows, workflow versions, runs, run events (partitioned by run start), tasks (with `lease_epoch`), timers, trigger receipts, subject keys, audit log, and audit chain heads, with RLS enabled from day one and the `taskier_dispatch` claim functions (spec 5.3) as the only cross-tenant path.
+- **Schema v0.** Migrations for tenants, users, memberships, workflows, workflow versions, runs, run events (partitioned by run start), tasks (with `lease_epoch`), timers, trigger receipts, subject keys, audit log, and audit chain heads, with RLS enabled from day one and the `taskiem_dispatch` claim functions (spec 5.3) as the only cross-tenant path.
 - **Specs frozen for Phase 1.** `wd/v1` JSON Schema draft, `connector/v1` manifest schema draft, the action-class contract, and the idempotency key derivation and encoding contract (spec 4.4).
 - **Engine spike.** A throwaway prototype of `decide()` plus the `SKIP LOCKED` queue and dispatch functions, load-tested and profiled to validate the Postgres-as-queue choice before building on it.
 - **Dogfood selection.** Pick 3 real workflows from holdco products (for example, a Payrolla salary disbursement, an iSpend wallet top-up reconciliation, an ops alert) as the Phase 1 acceptance tests.
@@ -115,7 +115,7 @@ Phase 2 makes the platform fit for the first external design partners: regulated
 | --- | --- | --- |
 | Code and Git | TypeScript SDK, compiler to WD, deterministic codegen from canvas, three-way merge | 10.1, 10.2 |
 | Code and Git | GitHub and GitLab integration, platform-led and Git-led modes | 10.3 |
-| CLI | `taskier` validate, test, dev, diff, deploy, runs tail | 10.4 |
+| CLI | `taskiem` validate, test, dev, diff, deploy, runs tail | 10.4 |
 | Engine | `parallel` step type | 3.2 |
 | Testing | Workflow test framework with mocked connector outputs, required in CI | 10.5 |
 | Governance | Policy objects with amount thresholds, multi-level approvers, escalation, delegation, step-up (passkey, TOTP) | 9.1 |

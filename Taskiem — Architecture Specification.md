@@ -1,10 +1,10 @@
-# Taskier — Architecture Specification
+# Taskiem — Architecture Specification
 
 Oct 5, 2026 · @EaziDeFi
 
 ## 1. Overview
 
-Taskier (working name, pending trademark search; see section 18.2) is a workflow automation engine that regulated businesses can trust with money movement. It is built from scratch in Go on PostgreSQL, owns all of its code, and is hosted in Nigeria. It combines a visual builder with a durable execution core, compliance controls, and first-class African integrations.
+Taskiem (working name, pending trademark search; see section 18.2) is a workflow automation engine that regulated businesses can trust with money movement. It is built from scratch in Go on PostgreSQL, owns all of its code, and is hosted in Nigeria. It combines a visual builder with a durable execution core, compliance controls, and first-class African integrations.
 
 ### 1.1 Target users
 
@@ -480,7 +480,7 @@ CREATE TABLE audit_chain_heads (
 - Every transaction sets `SET LOCAL app.tenant_scope` at start: an array of tenant ids the caller may touch. RLS policies check `tenant_id = ANY(current_setting('app.tenant_scope')::uuid[])`. For an ordinary user or API key the scope is their own tenant only.
 - **Tenant hierarchy.** A partner's scope includes its sub-tenants only when the call comes through the partner admin API (section 13.4) with the `subtenant.read` or `subtenant.manage` permission. The API computes the scope from `tenants.parent_id` at authentication, and each cross-tenant access is written to both the partner's and the sub-tenant's audit log. Partner users acting in the partner's own workspace never get sub-tenant ids in scope, which keeps sub-tenant data isolated from them by default.
 - The application role cannot bypass RLS. Only migrations and the platform-admin role can, and their use is itself audited.
-- **Dispatch path.** Workers, the orchestrator, and the scheduler must find work across all tenants. They do this only through a small set of `SECURITY DEFINER` functions owned by a `taskier_dispatch` role: `claim_tasks(queue, worker_id, n)`, `claim_due_timers(n)`, `claim_runs_to_orchestrate(n)`, and `recover_expired_leases()`. Each function claims rows with `SKIP LOCKED`, returns only routing columns (ids, `tenant_id`, step id, lease epoch), and touches no payloads. The caller then opens a normal transaction with `app.tenant_scope` set to that row's single tenant before reading history, secrets, or payloads, so all data access stays under RLS. These functions are fixed in migrations, reviewed like security code, and covered by the RLS bypass tests.
+- **Dispatch path.** Workers, the orchestrator, and the scheduler must find work across all tenants. They do this only through a small set of `SECURITY DEFINER` functions owned by a `taskiem_dispatch` role: `claim_tasks(queue, worker_id, n)`, `claim_due_timers(n)`, `claim_runs_to_orchestrate(n)`, and `recover_expired_leases()`. Each function claims rows with `SKIP LOCKED`, returns only routing columns (ids, `tenant_id`, step id, lease epoch), and touches no payloads. The caller then opens a normal transaction with `app.tenant_scope` set to that row's single tenant before reading history, secrets, or payloads, so all data access stays under RLS. These functions are fixed in migrations, reviewed like security code, and covered by the RLS bypass tests.
 - `audit_log` and `run_events` grant `INSERT` and `SELECT` only; `UPDATE` and `DELETE` are revoked from every application role.
 - Large tenants can be moved to a dedicated database by tenant id; the data model never assumes tenants share a database.
 
@@ -747,8 +747,8 @@ The canvas and code stay in sync because both compile to the same WD, and code i
 TypeScript first (most automation authors know it), Go second for backend teams.
 
 ```ts
-import { workflow, webhook, step, approval } from "@taskier/sdk";
-import { smileid, paystack } from "@taskier/connectors";
+import { workflow, webhook, step, approval } from "@taskiem/sdk";
+import { smileid, paystack } from "@taskiem/connectors";
 
 export default workflow("disburse-approved-loan", {
   trigger: webhook({ path: "/loans/approved", auth: "hmac" }),
@@ -776,22 +776,22 @@ The WD JSON is always committed alongside the `.flow.ts` file, so the repo stays
 ### 10.3 Git integration
 
 - Tenants connect a GitHub, GitLab, or Bitbucket repository per environment through an app installation with scoped permissions.
-- Repo layout: `flows/`, `policies/`, `connectors/` (custom), `tests/`, and `taskier.yaml` for environment mapping.
+- Repo layout: `flows/`, `policies/`, `connectors/` (custom), `tests/`, and `taskiem.yaml` for environment mapping.
 - Two modes per environment: **platform-led** (publishing in the UI opens a pull request) or **Git-led** (merging to a branch deploys to that environment, and the UI becomes read-only for it).
 - Every workflow version records its commit SHA; every audit entry for a publish links the commit.
 
 ### 10.4 CLI and local development
 
-The CLI (`taskier`) is a single Go binary.
+The CLI (`taskiem`) is a single Go binary.
 
 | Command | Purpose |
 | --- | --- |
-| `taskier validate` | Schema, expression, and policy checks |
-| `taskier test` | Run workflow tests with mocked connector outputs |
-| `taskier dev` | Local engine on embedded Postgres (the engine needs `SKIP LOCKED`, RLS, `LISTEN/NOTIFY` and partitioning, so SQLite is not supported), hot reload, recorded fixtures |
-| `taskier diff --env prod` | Show what a deploy would change |
-| `taskier deploy --env staging` | Publish through the API, subject to approval policy |
-| `taskier runs tail` | Stream live run events |
+| `taskiem validate` | Schema, expression, and policy checks |
+| `taskiem test` | Run workflow tests with mocked connector outputs |
+| `taskiem dev` | Local engine on embedded Postgres (the engine needs `SKIP LOCKED`, RLS, `LISTEN/NOTIFY` and partitioning, so SQLite is not supported), hot reload, recorded fixtures |
+| `taskiem diff --env prod` | Show what a deploy would change |
+| `taskiem deploy --env staging` | Publish through the API, subject to approval policy |
+| `taskiem runs tail` | Stream live run events |
 
 ### 10.5 Workflow tests
 
@@ -922,7 +922,7 @@ Partners embed the builder and run views inside their own product.
 
 1. **Register** an `embed_app` with allowed origins, branding tokens, and the connectors and templates their customers may use.
 2. **Mint** a short-lived end-user token on the partner's server through the platform API, carrying `end_user_id`, sub-tenant, and permissions. No platform login is needed for the end user.
-3. **Render** the embedded builder as a web component (`<taskier-builder token="…">`) or iframe, themed with the partner's colours, fonts, and domain.
+3. **Render** the embedded builder as a web component (`<taskiem-builder token="…">`) or iframe, themed with the partner's colours, fonts, and domain.
 4. **Bridge** the partner's own API as a pre-authenticated connector, so end users automate the partner's product without handling credentials.
 5. **Observe** through the partner admin API and webhooks: end-user workflows, run outcomes, usage per sub-tenant. This API is the only path by which a partner reaches sub-tenant data; its tenant scope and dual audit trail are defined in section 5.3.
 
@@ -1057,7 +1057,7 @@ AGPL services are limited to optional operational tooling: the core install (eng
 | Frontend | React, TypeScript, Vite | MIT |  |
 | Canvas | React Flow (xyflow) | MIT | Used as a library dependency |
 | Code editor | Monaco | MIT | WD and code step editing |
-| CLI | Go, cobra | Apache 2.0 | `taskier` |
+| CLI | Go, cobra | Apache 2.0 | `taskiem` |
 | Deploy | Docker, Helm, Kubernetes | Apache 2.0 | Compose for single-node |
 
 HashiCorp Vault and Redis are deliberately avoided because of their source-available licence changes; OpenBao and Valkey are the community forks under permissive or weak-copyleft terms. Licence terms change, so the scanner's allow-list should be reviewed each quarter.
@@ -1081,7 +1081,7 @@ The biggest risk is scope: eight pillars is several products' worth of work, so 
 
 ### 18.2 Open questions
 
-- [ ] Trademark search for the working name Taskier in Nigeria and key markets; confirm or replace it before Phase 4 filing.
+- [ ] Trademark search for the working name Taskiem in Nigeria and key markets; confirm or replace it before Phase 4 filing.
 - [ ] Naira price points per tier.
 - [ ] Which regulated partner provides NIBSS access, and on what terms?
 - [ ] Exact CBN and NDPA control requirements to map in compliance reporting (counsel review).
