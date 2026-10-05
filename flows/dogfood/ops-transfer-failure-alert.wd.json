@@ -1,0 +1,50 @@
+{
+  "schema": "wd/v1",
+  "id": "wf_opsTransferFailureAlert",
+  "version": 1,
+  "name": "Ops: alert on failed or reversed Paystack transfers",
+  "description": "When Paystack reports a failed or reversed transfer, alerts the on-call engineer by SMS and posts to the ops Slack channel.",
+  "trigger": {
+    "type": "connector_event",
+    "config": {
+      "connector": "paystack@1",
+      "trigger": "transfer_event",
+      "events": ["transfer.failed", "transfer.reversed"]
+    }
+  },
+  "steps": [
+    {
+      "id": "message",
+      "type": "transform",
+      "config": {
+        "output": {
+          "text": "='Paystack ' + trigger.body.event + ': ' + string(double(trigger.body.data.amount) / 100.0) + ' NGN, ref ' + trigger.body.data.reference + (has(trigger.body.data.reason) ? ' (' + trigger.body.data.reason + ')' : '')"
+        }
+      }
+    },
+    {
+      "id": "sms_on_call",
+      "type": "connector",
+      "needs": ["message"],
+      "connector": "termii@1",
+      "action": "send_sms",
+      "input": {
+        "to": "=env.ops_on_call_phone",
+        "sms": "=steps.message.output.text",
+        "channel": "dnd"
+      }
+    },
+    {
+      "id": "post_slack",
+      "type": "http",
+      "needs": ["message"],
+      "config": {
+        "method": "POST",
+        "url": "=secrets.ops_slack_webhook_url",
+        "body": { "text": "=steps.message.output.text" },
+        "class": "unsafe_write"
+      }
+    }
+  ],
+  "settings": { "timeout": "1h" }
+}

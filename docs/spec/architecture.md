@@ -89,7 +89,7 @@ Requests flow top to bottom: clients and providers hit the edge, the edge record
 | Public API | `api` | REST API for UI, CLI, SDKs, partners; auth, RBAC, rate limits |
 | Trigger ingest | `edge` | Verify, deduplicate, and record inbound events; acknowledge fast |
 | Fast path | `edge` | Low-latency USSD menus and chat sessions |
-| Orchestrator | `orchestrator` | Run `decide()` on new events; write events and tasks transactionally |
+| Orchestrator | `orchestrator` | Sweep runs with undecided events and run `decide()`; most decisions run inline where the event is appended (section 4.2) |
 | Scheduler | `scheduler` | Fire timers and cron, recover expired leases, run retention jobs |
 | Workers | `worker` | Execute steps: connector calls, sandboxed code, AI calls |
 | Web app | static | React canvas, run inspector, admin, served from a CDN or the API |
@@ -101,7 +101,7 @@ Requests flow top to bottom: clients and providers hit the edge, the edge record
 2. Ingest writes `RunStarted` and triggers the first orchestrator pass in one transaction, then returns 202.
 3. The orchestrator reads the history, decides the first step is ready, and writes `StepScheduled` plus a task.
 4. A worker claims the task with `SKIP LOCKED`, receiving a lease epoch (fencing token); it writes `EffectIntent` and calls the provider through the egress proxy with a deterministic idempotency key.
-5. The worker writes `StepCompleted`, which is accepted only if its lease epoch is still current (section 4.3); the orchestrator wakes, decides the next step, and the loop repeats.
+5. The worker writes `StepCompleted`, which is accepted only if its lease epoch is still current (section 4.3), and runs the next orchestrator pass in the same transaction; the loop repeats.
 6. At an approval step the orchestrator writes `ApprovalRequested`; the run sleeps at zero cost until a signed decision arrives from the web or WhatsApp.
 7. When no steps remain, the orchestrator writes `RunCompleted`.
 
@@ -232,6 +232,8 @@ Each run has an ordered event log in `run_events`. Events are immutable and sequ
 The orchestrator is a pure function: `decide(WD version, history) → []Command`. Commands are `ScheduleStep`, `StartTimer`, `AwaitSignal`, `RequestApproval`, `Complete`, `Fail`. It reads no clock, no randomness, and no external state; time enters only through events. That makes every run replayable byte for byte, which the audit log, debugging, and AI repair all depend on.
 
 The orchestrator runs whenever a run receives a new event. It locks the run row, loads history, decides, and writes new events plus tasks in **one transaction** (transactional outbox). Either all of it commits or none does.
+
+Whoever appends an event runs that pass inline in the same transaction: ingest for `RunStarted`, a worker for `StepCompleted` or `StepFailed`. The `orchestrator` role sweeps runs left with undecided events (after a crash, or when an event arrives by another path) and takes decisions too expensive to run inline. The Phase 0 spike measured inline decisions at 43% fewer commits per step and 34% more peak throughput (decision 0002).
 
 ### 4.3 Task queue
 
@@ -513,6 +515,7 @@ actions:
       encoding: base32_lower      # engine-derived sha256, encoded to the provider's rules
       length: 32                  # Paystack: 16–50 chars of [a-z0-9_-]
       prefix: "tsk_"
+      limits: { min_length: 16, max_length: 50, charset: "a-z0-9_-" }
     reconcile: verify_transfer
     compensate: null
     input:

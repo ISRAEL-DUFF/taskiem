@@ -1,0 +1,41 @@
+# Single-node development stack (spec 2.3). Not for production.
+name: taskiem
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: taskiem
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      retries: 30
+
+  migrate:
+    build: { context: .., args: { VERSION: dev } }
+    command: ["migrate"]
+    environment:
+      TASKIEM_DATABASE_URL: postgres://postgres:postgres@postgres:5432/taskiem?sslmode=disable
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  # S3-compatible object storage for large payloads (spec 4.9).
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: ["server", "-s3", "-dir=/data"]
+    ports: ["8333:8333"]
+    volumes: [seaweed:/data]
+
+  # Secrets and transit encryption (spec 14.1). Dev mode: in-memory, unsealed, root token "dev".
+  openbao:
+    image: openbao/openbao:latest
+    command: ["server", "-dev", "-dev-root-token-id=dev", "-dev-listen-address=0.0.0.0:8200"]
+    ports: ["8200:8200"]
+    cap_add: [IPC_LOCK]
+
+volumes:
+  pgdata: {}
+  seaweed: {}

@@ -1,0 +1,112 @@
+{
+  "schema": "wd/v1",
+  "id": "wf_ispendTopupReconciliation",
+  "version": 1,
+  "name": "iSpend: reconcile stuck wallet top-ups",
+  "description": "Every 15 minutes, checks top-ups that have been pending for more than 15 minutes against Paystack and credits or fails them in iSpend.",
+  "trigger": {
+    "type": "schedule",
+    "config": { "cron": "*/15 * * * *", "timezone": "Africa/Lagos" }
+  },
+  "steps": [
+    {
+      "id": "find_pending",
+      "type": "connector",
+      "connector": "postgres@1",
+      "action": "query",
+      "connection": "ispend_readonly",
+      "input": {
+        "sql": "SELECT id, paystack_reference, amount_kobo, wallet_id FROM topups WHERE status = 'pending' AND created_at < now() - interval '15 minutes' ORDER BY created_at LIMIT 500",
+        "params": []
+      }
+    },
+    {
+      "id": "reconcile_each",
+      "type": "foreach",
+      "needs": ["find_pending"],
+      "config": {
+        "items": "=steps.find_pending.output.rows",
+        "max_concurrency": 10,
+        "max_items": 500,
+        "steps": [
+          {
+            "id": "verify",
+            "type": "connector",
+            "connector": "paystack@1",
+            "action": "verify_charge",
+            "input": { "reference": "=item.paystack_reference" },
+            "retry": { "max": 3, "backoff": "exponential", "initial": "2s" }
+          },
+          {
+            "id": "decide",
+            "type": "branch",
+            "needs": ["verify"],
+            "config": {
+              "paths": [
+                {
+                  "name": "paid",
+                  "when": "=steps.verify.output.status == 'success' && steps.verify.output.amount == item.amount_kobo",
+                  "steps": [
+                    {
+                      "id": "credit_wallet",
+                      "type": "http",
+                      "config": {
+                        "method": "POST",
+                        "url": "=env.ispend_api_url + '/internal/topups/' + item.id + '/complete'",
+                        "headers": { "Authorization": "='Bearer ' + secrets.ispend_api_token" },
+                        "body": { "paystack_reference": "=item.paystack_reference", "amount_kobo": "=item.amount_kobo" },
+                        "class": "idempotent_write",
+                        "idempotency_header": "Idempotency-Key"
+                      },
+                      "effect": { "idempotency_seed": "=item.paystack_reference" },
+                      "retry": { "max": 5, "backoff": "exponential", "initial": "2s" }
+                    }
+                  ]
+                },
+                {
+                  "name": "amount_mismatch",
+                  "when": "=steps.verify.output.status == 'success' && steps.verify.output.amount != item.amount_kobo",
+                  "steps": [
+                    {
+                      "id": "flag_mismatch",
+                      "type": "http",
+                      "config": {
+                        "method": "POST",
+                        "url": "=env.ispend_api_url + '/internal/topups/' + item.id + '/flag'",
+                        "headers": { "Authorization": "='Bearer ' + secrets.ispend_api_token" },
+                        "body": { "reason": "amount_mismatch", "paid_kobo": "=steps.verify.output.amount" },
+                        "class": "idempotent_write",
+                        "idempotency_header": "Idempotency-Key"
+                      },
+                      "effect": { "idempotency_seed": "=item.paystack_reference" }
+                    }
+                  ]
+                },
+                {
+                  "name": "failed",
+                  "when": "=steps.verify.output.status in ['failed', 'abandoned', 'reversed']",
+                  "steps": [
+                    {
+                      "id": "fail_topup",
+                      "type": "http",
+                      "config": {
+                        "method": "POST",
+                        "url": "=env.ispend_api_url + '/internal/topups/' + item.id + '/fail'",
+                        "headers": { "Authorization": "='Bearer ' + secrets.ispend_api_token" },
+                        "body": { "paystack_status": "=steps.verify.output.status" },
+                        "class": "idempotent_write",
+                        "idempotency_header": "Idempotency-Key"
+                      },
+                      "effect": { "idempotency_seed": "=item.paystack_reference" }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "settings": { "timeout": "14m", "concurrency_key": "='ispend-topup-reconciliation'" }
+}

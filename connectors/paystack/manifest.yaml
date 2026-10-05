@@ -1,0 +1,98 @@
+# Reference manifest for the Phase 1 Paystack connector. Handlers land in Phase 1;
+# this file is a contract fixture validated against schemas/connector-v1.schema.json.
+manifest: connector/v1
+id: paystack
+version: 1.0.0
+name: Paystack
+category: payments
+regions: [NG, GH, KE, ZA, CI]
+auth:
+  type: api_key
+  fields:
+    - { key: secret_key, label: Secret key, secret: true }
+  test: { action: check_balance }
+rate_limit: { requests: 50, per: 1s, scope: connection }
+base_url: https://api.paystack.co
+actions:
+  check_balance:
+    title: Check balance
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        balances:
+          type: array
+          items:
+            type: object
+            properties:
+              currency: { type: string }
+              balance: { type: integer, description: Minor units }
+  transfer:
+    title: Send transfer
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 50, charset: "a-z0-9_-" }
+    reconcile: verify_transfer
+    compensate: null
+    input:
+      type: object
+      required: [amount, recipient]
+      properties:
+        amount:    { type: integer, description: Amount in kobo, minimum: 100 }
+        recipient: { type: string, description: Recipient code }
+        reason:    { type: string }
+        currency:  { type: string, default: NGN }
+    output:
+      type: object
+      properties:
+        transfer_code: { type: string }
+        reference:     { type: string }
+        status:        { type: string, enum: [pending, success, failed, reversed, otp] }
+    pii:
+      - { field: recipient, category: account_number }
+  verify_transfer:
+    title: Verify transfer
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output:
+      type: object
+      properties:
+        transfer_code: { type: string }
+        reference:     { type: string }
+        status:        { type: string, enum: [pending, success, failed, reversed, otp, not_found] }
+  verify_charge:
+    title: Verify charge
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        amount:    { type: integer }
+        status:    { type: string }
+triggers:
+  transfer_event:
+    type: webhook
+    verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
+    events: [transfer.success, transfer.failed, transfer.reversed]
+    event_type: =body.event
+    dedup: =body.data.reference + ':' + body.event
+    correlation: =body.data.reference
+  charge_event:
+    type: webhook
+    verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
+    events: [charge.success]
+    event_type: =body.event
+    dedup: =body.data.reference + ':' + body.event
+    correlation: =body.data.reference
