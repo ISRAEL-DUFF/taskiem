@@ -22,8 +22,11 @@ type Scheduler struct {
 	ID       string
 	Interval time.Duration
 	Logger   *slog.Logger
+	// Archiver receives runs past retention before they are purged; nil
+	// disables purging.
+	Archiver Archiver
 
-	lastPartitions time.Time
+	lastPartitions, lastPurge time.Time
 }
 
 // TickStats reports one tick's work.
@@ -74,6 +77,13 @@ func (s *Scheduler) Tick(ctx context.Context) (TickStats, error) {
 	n, err = s.sweep(ctx)
 	st.RunsSwept = n
 	errs = append(errs, err)
+	if time.Since(s.lastPurge) > 10*time.Minute {
+		if _, err := s.PurgeExpired(ctx, 500); err != nil {
+			errs = append(errs, err)
+		} else {
+			s.lastPurge = time.Now()
+		}
+	}
 	if time.Since(s.lastPartitions) > time.Hour {
 		if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_ensure_run_event_partitions(now(), 3)`); err != nil {
 			errs = append(errs, err)

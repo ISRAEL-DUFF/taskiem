@@ -11,6 +11,7 @@ import (
 // Event types (spec 4.1).
 const (
 	RunStarted            = "RunStarted"
+	RunAdmitted           = "RunAdmitted" // a queued run got its concurrency slot
 	StepScheduled         = "StepScheduled"
 	StepStarted           = "StepStarted"
 	EffectIntent          = "EffectIntent"

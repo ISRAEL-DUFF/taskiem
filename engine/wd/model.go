@@ -21,6 +21,10 @@ type Definition struct {
 	Trigger     Trigger  `json:"trigger"`
 	Steps       []*Step  `json:"steps"`
 	Settings    Settings `json:"settings"`
+	RawInputs   *struct {
+		Schema json.RawMessage `json:"schema"`
+	} `json:"inputs,omitempty"`
+	RawTypes map[string]json.RawMessage `json:"types,omitempty"`
 
 	byID   map[string]*Step
 	parent map[string]*Step // nested step id -> enclosing control (or on_error owner) step
@@ -351,3 +355,18 @@ func ParseDuration(s string) (time.Duration, error) {
 }
 
 var durFull = regexp.MustCompile(`^([0-9]+(ms|s|m|h|d))+$`)
+
+// InputsSchema returns the inputs schema and the named types it may
+// reference, as JSON-compatible values (for PII paths and validation).
+func (d *Definition) InputsSchema() (schema any, types map[string]any) {
+	types = map[string]any{}
+	for k, raw := range d.RawTypes {
+		if v, err := expr.DecodeJSON(raw); err == nil {
+			types[k] = v
+		}
+	}
+	if d.RawInputs != nil && len(d.RawInputs.Schema) > 0 {
+		schema, _ = expr.DecodeJSON(d.RawInputs.Schema)
+	}
+	return schema, types
+}

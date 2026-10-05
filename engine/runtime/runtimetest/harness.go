@@ -48,8 +48,9 @@ func New(t testing.TB) *Env {
 		t.Fatal(err)
 	}
 	guard := &egress.Guard{Blocked: func(a netip.Addr) bool { return !a.IsLoopback() && egress.BlockedAddr(a) }}
-	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg}, Registry: reg, Provider: prov, Tenant: tn.ID,
-		Secrets: runtime.MapSecrets{}, Vault: &secrets.Vault{Pool: d.App, KMS: kms, RootKey: "root"}, Egress: guard}
+	vault := &secrets.Vault{Pool: d.App, KMS: kms, RootKey: "root"}
+	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg, PII: vault}, Registry: reg, Provider: prov, Tenant: tn.ID,
+		Secrets: runtime.MapSecrets{}, Vault: vault, Egress: guard}
 }
 
 // Publish stores a published workflow version and returns its workflow id.

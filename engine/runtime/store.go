@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -29,6 +30,9 @@ import (
 type Store struct {
 	Pool     *pgxpool.Pool
 	Registry *connector.Registry
+	// PII seals declared personal data before it is written (spec 4.9);
+	// nil stores it in plaintext (development without a vault).
+	PII pii.Cipher
 
 	defs sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
 }
@@ -98,19 +102,18 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 				Version: req.Version, Environment: req.Environment, StartedAt: history.FormatTime(startedAt)},
 			Trigger: req.Trigger, Env: req.Env, Connectors: pins,
 		}
-		if _, err := appendEvent(ctx, tx, ref.ID, history.RunStarted, "", 0, payload, history.OriginIngest); err != nil {
+		sealed, err := s.sealPayload(ctx, tx, req.TenantID, payload, triggerPaths(def), pii.Taint{})
+		if err != nil {
 			return err
 		}
-		if def.Settings.Timeout != "" {
-			d, err := wd.ParseDuration(def.Settings.Timeout)
-			if err != nil {
-				return err
-			}
-			if err := insertTimer(ctx, tx, req.TenantID, ref.ID, "", "run_timeout", startedAt.Add(d)); err != nil {
-				return err
-			}
+		if _, err := appendEvent(ctx, tx, ref.ID, history.RunStarted, "", 0, sealed, history.OriginIngest); err != nil {
+			return err
 		}
-		return s.decideInline(ctx, tx, ref)
+		admitted, err := s.admit(ctx, tx, ref, req.WorkflowID, def, payload)
+		if err != nil || !admitted {
+			return err
+		}
+		return s.start(ctx, tx, ref, def, startedAt)
 	})
 	return ref, created, err
 }
@@ -134,6 +137,20 @@ func (s *Store) definition(ctx context.Context, tx pgx.Tx, workflowID uuid.UUID,
 	}
 	s.defs.Store(key, d)
 	return d, nil
+}
+
+// start arms the run timeout and makes the first decision.
+func (s *Store) start(ctx context.Context, tx pgx.Tx, ref RunRef, def *wd.Definition, from time.Time) error {
+	if def.Settings.Timeout != "" {
+		d, err := wd.ParseDuration(def.Settings.Timeout)
+		if err != nil {
+			return err
+		}
+		if err := insertTimer(ctx, tx, ref.TenantID, ref.ID, "", "run_timeout", from.Add(d)); err != nil {
+			return err
+		}
+	}
+	return s.decideInline(ctx, tx, ref)
 }
 
 // runRow is the part of a run the engine needs.
@@ -208,8 +225,17 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 	if err != nil {
 		return err
 	}
+	if run.status == "queued" {
+		// Not admitted yet: nothing is decided until it gets its slot.
+		_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL WHERE id = $1`, ref.ID)
+		return err
+	}
 	for round := 0; round < maxInlineRounds; round++ {
-		hist, err := History(ctx, tx, ref.ID)
+		raw, err := History(ctx, tx, ref.ID)
+		if err != nil {
+			return err
+		}
+		hist, taint, err := s.openHistory(ctx, tx, ref.TenantID, raw)
 		if err != nil {
 			return err
 		}
@@ -222,10 +248,18 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 		// contiguous and replayable.
 		var deferred []func() error
 		for _, ev := range evs {
-			if _, err := appendEvent(ctx, tx, ref.ID, ev.Type, ev.StepID, ev.Attempt, ev.Payload, history.OriginDecide); err != nil {
+			var paths []pii.Path
+			if p, ok := ev.Payload.(history.ScheduledPayload); ok {
+				paths = s.connectorPIIPaths(p)
+			}
+			sealed, err := s.sealPayload(ctx, tx, ref.TenantID, ev.Payload, paths, taint)
+			if err != nil {
 				return err
 			}
-			then, err := s.applyEffects(ctx, tx, run, ev)
+			if _, err := appendEvent(ctx, tx, ref.ID, ev.Type, ev.StepID, ev.Attempt, sealed, history.OriginDecide); err != nil {
+				return err
+			}
+			then, err := s.applyEffects(ctx, tx, run, def, ev)
 			if err != nil {
 				return fmt.Errorf("apply %s(%s): %w", ev.Type, ev.StepID, err)
 			}
@@ -249,7 +283,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 // applyEffects performs the side effects an event implies: tasks, timers,
 // signal waits, run status. It may return a follow-up that appends further
 // events once decide's batch is written.
-func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, ev decide.NewEvent) (func() error, error) {
+func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, ev decide.NewEvent) (func() error, error) {
 	tenant := run.ref.TenantID
 	switch ev.Type {
 	case history.StepScheduled:
@@ -297,9 +331,9 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, ev deci
 			return nil, err
 		}
 	case history.RunCompleted:
-		return nil, endRun(ctx, tx, run.ref.ID, "completed")
+		return nil, s.endRun(ctx, tx, run, def, "completed")
 	case history.RunFailed:
-		return nil, endRun(ctx, tx, run.ref.ID, "failed")
+		return nil, s.endRun(ctx, tx, run, def, "failed")
 	}
 	return nil, nil
 }
@@ -318,20 +352,36 @@ func insertTimer(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, step, ki
 	return err
 }
 
-// endRun marks a run terminal and clears what it no longer needs. Tasks a
-// worker holds are left alone: its result is still recorded when it returns.
-func endRun(ctx context.Context, tx pgx.Tx, run uuid.UUID, status string) error {
-	if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now() WHERE id = $1`, run, status); err != nil {
+// DefaultRetention applies when a workflow sets no settings.retention.
+const DefaultRetention = 90 * 24 * time.Hour
+
+// endRun marks a run terminal, starts its retention clock (spec 9.4), clears
+// what it no longer needs, and admits queued runs its slot was holding back.
+// Tasks a worker holds are left alone: its result is still recorded.
+func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
+	run := r.ref.ID
+	retention := DefaultRetention
+	if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
+		retention = d
+	}
+	if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now(), retain_until = now() + $3::interval WHERE id = $1`,
+		run, status, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(ctx, `DELETE FROM concurrency_slots WHERE run_id = $1`, run); err != nil {
+		return err
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM tasks WHERE run_id = $1 AND lease_owner IS NULL`, run); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM timers WHERE run_id = $1 AND fired_at IS NULL`, run); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1`, run)
-	return err
+	if _, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1`, run); err != nil {
+		return err
+	}
+	return s.promote(ctx, tx, r.ref.TenantID, r.workflowID)
 }
 
 // signalLock serialises waiting and delivery for one (tenant, event,
@@ -486,7 +536,11 @@ func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string) error {
 		if _, err := appendEvent(ctx, tx, ref.ID, history.RunCancelled, "", 0, map[string]any{"by": by}, history.OriginAPI); err != nil {
 			return err
 		}
-		return endRun(ctx, tx, ref.ID, "cancelled")
+		def, err := s.definition(ctx, tx, run.workflowID, run.version)
+		if err != nil {
+			return err
+		}
+		return s.endRun(ctx, tx, run, def, "cancelled")
 	})
 }
 
@@ -511,4 +565,8 @@ func (s *Store) RunHistory(ctx context.Context, ref RunRef) ([]history.Event, er
 		return err
 	})
 	return h, err
+}
+
+func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error) error {
+	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, fn)
 }

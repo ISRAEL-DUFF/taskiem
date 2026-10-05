@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -255,6 +256,7 @@ type plan struct {
 	keyIn    effects.KeyInput
 	intentAt time.Time // when the EffectIntent in force was recorded (database clock)
 	step     *wd.Step
+	taint    pii.Taint // personal values in this run; outputs repeating them are sealed
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -331,10 +333,15 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if err != nil {
 			return err
 		}
-		hist, err := History(ctx, tx, c.run)
+		raw, err := History(ctx, tx, c.run)
 		if err != nil {
 			return err
 		}
+		hist, taint, err := w.Store.openHistory(ctx, tx, c.tenant, raw)
+		if err != nil {
+			return err
+		}
+		p.taint = taint
 		found := false
 		var intents []history.IntentPayload
 		var intentAttempts []int
@@ -557,7 +564,17 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		if result == nil {
 			return nil
 		}
-		if _, err := appendEvent(ctx, tx, p.c.run, result.Type, result.StepID, result.Attempt, result.Payload, history.OriginWorker); err != nil {
+		var payload any = result.Payload
+		if w.Store.PII != nil && len(p.taint) > 0 {
+			v, err := expr.DecodeJSON(result.Payload)
+			if err != nil {
+				return err
+			}
+			if payload, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, nil, p.taint); err != nil {
+				return err
+			}
+		}
+		if _, err := appendEvent(ctx, tx, p.c.run, result.Type, result.StepID, result.Attempt, payload, history.OriginWorker); err != nil {
 			return err
 		}
 		if result.Type == history.StepFailed {
