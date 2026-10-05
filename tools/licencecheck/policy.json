@@ -1,0 +1,51 @@
+{
+  "comment": "Licence gate (decision 0007). 'allowed' is the linked-or-bundled tier. Each exception names one module or package, its licence, and why it is acceptable; adding one needs a decision-log entry or founder approval.",
+  "allowed": [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "PostgreSQL",
+    "0BSD",
+    "Unlicense",
+    "CC0-1.0",
+    "BlueOak-1.0.0",
+    "Python-2.0"
+  ],
+  "exceptions": {
+    "lightningcss": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."
+    },
+    "lightningcss-linux-x64-gnu": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."
+    },
+    "lightningcss-linux-x64-musl": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."
+    },
+    "lightningcss-darwin-arm64": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."
+    },
+    "lightningcss-darwin-x64": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."
+    },
+    "lightningcss-linux-arm64-gnu": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."
+    },
+    "lightningcss-linux-arm64-musl": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."
+    },
+    "lightningcss-win32-x64-msvc": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."
+    }
+  }
+}

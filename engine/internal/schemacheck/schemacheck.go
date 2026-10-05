@@ -4,6 +4,7 @@ package schemacheck
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -56,8 +57,8 @@ func (s *Schema) Validate(jsonDoc []byte) []string {
 	if err == nil {
 		return nil
 	}
-	ve, ok := err.(*jsonschema.ValidationError)
-	if !ok {
+	var ve *jsonschema.ValidationError
+	if !errors.As(err, &ve) {
 		return []string{err.Error()}
 	}
 	var out []string

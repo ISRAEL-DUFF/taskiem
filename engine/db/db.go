@@ -26,7 +26,7 @@ func Migrate(ctx context.Context, dsn string) ([]*goose.MigrationResult, error) 
 		return nil, err
 	}
 	sqlDB := stdlib.OpenDB(*cfg)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 	return migrate(ctx, sqlDB)
 }
 

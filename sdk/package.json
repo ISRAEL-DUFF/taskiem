@@ -1,0 +1,14 @@
+{
+  "name": "@taskiem/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Taskiem TypeScript SDK. Phase 0: wd/v1 types and contract helpers; the workflow builder API lands in Phase 2.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

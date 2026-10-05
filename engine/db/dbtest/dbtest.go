@@ -45,7 +45,7 @@ func New(t testing.TB) *DB {
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		t.Fatal(err)
 	}
-	admin.Close(ctx)
+	_ = admin.Close(ctx)
 
 	u, err := url.Parse(base)
 	if err != nil {
@@ -66,7 +66,7 @@ func New(t testing.TB) *DB {
 		defer cancel()
 		if c, err := pgx.Connect(ctx, base); err == nil {
 			_, _ = c.Exec(ctx, "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
-			c.Close(ctx)
+			_ = c.Close(ctx)
 		}
 	})
 	return d

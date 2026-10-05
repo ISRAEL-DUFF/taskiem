@@ -1,0 +1,102 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+      - name: Unit and database tests
+        run: go test -count=1 ./...
+      - name: Validate contracts and dogfood workflows
+        run: go run ./cmd/taskiem validate flows/*/*.wd.json connectors/*/manifest.yaml
+      - name: Migrations apply cleanly with the CLI
+        run: go run ./cmd/taskiem migrate --dsn "$TASKIEM_TEST_DATABASE_URL"
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  licences:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm licenses list --json > npm-licences.json
+      - run: go run ./tools/licencecheck -npm npm-licences.json
+
+  # Signed builds and SBOM (build plan Phase 0). Runs on main only.
+  release-build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [go, typescript, licences]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # keyless cosign signing via GitHub OIDC
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: make build VERSION=${GITHUB_SHA::12}
+      - name: SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: bin/taskiem.spdx.json
+          upload-artifact: false
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign binary and SBOM
+        run: |
+          for f in bin/taskiem bin/taskiem.spdx.json; do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: taskiem-${{ github.sha }}
+          path: bin/

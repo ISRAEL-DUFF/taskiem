@@ -9,7 +9,7 @@ Before your first commit:
 
 | Path | Contents |
 | --- | --- |
-| `cmd/taskiem` | The single binary; roles are chosen with `--role` |
+| `cmd/taskiem` | The single binary: `migrate`, `validate`, and (Phase 1) `serve --role` |
 | `engine/` | Engine packages: database and migrations, effects contract, the Phase 0 spike |
 | `connectors/` | First-party connector manifests and (from Phase 1) Go handlers |
 | `schemas/` | Frozen contracts: `wd/v1` and `connector/v1` JSON Schemas |
@@ -24,7 +24,7 @@ Before your first commit:
 
 ```sh
 make check          # lint, unit tests, schema validation, licence check
-make db-up          # start Postgres via Docker Compose
+make db-up          # start Postgres via Docker Compose (or point TASKIEM_TEST_DATABASE_URL at any Postgres 16)
 make test-db        # integration tests against TASKIEM_TEST_DATABASE_URL
 ```
 

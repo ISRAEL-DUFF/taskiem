@@ -1,11 +1,11 @@
 # Decision log
 
-One file per decision, numbered in order: `NNNN-short-title.md`. Each entry records what was decided, why, the alternatives considered, and, where the design resembles an existing product, where the idea came from. Entries are never rewritten; a later decision supersedes an earlier one by number.
+One file per decision, numbered in order: `NNNN-short-title.md`. Each entry records what was decided, why, the alternatives considered, and, where the design resembles an existing product, where the idea came from. Entries are never rewritten: amendments are appended with a date, and a later decision supersedes an earlier one by number.
 
 | # | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-event-sourced-execution.md) | Event-sourced runs with a pure `decide()` | Accepted |
-| [0002](0002-postgres-as-queue.md) | PostgreSQL as the task queue in v1 | Accepted, pending G0 load test |
+| [0002](0002-postgres-as-queue.md) | PostgreSQL as the task queue in v1 | Accepted; amended after the G0 spike |
 | [0003](0003-cel-expressions.md) | CEL for workflow expressions | Accepted |
 | [0004](0004-tenant-isolation-rls.md) | RLS with tenant scope arrays and a dispatch role | Accepted |
 | [0005](0005-idempotency-keys.md) | Derived and per-connector encoded idempotency keys | Accepted |

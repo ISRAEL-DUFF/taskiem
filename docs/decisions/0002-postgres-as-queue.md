@@ -21,3 +21,10 @@ See `engine/spike/RESULTS.md` for the Phase 0 spike numbers and the projection t
 ## Provenance
 
 `SKIP LOCKED` queues are a documented PostgreSQL pattern (PostgreSQL docs, `SELECT … FOR UPDATE SKIP LOCKED`, since 9.5). Fencing tokens are from Kleppmann, "How to do distributed locking", 2016.
+
+## Amendment — 2026-10-05, after the G0 spike
+
+The spike sustained 500 steps/s at p95 dispatch 4–5 ms and peaked at 1,302 steps/s on a 4-vCPU host (`engine/spike/RESULTS.md`). The decision stands, with two changes to how the engine is built:
+
+1. **One claimer per process.** Each worker or orchestrator process holds a single `LISTEN` connection and a single claim loop that feeds its executors. One claimer per executor caused a thundering herd costing 7× the commits.
+2. **Inline decide.** `decide()` runs inside the transaction that appends a step's result, as ingest already does for `RunStarted`. The orchestrator role sweeps runs left undecided. This cut commits per step by 43% and raised peak throughput by 34%.
