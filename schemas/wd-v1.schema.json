@@ -1,0 +1,1256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.taskiem.dev/wd/v1.json",
+  "title": "Taskiem Workflow Definition (wd/v1)",
+  "description": "Canonical, versioned workflow definition. Structural rules live here; cross-reference rules (unique step ids, needs targets, cycles, expression roots) are enforced by the engine's semantic validator and documented in docs/contracts/wd-v1.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "version",
+    "name",
+    "trigger",
+    "steps"
+  ],
+  "properties": {
+    "schema": {
+      "const": "wd/v1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^wf_[0-9A-Za-z]{1,40}$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "trigger": {
+      "$ref": "#/$defs/trigger"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "$ref": "#/$defs/jsonSchema"
+        }
+      }
+    },
+    "steps": {
+      "$ref": "#/$defs/steps"
+    },
+    "types": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/jsonSchema"
+      }
+    },
+    "settings": {
+      "$ref": "#/$defs/settings"
+    }
+  },
+  "$defs": {
+    "expr": {
+      "description": "CEL expression, marked by a leading '='.",
+      "type": "string",
+      "pattern": "^=.+"
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^([0-9]+(ms|s|m|h|d))+$"
+    },
+    "stepId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$"
+    },
+    "connectorRef": {
+      "description": "Connector id pinned to a major version, e.g. paystack@1.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,62}@[0-9]+$"
+    },
+    "actionClass": {
+      "enum": [
+        "read",
+        "idempotent_write",
+        "reconcilable_write",
+        "unsafe_write"
+      ]
+    },
+    "jsonSchema": {
+      "description": "A JSON Schema (draft 2020-12) for data. Validated separately.",
+      "type": [
+        "object",
+        "boolean"
+      ]
+    },
+    "values": {
+      "description": "Object whose values are literals or expressions, at any depth.",
+      "type": "object"
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout": {
+          "$ref": "#/$defs/duration"
+        },
+        "concurrency_key": {
+          "$ref": "#/$defs/expr"
+        },
+        "max_concurrency": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retention": {
+          "$ref": "#/$defs/duration"
+        }
+      }
+    },
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max"
+      ],
+      "properties": {
+        "max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "backoff": {
+          "enum": [
+            "fixed",
+            "exponential"
+          ],
+          "default": "exponential"
+        },
+        "initial": {
+          "$ref": "#/$defs/duration"
+        },
+        "max_delay": {
+          "$ref": "#/$defs/duration"
+        },
+        "max_duration": {
+          "$ref": "#/$defs/duration"
+        }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idempotency_seed": {
+          "description": "Replaces the run id in the idempotency key material (docs/contracts/idempotency.md).",
+          "$ref": "#/$defs/expr"
+        }
+      }
+    },
+    "subflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "steps"
+      ],
+      "properties": {
+        "steps": {
+          "$ref": "#/$defs/steps"
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "stepCommon": {
+      "type": "object",
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stepId"
+        },
+        "type": {
+          "enum": [
+            "connector",
+            "code",
+            "http",
+            "branch",
+            "parallel",
+            "foreach",
+            "wait",
+            "signal",
+            "approval",
+            "subflow",
+            "transform",
+            "ai"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "needs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stepId"
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/expr"
+        },
+        "retry": {
+          "$ref": "#/$defs/retry"
+        },
+        "timeout": {
+          "$ref": "#/$defs/duration"
+        },
+        "on_error": {
+          "$ref": "#/$defs/subflow"
+        }
+      }
+    },
+    "step": {
+      "description": "A step; 'type' selects which step schema applies.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "connector"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/connectorStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "code"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/codeStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "http"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/httpStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "branch"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/branchStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "parallel"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/parallelStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "foreach"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/foreachStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "wait"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/waitStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "signal"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/signalStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "approval"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/approvalStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "subflow"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/subflowStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "transform"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/transformStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "ai"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/aiStep"
+          }
+        }
+      ]
+    },
+    "connectorStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "connector",
+        "action"
+      ],
+      "properties": {
+        "type": {
+          "const": "connector"
+        },
+        "connector": {
+          "$ref": "#/$defs/connectorRef"
+        },
+        "action": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,62}$"
+        },
+        "connection": {
+          "type": "string",
+          "description": "Connection name in the run's environment; defaults to the only one for this connector."
+        },
+        "input": {
+          "$ref": "#/$defs/values"
+        },
+        "effect": {
+          "$ref": "#/$defs/effect"
+        },
+        "compensate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action"
+          ],
+          "properties": {
+            "action": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,62}$"
+            },
+            "input": {
+              "$ref": "#/$defs/values"
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "codeStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "code"
+        },
+        "input": {
+          "$ref": "#/$defs/values"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "language"
+          ],
+          "properties": {
+            "language": {
+              "enum": [
+                "javascript",
+                "typescript",
+                "python",
+                "wasm"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "maxLength": 262144
+            },
+            "module": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "secrets": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "memory_mb": {
+                  "type": "integer",
+                  "minimum": 16
+                },
+                "cpu": {
+                  "$ref": "#/$defs/duration"
+                }
+              }
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "language": {
+                  "enum": [
+                    "javascript",
+                    "typescript",
+                    "python"
+                  ]
+                }
+              }
+            },
+            {
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "language": {
+                  "const": "wasm"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "httpStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "http"
+        },
+        "effect": {
+          "$ref": "#/$defs/effect"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "url"
+          ],
+          "properties": {
+            "method": {
+              "enum": [
+                "GET",
+                "HEAD",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "headers": {
+              "$ref": "#/$defs/values"
+            },
+            "query": {
+              "$ref": "#/$defs/values"
+            },
+            "body": {},
+            "class": {
+              "$ref": "#/$defs/actionClass"
+            },
+            "idempotency_header": {
+              "type": "string",
+              "description": "Header that carries the encoded idempotency key, e.g. Idempotency-Key."
+            }
+          },
+          "if": {
+            "properties": {
+              "method": {
+                "enum": [
+                  "POST",
+                  "PUT",
+                  "PATCH",
+                  "DELETE"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "class"
+            ],
+            "properties": {
+              "class": {
+                "not": {
+                  "const": "read"
+                }
+              }
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "branchStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "branch"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "paths"
+          ],
+          "properties": {
+            "paths": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "when",
+                  "steps"
+                ],
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/stepId"
+                  },
+                  "when": {
+                    "$ref": "#/$defs/expr"
+                  },
+                  "steps": {
+                    "$ref": "#/$defs/steps"
+                  }
+                }
+              }
+            },
+            "default": {
+              "$ref": "#/$defs/subflow"
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "parallelStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "parallel"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "branches"
+          ],
+          "properties": {
+            "branches": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "steps"
+                ],
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/stepId"
+                  },
+                  "steps": {
+                    "$ref": "#/$defs/steps"
+                  }
+                }
+              }
+            },
+            "join": {
+              "enum": [
+                "all",
+                "any"
+              ],
+              "default": "all"
+            },
+            "max_concurrency": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "foreachStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "foreach"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "items",
+            "steps"
+          ],
+          "properties": {
+            "items": {
+              "$ref": "#/$defs/expr"
+            },
+            "max_concurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 10
+            },
+            "max_items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000,
+              "default": 10000
+            },
+            "steps": {
+              "$ref": "#/$defs/steps"
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "waitStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "wait"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "duration": {
+              "$ref": "#/$defs/duration"
+            },
+            "until": {
+              "$ref": "#/$defs/expr"
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "duration"
+              ]
+            },
+            {
+              "required": [
+                "until"
+              ]
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "signalStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "signal"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "event",
+            "correlation"
+          ],
+          "properties": {
+            "event": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Signal name, or connector trigger as connector@major:trigger.event, e.g. paystack@1:transfer_event.transfer.success"
+            },
+            "correlation": {
+              "$ref": "#/$defs/expr"
+            },
+            "timeout": {
+              "$ref": "#/$defs/duration"
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "approvalStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "approval"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "policy": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,62}$",
+              "description": "Named approval policy, or a built-in: single, maker_checker."
+            },
+            "role": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,62}$"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "timeout": {
+              "$ref": "#/$defs/duration"
+            },
+            "on_timeout": {
+              "type": "string",
+              "pattern": "^(reject|fail|escalate:[a-z][a-z0-9_]{0,62})$"
+            },
+            "subject": {
+              "$ref": "#/$defs/values",
+              "description": "Data shown to approvers; recorded with each decision."
+            }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "policy"
+              ]
+            },
+            {
+              "required": [
+                "role"
+              ]
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "subflowStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "subflow"
+        },
+        "input": {
+          "$ref": "#/$defs/values"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "workflow",
+            "version"
+          ],
+          "properties": {
+            "workflow": {
+              "type": "string",
+              "pattern": "^wf_[0-9A-Za-z]{1,40}$"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "wait": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "transformStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "transform"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "output"
+          ],
+          "properties": {
+            "output": {}
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "aiStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "ai"
+        },
+        "input": {
+          "$ref": "#/$defs/values"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "prompt",
+            "output_schema"
+          ],
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 65536
+            },
+            "output_schema": {
+              "$ref": "#/$defs/jsonSchema"
+            },
+            "model": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "webhook",
+            "schedule",
+            "connector_event",
+            "polling",
+            "database_change",
+            "manual",
+            "whatsapp",
+            "ussd",
+            "email",
+            "subflow"
+          ]
+        },
+        "config": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "webhook"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "auth"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^/[A-Za-z0-9/_.-]*$"
+                  },
+                  "auth": {
+                    "enum": [
+                      "hmac",
+                      "bearer",
+                      "mtls",
+                      "none"
+                    ]
+                  },
+                  "dedup": {
+                    "$ref": "#/$defs/expr"
+                  },
+                  "respond": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "schedule"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "cron"
+                ],
+                "properties": {
+                  "cron": {
+                    "type": "string",
+                    "minLength": 9
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "default": "Africa/Lagos"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "connector_event"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "connector",
+                  "trigger"
+                ],
+                "properties": {
+                  "connector": {
+                    "$ref": "#/$defs/connectorRef"
+                  },
+                  "trigger": {
+                    "type": "string"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "connection": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "polling"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "connector",
+                  "action",
+                  "interval",
+                  "item_id"
+                ],
+                "properties": {
+                  "connector": {
+                    "$ref": "#/$defs/connectorRef"
+                  },
+                  "action": {
+                    "type": "string"
+                  },
+                  "input": {
+                    "$ref": "#/$defs/values"
+                  },
+                  "interval": {
+                    "$ref": "#/$defs/duration"
+                  },
+                  "item_id": {
+                    "$ref": "#/$defs/expr"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

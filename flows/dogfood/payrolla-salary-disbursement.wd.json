@@ -1,0 +1,125 @@
+{
+  "schema": "wd/v1",
+  "id": "wf_payrollaSalaryDisbursement",
+  "version": 1,
+  "name": "Payrolla: disburse approved payroll",
+  "description": "Pays every employee in an approved Payrolla payroll run through Paystack, after maker-checker approval, and reports the outcome.",
+  "trigger": {
+    "type": "webhook",
+    "config": { "path": "/payrolla/payroll-approved", "auth": "hmac", "dedup": "=trigger.body.payroll_id" }
+  },
+  "inputs": { "schema": { "$ref": "#/types/PayrollApproved" } },
+  "steps": [
+    {
+      "id": "summarise",
+      "type": "transform",
+      "config": {
+        "output": {
+          "payroll_id": "=trigger.body.payroll_id",
+          "employee_count": "=size(trigger.body.employees)",
+          "total_kobo": "=trigger.body.total_kobo"
+        }
+      }
+    },
+    {
+      "id": "check_balance",
+      "type": "connector",
+      "connector": "paystack@1",
+      "action": "check_balance",
+      "retry": { "max": 3, "backoff": "exponential", "initial": "2s" }
+    },
+    {
+      "id": "approve",
+      "type": "approval",
+      "needs": ["summarise", "check_balance"],
+      "config": {
+        "policy": "maker_checker",
+        "role": "payroll_approver",
+        "timeout": "24h",
+        "on_timeout": "reject",
+        "subject": {
+          "payroll_id": "=steps.summarise.output.payroll_id",
+          "employees": "=steps.summarise.output.employee_count",
+          "total_kobo": "=steps.summarise.output.total_kobo",
+          "ngn_balance_kobo": "=steps.check_balance.output.balances.filter(b, b.currency == 'NGN')[0].balance"
+        }
+      }
+    },
+    {
+      "id": "pay_all",
+      "type": "foreach",
+      "needs": ["approve"],
+      "when": "=steps.approve.output.decision == 'approved'",
+      "config": {
+        "items": "=trigger.body.employees",
+        "max_concurrency": 5,
+        "max_items": 5000,
+        "steps": [
+          {
+            "id": "pay_employee",
+            "type": "connector",
+            "connector": "paystack@1",
+            "action": "transfer",
+            "input": {
+              "amount": "=item.net_pay_kobo",
+              "recipient": "=item.recipient_code",
+              "reason": "='Salary ' + trigger.body.period"
+            },
+            "effect": { "idempotency_seed": "=trigger.body.payroll_id + ':' + item.employee_id" },
+            "retry": { "max": 5, "backoff": "exponential", "initial": "5s", "max_duration": "30m" }
+          },
+          {
+            "id": "await_settlement",
+            "type": "signal",
+            "needs": ["pay_employee"],
+            "when": "=steps.pay_employee.output.status == 'pending'",
+            "config": {
+              "event": "paystack@1:transfer_event",
+              "correlation": "=steps.pay_employee.output.reference",
+              "timeout": "24h"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "report",
+      "type": "http",
+      "needs": ["pay_all"],
+      "when": "=steps.approve.output.decision == 'approved'",
+      "config": {
+        "method": "POST",
+        "url": "=env.payrolla_api_url + '/payrolls/' + trigger.body.payroll_id + '/disbursement-report'",
+        "headers": { "Authorization": "='Bearer ' + secrets.payrolla_api_token" },
+        "body": { "results": "=steps.pay_all.output" },
+        "class": "idempotent_write",
+        "idempotency_header": "Idempotency-Key"
+      },
+      "retry": { "max": 5, "backoff": "exponential", "initial": "2s" }
+    }
+  ],
+  "types": {
+    "PayrollApproved": {
+      "type": "object",
+      "required": ["payroll_id", "period", "total_kobo", "employees"],
+      "properties": {
+        "payroll_id": { "type": "string" },
+        "period": { "type": "string" },
+        "total_kobo": { "type": "integer", "minimum": 0 },
+        "employees": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["employee_id", "net_pay_kobo", "recipient_code"],
+            "properties": {
+              "employee_id": { "type": "string" },
+              "net_pay_kobo": { "type": "integer", "minimum": 100 },
+              "recipient_code": { "type": "string", "x-pii": "account_number" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "settings": { "timeout": "72h", "concurrency_key": "=trigger.body.payroll_id" }
+}

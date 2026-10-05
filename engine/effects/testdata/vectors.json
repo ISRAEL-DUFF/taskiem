@@ -1,0 +1,82 @@
+{
+  "generated_by": "independent Python implementation of docs/contracts/idempotency.md",
+  "cases": [
+    {
+      "name": "paystack default seed",
+      "tenant_id": "0192a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+      "seed": "0192a1b2-c3d4-7e5f-8a9b-ffffffffffff",
+      "step_id": "pay",
+      "attempt_group": 0,
+      "encoding": "base32_lower",
+      "length": 32,
+      "prefix": "tsk_",
+      "expected": "tsk_a5lwkoeibomjyhm6xscbavkgurhjoark"
+    },
+    {
+      "name": "paystack business seed",
+      "tenant_id": "0192a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+      "seed": "payroll_42:emp_7",
+      "step_id": "pay_employee",
+      "attempt_group": 0,
+      "encoding": "base32_lower",
+      "length": 32,
+      "prefix": "tsk_",
+      "expected": "tsk_vjlnjuwa22i3jiomthfbfjoqx24jxxno"
+    },
+    {
+      "name": "attempt group 1",
+      "tenant_id": "0192a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+      "seed": "0192a1b2-c3d4-7e5f-8a9b-ffffffffffff",
+      "step_id": "pay",
+      "attempt_group": 1,
+      "encoding": "base32_lower",
+      "length": 32,
+      "prefix": "tsk_",
+      "expected": "tsk_gfece3ywz74ayhr4jdvj6vtgpjpg26qu"
+    },
+    {
+      "name": "foreach index",
+      "tenant_id": "0192a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+      "seed": "0192a1b2-c3d4-7e5f-8a9b-ffffffffffff",
+      "step_id": "pay_employee[3]",
+      "attempt_group": 0,
+      "encoding": "base32_lower",
+      "length": 32,
+      "prefix": "tsk_",
+      "expected": "tsk_e3xmafk64fnij2ql5nder42pc7btsv5h"
+    },
+    {
+      "name": "hex full",
+      "tenant_id": "0192a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+      "seed": "0192a1b2-c3d4-7e5f-8a9b-ffffffffffff",
+      "step_id": "credit_wallet",
+      "attempt_group": 0,
+      "encoding": "hex_lower",
+      "length": 64,
+      "prefix": "",
+      "expected": "f4db66df08f3f825664218cb80a7644874ffbda27f71300d41ad10dabc75ee48"
+    },
+    {
+      "name": "base64url",
+      "tenant_id": "0192a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+      "seed": "ref_ABC",
+      "step_id": "x",
+      "attempt_group": 2,
+      "encoding": "base64url",
+      "length": 22,
+      "prefix": "k-",
+      "expected": "k-jvky9LdfbN7kdZ_FcsAi8q"
+    },
+    {
+      "name": "unicode seed",
+      "tenant_id": "0192a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+      "seed": "Àdé ₦500",
+      "step_id": "pay",
+      "attempt_group": 0,
+      "encoding": "base32_lower",
+      "length": 26,
+      "prefix": "",
+      "expected": "4js6e4wfcnmwmsy3qpscgfelzl"
+    }
+  ]
+}

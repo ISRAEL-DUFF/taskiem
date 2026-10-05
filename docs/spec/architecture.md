@@ -513,6 +513,7 @@ actions:
       encoding: base32_lower      # engine-derived sha256, encoded to the provider's rules
       length: 32                  # Paystack: 16–50 chars of [a-z0-9_-]
       prefix: "tsk_"
+      limits: { min_length: 16, max_length: 50, charset: "a-z0-9_-" }
     reconcile: verify_transfer
     compensate: null
     input:
