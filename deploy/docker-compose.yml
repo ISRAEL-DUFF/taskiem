@@ -38,7 +38,7 @@ services:
   openbao:
     image: openbao/openbao:2.4.1
     command: ["server", "-dev", "-dev-root-token-id=dev", "-dev-listen-address=0.0.0.0:8200"]
-    ports: ["8200:8200"]
+    # Not published: only Taskiem talks to it (docker compose exec openbao bao ...).
     cap_add: [IPC_LOCK]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8200/v1/sys/health"]

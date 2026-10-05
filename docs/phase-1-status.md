@@ -1,6 +1,6 @@
 # Phase 1 status
 
-Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, UI, then dogfooding and a 4-week soak. Started 2026-10-05, while gate G0's people items were still open (clean-room signatures, trademark search, dogfood confirmation; see [Phase 0 status](phase-0-status.md)). Last updated 2026-10-05.
+Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, UI, then dogfooding and a 4-week soak. Started 2026-10-05, while gate G0's people items were still open (clean-room signatures, trademark search, dogfood confirmation; see [Phase 0 status](phase-0-status.md)). Last updated 2026-10-05 (milestone 3).
 
 ## Milestones
 
@@ -8,9 +8,9 @@ Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, 
 | --- | --- | --- | --- |
 | 1 | 1–6 | Engine core passes the determinism and crash-recovery suites | **Engine core built; both suites pass at G1 scale** (below) |
 | 2 | 4–10 | Connector SDK, first five connectors, sandbox | **Done** (below): Paystack, Dojah, Termii, Postgres connectors plus http steps; JavaScript/TypeScript sandbox; egress guard; encrypted secrets and connections |
-| 3 | 7–13 | Canvas, inspector, approvals, audit log | Approval step and decision API in the engine; UI, policies, and audit wiring not started |
-| 4 | 13–16 | Dogfood workflows live; bug-fix and load test | Not started |
-| 5 | 17–20 | Production soak | Not started |
+| 3 | 7–13 | Canvas, inspector, approvals, audit log | **Done** (below): HTTP API with identity and RBAC, approvals with separation of duties, audit log with an independent verifier, triggers and ingest, single-binary roles with telemetry, Docker Compose, and the web app. All three dogfood workflows run end to end in tests |
+| 4 | 13–16 | Dogfood workflows live; bug-fix and load test | **Needs people and production**: product owners to confirm the drafts, holdco production access, provider sandbox and live credentials, target hardware |
+| 5 | 17–20 | Production soak | Not started (follows milestone 4) |
 
 ## Milestone 1: what exists
 
@@ -37,6 +37,22 @@ Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, 
 | Configuration | Connections with encrypted credentials, tenant variables snapshotted into each run, egress rules | migration 00008, `engine/runtime/config.go` |
 | Dogfood | The iSpend top-up reconciliation flow runs end to end against real Postgres and fake Paystack/iSpend servers | `e2e/` |
 
+## Milestone 3: what exists
+
+| Area | Deliverable | Where |
+| --- | --- | --- |
+| Engine completions | `concurrency_key` and `max_concurrency` with queued runs admitted in order (`RunAdmitted`); operator resolution of parked steps (`completed`, `failed`, `retry`), audited; retention from run end with archive-then-purge and empty-partition drops; declared PII sealed per data subject before write, taint-sealing of copies, erasure by key destruction | `engine/runtime`, `engine/pii`, `engine/secrets`, migrations 00009–00010 |
+| API | REST API (`/v1`): password sign-in (argon2id, rate-limited), hashed session tokens, scoped and environment-limited API keys, CSRF header for cookie sessions, built-in roles (spec 13.3); workflows, immutable versions, canvas layout, validation and publish; idempotent run start checked against the inputs schema; run history sealed unless revealed (audited); cancel; resolve; connections, secrets (write-only), variables, egress; members and keys; audit list, verify and export; erasure | `api/`, migration 00011 |
+| Approvals | Inbox per role; votes recorded in one transaction with the decision: role required, maker-checker (whoever started the run or wrote or published the version cannot approve), distinct approvers, `count` approvals approve and any rejection rejects; what the approver was shown is stored with the vote | `engine/runtime/approvals.go`, `api/approvals.go` |
+| Audit | Every security-relevant action appended to the per-tenant hash chain; `taskiem audit verify` recomputes an export independently of Postgres, byte for byte, and catches edits and truncation | `engine/audit`, `cmd/taskiem` |
+| Triggers | Webhooks (HMAC or bearer; dedup expression or body hash; inputs schema; per-tenant ceiling with 429), connector webhooks verified by manifest (Paystack HMAC-SHA512) delivering deduplicated signals and starting subscribed workflows, cron schedules in Africa/Lagos deduplicated per scheduled time; registered from the published version in the publishing transaction | `engine/ingest`, migration 00012, decision 0012 |
+| Operations | `taskiem serve --role api\|edge\|orchestrator\|scheduler\|worker\|all` configured from the environment, graceful shutdown with a worker drain window; Prometheus metrics (requests, ingest, steps, queue depth and age, timers, lease expiries, sweeps); OpenTelemetry traces over OTLP; `taskiem bootstrap`; Docker image with the web app; Compose stack with OpenBao transit, verified end to end | `cmd/taskiem`, `engine/telemetry`, `deploy/`, `Dockerfile`, [operations](operations.md) |
+| Web app | Sign-in; workflow list; canvas editor (React Flow) with step palette, dependency editing, connector input forms generated from manifest schemas, trigger and run settings, JSON view, published endpoints; run list and inspector; approvals inbox; connections; secrets, variables, egress; audit log with verification and export; members and API keys | `web/` |
+
+**Dogfood workflows, end to end in tests** (`e2e/`): the Payrolla disbursement runs through the API and the edge (signed webhook, duplicate delivery returns the same run, balance check, maker-checker approval in which the workflow's author is refused, three transfers with idempotency seeds, one settled later by a signed Paystack webhook, report posted to Payrolla, recipient codes sealed at rest, replay verified); the ops alert starts from a Paystack `transfer.failed` webhook, ignores the retry and `transfer.success`, and sends one SMS through Termii and one Slack post; the iSpend reconciliation runs as in milestone 2.
+
+**Browser test** (`web/e2e`, CI job `web`): signs in, creates a workflow, adds a code step on the canvas, publishes, starts a run, sees it complete in the inspector, and verifies the audit chain, against the real binary and a fresh database.
+
 ## Suites (build plan, "Testing")
 
 **Determinism.** `decide.Verify` replays a recorded history and checks every block of decide-written events, byte for byte in canonical JSON. It runs on every history the crash and determinism suites produce, and on every simulator test.
@@ -59,15 +75,27 @@ The suite has teeth: with a provider that ignores keys on the idempotent transfe
 - Real target hardware, real connectors (sandbox modes), and a synchronous standby.
 - Recorded with the load test at 500 steps/s, not just correctness.
 
+## G1 gate: where each item stands
+
+| Item | Status |
+| --- | --- |
+| Three dogfood workflows in production for 4 weeks | Built and passing end to end against fake providers; needs owners' confirmation of the drafts, production access, and live or sandbox credentials |
+| Chaos: 10,000 payment-shaped runs, zero duplicate and zero lost effects | Passed with worker crashes, stalls and process kills (table above); the database-primary kill and target hardware remain |
+| 500 steps/s sustained, p95 dispatch under 50 ms | Phase 0 spike met it on development hardware; needs the target hardware and the full engine |
+| Audit chain verifies end to end with the CLI verifier | **Done**: `taskiem audit verify` on an export from `GET /v1/audit/export` |
+| No open critical findings from an internal review | Needs the review |
+
 ## Known gaps carried forward
 
 - `parallel`, `subflow`, `ai` steps fail as unsupported (Phase 2/3 per the build plan).
-- `concurrency_key` and plan caps are not enforced yet.
+- Plan caps and soft ingest limits that queue runs (spec 8.3, 16); the hard per-tenant ingest ceiling exists.
 - Long histories: decide re-reads the full history each time; payroll-sized `foreach` needs incremental decision state (spike RESULTS.md).
-- Resolving a parked step (`needs_reconciliation`) needs an operator API and events.
-- PII envelopes (per-subject encryption) are not written yet; inputs and outputs are stored as plain JSONB.
 - The egress guard is in-process; the standalone sidecar proxy with fixed egress IPs is deployment work (spec 14.2).
 - Postgres connections to private networks are refused by the SSRF guard; reaching a private database needs a platform-level egress exception (not yet designed).
 - Code steps: Python and uploaded WASM modules (Phase 2); `Date.now()` is the real clock, `host.now()` the run's logical time.
 - Smile ID is not built (the plan allows Smile ID or Dojah).
-- HTTP API, triggers beyond manual start (webhook, schedule, connector events), and the web UI.
+- Sign-in is password-only: no passkeys, SSO, step-up for approvals, or password reset yet; users are added by an admin.
+- Workers read secrets through the vault directly; per-secret read auditing (`secret.read`) is not recorded per use.
+- The web app edits nested steps as JSON, and has no live canvas view (Phase 2).
+- Webhook `mtls` and synchronous `respond` are refused at publish until the edge proxy exists.
+- The unsafe-write alert question from Phase 0 (`effect.duplicates: tolerable`) is still open; the ops alert parks on an unknown SMS or Slack outcome.
