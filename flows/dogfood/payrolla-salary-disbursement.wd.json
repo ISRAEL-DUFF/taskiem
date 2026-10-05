@@ -3,7 +3,7 @@
   "id": "wf_payrollaSalaryDisbursement",
   "version": 1,
   "name": "Payrolla: disburse approved payroll",
-  "description": "Pays every employee in an approved Payrolla payroll from the company's iswallet wallet, after maker-checker approval: by wallet transfer to employees with an iswallet wallet, by bank payout otherwise. A refused payment does not stop the others; every outcome, paid or failed, is reported to Payrolla.",
+  "description": "Pays every employee in an approved Payrolla payroll from the company's iswallet wallet, after maker-checker approval: by wallet transfer to employees with an iswallet wallet, by bank payout otherwise. A refused payment does not stop the others; every outcome, paid or failed, is reported to Payrolla, and so is a rejected or expired approval.",
   "trigger": {
     "type": "webhook",
     "config": {
@@ -78,6 +78,15 @@
         "max_concurrency": 5,
         "max_items": 5000,
         "steps": [
+          {
+            "id": "employee",
+            "type": "transform",
+            "config": {
+              "output": {
+                "employee_id": "=item.employee_id"
+              }
+            }
+          },
           {
             "id": "to_wallet",
             "type": "connector",
@@ -219,9 +228,40 @@
         },
         "body": {
           "payroll_id": "=trigger.body.payroll_id",
+          "status": "completed",
           "paid": "=steps.summary.output.paid",
           "failed": "=steps.summary.output.failed",
           "results": "=steps.pay_all.output"
+        },
+        "class": "idempotent_write",
+        "idempotency_header": "Idempotency-Key"
+      },
+      "retry": {
+        "max": 5,
+        "backoff": "exponential",
+        "initial": "2s"
+      }
+    },
+    {
+      "id": "report_rejected",
+      "type": "http",
+      "needs": [
+        "approve"
+      ],
+      "when": "=steps.approve.output.decision != 'approved'",
+      "config": {
+        "method": "POST",
+        "url": "=env.payrolla_api_url + '/payrolls/' + trigger.body.payroll_id + '/disbursement-report'",
+        "headers": {
+          "Authorization": "='Bearer ' + secrets.payrolla_api_token"
+        },
+        "body": {
+          "payroll_id": "=trigger.body.payroll_id",
+          "status": "rejected",
+          "reason": "=has(steps.approve.output.reason) && steps.approve.output.reason == 'timeout' ? 'approval_timed_out' : 'rejected_by_approver'",
+          "paid": 0,
+          "failed": 0,
+          "results": []
         },
         "class": "idempotent_write",
         "idempotency_header": "Idempotency-Key"

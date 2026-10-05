@@ -15,7 +15,7 @@ All three validate against `schemas/wd-v1.schema.json` and the semantic rules in
 1. Summarise the payroll and read the funding wallet's available NGN balance.
 2. Pause for maker-checker approval by a `payroll_approver`, showing the total, headcount, how many are paid to banks, and the balance. Rejection or a 24-hour timeout ends the run with nothing paid.
 3. Pay each employee, at most 5 at a time: by wallet transfer when they have an iswallet wallet (instant, final, free), otherwise by bank payout, then wait up to 72 hours for iswallet's confirmation. The idempotency seed is `payroll_id:employee_id`.
-4. Post the results back to Payrolla: how many were paid and how many failed, and one entry per employee in payroll order, either the payment or a failure record with the employee id and iswallet's error.
+4. Post the results back to Payrolla: how many were paid and how many failed, and one entry per employee in payroll order, carrying the employee id and either the payment or a failure record with iswallet's error. A rejected or expired approval is reported too. The contract with Payrolla is [docs/integrations/payrolla.md](../../docs/integrations/payrolla.md).
 
 **Must never happen.** An employee paid twice for one payroll; a payment before approval; an approver who triggered or wrote the workflow approving it.
 

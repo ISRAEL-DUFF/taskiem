@@ -230,6 +230,10 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	}
 	// Dayo's refused transfer did not stop the others, and the report says so.
 	rb := reports[0]["body"].(map[string]any)
+	if os.Getenv("TASKIEM_DUMP_REPORT") != "" {
+		raw, _ := json.MarshalIndent(map[string]any{"headers": map[string]any{"Authorization": reports[0]["auth"], "Idempotency-Key": reports[0]["key"]}, "body": rb}, "", "  ")
+		t.Logf("report:\n%s", raw)
+	}
 	if rb["paid"] != float64(3) || rb["failed"] != float64(1) || !strings.Contains(toJSON(rb["results"]), `"employee_id":"E4"`) || !strings.Contains(toJSON(rb["results"]), "EXCEEDS_SINGLE_TXN_LIMIT") {
 		t.Errorf("report body: %s", toJSON(rb))
 	}

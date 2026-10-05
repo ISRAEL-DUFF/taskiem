@@ -372,7 +372,7 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 		t.Errorf("report input %v", in)
 	}
 	body := rp["input"].(map[string]any)["body"].(map[string]any)
-	if body["paid"] != int64(2) || body["failed"] != int64(1) {
+	if body["paid"] != int64(2) || body["failed"] != int64(1) || body["status"] != "completed" || !s.has(history.StepSkipped, "report_rejected") {
 		t.Errorf("report counts %v", body)
 	}
 	failure := body["results"].([]any)[2].(map[string]any)["wallet_failed"].(map[string]any)
@@ -382,6 +382,31 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 	s.complete("report", map[string]any{"status": 200})
 	if s.last().Type != history.RunCompleted {
 		t.Errorf("payroll run should complete: %s", s.types())
+	}
+}
+
+func TestPayrollaRejectedPayrollIsReported(t *testing.T) {
+	doc, err := os.ReadFile("../../flows/dogfood/payrolla-salary-disbursement.wd.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSim(t, string(doc), map[string]any{"body": map[string]any{
+		"payroll_id": "PR-11", "period": "Oct 2026", "funding_wallet_id": "w_company", "total_kobo": 100000,
+		"employees": []any{map[string]any{"employee_id": "e1", "net_pay_kobo": 100000, "wallet_id": "w_e1"}},
+	}})
+	s.complete("check_balance", map[string]any{"balances": []any{map[string]any{"currency": "NGN", "available": 9000000}}})
+	s.advance(25 * time.Hour)
+	s.fire("approve", "approval_timeout")
+	if !s.has(history.StepSkipped, "pay_all") || !s.has(history.StepSkipped, "report") {
+		t.Fatalf("nothing should be paid: %s", s.types())
+	}
+	body := s.payload(history.StepScheduled, "report_rejected")["input"].(map[string]any)["body"].(map[string]any)
+	if body["status"] != "rejected" || body["reason"] != "approval_timed_out" || body["paid"] != int64(0) {
+		t.Fatalf("rejection report %v", body)
+	}
+	s.complete("report_rejected", map[string]any{"status": 200})
+	if s.last().Type != history.RunCompleted {
+		t.Errorf("run should complete: %s", s.types())
 	}
 }
 
