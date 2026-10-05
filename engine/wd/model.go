@@ -103,10 +103,16 @@ type HTTPConfig struct {
 }
 
 type CodeConfig struct {
-	Language string   `json:"language"`
-	Source   string   `json:"source,omitempty"`
-	Module   string   `json:"module,omitempty"`
-	Secrets  []string `json:"secrets,omitempty"`
+	Language string      `json:"language"`
+	Source   string      `json:"source,omitempty"`
+	Module   string      `json:"module,omitempty"`
+	Secrets  []string    `json:"secrets,omitempty"`
+	Limits   *CodeLimits `json:"limits,omitempty"`
+}
+
+type CodeLimits struct {
+	MemoryMB int    `json:"memory_mb,omitempty"`
+	CPU      string `json:"cpu,omitempty"`
 }
 
 type BranchPath struct {

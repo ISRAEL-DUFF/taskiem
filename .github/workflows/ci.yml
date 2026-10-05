@@ -31,6 +31,15 @@ jobs:
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
+      - name: Start OpenBao (transit engine for the secrets tests)
+        run: |
+          curl -sSL -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz
+          tar xzf bao.tgz bao
+          ./bao server -dev -dev-root-token-id=dev -dev-listen-address=127.0.0.1:8200 > bao.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8200/v1/sys/health >/dev/null && break; sleep 1; done
+          curl -sf -H "X-Vault-Token: dev" -X POST -d '{"type":"transit"}' http://127.0.0.1:8200/v1/sys/mounts/transit
+          curl -sf -H "X-Vault-Token: dev" -X POST http://127.0.0.1:8200/v1/transit/keys/taskiem-root
+          echo "TASKIEM_TEST_OPENBAO_ADDR=http://127.0.0.1:8200" >> "$GITHUB_ENV"
       - name: Unit and database tests
         run: go test -count=1 ./...
       - name: Validate contracts and dogfood workflows

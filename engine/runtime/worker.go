@@ -23,6 +23,8 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/sandbox"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 var exprEngine = expr.MustNew()
@@ -85,6 +87,10 @@ func (w *Worker) defaults() {
 	}
 	if w.Concurrency <= 0 {
 		w.Concurrency = 16
+		if w.Queue == "sandbox" {
+			// Each script may use up to the sandbox memory cap.
+			w.Concurrency = 4
+		}
 	}
 	if w.Lease <= 0 {
 		w.Lease = 60 * time.Second
@@ -117,6 +123,9 @@ type claim struct {
 // executors and claims only as many tasks as are free (decision 0002).
 func (w *Worker) Run(ctx context.Context) error {
 	w.defaults()
+	if w.Queue == "sandbox" {
+		sandbox.Init(0)
+	}
 	wake, stop, err := listen(ctx, w.Store, "taskiem_tasks")
 	if err != nil {
 		return err
@@ -245,6 +254,7 @@ type plan struct {
 	key      string
 	keyIn    effects.KeyInput
 	intentAt time.Time // when the EffectIntent in force was recorded (database clock)
+	step     *wd.Step
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -370,6 +380,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		_, id := history.SplitInstance(c.step)
 		if s := def.Step(id); s != nil {
 			p.stepType = s.Type
+			p.step = s
 		}
 		if err := w.resolveExecutor(p); err != nil {
 			p.mode = modeDone
@@ -449,6 +460,10 @@ func (w *Worker) resolveExecutor(p *plan) error {
 		} else {
 			p.spec = &defaultHTTPKey
 		}
+	case p.stepType == "code":
+		// Code has no external effects of its own; host.fetch goes through
+		// the egress guard. It is treated as a read for retries.
+		p.class = effects.Read
 	case p.stepType == "http":
 		in, _ := p.sched.Input.(map[string]any)
 		method, _ := in["method"].(string)
@@ -617,6 +632,15 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 	in, err := w.resolveSecrets(ctx, p)
 	if err != nil {
 		return failed(p.c, "fatal", err.Error(), "fail")
+	}
+	if p.stepType == "code" {
+		// The sandbox enforces the step's own time limit.
+		res, err := w.runCode(ctx, p, in)
+		if err != nil {
+			return w.classify(p, err)
+		}
+		raw, _ := json.Marshal(history.CompletedPayload{Output: res.Output, Logs: res.Logs})
+		return history.Event{Type: history.StepCompleted, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 	}
 	deadline := time.Now().Add(w.CallTimeout)
 	if p.class.IsWrite() {

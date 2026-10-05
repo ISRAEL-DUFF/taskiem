@@ -105,11 +105,18 @@ func (e *Env) Drain(t testing.TB) {
 	t.Helper()
 	ctx := context.Background()
 	w, s := e.Worker("drain"), e.Scheduler()
+	sb := e.Worker("drain-sandbox")
+	sb.Queue = "sandbox"
 	for i := 0; i < 1000; i++ {
 		n, err := w.RunOnce(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
+		m, err := sb.RunOnce(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n += m
 		st, err := s.Tick(ctx)
 		if err != nil {
 			t.Fatal(err)

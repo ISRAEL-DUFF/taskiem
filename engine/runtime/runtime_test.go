@@ -366,3 +366,53 @@ func TestConnectorCredentialsFromConnections(t *testing.T) {
 		t.Errorf("status %s, credential %q: %s", st, seen, types(events(t, e, ref)))
 	}
 }
+
+func TestCodeStepInRun(t *testing.T) {
+	e := rt.New(t)
+	fx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ngn_per_usd": 1500}`))
+	}))
+	defer fx.Close()
+	e.Secrets["fx_key"] = "k-123"
+	if err := e.Store.AllowEgress(ctx, e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := json.Marshal(`
+	  type Line = { usd: number }
+	  export default async function (input: { lines: Line[]; fx: string }, host: any) {
+	    const rate = (await host.fetch(input.fx)).json().ngn_per_usd;
+	    console.log("rate", rate, "key", host.secret("fx_key").length);
+	    return { total_kobo: input.lines.reduce((s, l) => s + l.usd * rate * 100, 0), at: host.now() };
+	  }`)
+	wf := e.Publish(t, wfDoc(`{"id":"calc","type":"code","input":{"lines":"=trigger.lines","fx":"=trigger.fx"},
+	  "config":{"language":"typescript","secrets":["fx_key"],"source":`+string(src)+`}},
+	  {"id":"out","type":"transform","needs":["calc"],"config":{"output":"=steps.calc.output.total_kobo"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{"lines": []any{map[string]any{"usd": 2}, map[string]any{"usd": 3}}, "fx": fx.URL})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		for _, ev := range events(t, e, ref) {
+			t.Logf("%s(%s) %s", ev.Type, ev.StepID, ev.Payload)
+		}
+		t.Fatalf("status %s", st)
+	}
+	h := events(t, e, ref)
+	var calc, out history.CompletedPayload
+	for _, ev := range h {
+		if ev.Type == history.StepCompleted && ev.StepID == "calc" {
+			_ = json.Unmarshal(ev.Payload, &calc)
+		}
+		if ev.Type == history.StepCompleted && ev.StepID == "out" {
+			_ = json.Unmarshal(ev.Payload, &out)
+		}
+	}
+	if out.Output != float64(750000) || len(calc.Logs) != 1 || calc.Logs[0] != "rate 1500 key 5" {
+		t.Errorf("out %v logs %q", out.Output, calc.Logs)
+	}
+
+	bad := e.Publish(t, wfDoc(`{"id":"calc","type":"code","config":{"language":"javascript","source":"export default () => { throw new Error('no rate') }"}}`, ""))
+	ref2 := e.Start(t, bad, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref2); st != "failed" {
+		t.Errorf("throwing script: %s", st)
+	}
+}

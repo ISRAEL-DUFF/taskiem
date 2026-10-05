@@ -4,3 +4,6 @@ bin/
 *.prof
 .npm-licences.json
 npm-licences.json
+bao
+bao.tgz
+bao.log

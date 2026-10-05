@@ -110,8 +110,9 @@ type FailedPayload struct {
 }
 
 type CompletedPayload struct {
-	Output     any  `json:"output"`
-	Reconciled bool `json:"reconciled,omitempty"`
+	Output     any      `json:"output"`
+	Reconciled bool     `json:"reconciled,omitempty"`
+	Logs       []string `json:"logs,omitempty"` // code steps' console output, bounded
 }
 
 type IntentPayload struct {

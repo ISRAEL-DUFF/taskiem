@@ -7,7 +7,7 @@ Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, 
 | # | Weeks | Milestone | Status |
 | --- | --- | --- | --- |
 | 1 | 1–6 | Engine core passes the determinism and crash-recovery suites | **Engine core built; both suites pass at G1 scale** (below) |
-| 2 | 4–10 | Connector SDK, first five connectors, sandbox | Connector runtime interface and registry done; real connectors and QuickJS sandbox not started |
+| 2 | 4–10 | Connector SDK, first five connectors, sandbox | **Done** (below): Paystack, Dojah, Termii, Postgres connectors plus http steps; JavaScript/TypeScript sandbox; egress guard; encrypted secrets and connections |
 | 3 | 7–13 | Canvas, inspector, approvals, audit log | Approval step and decision API in the engine; UI, policies, and audit wiring not started |
 | 4 | 13–16 | Dogfood workflows live; bug-fix and load test | Not started |
 | 5 | 17–20 | Production soak | Not started |
@@ -24,6 +24,18 @@ Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, 
 | Scheduler | Timers, lease recovery, undecided-run sweep, partitions | `engine/runtime` (scheduler) |
 | Executors | Connector actions (spec 6.3) and http steps with transport error classification | `engine/connector`, `engine/runtime` |
 | Schema | Migration 00007: event origins, signal waits, buffered signals | `engine/db/migrations` |
+
+## Milestone 2: what exists
+
+| Area | Deliverable | Where |
+| --- | --- | --- |
+| Connectors | Paystack (balance, transfer with duplicate-reference handling, verify, webhook HMAC-SHA512), Dojah (BVN, NIN, balance), Termii (SMS as `unsafe_write`, balance), Postgres (read-only `query`, `execute`); HTTP is the `http` step. Each ships recorded fixtures replayed in CI | `connectors/`, `connectors/builtin` |
+| Connector SDK | Runtime interface (spec 6.3), registry, classified JSON HTTP helper, generic webhook verification, guarded TCP dialer for non-HTTP connectors | `engine/connector` |
+| Sandbox | QuickJS on wazero with hard memory cap, wall-clock limit, no filesystem or stdlib, fresh runtime per run; TypeScript via esbuild; `host.log/secret/now/fetch`; sandbox worker queue | `engine/sandbox`, `third_party/qjs`, decision 0011 |
+| Egress | Per-call allow-lists (connectors: manifest hosts; http steps and sandbox fetch: tenant rules per environment); SSRF blocking incl. metadata, IPv4-mapped, DNS rebinding; guarded redirects; logged | `engine/egress` |
+| Secrets | Envelope encryption: AES-256-GCM per value, tenant KEKs wrapped by a KMS root key (local or OpenBao transit, tested against OpenBao 2.4.1), rotation re-wraps data keys, audited | `engine/secrets` |
+| Configuration | Connections with encrypted credentials, tenant variables snapshotted into each run, egress rules | migration 00008, `engine/runtime/config.go` |
+| Dogfood | The iSpend top-up reconciliation flow runs end to end against real Postgres and fake Paystack/iSpend servers | `e2e/` |
 
 ## Suites (build plan, "Testing")
 
@@ -54,5 +66,8 @@ The suite has teeth: with a provider that ignores keys on the idempotent transfe
 - Long histories: decide re-reads the full history each time; payroll-sized `foreach` needs incremental decision state (spike RESULTS.md).
 - Resolving a parked step (`needs_reconciliation`) needs an operator API and events.
 - PII envelopes (per-subject encryption) are not written yet; inputs and outputs are stored as plain JSONB.
-- Egress proxy, OpenBao secrets, and connection credentials beyond in-memory secrets.
+- The egress guard is in-process; the standalone sidecar proxy with fixed egress IPs is deployment work (spec 14.2).
+- Postgres connections to private networks are refused by the SSRF guard; reaching a private database needs a platform-level egress exception (not yet designed).
+- Code steps: Python and uploaded WASM modules (Phase 2); `Date.now()` is the real clock, `host.now()` the run's logical time.
+- Smile ID is not built (the plan allows Smile ID or Dojah).
 - HTTP API, triggers beyond manual start (webhook, schedule, connector events), and the web UI.
