@@ -43,7 +43,14 @@ func Validate(doc []byte) []Problem {
 	v.scope("/steps", root["steps"].([]any))
 	v.secretsOutsideSteps(root)
 	sort.SliceStable(v.problems, func(i, j int) bool { return v.problems[i].Path < v.problems[j].Path })
-	return v.problems
+	if len(v.problems) > 0 {
+		return v.problems
+	}
+	d, err := parse(doc)
+	if err != nil {
+		return []Problem{{Path: "/", Message: err.Error()}}
+	}
+	return checkExpressions(d)
 }
 
 type validator struct {
