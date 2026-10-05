@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"os/exec"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -265,4 +266,95 @@ func TestDeterminismSuite(t *testing.T) {
 			t.Errorf("run %s: %v", ref.ID, err)
 		}
 	}
+}
+
+// TestDatabaseCrashSuite crashes Postgres while payment-shaped runs are in
+// flight (G1: "the database primary killed mid-run") and checks the same
+// invariants as the crash suite. It is opt-in: TASKIEM_CHAOS_PG_CRASH names
+// a command that crashes the test database with an immediate shutdown and
+// starts it again (e.g. pg_ctl -m immediate stop; pg_ctl start).
+func TestDatabaseCrashSuite(t *testing.T) {
+	crash := os.Getenv("TASKIEM_CHAOS_PG_CRASH")
+	if crash == "" {
+		t.Skip("set TASKIEM_CHAOS_PG_CRASH to a command that crashes and restarts the test database")
+	}
+	runs := envInt("TASKIEM_CHAOS_RUNS", 200)
+	crashes := envInt("TASKIEM_CHAOS_PG_CRASHES", 3)
+	e := rt.New(t)
+	e.Provider.Faults = rt.RandomFaults(uint64(envInt("TASKIEM_CHAOS_SEED", 11)), 0.02, 0.02)
+	wf := e.Publish(t, paymentShaped)
+	refs := make([]runtime.RunRef, runs)
+	for i := range refs {
+		refs[i] = e.Start(t, wf, map[string]any{"amount": 1000 + i})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cw := &chaosWorkers{e: e, rng: rand.New(rand.NewPCG(3, 4)), lease: 2 * time.Second}
+	for i := 0; i < 4; i++ {
+		cw.start(ctx)
+	}
+	sched := e.Scheduler()
+	go func() { _ = sched.Run(ctx) }()
+
+	open := func() (int, error) {
+		var n int
+		err := e.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM runs WHERE status NOT IN ('completed', 'failed', 'cancelled', 'needs_reconciliation')`).Scan(&n)
+		return n, err
+	}
+	for i := 0; i < crashes; i++ {
+		// Crash at progress points, so recovery between crashes is tested too.
+		target := runs - (i+1)*runs/(crashes+2)
+		n, _ := open()
+		for wait := time.Now().Add(60 * time.Second); n > target && time.Now().Before(wait); n, _ = open() {
+			time.Sleep(20 * time.Millisecond)
+		}
+		out, err := exec.Command("sh", "-c", crash).CombinedOutput()
+		if err != nil {
+			t.Fatalf("crash command: %v: %s", err, out)
+		}
+		t.Logf("crashed the database with %d runs open", n)
+	}
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		n, err := open()
+		if err == nil && n == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d runs still open at the deadline (%v)", n, err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	cancel()
+	cw.stopAll()
+
+	def, err := wd.Load([]byte(paymentShaped))
+	if err != nil {
+		t.Fatal(err)
+	}
+	executions := e.Provider.Snapshot()
+	var duplicates, lost, notCompleted, replayErrors int
+	for _, ref := range refs {
+		if st := e.Status(t, ref); st != "completed" {
+			notCompleted++
+			t.Errorf("run %s ended %s", ref.ID, st)
+		}
+		for _, suffix := range logicalSuffixes {
+			switch n := executions[ref.ID.String()+suffix]; {
+			case n > 1:
+				duplicates++
+				t.Errorf("duplicate effect: %s%s executed %d times", ref.ID, suffix, n)
+			case n == 0:
+				lost++
+				t.Errorf("lost effect: %s%s never executed", ref.ID, suffix)
+			}
+		}
+		if err := decide.Verify(def, events(t, e, ref)); err != nil {
+			replayErrors++
+			t.Errorf("run %s does not replay: %v", ref.ID, err)
+		}
+	}
+	t.Logf("runs=%d effects=%d database-crashes=%d duplicates=%d lost=%d not-completed=%d replay-errors=%d",
+		runs, runs*len(logicalSuffixes), crashes, duplicates, lost, notCompleted, replayErrors)
 }

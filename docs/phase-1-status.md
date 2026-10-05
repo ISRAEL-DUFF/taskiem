@@ -1,6 +1,6 @@
 # Phase 1 status
 
-Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, UI, then dogfooding and a 4-week soak. Started 2026-10-05, while gate G0's people items were still open (clean-room signatures, trademark search, dogfood confirmation; see [Phase 0 status](phase-0-status.md)). Last updated 2026-10-05 (milestone 3).
+Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, UI, then dogfooding and a 4-week soak. Started 2026-10-05, while gate G0's people items were still open (clean-room signatures, trademark search, dogfood confirmation; see [Phase 0 status](phase-0-status.md)). Last updated 2026-10-05 (milestone 4, engineering part).
 
 ## Milestones
 
@@ -9,7 +9,7 @@ Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, 
 | 1 | 1–6 | Engine core passes the determinism and crash-recovery suites | **Engine core built; both suites pass at G1 scale** (below) |
 | 2 | 4–10 | Connector SDK, first five connectors, sandbox | **Done** (below): Paystack, Dojah, Termii, Postgres connectors plus http steps; JavaScript/TypeScript sandbox; egress guard; encrypted secrets and connections |
 | 3 | 7–13 | Canvas, inspector, approvals, audit log | **Done** (below): HTTP API with identity and RBAC, approvals with separation of duties, audit log with an independent verifier, triggers and ingest, single-binary roles with telemetry, Docker Compose, and the web app. All three dogfood workflows run end to end in tests |
-| 4 | 13–16 | Dogfood workflows live; bug-fix and load test | **Needs people and production**: product owners to confirm the drafts, holdco production access, provider sandbox and live credentials, target hardware |
+| 4 | 13–16 | Dogfood workflows live; bug-fix and load test | **Engineering part done** (below): load test of the real engine, database-crash suite, the bugs they found fixed. **Going live needs people and production**: product owners to confirm the drafts, holdco production access, provider sandbox and live credentials, target hardware |
 | 5 | 17–20 | Production soak | Not started (follows milestone 4) |
 
 ## Milestone 1: what exists
@@ -71,17 +71,42 @@ The suite has teeth: with a provider that ignores keys on the idempotent transfe
 
 ### What G1's crash criterion still needs
 
-- The database primary killed mid-run (the testing plan lists it; the suite kills workers only).
-- Real target hardware, real connectors (sandbox modes), and a synchronous standby.
+- Real target hardware, real connectors (sandbox modes), and failover to a synchronous standby (the database-crash suite restarts one instance).
 - Recorded with the load test at 500 steps/s, not just correctness.
+
+## Milestone 4: what could be done before production
+
+**Load test of the real engine** (`tools/loadtest`, `make load`): `StartRun` with its first decision, one-claimer workers, decide inline in every completion, the scheduler's sweep, all as in production, against a fresh database; a no-op connector action stands in for providers and timestamps each execution. Same host as the Phase 0 spike: shared 4-vCPU container, 15 GB, Postgres 16.14 stock (`shared_buffers` 128 MB, `synchronous_commit` on), load generator on the same host; 20 tenants, 5 sequential connector steps per run.
+
+| Mode | Offered | Achieved | Dispatch p50 / p95 / p99 | Commits per step | Host CPU busy |
+| --- | --- | --- | --- | --- | --- |
+| Open loop, 60 s | 500 steps/s | 500 steps/s | 3.9 / **5.4** / 6.9 ms | 3.4 | 54% |
+| Closed loop, 4,000 runs at once | — | 1,000 steps/s | (backlog) | 3.3 | 89% |
+
+Dispatch latency is measured from the `StepScheduled` event to the moment a worker starts the step. G1 asks for 500 steps/s at p95 under 50 ms on the target hardware: met here with a wide margin, on weaker hardware. The real engine peaks at about 77% of the spike (1,302 steps/s): it loads definitions, re-reads history to decide, and seals and audits.
+
+**Database-crash suite** (`TestDatabaseCrashSuite`, opt-in with `TASKIEM_CHAOS_PG_CRASH`, a command that stops Postgres with an immediate shutdown, as if the primary were killed, and starts it again): payment-shaped runs with light provider faults, Postgres crashed at progress points.
+
+| Runs | Effects | Database crashes | Duplicates | Lost | Not completed | Replay mismatches |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | 5,000 | 4 | **0** | **0** | 0 | 0 |
+| 200 | 1,000 | 3 | 0 | 0 | 0 | 0 |
+
+**Bugs found and fixed in this milestone**
+
+- Workers never re-established their `LISTEN` connection after the database restarted, so they fell back to polling once a second for the life of the process. The listener now reconnects with backoff and wakes the claimer after reconnecting.
+- The Docker image had not built since the vendored QuickJS fork (milestone 2): `go mod download` ran before `third_party/` was copied.
+- Retention could not purge a run that had an approval (foreign key from `approvals`); purge now removes approvals and decisions with the run.
+- Workers cancelled in-flight provider calls on shutdown, leaving outcomes unknown; they now drain for up to 30 s.
+- `chi`'s `RealIP` middleware trusted any client's `X-Forwarded-For`, which would have let anyone dodge the sign-in rate limit; replaced by an opt-in, last-hop-only `TASKIEM_TRUST_PROXY`.
 
 ## G1 gate: where each item stands
 
 | Item | Status |
 | --- | --- |
 | Three dogfood workflows in production for 4 weeks | Built and passing end to end against fake providers; needs owners' confirmation of the drafts, production access, and live or sandbox credentials |
-| Chaos: 10,000 payment-shaped runs, zero duplicate and zero lost effects | Passed with worker crashes, stalls and process kills (table above); the database-primary kill and target hardware remain |
-| 500 steps/s sustained, p95 dispatch under 50 ms | Phase 0 spike met it on development hardware; needs the target hardware and the full engine |
+| Chaos: 10,000 payment-shaped runs, zero duplicate and zero lost effects | Passed with worker crashes, stalls and process kills at 10,000 runs, and with database crashes at 1,000 runs (tables above); a synchronous-standby failover needs the target setup |
+| 500 steps/s sustained, p95 dispatch under 50 ms | The real engine sustains 500 steps/s at p95 5.4 ms on a 4-vCPU development host; to be repeated on the target hardware |
 | Audit chain verifies end to end with the CLI verifier | **Done**: `taskiem audit verify` on an export from `GET /v1/audit/export` |
 | No open critical findings from an internal review | Needs the review |
 
