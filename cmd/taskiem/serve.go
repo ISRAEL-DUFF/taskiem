@@ -83,6 +83,7 @@ func loadConfig() (config, error) {
 			PaystackURL: os.Getenv("TASKIEM_PAYSTACK_URL"),
 			TermiiURL:   os.Getenv("TASKIEM_TERMII_URL"),
 			DojahURL:    os.Getenv("TASKIEM_DOJAH_URL"),
+			IswalletURL: os.Getenv("TASKIEM_ISWALLET_URL"),
 		},
 		PoolSize: 20,
 	}

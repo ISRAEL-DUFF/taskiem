@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"hash"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // ErrBadSignature means a webhook failed verification (spec 8.2: reject
@@ -28,10 +30,18 @@ type TriggerSpec struct {
 }
 
 type VerifySpec struct {
-	Scheme      string `json:"scheme"`
-	Header      string `json:"header"`
-	SecretField string `json:"secret_field"`
+	Scheme          string `json:"scheme"`
+	Header          string `json:"header"`
+	SecretField     string `json:"secret_field"`
+	TimestampHeader string `json:"timestamp_header"`
+	Tolerance       string `json:"tolerance"`
 }
+
+// DefaultTolerance is how far a timestamped signature may be from now.
+const DefaultTolerance = 5 * time.Minute
+
+// Now is the clock for timestamped signatures; tests replace it.
+var Now = time.Now
 
 // VerifyWebhook checks a delivery against the manifest's scheme. secret is
 // the connection credential named by secret_field.
@@ -41,7 +51,25 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 	}
 	got := strings.TrimSpace(h.Get(v.Header))
 	var mac func() hash.Hash
+	signed := body
 	switch v.Scheme {
+	case "hmac_sha256_timestamped":
+		mac = sha256.New
+		ts := strings.TrimSpace(h.Get(v.TimestampHeader))
+		sec, err := strconv.ParseInt(ts, 10, 64)
+		if err != nil {
+			return fmt.Errorf("%w: missing or bad %s", ErrBadSignature, v.TimestampHeader)
+		}
+		tol := DefaultTolerance
+		if v.Tolerance != "" {
+			if d, err := time.ParseDuration(v.Tolerance); err == nil {
+				tol = d
+			}
+		}
+		if skew := Now().Sub(time.Unix(sec, 0)); skew > tol || skew < -tol {
+			return fmt.Errorf("%w: timestamp outside %s", ErrBadSignature, tol)
+		}
+		signed = append([]byte(ts+"."), body...)
 	case "hmac_sha256":
 		mac = sha256.New
 	case "hmac_sha512":
@@ -61,7 +89,7 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 		return ErrBadSignature
 	}
 	m := hmac.New(mac, []byte(secret))
-	m.Write(body)
+	m.Write(signed)
 	want := hex.EncodeToString(m.Sum(nil))
 	got = strings.TrimPrefix(strings.ToLower(got), "sha256=")
 	if subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {

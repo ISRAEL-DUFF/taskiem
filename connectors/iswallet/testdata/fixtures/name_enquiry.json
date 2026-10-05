@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/v1/name-enquiry","body":{"bank_code":"044","account_number":"0690000031"}},
+ "response":{"status":200,"body":{"account_name":"ADA OBI","account_number":"0690000031","bank_code":"044"}}}

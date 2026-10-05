@@ -278,7 +278,7 @@ Automatic retries keep the same `attempt_group`, so every retry of one logical e
 
 ### 4.5 Retries and errors
 
-- Errors are classified as `retryable` (timeouts, 5xx, 429 honouring `Retry-After`), `fatal` (validation, 4xx auth), or `unknown_outcome` (connection dropped after send).
+- Errors are classified as `retryable` (timeouts before send, 429 and 503 honouring `Retry-After`), `fatal` (validation, 4xx auth), or `unknown_outcome` (connection dropped after send, and 500/502/504, after which the provider may have acted). A write that failed with an unknown outcome parks for an operator, rather than failing, if its retries run out.
 - Per-step policy: max attempts, backoff (fixed or exponential with jitter computed from the run id, keeping replay deterministic), and a max total duration.
 - Exhausted retries route to the step's `on_error` path if declared, else fail the run and start compensation.
 

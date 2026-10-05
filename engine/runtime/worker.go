@@ -284,6 +284,7 @@ type plan struct {
 	key      string
 	keyIn    effects.KeyInput
 	intentAt time.Time // when the EffectIntent in force was recorded (database clock)
+	keyFirst time.Time // when this attempt group's key was first about to be sent
 	step     *wd.Step
 	taint    pii.Taint // personal values in this run; outputs repeating them are sealed
 }
@@ -483,6 +484,14 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			}
 		}
 		p.keyIn.AttemptGroup = p.group
+		for i, ip := range intents {
+			if ip.AttemptGroup == p.group && (p.keyFirst.IsZero() || intentTimes[i].Before(p.keyFirst)) {
+				p.keyFirst = intentTimes[i]
+			}
+		}
+		if p.keyFirst.IsZero() {
+			p.keyFirst = time.Now()
+		}
 		if p.key, err = p.spec.Key(p.keyIn); err != nil {
 			return err
 		}
@@ -502,6 +511,8 @@ func kindOf(k string) effects.ErrorKind {
 		return effects.KindFatal
 	case "not_sent":
 		return effects.KindNotSent
+	case "indeterminate":
+		return effects.KindIndeterminate
 	}
 	return effects.KindUnknownOutcome
 }
@@ -687,6 +698,7 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 		// Safe to send again, under a new key (contract: idempotency.md).
 		p.group++
 		p.keyIn.AttemptGroup = p.group
+		p.keyFirst = time.Now() // a new key
 		if p.key, err = p.spec.Key(p.keyIn); err != nil {
 			return history.Event{}, err
 		}
@@ -753,7 +765,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 			return failed(p.c, "fatal", err.Error(), "fail")
 		}
 		var resp connector.Response
-		resp, err = p.conn.Actions[p.action].Execute(ctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
+		resp, err = p.conn.Actions[p.action].Execute(ctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
 		if err != nil {
 			return w.classify(p, err)
 		}
@@ -770,7 +782,11 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 func (w *Worker) classify(p *plan, err error) history.Event {
 	kind := effects.Classify(err)
 	next := map[effects.Next]string{effects.Retry: "retry", effects.Reconcile: "reconcile", effects.Park: "park", effects.Fail: "fail"}[effects.AfterError(p.class, kind)]
-	return failed(p.c, kind.String(), err.Error(), next)
+	if !p.class.MayHaveApplied(kind) {
+		return failed(p.c, kind.String(), err.Error(), next)
+	}
+	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: kind.String(), Message: err.Error(), Next: next, MaybeApplied: true}})
+	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 }
 
 // resolveSecrets evaluates the secret-only expressions decide left in the input.

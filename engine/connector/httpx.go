@@ -37,8 +37,10 @@ func (e *HTTPError) Unwrap() error { return e.kind }
 
 // DoJSON sends a JSON request and decodes a JSON response into out. Errors
 // are classified for the engine: transport failures before sending are
-// not_sent, after sending unknown_outcome; 429 and 5xx retryable; other
-// 4xx fatal (callers may inspect *HTTPError, e.g. to map 404 to ErrNotFound).
+// not_sent, after sending unknown_outcome; 429 and 503 retryable; other 5xx
+// unknown_outcome (the provider may have acted, so reads and idempotent
+// writes retry while unsafe writes park); other 4xx fatal (callers may
+// inspect *HTTPError, e.g. to map 404 to ErrNotFound).
 func DoJSON(ctx context.Context, client *http.Client, method, url string, headers map[string]string, body, out any) error {
 	var rd io.Reader
 	if body != nil {
@@ -70,8 +72,15 @@ func DoJSON(ctx context.Context, client *http.Client, method, url string, header
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		he := &HTTPError{Status: resp.StatusCode, Body: raw, kind: effects.ErrFatal}
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+		switch {
+		case resp.StatusCode == http.StatusTooManyRequests, resp.StatusCode == http.StatusServiceUnavailable:
+			// Refused before processing: safe to send again.
 			he.kind = effects.ErrRetryable
+		case resp.StatusCode >= 500:
+			// The provider may have acted before failing (500, 502, 504).
+			he.kind = effects.ErrUnknownOutcome
+		}
+		if !errors.Is(he.kind, effects.ErrFatal) {
 			if s, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil {
 				he.RetryAfter = time.Duration(s) * time.Second
 			}

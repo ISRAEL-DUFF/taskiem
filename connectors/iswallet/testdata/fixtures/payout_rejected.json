@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/v1/outflows","headers":{"Idempotency-Key":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}},
+ "response":{"status":422,"headers":{"X-Request-ID":"req_rejected"},"body":{"error":{"code":"OUTFLOW_REJECTED","message":"rejected","request_id":"req_rejected","doc_url":"https://docs.ispend.io/errors/OUTFLOW_REJECTED"}}}}

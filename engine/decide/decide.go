@@ -592,13 +592,11 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 	}
 	r := retryPolicy(s)
 	if n > r.max {
-		d.finalise(inst, f, e, fmt.Sprintf("gave up after %d attempts", n))
-		return failed
+		return d.finalise(inst, f, e, fmt.Sprintf("gave up after %d attempts", n))
 	}
 	delay := backoff(r, n, d.runID(), inst)
 	if r.maxDuration > 0 && d.now.Add(delay).Sub(f.firstSchedAt) > r.maxDuration {
-		d.finalise(inst, f, e, "retry budget exhausted")
-		return failed
+		return d.finalise(inst, f, e, "retry budget exhausted")
 	}
 	if !start {
 		return running
@@ -612,11 +610,24 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 }
 
 // finalise records that a worker failure is final, so later passes and
-// replays do not reconsider it.
-func (d *decider) finalise(inst string, f *facts, e history.Error, why string) {
+// replays do not reconsider it. A write that may have taken effect in any
+// attempt is parked for an operator instead: reporting it as failed could
+// lead someone to pay again.
+func (d *decider) finalise(inst string, f *facts, e history.Error, why string) status {
 	e.Message = e.Message + " (" + why + ")"
 	e.Next = "fail"
+	for _, fe := range f.failures {
+		if fe.MaybeApplied {
+			e.Next, e.MaybeApplied = "park", true
+			e.Message += "; an earlier attempt may have taken effect"
+			break
+		}
+	}
 	d.emit(history.StepFailed, inst, f.lastAttempt, history.FailedPayload{Error: e})
+	if e.Next == "park" {
+		return parked
+	}
+	return failed
 }
 
 func (d *decider) approvalProgress(s *wd.Step, inst string, f *facts) status {

@@ -1,15 +1,15 @@
 {
   "schema": "wd/v1",
-  "id": "wf_opsTransferFailureAlert",
+  "id": "wf_opsPayoutFailureAlert",
   "version": 1,
-  "name": "Ops: alert on failed or reversed Paystack transfers",
-  "description": "When Paystack reports a failed or reversed transfer, alerts the on-call engineer by SMS and posts to the ops Slack channel.",
+  "name": "Ops: alert on failed or reversed iswallet payouts",
+  "description": "When iswallet reports a bank payout as failed, or reverses one it had confirmed, alerts the on-call engineer by SMS and posts to the ops Slack channel.",
   "trigger": {
     "type": "connector_event",
     "config": {
-      "connector": "paystack@1",
-      "trigger": "transfer_event",
-      "events": ["transfer.failed", "transfer.reversed"]
+      "connector": "iswallet@1",
+      "trigger": "outflow_event",
+      "events": ["wallet.outflow.failed", "wallet.outflow.reversed"]
     }
   },
   "steps": [
@@ -18,7 +18,7 @@
       "type": "transform",
       "config": {
         "output": {
-          "text": "='Paystack ' + trigger.body.event + ': ' + string(double(trigger.body.data.amount) / 100.0) + ' NGN, ref ' + trigger.body.data.reference + (has(trigger.body.data.reason) ? ' (' + trigger.body.data.reason + ')' : '')"
+          "text": "='iswallet payout ' + (trigger.event == 'wallet.outflow.reversed' ? 'REVERSED after it was confirmed' : 'failed') + ': ' + string(double(trigger.body.data.amount) / 100.0) + ' NGN, outflow ' + trigger.body.data.outflow_id + ', wallet ' + trigger.body.data.wallet_id + (has(trigger.body.data.failure_reason) ? ' (' + trigger.body.data.failure_reason + ')' : '')"
         }
       }
     },

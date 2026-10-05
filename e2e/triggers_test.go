@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"hash"
@@ -114,41 +113,13 @@ func mac(h func() hash.Hash, key string, body []byte) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// fakePaystack records transfers by reference; listed recipients come back
-// pending (settled later by webhook), the rest succeed at once.
-type fakePaystack struct {
-	mu        sync.Mutex
-	transfers map[string]int // reference -> times created
-	recipient map[string]string
-	pending   map[string]bool
-}
-
-func (f *fakePaystack) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	switch r.URL.Path {
-	case "/balance":
-		_, _ = w.Write([]byte(`{"status":true,"data":[{"currency":"NGN","balance":900000000}]}`))
-	case "/transfer":
-		var in map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&in)
-		ref, rcp := in["reference"].(string), in["recipient"].(string)
-		f.transfers[ref]++
-		f.recipient[ref] = rcp
-		status := "success"
-		if f.pending[rcp] {
-			status = "pending"
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": true, "data": map[string]any{"reference": ref, "status": status, "amount": in["amount"], "currency": "NGN", "transfer_code": "TRF_" + ref[:8]}})
-	default:
-		http.NotFound(w, r)
-	}
-}
-
 func TestPayrollaDisbursementEndToEnd(t *testing.T) {
-	ps := &fakePaystack{transfers: map[string]int{}, recipient: map[string]string{}, pending: map[string]bool{"RCP_bola": true}}
-	paystack := httptest.NewServer(ps)
-	defer paystack.Close()
+	isw := newFakeIswallet()
+	isw.balances["w_company"] = 900_000_000
+	// Ada's transfer reaches iswallet and moves money, but its response is
+	// lost as a 500: the retry must be answered from the replay cache.
+	iswallet := httptest.NewServer(isw)
+	defer iswallet.Close()
 	var mu sync.Mutex
 	var reports []map[string]any
 	payrolla := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -161,27 +132,28 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	}))
 	defer payrolla.Close()
 
-	s := newStack(t, builtin.Options{PaystackURL: paystack.URL})
+	s := newStack(t, builtin.Options{IswalletURL: iswallet.URL})
 	anon := ""
 	tenant := s.must(t, 201, anon, "POST", "/v1/signup", map[string]any{"tenant": "Payrolla", "email": "ops@payrolla.test", "password": "correct horse battery"})["tenant_id"].(string)
 	owner := s.login(t, "ops@payrolla.test")
 	s.must(t, 201, owner, "POST", "/v1/members", map[string]any{"email": "cfo@payrolla.test", "password": "correct horse battery", "roles": []string{"approver", "payroll_approver"}})
 	cfo := s.login(t, "cfo@payrolla.test")
-	s.must(t, 201, owner, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "paystack@1", "name": "main", "credentials": map[string]string{"secret_key": "sk_test_pr"}})
+	s.must(t, 201, owner, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "iswallet@1", "name": "payrolla",
+		"credentials": map[string]string{"api_key": "isw_payrolla_key", "webhook_secret": "whsec_payrolla"}})
 	s.must(t, 204, owner, "PUT", "/v1/secrets/prod/webhook_wf_payrollaSalaryDisbursement", map[string]any{"value": "payrolla-hook-key"})
 	s.must(t, 204, owner, "PUT", "/v1/variables/prod/payrolla_api_url", map[string]any{"value": payrolla.URL})
 	s.must(t, 204, owner, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "127.0.0.1"})
 	s.Secrets["payrolla_api_token"] = "pr_token"
 
-	wf, hook := s.publishFile(t, owner, "payrolla-salary-disbursement.wd.json")
+	_, hook := s.publishFile(t, owner, "payrolla-salary-disbursement.wd.json")
 	if !strings.HasPrefix(hook, "/hooks/"+tenant+"/payrolla/payroll-approved") {
 		t.Fatalf("webhook url %q", hook)
 	}
 
-	payroll := []byte(`{"payroll_id":"PR-2026-09","period":"September 2026","total_kobo":90000000,"employees":[
-	  {"employee_id":"E1","net_pay_kobo":30000000,"recipient_code":"RCP_ada"},
-	  {"employee_id":"E2","net_pay_kobo":35000000,"recipient_code":"RCP_bola"},
-	  {"employee_id":"E3","net_pay_kobo":25000000,"recipient_code":"RCP_chi"}]}`)
+	payroll := []byte(`{"payroll_id":"PR-2026-09","period":"September 2026","funding_wallet_id":"w_company","total_kobo":90000000,"employees":[
+	  {"employee_id":"E1","net_pay_kobo":30000000,"wallet_id":"w_ada"},
+	  {"employee_id":"E2","net_pay_kobo":35000000,"bank_code":"044","account_number":"0690000031","account_name":"Bola Ade"},
+	  {"employee_id":"E3","net_pay_kobo":25000000,"wallet_id":"w_chi"}]}`)
 	sig := "sha256=" + mac(sha256.New, "payrolla-hook-key", payroll)
 	first := s.must(t, 202, anon, "POST", hook, payroll, "X-Taskiem-Signature", sig)
 	again := s.must(t, 202, anon, "POST", hook, payroll, "X-Taskiem-Signature", sig)
@@ -191,41 +163,47 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	run := first["run_id"].(string)
 	ref := runtime.RunRef{ID: uuid.MustParse(run), TenantID: uuid.MustParse(tenant)}
 
-	// Balance check, then the approval waits; no transfer before approval.
+	// Balance check, then the approval waits; nothing moves before approval.
 	s.Drain(t)
-	if len(ps.transfers) != 0 {
-		t.Fatal("transferred before approval")
+	if len(isw.moves) != 0 {
+		t.Fatal("money moved before approval")
 	}
 	inbox := s.must(t, 200, cfo, "GET", "/v1/approvals", nil)["approvals"].([]any)
-	if len(inbox) != 1 || !strings.Contains(toJSON(inbox), `"total_kobo":90000000`) || !strings.Contains(toJSON(inbox), `"ngn_balance_kobo":900000000`) {
+	if len(inbox) != 1 || !strings.Contains(toJSON(inbox), `"total_kobo":90000000`) || !strings.Contains(toJSON(inbox), `"available_kobo":900000000`) || !strings.Contains(toJSON(inbox), `"paid_to_bank":1`) {
 		t.Fatalf("approver inbox: %s", toJSON(inbox))
 	}
 	s.must(t, 403, owner, "POST", "/v1/approvals/"+run+"/approve", map[string]any{"decision": "approved"}) // wrote the workflow
+	isw.mu.Lock()
+	isw.failNextTransferTo("w_ada")
+	isw.mu.Unlock()
 	s.must(t, 200, cfo, "POST", "/v1/approvals/"+run+"/approve", map[string]any{"decision": "approved"})
 
-	// Three transfers; Bola's is pending until Paystack's webhook.
-	s.Drain(t)
+	// Two wallet transfers settle at once; Bola's bank payout waits for iswallet.
+	rt.WaitFor(t, 15*time.Second, "transfers and payout", func() bool {
+		s.Drain(t)
+		isw.mu.Lock()
+		defer isw.mu.Unlock()
+		return len(isw.moves) == 3
+	})
 	if st := s.Status(t, ref); st != "running" {
 		t.Fatalf("after transfers: %s", st)
 	}
-	var bolaRef string
-	for r, rcp := range ps.transfers {
-		if rcp != 1 {
-			t.Errorf("transfer %s created %d times", r, rcp)
-		}
-		if ps.recipient[r] == "RCP_bola" {
-			bolaRef = r
-		}
+	o := isw.outflowFor("Bola Ade")
+	if o == nil {
+		t.Fatal("no payout for Bola")
 	}
-	if len(ps.transfers) != 3 || bolaRef == "" {
-		t.Fatalf("transfers: %v", ps.transfers)
-	}
-	settle := []byte(`{"event":"transfer.success","data":{"reference":"` + bolaRef + `","amount":35000000,"status":"success"}}`)
-	out := s.must(t, 202, anon, "POST", "/hooks/"+tenant+"/connectors/paystack@1/transfer_event", settle, "x-paystack-signature", mac(sha512.New, "sk_test_pr", settle))
+	body, hdr := isw.event(o, "wallet.outflow.confirmed", "whsec_payrolla")
+	out := s.must(t, 202, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", body, hdr...)
 	if out["signalled"] != float64(1) {
 		t.Fatalf("settlement: %v", out)
 	}
-	s.Drain(t)
+	// A forged delivery is refused.
+	forged, fh := isw.event(o, "wallet.outflow.confirmed", "not_the_secret")
+	if st, _ := s.call(t, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", forged, fh...); st != 401 {
+		t.Errorf("forged webhook: %d", st)
+	}
+	// Ada's transfer retries with the same key and is answered from the replay cache.
+	rt.WaitFor(t, 30*time.Second, "payroll run", func() bool { s.Drain(t); return s.Status(t, ref) != "running" })
 	if st := s.Status(t, ref); st != "completed" {
 		h, _ := s.Store.RunHistory(ctx, ref)
 		var b strings.Builder
@@ -234,6 +212,16 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 		}
 		t.Fatalf("status %s:\n%s", st, b.String())
 	}
+	isw.mu.Lock()
+	for k, n := range isw.moves {
+		if n != 1 {
+			t.Errorf("key %s moved money %d times", k, n)
+		}
+	}
+	if len(isw.moves) != 3 || isw.balances["w_ada"] != 30000000 || isw.balances["w_chi"] != 25000000 || isw.balances["w_company"] != 900000000-90000000-5350 {
+		t.Errorf("moves %v, balances %v", isw.moves, isw.balances)
+	}
+	isw.mu.Unlock()
 	mu.Lock()
 	if len(reports) != 1 || reports[0]["path"] != "/payrolls/PR-2026-09/disbursement-report" || reports[0]["auth"] != "Bearer pr_token" {
 		t.Errorf("reports: %v", reports)
@@ -242,8 +230,8 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 
 	// Personal data stays sealed at rest; replay holds over the opened history.
 	sealed := s.must(t, 200, owner, "GET", "/v1/runs/"+run, nil)
-	if strings.Contains(toJSON(sealed), "RCP_ada") {
-		t.Error("recipient codes stored in plaintext")
+	if strings.Contains(toJSON(sealed), "0690000031") {
+		t.Error("account number stored in plaintext")
 	}
 	opened, err := s.Store.OpenedHistory(ctx, ref)
 	if err != nil {
@@ -254,10 +242,9 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	if err := decide.Verify(def, opened); err != nil {
 		t.Errorf("replay: %v", err)
 	}
-	_ = wf
 }
 
-func TestOpsTransferFailureAlertEndToEnd(t *testing.T) {
+func TestOpsPayoutFailureAlertEndToEnd(t *testing.T) {
 	var mu sync.Mutex
 	var sms, slack []string
 	termii := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -282,27 +269,28 @@ func TestOpsTransferFailureAlertEndToEnd(t *testing.T) {
 	s := newStack(t, builtin.Options{TermiiURL: termii.URL})
 	tenant := s.must(t, 201, "", "POST", "/v1/signup", map[string]any{"tenant": "Holdco Ops", "email": "oncall@holdco.test", "password": "correct horse battery"})["tenant_id"].(string)
 	owner := s.login(t, "oncall@holdco.test")
-	s.must(t, 201, owner, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "paystack@1", "credentials": map[string]string{"secret_key": "sk_ops"}})
+	s.must(t, 201, owner, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "iswallet@1", "credentials": map[string]string{"api_key": "isw_ops", "webhook_secret": "whsec_ops"}})
 	s.must(t, 201, owner, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "termii@1", "credentials": map[string]string{"api_key": "tm_key", "sender_id": "Holdco"}})
 	s.must(t, 204, owner, "PUT", "/v1/variables/prod/ops_on_call_phone", map[string]any{"value": "2348000000001"})
 	s.must(t, 204, owner, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "127.0.0.1"})
 	s.Secrets["ops_slack_webhook_url"] = slackSrv.URL + "/services/T/B/X"
-	_, hook := s.publishFile(t, owner, "ops-transfer-failure-alert.wd.json")
-	if hook != "/hooks/"+tenant+"/connectors/paystack@1/transfer_event?env=prod" {
+	_, hook := s.publishFile(t, owner, "ops-payout-failure-alert.wd.json")
+	if hook != "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?env=prod" {
 		t.Fatalf("hook %q", hook)
 	}
 
-	send := func(body string) map[string]any {
-		b := []byte(body)
-		return s.must(t, 202, "", "POST", hook, b, "x-paystack-signature", mac(sha512.New, "sk_ops", b))
+	isw := newFakeIswallet()
+	send := func(o map[string]any, eventType string) map[string]any {
+		body, hdr := isw.event(o, eventType, "whsec_ops")
+		return s.must(t, 202, "", "POST", hook, body, hdr...)
 	}
-	failed := `{"event":"transfer.failed","data":{"reference":"TRF-9","amount":250000,"reason":"Account closed"}}`
-	if n := len(send(failed)["runs"].([]any)); n != 1 {
-		t.Fatalf("failed transfer started %d runs", n)
+	payout := map[string]any{"outflow_id": "out_9", "operation_id": "out_9", "wallet_id": "w_company", "amount": 250000, "fee": 5350, "currency": "NGN", "idempotency_key": "tsk_x", "provider_reference": "tsk_x"}
+	if n := len(send(payout, "wallet.outflow.failed")["runs"].([]any)); n != 1 {
+		t.Fatalf("failed payout started %d runs", n)
 	}
-	send(failed) // Paystack retry
-	if n := len(send(`{"event":"transfer.success","data":{"reference":"TRF-10","amount":1}}`)["runs"].([]any)); n != 0 {
-		t.Errorf("success started %d alert runs", n)
+	send(payout, "wallet.outflow.failed") // iswallet redelivers
+	if n := len(send(payout, "wallet.outflow.confirmed")["runs"].([]any)); n != 0 {
+		t.Errorf("confirmed payout started %d alert runs", n)
 	}
 	rt.WaitFor(t, 10*time.Second, "alerts", func() bool {
 		s.Drain(t)
@@ -312,7 +300,7 @@ func TestOpsTransferFailureAlertEndToEnd(t *testing.T) {
 	})
 	mu.Lock()
 	defer mu.Unlock()
-	want := "Paystack transfer.failed: 2500 NGN, ref TRF-9 (Account closed)"
+	want := "iswallet payout failed: 2500 NGN, outflow out_9, wallet w_company (beneficiary account closed)"
 	if len(sms) != 1 || sms[0] != "2348000000001: "+want || len(slack) != 1 || slack[0] != want {
 		t.Errorf("sms %v, slack %v", sms, slack)
 	}

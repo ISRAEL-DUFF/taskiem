@@ -317,34 +317,46 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := newSim(t, string(doc), map[string]any{"body": map[string]any{
-		"payroll_id": "PR-10", "period": "Oct 2026", "total_kobo": 300000,
+		"payroll_id": "PR-10", "period": "Oct 2026", "funding_wallet_id": "w_company", "total_kobo": 300000,
 		"employees": []any{
-			map[string]any{"employee_id": "e1", "net_pay_kobo": 100000, "recipient_code": "RCP_1"},
-			map[string]any{"employee_id": "e2", "net_pay_kobo": 200000, "recipient_code": "RCP_2"},
+			map[string]any{"employee_id": "e1", "net_pay_kobo": 100000, "wallet_id": "w_e1"},
+			map[string]any{"employee_id": "e2", "net_pay_kobo": 200000, "bank_code": "044", "account_number": "0690000031", "account_name": "Ada Obi"},
 		},
 	}})
 	if !s.has(history.StepCompleted, "summarise") {
 		t.Fatalf("summarise: %s", s.types())
 	}
-	s.complete("check_balance", map[string]any{"balances": []any{map[string]any{"currency": "NGN", "balance": 9000000}}})
+	if in := s.payload(history.StepScheduled, "check_balance")["input"].(map[string]any); in["wallet_id"] != "w_company" {
+		t.Fatalf("balance input %v", in)
+	}
+	s.complete("check_balance", map[string]any{"balances": []any{map[string]any{"currency": "NGN", "available": 9000000, "total": 9100000}}})
 	subj := s.payload(history.ApprovalRequested, "approve")["subject"].(map[string]any)
-	if subj["ngn_balance_kobo"] != int64(9000000) || subj["employees"] != int64(2) {
+	if subj["available_kobo"] != int64(9000000) || subj["employees"] != int64(2) || subj["paid_to_bank"] != int64(1) {
 		t.Fatalf("approval subject %v", subj)
 	}
 	s.external(history.ApprovalDecided, "approve", 0, history.ApprovalDecidedPayload{Decision: "approved", DecidedBy: "checker"}, history.OriginAPI)
-	p := s.payload(history.StepScheduled, "pay_all[1].pay_employee")
-	if p["seed"] != "PR-10:e2" || p["input"].(map[string]any)["reason"] != "Salary Oct 2026" {
-		t.Fatalf("transfer payload %v", p)
+
+	// e1 has a wallet: an instant transfer. e2 does not: a bank payout.
+	w := s.payload(history.StepScheduled, "pay_all[0].to_wallet")
+	if w["seed"] != "PR-10:e1" || w["input"].(map[string]any)["to_wallet_id"] != "w_e1" {
+		t.Fatalf("transfer payload %v", w)
 	}
-	s.complete("pay_all[0].pay_employee", map[string]any{"status": "success", "reference": "tsk_a"})
-	s.complete("pay_all[1].pay_employee", map[string]any{"status": "pending", "reference": "tsk_b"})
-	if !s.has(history.StepSkipped, "pay_all[0].await_settlement") {
-		t.Errorf("settled transfer should skip the wait: %s", s.types())
+	if !s.has(history.StepSkipped, "pay_all[0].to_bank") || !s.has(history.StepSkipped, "pay_all[1].to_wallet") {
+		t.Fatalf("each employee takes one rail: %s", s.types())
 	}
-	if c := s.payload(history.StepScheduled, "pay_all[1].await_settlement")["correlation"]; c != "tsk_b" {
-		t.Errorf("await correlation %v", c)
+	b := s.payload(history.StepScheduled, "pay_all[1].to_bank")
+	if b["seed"] != "PR-10:e2" || b["input"].(map[string]any)["bank_code"] != "044" {
+		t.Fatalf("payout payload %v", b)
 	}
-	s.external(history.SignalReceived, "pay_all[1].await_settlement", 0, history.SignalPayload{Event: "transfer.success", Payload: map[string]any{"event": "transfer.success"}}, history.OriginSignal)
+	s.complete("pay_all[0].to_wallet", map[string]any{"status": "completed", "txn_id": "txn_1"})
+	if !s.has(history.StepSkipped, "pay_all[0].settle") {
+		t.Errorf("a wallet transfer has nothing to wait for: %s", s.types())
+	}
+	s.complete("pay_all[1].to_bank", map[string]any{"status": "pending", "outflow_id": "out_2"})
+	if c := s.payload(history.StepScheduled, "pay_all[1].settle")["correlation"]; c != "out_2" {
+		t.Errorf("settle correlation %v", c)
+	}
+	s.external(history.SignalReceived, "pay_all[1].settle", 0, history.SignalPayload{Event: "iswallet@1:outflow_event", Payload: map[string]any{"event": "wallet.outflow.confirmed"}}, history.OriginSignal)
 	if s.has(history.StepFailed, "report") {
 		t.Fatalf("report failed: %v", s.payload(history.StepFailed, "report"))
 	}
@@ -356,5 +368,23 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 	s.complete("report", map[string]any{"status": 200})
 	if s.last().Type != history.RunCompleted {
 		t.Errorf("payroll run should complete: %s", s.types())
+	}
+}
+
+func TestWriteThatMayHaveAppliedParksWhenRetriesRunOut(t *testing.T) {
+	s := newSim(t, wdDoc(`{"id":"pay","type":"connector","connector":"iswallet@1","action":"payout","retry":{"max":1,"initial":"1s"}}`, ""), map[string]any{})
+	maybe := history.FailedPayload{Error: history.Error{Kind: "unknown_outcome", Message: "500", Next: "retry", MaybeApplied: true}}
+	s.external(history.StepFailed, "pay", 1, maybe, history.OriginWorker)
+	if s.lastAttempt("pay") != 2 {
+		t.Fatalf("no retry: %s", s.types())
+	}
+	// The retry fails harmlessly, but the first attempt may still have paid.
+	s.failStep("pay", "retryable", "retry")
+	last := s.last()
+	if last.Type != history.StepFailed || s.payload(history.StepFailed, "pay")["error"].(map[string]any)["next"] != "park" {
+		t.Fatalf("want the step parked, got %s", s.types())
+	}
+	if out := s.decide(); len(out) != 0 {
+		t.Errorf("parked step decided again: %v", out)
 	}
 }

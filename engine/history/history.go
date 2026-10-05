@@ -104,6 +104,10 @@ type Error struct {
 	Kind    string `json:"kind"` // retryable | fatal | unknown_outcome | not_sent | timeout | expression | child_failed | unsupported
 	Message string `json:"message"`
 	Next    string `json:"next"` // retry | reconcile | park | fail
+	// MaybeApplied is set by the worker when a write failed in a way that
+	// may still have taken effect. A step with such a failure parks instead
+	// of failing when its retries run out.
+	MaybeApplied bool `json:"maybe_applied,omitempty"`
 }
 
 type FailedPayload struct {

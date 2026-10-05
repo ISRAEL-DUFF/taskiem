@@ -24,6 +24,13 @@ func ParseClass(s string) (Class, error) {
 	return "", fmt.Errorf("effects: unknown action class %q", s)
 }
 
+// MayHaveApplied reports whether a write that failed with kind may still
+// have taken effect at the provider. Such a step never ends as failed when
+// its retries run out: it parks for an operator instead.
+func (c Class) MayHaveApplied(kind ErrorKind) bool {
+	return c.IsWrite() && (kind == KindUnknownOutcome || kind == KindIndeterminate)
+}
+
 // IsWrite reports whether the class has external side effects.
 func (c Class) IsWrite() bool { return c != Read }
 
@@ -36,6 +43,10 @@ var (
 	// request byte left the process (DNS failure, connection refused). Only
 	// these may be retried for an unsafe_write.
 	ErrNotSent = errors.New("not_sent")
+	// ErrIndeterminate marks an outcome the connector knows it cannot settle
+	// by retrying, such as a provider whose duplicate protection has expired
+	// for this key. The step parks for an operator whatever its class.
+	ErrIndeterminate = errors.New("indeterminate")
 )
 
 // ErrorKind is the engine's view of a step failure.
@@ -46,6 +57,7 @@ const (
 	KindRetryable
 	KindFatal
 	KindNotSent
+	KindIndeterminate
 )
 
 func (k ErrorKind) String() string {
@@ -56,6 +68,8 @@ func (k ErrorKind) String() string {
 		return "fatal"
 	case KindNotSent:
 		return "not_sent"
+	case KindIndeterminate:
+		return "indeterminate"
 	}
 	return "unknown_outcome"
 }
@@ -64,6 +78,8 @@ func (k ErrorKind) String() string {
 // unknown outcomes, because assuming nothing was sent is the unsafe guess.
 func Classify(err error) ErrorKind {
 	switch {
+	case errors.Is(err, ErrIndeterminate):
+		return KindIndeterminate
 	case errors.Is(err, ErrFatal):
 		return KindFatal
 	case errors.Is(err, ErrNotSent):
@@ -95,8 +111,11 @@ func (n Next) String() string {
 // AfterError decides the next move once an attempt failed with kind. Retry
 // budgets (max attempts, durations) are applied by the caller.
 func AfterError(c Class, kind ErrorKind) Next {
-	if kind == KindFatal {
+	switch kind {
+	case KindFatal:
 		return Fail
+	case KindIndeterminate:
+		return Park
 	}
 	switch c {
 	case Read, IdempotentWrite:

@@ -38,7 +38,7 @@ Every role serves Prometheus metrics on `TASKIEM_METRICS_LISTEN` (`:9090`). Runn
 | `TASKIEM_SECURE_COOKIES` | `true` | Set `false` only for plain-HTTP local use. |
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |
 | `TASKIEM_ALLOW_SIGNUP` | `false` | Self-serve `POST /v1/signup`. |
-| `TASKIEM_PAYSTACK_URL`, `TASKIEM_TERMII_URL`, `TASKIEM_DOJAH_URL` | provider defaults | Point connectors at sandboxes; the egress allow-list follows. |
+| `TASKIEM_ISWALLET_URL`, `TASKIEM_PAYSTACK_URL`, `TASKIEM_TERMII_URL`, `TASKIEM_DOJAH_URL` | provider defaults | Point connectors at another environment; the egress allow-list follows. iswallet defaults to its **sandbox**; set its production URL at go-live. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OpenTelemetry trace export (OTLP/HTTP); standard `OTEL_*` variables apply. |
 
 ## Database roles

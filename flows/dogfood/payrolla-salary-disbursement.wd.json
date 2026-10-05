@@ -3,7 +3,7 @@
   "id": "wf_payrollaSalaryDisbursement",
   "version": 1,
   "name": "Payrolla: disburse approved payroll",
-  "description": "Pays every employee in an approved Payrolla payroll run through Paystack, after maker-checker approval, and reports the outcome.",
+  "description": "Pays every employee in an approved Payrolla payroll from the company's iswallet wallet, after maker-checker approval: by wallet transfer to employees with an iswallet wallet, by bank payout otherwise. Reports each outcome to Payrolla.",
   "trigger": {
     "type": "webhook",
     "config": { "path": "/payrolla/payroll-approved", "auth": "hmac", "dedup": "=trigger.body.payroll_id" }
@@ -16,7 +16,8 @@
       "config": {
         "output": {
           "payroll_id": "=trigger.body.payroll_id",
-          "employee_count": "=size(trigger.body.employees)",
+          "employees": "=size(trigger.body.employees)",
+          "to_bank": "=size(trigger.body.employees.filter(e, !has(e.wallet_id)))",
           "total_kobo": "=trigger.body.total_kobo"
         }
       }
@@ -24,8 +25,9 @@
     {
       "id": "check_balance",
       "type": "connector",
-      "connector": "paystack@1",
-      "action": "check_balance",
+      "connector": "iswallet@1",
+      "action": "get_balance",
+      "input": { "wallet_id": "=trigger.body.funding_wallet_id" },
       "retry": { "max": 3, "backoff": "exponential", "initial": "2s" }
     },
     {
@@ -39,9 +41,11 @@
         "on_timeout": "reject",
         "subject": {
           "payroll_id": "=steps.summarise.output.payroll_id",
-          "employees": "=steps.summarise.output.employee_count",
+          "period": "=trigger.body.period",
+          "employees": "=steps.summarise.output.employees",
+          "paid_to_bank": "=steps.summarise.output.to_bank",
           "total_kobo": "=steps.summarise.output.total_kobo",
-          "ngn_balance_kobo": "=steps.check_balance.output.balances.filter(b, b.currency == 'NGN')[0].balance"
+          "available_kobo": "=steps.check_balance.output.balances.filter(b, b.currency == 'NGN').map(b, b.available)[0]"
         }
       }
     },
@@ -56,27 +60,47 @@
         "max_items": 5000,
         "steps": [
           {
-            "id": "pay_employee",
+            "id": "to_wallet",
             "type": "connector",
-            "connector": "paystack@1",
+            "connector": "iswallet@1",
             "action": "transfer",
+            "when": "=has(item.wallet_id)",
             "input": {
+              "from_wallet_id": "=trigger.body.funding_wallet_id",
+              "to_wallet_id": "=item.wallet_id",
               "amount": "=item.net_pay_kobo",
-              "recipient": "=item.recipient_code",
-              "reason": "='Salary ' + trigger.body.period"
+              "narration": "='Salary ' + trigger.body.period + ' ' + trigger.body.payroll_id + ' ' + item.employee_id"
             },
             "effect": { "idempotency_seed": "=trigger.body.payroll_id + ':' + item.employee_id" },
-            "retry": { "max": 5, "backoff": "exponential", "initial": "5s", "max_duration": "30m" }
+            "retry": { "max": 8, "backoff": "exponential", "initial": "5s", "max_delay": "10m", "max_duration": "6h" }
           },
           {
-            "id": "await_settlement",
+            "id": "to_bank",
+            "type": "connector",
+            "connector": "iswallet@1",
+            "action": "payout",
+            "when": "=!has(item.wallet_id)",
+            "input": {
+              "wallet_id": "=trigger.body.funding_wallet_id",
+              "amount": "=item.net_pay_kobo",
+              "bank_code": "=item.bank_code",
+              "account_number": "=item.account_number",
+              "account_name": "=item.account_name",
+              "narration": "='Salary ' + trigger.body.period",
+              "metadata": { "payroll_id": "=trigger.body.payroll_id", "employee_id": "=item.employee_id" }
+            },
+            "effect": { "idempotency_seed": "=trigger.body.payroll_id + ':' + item.employee_id" },
+            "retry": { "max": 8, "backoff": "exponential", "initial": "5s", "max_delay": "10m", "max_duration": "6h" }
+          },
+          {
+            "id": "settle",
             "type": "signal",
-            "needs": ["pay_employee"],
-            "when": "=steps.pay_employee.output.status == 'pending'",
+            "needs": ["to_bank"],
+            "when": "=steps.to_bank.output.status == 'pending'",
             "config": {
-              "event": "paystack@1:transfer_event",
-              "correlation": "=steps.pay_employee.output.reference",
-              "timeout": "24h"
+              "event": "iswallet@1:outflow_event",
+              "correlation": "=steps.to_bank.output.outflow_id",
+              "timeout": "72h"
             }
           }
         ]
@@ -91,7 +115,7 @@
         "method": "POST",
         "url": "=env.payrolla_api_url + '/payrolls/' + trigger.body.payroll_id + '/disbursement-report'",
         "headers": { "Authorization": "='Bearer ' + secrets.payrolla_api_token" },
-        "body": { "results": "=steps.pay_all.output" },
+        "body": { "payroll_id": "=trigger.body.payroll_id", "results": "=steps.pay_all.output" },
         "class": "idempotent_write",
         "idempotency_header": "Idempotency-Key"
       },
@@ -101,25 +125,33 @@
   "types": {
     "PayrollApproved": {
       "type": "object",
-      "required": ["payroll_id", "period", "total_kobo", "employees"],
+      "required": ["payroll_id", "period", "funding_wallet_id", "total_kobo", "employees"],
       "properties": {
         "payroll_id": { "type": "string" },
         "period": { "type": "string" },
+        "funding_wallet_id": { "type": "string", "description": "Payrolla's company wallet on iswallet" },
         "total_kobo": { "type": "integer", "minimum": 0 },
         "employees": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["employee_id", "net_pay_kobo", "recipient_code"],
+            "required": ["employee_id", "net_pay_kobo"],
             "properties": {
               "employee_id": { "type": "string" },
               "net_pay_kobo": { "type": "integer", "minimum": 100 },
-              "recipient_code": { "type": "string", "x-pii": "account_number" }
-            }
+              "wallet_id": { "type": "string", "description": "The employee's iswallet wallet under the Payrolla client; omit to pay to a bank account" },
+              "bank_code": { "type": "string" },
+              "account_number": { "type": "string", "x-pii": "account_number" },
+              "account_name": { "type": "string", "x-pii": "name" }
+            },
+            "oneOf": [
+              { "required": ["wallet_id"] },
+              { "required": ["bank_code", "account_number", "account_name"] }
+            ]
           }
         }
       }
     }
   },
-  "settings": { "timeout": "72h", "concurrency_key": "=trigger.body.payroll_id" }
+  "settings": { "timeout": "96h", "concurrency_key": "=trigger.body.payroll_id" }
 }

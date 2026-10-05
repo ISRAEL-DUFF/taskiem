@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Request is what an action handler receives (spec 6.3).
@@ -17,9 +18,13 @@ type Request struct {
 	Input          map[string]any
 	Credentials    map[string]string // decrypted for this call only
 	IdempotencyKey string            // also placed in the manifest's idempotency field
-	Attempt        int
-	Logger         *slog.Logger
-	HTTP           *http.Client
+	// KeyFirstSent is when a request carrying IdempotencyKey was first about
+	// to be sent (database clock), for providers whose duplicate protection
+	// expires; zero for reads.
+	KeyFirstSent time.Time
+	Attempt      int
+	Logger       *slog.Logger
+	HTTP         *http.Client
 	// Dial opens egress-guarded TCP connections for connectors that do not
 	// speak HTTP (databases, SFTP).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)

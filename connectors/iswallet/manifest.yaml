@@ -1,0 +1,176 @@
+# iswallet (iSpend's wallet platform): the wallet and payment provider for
+# Payrolla and iSpend. Built from iswallet engineering's answers of
+# 5 October 2026 (docs/integrations/iswallet.md).
+manifest: connector/v1
+id: iswallet
+version: 1.0.0
+name: iswallet
+description: Wallet-to-wallet transfers, bank payouts, balances and wallet events on iswallet.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: api_key, label: API key (client scope), secret: true }
+    - { key: webhook_secret, label: Webhook signing secret (from the subscription), secret: true, required: false }
+  test: { action: list_banks }
+# 100 requests a minute per API key (client scope).
+rate_limit: { requests: 100, per: 1m, scope: connection }
+# Sandbox; production is issued at go-live and set with TASKIEM_ISWALLET_URL.
+base_url: https://synledger.name.ng/iwallet
+actions:
+  get_balance:
+    title: Get wallet balance
+    class: read
+    input:
+      type: object
+      required: [wallet_id]
+      properties:
+        wallet_id: { type: string }
+    output:
+      type: object
+      properties:
+        wallet_id: { type: string }
+        balances:
+          type: array
+          description: One entry per currency held; a currency with no balance is absent.
+          items:
+            type: object
+            properties:
+              currency:  { type: string }
+              total:     { type: integer, description: Minor units, including money committed to pending payouts }
+              available: { type: integer, description: Minor units that can be spent now }
+              pending:   { type: integer }
+              scale:     { type: integer, description: Decimal places of the minor unit (NGN 2) }
+  transfer:
+    title: Transfer between wallets
+    description: Same client, same currency. Final when it returns; no fee; does not use the daily limit.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 255 }
+    # Undo with a transfer the other way, under its own key.
+    compensate: transfer
+    input:
+      type: object
+      required: [from_wallet_id, to_wallet_id, amount]
+      properties:
+        from_wallet_id: { type: string }
+        to_wallet_id:   { type: string }
+        amount:         { type: integer, minimum: 1, description: Minor units (kobo for NGN) }
+        currency:       { type: string, default: NGN }
+        narration:      { type: string, maxLength: 255 }
+    output:
+      type: object
+      properties:
+        transfer_id:  { type: string }
+        txn_id:       { type: string }
+        status:       { type: string, enum: [completed] }
+        amount:       { type: integer }
+        currency:     { type: string }
+        completed_at: { type: string }
+  payout:
+    title: Pay out to a bank account
+    description: >-
+      NGN bank payout over NIP. Returns pending; the outcome arrives as an
+      outflow_event (correlation: outflow_id). The wallet is debited amount + fee.
+      A confirmed payout cannot be undone.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 255 }
+    compensate: null
+    input:
+      type: object
+      required: [wallet_id, amount, bank_code, account_number, account_name]
+      properties:
+        wallet_id:      { type: string }
+        amount:         { type: integer, minimum: 1, description: Kobo }
+        narration:      { type: string, maxLength: 255 }
+        bank_code:      { type: string, description: From list_banks }
+        account_number: { type: string }
+        account_name:   { type: string, description: As returned by name_enquiry }
+        metadata:       { type: object, description: Echoed back on reads }
+    output:
+      type: object
+      properties:
+        outflow_id:         { type: string, description: The handle for get_payout and outflow events }
+        status:             { type: string, enum: [pending, confirmed, failed, reversed, unresolved, resolved] }
+        amount:             { type: integer }
+        fee:                { type: integer, description: Charged on top of amount }
+        net_amount:         { type: integer }
+        provider_reference: { type: string, description: Empty when the provider's answer is not yet known }
+        idempotency_key:    { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: account_name, category: name }
+  get_payout:
+    title: Get payout status
+    class: read
+    input:
+      type: object
+      required: [outflow_id]
+      properties:
+        outflow_id: { type: string }
+    output:
+      type: object
+      properties:
+        outflow_id:   { type: string }
+        status:       { type: string, enum: [pending, confirmed, failed, reversed, unresolved, resolved] }
+        amount:       { type: integer }
+        fee:          { type: integer }
+        confirmed_at: { type: string }
+  name_enquiry:
+    title: Resolve account name
+    description: Call before paying a new account; a payout to the wrong valid account cannot be recovered.
+    class: read
+    input:
+      type: object
+      required: [bank_code, account_number]
+      properties:
+        bank_code:      { type: string }
+        account_number: { type: string }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_code:      { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+  list_banks:
+    title: List banks
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        banks: { type: array, items: { type: object } }
+triggers:
+  outflow_event:
+    type: webhook
+    verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
+    events: [wallet.outflow.confirmed, wallet.outflow.failed, wallet.outflow.reversed]
+    event_type: =body.event_type
+    dedup: =body.id
+    correlation: =body.data.outflow_id
+  credit_event:
+    type: webhook
+    verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
+    events: [wallet.credit.posted, wallet.credit.reversed, wallet.credit.rejected]
+    event_type: =body.event_type
+    dedup: =body.id
+    correlation: =body.wallet_id
+  transfer_event:
+    type: webhook
+    verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
+    events: [wallet.transfer.completed, wallet.transfer.failed]
+    event_type: =body.event_type
+    dedup: =body.id
+    correlation: =body.wallet_id

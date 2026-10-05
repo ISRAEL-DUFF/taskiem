@@ -1,0 +1,5 @@
+{"request":{"method":"POST","path":"/v1/outflows","headers":{"Authorization":"Bearer isw_test_key","Idempotency-Key":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"},
+  "body":{"wallet_id":"6f1e","amount":4500000,"currency":"NGN","narration":"Sept salary",
+    "destination":{"bank_code":"044","account_number":"0690000031","account_name":"Ada Obi"},"metadata":{"run_id":"payroll-2026-09","employee_id":"emp-417"}}},
+ "response":{"status":202,"body":{"outflow_id":"8d3f","operation_id":"8d3f","wallet_id":"6f1e","amount":4500000,"currency":"NGN","status":"pending",
+   "fee":5350,"net_amount":4500000,"provider_reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","destination":{"bank_code":"044","account_number":"0690000031","account_name":"Ada Obi"},"created_at":"2026-10-05T09:14:02Z"}}}

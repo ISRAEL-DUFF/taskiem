@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/v1/transfers","headers":{"Idempotency-Key":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}},
+ "response":{"status":422,"body":{"error":{"code":"EXCEEDS_SINGLE_TXN_LIMIT","message":"amount exceeds the per-transaction limit for TIER_1","request_id":"req_a1","doc_url":"https://docs.ispend.io/errors/EXCEEDS_SINGLE_TXN_LIMIT"}}}}

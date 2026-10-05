@@ -73,8 +73,8 @@ func TestDuplicateReferenceReturnsExistingTransfer(t *testing.T) {
 
 func TestErrorClassification(t *testing.T) {
 	_, err := call(t, "transfer", map[string]any{"amount": 1, "recipient": "R", "reference": ref}, "transfer_server_error")
-	if effects.Classify(err) != effects.KindRetryable {
-		t.Errorf("502 should be retryable: %v", err)
+	if effects.Classify(err) != effects.KindUnknownOutcome {
+		t.Errorf("502 may follow a transfer that happened: want unknown outcome, got %v", err)
 	}
 	_, err = call(t, "transfer", map[string]any{"amount": 1, "recipient": "R", "reference": ref}, "transfer_insufficient")
 	if effects.Classify(err) != effects.KindFatal {
