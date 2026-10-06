@@ -55,6 +55,15 @@ Owners and admins connect an OpenID Connect or SAML 2.0 identity provider under 
 - **Enforcement.** With enforce on, members whose email is on the connection's domains cannot sign in with a password or a passkey. Owners are exempt, so a broken provider cannot lock the tenant out ("Owner? Use your password" on the sign-in page).
 - **Checks.** OIDC: authorization code with PKCE, state and nonce single-use within ten minutes; ID tokens are RS256, PS256 or ES256 only, checked for issuer, audience, expiry and nonce; the email must be verified by the provider. SAML: SP-initiated only; the signed assertion must answer our request, for our audience and ACS URL, within its validity window. Provider calls go through the egress guard to the hosts found when the connection was saved. Every sign-in is audited with the groups seen and the roles granted or removed.
 
+## Provisioning (SCIM 2.0)
+
+An identity provider (Okta, Microsoft Entra ID, others) keeps members in step with the directory over SCIM 2.0 (RFC 7643, RFC 7644) at `<public URL>/scim/v2`. It authenticates with an API key holding `scim.provision` (**Members → Provisioning → Create SCIM token**); sessions are refused there, and so are keys without that permission.
+
+- **Users.** `POST /Users` creates a member, or links an existing person with the same email. The sign-in email is the primary email (else the user name, when it is an email) and stays as provisioned: one tenant's provider cannot rename someone. Filters: `userName`, `externalId`, `emails.value` with `eq`. `PATCH` takes the usual operations, with or without a path, including `active` sent as a string.
+- **Roles.** An administrator decides the roles: default roles for everyone provisioned (`viewer` until changed) and roles per group, by group name (`PUT /v1/scim`, held to the no-escalation rule; `owner` cannot be provisioned). The key only moves people between groups. SCIM manages only the roles it granted; roles given by hand stay while the person is active. Changing the mapping, or renaming a group, re-applies it to everyone provisioned.
+- **Deprovisioning.** `active: false` or `DELETE` removes all the person's roles in the tenant, including those given by hand, and signs them out; single sign-on will not let a deactivated person back in. Reactivated, they get only what SCIM grants. **Owners are never deprovisioned by SCIM**: an owner removes an owner.
+- Every change is audited with the roles granted and removed. Not supported: bulk operations, sorting, ETags, password changes.
+
 ## Custom roles
 
 Besides the built-in roles, owners and admins define roles as named sets of permissions (Members → Roles, `PUT /v1/roles/{name}`). No one can create, widen, grant or take away a role carrying a permission they do not hold; this also applies to built-in roles. A role someone holds cannot be deleted. Narrowing a role takes effect on its members' next request.

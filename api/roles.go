@@ -40,6 +40,7 @@ var permissionInfo = map[string]string{
 	PermPolicyManage:     "Manage approval policies",
 	PermConnectorManage:  "Upload the tenant's own connectors",
 	PermRoleManage:       "Manage custom roles",
+	PermSCIM:             "Provision members over SCIM (for an identity provider's key)",
 }
 
 var roleNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,47}$`)

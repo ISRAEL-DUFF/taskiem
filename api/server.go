@@ -85,6 +85,7 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
 	r.Mount("/git-hooks", s.GitHooks())
+	r.Mount("/scim/v2", s.SCIM())
 	if s.Ingest != nil {
 		r.Mount("/hooks", s.Ingest)
 	}
@@ -111,6 +112,8 @@ func (s *Server) Handler() http.Handler {
 			r.Delete("/me/passkeys/{id}", s.removePasskey)
 			r.Post("/me/step-up/options", s.stepUpOptions)
 			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
+			r.With(s.need(PermMemberManage)).Get("/scim", s.getSCIM)
+			r.With(s.need(PermMemberManage)).Put("/scim", s.putSCIM)
 			r.With(s.need(PermMemberManage)).Get("/sso", s.listSSO)
 			r.With(s.need(PermMemberManage)).Post("/sso", s.createSSO)
 			r.With(s.need(PermMemberManage)).Put("/sso/{id}", s.updateSSO)

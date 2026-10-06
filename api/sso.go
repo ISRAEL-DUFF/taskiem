@@ -731,6 +731,10 @@ func (s *Server) finishSSO(w http.ResponseWriter, r *http.Request, c ssoConn, re
 			}
 		} else if err != nil {
 			return err
+		} else if off, err := scimDeactivated(ctx, tx, user); err != nil {
+			return err
+		} else if off {
+			return errSSONotMember // deprovisioned by the tenant's SCIM provider
 		}
 		want := slices.Clone(settings.DefaultRoles)
 		for _, g := range groups {

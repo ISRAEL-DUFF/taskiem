@@ -174,6 +174,7 @@ export function Members() {
         </table>
       )}
       {can("member.manage") && <SingleSignOn />}
+      {can("member.manage") && can("scim.provision") && <Provisioning />}
       {adding && <AddMember roles={roles.data?.roles ?? []} onClose={() => setAdding(false)} onDone={() => (setAdding(false), members.reload(), roles.reload())} />}
       {editing && <EditRole role={editing === "new" ? null : editing} onClose={() => setEditing(null)} onDone={() => (setEditing(null), roles.reload())} />}
       {minting && <NewKey onClose={() => (setMinting(false), keys.reload())} />}
@@ -458,6 +459,115 @@ function SingleSignOn() {
         </section>
       ))}
       {adding && <AddSSO onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} />}
+    </>
+  );
+}
+
+type SCIMConfig = {
+  endpoint: string;
+  default_roles: string[];
+  group_roles: Record<string, string[]>;
+  groups: { id: string; display_name: string; members: number; roles: string[] }[];
+  users: { active: number; inactive: number };
+};
+
+function Provisioning() {
+  const cfg = useLoad(() => get<SCIMConfig>("/v1/scim"), []);
+  const [edit, setEdit] = useState<{ defaults: string; mapping: string } | null>(null);
+  const [token, setToken] = useState("");
+  const act = useAction();
+  const c = cfg.data;
+  const save = () =>
+    act.run(async () => {
+      if (!edit) return;
+      const group_roles: Record<string, string[]> = {};
+      for (const line of edit.mapping.split("\n")) {
+        const [g, roles] = line.split("=").map((x) => x.trim());
+        if (g && roles) group_roles[g] = roles.split(",").map((r) => r.trim()).filter(Boolean);
+      }
+      await put("/v1/scim", { default_roles: edit.defaults.split(",").map((r) => r.trim()).filter(Boolean), group_roles });
+      setEdit(null);
+      cfg.reload();
+    });
+  const newToken = () =>
+    act.run(async () => {
+      const out = await post<{ key: string }>("/v1/api-keys", { name: "SCIM provisioning", permissions: ["scim.provision"], expires_days: 365 });
+      setToken(out.key);
+    });
+  return (
+    <>
+      <div className="toolbar" style={{ marginTop: 24 }}>
+        <h2 className="grow" style={{ margin: 0 }}>
+          Provisioning (SCIM)
+        </h2>
+        <button onClick={() => void newToken()}>Create SCIM token</button>
+      </div>
+      <p className="hint">
+        Your identity provider creates, updates and deactivates members, and moves them between groups. You decide which roles each group carries. Deactivating someone removes all their roles and signs them out; owners are never deprovisioned.
+      </p>
+      <ErrorBox error={cfg.error ?? act.error} />
+      {token && (
+        <p className="card">
+          Token (shown once; give it to your identity provider): <code>{token}</code>
+        </p>
+      )}
+      {c && (
+        <section className="card">
+          <p className="hint">
+            SCIM base URL <code>{c.endpoint}</code> · {c.users.active} active, {c.users.inactive} deactivated
+          </p>
+          {edit ? (
+            <>
+              <Field label="Default roles" hint="Comma-separated; everyone provisioned gets these">
+                <input value={edit.defaults} onChange={(e) => setEdit({ ...edit, defaults: e.target.value })} />
+              </Field>
+              <Field label="Group mapping" hint="One per line: group = role, role">
+                <textarea rows={4} value={edit.mapping} onChange={(e) => setEdit({ ...edit, mapping: e.target.value })} />
+              </Field>
+              <div className="toolbar">
+                <button className="primary" disabled={act.busy} onClick={() => void save()}>
+                  Save
+                </button>
+                <button onClick={() => setEdit(null)}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <div className="toolbar">
+              <span className="grow hint">Default roles: {c.default_roles.join(", ") || "none"}</span>
+              <button
+                onClick={() =>
+                  setEdit({
+                    defaults: c.default_roles.join(", "),
+                    mapping: Object.entries(c.group_roles)
+                      .map(([g, r]) => `${g} = ${r.join(", ")}`)
+                      .join("\n"),
+                  })
+                }
+              >
+                Edit roles
+              </button>
+            </div>
+          )}
+          <table>
+            <thead>
+              <tr>
+                <th>Group</th>
+                <th>Members</th>
+                <th>Roles</th>
+              </tr>
+            </thead>
+            <tbody>
+              {c.groups.map((g) => (
+                <tr key={g.id}>
+                  <td>{g.display_name}</td>
+                  <td>{g.members}</td>
+                  <td>{g.roles.join(", ") || <span className="hint">none: map it above</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
     </>
   );
 }
