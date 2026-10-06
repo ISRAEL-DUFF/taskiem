@@ -44,6 +44,9 @@ Usage:
   taskiem diff [PATH...]             show what deploying local *.wd.json files would change (default path: flows)
   taskiem deploy [--dry-run] [PATH...]
                                      save and publish changed workflows through the API
+                                     (to every environment not gated on another)
+  taskiem promote [--from staging] [--to prod] [PATH...]
+                                     run in --to the version each workflow runs in --from
   taskiem dev [--flows DIR] [--dsn DSN]
                                      run a local engine with the web app; reload workflows and tests on change
   taskiem runs tail [--workflow ID] [RUN_ID]
@@ -63,7 +66,7 @@ Usage:
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 
-diff, deploy, runs and connector push use $TASKIEM_URL (default http://localhost:8080) and an
+diff, deploy, promote, runs and connector push use $TASKIEM_URL (default http://localhost:8080) and an
 API key in $TASKIEM_API_KEY, or --url and --key.
 `
 
@@ -97,6 +100,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return diffCmd(args[1:], stdout)
 	case "deploy":
 		return deployCmd(args[1:], stdout)
+	case "promote":
+		return promoteCmd(args[1:], stdout)
 	case "dev":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()

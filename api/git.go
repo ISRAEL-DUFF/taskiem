@@ -733,7 +733,7 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 					}
 				}
 			}
-			probs, digest, published, err := s.publishTx(ctx, tx, tenant, wf, note.Version, nil)
+			probs, digest, published, err := s.publishTx(ctx, tx, tenant, wf, note.Version, nil, conn.Environment)
 			if errors.Is(err, errInvalid) {
 				return fmt.Errorf("%s: %v", d.path, probs)
 			}

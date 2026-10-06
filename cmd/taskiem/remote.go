@@ -458,6 +458,46 @@ func runsCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	return t.all(ctx, wf, *interval)
 }
 
+// promoteCmd copies what runs in one environment into the environment
+// gated on it, for each local workflow.
+func promoteCmd(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("promote", flag.ContinueOnError)
+	connect := remoteFlags(fs)
+	from := fs.String("from", "staging", "environment to promote from")
+	to := fs.String("to", "prod", "environment to promote to (gated on --from)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	c, err := connect()
+	if err != nil {
+		return err
+	}
+	locals, err := findWorkflows(fs.Args())
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	failed := 0
+	for _, l := range locals {
+		id, err := c.workflowByKey(ctx, l.key)
+		if err == nil {
+			var out struct {
+				Version int `json:"version"`
+			}
+			if err = c.do(ctx, "POST", "/v1/workflows/"+id+"/promote", map[string]any{"from": *from, "to": *to}, &out); err == nil {
+				fmt.Fprintf(stdout, "%s: version %d now runs in %s\n", l.key, out.Version, *to)
+				continue
+			}
+		}
+		failed++
+		fmt.Fprintf(stdout, "%s: FAILED: %v\n", l.key, err)
+	}
+	if failed > 0 {
+		return fmt.Errorf("promote: %d of %d workflows failed", failed, len(locals))
+	}
+	return nil
+}
+
 func (c *client) workflowByKey(ctx context.Context, key string) (string, error) {
 	var list struct {
 		Workflows []remoteWorkflow `json:"workflows"`

@@ -19,9 +19,10 @@ These use `$TASKIEM_URL` (default `http://localhost:8080`) and an API key in `$T
 | --- | --- |
 | `taskiem diff [PATH...]` | Compares local `*.wd.json` files (default `flows/`) with the server, matched by the definition's `id`: new workflows, unchanged ones, and for changed ones which steps were added, removed or changed, against the published version |
 | `taskiem deploy [--dry-run] [PATH...]` | Saves each changed workflow as a new version and publishes it. Publishing runs the server's checks; a version that fails them stays a draft and the problems are printed |
+| `taskiem promote [--from staging] [--to prod] [PATH...]` | For each local workflow, runs in `--to` the version it runs in `--from`. `--to` must be gated on `--from` (see [Environments](environments.md)); needs `workflow.publish` |
 | `taskiem runs tail [--workflow ID] [RUN_ID]` | Prints run events as they are recorded: one run until it ends, or every active run (of one workflow, by its id or `wf_...` key) until interrupted |
 
-Deploy publishes for every environment, as the web app does today; per-environment promotion arrives with staging support (Phase 2, milestone 5).
+Deploy publishes to every environment not gated on another; `promote` carries a version into a gated one.
 
 ## Local development
 

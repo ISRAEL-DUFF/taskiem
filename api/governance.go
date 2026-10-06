@@ -639,7 +639,7 @@ func (s *Server) decidePublish(approve bool) http.HandlerFunc {
 				by := p.UserID
 				var digest string
 				var err error
-				if probs, digest, published, err = s.publishTx(ctx, tx, p.TenantID, wf, v, &by); err != nil {
+				if probs, digest, published, err = s.publishTx(ctx, tx, p.TenantID, wf, v, &by, ""); err != nil {
 					return err
 				}
 				if err := auditTx(r, tx, "workflow.publish", fmt.Sprintf("%s/%d", wf, v), map[string]any{"digest": digest, "requested_by": requester}); err != nil {

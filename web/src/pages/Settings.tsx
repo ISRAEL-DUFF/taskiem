@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAuth } from "../auth";
+import { EnvSelect, useEnvironments } from "../environments";
 import { ErrorBox, Field, JsonInput, fmtTime, useAction, useLoad } from "../ui";
 
 interface Secret {
@@ -25,17 +26,105 @@ export function Settings() {
         <h1 className="grow" style={{ margin: 0 }}>
           Secrets &amp; settings
         </h1>
-        <select aria-label="Environment" style={{ width: "auto" }} value={env} onChange={(e) => setEnv(e.target.value)}>
-          <option value="prod">prod</option>
-          <option value="dev">dev</option>
-        </select>
+        <EnvSelect value={env} onChange={setEnv} />
       </div>
+      <Environments editable={can("secret.manage")} />
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />
       {can("secret.manage") && <Egress env={env} />}
       {can("git.manage") && <Git env={env} />}
       <Governance />
     </>
+  );
+}
+
+function Environments({ editable }: { editable: boolean }) {
+  const envs = useEnvironments();
+  const [name, setName] = useState("");
+  const [gate, setGate] = useState("");
+  const act = useAction();
+  const list = envs.data?.environments ?? [];
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Environments</h2>
+      <p className="hint">
+        Each environment has its own secrets, connections, variables and triggers, and runs its own version of each workflow. Publishing deploys to every environment not gated on another; a gated environment runs only what was promoted from the one it names.
+      </p>
+      <ErrorBox error={envs.error ?? act.error} />
+      <table>
+        <thead>
+          <tr>
+            <th>Environment</th>
+            <th>Takes versions</th>
+            <th>Workflows</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((e) => (
+            <tr key={e.name}>
+              <td>{e.name}</td>
+              <td>
+                {editable && !e.git ? (
+                  <select
+                    aria-label={`Gate for ${e.name}`}
+                    value={e.promotion_from ?? ""}
+                    onChange={(ev) => void act.run(async () => (await put(`/v1/environments/${e.name}`, { promotion_from: ev.target.value }), envs.reload()))}
+                  >
+                    <option value="">when published</option>
+                    {list
+                      .filter((o) => o.name !== e.name)
+                      .map((o) => (
+                        <option key={o.name} value={o.name}>
+                          by promotion from {o.name}
+                        </option>
+                      ))}
+                  </select>
+                ) : e.git ? (
+                  "from Git"
+                ) : e.promotion_from ? (
+                  `by promotion from ${e.promotion_from}`
+                ) : (
+                  "when published"
+                )}
+              </td>
+              <td>{e.workflows}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {editable && (
+        <form
+          className="row"
+          style={{ alignItems: "flex-end" }}
+          onSubmit={(ev) => {
+            ev.preventDefault();
+            void act.run(async () => {
+              await post("/v1/environments", { name, promotion_from: gate });
+              setName("");
+              setGate("");
+              envs.reload();
+            });
+          }}
+        >
+          <Field label="New environment">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="staging" required />
+          </Field>
+          <Field label="Takes versions">
+            <select value={gate} onChange={(e) => setGate(e.target.value)}>
+              <option value="">when published</option>
+              {list.map((o) => (
+                <option key={o.name} value={o.name}>
+                  by promotion from {o.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <button type="submit" disabled={act.busy}>
+            Add
+          </button>
+        </form>
+      )}
+    </section>
   );
 }
 

@@ -166,3 +166,16 @@ button.link {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.deployments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+  margin: 8px 0;
+}
+.deployment button.small {
+  margin-left: 6px;
+  padding: 2px 8px;
+  font-size: 0.85em;
+}

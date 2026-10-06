@@ -12,7 +12,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **Done** (below), except a published Taskiem GitHub App and Bitbucket |
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **Done** (below), except emailed anchors (with milestone 5's email) |
 | 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | **In progress** (below): WASM runtime, drift monitor, and Flutterwave, Anchor, Lenco and Breet done; more connectors to follow |
-| 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | **In progress** (below): custom roles, passkeys, SSO and SCIM done |
+| 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | **In progress** (below): custom roles, passkeys, SSO, SCIM and staging environments done |
 | 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people |
 
 ### What engineering cannot finish alone
@@ -97,9 +97,10 @@ Open questions for each provider are listed at the end of its guide. The one tha
 | Custom roles | Named permission sets; no one creates, widens, grants or removes a role carrying a permission they lack | `api/roles.go`, migration 00020, [governance](governance.md#custom-roles) |
 | Passkeys | WebAuthn implemented from the specification: sign-in, approval step-up (also satisfies `totp`), administrators held to passkeys once a public URL is set, resets audited | `engine/webauthn`, `api/passkeys.go`, migration 00021, [governance](governance.md#passkeys) |
 | Single sign-on | OIDC (code flow with PKCE) and SAML 2.0 (SP-initiated); DNS-verified domains, JIT members, group-to-role mapping, enforcement with an owner break-glass | `engine/oidc`, `engine/saml`, `api/sso.go`, migration 00022, [governance](governance.md#single-sign-on) |
+| Staging | Per-environment deployments: publishing reaches ungated environments; gated ones (prod on staging) take a version only by promotion, held to four-eyes; `taskiem promote` | `api/environments.go`, migration 00024, [guide](environments.md) |
 | SCIM 2.0 | Users and Groups for Okta, Entra ID and others; administrators map groups to roles; deactivation removes access and signs out; owners are never deprovisioned | `api/scim.go`, migration 00023, [governance](governance.md#provisioning-scim-20) |
 
-Still to come in this milestone: staging environments, alerts to email and Slack (with emailed audit anchors), dashboards, the live run view on the canvas, and the Python sandbox.
+Still to come in this milestone: alerts to email and Slack (with emailed audit anchors), dashboards, the live run view on the canvas, and the Python sandbox.
 
 ## Carried over from Phase 1
 

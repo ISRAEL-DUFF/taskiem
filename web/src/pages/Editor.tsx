@@ -8,6 +8,7 @@ import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
 import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph, type Layout } from "../lib/graph";
 import { merge } from "../lib/schema";
+import { EnvSelect, useEnvironments, type Deployment } from "../environments";
 import { Badge, ErrorBox, Field, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
 
 const nodeTypes = { step: StepNode };
@@ -16,6 +17,7 @@ const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "appr
 interface Loaded {
   workflow: WorkflowSummary;
   versions: VersionInfo[];
+  deployments: Deployment[];
 }
 interface VersionDoc {
   version: VersionInfo;
@@ -245,6 +247,7 @@ export function Editor() {
         )}
       </div>
       <ErrorBox error={act.error} />
+      <Deployments workflow={id} deployments={wf.data.deployments} canPromote={can("workflow.publish")} onChange={wf.reload} />
       {managed && (
         <div className="notice" role="status">
           This workflow is managed in Git (<code>{managed}</code>). Change it in the repository: a push to the connected branch deploys it once its
@@ -559,6 +562,45 @@ function Endpoints({ workflow }: { workflow: string }) {
   );
 }
 
+/** Which version each environment runs, and promotion into gated ones. */
+function Deployments({ workflow, deployments, canPromote, onChange }: { workflow: string; deployments: Deployment[]; canPromote: boolean; onChange: () => void }) {
+  const envs = useEnvironments();
+  const act = useAction();
+  const list = envs.data?.environments ?? [];
+  if (list.length === 0) return null;
+  const at = (env: string) => deployments.find((d) => d.environment === env);
+  return (
+    <div className="deployments hint" aria-label="Deployments">
+      {list.map((e) => {
+        const d = at(e.name);
+        const from = e.promotion_from ? at(e.promotion_from) : undefined;
+        const promotable = canPromote && !e.git && e.promotion_from && from && from.version !== d?.version;
+        return (
+          <span key={e.name} className="deployment">
+            <strong>{e.name}</strong> {d ? `v${d.version}` : "not deployed"}
+            {promotable && (
+              <button
+                className="small"
+                disabled={act.busy}
+                onClick={() =>
+                  void act.run(async () => {
+                    await post(`/v1/workflows/${workflow}/promote`, { from: e.promotion_from, to: e.name });
+                    onChange();
+                    envs.reload();
+                  })
+                }
+              >
+                Promote v{from.version} from {e.promotion_from}
+              </button>
+            )}
+          </span>
+        );
+      })}
+      <ErrorBox error={act.error} />
+    </div>
+  );
+}
+
 function StartRun({ workflow, onClose, onStarted }: { workflow: string; onClose: () => void; onStarted: (run: string) => void }) {
   const [input, setInput] = useState<unknown>({});
   const [env, setEnv] = useState("prod");
@@ -566,10 +608,7 @@ function StartRun({ workflow, onClose, onStarted }: { workflow: string; onClose:
   return (
     <Modal title="Start a run" onClose={onClose}>
       <Field label="Environment">
-        <select value={env} onChange={(e) => setEnv(e.target.value)}>
-          <option value="prod">prod</option>
-          <option value="dev">dev</option>
-        </select>
+        <EnvSelect value={env} onChange={setEnv} />
       </Field>
       <Field label="Input (trigger.body)">
         <JsonInput value={input} onChange={setInput} rows={8} />

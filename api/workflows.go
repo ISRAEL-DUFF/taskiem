@@ -18,7 +18,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
-	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
@@ -262,6 +261,7 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	var sum workflowSummary
 	var versions []versionInfo
+	var deployments []deployment
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path
@@ -274,13 +274,17 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		versions, err = pgx.CollectRows(rows, pgx.RowToStructByPos[versionInfo])
+		if err != nil {
+			return err
+		}
+		deployments, err = deploymentsOf(ctx, tx, wf)
 		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"workflow": sum, "versions": versions})
+	writeJSON(w, http.StatusOK, map[string]any{"workflow": sum, "versions": versions, "deployments": deployments})
 }
 
 func versionParams(r *http.Request) (uuid.UUID, int, error) {
@@ -388,7 +392,7 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		}
 		by := p.id()
 		var digest string
-		if probs, digest, published, err = s.publishTx(r.Context(), tx, p.TenantID, wf, v, &by); err != nil || !published {
+		if probs, digest, published, err = s.publishTx(r.Context(), tx, p.TenantID, wf, v, &by, ""); err != nil || !published {
 			return err
 		}
 		return auditTx(r, tx, "workflow.publish", fmt.Sprintf("%s/%d", wf, v), map[string]any{"digest": digest})
@@ -415,10 +419,12 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 }
 
 // publishTx publishes version v of wf: it checks the definition, deprecates
-// the version it replaces, and registers its triggers. A version already
-// published reports published=false; one that fails its checks returns
-// errInvalid with the problems.
-func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, by *uuid.UUID) (probs []problem, digest string, published bool, err error) {
+// the version it replaces, and deploys it, with its triggers, to every
+// ungated environment, and to gitEnv when a Git sync for that environment
+// publishes. A version already published (and deployed to gitEnv) reports
+// published=false; one that fails its checks returns errInvalid with the
+// problems.
+func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, by *uuid.UUID, gitEnv string) (probs []problem, digest string, published bool, err error) {
 	if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
 		return nil, "", false, err
 	}
@@ -429,7 +435,21 @@ func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID,
 		return nil, "", false, err
 	}
 	if state == "published" {
-		return nil, digest, false, nil
+		if gitEnv == "" {
+			return nil, digest, false, nil
+		}
+		var at *int
+		if err := tx.QueryRow(ctx, `SELECT version FROM deployments WHERE workflow_id = $1 AND environment = $2`, wf, gitEnv).Scan(&at); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", false, err
+		}
+		if at != nil && *at == v {
+			return nil, digest, false, nil
+		}
+		d, err := wd.Load(def)
+		if err != nil {
+			return nil, "", false, err
+		}
+		return nil, digest, true, s.deployTx(ctx, tx, tenant, wf, gitEnv, v, d, deployer(by), "")
 	}
 	if state != "draft" {
 		return nil, "", false, fmt.Errorf("%w: version %d is %s", errConflict, v, state)
@@ -457,18 +477,24 @@ func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID,
 	if err != nil {
 		return nil, "", false, err
 	}
-	reg, err := s.Registry.For(ctx, tenant.String())
+	targets, err := deployTargets(ctx, tx, gitEnv)
 	if err != nil {
 		return nil, "", false, err
 	}
-	if err := ingest.Sync(ctx, tx, tenant, wf, v, d, reg, time.Now()); err != nil {
-		var pgErr interface{ SQLState() string }
-		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
-			return nil, "", false, fmt.Errorf("%w: another workflow already uses this webhook path", errConflict)
+	for _, env := range targets {
+		if err := s.deployTx(ctx, tx, tenant, wf, env, v, d, deployer(by), ""); err != nil {
+			return nil, "", false, err
 		}
-		return nil, "", false, err
 	}
 	return nil, digest, true, nil
+}
+
+func deployer(by *uuid.UUID) *string {
+	if by == nil {
+		return nil
+	}
+	s := by.String()
+	return &s
 }
 
 var errInvalid = errors.New("invalid definition")

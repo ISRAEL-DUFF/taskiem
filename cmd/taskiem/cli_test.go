@@ -60,9 +60,18 @@ func TestDeployDiffAndTail(t *testing.T) {
 		t.Errorf("deploy v2:\n%s", out)
 	}
 
+	// With prod gated on dev, deploy stops at dev and promote carries it on.
+	srv.call(t, "PUT", "/v1/environments/prod", tok, map[string]any{"promotion_from": "dev"})
+	write("4")
+	cli("deploy", dir)
+	if out := cli("promote", "--from", "dev", "--to", "prod", dir); !strings.Contains(out, "wf_double: version 3 now runs in prod") {
+		t.Errorf("promote:\n%s", out)
+	}
+	srv.call(t, "PUT", "/v1/environments/prod", tok, map[string]any{"promotion_from": ""})
+
 	list := srv.call(t, "GET", "/v1/workflows", tok, nil)
 	wf := list["workflows"].([]any)[0].(map[string]any)
-	if wf["key"] != "wf_double" || wf["active_version"] != float64(2) {
+	if wf["key"] != "wf_double" || wf["active_version"] != float64(3) {
 		t.Fatalf("workflow: %v", wf)
 	}
 	runID := srv.call(t, "POST", "/v1/workflows/"+wf["id"].(string)+"/runs", tok, map[string]any{"input": map[string]any{"n": 7}})["run_id"].(string)

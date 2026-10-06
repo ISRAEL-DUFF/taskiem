@@ -37,8 +37,8 @@ func environment(p *Principal, requested string) (string, error) {
 	return "prod", nil
 }
 
-// startRun starts a run of a workflow's published version (the active one
-// unless the request pins another). An Idempotency-Key header makes the
+// startRun starts a run of a workflow's published version (the one deployed
+// in the environment unless the request pins another). An Idempotency-Key header makes the
 // request safe to retry: the same key returns the same run.
 func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	wf, err := uuid.Parse(chi.URLParam(r, "wf"))
@@ -77,14 +77,28 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("%w: no environment %q", errBadRequest, env)
 		}
 		if version == 0 {
-			var active *int
-			if err := tx.QueryRow(ctx, `SELECT active_version FROM workflows WHERE id = $1`, wf).Scan(&active); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1`, wf).Scan(new(int)); err != nil {
 				return err
 			}
-			if active == nil {
-				return fmt.Errorf("%w: workflow has no published version", errConflict)
+			deployed, err := deployedVersion(ctx, tx, wf, env)
+			if err != nil {
+				return err
 			}
-			version = *active
+			if deployed == 0 {
+				return fmt.Errorf("%w: workflow has no version deployed in %s", errConflict, env)
+			}
+			version = deployed
+		} else {
+			// A gated environment runs only what was promoted to it.
+			var gated bool
+			if err := tx.QueryRow(ctx, `SELECT promotion_from IS NOT NULL FROM environments WHERE name = $1`, env).Scan(&gated); err != nil {
+				return err
+			}
+			if deployed, err := deployedVersion(ctx, tx, wf, env); err != nil {
+				return err
+			} else if gated && deployed != version {
+				return fmt.Errorf("%w: %s runs only the version promoted to it (%d)", errConflict, env, deployed)
+			}
 		}
 		var state string
 		if err := tx.QueryRow(ctx, `SELECT state, definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, version).Scan(&state, &def); err != nil {

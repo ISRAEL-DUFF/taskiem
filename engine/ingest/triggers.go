@@ -126,17 +126,12 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 	return fmt.Errorf("%s triggers are not available yet", def.Trigger.Type)
 }
 
-// Sync replaces a workflow's registered triggers with those of the version
-// being published, inside the publishing transaction. Webhook and connector
-// triggers are registered in every environment (deliveries name theirs with
-// ?env=, default prod); schedules fire in prod only.
+// Sync replaces a workflow's registered triggers in every environment with
+// those of the version being published, inside the publishing transaction.
+// Webhook and connector triggers are registered per environment
+// (deliveries name theirs with ?env=, default prod); schedules fire in prod
+// only.
 func Sync(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, version int, def *wd.Definition, reg connector.Lookup, now time.Time) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM triggers WHERE workflow_id = $1`, wf); err != nil {
-		return err
-	}
-	if err := Check(def, reg); err != nil {
-		return err
-	}
 	rows, err := tx.Query(ctx, `SELECT name FROM environments ORDER BY name`)
 	if err != nil {
 		return err
@@ -145,6 +140,19 @@ func Sync(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, version int, def
 	if err != nil {
 		return err
 	}
+	return SyncEnvironments(ctx, tx, tenant, wf, envs, version, def, reg, now)
+}
+
+// SyncEnvironments replaces a workflow's triggers in the given environments
+// only, with those of the version deployed there.
+func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs []string, version int, def *wd.Definition, reg connector.Lookup, now time.Time) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM triggers WHERE workflow_id = $1 AND environment = ANY ($2)`, wf, envs); err != nil {
+		return err
+	}
+	if err := Check(def, reg); err != nil {
+		return err
+	}
+	var err error
 	c := def.Trigger.Config
 	for _, env := range envs {
 		id := uuid.Must(uuid.NewV7())
