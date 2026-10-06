@@ -10,3 +10,4 @@ bao.log
 web/dist/
 web/test-results/
 web/playwright-report/
+.taskiem/

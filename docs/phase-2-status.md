@@ -8,7 +8,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 
 | # | Weeks | Milestone | Deliverables (spec) | Status |
 | --- | --- | --- | --- | --- |
-| 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **In progress**: `parallel` done (below) |
+| 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **Done** (below) |
 | 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | Not started |
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | Not started |
 | 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | Not started |
@@ -29,6 +29,11 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | Worker | A worker never starts a cancelled write: it checks for cancellation under the run lock before recording intent | `engine/runtime/worker.go` |
 | Fix | A failing `foreach` waited forever when another iteration had steps it would never start; failing control steps now wait only for steps in flight | `engine/decide` |
 | Web app | `parallel` in the step palette, node summaries, and run timeline (`cancelled`) | `web/` |
+| Workflow tests | `wd-test/v1`: trigger, mocked step outcomes (per attempt, by step or instance), signals, approval decisions; assertions on status, step states, outputs, what each step sent, and attempt counts. Runs the real orchestrator on a virtual clock; mocked errors are classified by the real action classes. The three dogfood workflows have 12 cases, run by `go test` | `engine/wdtest`, `flows/dogfood/tests/`, [contract](contracts/wd-test-v1.md) |
+| CLI | `validate` (now the same checks as publishing, shared with the API), `test`, `diff`, `deploy`, `runs tail`, `dev` (private Postgres cluster, bootstrap, hot reload that tests before it deploys) | `cmd/taskiem`, `engine/wdcheck`, [CLI guide](cli.md) |
+| API | Workflow listings carry the definition's id (`key`), which the CLI matches local files by | `api/workflows.go` |
+
+`taskiem dev` uses the Postgres installed on the machine rather than downloading binaries at run time; `--dsn` covers machines without it. Recorded connector fixtures in `dev` are not wired yet: workflows that call providers need sandbox credentials or test mocks.
 
 ## Carried over from Phase 1
 

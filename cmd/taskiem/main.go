@@ -21,7 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
-	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/engine/wdcheck"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -32,12 +32,24 @@ const usage = `taskiem — workflow automation engine
 Usage:
   taskiem migrate [--dsn DSN]        apply database migrations (as the schema owner)
   taskiem validate FILE...           validate workflow definitions (*.wd.json) and connector manifests (*.yaml)
+  taskiem test [-run RE] [-v] [PATH...]
+                                     run workflow tests (*.test.json) with mocked steps, offline
+  taskiem diff [PATH...]             show what deploying local *.wd.json files would change (default path: flows)
+  taskiem deploy [--dry-run] [PATH...]
+                                     save and publish changed workflows through the API
+  taskiem dev [--flows DIR] [--dsn DSN]
+                                     run a local engine with the web app; reload workflows and tests on change
+  taskiem runs tail [--workflow ID] [RUN_ID]
+                                     stream run events as they are recorded
   taskiem serve [--role ROLE]        run an engine role: api, edge, orchestrator, scheduler, worker, all (default)
   taskiem bootstrap --tenant NAME --email EMAIL
                                      create the first tenant and its owner (password from $TASKIEM_BOOTSTRAP_PASSWORD)
   taskiem audit verify FILE          verify an audit export (GET /v1/audit/export) offline
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
+
+diff, deploy and runs use $TASKIEM_URL (default http://localhost:8080) and an
+API key in $TASKIEM_API_KEY, or --url and --key.
 `
 
 func main() {
@@ -60,6 +72,20 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return migrate(args[1:], stdout)
 	case "validate":
 		return validate(args[1:], stdout)
+	case "test":
+		return testCmd(args[1:], stdout)
+	case "diff":
+		return diffCmd(args[1:], stdout)
+	case "deploy":
+		return deployCmd(args[1:], stdout)
+	case "dev":
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return devCmd(ctx, args[1:], stdout)
+	case "runs":
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return runsCmd(ctx, args[1:], stdout)
 	case "serve":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -104,6 +130,10 @@ func validate(files []string, stdout io.Writer) error {
 	if len(files) == 0 {
 		return errors.New("validate: no files given")
 	}
+	reg, err := builtinRegistry()
+	if err != nil {
+		return err
+	}
 	failed := 0
 	for _, f := range files {
 		src, err := os.ReadFile(f)
@@ -113,7 +143,9 @@ func validate(files []string, stdout io.Writer) error {
 		var probs []string
 		switch {
 		case strings.HasSuffix(f, ".wd.json"):
-			for _, p := range wd.Validate(src) {
+			// The contract, plus this binary's connectors, code compilation
+			// and trigger checks: what publishing would check.
+			for _, p := range wdcheck.Check(src, reg) {
 				probs = append(probs, p.String())
 			}
 		case strings.HasSuffix(f, ".yaml"), strings.HasSuffix(f, ".yml"):

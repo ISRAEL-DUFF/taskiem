@@ -17,61 +17,16 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/ingest"
-	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/engine/wdcheck"
 )
 
 // problem is one validation failure, as returned to builders.
-type problem struct {
-	Path    string `json:"path"`
-	Message string `json:"message"`
-}
+type problem = wdcheck.Problem
 
 // check validates a WD document against the contract and against this
 // platform: connectors and actions must exist, code must compile.
-func (s *Server) check(doc []byte) []problem {
-	var out []problem
-	for _, p := range wd.Validate(doc) {
-		out = append(out, problem{p.Path, p.Message})
-	}
-	if len(out) > 0 {
-		return out
-	}
-	def, err := wd.Load(doc)
-	if err != nil {
-		return []problem{{"/", err.Error()}}
-	}
-	var walk func(steps []*wd.Step)
-	walk = func(steps []*wd.Step) {
-		for _, st := range steps {
-			path := "/steps/" + st.ID
-			switch st.Type {
-			case "connector":
-				c, ok := s.Registry.Get(st.Connector)
-				switch {
-				case !ok:
-					out = append(out, problem{path, fmt.Sprintf("connector %q is not available", st.Connector)})
-				case !hasAction(c, st.Action):
-					out = append(out, problem{path, fmt.Sprintf("connector %q has no action %q", st.Connector, st.Action)})
-				}
-			case "code":
-				if st.Code != nil {
-					if _, err := sandbox.Compile(st.Code.Source, st.Code.Language); err != nil {
-						out = append(out, problem{path, "code: " + err.Error()})
-					}
-				}
-			}
-			for _, sub := range st.Children() {
-				walk(sub)
-			}
-		}
-	}
-	walk(def.Steps)
-	if err := ingest.Check(def, s.Registry); err != nil {
-		out = append(out, problem{"/trigger", err.Error()})
-	}
-	return out
-}
+func (s *Server) check(doc []byte) []problem { return wdcheck.Check(doc, s.Registry) }
 
 // canonical compacts a JSON document; its SHA-256 is the version digest.
 func canonical(doc json.RawMessage) ([]byte, error) {
@@ -95,12 +50,17 @@ type workflowSummary struct {
 	ActiveVersion *int      `json:"active_version"`
 	LatestVersion int       `json:"latest_version"`
 	CreatedAt     time.Time `json:"created_at"`
+	// Key is the definition's own id (wf_...) in the latest version: what
+	// the CLI matches local files by.
+	Key string `json:"key"`
 }
+
+const latestKey = `COALESCE((SELECT definition->>'id' FROM workflow_versions WHERE workflow_id = w.id ORDER BY version DESC LIMIT 1), '')`
 
 func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
 	var out []workflowSummary
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at
+		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`
 			FROM workflows w LEFT JOIN workflow_versions v ON v.workflow_id = w.id GROUP BY w.id ORDER BY w.name`)
 		if err != nil {
 			return err
@@ -225,8 +185,8 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	var versions []versionInfo
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at
-			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`
+			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at
@@ -419,11 +379,6 @@ func (s *Server) listConnectors(w http.ResponseWriter, _ *http.Request) {
 		out = append(out, info)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connectors": nonNil(out)})
-}
-
-func hasAction(c *connector.Connector, action string) bool {
-	_, ok := c.Manifest.Actions[action]
-	return ok
 }
 
 func nonNil[T any](s []T) []T {

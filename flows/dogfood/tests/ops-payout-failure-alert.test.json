@@ -1,0 +1,39 @@
+{
+  "schema": "wd-test/v1",
+  "workflow": "../ops-payout-failure-alert.wd.json",
+  "env": { "ops_on_call_phone": "2348000000000" },
+  "cases": [
+    {
+      "name": "a failed payout alerts by SMS and Slack",
+      "trigger": { "event": "wallet.outflow.failed", "body": { "id": "evt_1", "event_type": "wallet.outflow.failed",
+        "data": { "outflow_id": "o9", "wallet_id": "w_company", "amount": 2500050, "failure_reason": "account closed" } } },
+      "mocks": { "sms_on_call": { "output": { "message_id": "m1" } }, "post_slack": { "output": { "status": 200 } } },
+      "expect": {
+        "status": "completed",
+        "outputs": { "message": { "text": "iswallet payout failed: 25000.5 NGN, outflow o9, wallet w_company (account closed)" } },
+        "inputs": {
+          "sms_on_call": { "to": "2348000000000", "channel": "dnd" },
+          "post_slack": { "method": "POST", "url": "=secrets.ops_slack_webhook_url" }
+        }
+      }
+    },
+    {
+      "name": "a reversal says so",
+      "trigger": { "event": "wallet.outflow.reversed", "body": { "id": "evt_2", "event_type": "wallet.outflow.reversed",
+        "data": { "outflow_id": "o9", "wallet_id": "w_company", "amount": 100 } } },
+      "mocks": { "sms_on_call": { "output": {} }, "post_slack": { "output": {} } },
+      "expect": { "outputs": { "message": { "text": "iswallet payout REVERSED after it was confirmed: 1 NGN, outflow o9, wallet w_company" } } }
+    },
+    {
+      "name": "a Slack outage does not stop the SMS, and the unsafe post is not retried",
+      "trigger": { "event": "wallet.outflow.failed", "body": { "id": "evt_3", "event_type": "wallet.outflow.failed",
+        "data": { "outflow_id": "o9", "wallet_id": "w_company", "amount": 100 } } },
+      "mocks": { "sms_on_call": { "output": {} }, "post_slack": { "error": { "kind": "unknown_outcome", "message": "timeout" } } },
+      "expect": {
+        "status": "needs_reconciliation",
+        "steps": { "sms_on_call": "completed", "post_slack": "parked" },
+        "calls": { "post_slack": 1 }
+      }
+    }
+  ]
+}

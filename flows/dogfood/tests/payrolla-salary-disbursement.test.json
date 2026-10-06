@@ -1,0 +1,134 @@
+{
+  "schema": "wd-test/v1",
+  "workflow": "../payrolla-salary-disbursement.wd.json",
+  "env": { "payrolla_api_url": "https://payrolla.test/api" },
+  "cases": [
+    {
+      "name": "pays a wallet employee and a bank employee, then reports",
+      "trigger": { "body": {
+        "payroll_id": "pr_2026_01", "period": "2026-01", "funding_wallet_id": "w_company", "total_kobo": 50000000,
+        "employees": [
+          { "employee_id": "e1", "net_pay_kobo": 30000000, "wallet_id": "w_e1" },
+          { "employee_id": "e2", "net_pay_kobo": 20000000, "bank_code": "000", "account_number": "0123456789", "account_name": "Ada Obi" }
+        ] } },
+      "mocks": {
+        "check_balance": { "output": { "balances": [ { "currency": "NGN", "available": 90000000 } ] } },
+        "to_wallet": { "output": { "transfer_id": "t1", "status": "completed", "amount": "=input.amount" } },
+        "to_bank": { "output": { "outflow_id": "o2", "status": "pending" } },
+        "report": { "output": { "status": 200 } }
+      },
+      "signals": { "settle": { "payload": { "event": "wallet.outflow.confirmed", "body": { "data": { "outflow_id": "o2" } } } } },
+      "approvals": { "approve": { "decision": "approved", "by": "checker" } },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all[0].to_wallet": "completed", "pay_all[0].to_bank": "skipped",
+          "pay_all[1].to_wallet": "skipped", "pay_all[1].settle": "completed",
+          "report_rejected": "skipped"
+        },
+        "inputs": {
+          "pay_all[0].to_wallet": { "from_wallet_id": "w_company", "to_wallet_id": "w_e1", "amount": 30000000 },
+          "pay_all[1].to_bank": { "bank_code": "000", "amount": 20000000, "metadata": { "payroll_id": "pr_2026_01", "employee_id": "e2" } },
+          "report": { "method": "POST", "url": "https://payrolla.test/api/payrolls/pr_2026_01/disbursement-report",
+                      "body": { "status": "completed", "paid": 2, "failed": 0 } }
+        },
+        "outputs": {
+          "approve": { "decision": "approved", "decided_by": "checker" },
+          "summary": { "paid": 2, "failed": 0 }
+        },
+        "calls": { "to_wallet": 1, "to_bank": 1, "report": 1 }
+      }
+    },
+    {
+      "name": "a refused payment does not stop the others and is reported",
+      "trigger": { "body": {
+        "payroll_id": "pr_2026_02", "period": "2026-02", "funding_wallet_id": "w_company", "total_kobo": 50000000,
+        "employees": [
+          { "employee_id": "e1", "net_pay_kobo": 30000000, "wallet_id": "w_e1" },
+          { "employee_id": "e2", "net_pay_kobo": 20000000, "wallet_id": "w_e2" }
+        ] } },
+      "mocks": {
+        "check_balance": { "output": { "balances": [ { "currency": "NGN", "available": 90000000 } ] } },
+        "pay_all[0].to_wallet": { "error": { "kind": "fatal", "message": "destination wallet is frozen" } },
+        "to_wallet": { "output": { "transfer_id": "t2", "status": "completed" } },
+        "report": { "output": { "status": 200 } }
+      },
+      "approvals": { "approve": { "decision": "approved" } },
+      "expect": {
+        "status": "completed",
+        "steps": { "pay_all[0].to_wallet": "failed", "pay_all[0].wallet_failed": "completed", "pay_all[1].to_wallet": "completed" },
+        "outputs": {
+          "pay_all[0].wallet_failed": { "employee_id": "e1", "rail": "wallet", "error": { "kind": "fatal" } },
+          "summary": { "paid": 1, "failed": 1 }
+        },
+        "calls": { "pay_all[0].to_wallet": 1 }
+      }
+    },
+    {
+      "name": "a lost response is retried under the same key and pays once",
+      "trigger": { "body": {
+        "payroll_id": "pr_2026_03", "period": "2026-03", "funding_wallet_id": "w_company", "total_kobo": 30000000,
+        "employees": [ { "employee_id": "e1", "net_pay_kobo": 30000000, "wallet_id": "w_e1" } ] } },
+      "mocks": {
+        "check_balance": { "output": { "balances": [ { "currency": "NGN", "available": 90000000 } ] } },
+        "to_wallet": [
+          { "error": { "kind": "unknown_outcome", "message": "500 after the transfer posted" } },
+          { "output": { "transfer_id": "t1", "status": "completed" } }
+        ],
+        "report": { "output": { "status": 200 } }
+      },
+      "approvals": { "approve": { "decision": "approved" } },
+      "expect": { "status": "completed", "outputs": { "summary": { "paid": 1, "failed": 0 } }, "calls": { "to_wallet": 2 } }
+    },
+    {
+      "name": "a bank payout that is never confirmed counts as failed",
+      "trigger": { "body": {
+        "payroll_id": "pr_2026_04", "period": "2026-04", "funding_wallet_id": "w_company", "total_kobo": 20000000,
+        "employees": [ { "employee_id": "e2", "net_pay_kobo": 20000000, "bank_code": "000", "account_number": "0123456789", "account_name": "Ada Obi" } ] } },
+      "mocks": {
+        "check_balance": { "output": { "balances": [ { "currency": "NGN", "available": 90000000 } ] } },
+        "to_bank": { "output": { "outflow_id": "o2", "status": "pending" } },
+        "report": { "output": { "status": 200 } }
+      },
+      "signals": { "settle": { "timeout": true } },
+      "approvals": { "approve": { "decision": "approved" } },
+      "expect": {
+        "status": "completed",
+        "steps": { "pay_all[0].settle": "failed", "pay_all[0].bank_unconfirmed": "completed" },
+        "outputs": { "summary": { "paid": 0, "failed": 1 } }
+      }
+    },
+    {
+      "name": "a rejected payroll pays no one and is reported",
+      "trigger": { "body": {
+        "payroll_id": "pr_2026_05", "period": "2026-05", "funding_wallet_id": "w_company", "total_kobo": 30000000,
+        "employees": [ { "employee_id": "e1", "net_pay_kobo": 30000000, "wallet_id": "w_e1" } ] } },
+      "mocks": {
+        "check_balance": { "output": { "balances": [ { "currency": "NGN", "available": 90000000 } ] } },
+        "report_rejected": { "output": { "status": 200 } }
+      },
+      "approvals": { "approve": { "decision": "rejected" } },
+      "expect": {
+        "status": "completed",
+        "steps": { "pay_all": "skipped", "report": "skipped", "report_rejected": "completed" },
+        "inputs": { "report_rejected": { "body": { "status": "rejected", "reason": "rejected_by_approver" } } },
+        "calls": { "to_wallet": 0 }
+      }
+    },
+    {
+      "name": "an approval nobody answers expires after 24 hours and is reported",
+      "trigger": { "body": {
+        "payroll_id": "pr_2026_06", "period": "2026-06", "funding_wallet_id": "w_company", "total_kobo": 30000000,
+        "employees": [ { "employee_id": "e1", "net_pay_kobo": 30000000, "wallet_id": "w_e1" } ] } },
+      "mocks": {
+        "check_balance": { "output": { "balances": [ { "currency": "NGN", "available": 90000000 } ] } },
+        "report_rejected": { "output": { "status": 200 } }
+      },
+      "approvals": { "approve": { "timeout": true } },
+      "expect": {
+        "status": "completed",
+        "inputs": { "report_rejected": { "body": { "status": "rejected", "reason": "approval_timed_out" } } }
+      }
+    }
+  ]
+}

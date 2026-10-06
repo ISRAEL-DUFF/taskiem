@@ -2,7 +2,7 @@
 
 These are the three Phase 1 acceptance workflows required by gate G0. All the group's products move money through **iswallet**; the Paystack-based first drafts were rewritten on 5 October 2026 once iswallet's answers arrived. Each owner confirms the payloads, endpoints, and roles against the real product before go-live. Assumptions to confirm are listed per workflow.
 
-All three validate against `schemas/wd-v1.schema.json` and the semantic rules in `docs/contracts/wd-v1.md` (`go test ./engine/wd/...`).
+All three validate against `schemas/wd-v1.schema.json` and the semantic rules in `docs/contracts/wd-v1.md` (`taskiem validate flows/dogfood/*.wd.json`). Their behaviour is pinned by workflow tests in `tests/` ([format](../../docs/contracts/wd-test-v1.md)): run `taskiem test flows`.
 
 ## 1. Payrolla salary disbursement — `payrolla-salary-disbursement.wd.json`
 
