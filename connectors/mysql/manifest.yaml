@@ -1,0 +1,51 @@
+manifest: connector/v1
+id: mysql
+version: 1.0.0
+name: MySQL
+description: Query and update a MySQL or MariaDB database.
+category: database
+auth:
+  type: custom
+  fields:
+    - { key: host, label: Host }
+    - { key: port, label: Port, required: false }
+    - { key: database, label: Database }
+    - { key: user, label: User }
+    - { key: password, label: Password, secret: true, required: false }
+    - { key: sslmode, label: "SSL mode (require, verify-ca, verify-full, disable)", required: false }
+    - { key: ssl_ca, label: "CA certificate (PEM) for verify-ca / verify-full", required: false }
+  test: { action: query }
+egress_hosts: ["${connection.host}"]
+actions:
+  query:
+    title: Run a read-only query
+    description: Runs as a prepared statement in a READ ONLY transaction with a statement timeout; at most max_rows rows are returned.
+    class: read
+    input:
+      type: object
+      required: [sql]
+      properties:
+        sql:      { type: string }
+        params:   { type: array }
+        max_rows: { type: integer, minimum: 1, maximum: 10000, default: 1000 }
+    output:
+      type: object
+      properties:
+        rows:      { type: array }
+        row_count: { type: integer }
+        truncated: { type: boolean }
+  execute:
+    title: Run a statement that changes data
+    description: Without a key the database cannot deduplicate, so an unknown outcome parks the step. Make statements idempotent where you can (for example INSERT IGNORE, or INSERT ... ON DUPLICATE KEY UPDATE on a unique key).
+    class: unsafe_write
+    input:
+      type: object
+      required: [sql]
+      properties:
+        sql:    { type: string }
+        params: { type: array }
+    output:
+      type: object
+      properties:
+        rows_affected:  { type: integer }
+        last_insert_id: { type: integer }
