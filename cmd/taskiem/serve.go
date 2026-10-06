@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
+	"github.com/israel-duff/taskiem/engine/webauthn"
 )
 
 var roles = map[string]bool{"api": true, "edge": true, "orchestrator": true, "scheduler": true, "worker": true, "all": true}
@@ -44,9 +46,12 @@ type config struct {
 	ArchiveDir, WebDir                string
 	AnchorKey, AnchorDir              string
 	SecureCookies, TrustProxy, Signup bool
-	Queues                            []string
-	Connectors                        builtin.Options
-	PoolSize                          int32
+	// PublicURL is where people reach the web app; passkeys are bound to it.
+	PublicURL, PasskeyRPID string
+	RequireAdminPasskeys   bool
+	Queues                 []string
+	Connectors             builtin.Options
+	PoolSize               int32
 }
 
 func env(k, def string) string {
@@ -78,6 +83,8 @@ func loadConfig() (config, error) {
 		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
 		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
 		ArchiveDir:    os.Getenv("TASKIEM_ARCHIVE_DIR"),
+		PublicURL:     strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
+		PasskeyRPID:   os.Getenv("TASKIEM_PASSKEY_RP_ID"),
 		AnchorKey:     os.Getenv("TASKIEM_ANCHOR_KEY"),
 		AnchorDir:     os.Getenv("TASKIEM_ANCHOR_DIR"),
 		WebDir:        os.Getenv("TASKIEM_WEB_DIR"),
@@ -99,6 +106,8 @@ func loadConfig() (config, error) {
 		},
 		PoolSize: 20,
 	}
+	// Administrators are held to passkeys wherever passkeys can work.
+	c.RequireAdminPasskeys = envBool("TASKIEM_REQUIRE_ADMIN_PASSKEYS", c.PublicURL != "")
 	if n, err := strconv.Atoi(os.Getenv("TASKIEM_DATABASE_POOL")); err == nil && n > 0 {
 		c.PoolSize = int32(n) //nolint:gosec // small operator-set value
 	}
@@ -234,6 +243,11 @@ func serve(ctx context.Context, args []string) error {
 		if signer := cfg.anchorSigner(nil); signer != nil {
 			srv.AnchorKey = signer.PublicKey()
 		}
+		rp, err := cfg.relyingParty()
+		if err != nil {
+			return err
+		}
+		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		if *role == "all" {
 			srv.Ingest = e.hooks() // one listener for a small install
 		}
@@ -363,4 +377,23 @@ func (c config) anchorSigner(log *slog.Logger) *audit.Signer {
 		log.Error("TASKIEM_ANCHOR_KEY must be 32 bytes, base64 (openssl rand -base64 32)", "err", err)
 	}
 	return nil
+}
+
+// relyingParty is the passkey configuration from TASKIEM_PUBLIC_URL.
+func (c config) relyingParty() (webauthn.Config, error) {
+	if c.PublicURL == "" {
+		return webauthn.Config{}, nil
+	}
+	u, err := url.Parse(c.PublicURL)
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Hostname() != "localhost") {
+		return webauthn.Config{}, fmt.Errorf("TASKIEM_PUBLIC_URL must be an https URL (or http://localhost), not %q", c.PublicURL)
+	}
+	rp := c.PasskeyRPID
+	if rp == "" {
+		rp = u.Hostname()
+	}
+	if u.Hostname() != rp && !strings.HasSuffix(u.Hostname(), "."+rp) {
+		return webauthn.Config{}, fmt.Errorf("TASKIEM_PASSKEY_RP_ID %q must be the host of TASKIEM_PUBLIC_URL or a domain above it", rp)
+	}
+	return webauthn.Config{RPID: rp, RPName: "Taskiem", Origins: []string{u.Scheme + "://" + u.Host}}, nil
 }

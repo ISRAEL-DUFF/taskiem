@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { get, post, type Me } from "./api";
+import { passkeyLogin } from "./passkeys";
 
 interface Auth {
   me: Me | null | undefined; // undefined while loading
   can: (perm: string) => boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithPasskey: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -26,6 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     can: (perm) => !!me?.permissions.includes(perm),
     login: async (email, password) => {
       await post("/v1/auth/login", { email, password });
+      await refresh();
+    },
+    loginWithPasskey: async () => {
+      await passkeyLogin();
       await refresh();
     },
     logout: async () => {

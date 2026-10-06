@@ -10,7 +10,7 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
   await expect(page).toHaveURL(/\/login/);
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
 
   // Create a workflow; the editor opens on its first draft.

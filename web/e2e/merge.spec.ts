@@ -6,7 +6,7 @@ test("conflicting edits are resolved in the editor", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
 
   const api = async (method: string, path: string, data?: unknown) => {

@@ -100,6 +100,10 @@ export interface Me {
   user?: { id: string; email: string; name: string };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
+  /** How this session signed in. */
+  auth_method?: "password" | "passkey" | "sso";
+  /** An administrator who must add a passkey before anything else. */
+  enrol_passkey?: boolean;
 }
 
 export interface WorkflowSummary {

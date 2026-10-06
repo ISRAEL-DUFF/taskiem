@@ -68,7 +68,12 @@ type Principal struct {
 	Roles       []string
 	Permissions map[string]bool
 	Environment string // API keys may be limited to one environment
-	viaCookie   bool
+	// AuthMethod is how the session signed in: password, passkey or sso.
+	AuthMethod string
+	// EnrolOnly marks a password session of an administrator held to
+	// passkeys: it may only enrol one.
+	EnrolOnly bool
+	viaCookie bool
 }
 
 func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
@@ -160,6 +165,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
+		if p.EnrolOnly && !enrolOnly[r.Method+" "+r.URL.Path] {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "administrators sign in with a passkey: add one to continue", "enrol_passkey": true})
+			return
+		}
 		// Cookie sessions must prove the request came from our own pages.
 		if p.viaCookie && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get(csrfHeader) == "" {
 			writeErr(w, http.StatusForbidden, "missing "+csrfHeader+" header")
@@ -203,10 +212,22 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return &p, nil
 	}
 	p := Principal{viaCookie: viaCookie, Permissions: map[string]bool{}}
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID); err != nil {
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod); err != nil {
 		return nil, err
 	}
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+	if err := s.loadRoles(ctx, &p); err != nil {
+		return nil, err
+	}
+	if len(p.Roles) == 0 {
+		return nil, errors.New("no membership")
+	}
+	p.EnrolOnly = s.RequireAdminPasskeys && p.AuthMethod == "password" && isAdmin(p.Permissions)
+	return &p, nil
+}
+
+// loadRoles fills a user principal's roles and permissions.
+func (s *Server) loadRoles(ctx context.Context, p *Principal) error {
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT m.role, r.permissions FROM memberships m
 			LEFT JOIN roles r ON r.tenant_id = m.tenant_id AND r.name = m.role
 			WHERE m.tenant_id = $1 AND m.user_id = $2 ORDER BY m.role`, p.TenantID, p.UserID)
@@ -231,13 +252,6 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		}
 		return rows.Err()
 	})
-	if err != nil {
-		return nil, err
-	}
-	if len(p.Roles) == 0 {
-		return nil, errors.New("no membership")
-	}
-	return &p, nil
 }
 
 func (s *Server) need(perm string) func(http.Handler) http.Handler {
@@ -284,36 +298,29 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
-	var tenants []uuid.UUID
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, userID).Scan(&tenants); err != nil || len(tenants) == 0 {
-		writeErr(w, http.StatusUnauthorized, "no active membership")
-		return
-	}
-	tenant := tenants[0]
-	if req.TenantID != uuid.Nil {
-		if !slices.Contains(tenants, req.TenantID) {
-			writeErr(w, http.StatusUnauthorized, "not a member of that tenant")
+	if s.RequireAdminPasskeys {
+		// An administrator with a passkey signs in with it.
+		var has bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, userID).Scan(&has); err != nil {
+			s.fail(w, r, err)
 			return
 		}
-		tenant = req.TenantID
-	}
-	tok := newToken()
-	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO sessions (token_hash, user_id, tenant_id, expires_at, ip) VALUES ($1, $2, $3, now() + $4::interval, $5)`,
-			hashToken(tok), userID, tenant, sessionTTL.String(), clientIP(r)); err != nil {
-			return err
+		if has {
+			var tenants []uuid.UUID
+			_ = s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, userID).Scan(&tenants)
+			for _, t := range tenants {
+				if req.TenantID != uuid.Nil && t != req.TenantID {
+					continue
+				}
+				p := Principal{TenantID: t, UserID: userID, Permissions: map[string]bool{}}
+				if err := s.loadRoles(ctx, &p); err == nil && isAdmin(p.Permissions) {
+					writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "administrators sign in with their passkey", "passkey_required": true})
+					return
+				}
+			}
 		}
-		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.login', $3, jsonb_build_object('ip', $4::text))`, tenant, userID.String(), userID.String(), clientIP(r))
-		return err
-	})
-	if err != nil {
-		s.fail(w, r, err)
-		return
 	}
-	//nolint:gosec // Secure is configuration: off only for plain-HTTP local development.
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: tok, Path: "/", HttpOnly: true, Secure: s.SecureCookies,
-		SameSite: http.SameSiteStrictMode, MaxAge: int(sessionTTL.Seconds())})
-	writeJSON(w, http.StatusOK, map[string]any{"token": tok, "tenant_id": tenant, "tenants": tenants, "user_id": userID})
+	s.startSession(w, r, userID, req.TenantID, "password")
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +347,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		perms = append(perms, k)
 	}
 	slices.Sort(perms)
-	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms}
+	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms, "auth_method": p.AuthMethod, "enrol_passkey": p.EnrolOnly}
 	if p.UserID != uuid.Nil {
 		var email, name string
 		_ = s.tx(r, func(tx pgx.Tx) error {

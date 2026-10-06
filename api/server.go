@@ -29,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
+	"github.com/israel-duff/taskiem/engine/webauthn"
 )
 
 // Server serves the API.
@@ -55,6 +56,14 @@ type Server struct {
 	// Connectors loads tenants' own WebAssembly connectors; nil refuses
 	// uploads.
 	Connectors *wasmconn.Source
+	// LoginBurst is how many sign-in attempts an address may make at once
+	// (then one every six seconds); default 10.
+	LoginBurst int
+	// WebAuthn is the relying party for passkeys; empty turns them off.
+	WebAuthn webauthn.Config
+	// RequireAdminPasskeys holds members with administrative permissions to
+	// passkeys (spec 13.2: on by default in production).
+	RequireAdminPasskeys bool
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
@@ -79,6 +88,8 @@ func (s *Server) Handler() http.Handler {
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(middleware.SetHeader("Cache-Control", "no-store"))
 		r.Post("/auth/login", s.login)
+		r.Post("/auth/passkey/options", s.passkeyLoginOptions)
+		r.Post("/auth/passkey", s.passkeyLogin)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup)
 		}
@@ -86,6 +97,12 @@ func (s *Server) Handler() http.Handler {
 			r.Use(s.authenticate)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
+			r.Get("/me/passkeys", s.listPasskeys)
+			r.Post("/me/passkeys/options", s.passkeyRegisterOptions)
+			r.Post("/me/passkeys", s.passkeyRegister)
+			r.Delete("/me/passkeys/{id}", s.removePasskey)
+			r.Post("/me/step-up/options", s.stepUpOptions)
+			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
 			r.Get("/connectors", s.listConnectors)
 			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
 			r.With(s.need(PermConnectionManage)).Post("/connector-drift/acknowledge", s.acknowledgeDrift)
@@ -297,7 +314,16 @@ func clientIP(r *http.Request) string {
 }
 
 func (s *Server) loginLimiter(ip string) *rate.Limiter {
-	l, _ := s.limiters.LoadOrStore(ip, rate.NewLimiter(rate.Every(6*time.Second), 10))
+	burst := s.LoginBurst
+	if burst <= 0 {
+		burst = 10
+	}
+	return s.limiter(ip, 6*time.Second, burst)
+}
+
+// limiter is a token bucket per key: one token every interval, up to burst.
+func (s *Server) limiter(key string, every time.Duration, burst int) *rate.Limiter {
+	l, _ := s.limiters.LoadOrStore(key, rate.NewLimiter(rate.Every(every), burst))
 	return l.(*rate.Limiter)
 }
 

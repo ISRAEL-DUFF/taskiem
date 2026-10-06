@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { assert, passkeysSupported } from "../passkeys";
 import { ApiError, del, get, post, type Approval, type Delegation, type PublishRequest } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field, Json, Modal, fmtTime, useAction, useLoad } from "../ui";
@@ -29,7 +30,7 @@ export function Approvals() {
             </span>
           </div>
           {a.on_behalf_of && <p className="hint">You are covering for {a.on_behalf_of} under a delegation.</p>}
-          {a.step_up && <p className="hint">This approval needs a code from your authenticator app.</p>}
+          {a.step_up && <p className="hint">{a.step_up === "passkey" ? "This approval needs your passkey." : "This approval needs your passkey or a code from your authenticator app."}</p>}
           <Json value={a.subject} />
           <div className="toolbar" style={{ marginTop: 8 }}>
             <button className="primary" onClick={() => setDeciding({ a, decision: "approved" })}>
@@ -60,17 +61,19 @@ function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "appr
   const [comment, setComment] = useState("");
   const [code, setCode] = useState("");
   const [needsCode, setNeedsCode] = useState(Boolean(a.step_up) && decision === "approved");
+  const passkeyOnly = a.step_up === "passkey";
   const act = useAction();
-  const submit = () =>
-    act.run(async () => {
-      try {
-        await post(`/v1/approvals/${a.run_id}/${encodeURIComponent(a.step_id)}`, { decision, ...(comment && { comment }), ...(code && { totp: code }) });
-      } catch (e) {
-        if (e instanceof ApiError && e.body.step_up) setNeedsCode(true);
-        throw e;
-      }
-      onDone();
-    });
+  const send = async (extra: object) => {
+    try {
+      await post(`/v1/approvals/${a.run_id}/${encodeURIComponent(a.step_id)}`, { decision, ...(comment && { comment }), ...extra });
+    } catch (e) {
+      if (e instanceof ApiError && e.body.step_up) setNeedsCode(true);
+      throw e;
+    }
+    onDone();
+  };
+  const submit = () => act.run(() => send(code ? { totp: code } : {}));
+  const withPasskey = () => act.run(async () => send({ passkey: await assert("/v1/me/step-up/options") }));
   return (
     <Modal title={decision === "approved" ? "Approve" : "Reject"} onClose={onClose}>
       <p>
@@ -79,14 +82,24 @@ function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "appr
       <Field label="Comment (optional, audited)">
         <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
       </Field>
-      {needsCode && (
-        <Field label="Authenticator code" hint={<>No authenticator yet? Enrol one under <Link to="/account">Account</Link>.</>}>
+      {needsCode && passkeysSupported() && (
+        <p>
+          <button className="primary" disabled={act.busy} onClick={() => void withPasskey()}>
+            Confirm with your passkey
+          </button>{" "}
+          <span className="hint">
+            No passkey yet? Add one under <Link to="/account">Account</Link>.
+          </span>
+        </p>
+      )}
+      {needsCode && !passkeyOnly && (
+        <Field label="Or an authenticator code" hint={<>No authenticator yet? Enrol one under <Link to="/account">Account</Link>.</>}>
           <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
         </Field>
       )}
       <ErrorBox error={act.error} />
       <div className="toolbar">
-        <button className={decision === "approved" ? "primary" : "danger"} disabled={act.busy || (needsCode && code.length !== 6)} onClick={() => void submit()}>
+        <button className={decision === "approved" ? "primary" : "danger"} disabled={act.busy || (needsCode && (passkeyOnly || code.length !== 6))} onClick={() => void submit()}>
           Confirm
         </button>
         <button onClick={onClose}>Cancel</button>

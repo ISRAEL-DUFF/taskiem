@@ -38,6 +38,9 @@ Every role serves Prometheus metrics on `TASKIEM_METRICS_LISTEN` (`:9090`). Runn
 | `TASKIEM_ANCHOR_DIR` | — | Where the scheduler role appends each tenant's anchors (`<tenant>.jsonl`). Point it at write-once storage (an object-lock bucket, an append-only volume): anchors are only worth as much as their copy outside the database. |
 | `TASKIEM_WEB_DIR` | — | Built web app to serve (`/web` in the image). |
 | `TASKIEM_SECURE_COOKIES` | `true` | Set `false` only for plain-HTTP local use. |
+| `TASKIEM_PUBLIC_URL` | — | Where people reach the web app (`https://…`, or `http://localhost:…`). Turns on passkeys, which are bound to it |
+| `TASKIEM_PASSKEY_RP_ID` | the URL's host | The passkey domain, if passkeys should work across subdomains (a parent of the URL's host) |
+| `TASKIEM_REQUIRE_ADMIN_PASSKEYS` | `true` with a public URL | Hold administrators to passkeys ([governance](governance.md#passkeys)) |
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |
 | `TASKIEM_ALLOW_SIGNUP` | `false` | Self-serve `POST /v1/signup`. |
 | `TASKIEM_ISWALLET_URL`, `TASKIEM_PAYSTACK_URL`, `TASKIEM_TERMII_URL`, `TASKIEM_DOJAH_URL`, `TASKIEM_FLUTTERWAVE_URL`, `TASKIEM_GETANCHOR_URL`, `TASKIEM_LENCO_URL`, `TASKIEM_BREET_URL` | provider defaults | Point connectors at another environment; the egress allow-list follows. iswallet defaults to its **sandbox**; set its production URL at go-live. Anchor and Lenco connections choose their provider's sandbox themselves (`environment: sandbox`), Breet's with the same field, Flutterwave's by the key. |

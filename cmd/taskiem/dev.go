@@ -72,8 +72,11 @@ func devCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		"TASKIEM_LISTEN":         *listen,
 		"TASKIEM_METRICS_LISTEN": "127.0.0.1:0",
 		"TASKIEM_SECURE_COOKIES": "false",
-		"TASKIEM_ARCHIVE_DIR":    filepath.Join(*dir, "archive"),
-		"TASKIEM_KMS":            "local",
+		// Passkeys work on localhost; the dev owner signs in with a password.
+		"TASKIEM_PUBLIC_URL":             "http://localhost" + portOf(*listen),
+		"TASKIEM_REQUIRE_ADMIN_PASSKEYS": "false",
+		"TASKIEM_ARCHIVE_DIR":            filepath.Join(*dir, "archive"),
+		"TASKIEM_KMS":                    "local",
 	} {
 		if err := os.Setenv(k, v); err != nil {
 			return err
@@ -394,4 +397,12 @@ func reload(ctx context.Context, c *client, dir string, changed []string, stdout
 			fmt.Fprintf(stdout, "    FAILED: %v\n", err)
 		}
 	}
+}
+
+// portOf is ":8080" for a listen address like "127.0.0.1:8080" or ":8080".
+func portOf(listen string) string {
+	if i := strings.LastIndex(listen, ":"); i >= 0 {
+		return listen[i:]
+	}
+	return ""
 }

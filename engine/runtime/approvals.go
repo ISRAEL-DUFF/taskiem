@@ -38,7 +38,8 @@ type Vote struct {
 	Decision string   // approved | rejected
 	Channel  string   // web, api, whatsapp ...
 	IP       string
-	// StepUp is the second factor the approver just passed ("totp"), if any.
+	// StepUp is the second factor the approver just passed ("totp" or
+	// "passkey"), if any.
 	StepUp string
 }
 
@@ -164,7 +165,8 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 		}
 		// Step-up last: nobody is asked for a second factor to cast a vote
 		// that would be refused anyway.
-		if a.stepUp != nil && *a.stepUp != v.StepUp {
+		// A passkey is the stronger factor: it also satisfies "totp".
+		if a.stepUp != nil && *a.stepUp != v.StepUp && (*a.stepUp != "totp" || v.StepUp != "passkey") {
 			return &StepUpError{Method: *a.stepUp}
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO approval_decisions (tenant_id, run_id, step_id, level, user_id, decision, channel, ip, shown, step_up, on_behalf_of)

@@ -40,6 +40,16 @@ A member can hand approval roles they hold to a colleague for up to 90 days, wit
 
 Each member enrols an authenticator under **Account** (`POST /v1/me/totp`, then `/v1/me/totp/confirm` with a code). The secret is an encrypted tenant secret. A code works once: the time step it used is recorded, so it cannot be replayed. An approval that needs step-up returns `403 {"step_up": "totp"}` without a valid code. Eligibility (role, maker-checker, levels) is checked first, so nobody is asked for a code to cast a vote that would be refused.
 
+## Passkeys
+
+Members add passkeys under **Account** (WebAuthn: the device's fingerprint, face or PIN; synced passkeys work). A passkey signs in without a password (**Sign in with a passkey**) and answers step-up: an approval whose policy asks for `passkey` needs one, and a passkey also satisfies `totp`, being the stronger factor (`POST /v1/me/step-up/options`, then the vote with `passkey`). Challenges are single-use, last five minutes, and are bound to their purpose and person, so a sign-in assertion cannot pass step-up. A signature counter that does not advance is refused as a possible copied authenticator.
+
+**Administrators are held to passkeys** when the deployment sets `TASKIEM_PUBLIC_URL` (on by default then; `TASKIEM_REQUIRE_ADMIN_PASSKEYS=false` turns it off). An administrator is anyone holding `member.manage`, `role.manage`, `secret.manage`, `policy.manage`, `git.manage`, `connector.manage`, `pii.reveal` or `pii.erase`. Signed in with a password, they can only add a passkey; once they have one, their password no longer signs them in. A member who loses their passkeys is reset by someone able to grant all their roles (Members, `DELETE /v1/members/{id}/passkeys`), which also ends their sessions; when no such person can, an operator runs `taskiem passkeys reset --email …`. Every addition, removal and reset is audited.
+
+## Custom roles
+
+Besides the built-in roles, owners and admins define roles as named sets of permissions (Members → Roles, `PUT /v1/roles/{name}`). No one can create, widen, grant or take away a role carrying a permission they do not hold; this also applies to built-in roles. A role someone holds cannot be deleted. Narrowing a role takes effect on its members' next request.
+
 ## Four-eyes on change
 
 Owners turn these on under **Secrets & settings → Four-eyes** (`PUT /v1/governance`); every change is audited with its before and after.

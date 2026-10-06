@@ -19,7 +19,7 @@ async function signIn(page: Page, email: string) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct horse battery");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
 }
 
@@ -62,10 +62,10 @@ test("a policy routes an approval that needs an authenticator code", async ({ pa
 
   await ann.getByRole("link", { name: "Approvals" }).click();
   const card = ann.getByTestId("approval");
-  await expect(card).toContainText("needs a code from your authenticator app");
+  await expect(card).toContainText("a code from your authenticator app");
   await card.getByRole("button", { name: "Approve" }).click();
   await ann.getByLabel("Authenticator code").fill(totp(secret, 1));
-  await ann.getByRole("dialog").getByRole("button", { name: "Confirm" }).click();
+  await ann.getByRole("dialog").getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(ann.getByText("Nothing waiting for you.")).toBeVisible();
 
   await expect.poll(async () => ((await api("GET", `/v1/runs/${String(run.run_id)}`)).run as { status: string }).status).toBe("completed");

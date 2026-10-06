@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/webauthn"
 )
 
 type approvalItem struct {
@@ -105,6 +106,9 @@ type decideReq struct {
 	// TOTP is a code from the approver's authenticator app, for approvals
 	// whose policy needs step-up.
 	TOTP string `json:"totp,omitempty"`
+	// Passkey is a passkey assertion for a challenge from
+	// POST /v1/me/step-up/options.
+	Passkey *credentialJSON `json:"passkey,omitempty"`
 }
 
 // decide records the caller's decision on an approval step. Only users
@@ -129,7 +133,17 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 	step := chi.URLParam(r, "step")
 	ref := runtime.RunRef{ID: run, TenantID: p.TenantID}
 	vote := runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: req.Decision, Channel: "web", IP: clientIP(r)}
-	if req.TOTP != "" {
+	if req.Passkey != nil {
+		if _, err := s.verifyPasskey(r.Context(), *req.Passkey, "step_up", &p.UserID); err != nil {
+			if errors.Is(err, errPasskey) || errors.Is(err, webauthn.ErrInvalid) || errors.Is(err, webauthn.ErrCloned) {
+				writeJSON(w, http.StatusForbidden, map[string]any{"error": "that passkey response is not valid; try again", "step_up": "passkey"})
+				return
+			}
+			s.fail(w, r, err)
+			return
+		}
+		vote.StepUp = "passkey"
+	} else if req.TOTP != "" {
 		ok, err := s.verifyTOTP(r.Context(), p.TenantID, p.UserID, req.TOTP)
 		if err != nil {
 			s.fail(w, r, err)

@@ -58,6 +58,8 @@ Usage:
   taskiem bootstrap --tenant NAME --email EMAIL
                                      create the first tenant and its owner (password from $TASKIEM_BOOTSTRAP_PASSWORD)
   taskiem audit verify FILE          verify an audit export (GET /v1/audit/export) offline
+  taskiem passkeys reset --email EMAIL
+                                     remove someone's passkeys when no owner can (recovery; audited)
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 
@@ -111,6 +113,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return bootstrap(args[1:], stdout)
 	case "audit":
 		return auditCmd(args[1:], stdout)
+	case "passkeys":
+		return passkeysCmd(args[1:], stdout)
 	case "connector":
 		return connectorCmd(context.Background(), args[1:], stdout)
 	case "healthcheck":
@@ -223,6 +227,39 @@ func bootstrap(args []string, stdout io.Writer) error {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
 	fmt.Fprintf(stdout, "tenant %s\nowner  %s (%s)\n", t, u, *email)
+	return nil
+}
+
+// passkeysCmd recovers someone who lost every passkey, when no other owner
+// can reset theirs from the web app.
+func passkeysCmd(args []string, stdout io.Writer) error {
+	if len(args) == 0 || args[0] != "reset" {
+		return errors.New("usage: taskiem passkeys reset --email EMAIL")
+	}
+	fs := flag.NewFlagSet("passkeys reset", flag.ContinueOnError)
+	email := fs.String("email", "", "the person's email")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *email == "" {
+		return errors.New("usage: taskiem passkeys reset --email EMAIL")
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	pool, err := openPool(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	operator := "cli:" + env("USER", "operator")
+	n, err := api.ResetPasskeys(ctx, pool, *email, operator)
+	if err != nil {
+		return fmt.Errorf("passkeys reset: %w", err)
+	}
+	fmt.Fprintf(stdout, "removed %d passkey(s) of %s and signed them out; they sign in with their password and enrol a new one\n", n, *email)
 	return nil
 }
 
