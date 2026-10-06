@@ -32,7 +32,7 @@ export function summary(s: Step): string {
 export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
   const s = data.step;
   return (
-    <div className={`step-node${selected ? " selected" : ""}${data.invalid ? " invalid" : ""}`} data-testid={`node-${s.id}`}>
+    <div className={`step-node${selected ? " selected" : ""}${data.invalid ? " invalid" : ""}${data.status ? ` status-${data.status}` : ""}`} data-testid={`node-${s.id}`} data-status={data.status}>
       <Handle type="target" position={Position.Left} />
       <div className="type">
         {s.type}

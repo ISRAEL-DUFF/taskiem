@@ -100,3 +100,25 @@ export function duration(from: string, to: string): string {
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)} min`;
   return `${(ms / 3_600_000).toFixed(1)} h`;
 }
+
+// Status of each top-level step for the live canvas: a step's own row and
+// those of the instances nested in it (pay_all[2].pay, branch.path.step)
+// combine, the most pressing first.
+const PRIORITY: StepStatus[] = ["failed", "parked", "running", "retrying", "waiting", "scheduled", "completed", "cancelled", "skipped"];
+
+export function topLevelStatus(rows: StepRow[], ids: string[]): Record<string, StepStatus> {
+  const out: Record<string, StepStatus> = {};
+  for (const id of ids) {
+    const mine = rows.filter((r) => r.id === id || r.id.startsWith(id + "[") || r.id.startsWith(id + "."));
+    if (mine.length === 0) continue;
+    const own = mine.find((r) => r.id === id);
+    // A finished container step is what it says; while it runs, its
+    // children show what is happening inside it.
+    if (own && ["completed", "failed", "cancelled", "skipped"].includes(own.status)) {
+      out[id] = own.status;
+      continue;
+    }
+    out[id] = PRIORITY.find((p) => mine.some((r) => r.status === p)) ?? (mine[0] as StepRow).status;
+  }
+  return out;
+}

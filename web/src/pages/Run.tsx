@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { get, post, type RunEvent, type RunSummary } from "../api";
 import { useAuth } from "../auth";
+import { RunCanvas } from "../canvas/RunCanvas";
 import { duration, timeline, type StepRow } from "../lib/timeline";
 import { Badge, ErrorBox, Field, Json, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
 
@@ -17,31 +18,54 @@ export function RunPage() {
   const { can } = useAuth();
   const [reveal, setReveal] = useState(false);
   const [live, setLive] = useState(true);
-  const { data, error, reload } = useLoad(() => get<RunDoc>(`/v1/runs/${id}${reveal ? "?reveal=true" : ""}`), [id, reveal], live);
+  // Revealed history is fetched (each fetch is audited); sealed history
+  // streams as it is recorded (spec 15.1, live view).
+  const { data, error, reload } = useLoad(() => get<RunDoc>(`/v1/runs/${id}${reveal ? "?reveal=true" : ""}`), [id, reveal], live && reveal);
+  const [streamed, setStreamed] = useState<RunEvent[]>([]);
+  const [view, setView] = useState<"canvas" | "timeline">("canvas");
   const [resolving, setResolving] = useState<string | null>(null);
   const act = useAction();
   const status = data?.run.status;
   useEffect(() => {
     if (status && TERMINAL.has(status)) setLive(false);
   }, [status]);
+  useEffect(() => {
+    setStreamed([]);
+    if (!data || reveal || TERMINAL.has(data.run.status) || typeof EventSource === "undefined") return;
+    const es = new EventSource(`/v1/runs/${id}/stream?after=${data.events.at(-1)?.seq ?? 0}`);
+    es.addEventListener("run_event", (m) => setStreamed((prev) => [...prev, JSON.parse((m as MessageEvent<string>).data) as RunEvent]));
+    es.addEventListener("end", () => {
+      es.close();
+      reload();
+    });
+    return () => es.close();
+  }, [data, id, reveal, reload]);
+  const events = useMemo(() => {
+    if (!data) return [];
+    const seen = new Set(data.events.map((e) => e.seq));
+    return [...data.events, ...streamed.filter((e) => !seen.has(e.seq))];
+  }, [data, streamed]);
   if (error) return <ErrorBox error={error} />;
   if (!data) return <div className="empty">Loading…</div>;
   const r = data.run;
-  const rows = timeline(data.events);
-  const ended = data.events.find((e) => ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type));
+  const rows = timeline(events);
+  const ended = events.find((e) => ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type));
+  const ENDED: Record<string, string> = { RunCompleted: "completed", RunFailed: "failed", RunCancelled: "cancelled" };
+  const shownStatus = (ended && ENDED[ended.type]) || r.status;
   return (
     <>
       <div className="toolbar">
         <h1 className="grow" style={{ margin: 0 }}>
           <Link to={`/workflows/${r.workflow_id}?v=${r.version}`}>{r.workflow}</Link> <span className="hint">run</span>
         </h1>
-        <Badge value={r.status} />
+        <Badge value={shownStatus} />
+        {!reveal && !TERMINAL.has(shownStatus) && <span className="hint live-dot">live</span>}
         {can("pii.reveal") && (
           <label className="inline" title="Decrypt personal data for this view; the access is audited">
             <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
           </label>
         )}
-        {can("run.cancel") && !TERMINAL.has(r.status) && (
+        {can("run.cancel") && !TERMINAL.has(shownStatus) && (
           <button
             className="danger"
             disabled={act.busy}
@@ -75,8 +99,19 @@ export function RunPage() {
           </div>
         )}
       </div>
-      <h2>Steps</h2>
-      <div className="timeline">
+      <div className="toolbar">
+        <h2 className="grow">Steps</h2>
+        <div className="tabs" role="tablist">
+          <button role="tab" className={view === "canvas" ? "active" : ""} onClick={() => setView("canvas")}>
+            Canvas
+          </button>
+          <button role="tab" className={view === "timeline" ? "active" : ""} onClick={() => setView("timeline")}>
+            Timeline
+          </button>
+        </div>
+      </div>
+      {view === "canvas" && <RunCanvas workflow={r.workflow_id} version={r.version} rows={rows} ended={TERMINAL.has(shownStatus)} onSelect={(step) => (setView("timeline"), setTimeout(() => document.querySelector(`[data-testid="step-${CSS.escape(step)}"]`)?.scrollIntoView({ block: "center" }), 0))} />}
+      <div className="timeline" hidden={view !== "timeline"}>
         {rows.length === 0 && <div className="empty">No steps yet.</div>}
         {rows.map((s) => (
           <StepCard key={s.id} row={s} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
@@ -89,7 +124,7 @@ export function RunPage() {
         </>
       )}
       <details style={{ marginTop: 16 }}>
-        <summary>All {data.events.length} events</summary>
+        <summary>All {events.length} events</summary>
         <table>
           <thead>
             <tr>
@@ -101,7 +136,7 @@ export function RunPage() {
             </tr>
           </thead>
           <tbody>
-            {data.events.map((e) => (
+            {events.map((e) => (
               <tr key={e.seq}>
                 <td>{e.seq}</td>
                 <td>

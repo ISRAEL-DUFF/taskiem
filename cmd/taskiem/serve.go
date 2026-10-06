@@ -259,6 +259,7 @@ func serve(ctx context.Context, args []string) error {
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
 		srv.Alerts = alerter
+		srv.Done = ctx.Done()
 		if *role == "all" {
 			srv.Ingest = e.hooks() // one listener for a small install
 		}

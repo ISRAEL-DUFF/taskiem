@@ -189,3 +189,12 @@ button.link {
 .chart .bar-failed { fill: var(--danger); }
 .chart .bar-other { fill: var(--muted); opacity: 0.5; }
 .chart-label { font-size: 4px; fill: var(--muted); }
+.run-canvas { height: 460px; margin-bottom: 12px; }
+.step-node.status-completed { border-color: var(--ok); }
+.step-node.status-failed, .step-node.status-parked { border-color: var(--danger); }
+.step-node.status-waiting { border-color: var(--info); }
+.step-node.status-running, .step-node.status-retrying, .step-node.status-scheduled { border-color: var(--info); animation: step-pulse 1.2s ease-in-out infinite; }
+.step-node.status-skipped, .step-node.status-cancelled { opacity: 0.55; }
+@keyframes step-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--info) 25%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .step-node.status-running, .step-node.status-retrying, .step-node.status-scheduled { animation: none; } }
+.live-dot::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 4px; animation: step-pulse 1.2s ease-in-out infinite; }

@@ -721,6 +721,31 @@ func (s *Store) RunHistory(ctx context.Context, ref RunRef) ([]history.Event, er
 	return h, err
 }
 
+// HistoryAfter returns up to limit events after seq, sealed as RunHistory
+// returns them, for streaming a run as it goes.
+func (s *Store) HistoryAfter(ctx context.Context, ref RunRef, after int64, limit int) ([]history.Event, error) {
+	var out []history.Event
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
+			FROM run_events WHERE run_id = $1 AND seq > $2 ORDER BY seq LIMIT $3`, ref.ID, after, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var e history.Event
+			var payload []byte
+			if err := rows.Scan(&e.Seq, &e.Type, &e.StepID, &e.Attempt, &payload, &e.RecordedAt, &e.Origin); err != nil {
+				return err
+			}
+			e.Payload = payload
+			out = append(out, e)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error) error {
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, fn)
 }

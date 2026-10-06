@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Step } from "@sdk/wd";
 import { autoLayout, connect, disconnect, freshId, removeStep, renameStep, toGraph } from "./graph";
 import { coerce, kindOf } from "./schema";
-import { redact, timeline } from "./timeline";
+import { redact, timeline, topLevelStatus, type StepRow } from "./timeline";
 
 const steps: Step[] = [
   { id: "a", type: "transform", config: { output: 1 } },
@@ -75,5 +75,19 @@ describe("merge", () => {
   it("applies a patch and drops blanked keys", async () => {
     const { merge } = await import("./schema");
     expect(merge({ a: 1, b: 2, c: 3 }, { b: undefined, c: "", d: 4 })).toEqual({ a: 1, d: 4 });
+  });
+});
+
+describe("topLevelStatus", () => {
+  const row = (id: string, status: StepRow["status"]): StepRow => ({ id, status, attempts: 1, firstAt: "", lastAt: "", events: [] });
+  it("rolls nested instances up to their top-level step", () => {
+    const got = topLevelStatus(
+      [row("a", "completed"), row("pay_all", "running"), row("pay_all[0].pay", "completed"), row("pay_all[1].pay", "failed"), row("x", "skipped")],
+      ["a", "pay_all", "c", "x"],
+    );
+    expect(got).toEqual({ a: "completed", pay_all: "failed", x: "skipped" });
+  });
+  it("lets a finished step speak for itself", () => {
+    expect(topLevelStatus([row("loop", "completed"), row("loop[0].s", "failed")], ["loop"])).toEqual({ loop: "completed" });
   });
 });

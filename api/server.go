@@ -68,6 +68,8 @@ type Server struct {
 	// RequireAdminPasskeys holds members with administrative permissions to
 	// passkeys (spec 13.2: on by default in production).
 	RequireAdminPasskeys bool
+	// Done, when closed, ends long-lived streams so shutdown is prompt.
+	Done <-chan struct{}
 	// Alerts sends channels' test messages; nil refuses them.
 	Alerts *alerts.Alerter
 	// AnchorKey is the public key audit anchors are signed with, published
@@ -158,6 +160,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRunRead)).Get("/runs", s.listRuns)
 			r.With(s.need(PermRunRead)).Get("/dashboard", s.dashboard)
 			r.With(s.need(PermRunRead)).Get("/runs/{run}", s.getRun)
+			r.With(s.need(PermRunRead)).Get("/runs/{run}/stream", s.streamRun)
 			r.With(s.need(PermRunCancel)).Post("/runs/{run}/cancel", s.cancelRun)
 			r.With(s.need(PermRunResolve)).Post("/runs/{run}/steps/{step}/resolve", s.resolveStep)
 
