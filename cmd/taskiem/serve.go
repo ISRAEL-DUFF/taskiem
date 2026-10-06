@@ -110,6 +110,8 @@ func loadConfig() (config, error) {
 			AnchorURL:      os.Getenv("TASKIEM_GETANCHOR_URL"), // not TASKIEM_ANCHOR_*: those are audit anchors
 			LencoURL:       os.Getenv("TASKIEM_LENCO_URL"),
 			BreetURL:       os.Getenv("TASKIEM_BREET_URL"),
+			MoniepointURL:  os.Getenv("TASKIEM_MONIEPOINT_URL"),
+			InterswitchURL: os.Getenv("TASKIEM_INTERSWITCH_URL"),
 		},
 		PoolSize: 20,
 	}

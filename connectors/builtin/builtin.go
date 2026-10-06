@@ -7,8 +7,10 @@ import (
 	"github.com/israel-duff/taskiem/connectors/breet"
 	"github.com/israel-duff/taskiem/connectors/dojah"
 	"github.com/israel-duff/taskiem/connectors/flutterwave"
+	"github.com/israel-duff/taskiem/connectors/interswitch"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
+	"github.com/israel-duff/taskiem/connectors/moniepoint"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/termii"
@@ -19,6 +21,7 @@ import (
 type Options struct {
 	PaystackURL, TermiiURL, DojahURL, IswalletURL string
 	FlutterwaveURL, AnchorURL, LencoURL, BreetURL string
+	MoniepointURL, InterswitchURL                 string
 }
 
 // Register adds every built-in connector to r.
@@ -32,6 +35,8 @@ func Register(r *connector.Registry, o Options) error {
 		anchor.New(anchor.Options{BaseURL: o.AnchorURL}),
 		lenco.New(lenco.Options{BaseURL: o.LencoURL}),
 		breet.New(breet.Options{BaseURL: o.BreetURL}),
+		moniepoint.New(moniepoint.Options{BaseURL: o.MoniepointURL}),
+		interswitch.New(interswitch.Options{BaseURL: o.InterswitchURL}),
 		postgres.New(),
 	} {
 		if err := r.Register(c); err != nil {

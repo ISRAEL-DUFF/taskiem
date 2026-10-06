@@ -42,6 +42,16 @@ func TestTriggerExpressions(t *testing.T) {
 			"withdrawal.completed", "2d7f", "6968"},
 		{"breet@1", "event", `{"event":"trade.address.created","eventId":"8b4c","address":"TB3y"}`,
 			"trade.address.created", "8b4c", "TB3y"},
+		{"moniepoint@1", "event", `{"eventType":"SUCCESSFUL_DISBURSEMENT","eventData":{"amount":10,"transactionReference":"MFDS|20210317032332|002431","fee":8,"reference":"tsk_1","status":"SUCCESS"}}`,
+			"SUCCESSFUL_DISBURSEMENT", "SUCCESSFUL_DISBURSEMENT:MFDS|20210317032332|002431", "tsk_1"},
+		{"moniepoint@1", "event", `{"eventType":"SUCCESSFUL_TRANSACTION","eventData":{"product":{"reference":"acct-ref-1","type":"RESERVED_ACCOUNT"},"transactionReference":"MNFY|04|1","paymentReference":"MNFY|04|1","amountPaid":3000}}`,
+			"SUCCESSFUL_TRANSACTION", "SUCCESSFUL_TRANSACTION:MNFY|04|1", "acct-ref-1"},
+		{"moniepoint@1", "event", `{"eventType":"SUCCESSFUL_REFUND","eventData":{"transactionReference":"MNFY|9","refundReference":"ref001","refundStatus":"COMPLETED"}}`,
+			"SUCCESSFUL_REFUND", "SUCCESSFUL_REFUND:ref001", "ref001"},
+		{"interswitch@1", "event", `{"event":"TRANSACTION.COMPLETED","uuid":"2Xdf35faAyX2Sk5Dalu405rUD","timestamp":1594646111460,"data":{"amount":12000,"responseCode":"00","merchantReference":"order-17"}}`,
+			"TRANSACTION.COMPLETED", "TRANSACTION.COMPLETED:2Xdf35faAyX2Sk5Dalu405rUD:1594646111460", "order-17"},
+		{"interswitch@1", "event", `{"event":"INVOICE.TRANSACTION_SUCCESSFUL","uuid":"inv-9","timestamp":1594646112000,"data":{"amount":5000}}`,
+			"INVOICE.TRANSACTION_SUCCESSFUL", "INVOICE.TRANSACTION_SUCCESSFUL:inv-9:1594646112000", "inv-9"},
 	} {
 		conn, ok := reg.Get(c.ref)
 		if !ok {
