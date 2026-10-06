@@ -44,7 +44,7 @@ OPay posts status changes to the payment's `callbackUrl`, or to the webhook URL 
 | --- | --- | --- | --- |
 | `payment` | `transaction-status` (`body.type`) | `body.sha512` (changes with status and refund flag) | `body.payload.reference` |
 
-**Deliveries are not verified by the engine.** OPay signs a callback with `sha512` *inside the body*: the hex HMAC-SHA3-512, keyed with the secret key, of `{Amount:"<amount>",Currency:"<currency>",Reference:"<reference>",Refunded:<t|f>,Status:"<status>",Timestamp:"<timestamp>",Token:"<token>",TransactionID:"<transactionId>"}` built from `payload`. None of the engine's webhook schemes can check that, so the trigger is declared `verify: none`. A workflow must not act on a callback alone: run `get_payment` (OPay's own advice) or `verify_callback` with `trigger.body.payload` and `trigger.body.sha512` first. The connector's implementation reproduces the signature in OPay's documented example exactly. OPay retries unacknowledged callbacks for 72 hours; the engine answers 2xx.
+**Deliveries are verified.** OPay signs a callback with `sha512` *inside the body*: the hex HMAC-SHA3-512, keyed with the secret key, of `{Amount:"<amount>",Currency:"<currency>",Reference:"<reference>",Refunded:<t|f>,Status:"<status>",Timestamp:"<timestamp>",Token:"<token>",TransactionID:"<transactionId>"}` built from `payload`. The trigger declares `verify: {scheme: connector}`, so the connector's own check runs before anything is recorded: a forged or altered callback is refused with 401. The implementation reproduces the signature in OPay's documented example exactly. A callback is still a report of a payment, not money in hand: before releasing goods or value, `get_payment` (OPay's own advice) confirms it. OPay retries unacknowledged callbacks for 72 hours; the engine answers 2xx.
 
 ## To confirm with OPay before go-live
 
@@ -58,4 +58,4 @@ OPay posts status changes to the payment's `callbackUrl`, or to the webhook URL 
 
 ## Engine change that would help
 
-A webhook verify scheme for a signature carried in the body over a templated string, e.g. `scheme: body_template_hmac`, `algorithm: sha3_512`, `signature: =body.sha512`, `template: '{Amount:"%s",...}'` with CEL expressions for each field and a boolean-to-`t`/`f` rule. With it the `payment` trigger could reject forged callbacks before they reach a workflow.
+None: the engine's `connector` verify scheme lets this connector check OPay's body signature itself.

@@ -326,7 +326,17 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	if spec.Verify != nil {
 		secret = creds[spec.Verify.SecretField]
 	}
-	if err := connector.VerifyWebhook(spec.Verify, secret, r.Header, body); err != nil {
+	verify := func() error { return connector.VerifyWebhook(spec.Verify, secret, r.Header, body) }
+	if spec.Verify != nil && spec.Verify.Scheme == "connector" {
+		verify = func() error {
+			v := conn.Verifiers[name]
+			if v == nil || secret == "" {
+				return connector.ErrBadSignature
+			}
+			return v(secret, r.Header, body)
+		}
+	}
+	if err := verify(); err != nil {
 		replyErr(w, http.StatusUnauthorized, "signature invalid")
 		return
 	}

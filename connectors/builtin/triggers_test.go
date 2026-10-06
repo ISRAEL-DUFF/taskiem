@@ -68,6 +68,10 @@ func TestTriggerExpressions(t *testing.T) {
 			"message", "Ev123ABC456", "C123ABC456:1503435956.000247"},
 		{"slack@1", "events", `{"type":"event_callback","event":{"type":"reaction_added","reaction":"white_check_mark","item":{"type":"message","channel":"C123ABC456","ts":"1503435956.000247"}},"event_id":"Ev2"}`,
 			"reaction_added", "Ev2", "C123ABC456:1503435956.000247"},
+		{"opay@1", "payment", `{"payload":{"amount":"49160","currency":"NGN","reference":"10023","refunded":false,"status":"SUCCESS","timestamp":"2022-05-07T06:20:46Z","token":"220507145660712931829","transactionId":"220507145660712931829"},"sha512":"9f605d69f04e94172875dc156537071cead060bbcaeaca94a7b8805af9f89611e2fdf6836713c9c90b028ca7e4470b1356e996975f2abc862315aaa9b7f2ae2d","type":"transaction-status"}`,
+			"transaction-status", "9f605d69f04e94172875dc156537071cead060bbcaeaca94a7b8805af9f89611e2fdf6836713c9c90b028ca7e4470b1356e996975f2abc862315aaa9b7f2ae2d", "10023"},
+		{"remita@1", "invoice_payment", `[{"rrr":"110002071256","channel":"CARDPAYMENT","amount":650000.00,"orderId":"6954148807","type":"PY"}]`,
+			"payment_notification", "110002071256", "6954148807"},
 	} {
 		conn, ok := reg.Get(c.ref)
 		if !ok {

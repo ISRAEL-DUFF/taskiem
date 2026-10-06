@@ -298,14 +298,29 @@ func TestCallbackSignatureMatchesOPaysExample(t *testing.T) {
 }
 
 func TestCallbackTrigger(t *testing.T) {
-	spec := New(Options{}).Manifest.Triggers["payment"]
-	// OPay's body signature cannot be checked by the engine: the trigger
-	// accepts deliveries and the manifest says so; workflows re-query.
-	if spec.Verify == nil || spec.Verify.Scheme != "none" {
+	c := New(Options{})
+	spec := c.Manifest.Triggers["payment"]
+	// The engine hands the delivery to the connector's verifier.
+	if spec.Verify == nil || spec.Verify.Scheme != "connector" || spec.Verify.SecretField != "secret_key" {
 		t.Fatalf("verify %+v", spec.Verify)
 	}
-	if err := connector.VerifyWebhook(spec.Verify, "", http.Header{}, []byte(docCallback)); err != nil {
-		t.Error(err)
+	v := c.Verifiers["payment"]
+	if v == nil {
+		t.Fatal("no verifier for the payment trigger")
+	}
+	if err := v(docKey, http.Header{}, []byte(docCallback)); err != nil {
+		t.Errorf("OPay's own example refused: %v", err)
+	}
+	forged := strings.Replace(docCallback, `"status":"SUCCESS"`, `"status":"FAIL"`, 1)
+	for name, tc := range map[string]struct{ key, body string }{
+		"tampered":  {docKey, forged},
+		"wrong key": {"OPAYPRV_other", docCallback},
+		"unsigned":  {docKey, `{"payload":{"reference":"10023"},"type":"transaction-status"}`},
+		"not json":  {docKey, `reference=10023`},
+	} {
+		if v(tc.key, http.Header{}, []byte(tc.body)) == nil {
+			t.Errorf("%s accepted", name)
+		}
 	}
 	if spec.EventType != "=body.type" || spec.Correlation != "=body.payload.reference" || spec.Dedup != "=body.sha512" || len(spec.Events) != 1 || spec.Events[0] != "transaction-status" {
 		t.Errorf("trigger %+v", spec)

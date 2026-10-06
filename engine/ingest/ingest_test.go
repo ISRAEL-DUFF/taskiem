@@ -336,6 +336,10 @@ triggers:
     event_type: =item.kind
     dedup: =item.id
     correlation: =item.ref
+  custom:
+    type: webhook
+    verify: { scheme: connector, secret_field: secret }
+    event_type: =body.kind
   slack:
     type: webhook
     verify: { scheme: header_secret, header: X-Secret, secret_field: secret }
@@ -348,7 +352,12 @@ func TestConnectorHandshakes(t *testing.T) {
 	c := connector.MustParse(handshakeManifest)
 	if err := w.Registry.Register(&connector.Connector{Manifest: c, Actions: map[string]connector.Action{"noop": connector.ActionFunc(func(context.Context, connector.Request) (connector.Response, error) {
 		return connector.Response{}, nil
-	})}}); err != nil {
+	})}, Verifiers: map[string]connector.WebhookVerifier{"custom": func(secret string, _ http.Header, body []byte) error {
+		if !bytes.Contains(body, []byte(`"sig":"`+secret+`"`)) {
+			return connector.ErrBadSignature
+		}
+		return nil
+	}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.Vault.CreateConnection(ctx, w.Tenant, "prod", "shake", "main", "api_key", map[string]string{"secret": "s1", "verify_token": "vt"}, "test"); err != nil {
@@ -389,6 +398,22 @@ func TestConnectorHandshakes(t *testing.T) {
 	}
 	if st, body := post(`{"type":"event_callback"}`, "s1"); st != 202 || !bytes.Contains([]byte(body), []byte(`"event":"event_callback"`)) {
 		t.Errorf("delivery: %d %s", st, body)
+	}
+
+	// A connector-verified trigger: the connector's own check decides.
+	custom := func(body string) int {
+		resp, err := http.Post(w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/custom", "application/json", bytes.NewReader([]byte(body)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	if st := custom(`{"kind":"paid","sig":"s1"}`); st != 202 {
+		t.Errorf("verified by the connector: %d", st)
+	}
+	if st := custom(`{"kind":"paid","sig":"forged"}`); st != 401 {
+		t.Errorf("forged delivery: %d", st)
 	}
 
 	// A batch is split into one event per item, each deduplicated alone.

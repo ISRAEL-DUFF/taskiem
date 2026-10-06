@@ -55,7 +55,15 @@ var ErrNotFound = errors.New("not_found")
 type Connector struct {
 	Manifest *Manifest
 	Actions  map[string]Action
+	// Verifiers check webhooks for triggers whose verify scheme is
+	// "connector": providers that sign something no manifest scheme
+	// describes (fields inside the body, for example). Keyed by trigger.
+	Verifiers map[string]WebhookVerifier
 }
+
+// WebhookVerifier checks one delivery; secret is the connection credential
+// named by the trigger's secret_field. A non-nil error refuses it.
+type WebhookVerifier func(secret string, h http.Header, body []byte) error
 
 // Ref is the "id@major" a workflow pins.
 func (c *Connector) Ref() string {

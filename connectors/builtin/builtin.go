@@ -15,8 +15,10 @@ import (
 	"github.com/israel-duff/taskiem/connectors/lenco"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
 	"github.com/israel-duff/taskiem/connectors/mysql"
+	"github.com/israel-duff/taskiem/connectors/opay"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
+	"github.com/israel-duff/taskiem/connectors/remita"
 	"github.com/israel-duff/taskiem/connectors/s3"
 	"github.com/israel-duff/taskiem/connectors/sftp"
 	"github.com/israel-duff/taskiem/connectors/slack"
@@ -34,6 +36,7 @@ type Options struct {
 	S3URL                                         string
 	AfricasTalkingURL, TelegramURL, WhatsAppURL   string
 	SlackURL, GmailURL, GooglesheetsURL           string
+	OpayURL, RemitaURL                            string
 	// GoogleTokenURL overrides Google's OAuth token endpoint (tests).
 	GoogleTokenURL string
 }
@@ -57,6 +60,8 @@ func Register(r *connector.Registry, o Options) error {
 		slack.New(slack.Options{BaseURL: o.SlackURL}),
 		gmail.New(gmail.Options{BaseURL: o.GmailURL, TokenURL: o.GoogleTokenURL}),
 		googlesheets.New(googlesheets.Options{BaseURL: o.GooglesheetsURL, TokenURL: o.GoogleTokenURL}),
+		opay.New(opay.Options{BaseURL: o.OpayURL}),
+		remita.New(remita.Options{BaseURL: o.RemitaURL}),
 		postgres.New(),
 		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),

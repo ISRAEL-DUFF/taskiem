@@ -120,6 +120,8 @@ func loadConfig() (config, error) {
 			GmailURL:          os.Getenv("TASKIEM_GMAIL_URL"),
 			GooglesheetsURL:   os.Getenv("TASKIEM_GOOGLESHEETS_URL"),
 			GoogleTokenURL:    os.Getenv("TASKIEM_GOOGLE_TOKEN_URL"),
+			OpayURL:           os.Getenv("TASKIEM_OPAY_URL"),
+			RemitaURL:         os.Getenv("TASKIEM_REMITA_URL"),
 		},
 		PoolSize: 20,
 	}

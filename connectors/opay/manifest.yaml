@@ -216,12 +216,11 @@ actions:
 triggers:
   # OPay posts every status change to the callbackUrl of the payment or the
   # dashboard's webhook URL. Its signature is an HMAC-SHA3-512 of fields
-  # inside the body (not the raw body, not a header), which the engine's
-  # verifiers cannot check, so deliveries are not verified here: run
-  # get_payment (or verify_callback) before acting on one.
+  # inside the body (body.sha512), keyed with the secret key: the connector
+  # verifies it (CallbackSignature), so a forged delivery is refused.
   payment:
     type: webhook
-    verify: { scheme: none }
+    verify: { scheme: connector, secret_field: secret_key }
     events: [transaction-status]
     event_type: =body.type
     # The signature differs whenever any signed field (status, refunded…) does.

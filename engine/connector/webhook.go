@@ -129,6 +129,8 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 		return nil
 	case "none":
 		return nil
+	case "connector":
+		return fmt.Errorf("%w: the connector verifies this trigger itself", ErrBadSignature)
 	default:
 		return fmt.Errorf("%w: unsupported scheme %q", ErrBadSignature, v.Scheme)
 	}

@@ -19,6 +19,7 @@
 package opay
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha3"
@@ -66,7 +67,7 @@ func New(o Options) *connector.Connector {
 		"refund_payment":               connector.ActionFunc(c.refundPayment),
 		"get_refund":                   connector.ActionFunc(c.getRefund),
 		"verify_callback":              connector.ActionFunc(verifyCallback),
-	}}
+	}, Verifiers: map[string]connector.WebhookVerifier{"payment": verifyDelivery}}
 }
 
 type client struct{ live, sandbox string }
@@ -651,6 +652,23 @@ func verifyCallback(_ context.Context, req connector.Request) (connector.Respons
 	}
 	return connector.Response{Output: map[string]any{"valid": true, "reference": str(payload, "reference"),
 		"transaction_id": str(payload, "transactionId"), "status": str(payload, "status"), "refunded": isRefunded(payload["refunded"])}}, nil
+}
+
+// verifyDelivery checks a callback delivered to the payment trigger.
+func verifyDelivery(secret string, _ http.Header, body []byte) error {
+	var cb struct {
+		Payload map[string]any `json:"payload"`
+		SHA512  string         `json:"sha512"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber() // amounts are signed as sent
+	if err := dec.Decode(&cb); err != nil || cb.Payload == nil || cb.SHA512 == "" {
+		return connector.ErrBadSignature
+	}
+	if subtle.ConstantTimeCompare([]byte(strings.ToLower(cb.SHA512)), []byte(CallbackSignature(secret, cb.Payload))) != 1 {
+		return connector.ErrBadSignature
+	}
+	return nil
 }
 
 // isRefunded reads the payload's refunded flag: false in OPay's example,
