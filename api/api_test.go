@@ -60,14 +60,15 @@ func (c *client) must(want int, method, path string, body any, hdr ...string) ma
 type world struct {
 	env  *rt.Env
 	base string
+	srv  *api.Server
 }
 
 func newWorld(t *testing.T) *world {
 	e := rt.New(t)
-	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, AllowSignup: true}
+	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, AllowSignup: true, Egress: e.Egress}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	return &world{env: e, base: ts.URL}
+	return &world{env: e, base: ts.URL, srv: srv}
 }
 
 // tenant signs up a new tenant and returns its owner's client.

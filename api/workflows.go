@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -55,6 +56,9 @@ type workflowSummary struct {
 	// Key is the definition's own id (wf_...) in the latest version: what
 	// the CLI matches local files by.
 	Key string `json:"key"`
+	// GitPath is the file a Git-led repository keeps this workflow in; the
+	// workflow is then read-only here.
+	GitPath *string `json:"git_path"`
 }
 
 const latestKey = `COALESCE((SELECT definition->>'id' FROM workflow_versions WHERE workflow_id = w.id ORDER BY version DESC LIMIT 1), '')`
@@ -62,7 +66,7 @@ const latestKey = `COALESCE((SELECT definition->>'id' FROM workflow_versions WHE
 func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
 	var out []workflowSummary
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`
+		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`, w.git_path
 			FROM workflows w LEFT JOIN workflow_versions v ON v.workflow_id = w.id GROUP BY w.id ORDER BY w.name`)
 		if err != nil {
 			return err
@@ -139,13 +143,19 @@ func (s *Server) createWorkflow(w http.ResponseWriter, r *http.Request) {
 
 func insertVersion(r *http.Request, tx pgx.Tx, wf uuid.UUID, v int, doc []byte, layout json.RawMessage) error {
 	p := principalFrom(r.Context())
+	return insertVersionTx(r.Context(), tx, p.TenantID, wf, v, doc, layout, p.Actor(), "")
+}
+
+// insertVersionTx stores a new immutable version; commit is the Git commit
+// it came from, if any.
+func insertVersionTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, doc []byte, layout json.RawMessage, by, commit string) error {
 	sum := sha256.Sum256(doc)
 	var lay any
 	if len(layout) > 0 {
 		lay = layout
 	}
-	_, err := tx.Exec(r.Context(), `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`, wf, v, p.TenantID, doc, lay, sum[:], p.Actor())
+	_, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by, git_commit)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`, wf, v, tenant, doc, lay, sum[:], by, commit)
 	return err
 }
 
@@ -171,6 +181,9 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		// The row lock serialises version numbering per workflow.
 		if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
+			return err
+		}
+		if err := s.refuseGitManaged(ctx, tx, wf); err != nil {
 			return err
 		}
 		var latest int
@@ -226,6 +239,8 @@ type versionInfo struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	PublishedBy *uuid.UUID `json:"published_by"`
 	PublishedAt *time.Time `json:"published_at"`
+	GitCommit   *string    `json:"git_commit"`  // the commit a Git-led sync deployed it from
+	GitRequest  *string    `json:"git_request"` // the pull or merge request a platform-led publish opened
 }
 
 func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -238,11 +253,11 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	var versions []versionInfo
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`
-			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path
+			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key, &sum.GitPath); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at
+		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr
 			FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC`, wf)
 		if err != nil {
 			return err
@@ -278,9 +293,9 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	var info versionInfo
 	var def, layout []byte
 	err = s.tx(r, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, definition, layout
+		return tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, definition, layout
 			FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
-			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &def, &layout)
+			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &def, &layout)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -320,7 +335,9 @@ func (s *Server) putLayout(w http.ResponseWriter, r *http.Request) {
 }
 
 // publish makes a valid version the one new runs use. The previously
-// published version is deprecated; its in-flight runs finish on it.
+// published version is deprecated; its in-flight runs finish on it. With a
+// platform-led Git connection, publishing also opens a pull request with
+// the definition and its code (spec 10.3).
 func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	wf, v, err := versionParams(r)
 	if err != nil {
@@ -329,45 +346,15 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var probs []problem
+	published := false
 	err = s.tx(r, func(tx pgx.Tx) error {
-		ctx := r.Context()
-		if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
+		if err := s.refuseGitManaged(r.Context(), tx, wf); err != nil {
 			return err
 		}
-		var def []byte
-		var state, digest string
-		if err := tx.QueryRow(ctx, `SELECT definition, state, encode(digest, 'hex') FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
-			Scan(&def, &state, &digest); err != nil {
-			return err
-		}
-		if state == "published" {
-			return nil
-		}
-		if state != "draft" {
-			return fmt.Errorf("%w: version %d is %s", errConflict, v, state)
-		}
-		if probs = s.check(def); len(probs) > 0 {
-			return errInvalid
-		}
-		if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'deprecated' WHERE workflow_id = $1 AND state = 'published'`, wf); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'published', published_by = $3, published_at = now() WHERE workflow_id = $1 AND version = $2`,
-			wf, v, p.id()); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE workflows SET active_version = $2 WHERE id = $1`, wf, v); err != nil {
-			return err
-		}
-		d, err := wd.Load(def)
-		if err != nil {
-			return err
-		}
-		if err := ingest.Sync(ctx, tx, p.TenantID, wf, v, d, s.Registry, time.Now()); err != nil {
-			var pgErr interface{ SQLState() string }
-			if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
-				return fmt.Errorf("%w: another workflow already uses this webhook path", errConflict)
-			}
+		by := p.id()
+		var digest string
+		var err error
+		if probs, digest, published, err = s.publishTx(r.Context(), tx, p.TenantID, wf, v, &by); err != nil || !published {
 			return err
 		}
 		return auditTx(r, tx, "workflow.publish", fmt.Sprintf("%s/%d", wf, v), map[string]any{"digest": digest})
@@ -380,7 +367,60 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": wf, "version": v, "state": "published"})
+	out := map[string]any{"id": wf, "version": v, "state": "published"}
+	if published {
+		if g := s.proposeToGit(r, wf, v); g != nil {
+			out["git"] = g
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// publishTx publishes version v of wf: it checks the definition, deprecates
+// the version it replaces, and registers its triggers. A version already
+// published reports published=false; one that fails its checks returns
+// errInvalid with the problems.
+func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, by *uuid.UUID) (probs []problem, digest string, published bool, err error) {
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
+		return nil, "", false, err
+	}
+	var def []byte
+	var state string
+	if err := tx.QueryRow(ctx, `SELECT definition, state, encode(digest, 'hex') FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
+		Scan(&def, &state, &digest); err != nil {
+		return nil, "", false, err
+	}
+	if state == "published" {
+		return nil, digest, false, nil
+	}
+	if state != "draft" {
+		return nil, "", false, fmt.Errorf("%w: version %d is %s", errConflict, v, state)
+	}
+	if probs = s.check(def); len(probs) > 0 {
+		return probs, "", false, errInvalid
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'deprecated' WHERE workflow_id = $1 AND state = 'published'`, wf); err != nil {
+		return nil, "", false, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'published', published_by = $3, published_at = now() WHERE workflow_id = $1 AND version = $2`,
+		wf, v, by); err != nil {
+		return nil, "", false, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflows SET active_version = $2 WHERE id = $1`, wf, v); err != nil {
+		return nil, "", false, err
+	}
+	d, err := wd.Load(def)
+	if err != nil {
+		return nil, "", false, err
+	}
+	if err := ingest.Sync(ctx, tx, tenant, wf, v, d, s.Registry, time.Now()); err != nil {
+		var pgErr interface{ SQLState() string }
+		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
+			return nil, "", false, fmt.Errorf("%w: another workflow already uses this webhook path", errConflict)
+		}
+		return nil, "", false, err
+	}
+	return nil, digest, true, nil
 }
 
 var errInvalid = errors.New("invalid definition")

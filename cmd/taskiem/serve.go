@@ -208,11 +208,13 @@ func serve(ctx context.Context, args []string) error {
 		if cfg.WebDir != "" {
 			srv.Static = api.SPA(cfg.WebDir)
 		}
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log))
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs)
 	}
 	if *role == "edge" {
 		mux := http.NewServeMux()
 		mux.Handle("/hooks/", http.StripPrefix("/hooks", e.hooks()))
+		git := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log}
+		mux.Handle("/git-hooks/", http.StripPrefix("/git-hooks", git.GitHooks()))
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 		tasks = append(tasks, httpTask("edge", cfg.EdgeListen, mux, log))
 	}

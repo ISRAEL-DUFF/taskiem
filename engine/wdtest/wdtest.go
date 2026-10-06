@@ -143,6 +143,11 @@ func Load(path string) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
+	return Parse(path, raw)
+}
+
+// Parse reads a test file's contents; path locates the workflow it names.
+func Parse(path string, raw []byte) (*File, error) {
 	var f File
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
@@ -183,6 +188,12 @@ func (f *File) Run(reg *connector.Registry) ([]Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	return f.RunDefinition(doc, reg)
+}
+
+// RunDefinition runs every case against the given definition (the
+// workflow file's contents, read from wherever it lives).
+func (f *File) RunDefinition(doc []byte, reg *connector.Registry) ([]Result, error) {
 	def, err := wd.Load(doc)
 	if err != nil {
 		return nil, err

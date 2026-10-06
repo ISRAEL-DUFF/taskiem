@@ -68,6 +68,9 @@ export interface WorkflowSummary {
   active_version: number | null;
   latest_version: number;
   created_at: string;
+  key: string;
+  /** Set when a Git-led repository holds this workflow: it is read-only here. */
+  git_path: string | null;
 }
 
 export interface VersionInfo {
@@ -78,6 +81,32 @@ export interface VersionInfo {
   created_at: string;
   published_by: string | null;
   published_at: string | null;
+  git_commit: string | null;
+  git_request: string | null;
+}
+
+export interface GitSync {
+  id: string;
+  commit: string;
+  requested_by: string;
+  status: "queued" | "running" | "deployed" | "unchanged" | "failed";
+  report?: { commit?: string; error?: string; problems?: string[]; tests?: { passed: number; failed: number; failures?: string[] }; workflows?: { path: string; key: string; action: string; version?: number }[] };
+  requested_at: string;
+  finished_at?: string;
+}
+
+export interface GitConnection {
+  environment: string;
+  provider: "github" | "gitlab";
+  api_url: string;
+  repo: string;
+  branch: string;
+  path: string;
+  tests_path: string;
+  mode: "platform_led" | "git_led";
+  updated_at: string;
+  webhook_url: string;
+  last_sync?: GitSync;
 }
 
 export interface RunSummary {

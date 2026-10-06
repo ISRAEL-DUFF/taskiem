@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { del, get, post, put } from "../api";
+import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field, JsonInput, fmtTime, useAction, useLoad } from "../ui";
 
@@ -33,6 +33,7 @@ export function Settings() {
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />
       {can("secret.manage") && <Egress env={env} />}
+      {can("git.manage") && <Git env={env} />}
     </>
   );
 }
@@ -170,6 +171,137 @@ function Egress({ env }: { env: string }) {
           Allow host
         </button>
       </form>
+    </section>
+  );
+}
+
+/**
+ * The environment's Git repository (spec 10.3). Platform-led: publishing
+ * here opens a pull request. Git-led: pushes to the branch deploy once every
+ * workflow test passes, and the workflows the repository holds are
+ * read-only here.
+ */
+function Git({ env }: { env: string }) {
+  const { data, error, reload } = useLoad(() => get<{ connections: GitConnection[] }>("/v1/git"), []);
+  const conn = data?.connections.find((c) => c.environment === env);
+  const syncs = useLoad(() => (conn?.mode === "git_led" ? get<{ syncs: GitSync[] }>(`/v1/git/${env}/syncs`) : Promise.resolve({ syncs: [] })), [env, conn?.mode]);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [issued, setIssued] = useState<{ secret: string; url: string }>();
+  const act = useAction();
+  const v = (k: keyof GitConnection | "token", d = "") => form[k] ?? (conn && k !== "token" ? String(conn[k as keyof GitConnection] ?? "") : d);
+  const set = (k: string) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const save = () =>
+    act.run(async () => {
+      const body: Record<string, unknown> = {
+        provider: v("provider", "github"), api_url: v("api_url"), repo: v("repo"), branch: v("branch", "main"),
+        path: v("path", "flows"), tests_path: v("tests_path", "tests"), mode: v("mode", "platform_led"),
+      };
+      if (form.token) body.auth = { type: "token", token: form.token };
+      const r = await put<{ webhook_secret?: string; webhook_url: string }>(`/v1/git/${env}`, body);
+      if (r.webhook_secret) setIssued({ secret: r.webhook_secret, url: location.origin + r.webhook_url });
+      setForm({});
+      reload();
+    });
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Git</h2>
+      <p className="hint">
+        Platform-led: publishing here opens a pull request with the workflow's definition and code. Git-led: pushes to the branch deploy, after every
+        workflow test in the repository passes, and those workflows are read-only here.
+      </p>
+      <ErrorBox error={error ?? act.error ?? syncs.error} />
+      {issued && (
+        <div className="notice">
+          Add this webhook to the repository (push events). The secret is shown once.
+          <br />
+          URL <code>{issued.url}</code>
+          <br />
+          Secret <code>{issued.secret}</code>
+        </div>
+      )}
+      <div className="row">
+        <Field label="Host">
+          <select value={v("provider", "github")} onChange={set("provider")}>
+            <option value="github">GitHub</option>
+            <option value="gitlab">GitLab</option>
+          </select>
+        </Field>
+        <Field label="API URL" hint="Empty for github.com or gitlab.com">
+          <input value={v("api_url")} onChange={set("api_url")} placeholder="https://github.example.com/api/v3" />
+        </Field>
+        <Field label="Mode">
+          <select value={v("mode", "platform_led")} onChange={set("mode")}>
+            <option value="platform_led">Platform-led</option>
+            <option value="git_led">Git-led</option>
+          </select>
+        </Field>
+      </div>
+      <div className="row">
+        <Field label="Repository">
+          <input value={v("repo")} onChange={set("repo")} placeholder="owner/name" />
+        </Field>
+        <Field label="Branch">
+          <input value={v("branch", "main")} onChange={set("branch")} />
+        </Field>
+        <Field label="Workflows directory">
+          <input value={v("path", "flows")} onChange={set("path")} />
+        </Field>
+        <Field label="Tests directory">
+          <input value={v("tests_path", "tests")} onChange={set("tests_path")} />
+        </Field>
+      </div>
+      <Field label={conn ? "Access token (leave empty to keep the current one)" : "Access token"} hint="Needs read access to contents, and write access to contents and pull requests for platform-led mode">
+        <input type="password" autoComplete="off" value={form.token ?? ""} onChange={set("token")} />
+      </Field>
+      <div className="row">
+        <button className="primary" disabled={act.busy} onClick={() => void save()}>
+          {conn ? "Save" : "Connect"}
+        </button>
+        {conn && (
+          <button className="danger" disabled={act.busy} onClick={() => confirm(`Disconnect ${conn.repo}?`) && void act.run(async () => (await del(`/v1/git/${env}`), reload()))}>
+            Disconnect
+          </button>
+        )}
+        {conn?.mode === "git_led" && (
+          <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/git/${env}/sync`), syncs.reload()))}>
+            Deploy from {conn.branch} now
+          </button>
+        )}
+      </div>
+      {conn?.mode === "git_led" && (syncs.data?.syncs.length ?? 0) > 0 && (
+        <table style={{ marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>Requested</th>
+              <th>Commit</th>
+              <th>Status</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {syncs.data?.syncs.map((s) => (
+              <tr key={s.id}>
+                <td>{fmtTime(s.requested_at)}</td>
+                <td>
+                  <code>{s.commit.slice(0, 10) || "head"}</code>
+                </td>
+                <td>{s.status}</td>
+                <td className="hint">
+                  {s.report?.error ??
+                    [
+                      s.report?.tests && `${s.report.tests.passed} tests passed, ${s.report.tests.failed} failed`,
+                      ...(s.report?.problems ?? []),
+                      ...(s.report?.tests?.failures ?? []),
+                      ...(s.report?.workflows ?? []).filter((w) => w.action !== "unchanged").map((w) => `${w.key} ${w.action} v${w.version}`),
+                    ]
+                      .filter(Boolean)
+                      .join("; ")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </section>
   );
 }

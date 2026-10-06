@@ -9,7 +9,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | # | Weeks | Milestone | Deliverables (spec) | Status |
 | --- | --- | --- | --- | --- |
 | 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **Done** (below) |
-| 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **In progress**: SDK, compiler, code generation, the editor's Code tab, and three-way merge done (below); Git next |
+| 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **Done** (below), except a published Taskiem GitHub App and Bitbucket |
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | Not started |
 | 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | Not started |
 | 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | Not started |
@@ -18,7 +18,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 ### What engineering cannot finish alone
 
 - **Connectors** are built from each provider's public documentation (clean-room policy) and tested against recorded fixtures. The gate's nightly sandbox checks need a sandbox account per provider.
-- **SSO, SCIM, and Git apps** need a GitHub App, a GitLab application, and test identity providers registered by the organisation.
+- **SSO and SCIM** need test identity providers registered by the organisation. A one-click **Taskiem GitHub App** needs the organisation to register it; until then tenants use a token or their own GitHub App.
 - **Gate G2** needs design partners, an external penetration test, and a partner's compliance sign-off.
 
 ## Milestone 1: what exists
@@ -35,7 +35,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 
 `taskiem dev` uses the Postgres installed on the machine rather than downloading binaries at run time; `--dsn` covers machines without it. Recorded connector fixtures in `dev` are not wired yet: workflows that call providers need sandbox credentials or test mocks.
 
-## Milestone 2: what exists so far
+## Milestone 2: what exists
 
 | Area | Deliverable | Where |
 | --- | --- | --- |
@@ -44,6 +44,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | Code generation | Definition to `.flow.ts`, deterministic and stable. An expression becomes an arrow function only when it compiles back to the identical CEL, so generated code always builds to its definition. All workflows in `flows/` have their code committed and are checked both ways (`go test`, `pnpm test`), and `tsc` checks the code | `sdk/src/codegen.ts`, `flows/**/*.flow.ts` |
 | In the binary | esbuild bundles flow code with the embedded SDK and QuickJS runs it: `taskiem build` (`--check` for CI), `taskiem codegen`, `validate` and `dev` accept `.flow.ts`. Identical output to Node | `engine/flowcode`, `sdk/sdk.go`, `cmd/taskiem` |
 | API and web app | `POST /v1/code/generate` and `/v1/code/compile` (sandboxed, SDK imports only, checked as publishing would); the editor's Code tab shows the workflow as code and applies edits | `api/code.go`, `web/src/pages/Editor.tsx` |
+| Git | Per environment, GitHub or GitLab with a token or a GitHub App installation. Git-led: signed push webhooks queue a sync that checks every definition and runs every workflow test at the commit, and deploys only if all pass, in one transaction; versions record the commit, publishes are audited with it, and the workflows are read-only in Taskiem. Platform-led: publishing opens a pull or merge request with the definition and its code. Calls go through the egress guard; credentials are encrypted secrets | `engine/gitprovider` (with an in-memory fake GitHub and GitLab), `api/git.go`, migration 00015, Settings → Git, [guide](git.md) |
 | Concurrent edits | A save names its parent version's digest. When another version landed since, the edits merge three ways by top-level field and top-level step (nested steps included): different parts merge, the same part changed twice is a conflict (409 listing each, with both sides). The editor shows a dialog to keep either side; `deploy` sends the version it compared with | `engine/wdmerge`, `api/workflows.go`, editor `MergeDialog`, `web/e2e/merge.spec.ts` |
 
 Definitions are stored as `jsonb`, which reorders keys, so code generated from a stored version lists object keys in Postgres's order rather than the author's. Git sync will carry the author's file.

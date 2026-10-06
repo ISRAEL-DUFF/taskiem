@@ -174,13 +174,17 @@ export function Editor() {
   const publish = () =>
     act.run(async () => {
       const v = await save();
+      let r: { git?: Record<string, { url?: string; error?: string }> };
       try {
-        await post(`/v1/workflows/${id}/versions/${v}/publish`);
+        r = await post(`/v1/workflows/${id}/versions/${v}/publish`);
       } catch (e) {
         if (e instanceof ApiError && e.status === 422) setProblems(e.problems as Problem[]);
         throw e;
       }
-      setNotice(`Version ${v} is published; new runs use it.`);
+      const git = Object.entries(r.git ?? {})
+        .map(([env, g]) => (g.url ? `Pull request for ${env}: ${g.url}` : `The pull request for ${env} could not be opened: ${g.error ?? "unknown error"}`))
+        .join(" ");
+      setNotice(`Version ${v} is published; new runs use it.${git ? " " + git : ""}`);
       wf.reload();
       doc.reload();
     });
@@ -189,6 +193,7 @@ export function Editor() {
   if (!wf.data || !def) return <div className="empty">Loading…</div>;
   const current = wf.data.versions.find((v) => v.version === version);
   const sel = def.steps.find((s) => s.id === selected);
+  const managed = wf.data.workflow.git_path;
 
   return (
     <>
@@ -213,7 +218,7 @@ export function Editor() {
         </select>
         {current && <Badge value={dirty ? "draft" : current.state} />}
         {dirty && <span className="hint">unsaved</span>}
-        {can("workflow.edit") && (
+        {can("workflow.edit") && !managed && (
           <>
             <button onClick={() => void validate()} disabled={act.busy}>
               Validate
@@ -223,7 +228,7 @@ export function Editor() {
             </button>
           </>
         )}
-        {can("workflow.publish") && (
+        {can("workflow.publish") && !managed && (
           <button className="primary" onClick={() => void publish()} disabled={act.busy || (!dirty && current?.state === "published")}>
             Publish
           </button>
@@ -235,6 +240,12 @@ export function Editor() {
         )}
       </div>
       <ErrorBox error={act.error} />
+      {managed && (
+        <div className="notice" role="status">
+          This workflow is managed in Git (<code>{managed}</code>). Change it in the repository: a push to the connected branch deploys it once its
+          tests pass.
+        </div>
+      )}
       {notice && (
         <div className="notice" onClick={() => setNotice("")}>
           {notice}
@@ -339,6 +350,21 @@ export function Editor() {
         <p className="hint">
           v{current.version} created {fmtTime(current.created_at)}
           {current.published_at && `, published ${fmtTime(current.published_at)}`} · digest <code>{current.digest.slice(0, 12)}</code>
+          {current.git_commit && (
+            <>
+              {" "}
+              · from commit <code>{current.git_commit.slice(0, 10)}</code>
+            </>
+          )}
+          {current.git_request && (
+            <>
+              {" "}
+              ·{" "}
+              <a href={current.git_request} target="_blank" rel="noreferrer">
+                pull request
+              </a>
+            </>
+          )}
         </p>
       )}
       {starting && <StartRun workflow={id} onClose={() => setStarting(false)} onStarted={(run) => nav(`/runs/${run}`)} />}

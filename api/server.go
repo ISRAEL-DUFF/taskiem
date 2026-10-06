@@ -23,6 +23,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -47,6 +48,8 @@ type Server struct {
 	TrustProxy bool
 	// Static serves the web app; nil omits it.
 	Static http.Handler
+	// Egress guards calls to Git hosts; nil uses a default guard.
+	Egress *egress.Guard
 
 	limiters sync.Map // ip -> *rate.Limiter, for login attempts
 	defs     sync.Map // "workflow/version" -> *wd.Definition
@@ -61,6 +64,7 @@ func (s *Server) Handler() http.Handler {
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
+	r.Mount("/git-hooks", s.GitHooks())
 	if s.Ingest != nil {
 		r.Mount("/hooks", s.Ingest)
 	}
@@ -117,6 +121,13 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermAuditRead)).Get("/audit/verify", s.verifyAudit)
 			r.With(s.need(PermAuditRead)).Get("/audit/export", s.exportAudit)
 			r.With(s.need(PermPIIErase)).Post("/pii/erase", s.erase)
+
+			r.With(s.need(PermGitManage)).Get("/git", s.listGit)
+			r.With(s.need(PermGitManage)).Put("/git/{env}", s.putGit)
+			r.With(s.need(PermGitManage)).Delete("/git/{env}", s.deleteGit)
+			r.With(s.need(PermWorkflowPublish)).Post("/git/{env}/sync", s.syncNow)
+			r.With(s.need(PermWorkflowRead)).Get("/git/{env}/syncs", s.listSyncs)
+			r.With(s.need(PermWorkflowPublish)).Post("/workflows/{wf}/versions/{v}/git-request", s.retryProposal)
 		})
 	})
 	if s.Static != nil {
