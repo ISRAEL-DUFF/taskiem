@@ -106,13 +106,20 @@ func loadConfig() (config, error) {
 			IswalletURL: os.Getenv("TASKIEM_ISWALLET_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
 			// their provider's sandbox with environment=sandbox.
-			FlutterwaveURL: os.Getenv("TASKIEM_FLUTTERWAVE_URL"),
-			AnchorURL:      os.Getenv("TASKIEM_GETANCHOR_URL"), // not TASKIEM_ANCHOR_*: those are audit anchors
-			LencoURL:       os.Getenv("TASKIEM_LENCO_URL"),
-			BreetURL:       os.Getenv("TASKIEM_BREET_URL"),
-			MoniepointURL:  os.Getenv("TASKIEM_MONIEPOINT_URL"),
-			InterswitchURL: os.Getenv("TASKIEM_INTERSWITCH_URL"),
-			S3URL:          os.Getenv("TASKIEM_S3_URL"),
+			FlutterwaveURL:    os.Getenv("TASKIEM_FLUTTERWAVE_URL"),
+			AnchorURL:         os.Getenv("TASKIEM_GETANCHOR_URL"), // not TASKIEM_ANCHOR_*: those are audit anchors
+			LencoURL:          os.Getenv("TASKIEM_LENCO_URL"),
+			BreetURL:          os.Getenv("TASKIEM_BREET_URL"),
+			MoniepointURL:     os.Getenv("TASKIEM_MONIEPOINT_URL"),
+			InterswitchURL:    os.Getenv("TASKIEM_INTERSWITCH_URL"),
+			S3URL:             os.Getenv("TASKIEM_S3_URL"),
+			AfricasTalkingURL: os.Getenv("TASKIEM_AFRICASTALKING_URL"),
+			TelegramURL:       os.Getenv("TASKIEM_TELEGRAM_URL"),
+			WhatsAppURL:       os.Getenv("TASKIEM_WHATSAPP_URL"),
+			SlackURL:          os.Getenv("TASKIEM_SLACK_URL"),
+			GmailURL:          os.Getenv("TASKIEM_GMAIL_URL"),
+			GooglesheetsURL:   os.Getenv("TASKIEM_GOOGLESHEETS_URL"),
+			GoogleTokenURL:    os.Getenv("TASKIEM_GOOGLE_TOKEN_URL"),
 		},
 		PoolSize: 20,
 	}

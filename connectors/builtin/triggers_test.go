@@ -52,6 +52,22 @@ func TestTriggerExpressions(t *testing.T) {
 			"TRANSACTION.COMPLETED", "TRANSACTION.COMPLETED:2Xdf35faAyX2Sk5Dalu405rUD:1594646111460", "order-17"},
 		{"interswitch@1", "event", `{"event":"INVOICE.TRANSACTION_SUCCESSFUL","uuid":"inv-9","timestamp":1594646112000,"data":{"amount":5000}}`,
 			"INVOICE.TRANSACTION_SUCCESSFUL", "INVOICE.TRANSACTION_SUCCESSFUL:inv-9:1594646112000", "inv-9"},
+		{"telegram@1", "update", `{"update_id":10000,"message":{"message_id":1365,"chat":{"id":1111111,"type":"private"},"date":1791320000,"text":"/start"}}`,
+			"message", "10000", "1111111"},
+		{"telegram@1", "update", `{"update_id":10001,"callback_query":{"id":"4382bf","from":{"id":1111111,"is_bot":false,"first_name":"Ada"},"message":{"message_id":4242,"chat":{"id":-1001234567890,"type":"supergroup"},"date":1791320000},"chat_instance":"-1","data":"approve:run-17"}}`,
+			"callback_query", "10001", "-1001234567890"},
+		{"whatsapp@1", "messages", `{"object":"whatsapp_business_account","entry":[{"id":"102290129340398","changes":[{"value":{"messaging_product":"whatsapp","metadata":{"display_phone_number":"15550783881","phone_number_id":"106540352242922"},"contacts":[{"profile":{"name":"Sheena Nelson"},"wa_id":"16505551234"}],"messages":[{"from":"16505551234","id":"wamid.IN1","timestamp":"1749416383","type":"text","text":{"body":"Hi"}}]},"field":"messages"}]}]}`,
+			"message", "wamid.IN1", "16505551234"},
+		{"whatsapp@1", "messages", `{"object":"whatsapp_business_account","entry":[{"id":"102290129340398","changes":[{"value":{"messaging_product":"whatsapp","metadata":{"display_phone_number":"15550783881","phone_number_id":"106540352242922"},"statuses":[{"id":"wamid.OUT1","status":"delivered","timestamp":"1750263773","recipient_id":"16505551234"}]},"field":"messages"}]}]}`,
+			"status.delivered", "wamid.OUT1:delivered", "wamid.OUT1"},
+		{"africastalking@1", "delivery_report", `{"id":"ATXid_a1","status":"Success","phoneNumber":"+254711000001","networkCode":"63902"}`,
+			"Success", "ATXid_a1:Success", "ATXid_a1"},
+		{"africastalking@1", "incoming_sms", `{"date":"2026-10-06 11:20:46","from":"+254711000001","id":"15071","linkId":"L1","text":"STOP","to":"28901","networkCode":"63902"}`,
+			"incoming_sms", "15071", "+254711000001"},
+		{"slack@1", "events", `{"type":"event_callback","event":{"type":"message","channel":"C123ABC456","user":"U1","text":"ok","ts":"1503435999.000300","thread_ts":"1503435956.000247"},"event_id":"Ev123ABC456"}`,
+			"message", "Ev123ABC456", "C123ABC456:1503435956.000247"},
+		{"slack@1", "events", `{"type":"event_callback","event":{"type":"reaction_added","reaction":"white_check_mark","item":{"type":"message","channel":"C123ABC456","ts":"1503435956.000247"}},"event_id":"Ev2"}`,
+			"reaction_added", "Ev2", "C123ABC456:1503435956.000247"},
 	} {
 		conn, ok := reg.Get(c.ref)
 		if !ok {

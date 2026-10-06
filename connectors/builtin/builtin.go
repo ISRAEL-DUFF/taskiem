@@ -3,10 +3,13 @@
 package builtin
 
 import (
+	"github.com/israel-duff/taskiem/connectors/africastalking"
 	"github.com/israel-duff/taskiem/connectors/anchor"
 	"github.com/israel-duff/taskiem/connectors/breet"
 	"github.com/israel-duff/taskiem/connectors/dojah"
 	"github.com/israel-duff/taskiem/connectors/flutterwave"
+	"github.com/israel-duff/taskiem/connectors/gmail"
+	"github.com/israel-duff/taskiem/connectors/googlesheets"
 	"github.com/israel-duff/taskiem/connectors/interswitch"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
@@ -16,7 +19,10 @@ import (
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/s3"
 	"github.com/israel-duff/taskiem/connectors/sftp"
+	"github.com/israel-duff/taskiem/connectors/slack"
+	"github.com/israel-duff/taskiem/connectors/telegram"
 	"github.com/israel-duff/taskiem/connectors/termii"
+	"github.com/israel-duff/taskiem/connectors/whatsapp"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
@@ -26,6 +32,10 @@ type Options struct {
 	FlutterwaveURL, AnchorURL, LencoURL, BreetURL string
 	MoniepointURL, InterswitchURL                 string
 	S3URL                                         string
+	AfricasTalkingURL, TelegramURL, WhatsAppURL   string
+	SlackURL, GmailURL, GooglesheetsURL           string
+	// GoogleTokenURL overrides Google's OAuth token endpoint (tests).
+	GoogleTokenURL string
 }
 
 // Register adds every built-in connector to r.
@@ -41,6 +51,12 @@ func Register(r *connector.Registry, o Options) error {
 		breet.New(breet.Options{BaseURL: o.BreetURL}),
 		moniepoint.New(moniepoint.Options{BaseURL: o.MoniepointURL}),
 		interswitch.New(interswitch.Options{BaseURL: o.InterswitchURL}),
+		africastalking.New(africastalking.Options{BaseURL: o.AfricasTalkingURL}),
+		telegram.New(telegram.Options{BaseURL: o.TelegramURL}),
+		whatsapp.New(whatsapp.Options{BaseURL: o.WhatsAppURL}),
+		slack.New(slack.Options{BaseURL: o.SlackURL}),
+		gmail.New(gmail.Options{BaseURL: o.GmailURL, TokenURL: o.GoogleTokenURL}),
+		googlesheets.New(googlesheets.Options{BaseURL: o.GooglesheetsURL, TokenURL: o.GoogleTokenURL}),
 		postgres.New(),
 		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),
