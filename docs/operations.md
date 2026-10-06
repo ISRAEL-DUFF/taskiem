@@ -69,6 +69,9 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
 | `taskiem_steps_total`, `taskiem_step_duration_seconds` | queue, target (connector or step type), outcome |
 | `taskiem_queue_ready`, `taskiem_queue_leased`, `taskiem_queue_oldest_ready_seconds` | queue |
 | `taskiem_timers_fired_total`, `taskiem_lease_expiries_total`, `taskiem_runs_swept_total` | — |
+| `taskiem_connector_drift_total` | connector, action, kind (`type`, `enum`, `missing`) |
+
+**Contract drift.** After every successful connector call the worker compares the output with the action's declared output schema (`engine/drift`). A departure (a field of another type, a value outside an enum, a required field missing) is recorded per tenant (`connector_drift`; tenants see it under Connections), counted in `taskiem_connector_drift_total`, and logged at warning level the first time. The step still completes. Alert on any increase for built-in connectors: it means a provider changed its API and the connector needs updating.
 
 Traces span API requests, ingest, and worker steps, with `tenant_id`, `run_id`, and `step_id` attributes.
 

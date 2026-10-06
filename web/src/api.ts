@@ -64,6 +64,23 @@ export const del = <T>(path: string, body?: unknown) => api<T>("DELETE", path, b
 
 // --- response shapes ---
 
+/** Where a connector's live output departed from its declared schema. */
+export interface DriftFinding {
+  connector: string;
+  version: string;
+  action: string;
+  path: string;
+  kind: "type" | "enum" | "missing";
+  expected: string;
+  observed: string;
+  first_seen: string;
+  last_seen: string;
+  occurrences: number;
+  last_run_id?: string;
+  acknowledged_at?: string;
+  acknowledged_by?: string;
+}
+
 /** A version of one of the tenant's own WebAssembly connectors. */
 export interface TenantConnector {
   id: string;

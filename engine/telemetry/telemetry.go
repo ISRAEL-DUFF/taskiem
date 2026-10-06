@@ -53,6 +53,9 @@ var (
 	LeasesRecovered = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_lease_expiries_total", Help: "Task and timer leases recovered after expiring.",
 	})
+	ConnectorDrift = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_connector_drift_total", Help: "Connector outputs that departed from their declared schema, by connector, action and kind (type, enum, missing).",
+	}, []string{"connector", "action", "kind"})
 	RunsSwept = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_runs_swept_total", Help: "Runs decided by the orchestrator sweep rather than inline.",
 	})

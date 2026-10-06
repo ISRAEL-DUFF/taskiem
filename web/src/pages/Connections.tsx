@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { get, post, upload, type ConnectorInfo, type TenantConnector } from "../api";
+import { Link } from "react-router-dom";
+import { get, post, upload, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
 import { useAuth } from "../auth";
 import { Badge, ErrorBox, Field, Modal, fmtTime, useAction, useLoad } from "../ui";
 
@@ -57,8 +58,69 @@ export function Connections() {
         </table>
       )}
       {adding && connectors.data && <NewConnection connectors={connectors.data.connectors} onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} />}
+      <Drift />
       <OwnConnectors onChange={connectors.reload} />
     </>
+  );
+}
+
+/** Contract drift: providers answering in shapes their manifests do not declare. */
+function Drift() {
+  const list = useLoad(() => get<{ drift: DriftFinding[] }>("/v1/connector-drift"), []);
+  const act = useAction();
+  if (!list.data || list.data.drift.length === 0) return null;
+  const open = list.data.drift.filter((d) => !d.acknowledged_at).length;
+  return (
+    <section className="card" style={{ marginTop: 24 }}>
+      <h2>Contract drift {open > 0 && <Badge value={`${open} new`} />}</h2>
+      <p className="hint">A provider answered in a shape its connector does not declare. Runs carried on with what the provider said; check that the workflows using these fields still do the right thing.</p>
+      <ErrorBox error={list.error ?? act.error} />
+      <table>
+        <thead>
+          <tr>
+            <th>Connector</th>
+            <th>Action</th>
+            <th>Field</th>
+            <th>Expected</th>
+            <th>Seen</th>
+            <th>Times</th>
+            <th>Last</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {list.data.drift.map((d) => (
+            <tr key={[d.connector, d.version, d.action, d.path, d.kind].join(" ")}>
+              <td>
+                {d.connector} <span className="hint">{d.version}</span>
+              </td>
+              <td>{d.action}</td>
+              <td>
+                <code>{d.path}</code>
+              </td>
+              <td>{d.kind === "missing" ? "present" : d.expected}</td>
+              <td>{d.kind === "missing" ? "absent" : d.observed}</td>
+              <td>{d.occurrences}</td>
+              <td>{d.last_run_id ? <Link to={`/runs/${d.last_run_id}`}>{fmtTime(d.last_seen)}</Link> : fmtTime(d.last_seen)}</td>
+              <td>
+                {d.acknowledged_at ? (
+                  <span className="hint">seen by {d.acknowledged_by}</span>
+                ) : (
+                  <button
+                    disabled={act.busy}
+                    onClick={() =>
+                      void act.run(async () => (await post("/v1/connector-drift/acknowledge", { connector: d.connector, version: d.version, action: d.action, path: d.path, kind: d.kind }), list.reload()))
+                    }
+                  >
+                    Acknowledge
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

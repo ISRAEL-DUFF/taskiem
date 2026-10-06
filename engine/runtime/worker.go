@@ -21,6 +21,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/drift"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/expr"
@@ -301,7 +302,8 @@ type plan struct {
 	intentAt time.Time // when the EffectIntent in force was recorded (database clock)
 	keyFirst time.Time // when this attempt group's key was first about to be sent
 	step     *wd.Step
-	taint    pii.Taint // personal values in this run; outputs repeating them are sealed
+	taint    pii.Taint       // personal values in this run; outputs repeating them are sealed
+	drift    []drift.Finding // how a successful output departed from its schema
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -661,6 +663,28 @@ func (w *Worker) finishTask(ctx context.Context, tx pgx.Tx, c claim) (bool, erro
 	return ok, err
 }
 
+// recordDrift notes how an output departed from its declared schema. The
+// step still completes: the output is what the provider said.
+func (w *Worker) recordDrift(ctx context.Context, tx pgx.Tx, p *plan) error {
+	for _, f := range p.drift {
+		var first bool
+		err := tx.QueryRow(ctx, `INSERT INTO connector_drift (tenant_id, connector, version, action, path, kind, expected, observed, last_run_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			ON CONFLICT (tenant_id, connector, version, action, path, kind) DO UPDATE
+			SET observed = EXCLUDED.observed, last_seen = now(), occurrences = connector_drift.occurrences + 1, last_run_id = EXCLUDED.last_run_id
+			RETURNING occurrences = 1`, p.c.tenant, p.conn.Ref(), p.conn.Manifest.Version, p.action, f.Path, f.Kind, f.Expected, f.Observed, p.c.run).Scan(&first)
+		if err != nil {
+			return err
+		}
+		telemetry.ConnectorDrift.WithLabelValues(p.conn.Ref(), p.action, f.Kind).Inc()
+		if first && w.Logger != nil {
+			w.Logger.Warn("connector output departs from its schema", "connector", p.conn.Ref(), "version", p.conn.Manifest.Version,
+				"action", p.action, "path", f.Path, "kind", f.Kind, "expected", f.Expected, "observed", f.Observed, "tenant", p.c.tenant)
+		}
+	}
+	return nil
+}
+
 // postpone releases the task back to the queue, available at a later time,
 // without recording an outcome.
 func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
@@ -683,6 +707,11 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		}
 		if result == nil {
 			return nil
+		}
+		if len(p.drift) > 0 && result.Type == history.StepCompleted {
+			if err := w.recordDrift(ctx, tx, p); err != nil {
+				return err
+			}
 		}
 		var payload any = result.Payload
 		if w.Store.PII != nil {
@@ -824,6 +853,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 			return w.classify(p, err)
 		}
 		out = resp.Output
+		p.drift = drift.Check(p.conn.Manifest, p.action, out)
 	default:
 		out, err = w.doHTTP(ctx, p, in)
 		if err != nil {

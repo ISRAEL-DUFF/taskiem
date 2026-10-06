@@ -59,3 +59,5 @@ A version never changes once uploaded: raise `version` to change anything. New r
 ## 4. Use it
 
 Add a connection for it (Connections → New connection), then use it like any connector: `"connector": "x_ledger@1"` in a definition, or the step palette, or `connector("x_ledger@1", "get_balance", ...)` in workflow code. Provider webhooks declared under `triggers` work as for built-ins.
+
+Declare output schemas carefully: Taskiem compares every output with them, and a field that changes type, a value outside an `enum`, or a missing `required` field shows under Connections → Contract drift.

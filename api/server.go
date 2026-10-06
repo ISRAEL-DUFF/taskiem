@@ -87,6 +87,8 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
 			r.Get("/connectors", s.listConnectors)
+			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
+			r.With(s.need(PermConnectionManage)).Post("/connector-drift/acknowledge", s.acknowledgeDrift)
 			r.With(s.need(PermWorkflowRead)).Get("/tenant-connectors", s.listTenantConnectors)
 			r.With(s.need(PermConnectorManage)).Post("/tenant-connectors", s.uploadTenantConnector)
 			r.With(s.need(PermConnectorManage)).Post("/tenant-connectors/{id}/{version}/disable", s.disableTenantConnector)
