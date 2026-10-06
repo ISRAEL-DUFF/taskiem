@@ -51,7 +51,7 @@ func (s *Server) compileCode(w http.ResponseWriter, r *http.Request) {
 		s.codeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"definition": json.RawMessage(doc), "problems": nonNil(s.check(doc))})
+	writeJSON(w, http.StatusOK, map[string]any{"definition": json.RawMessage(doc), "problems": nonNil(s.checkFor(r, doc))})
 }
 
 func (s *Server) codeError(w http.ResponseWriter, r *http.Request, err error) {

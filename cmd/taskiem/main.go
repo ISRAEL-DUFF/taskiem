@@ -48,6 +48,12 @@ Usage:
                                      run a local engine with the web app; reload workflows and tests on change
   taskiem runs tail [--workflow ID] [RUN_ID]
                                      stream run events as they are recorded
+  taskiem connector build [-o FILE] [DIR]
+                                     compile a Go connector (sdk/connectorsdk) to WebAssembly
+  taskiem connector check MANIFEST MODULE
+                                     load a connector as an upload would, offline
+  taskiem connector push MANIFEST MODULE
+                                     upload a connector version to your tenant
   taskiem serve [--role ROLE]        run an engine role: api, edge, orchestrator, scheduler, worker, all (default)
   taskiem bootstrap --tenant NAME --email EMAIL
                                      create the first tenant and its owner (password from $TASKIEM_BOOTSTRAP_PASSWORD)
@@ -55,7 +61,7 @@ Usage:
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 
-diff, deploy and runs use $TASKIEM_URL (default http://localhost:8080) and an
+diff, deploy, runs and connector push use $TASKIEM_URL (default http://localhost:8080) and an
 API key in $TASKIEM_API_KEY, or --url and --key.
 `
 
@@ -105,6 +111,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return bootstrap(args[1:], stdout)
 	case "audit":
 		return auditCmd(args[1:], stdout)
+	case "connector":
+		return connectorCmd(context.Background(), args[1:], stdout)
 	case "healthcheck":
 		return healthcheck()
 	case "help", "-h", "--help":

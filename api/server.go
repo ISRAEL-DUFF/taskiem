@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
+	"github.com/israel-duff/taskiem/engine/wasmconn"
 )
 
 // Server serves the API.
@@ -51,6 +52,9 @@ type Server struct {
 	Static http.Handler
 	// Egress guards calls to Git hosts; nil uses a default guard.
 	Egress *egress.Guard
+	// Connectors loads tenants' own WebAssembly connectors; nil refuses
+	// uploads.
+	Connectors *wasmconn.Source
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
@@ -83,6 +87,9 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
 			r.Get("/connectors", s.listConnectors)
+			r.With(s.need(PermWorkflowRead)).Get("/tenant-connectors", s.listTenantConnectors)
+			r.With(s.need(PermConnectorManage)).Post("/tenant-connectors", s.uploadTenantConnector)
+			r.With(s.need(PermConnectorManage)).Post("/tenant-connectors/{id}/{version}/disable", s.disableTenantConnector)
 
 			r.With(s.need(PermWorkflowRead)).Get("/workflows", s.listWorkflows)
 			r.With(s.need(PermWorkflowEdit)).Post("/workflows", s.createWorkflow)

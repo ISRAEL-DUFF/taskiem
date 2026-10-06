@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { get, post, type ConnectorInfo } from "../api";
+import { get, post, upload, type ConnectorInfo, type TenantConnector } from "../api";
+import { useAuth } from "../auth";
 import { Badge, ErrorBox, Field, Modal, fmtTime, useAction, useLoad } from "../ui";
 
 interface Conn {
@@ -56,7 +57,99 @@ export function Connections() {
         </table>
       )}
       {adding && connectors.data && <NewConnection connectors={connectors.data.connectors} onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} />}
+      <OwnConnectors onChange={connectors.reload} />
     </>
+  );
+}
+
+/** The tenant's own WebAssembly connectors (docs/connector-sdk.md). */
+function OwnConnectors({ onChange }: { onChange: () => void }) {
+  const { can } = useAuth();
+  const list = useLoad(() => get<{ connectors: TenantConnector[] }>("/v1/tenant-connectors"), []);
+  const [manifest, setManifest] = useState<File | null>(null);
+  const [module, setModule] = useState<File | null>(null);
+  const act = useAction();
+  const manage = can("connector.manage");
+  const changed = () => (list.reload(), onChange());
+  return (
+    <section className="card" style={{ marginTop: 24 }}>
+      <h2>Your connectors</h2>
+      <p className="hint">
+        Connectors your team writes, compiled to WebAssembly. Each call runs isolated, reaching only the hosts its manifest names. Ids start with <code>x_</code>; a version never changes once uploaded.
+      </p>
+      <ErrorBox error={list.error ?? act.error} />
+      {list.data && list.data.connectors.length === 0 && <div className="empty">None uploaded.</div>}
+      {list.data && list.data.connectors.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Connector</th>
+              <th>Version</th>
+              <th>Module</th>
+              <th>Uploaded</th>
+              <th>State</th>
+              {manage && <th />}
+            </tr>
+          </thead>
+          <tbody>
+            {list.data.connectors.map((c) => (
+              <tr key={c.id + c.version}>
+                <td>{c.ref}</td>
+                <td>{c.version}</td>
+                <td>
+                  <code title={c.digest}>{c.digest.slice(0, 12)}</code>
+                </td>
+                <td>
+                  {fmtTime(c.uploaded_at)} by {c.uploaded_by}
+                </td>
+                <td>
+                  <Badge value={c.disabled_at ? "disabled" : c.active ? "active" : "superseded"} />
+                </td>
+                {manage && (
+                  <td>
+                    {!c.disabled_at && (
+                      <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/tenant-connectors/${c.id}/${c.version}/disable`), changed()))}>
+                        Disable
+                      </button>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {manage && (
+        <form
+          className="row"
+          style={{ marginTop: 12, alignItems: "flex-end" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!manifest || !module) return;
+            const form = new FormData();
+            form.append("manifest", manifest);
+            form.append("module", module);
+            void act.run(async () => {
+              await upload("/v1/tenant-connectors", form);
+              setManifest(null);
+              setModule(null);
+              (e.target as HTMLFormElement).reset();
+              changed();
+            });
+          }}
+        >
+          <Field label="Manifest (.yaml)">
+            <input type="file" accept=".yaml,.yml,.json" onChange={(e) => setManifest(e.target.files?.[0] ?? null)} />
+          </Field>
+          <Field label="Module (.wasm)">
+            <input type="file" accept=".wasm" onChange={(e) => setModule(e.target.files?.[0] ?? null)} />
+          </Field>
+          <button className="primary" disabled={act.busy || !manifest || !module}>
+            Upload
+          </button>
+        </form>
+      )}
+    </section>
   );
 }
 

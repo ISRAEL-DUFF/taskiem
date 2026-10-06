@@ -282,7 +282,12 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref, name := chi.URLParam(r, "connector"), chi.URLParam(r, "trigger")
-	conn, ok := h.Registry.Get(ref)
+	reg, err := h.Registry.For(ctx, tenant.String())
+	if err != nil {
+		replyErr(w, http.StatusServiceUnavailable, "try again")
+		return
+	}
+	conn, ok := reg.Get(ref)
 	var spec connector.TriggerSpec
 	if ok {
 		spec, ok = conn.Manifest.Triggers[name]

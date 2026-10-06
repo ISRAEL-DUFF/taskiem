@@ -65,7 +65,7 @@ type world struct {
 
 func newWorld(t *testing.T) *world {
 	e := rt.New(t)
-	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, AllowSignup: true, Egress: e.Egress}
+	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return &world{env: e, base: ts.URL, srv: srv}

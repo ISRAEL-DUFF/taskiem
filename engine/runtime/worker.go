@@ -476,7 +476,10 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			p.stepType = s.Type
 			p.step = s
 		}
-		if err := w.resolveExecutor(p); err != nil {
+		if err := w.resolveExecutor(ctx, p); err != nil {
+			if errors.Is(err, errLookup) {
+				return err // the database, not the step: try the task again
+			}
 			p.mode = modeDone
 			return w.recordFailure(ctx, tx, p, "fatal", err.Error())
 		}
@@ -541,16 +544,23 @@ func kindOf(k string) effects.ErrorKind {
 	return effects.KindUnknownOutcome
 }
 
+// errLookup is a failure to load a tenant's connectors.
+var errLookup = errors.New("connector lookup")
+
 // defaultHTTPKey is how an http step's idempotency key is encoded.
 var defaultHTTPKey = effects.Spec{Encoding: effects.Base32Lower, Length: 32, Prefix: "tsk_"}
 
-func (w *Worker) resolveExecutor(p *plan) error {
+func (w *Worker) resolveExecutor(ctx context.Context, p *plan) error {
 	switch {
 	case p.sched.Connector != "":
 		if w.Registry == nil {
 			return fmt.Errorf("no connector registry")
 		}
-		conn, ok := w.Registry.Get(p.sched.Connector)
+		reg, err := w.Registry.For(ctx, p.c.tenant.String())
+		if err != nil {
+			return fmt.Errorf("%w: %w", errLookup, err)
+		}
+		conn, ok := reg.Get(p.sched.Connector)
 		if !ok {
 			return fmt.Errorf("connector %s is not installed", p.sched.Connector)
 		}

@@ -76,7 +76,12 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	c, ok := s.Registry.Get(req.Connector)
+	reg, err := s.Registry.For(r.Context(), principalFrom(r.Context()).TenantID.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	c, ok := reg.Get(req.Connector)
 	if !ok {
 		s.fail(w, r, fmt.Errorf("%w: connector %q is not available", errBadRequest, req.Connector))
 		return

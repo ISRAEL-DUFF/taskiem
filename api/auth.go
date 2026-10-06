@@ -40,17 +40,18 @@ const (
 	PermAuditRead        = "audit.read"
 	PermGitManage        = "git.manage"
 	PermPolicyManage     = "policy.manage"
+	PermConnectorManage  = "connector.manage"
 )
 
 var allPermissions = []string{PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel,
-	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage}
+	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage}
 
 // rolePermissions are the built-in roles (spec 13.3). Any other membership
 // role (e.g. "credit_officer") is a business role that only qualifies the
 // member for approval steps naming it, on top of approval.decide.
 var rolePermissions = map[string][]string{
 	"owner":    allPermissions,
-	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage},
+	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage},
 	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart},
 	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve},
 	"approver": {PermWorkflowRead, PermRunRead, PermApprovalDecide},

@@ -29,7 +29,18 @@ type problem = wdcheck.Problem
 
 // check validates a WD document against the contract and against this
 // platform: connectors and actions must exist, code must compile.
-func (s *Server) check(doc []byte) []problem { return wdcheck.Check(doc, s.Registry) }
+func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []problem {
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
+	}
+	return wdcheck.Check(doc, reg)
+}
+
+// checkFor is check for the caller's tenant.
+func (s *Server) checkFor(r *http.Request, doc []byte) []problem {
+	return s.check(r.Context(), principalFrom(r.Context()).TenantID, doc)
+}
 
 // canonical compacts a JSON document; its SHA-256 is the version digest.
 func canonical(doc json.RawMessage) ([]byte, error) {
@@ -138,7 +149,7 @@ func (s *Server) createWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sum := sha256.Sum256(doc)
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "version": 1, "digest": hex.EncodeToString(sum[:]), "problems": nonNil(s.check(doc))})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "version": 1, "digest": hex.EncodeToString(sum[:]), "problems": nonNil(s.checkFor(r, doc))})
 }
 
 func insertVersion(r *http.Request, tx pgx.Tx, wf uuid.UUID, v int, doc []byte, layout json.RawMessage) error {
@@ -228,7 +239,7 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sum := sha256.Sum256(doc)
-	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": v, "digest": hex.EncodeToString(sum[:]), "merged": merged, "problems": nonNil(s.check(doc))})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": v, "digest": hex.EncodeToString(sum[:]), "merged": merged, "problems": nonNil(s.checkFor(r, doc))})
 }
 
 type versionInfo struct {
@@ -301,7 +312,7 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(s.check(def))}
+	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(s.checkFor(r, def))}
 	if layout != nil {
 		out["layout"] = json.RawMessage(layout)
 	}
@@ -423,7 +434,7 @@ func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID,
 	if state != "draft" {
 		return nil, "", false, fmt.Errorf("%w: version %d is %s", errConflict, v, state)
 	}
-	if probs = s.check(def); len(probs) > 0 {
+	if probs = s.check(ctx, tenant, def); len(probs) > 0 {
 		return probs, "", false, errInvalid
 	}
 	if probs, err = missingPolicies(ctx, tx, def); err != nil || len(probs) > 0 {
@@ -446,7 +457,11 @@ func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID,
 	if err != nil {
 		return nil, "", false, err
 	}
-	if err := ingest.Sync(ctx, tx, tenant, wf, v, d, s.Registry, time.Now()); err != nil {
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return nil, "", false, err
+	}
+	if err := ingest.Sync(ctx, tx, tenant, wf, v, d, reg, time.Now()); err != nil {
 		var pgErr interface{ SQLState() string }
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
 			return nil, "", false, fmt.Errorf("%w: another workflow already uses this webhook path", errConflict)
@@ -467,7 +482,7 @@ func (s *Server) validate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	probs := s.check(req.Definition)
+	probs := s.checkFor(r, req.Definition)
 	writeJSON(w, http.StatusOK, map[string]any{"valid": len(probs) == 0, "problems": nonNil(probs)})
 }
 
@@ -490,9 +505,14 @@ type connectorAction struct {
 
 // listConnectors describes the connectors this deployment runs, for the
 // canvas palette and schema forms.
-func (s *Server) listConnectors(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {
+	reg, err := s.Registry.For(r.Context(), principalFrom(r.Context()).TenantID.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var out []connectorInfo
-	for _, c := range s.Registry.List() {
+	for _, c := range reg.List() {
 		m := c.Manifest
 		info := connectorInfo{Ref: c.Ref(), ID: m.ID, Version: m.Version, Name: m.Name, Auth: m.Auth, Actions: map[string]connectorAction{}, Triggers: []string{}}
 		for name, a := range m.Actions {

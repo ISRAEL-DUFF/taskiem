@@ -186,7 +186,7 @@ func (f *File) WorkflowPath() string {
 // connector action classes, so a mocked error is handled as the engine
 // would handle it from the real connector; it may be nil when the workflow
 // uses no connectors.
-func (f *File) Run(reg *connector.Registry) ([]Result, error) {
+func (f *File) Run(reg connector.Lookup) ([]Result, error) {
 	doc, err := os.ReadFile(f.WorkflowPath())
 	if err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func (f *File) Run(reg *connector.Registry) ([]Result, error) {
 
 // RunDefinition runs every case against the given definition (the
 // workflow file's contents, read from wherever it lives).
-func (f *File) RunDefinition(doc []byte, reg *connector.Registry) ([]Result, error) {
+func (f *File) RunDefinition(doc []byte, reg connector.Lookup) ([]Result, error) {
 	def, err := wd.Load(doc)
 	if err != nil {
 		return nil, err
@@ -225,12 +225,12 @@ const maxEvents = 100_000
 var mockExpr = expr.MustNewWithRoots("input")
 
 // RunCase runs one case.
-func RunCase(def *wd.Definition, reg *connector.Registry, env map[string]any, c Case) Result {
+func RunCase(def *wd.Definition, reg connector.Lookup, env map[string]any, c Case) Result {
 	return RunCaseWithPolicies(def, reg, env, nil, c)
 }
 
 // RunCaseWithPolicies runs one case with approval policies in force.
-func RunCaseWithPolicies(def *wd.Definition, reg *connector.Registry, env map[string]any, policies map[string]json.RawMessage, c Case) Result {
+func RunCaseWithPolicies(def *wd.Definition, reg connector.Lookup, env map[string]any, policies map[string]json.RawMessage, c Case) Result {
 	start := time.Now()
 	r := &runner{def: def, reg: reg, c: c, now: Epoch, res: Result{Case: c.Name}, policies: policies}
 	r.run(env)
@@ -253,7 +253,7 @@ func RunCaseWithPolicies(def *wd.Definition, reg *connector.Registry, env map[st
 
 type runner struct {
 	def *wd.Definition
-	reg *connector.Registry
+	reg connector.Lookup
 	c   Case
 	h   []history.Event
 	now time.Time

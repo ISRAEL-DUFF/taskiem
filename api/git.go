@@ -545,6 +545,10 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 		return "", fmt.Errorf("reading %s: %w", conn.Repo, err)
 	}
 	rep.Commit = snap.Commit
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return "", err
+	}
 
 	// Check every definition and run every test before touching anything.
 	paths := make([]string, 0, len(snap.Files))
@@ -564,7 +568,7 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 			continue
 		}
 		doc := snap.Files[p]
-		for _, pr := range wdcheck.Check(doc, s.Registry) {
+		for _, pr := range wdcheck.Check(doc, reg) {
 			rep.Problems = append(rep.Problems, p+": "+pr.String())
 		}
 		var head struct {
@@ -618,7 +622,7 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 				f.Policies[name] = doc // the repository's policy, unless the test brings its own
 			}
 		}
-		results, err := f.RunDefinition(doc, s.Registry)
+		results, err := f.RunDefinition(doc, reg)
 		if err != nil {
 			rep.Problems = append(rep.Problems, fmt.Sprintf("%s: %v", p, err))
 			continue

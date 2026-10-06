@@ -11,7 +11,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **Done** (below) |
 | 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **Done** (below), except a published Taskiem GitHub App and Bitbucket |
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **Done** (below), except passkey step-up (with milestone 5's passkeys) and emailed anchors (with milestone 5's email) |
-| 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | Not started |
+| 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | **In progress** (below): WASM runtime done; provider connectors wait on documentation access |
 | 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | Not started |
 | 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people |
 
@@ -64,6 +64,19 @@ Definitions are stored as `jsonb`, which reorders keys, so code generated from a
 | PII detection | Conservative validators for Nigerian identifiers (phone, BVN, NIN, NUBAN by check digit or field name, Luhn-valid cards by scheme, email) seal undeclared personal data in step results and every payload before it is written; copies are sealed by taint. Code step logs, provider error messages and the process's own logs are masked | `engine/pii/detect.go`, `engine/runtime`, `cmd/taskiem/serve.go`, [privacy](privacy.md) |
 
 Passkey step-up waits for passkey sign-in (milestone 5), which needs the same WebAuthn support.
+
+## Milestone 4: what exists
+
+| Area | Deliverable | Where |
+| --- | --- | --- |
+| WASM runtime | Tenants' own connectors: a connector/v1 manifest and a WebAssembly module (ABI `taskiem-connector/v1`) on wazero. A fresh instance per call, memory capped, the step's deadline, no files; HTTP only through the host, to the manifest's hosts, through the tenant's egress guard. The host, which sees every request, decides whether anything was sent, so a module cannot talk the engine into resending a write | `engine/wasmconn`, [ABI contract](contracts/connector-wasm-v1.md) |
+| Tenant scoping | Connector lookups are per tenant everywhere (workers, run pins, PII sealing, validation, publishing, Git sync, webhooks, the palette): built-ins plus the tenant's own, whose ids start `x_` so they never shadow a built-in | `engine/connector` (`Registry.For`), migration 00018 |
+| Go SDK | `sdk/connectorsdk`: handlers per action, `Do`/`DoJSON` with the built-ins' status classification, classified errors, native testing with `TestHTTP`; a complete example connector | `sdk/connectorsdk`, `examples/wasm-connector`, [guide](connector-sdk.md) |
+| Upload | API (`connector.manage`, audited with the module's SHA-256; immutable versions; disable), CLI `connector build/check/push`, Connections → Your connectors | `api/tenantconnectors.go`, `cmd/taskiem`, `web/` |
+
+### Provider connectors: Flutterwave, Anchor, Lenco, Breet
+
+The products use Flutterwave, Anchor, Lenco and Breet, so these are built first, ahead of the spec's list (parts of which are out of date: Okra has shut down; Stitch serves South Africa; NIBSS needs a licensed partner). Research on 6 October 2026 could not reach any of the four providers' documentation from the build environment (its network policy refuses the hosts), so the notes came from search extracts and are not enough to move money safely: Lenco's docs do not say whether amounts are naira or kobo; Breet's request and response formats and webhook signing are not published in what could be reached; Flutterwave's behaviour on a repeated transfer reference is unconfirmed. They will be built once the documentation hosts are allowed (developer.flutterwave.com, docs.getanchor.co, docs.lenco.co, docs.breet.io).
 
 ## Carried over from Phase 1
 

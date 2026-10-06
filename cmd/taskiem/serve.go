@@ -30,6 +30,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
+	"github.com/israel-duff/taskiem/engine/wasmconn"
 )
 
 var roles = map[string]bool{"api": true, "edge": true, "orchestrator": true, "scheduler": true, "worker": true, "all": true}
@@ -150,6 +151,8 @@ type engine struct {
 	store    *runtime.Store
 	vault    *secrets.Vault
 	registry *connector.Registry
+	// connectors loads tenants' own WebAssembly connectors.
+	connectors *wasmconn.Source
 }
 
 func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, error) {
@@ -166,8 +169,22 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		pool.Close()
 		return nil, err
 	}
+	wrt, err := wasmconn.New(ctx, wasmconn.Limits{})
+	if err != nil {
+		pool.Close()
+		return nil, err
+	}
+	small := cfg
+	small.PoolSize = 2
+	srcPool, err := openPool(ctx, small)
+	if err != nil {
+		pool.Close()
+		return nil, err
+	}
+	src := &wasmconn.Source{Pool: srcPool, Runtime: wrt, Logger: log}
+	reg.SetTenantSource(src.Connectors)
 	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey}
-	return &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault,
+	return &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault}}, nil
 }
 
@@ -201,11 +218,12 @@ func serve(ctx context.Context, args []string) error {
 		return fmt.Errorf("serve: %w", err)
 	}
 	defer e.pool.Close()
+	defer e.connectors.Pool.Close()
 
 	is := func(r string) bool { return *role == r || *role == "all" }
 	var tasks []func(context.Context) error
 	if is("api") {
-		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log,
+		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
 			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy}
 		if signer := cfg.anchorSigner(nil); signer != nil {
 			srv.AnchorKey = signer.PublicKey()

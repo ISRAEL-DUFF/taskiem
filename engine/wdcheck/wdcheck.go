@@ -23,7 +23,7 @@ func (p Problem) String() string { return p.Path + ": " + p.Message }
 
 // Check validates doc. Contract problems are reported alone: platform checks
 // need a definition that parses.
-func Check(doc []byte, reg *connector.Registry) []Problem {
+func Check(doc []byte, reg connector.Lookup) []Problem {
 	var out []Problem
 	for _, p := range wd.Validate(doc) {
 		out = append(out, Problem{p.Path, p.Message})

@@ -63,7 +63,7 @@ func parseWebhook(c map[string]any) (webhookConfig, error) {
 	return w, nil
 }
 
-func parseEvent(c map[string]any, reg *connector.Registry) (eventConfig, error) {
+func parseEvent(c map[string]any, reg connector.Lookup) (eventConfig, error) {
 	e := eventConfig{connector: str(c, "connector"), trigger: str(c, "trigger"), connection: str(c, "connection")}
 	if evs, ok := c["events"].([]any); ok {
 		for _, v := range evs {
@@ -108,7 +108,7 @@ func parseSchedule(c map[string]any) (scheduleConfig, error) {
 func (s scheduleConfig) Next(t time.Time) time.Time { return s.sched.Next(t.In(s.tz)).UTC() }
 
 // Check reports why a definition's trigger cannot be registered here.
-func Check(def *wd.Definition, reg *connector.Registry) error {
+func Check(def *wd.Definition, reg connector.Lookup) error {
 	c := def.Trigger.Config
 	switch def.Trigger.Type {
 	case "manual":
@@ -130,7 +130,7 @@ func Check(def *wd.Definition, reg *connector.Registry) error {
 // being published, inside the publishing transaction. Webhook and connector
 // triggers are registered in every environment (deliveries name theirs with
 // ?env=, default prod); schedules fire in prod only.
-func Sync(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, version int, def *wd.Definition, reg *connector.Registry, now time.Time) error {
+func Sync(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, version int, def *wd.Definition, reg connector.Lookup, now time.Time) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM triggers WHERE workflow_id = $1`, wf); err != nil {
 		return err
 	}

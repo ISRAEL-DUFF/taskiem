@@ -65,13 +65,17 @@ func redactText(v any) {
 }
 
 // connectorPIIPaths are the input fields a connector action declares as PII.
-func (s *Store) connectorPIIPaths(p history.ScheduledPayload) []pii.Path {
+func (s *Store) connectorPIIPaths(ctx context.Context, tenant uuid.UUID, p history.ScheduledPayload) ([]pii.Path, error) {
 	if s.Registry == nil || p.Connector == "" {
-		return nil
+		return nil, nil
 	}
-	c, ok := s.Registry.Get(p.Connector)
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return nil, err // never write a payload whose personal fields are unknown
+	}
+	c, ok := reg.Get(p.Connector)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	var out []pii.Path
 	for _, f := range c.Manifest.Actions[p.Action].PII {
@@ -81,7 +85,7 @@ func (s *Store) connectorPIIPaths(p history.ScheduledPayload) []pii.Path {
 		}
 		out = append(out, pii.Path{Segments: []string{"input", f.Field}, Category: cat})
 	}
-	return out
+	return out, nil
 }
 
 // openHistory decrypts sealed values for decide and the worker, inside the

@@ -70,12 +70,17 @@ func (c *client) do(ctx context.Context, method, path string, body, out any) err
 		}
 		rd = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.base+path, rd)
+	return c.send(ctx, method, path, "application/json", rd, out)
+}
+
+// send makes one request with a body already encoded as contentType.
+func (c *client) send(ctx context.Context, method, path, contentType string, body io.Reader, out any) error {
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err

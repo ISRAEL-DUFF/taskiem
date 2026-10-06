@@ -73,6 +73,14 @@ func New(t testing.TB) *DB {
 	return d
 }
 
+// AppPool opens another pool as taskiem_app, closed when the test ends:
+// for components that must not share connections with their callers.
+func (d *DB) AppPool(t testing.TB, size int32) *pgxpool.Pool {
+	p := pool(t, d.DSN, "taskiem_app", size)
+	t.Cleanup(p.Close)
+	return p
+}
+
 func pool(t testing.TB, dsn, role string, size int32) *pgxpool.Pool {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {

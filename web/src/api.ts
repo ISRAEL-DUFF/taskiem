@@ -18,11 +18,20 @@ export class ApiError extends Error {
 }
 
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+  return request<T>(method, path, body === undefined ? undefined : JSON.stringify(body), { "Content-Type": "application/json" });
+}
+
+/** POSTs a multipart form (file uploads); the browser sets its boundary. */
+export function upload<T = unknown>(path: string, form: FormData): Promise<T> {
+  return request<T>("POST", path, form, {});
+}
+
+async function request<T>(method: string, path: string, body: BodyInit | undefined, headers: Record<string, string>): Promise<T> {
   const res = await fetch(path, {
     method,
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json", "X-Taskiem-Request": "1" },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { ...headers, "X-Taskiem-Request": "1" },
+    body,
   });
   if (res.status === 204) return undefined as T;
   const text = await res.text();
@@ -54,6 +63,18 @@ export const put = <T>(path: string, body?: unknown) => api<T>("PUT", path, body
 export const del = <T>(path: string, body?: unknown) => api<T>("DELETE", path, body);
 
 // --- response shapes ---
+
+/** A version of one of the tenant's own WebAssembly connectors. */
+export interface TenantConnector {
+  id: string;
+  version: string;
+  ref: string;
+  digest: string;
+  uploaded_by: string;
+  uploaded_at: string;
+  disabled_at?: string;
+  active: boolean;
+}
 
 export interface Me {
   tenant_id: string;

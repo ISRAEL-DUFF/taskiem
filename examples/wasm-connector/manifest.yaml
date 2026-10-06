@@ -1,0 +1,60 @@
+# An example tenant connector built with sdk/connectorsdk: a ledger API with
+# a balance read, an idempotent payment, and a lookup by reference that
+# settles unknown outcomes. Tenant connector ids start with "x_".
+manifest: connector/v1
+id: x_example_ledger
+version: 1.0.0
+name: Example ledger
+description: A minimal ledger API, to show how a WebAssembly connector is written.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: api_key, label: API key, secret: true }
+  test: { action: get_balance }
+base_url: https://ledger.example.com
+actions:
+  get_balance:
+    title: Get balance
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        available: { type: integer, description: Minor units }
+        currency:  { type: string }
+  create_payment:
+    title: Create payment
+    class: reconcilable_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 64 }
+    reconcile: get_payment
+    compensate: null
+    input:
+      type: object
+      required: [amount, account_number]
+      properties:
+        amount:         { type: integer, minimum: 1, description: Minor units }
+        account_number: { type: string }
+        reference:      { type: string }
+    output:
+      type: object
+      properties:
+        id:        { type: string }
+        reference: { type: string }
+        status:    { type: string, enum: [pending, completed, failed] }
+    pii:
+      - { field: account_number, category: account_number }
+  get_payment:
+    title: Get payment by reference
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output: { $ref: '#/actions/create_payment/output' }

@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/wasmconn"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -28,6 +29,8 @@ type Env struct {
 	Tenant   uuid.UUID
 	Secrets  runtime.MapSecrets
 	Vault    *secrets.Vault
+	// Connectors loads the tenant's own WebAssembly connectors.
+	Connectors *wasmconn.Source
 	// Egress allows loopback so tests can reach httptest servers; every
 	// other non-public address is still refused.
 	Egress *egress.Guard
@@ -47,10 +50,17 @@ func New(t testing.TB) *Env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	wrt, err := wasmconn.New(context.Background(), wasmconn.Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrt.Close(context.Background()) })
+	src := &wasmconn.Source{Pool: d.AppPool(t, 2), Runtime: wrt}
+	reg.SetTenantSource(src.Connectors)
 	guard := &egress.Guard{Blocked: func(a netip.Addr) bool { return !a.IsLoopback() && egress.BlockedAddr(a) }}
 	vault := &secrets.Vault{Pool: d.App, KMS: kms, RootKey: "root"}
 	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg, PII: vault}, Registry: reg, Provider: prov, Tenant: tn.ID,
-		Secrets: runtime.MapSecrets{}, Vault: vault, Egress: guard}
+		Secrets: runtime.MapSecrets{}, Vault: vault, Egress: guard, Connectors: src}
 }
 
 // Publish stores a published workflow version and returns its workflow id.

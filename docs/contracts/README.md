@@ -7,5 +7,6 @@
 | [Action classes](action-classes.md) | `class` in connector and `http` steps | `engine/effects` |
 | [Idempotency keys](idempotency.md) | `idempotency` in manifests, `effect` in steps | `engine/effects` |
 | [Workflow tests `wd-test/v1`](wd-test-v1.md) (Phase 2) | `*.test.json` files | `engine/wdtest` |
+| [WebAssembly connector ABI `taskiem-connector/v1`](connector-wasm-v1.md) (Phase 2) | module imports and exports | `engine/wasmconn`, `sdk/connectorsdk` |
 
 "Frozen" means Phase 1 builds against these as written. A change during Phase 1 needs a decision-log entry; a breaking change after Phase 1 needs a new schema version and a migration tool (build plan, "Release cadence").

@@ -96,7 +96,11 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 		}
 		pins := map[string]string{}
 		if s.Registry != nil {
-			pins = s.Registry.Pins()
+			reg, err := s.Registry.For(ctx, req.TenantID.String())
+			if err != nil {
+				return err
+			}
+			pins = reg.Pins()
 		}
 		policies, err := policySnapshots(ctx, tx, def)
 		if err != nil {
@@ -266,7 +270,9 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 		for _, ev := range evs {
 			var paths []pii.Path
 			if p, ok := ev.Payload.(history.ScheduledPayload); ok {
-				paths = s.connectorPIIPaths(p)
+				if paths, err = s.connectorPIIPaths(ctx, ref.TenantID, p); err != nil {
+					return err
+				}
 			}
 			sealed, err := s.sealPayload(ctx, tx, ref.TenantID, ev.Payload, paths, taint)
 			if err != nil {
