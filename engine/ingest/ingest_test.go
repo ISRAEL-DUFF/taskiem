@@ -336,6 +336,11 @@ triggers:
     event_type: =item.kind
     dedup: =item.id
     correlation: =item.ref
+  tokened:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: secret }
+    ack: { body: Ok }
+    event_type: '=has(query.token) ? "leaked" : "clean"'
   custom:
     type: webhook
     verify: { scheme: connector, secret_field: secret }
@@ -398,6 +403,27 @@ func TestConnectorHandshakes(t *testing.T) {
 	}
 	if st, body := post(`{"type":"event_callback"}`, "s1"); st != 202 || !bytes.Contains([]byte(body), []byte(`"event":"event_callback"`)) {
 		t.Errorf("delivery: %d %s", st, body)
+	}
+
+	// A URL token authenticates; it never reaches expressions or runs, and
+	// the provider gets the answer it expects.
+	tokened := func(q string) (int, string) {
+		resp, err := http.Post(w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/tokened?"+q, "application/json", bytes.NewReader([]byte(`{}`)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if st, body := tokened("env=prod&token=s1"); st != 200 || body != "Ok" {
+		t.Errorf("tokened: %d %q", st, body)
+	}
+	if st, _ := tokened("env=prod&token=nope"); st != 401 {
+		t.Errorf("wrong token: %d", st)
+	}
+	if st, _ := tokened("env=prod"); st != 401 {
+		t.Errorf("no token: %d", st)
 	}
 
 	// A connector-verified trigger: the connector's own check decides.

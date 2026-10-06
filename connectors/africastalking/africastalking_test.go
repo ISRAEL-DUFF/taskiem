@@ -187,15 +187,30 @@ func TestAirtime(t *testing.T) {
 	}
 }
 
-func TestCallbacksAreUnsigned(t *testing.T) {
+// Africa's Talking signs nothing: each callback URL carries the
+// connection's callback_token, and deliveries without it are refused.
+func TestCallbacksCarryAToken(t *testing.T) {
 	m := New(Options{}).Manifest
 	for name, tr := range m.Triggers {
-		if tr.Verify == nil || tr.Verify.Scheme != "none" {
+		if tr.Verify == nil || tr.Verify.Scheme != "query_secret" || tr.Verify.Query != "token" || tr.Verify.SecretField != "callback_token" {
 			t.Errorf("%s verify %+v", name, tr.Verify)
+			continue
 		}
-		if err := connector.VerifyWebhook(tr.Verify, "", http.Header{}, []byte("id=1")); err != nil {
+		if err := connector.VerifyQuerySecret(tr.Verify, "tok", url.Values{"token": {"tok"}}); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
+		for _, q := range []url.Values{{}, {"token": {"other"}}} {
+			if connector.VerifyQuerySecret(tr.Verify, "tok", q) == nil {
+				t.Errorf("%s accepted %v", name, q)
+			}
+		}
+	}
+	found := false
+	for _, f := range m.Auth.Fields {
+		found = found || (f.Key == "callback_token" && f.Secret)
+	}
+	if !found {
+		t.Error("no secret callback_token field")
 	}
 }
 

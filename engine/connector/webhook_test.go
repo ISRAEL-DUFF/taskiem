@@ -90,3 +90,19 @@ func TestSlackV0Scheme(t *testing.T) {
 		t.Error("stale timestamp accepted")
 	}
 }
+
+func TestBasicAndQuerySecret(t *testing.T) {
+	spec := &VerifySpec{Scheme: "basic"}
+	h := http.Header{}
+	h.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("hook:pw")))
+	if err := VerifyWebhook(spec, "hook:pw", h, nil); err != nil {
+		t.Errorf("basic: %v", err)
+	}
+	if VerifyWebhook(spec, "hook:other", h, nil) == nil || VerifyWebhook(spec, "", http.Header{}, nil) == nil {
+		t.Error("basic accepted wrong credentials")
+	}
+	qs := &VerifySpec{Scheme: "query_secret", Query: "token"}
+	if VerifyWebhook(qs, "s", http.Header{}, nil) == nil {
+		t.Error("query_secret must be checked against the URL, not passed by VerifyWebhook")
+	}
+}

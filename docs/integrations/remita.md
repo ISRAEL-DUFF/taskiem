@@ -43,13 +43,13 @@ Hosts: Funds Transfer uses `api-gateway.remita.net` live and `api-demo.systemspe
 
 ## Payment notifications
 
-Remita posts a JSON array of payments made in the merchant's favour to the URL configured on Remita. Register the trigger URL from the workflow's Endpoints tab (`/hooks/{tenant}/connectors/remita@1/invoice_payment?env=prod&connection=<name>`).
+Remita posts a JSON array of payments made in the merchant's favour to the URL configured on Remita. Set a long random `callback_token` on the connection (for example `openssl rand -hex 32`), and register the trigger URL with it: `/hooks/{tenant}/connectors/remita@1/invoice_payment?env=prod&connection=<name>&token=<callback_token>`.
 
 | Trigger | Event | Dedup | Correlation (signal steps wait for `remita@1:invoice_payment`) |
 | --- | --- | --- | --- |
-| `invoice_payment` | `payment_notification` | `body[0].rrr` | `body[0].orderId` (the invoice's `order_id`) |
+| `invoice_payment` | `payment_notification`, once per payment in the array | the payment's `rrr` | its `orderId` (the invoice's `order_id`) |
 
-**Deliveries are not verified.** Remita documents no signature, token or secret for these notifications, so the trigger is `verify: none`: a workflow must run `get_invoice` before acting on one. Remita sends an array; the trigger reads its first payment. Remita asks receivers to answer the text `Ok`; the engine answers 202 with JSON (see below). Remita documents no notifications for Funds Transfer; poll `get_transfer`/`get_bulk_transfer`.
+**Deliveries are authenticated by a URL token.** Remita documents no signature, so the trigger uses the `query_secret` scheme: a notification whose `token` does not match the connection's `callback_token` is refused with 401, and the token never reaches a workflow. Each payment in Remita's array is its own event (`split`), and accepted notifications are answered `Ok`, as Remita asks. A notification is still a report: run `get_invoice` before releasing value. Remita documents no notifications for Funds Transfer; poll `get_transfer`/`get_bulk_transfer`.
 
 ## To confirm with Remita before go-live
 
@@ -65,4 +65,4 @@ Remita posts a JSON array of payments made in the merchant's favour to the URL c
 
 ## Engine change that would help
 
-A per-trigger acknowledgement body, e.g. `ack: { status: 200, body: "Ok", content_type: text/plain }`, so the hook answers providers like Remita in the form they document instead of 202 JSON.
+None: the trigger's `ack` answers `Ok`, `split` delivers every payment, and `query_secret` authenticates notifications.

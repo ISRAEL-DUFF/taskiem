@@ -23,6 +23,7 @@ auth:
     - { key: source_bank_code, label: Its bank code, secret: false, required: false }
     - { key: source_account_name, label: Its account name, secret: false, required: false }
     - { key: environment, label: "Environment: live (default) or demo", secret: false, required: false }
+    - { key: callback_token, label: "Callback token: a long random value you add to the notification URL as ?token=", secret: true, required: false }
   test: { action: list_banks }
 # Funds Transfer and the other new APIs. Invoice APIs use demo.remita.net
 # (and remitademo.net for cancellation) in the demo environment; Remita's
@@ -270,13 +271,16 @@ actions:
         message:     { type: string }
 triggers:
   # Remita posts a JSON array of payments made in the merchant's favour to
-  # the URL configured on Remita. Remita documents no signature or secret
-  # for these notifications, so they are not verified: run get_invoice
-  # before acting on one. The handler reads the first payment in the array.
+  # the URL configured on Remita, and expects "Ok" back. Remita documents no
+  # signature, so the URL carries the connection's callback_token as
+  # ?token=...; deliveries without it are refused. Each payment in the
+  # array is its own event. Run get_invoice before releasing value.
   invoice_payment:
     type: webhook
-    verify: { scheme: none }
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    ack: { status: 200, body: Ok, content_type: text/plain }
     events: [payment_notification]
+    split: =body
     event_type: '="payment_notification"'
-    dedup: '=body[0].rrr'
-    correlation: '=body[0].orderId'
+    dedup: =item.rrr
+    correlation: =item.orderId

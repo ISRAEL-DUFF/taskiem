@@ -38,7 +38,7 @@ developers.africastalking.com shows automated readers a browser challenge, so it
 
 ## Callbacks
 
-Register each URL in the dashboard (SMS > Callback URLs > Delivery Reports / Incoming Messages; Airtime > Callback URLs):
+Set a long random `callback_token` on the connection (for example `openssl rand -hex 32`), then register each URL below, **with `&token=<callback_token>` appended**, in the dashboard (SMS > Callback URLs > Delivery Reports / Incoming Messages; Airtime > Callback URLs):
 
 | Trigger | URL | Event | Dedup | Correlation |
 | --- | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ Register each URL in the dashboard (SMS > Callback URLs > Delivery Reports / Inc
 
 Add `&connection=<name>` when the tenant has more than one Africa's Talking connection in the environment. The callbacks are form posts; Taskiem exposes their fields as `body.<field>` (`body.failureReason`, `body.networkCode`, `body.linkId`, ...).
 
-**Callbacks are not verified.** Africa's Talking documents no signature or shared secret on its callbacks, so the triggers use scheme `none`. Anyone who learns a callback URL can post a fake delivery report or incoming SMS. Treat these events as claims. Before acting on anything that moves money, confirm it with a read: `get_airtime_status` for airtime. Keep the URLs out of logs and tickets.
+**Callbacks are authenticated by a URL token.** Africa's Talking documents no signature on its callbacks, so each trigger uses the `query_secret` scheme: a delivery whose `token` parameter does not match the connection's `callback_token` is refused with 401, and the token is stripped before the event reaches a workflow. The token is only as secret as the URL: keep callback URLs out of logs and tickets, and rotate the token (edit the connection, then the dashboard URLs) if one leaks. Before acting on anything that moves money, still confirm it with a read: `get_airtime_status` for airtime.
 
 ## To confirm before go-live
 

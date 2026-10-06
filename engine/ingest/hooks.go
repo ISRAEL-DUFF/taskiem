@@ -180,7 +180,7 @@ func parse(r *http.Request, body []byte, hide ...string) parsed {
 		p.headers[k] = v[0]
 	}
 	for k, v := range r.URL.Query() {
-		if k != "env" && len(v) > 0 {
+		if k != "env" && !slices.Contains(hide, "query:"+k) && len(v) > 0 {
 			p.query[k] = v[0]
 		}
 	}
@@ -327,6 +327,9 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		secret = creds[spec.Verify.SecretField]
 	}
 	verify := func() error { return connector.VerifyWebhook(spec.Verify, secret, r.Header, body) }
+	if spec.Verify != nil && spec.Verify.Scheme == "query_secret" {
+		verify = func() error { return connector.VerifyQuerySecret(spec.Verify, secret, r.URL.Query()) }
+	}
 	if spec.Verify != nil && spec.Verify.Scheme == "connector" {
 		verify = func() error {
 			v := conn.Verifiers[name]
@@ -343,6 +346,9 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	hide := []string{}
 	if spec.Verify != nil {
 		hide = append(hide, strings.ToLower(spec.Verify.Header))
+		if spec.Verify.Query != "" {
+			hide = append(hide, "query:"+spec.Verify.Query) // the secret never reaches a run
+		}
 	}
 	p := parse(r, body, hide...)
 	act := p.activation()
@@ -462,6 +468,20 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		out["runs"] = runs
 		results = append(results, out)
+	}
+	if a := spec.Ack; a != nil {
+		status := a.Status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		ct := a.ContentType
+		if ct == "" {
+			ct = "text/plain; charset=utf-8"
+		}
+		w.Header().Set("Content-Type", ct)
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(a.Body))
+		return
 	}
 	if spec.Split != "" {
 		reply(w, http.StatusAccepted, map[string]any{"events": results})

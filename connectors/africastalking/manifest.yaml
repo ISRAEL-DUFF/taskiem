@@ -30,6 +30,7 @@ auth:
     - { key: api_key, label: API key, secret: true }
     - { key: sender_id, label: Default sender ID or short code, required: false }
     - { key: environment, label: "Environment: live (default) or sandbox", required: false }
+    - { key: callback_token, label: "Callback token: a long random value you add to each callback URL as ?token=", secret: true, required: false }
   test: { action: fetch_messages }
 base_url: https://api.africastalking.com
 egress_hosts: [api.africastalking.com, api.sandbox.africastalking.com]
@@ -163,26 +164,26 @@ actions:
         currency: { type: string }
         amount:   { type: integer, description: Hundredths of the currency unit, rounded down }
 triggers:
-  # Africa's Talking documents no signature or shared secret on callbacks,
-  # so they cannot be verified: anyone who learns the URL can post to it.
-  # Treat these events as claims and confirm anything that moves money with
-  # a read (get_airtime_status).
-  # Register each URL in the dashboard under SMS > Callback URLs.
+  # Africa's Talking documents no signature on callbacks, so each callback
+  # URL carries the connection's callback_token as ?token=..., registered in
+  # the dashboard (SMS > Callback URLs); deliveries without it are refused,
+  # and the token never reaches a run. Still confirm anything that moves
+  # money with a read (get_airtime_status).
   delivery_report:
     type: webhook
-    verify: { scheme: none }
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
     event_type: =body.status
     dedup: =body.id + ":" + body.status
     correlation: =body.id
   incoming_sms:
     type: webhook
-    verify: { scheme: none }
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
     event_type: '="incoming_sms"'
     dedup: =body.id
     correlation: =body.from
   airtime_status:
     type: webhook
-    verify: { scheme: none }
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
     event_type: =body.status
     dedup: =body.requestId + ":" + body.status
     correlation: =body.requestId

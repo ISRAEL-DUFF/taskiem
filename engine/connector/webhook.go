@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"hash"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,8 @@ type TriggerSpec struct {
 	// Handshake answers a provider's endpoint check (Slack's
 	// url_verification, Meta's GET challenge).
 	Handshake *HandshakeSpec `json:"handshake"`
+	// Ack replaces the default 202 JSON answer to an accepted delivery.
+	Ack *AckSpec `json:"ack"`
 }
 
 // HandshakeSpec is a trigger's endpoint check. GET: the query parameter
@@ -57,6 +60,25 @@ type VerifySpec struct {
 	Tolerance       string `json:"tolerance"`
 	Encoding        string `json:"encoding"`       // hex (default), base64, base64_of_hex
 	KeyDerivation   string `json:"key_derivation"` // none (default), sha256_hex
+	// Query names the URL parameter carrying the secret (query_secret).
+	Query string `json:"query"`
+}
+
+// AckSpec is the answer a provider expects to a delivery it made.
+type AckSpec struct {
+	Status      int    `json:"status"`
+	Body        string `json:"body"`
+	ContentType string `json:"content_type"`
+}
+
+// VerifyQuerySecret checks a query_secret delivery: the URL parameter
+// named by v.Query must equal the secret.
+func VerifyQuerySecret(v *VerifySpec, secret string, q url.Values) error {
+	got := q.Get(v.Query)
+	if v.Query == "" || secret == "" || got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(secret)) != 1 {
+		return ErrBadSignature
+	}
+	return nil
 }
 
 // DefaultTolerance is how far a timestamped signature may be from now.
@@ -129,6 +151,15 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 		return nil
 	case "none":
 		return nil
+	case "basic":
+		// The secret is "user:password", sent as HTTP Basic credentials.
+		want := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret))
+		if secret == "" || subtle.ConstantTimeCompare([]byte(h.Get("Authorization")), []byte(want)) != 1 {
+			return ErrBadSignature
+		}
+		return nil
+	case "query_secret":
+		return fmt.Errorf("%w: query_secret is checked against the URL", ErrBadSignature)
 	case "connector":
 		return fmt.Errorf("%w: the connector verifies this trigger itself", ErrBadSignature)
 	default:

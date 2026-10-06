@@ -290,10 +290,10 @@ func TestJSONPResponses(t *testing.T) {
 
 func TestNotificationTrigger(t *testing.T) {
 	spec := New(Options{}).Manifest.Triggers["invoice_payment"]
-	if spec.Verify == nil || spec.Verify.Scheme != "none" {
+	if spec.Verify == nil || spec.Verify.Scheme != "query_secret" || spec.Verify.SecretField != "callback_token" {
 		t.Fatalf("verify %+v", spec.Verify)
 	}
-	if spec.Dedup != "=body[0].rrr" || spec.Correlation != "=body[0].orderId" || len(spec.Events) != 1 || spec.Events[0] != "payment_notification" {
+	if spec.Split != "=body" || spec.Dedup != "=item.rrr" || spec.Correlation != "=item.orderId" || len(spec.Events) != 1 || spec.Events[0] != "payment_notification" {
 		t.Errorf("trigger %+v", spec)
 	}
 }
