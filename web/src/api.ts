@@ -51,7 +51,7 @@ export interface MergeConflict {
 export const get = <T>(path: string) => api<T>("GET", path);
 export const post = <T>(path: string, body?: unknown) => api<T>("POST", path, body ?? {});
 export const put = <T>(path: string, body?: unknown) => api<T>("PUT", path, body ?? {});
-export const del = <T>(path: string) => api<T>("DELETE", path);
+export const del = <T>(path: string, body?: unknown) => api<T>("DELETE", path, body);
 
 // --- response shapes ---
 
@@ -60,6 +60,8 @@ export interface Me {
   roles: string[];
   permissions: string[];
   user?: { id: string; email: string; name: string };
+  /** Whether the member has an authenticator app enrolled for step-up. */
+  totp?: boolean;
 }
 
 export interface WorkflowSummary {
@@ -151,9 +153,50 @@ export interface Approval {
   role: string | null;
   required: number;
   approvals: number;
+  /** 1-based level of a multi-level approval, and how many there are. */
+  level: number;
+  levels: number;
+  step_up: "totp" | "passkey" | null;
+  policy: string | null;
+  /** Set when a delegated role makes this approval the caller's. */
+  on_behalf_of?: string;
   requested_at: string;
   timeout_at: string | null;
   subject: unknown;
+}
+
+export interface Delegation {
+  id: string;
+  from_user: string;
+  from_email: string;
+  to_user: string;
+  to_email: string;
+  roles: string[];
+  starts_at: string;
+  ends_at: string;
+  reason: string;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface PublishRequest {
+  workflow_id: string;
+  workflow: string;
+  version: number;
+  requested_by: string;
+  requested_at: string;
+  status: string;
+}
+
+export interface PolicyVersion {
+  name: string;
+  version: number;
+  document: unknown;
+  state: "pending" | "active" | "superseded" | "rejected";
+  created_by: string;
+  created_at: string;
+  decided_by: string | null;
+  decided_at: string | null;
 }
 
 export interface TriggerInfo {

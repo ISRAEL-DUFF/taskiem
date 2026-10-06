@@ -346,14 +346,37 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var probs []problem
-	published := false
+	published, pending := false, false
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if err := s.refuseGitManaged(r.Context(), tx, wf); err != nil {
 			return err
 		}
+		// Four-eyes: a publish waits for a second person.
+		g, err := governanceTx(r.Context(), tx)
+		if err != nil {
+			return err
+		}
+		if g.FourEyesPublish {
+			var state string
+			if err := tx.QueryRow(r.Context(), `SELECT state FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&state); err != nil {
+				return err
+			}
+			if state == "published" {
+				return nil
+			}
+			if p.UserID == uuid.Nil {
+				return fmt.Errorf("%w: with four-eyes publishing, a person asks to publish and another approves", errForbidden)
+			}
+			pending = true
+			if _, err := tx.Exec(r.Context(), `INSERT INTO publish_requests (tenant_id, workflow_id, version, requested_by) VALUES ($1, $2, $3, $4)
+				ON CONFLICT (workflow_id, version) DO UPDATE SET requested_by = EXCLUDED.requested_by, requested_at = now(), status = 'pending', decided_by = NULL, decided_at = NULL`,
+				p.TenantID, wf, v, p.UserID); err != nil {
+				return err
+			}
+			return auditTx(r, tx, "publish_request.create", fmt.Sprintf("%s/%d", wf, v), nil)
+		}
 		by := p.id()
 		var digest string
-		var err error
 		if probs, digest, published, err = s.publishTx(r.Context(), tx, p.TenantID, wf, v, &by); err != nil || !published {
 			return err
 		}
@@ -365,6 +388,10 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if pending {
+		writeJSON(w, http.StatusAccepted, map[string]any{"id": wf, "version": v, "state": "pending_approval"})
 		return
 	}
 	out := map[string]any{"id": wf, "version": v, "state": "published"}
@@ -398,6 +425,12 @@ func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID,
 	}
 	if probs = s.check(def); len(probs) > 0 {
 		return probs, "", false, errInvalid
+	}
+	if probs, err = missingPolicies(ctx, tx, def); err != nil || len(probs) > 0 {
+		if err == nil {
+			err = errInvalid
+		}
+		return probs, "", false, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'deprecated' WHERE workflow_id = $1 AND state = 'published'`, wf); err != nil {
 		return nil, "", false, err

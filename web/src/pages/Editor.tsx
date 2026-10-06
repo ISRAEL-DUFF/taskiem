@@ -174,12 +174,17 @@ export function Editor() {
   const publish = () =>
     act.run(async () => {
       const v = await save();
-      let r: { git?: Record<string, { url?: string; error?: string }> };
+      let r: { state: string; git?: Record<string, { url?: string; error?: string }> };
       try {
         r = await post(`/v1/workflows/${id}/versions/${v}/publish`);
       } catch (e) {
         if (e instanceof ApiError && e.status === 422) setProblems(e.problems as Problem[]);
         throw e;
+      }
+      if (r.state === "pending_approval") {
+        setNotice(`Version ${v} is waiting for a second person to publish it (Approvals → Publishing to review).`);
+        wf.reload();
+        return;
       }
       const git = Object.entries(r.git ?? {})
         .map(([env, g]) => (g.url ? `Pull request for ${env}: ${g.url}` : `The pull request for ${env} could not be opened: ${g.error ?? "unknown error"}`))

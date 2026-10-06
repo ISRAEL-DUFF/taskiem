@@ -1,6 +1,7 @@
 package wdtest_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -93,5 +94,26 @@ func TestUnknownOutcomeParks(t *testing.T) {
 	})
 	if !r.Passed() {
 		t.Errorf("%v\n%v", r.Failures, r.Trace)
+	}
+}
+
+// A test supplies the approval policies its workflow names; the levels
+// show in what the step requested.
+func TestPolicies(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_p","version":1,"name":"p","trigger":{"type":"manual"},"steps":[
+	  {"id":"ok","type":"approval","config":{"policy":"two_step","subject":{"n":"=trigger.n"}}}]}`
+	def, err := wd.Load([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pol := map[string]json.RawMessage{"two_step": json.RawMessage(`{"rules":[{"levels":[{"role":"a"},{"role":"b"}]}]}`)}
+	r := wdtest.RunCaseWithPolicies(def, registry(t), nil, pol, wdtest.Case{Name: "approved", Trigger: map[string]any{"n": 1},
+		Approvals: map[string]wdtest.ApprovalMock{"ok": {Decision: "approved"}}, Expect: wdtest.Expect{Status: "completed"}})
+	if !r.Passed() {
+		t.Errorf("%v", r.Failures)
+	}
+	r = wdtest.RunCase(def, registry(t), nil, wdtest.Case{Name: "no policy", Trigger: map[string]any{"n": 1}, Expect: wdtest.Expect{Status: "failed", Error: "was not active"}})
+	if !r.Passed() {
+		t.Errorf("%v", r.Failures)
 	}
 }

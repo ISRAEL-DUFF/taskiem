@@ -1,0 +1,52 @@
+# Governance: approval policies, delegation, step-up, four-eyes
+
+Approvals are a step type (spec 9.1). An approval step either names a role and a count, or names a **policy**: a reusable, versioned object that decides who approves from the data being approved.
+
+## Approval policies
+
+```json
+{
+  "rules": [
+    { "when": "=subject.amount_kobo < 50000000", "levels": [{ "role": "credit_officer" }] },
+    { "when": "=subject.amount_kobo >= 50000000",
+      "levels": [{ "role": "credit_officer" }, { "role": "head_of_credit", "count": 2 }],
+      "step_up": "totp" }
+  ],
+  "constraints": { "forbid_self_approval": true, "distinct_approvers": true },
+  "timeout": "24h",
+  "on_timeout": "escalate:head_of_operations"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `rules` | Tried in order; the first whose `when` (CEL over the approval step's `subject`) holds applies. A rule without `when` always applies. If none applies, the approval step fails with kind `policy`: nobody can approve what the policy does not cover |
+| `levels` | Approved in order: level 2 opens when level 1 has `count` approvals (default 1). Any rejection rejects the step |
+| `step_up` | `totp`: each approver enters a fresh code from an authenticator app when voting. Passkeys arrive with passkey sign-in (Phase 2, milestone 5) |
+| `constraints` | `forbid_self_approval`: whoever started the run, or wrote or published the workflow version, cannot approve, nor can anyone acting for them. `distinct_approvers`: one person approves one level at most. Both default to true |
+| `timeout`, `on_timeout` | Used when the step sets none: `reject` (default), `fail`, or `escalate:<role>` (once, to a single approver with that role) |
+
+The step names it: `{"type": "approval", "config": {"policy": "high_value", "subject": {"amount_kobo": "=trigger.body.amount"}}}`.
+
+**Versions.** Saving a policy creates a new version (`PUT /v1/policies/{name}`, or Approval policies in the web app; `policy.manage`). Each run keeps the versions that were active when it started, recorded in its history, so a policy edit never changes an approval already under way, and replays and audits see exactly what governed each decision. A workflow naming a policy with no active version cannot be published. In a Git-led repository, policies live in `policies/<name>.policy.json` and are activated by the sync, with Git review in place of four-eyes.
+
+**Workflow tests** supply policies in the test file (`"policies": {"high_value": {...}}`); `taskiem test` also reads `policies/*.policy.json`.
+
+## Delegation
+
+A member can hand approval roles they hold to a colleague for up to 90 days, with a reason (`POST /v1/delegations`, or Approvals → Delegations). The colleague sees those approvals in their inbox marked "covering for …". A vote under a delegation records both people; maker-checker applies to both, and the person delegating cannot also vote on the same level. The delegator or a member admin can revoke it. Every delegation, revocation and decision is audited.
+
+## Step-up with an authenticator app
+
+Each member enrols an authenticator under **Account** (`POST /v1/me/totp`, then `/v1/me/totp/confirm` with a code). The secret is an encrypted tenant secret. A code works once: the time step it used is recorded, so it cannot be replayed. An approval that needs step-up returns `403 {"step_up": "totp"}` without a valid code. Eligibility (role, maker-checker, levels) is checked first, so nobody is asked for a code to cast a vote that would be refused.
+
+## Four-eyes on change
+
+Owners turn these on under **Secrets & settings → Four-eyes** (`PUT /v1/governance`); every change is audited with its before and after.
+
+| Setting | Effect |
+| --- | --- |
+| Publishing needs a second publisher | Publish returns `202 pending_approval` and opens a publish request. Another member with `workflow.publish`, who neither asked nor wrote the version, publishes or rejects it (Approvals → Publishing to review) |
+| A new policy version needs a second person | A saved policy version is `pending` until someone other than its author approves it; the previous version stays active meanwhile |
+
+Git-led environments publish from merged commits: the repository's branch protection and review are the second pair of eyes there.

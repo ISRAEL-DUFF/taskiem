@@ -97,6 +97,16 @@ func (e *Engine) program(src string) (cel.Program, error) {
 	return p, nil
 }
 
+// Check compiles an expression (with or without its leading "=") without
+// evaluating it: unknown variables and syntax errors are reported.
+func (e *Engine) Check(src string) error {
+	src = strings.TrimPrefix(src, "=")
+	if _, err := e.program(src); err != nil {
+		return &Error{Expr: src, Err: err}
+	}
+	return nil
+}
+
 // Eval evaluates one expression (with or without its leading "=") against
 // the activation and returns a JSON-compatible Go value.
 func (e *Engine) Eval(src string, act map[string]any) (any, error) {

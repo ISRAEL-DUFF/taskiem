@@ -6,6 +6,7 @@ interface Auth {
   can: (perm: string) => boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<Auth | null>(null);
@@ -21,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
   const value: Auth = {
     me,
+    refresh,
     can: (perm) => !!me?.permissions.includes(perm),
     login: async (email, password) => {
       await post("/v1/auth/login", { email, password });

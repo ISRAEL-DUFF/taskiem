@@ -10,7 +10,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | --- | --- | --- | --- | --- |
 | 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **Done** (below) |
 | 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **Done** (below), except a published Taskiem GitHub App and Bitbucket |
-| 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | Not started |
+| 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **In progress**: approval policies, levels, delegation, TOTP step-up and four-eyes done (below); PII detection, reports and anchoring next |
 | 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | Not started |
 | 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | Not started |
 | 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people |
@@ -48,6 +48,18 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | Concurrent edits | A save names its parent version's digest. When another version landed since, the edits merge three ways by top-level field and top-level step (nested steps included): different parts merge, the same part changed twice is a conflict (409 listing each, with both sides). The editor shows a dialog to keep either side; `deploy` sends the version it compared with | `engine/wdmerge`, `api/workflows.go`, editor `MergeDialog`, `web/e2e/merge.spec.ts` |
 
 Definitions are stored as `jsonb`, which reorders keys, so code generated from a stored version lists object keys in Postgres's order rather than the author's. Git sync will carry the author's file.
+
+## Milestone 3: what exists so far
+
+| Area | Deliverable | Where |
+| --- | --- | --- |
+| Policies | Versioned approval policies: ordered rules (CEL over the subject) choosing sequential levels of role and count, step-up, constraints, timeout and escalation. Snapshotted into each run so decisions replay; publishing refuses a workflow naming a policy with no active version; Git-led repositories carry `policies/*.policy.json` | `engine/policy`, `engine/decide`, `engine/runtime/approvals.go`, `api/governance.go`, migration 00016, [guide](governance.md) |
+| Approvals | Levels approved in order; distinct approvers across levels; maker-checker for the voter and anyone they act for; one voice per person per level | `engine/runtime/approvals.go` |
+| Delegation | Time-boxed (at most 90 days), reasoned, revocable hand-over of approval roles; inbox shows whom you cover for; audited | `api/governance.go`, Approvals page |
+| Step-up | TOTP (RFC 6238, verified against the RFC's vectors), enrolment under Account, single-use codes; asked for only after eligibility | `engine/totp`, Account page |
+| Four-eyes | Owner settings: publishing needs a second publisher (publish requests), policy versions need a second person | `api/governance.go`, Settings, Approvals pages |
+
+Passkey step-up waits for passkey sign-in (milestone 5), which needs the same WebAuthn support.
 
 ## Carried over from Phase 1
 

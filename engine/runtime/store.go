@@ -98,10 +98,14 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 		if s.Registry != nil {
 			pins = s.Registry.Pins()
 		}
+		policies, err := policySnapshots(ctx, tx, def)
+		if err != nil {
+			return err
+		}
 		payload := history.RunStartedPayload{
 			Run: history.RunInfo{ID: ref.ID.String(), TenantID: req.TenantID.String(), WorkflowID: req.WorkflowID.String(),
 				Version: req.Version, Environment: req.Environment, StartedAt: history.FormatTime(startedAt)},
-			Trigger: req.Trigger, Env: req.Env, Connectors: pins,
+			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
 		sealed, err := s.sealPayload(ctx, tx, req.TenantID, payload, triggerPaths(def), pii.Taint{})
 		if err != nil {
@@ -346,10 +350,19 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			}
 			timeoutAt = &t
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO approvals (tenant_id, run_id, step_id, role, policy, required, subject, timeout_at)
-			VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8)
-			ON CONFLICT (run_id, step_id) DO UPDATE SET role = EXCLUDED.role, timeout_at = EXCLUDED.timeout_at, status = 'open', requested_at = now()`,
-			tenant, run.ref.ID, ev.StepID, p.Role, p.Policy, required, subj, timeoutAt); err != nil {
+		var levels, constraints []byte
+		if len(p.Levels) > 0 {
+			levels, _ = json.Marshal(p.Levels)
+		}
+		if p.Constraints != nil {
+			constraints, _ = json.Marshal(p.Constraints)
+		}
+		// An escalation re-opens the step at its first level with new approvers.
+		if _, err := tx.Exec(ctx, `INSERT INTO approvals (tenant_id, run_id, step_id, role, policy, required, subject, timeout_at, levels, level, step_up, constraints, policy_version)
+			VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8, $9, 0, NULLIF($10, ''), $11, NULLIF($12, 0))
+			ON CONFLICT (run_id, step_id) DO UPDATE SET role = EXCLUDED.role, required = EXCLUDED.required, timeout_at = EXCLUDED.timeout_at,
+			  levels = EXCLUDED.levels, level = 0, status = 'open', requested_at = now()`,
+			tenant, run.ref.ID, ev.StepID, p.Role, p.Policy, required, subj, timeoutAt, levels, p.StepUp, constraints, p.PolicyVersion); err != nil {
 			return nil, err
 		}
 		if p.TimeoutAt != "" {
@@ -413,6 +426,43 @@ func insertTimer(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, step, ki
 	_, err := tx.Exec(ctx, `INSERT INTO timers (id, tenant_id, run_id, step_id, kind, fire_at) VALUES ($1, $2, $3, $4, $5, $6)`,
 		uuid.Must(uuid.NewV7()), tenant, run, stepArg, kind, at)
 	return err
+}
+
+// policySnapshots loads the active versions of the approval policies a
+// definition names. A missing one is left out: the approval step fails with
+// the reason when it is reached.
+func policySnapshots(ctx context.Context, tx pgx.Tx, def *wd.Definition) (map[string]history.PolicySnapshot, error) {
+	var names []string
+	var walk func([]*wd.Step)
+	walk = func(steps []*wd.Step) {
+		for _, st := range steps {
+			if st.Approval != nil && st.Approval.Policy != "" {
+				names = append(names, st.Approval.Policy)
+			}
+			for _, sub := range st.Children() {
+				walk(sub)
+			}
+		}
+	}
+	walk(def.Steps)
+	if len(names) == 0 {
+		return nil, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT name, version, document FROM approval_policies WHERE state = 'active' AND name = ANY ($1)`, names)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]history.PolicySnapshot{}
+	for rows.Next() {
+		var name string
+		var ps history.PolicySnapshot
+		if err := rows.Scan(&name, &ps.Version, &ps.Document); err != nil {
+			return nil, err
+		}
+		out[name] = ps
+	}
+	return out, rows.Err()
 }
 
 // DefaultRetention applies when a workflow sets no settings.retention.

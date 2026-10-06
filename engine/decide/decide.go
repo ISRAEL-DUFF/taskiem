@@ -19,6 +19,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -98,6 +99,7 @@ type decider struct {
 	trigger               any
 	env                   map[string]any
 	runInfo               map[string]any
+	policies              map[string]snapshot
 	terminal              bool
 	runTimeout            bool
 	compStarted, compDone bool
@@ -147,6 +149,14 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 			d.env = map[string]any{}
 		}
 		d.runInfo, _ = m["run"].(map[string]any)
+		d.policies = map[string]snapshot{}
+		for name, ps := range d.started.Policies {
+			doc, err := policy.Parse(ps.Document)
+			if err != nil {
+				return fmt.Errorf("policy %s: %w", name, err)
+			}
+			d.policies[name] = snapshot{version: ps.Version, doc: doc}
+		}
 		return nil
 	case history.RunCompleted, history.RunFailed, history.RunCancelled:
 		d.terminal = true
@@ -510,8 +520,14 @@ func (d *decider) begin(sc scope, s *wd.Step, inst string, act map[string]any) s
 		if m, ok := subj.(map[string]any); ok {
 			p.Subject = m
 		}
-		if s.Approval.Timeout != "" {
-			dur, _ := wd.ParseDuration(s.Approval.Timeout)
+		if name := s.Approval.Policy; name != "" {
+			if err := d.applyPolicy(name, subj, &p); err != nil {
+				d.emit(history.StepFailed, inst, 0, history.FailedPayload{Error: history.Error{Kind: "policy", Message: err.Error(), Next: "fail"}})
+				return d.onError(sc, s, inst, true)
+			}
+		}
+		if timeout, _ := d.approvalTimeout(s); timeout != "" {
+			dur, _ := wd.ParseDuration(timeout)
 			p.TimeoutAt = history.FormatTime(d.now.Add(dur))
 		}
 		d.emit(history.ApprovalRequested, inst, 0, p)
@@ -665,21 +681,67 @@ func (d *decider) approvalProgress(s *wd.Step, inst string, f *facts) status {
 	if !timedOut {
 		return running
 	}
-	switch on := s.Approval.OnTimeout; {
+	timeout, onTimeout := d.approvalTimeout(s)
+	switch on := onTimeout; {
 	case on == "fail":
-		d.fail(inst, "timeout", fmt.Errorf("approval timed out after %s", s.Approval.Timeout))
+		d.fail(inst, "timeout", fmt.Errorf("approval timed out after %s", timeout))
 		return failed
 	case strings.HasPrefix(on, "escalate:") && len(f.approvalReqs) == 1:
 		p := f.approvalReqs[0]
 		p.Role = strings.TrimPrefix(on, "escalate:")
+		p.Count = 1
+		if len(p.Levels) > 0 {
+			p.Levels = []history.ApprovalLevel{{Role: p.Role, Count: 1}}
+		}
 		p.Escalated = true
-		dur, _ := wd.ParseDuration(s.Approval.Timeout)
+		dur, _ := wd.ParseDuration(timeout)
 		p.TimeoutAt = history.FormatTime(d.now.Add(dur))
 		d.emit(history.ApprovalRequested, inst, 0, p)
 		return running
 	}
 	d.emit(history.StepCompleted, inst, 0, history.CompletedPayload{Output: map[string]any{"decision": "rejected", "reason": "timeout"}})
 	return completed
+}
+
+// snapshot is an approval policy as the run started with it.
+type snapshot struct {
+	version int
+	doc     *policy.Policy
+}
+
+// applyPolicy routes an approval by its policy: the first rule matching the
+// subject sets the levels, step-up and constraints.
+func (d *decider) applyPolicy(name string, subject any, p *history.ApprovalRequestedPayload) error {
+	ps, ok := d.policies[name]
+	if !ok {
+		return fmt.Errorf("approval policy %q was not active when the run started", name)
+	}
+	rule, err := ps.doc.Match(subject)
+	if err != nil {
+		return fmt.Errorf("approval policy %q: %w", name, err)
+	}
+	for _, l := range rule.Normalised() {
+		p.Levels = append(p.Levels, history.ApprovalLevel{Role: l.Role, Count: l.Count})
+	}
+	p.Role, p.Count = p.Levels[0].Role, p.Levels[0].Count
+	p.PolicyVersion, p.StepUp = ps.version, rule.StepUp
+	p.Constraints = &history.ApprovalConstraints{ForbidSelfApproval: ps.doc.Constraints.SelfApprovalForbidden(), DistinctApprovers: ps.doc.Constraints.Distinct()}
+	return nil
+}
+
+// approvalTimeout is the step's timeout and on_timeout, or its policy's
+// where the step sets none.
+func (d *decider) approvalTimeout(s *wd.Step) (timeout, onTimeout string) {
+	timeout, onTimeout = s.Approval.Timeout, s.Approval.OnTimeout
+	if ps, ok := d.policies[s.Approval.Policy]; ok && s.Approval.Policy != "" {
+		if timeout == "" {
+			timeout = ps.doc.Timeout
+		}
+		if onTimeout == "" {
+			onTimeout = ps.doc.OnTimeout
+		}
+	}
+	return timeout, onTimeout
 }
 
 func (d *decider) branchProgress(sc scope, s *wd.Step, inst string, f *facts, start bool) status {

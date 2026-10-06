@@ -118,6 +118,13 @@ func TestGitLedDeploysOnPushWhenTestsPass(t *testing.T) {
 		t.Error("a failing sync created a version")
 	}
 
+	// A policy in the repository is activated, and a workflow may use it.
+	gh.Repo.Commit("main", map[string]string{
+		"policies/payouts.policy.json": `{"rules":[{"levels":[{"role":"approver"}]}]}`,
+		"flows/payout.wd.json": `{"schema":"wd/v1","id":"wf_payout","version":1,"name":"Payout","trigger":{"type":"manual"},
+		  "steps":[{"id":"ok","type":"approval","config":{"policy":"payouts"}}]}`,
+	})
+
 	// Fixing the test deploys version 2, recording the commit.
 	good := gh.Repo.Commit("main", map[string]string{"tests/double.test.json": strings.Replace(flowTest, `"out":4`, `"out":6`, 1)})
 	owner.must(202, "POST", "/v1/git/prod/sync", nil)
@@ -127,6 +134,9 @@ func TestGitLedDeploysOnPushWhenTestsPass(t *testing.T) {
 	last = owner.must(200, "GET", "/v1/git/prod/syncs", nil)["syncs"].([]any)[0].(map[string]any)
 	if last["status"] != "deployed" || last["commit"] != good {
 		t.Errorf("fixed: %v", last)
+	}
+	if p := owner.must(200, "GET", "/v1/policies", nil)["policies"].([]any); len(p) != 1 || p[0].(map[string]any)["created_by"] != "git:prod" {
+		t.Errorf("policies: %v", p)
 	}
 	audit := owner.must(200, "GET", "/v1/audit?action=workflow.publish", nil)
 	if raw, _ := json.Marshal(audit); !strings.Contains(string(raw), good) {

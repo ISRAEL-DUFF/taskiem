@@ -55,7 +55,6 @@ export default workflow({
   }))
   .step("check_balance", iswallet.get_balance({ wallet_id: ({ trigger }) => trigger.body.funding_wallet_id }), { retry: { max: 3, backoff: "exponential", initial: "2s" } })
   .step("approve", approval({
-    policy: "maker_checker",
     role: "payroll_approver",
     timeout: "24h",
     on_timeout: "reject",

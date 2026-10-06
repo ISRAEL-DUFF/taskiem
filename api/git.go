@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/flowcode"
 	"github.com/israel-duff/taskiem/engine/gitprovider"
+	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 )
@@ -30,6 +31,9 @@ import (
 // Git integration (spec 10.3). Credentials and the webhook secret are
 // tenant secrets in the connection's environment, so they are encrypted
 // like every other secret and never returned.
+// policiesDir holds approval policies in a repository (spec 10.3 layout).
+const policiesDir = "policies"
+
 const (
 	gitCredSecret = "git_credentials"
 	gitHookSecret = "git_webhook_secret" //nolint:gosec // a secret's name, not its value
@@ -536,7 +540,7 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 	if err != nil {
 		return "", err
 	}
-	snap, err := prov.Read(ctx, commit, []string{conn.Path, conn.TestsPath}, []string{".wd.json", ".test.json"})
+	snap, err := prov.Read(ctx, commit, []string{conn.Path, conn.TestsPath, policiesDir}, []string{".wd.json", ".test.json", ".policy.json"})
 	if err != nil {
 		return "", fmt.Errorf("reading %s: %w", conn.Repo, err)
 	}
@@ -573,6 +577,23 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 		keys[head.ID] = p
 		defs = append(defs, def{p, head.ID, doc})
 	}
+	// Approval policies: policies/<name>.policy.json.
+	policies := map[string]json.RawMessage{}
+	for _, p := range paths {
+		if !strings.HasPrefix(p, policiesDir+"/") || !strings.HasSuffix(p, ".policy.json") {
+			continue
+		}
+		name := strings.TrimSuffix(path.Base(p), ".policy.json")
+		if !policy.ValidName(name) {
+			rep.Problems = append(rep.Problems, p+": policy file names are lower-case letters, digits and _")
+			continue
+		}
+		if _, err := policy.Parse(snap.Files[p]); err != nil {
+			rep.Problems = append(rep.Problems, p+": "+err.Error())
+			continue
+		}
+		policies[name] = snap.Files[p]
+	}
 	tests := &syncTests{}
 	for _, p := range paths {
 		if !strings.HasSuffix(p, ".test.json") {
@@ -588,6 +609,14 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 		if !ok {
 			rep.Problems = append(rep.Problems, fmt.Sprintf("%s: workflow %s is not in the repository", p, target))
 			continue
+		}
+		for name, doc := range policies {
+			if _, own := f.Policies[name]; !own {
+				if f.Policies == nil {
+					f.Policies = map[string]json.RawMessage{}
+				}
+				f.Policies[name] = doc // the repository's policy, unless the test brings its own
+			}
 		}
 		results, err := f.RunDefinition(doc, s.Registry)
 		if err != nil {
@@ -607,13 +636,53 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 	if len(rep.Problems) > 0 || tests.Failed > 0 {
 		return "failed", nil
 	}
-	if len(defs) == 0 {
+	if len(defs) == 0 && len(policies) == 0 {
 		return "unchanged", nil
 	}
 
 	changed := false
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		actor := "git:" + conn.Environment
+		// Policies first: the workflows' checks need them active. Review
+		// in Git stands in for four-eyes on these edits.
+		names := make([]string, 0, len(policies))
+		for n := range policies {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			doc, err := canonical(policies[name])
+			if err != nil {
+				return err
+			}
+			var current []byte
+			err = tx.QueryRow(ctx, `SELECT document FROM approval_policies WHERE name = $1 AND state = 'active'`, name).Scan(&current)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if current != nil && sameJSON(current, doc) {
+				continue
+			}
+			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('policy:' || $1))`, name); err != nil {
+				return err
+			}
+			var v int
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM approval_policies WHERE name = $1`, name).Scan(&v); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE approval_policies SET state = 'superseded' WHERE name = $1 AND state = 'active'`, name); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO approval_policies (tenant_id, name, version, document, state, created_by, decided_by, decided_at)
+				VALUES ($1, $2, $3, $4, 'active', $5, $5, now())`, tenant, name, v, doc, actor); err != nil {
+				return err
+			}
+			if err := auditSystem(ctx, tx, tenant, actor, "policy.write", fmt.Sprintf("%s/%d", name, v), map[string]any{"commit": snap.Commit, "repo": conn.Repo}); err != nil {
+				return err
+			}
+			changed = true
+			rep.Workflows = append(rep.Workflows, syncWorkflowNote{Path: policiesDir + "/" + name + ".policy.json", Key: "policy:" + name, Action: "published", Version: v})
+		}
 		for _, d := range defs {
 			doc, err := compactJSON(d.doc)
 			if err != nil {

@@ -1,15 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 )
 
@@ -25,6 +29,7 @@ func testCmd(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	runPattern := fs.String("run", "", "only cases whose name matches this regular expression")
 	verbose := fs.Bool("v", false, "list every case, not only failures")
+	policyDir := fs.String("policies", "policies", "directory of approval policies (<name>.policy.json) the workflows use, if it exists")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -50,6 +55,10 @@ func testCmd(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	policies, err := loadPolicies(*policyDir)
+	if err != nil {
+		return err
+	}
 	passed, failed := 0, 0
 	for _, path := range files {
 		f, err := wdtest.Load(path)
@@ -65,6 +74,14 @@ func testCmd(args []string, stdout io.Writer) error {
 			}
 			if f.Cases = kept; len(kept) == 0 {
 				continue
+			}
+		}
+		for name, doc := range policies {
+			if _, own := f.Policies[name]; !own {
+				if f.Policies == nil {
+					f.Policies = map[string]json.RawMessage{}
+				}
+				f.Policies[name] = doc
 			}
 		}
 		results, err := f.Run(reg)
@@ -95,4 +112,25 @@ func testCmd(args []string, stdout io.Writer) error {
 		return errors.New("test: some cases failed")
 	}
 	return nil
+}
+
+// loadPolicies reads dir/<name>.policy.json, as a Git-led sync does. A
+// missing directory is no policies.
+func loadPolicies(dir string) (map[string]json.RawMessage, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "*.policy.json"))
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]json.RawMessage{}
+	for _, f := range files {
+		raw, err := os.ReadFile(f) //nolint:gosec // the repository's own policy files
+		if err != nil {
+			return nil, err
+		}
+		if _, err := policy.Parse(raw); err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		out[strings.TrimSuffix(filepath.Base(f), ".policy.json")] = raw
+	}
+	return out, nil
 }

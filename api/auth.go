@@ -39,17 +39,18 @@ const (
 	PermMemberManage     = "member.manage"
 	PermAuditRead        = "audit.read"
 	PermGitManage        = "git.manage"
+	PermPolicyManage     = "policy.manage"
 )
 
 var allPermissions = []string{PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel,
-	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage}
+	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage}
 
 // rolePermissions are the built-in roles (spec 13.3). Any other membership
 // role (e.g. "credit_officer") is a business role that only qualifies the
 // member for approval steps naming it, on top of approval.decide.
 var rolePermissions = map[string][]string{
 	"owner":    allPermissions,
-	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage},
+	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage},
 	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart},
 	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve},
 	"approver": {PermWorkflowRead, PermRunRead, PermApprovalDecide},
@@ -332,6 +333,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 			return tx.QueryRow(r.Context(), `SELECT email, name FROM users WHERE id = $1`, p.UserID).Scan(&email, &name)
 		})
 		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name}
+		_ = s.tx(r, func(tx pgx.Tx) error {
+			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
+			return nil
+		})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

@@ -64,6 +64,15 @@ type RunStartedPayload struct {
 	Trigger    any               `json:"trigger"`
 	Env        map[string]any    `json:"env,omitempty"`
 	Connectors map[string]string `json:"connectors,omitempty"` // "paystack@1" -> "1.4.0"
+	// Policies are the approval policies the workflow names, as active when
+	// the run started (spec 9.1).
+	Policies map[string]PolicySnapshot `json:"policies,omitempty"`
+}
+
+// PolicySnapshot is one approval policy version.
+type PolicySnapshot struct {
+	Version  int             `json:"version"`
+	Document json.RawMessage `json:"document"`
 }
 
 type RunInfo struct {
@@ -146,6 +155,24 @@ type ApprovalRequestedPayload struct {
 	Subject   map[string]any `json:"subject,omitempty"`
 	TimeoutAt string         `json:"timeout_at,omitempty"`
 	Escalated bool           `json:"escalated,omitempty"`
+	// From a policy: the levels approved in order (Role and Count are the
+	// first level's), the step-up required to vote, and the constraints.
+	PolicyVersion int                  `json:"policy_version,omitempty"`
+	Levels        []ApprovalLevel      `json:"levels,omitempty"`
+	StepUp        string               `json:"step_up,omitempty"`
+	Constraints   *ApprovalConstraints `json:"constraints,omitempty"`
+}
+
+// ApprovalLevel is one stage of a multi-level approval.
+type ApprovalLevel struct {
+	Role  string `json:"role"`
+	Count int    `json:"count"`
+}
+
+// ApprovalConstraints are a policy's separation-of-duties rules.
+type ApprovalConstraints struct {
+	ForbidSelfApproval bool `json:"forbid_self_approval"`
+	DistinctApprovers  bool `json:"distinct_approvers"`
 }
 
 type ApprovalDecidedPayload struct {

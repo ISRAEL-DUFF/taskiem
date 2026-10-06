@@ -121,7 +121,7 @@ func (s *Server) listSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	var out []secret
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT environment, name, created_by, updated_at FROM secrets WHERE name IS NOT NULL ORDER BY environment, name`)
+		rows, err := tx.Query(r.Context(), `SELECT environment, name, created_by, updated_at FROM secrets WHERE name IS NOT NULL AND environment NOT LIKE '\_%' ORDER BY environment, name`)
 		if err != nil {
 			return err
 		}

@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -31,7 +32,9 @@ type File struct {
 	Schema   string         `json:"schema"`
 	Workflow string         `json:"workflow"` // path to the *.wd.json, relative to the test file
 	Env      map[string]any `json:"env,omitempty"`
-	Cases    []Case         `json:"cases"`
+	// Policies are the approval policies the workflow names, by name.
+	Policies map[string]json.RawMessage `json:"policies,omitempty"`
+	Cases    []Case                     `json:"cases"`
 
 	path string
 }
@@ -198,9 +201,14 @@ func (f *File) RunDefinition(doc []byte, reg *connector.Registry) ([]Result, err
 	if err != nil {
 		return nil, err
 	}
+	for name, doc := range f.Policies {
+		if _, err := policy.Parse(doc); err != nil {
+			return nil, fmt.Errorf("policies.%s: %w", name, err)
+		}
+	}
 	out := make([]Result, 0, len(f.Cases))
 	for _, c := range f.Cases {
-		r := RunCase(def, reg, f.Env, c)
+		r := RunCaseWithPolicies(def, reg, f.Env, f.Policies, c)
 		r.File = f.path
 		out = append(out, r)
 	}
@@ -218,8 +226,13 @@ var mockExpr = expr.MustNewWithRoots("input")
 
 // RunCase runs one case.
 func RunCase(def *wd.Definition, reg *connector.Registry, env map[string]any, c Case) Result {
+	return RunCaseWithPolicies(def, reg, env, nil, c)
+}
+
+// RunCaseWithPolicies runs one case with approval policies in force.
+func RunCaseWithPolicies(def *wd.Definition, reg *connector.Registry, env map[string]any, policies map[string]json.RawMessage, c Case) Result {
 	start := time.Now()
-	r := &runner{def: def, reg: reg, c: c, now: Epoch, res: Result{Case: c.Name}}
+	r := &runner{def: def, reg: reg, c: c, now: Epoch, res: Result{Case: c.Name}, policies: policies}
 	r.run(env)
 	r.check()
 	r.res.Duration = time.Since(start)
@@ -246,7 +259,8 @@ type runner struct {
 	now time.Time
 	res Result
 	// errors in the test itself (a missing mock), reported as failures
-	setup []string
+	setup    []string
+	policies map[string]json.RawMessage
 }
 
 func (r *runner) append(typ, inst string, attempt int, payload any, origin string) {
@@ -288,10 +302,18 @@ func (r *runner) run(env map[string]any) {
 		}
 		return
 	}
+	var snaps map[string]history.PolicySnapshot
+	for name, doc := range r.policies {
+		if snaps == nil {
+			snaps = map[string]history.PolicySnapshot{}
+		}
+		snaps[name] = history.PolicySnapshot{Version: 1, Document: doc}
+	}
 	r.append(history.RunStarted, "", 0, history.RunStartedPayload{
-		Run:     history.RunInfo{ID: "test-run", TenantID: "test", WorkflowID: r.def.ID, Version: r.def.Version, Environment: "test", StartedAt: history.FormatTime(r.now)},
-		Trigger: r.c.Trigger,
-		Env:     merged,
+		Run:      history.RunInfo{ID: "test-run", TenantID: "test", WorkflowID: r.def.ID, Version: r.def.Version, Environment: "test", StartedAt: history.FormatTime(r.now)},
+		Trigger:  r.c.Trigger,
+		Env:      merged,
+		Policies: snaps,
 	}, history.OriginIngest)
 	var runTimeout time.Time
 	if d, err := wd.ParseDuration(r.def.Settings.Timeout); err == nil && d > 0 {

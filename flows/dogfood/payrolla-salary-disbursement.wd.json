@@ -52,7 +52,6 @@
         "check_balance"
       ],
       "config": {
-        "policy": "maker_checker",
         "role": "payroll_approver",
         "timeout": "24h",
         "on_timeout": "reject",

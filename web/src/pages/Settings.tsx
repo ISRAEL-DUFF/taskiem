@@ -34,6 +34,7 @@ export function Settings() {
       <Variables env={env} editable={can("secret.manage")} />
       {can("secret.manage") && <Egress env={env} />}
       {can("git.manage") && <Git env={env} />}
+      <Governance />
     </>
   );
 }
@@ -302,6 +303,32 @@ function Git({ env }: { env: string }) {
           </tbody>
         </table>
       )}
+    </section>
+  );
+}
+
+/** Four-eyes on change (spec 9.1); owners change it, everyone can see it. */
+function Governance() {
+  const { me } = useAuth();
+  const { data, error, reload } = useLoad(() => get<{ four_eyes_publish: boolean; four_eyes_policies: boolean }>("/v1/governance"), []);
+  const act = useAction();
+  const owner = me?.roles.includes("owner") ?? false;
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  const set = (k: "four_eyes_publish" | "four_eyes_policies", v: boolean) => act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()));
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Four-eyes</h2>
+      <p className="hint">Changes that need a second person. Only owners change these, and every change is audited.</p>
+      <ErrorBox error={act.error} />
+      <label>
+        <input type="checkbox" checked={data.four_eyes_publish} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_publish", e.target.checked)} /> Publishing a
+        workflow needs a second publisher
+      </label>
+      <br />
+      <label>
+        <input type="checkbox" checked={data.four_eyes_policies} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_policies", e.target.checked)} /> A new
+        approval policy version needs a second person
+      </label>
     </section>
   );
 }

@@ -10,6 +10,8 @@ import { Connections } from "./pages/Connections";
 import { Settings } from "./pages/Settings";
 import { Audit } from "./pages/Audit";
 import { Members } from "./pages/Members";
+import { Policies } from "./pages/Policies";
+import { Account } from "./pages/Account";
 
 export function App() {
   return (
@@ -32,7 +34,8 @@ function Shell() {
   const links: [string, string, boolean][] = [
     ["/workflows", "Workflows", can("workflow.read")],
     ["/runs", "Runs", can("run.read")],
-    ["/approvals", "Approvals", can("approval.decide")],
+    ["/approvals", "Approvals", can("approval.decide") || can("workflow.publish")],
+    ["/policies", "Approval policies", can("workflow.read")],
     ["/connections", "Connections", can("connection.manage")],
     ["/settings", "Secrets & settings", can("secret.manage") || can("workflow.read")],
     ["/audit", "Audit log", can("audit.read")],
@@ -51,7 +54,7 @@ function Shell() {
           ))}
         <div className="spacer" />
         <div className="who">
-          {me.user?.email}
+          <NavLink to="/account">{me.user?.email ?? "API key"}</NavLink>
           <br />
           {me.roles.join(", ")}
         </div>
@@ -69,6 +72,8 @@ function Shell() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/members" element={<Members />} />
+          <Route path="/policies" element={<Policies />} />
+          <Route path="/account" element={<Account />} />
           <Route path="*" element={<div className="empty">Not found</div>} />
         </Routes>
       </main>
