@@ -13,7 +13,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **Done** (below) |
 | 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **Done** (below), except a published Taskiem GitHub App and Bitbucket |
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **Done** (below); emailed anchors arrived with milestone 5's alerts |
-| 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | **In progress** (below): WASM runtime, drift monitor, and Flutterwave, Anchor, Lenco and Breet done; more connectors to follow |
+| 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | **Done** (below): WASM runtime, drift monitor, and 25 connectors (16 African, 9 global); live sandbox checks wait on provider accounts |
 | 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | **Done** (below) |
 | 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people: [X1–X5](needs-people.md#external-readiness-phase-2-milestone-6-gate-g2) |
 
@@ -91,6 +91,31 @@ The products use Flutterwave, Anchor, Lenco and Breet, so these come first, ahea
 Shared pieces: exact conversion between minor units and providers' decimal amounts (`connectors/internal/money`; an amount that cannot be read exactly is an error, never a zero), and new webhook schemes (`hmac_sha1`, `header_secret`, base64 and base64-of-hex encodings, SHA-256 key derivation) in the connector/v1 contract.
 
 Open questions for each provider are listed at the end of its guide. The one that blocks a feature: **Breet's documentation gives bank withdrawal amounts both in local currency and in USD**, so `withdraw_to_bank` is refused until a connection records the unit Breet confirmed. Live checks need a sandbox account per provider.
+
+### The rest of the library
+
+Built on 6 October 2026 from each provider's public documentation, clean-room, with recorded-shape fixtures, tests and a guide listing what to confirm before go-live. Telegram was added at the product's request.
+
+| Connector | Covers | Webhooks | Guide |
+| --- | --- | --- | --- |
+| `moniepoint@1` | Monnify (Moniepoint's developer API): transfers with status and name enquiry, reserved accounts, collections, balance; duplicate references looked up | HMAC-SHA512 | [moniepoint.md](integrations/moniepoint.md) |
+| `interswitch@1` | Payouts with status, banks, name enquiry, Web Checkout status with an amount check | HMAC-SHA512 | [interswitch.md](integrations/interswitch.md) |
+| `opay@1` | Cashier and bank-transfer collections, status, close, refunds; signed requests (payouts are not publicly documented) | In-body HMAC-SHA3-512, checked by the connector | [opay.md](integrations/opay.md) |
+| `remita@1` | Funds transfer (single and bulk), invoices (RRR), banks, name enquiry | URL token, `Ok` reply, one event per payment | [remita.md](integrations/remita.md) |
+| `mono@1` | Account linking and data, statements, identity, DirectPay, Direct Debit mandates (reconcilable) | Shared secret, 200 reply | [mono.md](integrations/mono.md) |
+| `prembly@1` | IdentityPass KYC: BVN, NIN, phone, licence, passport, voter's card, CAC, bank account, face match, liveness | HMAC-SHA256 | [prembly.md](integrations/prembly.md) |
+| `youverify@1` | KYC and KYB, address verification, AML screening | HMAC-SHA256, 200 reply | [youverify.md](integrations/youverify.md) |
+| `africastalking@1` | SMS (bulk), fetch messages, airtime | URL token (Africa's Talking signs nothing) | [africastalking.md](integrations/africastalking.md) |
+| `telegram@1` | Bot API: messages, documents, photos, edits, button answers, chat lookups, webhook registration | Secret-token header | [telegram.md](integrations/telegram.md) |
+| `whatsapp@1` | Cloud API: text, templates, media, interactive messages, read receipts | HMAC-SHA256, GET verification, one event per batched item | [whatsapp.md](integrations/whatsapp.md) |
+| `slack@1` | Messages, updates, ephemeral, reactions, channels, users by email, file uploads | Slack v0 signatures, URL verification; button clicks correlate on the clicked value | [slack.md](integrations/slack.md) |
+| `gmail@1` | Send, search, read, labels, drafts; service account or OAuth refresh token | — | [gmail.md](integrations/gmail.md) |
+| `googlesheets@1` | Read, append, update, clear, create, add sheet | — | [googlesheets.md](integrations/googlesheets.md) |
+| `mysql@1` | Read-only queries and writes, typed parameters; MySQL's protocol written from Oracle's docs (the common Go driver is MPL-2.0) | — | [mysql.md](integrations/mysql.md) |
+| `s3@1` | S3 and compatible stores (R2, MinIO, Spaces, Wasabi): objects, listing, copy, presigned URLs; SigV4 written in-house | — | [s3.md](integrations/s3.md) |
+| `sftp@1` | Upload (atomic), download, list, stat, rename, delete, mkdir; host keys pinned before any credential is sent | — | [sftp.md](integrations/sftp.md) |
+
+Engine features they needed, all in the connector/v1 contract: `slack_v0`, `query_secret`, `basic` and `connector` verify schemes; trigger `handshake` (Meta's GET challenge, Slack's URL verification), `split` (one event per item of a batched delivery) and `ack` (the reply a provider expects); form-encoded deliveries as fields; `parseJSON` in trigger expressions; and personal data declared in outputs (`output.<path>`), sealed when a step's result is written. One library added: `github.com/pkg/sftp` (BSD-2-Clause). Every open question and account is in [What needs people](needs-people.md#providers-phase-2-milestone-4-gate-g2).
 
 ## Milestone 5: what exists
 

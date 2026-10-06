@@ -1,6 +1,6 @@
 # What needs people
 
-Every open item that engineering cannot finish alone, across all phases, in one place. None of them blocks writing code: each lists what the code already does and what the item will unblock once it is done. When an item is done, tick it here and in the status page it came from. Last updated 2026-10-06.
+Every open item that engineering cannot finish alone, across all phases, in one place. None of them blocks writing code: each lists what the code already does and what the item will unblock once it is done. When an item is done, tick it here and in the status page it came from. Last updated 2026-10-06 (connectors).
 
 Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](phase-2-status.md), the [build plan](spec/build-plan.md) gates, the [integration guides](integrations/), and the [dogfood workflows](../flows/dogfood/README.md).
 
@@ -44,12 +44,19 @@ Each connector is built from the provider's public documentation and tested agai
 
 | # | Item | Who | Code status | Unblocks |
 | --- | --- | --- | --- | --- |
-| P1 | [ ] Sandbox accounts for Paystack, Dojah, Termii, iswallet, Flutterwave, Anchor, Lenco and Breet, and for each connector added later; their credentials stored for the nightly sandbox checks | Whoever holds each provider relationship | Connectors built and fixture-tested | G2 ("nightly sandbox checks") |
+| P1 | [ ] Sandbox or test accounts for every connector, with credentials stored for the nightly sandbox checks: Paystack, Dojah, Termii, iswallet, Flutterwave, Anchor, Lenco, Breet, Monnify (Moniepoint: a disbursement wallet and contract code, two-factor approval off for API transfers), Interswitch (a funded payout wallet and PIN, a merchant code with Web Checkout), OPay, Remita (demo), Mono, Prembly, Youverify, Africa's Talking (sandbox app) | Whoever holds each provider relationship | All 25 connectors built and fixture-tested | G2 ("nightly sandbox checks") |
 | P2 | [ ] **Breet: the unit of bank withdrawal amounts** (local currency or USD) | Breet contact | `withdraw_to_bank` refused until a connection records the unit | Breet bank withdrawals |
 | P3 | [ ] Breet: whether a repeated `externalId` is refused; whether the one-minute duplicate guard covers bank withdrawals; separate sandbox and production credentials and webhook secrets | Breet contact | Withdrawals reconcile by `externalId` and are never resent blind | Breet go-live |
 | P4 | [ ] Anchor: the answer to a repeated `reference` without the idempotency key, and to a by-reference lookup that matches nothing; whether insufficient funds can be a synchronous 4xx; the meaning of statuses beyond PENDING, COMPLETED, FAILED, REVERSED; the idempotency window (24 or 48 hours); how to create virtual accounts now | Anchor contact | Connector handles each case conservatively ([guide](integrations/anchor.md)) | Anchor go-live, virtual accounts |
 | P5 | [ ] Flutterwave (in the sandbox): NGN payouts are in naira; how long a reference stays unique; settle test payouts with `event` deliveries | Flutterwave sandbox holder | Whole-naira payouts enforced ([guide](integrations/flutterwave.md)) | Flutterwave go-live |
 | P6 | [ ] Lenco: `/transfer` or `/transactions`; what `declined` means and whether it is final; reference length and uniqueness; whether the webhook signature covers the raw body; the unit of virtual-account amounts | Lenco contact | `declined` parks for a person; raw-body signatures verified ([guide](integrations/lenco.md)) | Lenco go-live |
+| P8 | [ ] **OPay's payout API documentation** (wallet and bank transfers, transfer status, balance, bank list, name enquiry): not in OPay's public docs | OPay contact | Collections, refunds and verified callbacks built; payouts not | OPay payouts |
+| P9 | [ ] **Remita's live host for invoices (echannel)**, and confirmation that `api-gateway.remita.net` is the production base for Funds Transfer | Remita contact | Live invoice calls refused with a clear error until the host is added | Remita live invoices |
+| P10 | [ ] **Monnify's live host** (`api.monnify.com`, from a search excerpt: its docs site blocks automated readers) and production IP whitelisting for disbursements | Monnify contact | Built against the documented sandbox | Moniepoint go-live |
+| P11 | [ ] Interswitch payout webhooks (undocumented: payouts are confirmed by polling `get_transfer`), the customer-lookup response shape, and which sandbox host batch payouts use | Interswitch contact | Conservative handling ([guide](integrations/interswitch.md)) | Interswitch go-live |
+| P12 | [ ] The remaining "To confirm before go-live" questions in each new guide (about 100 in all, mostly reference limits, unusual statuses and webhook details): [Moniepoint](integrations/moniepoint.md) 8, [Interswitch](integrations/interswitch.md) 8, [OPay](integrations/opay.md) 7, [Remita](integrations/remita.md) 9, [Mono](integrations/mono.md) 8, [Prembly](integrations/prembly.md) 6, [Youverify](integrations/youverify.md) 7, [Africa's Talking](integrations/africastalking.md) 7, [Telegram](integrations/telegram.md) 4, [WhatsApp](integrations/whatsapp.md) 5, [Slack](integrations/slack.md) 5, [Gmail](integrations/gmail.md) 4, [Google Sheets](integrations/googlesheets.md) 2, [MySQL](integrations/mysql.md) 4, [S3](integrations/s3.md) 5, [SFTP](integrations/sftp.md) 5 | Each provider relationship, or a sandbox run | Every case is handled conservatively today: an unclear outcome parks for a person rather than repeating a payment | Go-live of each connector |
+| P13 | [ ] Accounts for the messaging and workspace connectors' live checks: a Telegram bot, a Meta app with a WhatsApp Business number, a Slack workspace with the Taskiem app installed, a Google Cloud project with the Gmail and Sheets APIs (plus a Workspace admin to grant domain-wide delegation, or a user to consent for a refresh token) | Workspace and platform admins | Built and tested against fakes | Live checks for those connectors |
+| P14 | [ ] A real MySQL 8 (and ideally MariaDB 10.11) server to run the MySQL integration test (`TASKIEM_TEST_MYSQL_DSN`); managed services (RDS, Cloud SQL, Azure) to try | Infra | The protocol client is tested against an in-process fake server only | MySQL go-live |
 | P7 | [ ] Accounts or partner agreements for connectors that need one before their docs or sandbox open (for example NIBSS through a licensed partner) | Partnerships | Remaining connectors are built from public docs first | G2 ("15 African connectors live") |
 
 ## Identity providers and Git (Phase 2 milestones 2 and 5)
@@ -70,11 +77,20 @@ Each connector is built from the provider's public documentation and tested agai
 | X4 | [ ] Onboard each partner: tenant created, SSO connected, their providers' credentials entered, first workflows in production | Partner success, with the partner | `taskiem bootstrap` or signup (`TASKIEM_ALLOW_SIGNUP`) creates tenants | G2 ("running production workflows") |
 | X5 | [ ] A design partner's compliance or risk team reviews approvals, audit and reports, and signs off | The partner's compliance team | Policies, four-eyes, audit chain, anchors and reports built ([governance](governance.md), [compliance](compliance.md)) | G2 |
 
+## Decisions waiting on someone
+
+| # | Decision | Who | Today |
+| --- | --- | --- | --- |
+| E1 | [ ] MySQL: should `sslmode=require` (the default) verify the server certificate? Without verification, MySQL 8's default login can send the password in clear to whoever answers if the network is intercepted | Security / leadership | `require` encrypts but does not verify unless `ssl_ca` is set (as PostgreSQL's does); the guide recommends `verify-full` |
+| E2 | [ ] MySQL: send `KILL QUERY` when an `execute` times out? `max_execution_time` only covers SELECT, so a slow write can keep running after the step parks | Engineering lead | Not sent; the step parks as an unknown outcome |
+| E3 | [ ] SFTP: on servers without OpenSSH's atomic rename, refuse to overwrite instead of delete-then-rename? | Engineering lead | Overwrites, and reports `atomic: false` |
+| E4 | [ ] A decision-log entry recording the clean-room MySQL protocol client (written from Oracle's docs because the common driver is MPL-2.0) | Founder | Noted in the connector's guide and package docs |
+
 ## Engineering carries on meanwhile
 
 None of the items above stops code. Work that needs no one:
 
-- **More connectors** toward G2's 15 African connectors (8 today: Paystack, Dojah, Termii, iswallet, Flutterwave, Anchor, Lenco, Breet): Moniepoint, Interswitch, Opay, Remita, Mono, Prembly, Youverify, Africa's Talking; and the global set: WhatsApp (send), Slack, Gmail, Google Sheets, MySQL, S3, SFTP. Each is built from public docs with fixtures; only its live sandbox check waits on P1.
+- **Connectors** are built: 16 African (Paystack, Dojah, Termii, iswallet, Flutterwave, Anchor, Lenco, Breet, Moniepoint, Interswitch, OPay, Remita, Mono, Prembly, Youverify, Africa's Talking), against G2's 15, and the global set (WhatsApp, Telegram, Slack, Gmail, Google Sheets, MySQL, S3, SFTP, PostgreSQL). What remains for each is its live sandbox check (P1).
 - **Bitbucket** for Git-led and platform-led modes.
 - **Deployment**: Kubernetes manifests and a Helm chart (spec 15.4), so D5 is a matter of applying them.
 - **Known gaps** carried from Phase 1: incremental decision state for long histories, plan caps and soft ingest limits, password reset, per-use `secret.read` auditing, a design for reaching private databases.
