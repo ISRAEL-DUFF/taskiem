@@ -4,7 +4,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -215,27 +219,79 @@ func bootstrap(args []string, stdout io.Writer) error {
 }
 
 func auditCmd(args []string, stdout io.Writer) error {
-	if len(args) != 2 || args[0] != "verify" {
-		return errors.New("usage: taskiem audit verify FILE (an export from GET /v1/audit/export; - for stdin)")
+	usage := errors.New("usage: taskiem audit verify [--anchors FILE [--key BASE64]] FILE (an export from GET /v1/audit/export; - for stdin)")
+	if len(args) < 1 || args[0] != "verify" {
+		return usage
+	}
+	fs := flag.NewFlagSet("audit verify", flag.ContinueOnError)
+	anchorsFile := fs.String("anchors", "", "anchors to check the export against: the JSON lines delivered outside the database, or GET /v1/audit/anchors")
+	key := fs.String("key", "", "the anchor public key (base64), from GET /v1/audit/anchors")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return usage
 	}
 	var r io.Reader = os.Stdin
-	if args[1] != "-" {
-		f, err := os.Open(args[1])
+	if fs.Arg(0) != "-" {
+		f, err := os.Open(fs.Arg(0))
 		if err != nil {
 			return err
 		}
 		defer func() { _ = f.Close() }()
 		r = f
 	}
-	res, err := audit.Verify(r)
+	if *anchorsFile == "" {
+		res, err := audit.Verify(r)
+		if err != nil {
+			return err
+		}
+		if res.FirstBroken != 0 {
+			return fmt.Errorf("audit chain BROKEN at entry %d: %s (%d entries verified before it)", res.FirstBroken, res.Reason, res.Entries)
+		}
+		fmt.Fprintf(stdout, "audit chain intact: %d entries, every hash and link recomputed\n", res.Entries)
+		return nil
+	}
+	raw, err := os.ReadFile(*anchorsFile)
+	if err != nil {
+		return err
+	}
+	anchors, err := readAnchorsFile(raw)
+	if err != nil {
+		return err
+	}
+	var pub ed25519.PublicKey
+	if *key != "" {
+		b, err := base64.StdEncoding.DecodeString(*key)
+		if err != nil || len(b) != ed25519.PublicKeySize {
+			return errors.New("audit verify: --key must be a base64 Ed25519 public key")
+		}
+		pub = b
+	}
+	res, err := audit.VerifyWithAnchors(r, anchors, pub)
 	if err != nil {
 		return err
 	}
 	if res.FirstBroken != 0 {
-		return fmt.Errorf("audit chain BROKEN at entry %d: %s (%d entries verified before it)", res.FirstBroken, res.Reason, res.Entries)
+		return fmt.Errorf("audit chain BROKEN at entry %d: %s", res.FirstBroken, res.Reason)
 	}
-	fmt.Fprintf(stdout, "audit chain intact: %d entries, every hash and link recomputed\n", res.Entries)
+	signed := "signatures not checked (no --key)"
+	if pub != nil {
+		signed = "every signature checked"
+	}
+	fmt.Fprintf(stdout, "audit chain intact: %d entries, and it matches all %d anchors (%s)\n", res.Entries, res.Anchors, signed)
 	return nil
+}
+
+// readAnchorsFile accepts anchors as JSON lines, or the API's response.
+func readAnchorsFile(raw []byte) ([]audit.Anchor, error) {
+	var resp struct {
+		Anchors []audit.Anchor `json:"anchors"`
+	}
+	if json.Unmarshal(raw, &resp) == nil && resp.Anchors != nil {
+		return resp.Anchors, nil
+	}
+	return audit.ReadAnchors(bytes.NewReader(raw))
 }
 
 // healthcheck probes the local API's /readyz, for container health checks

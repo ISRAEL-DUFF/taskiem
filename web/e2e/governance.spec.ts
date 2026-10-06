@@ -70,4 +70,9 @@ test("a policy routes an approval that needs an authenticator code", async ({ pa
 
   await expect.poll(async () => ((await api("GET", `/v1/runs/${String(run.run_id)}`)).run as { status: string }).status).toBe("completed");
   await ctx.close();
+
+  // The approval shows in the owner's approvals report, with its step-up.
+  await page.getByRole("link", { name: "Reports" }).click();
+  await expect(page.getByTestId("report-table")).toContainText("ann@e2e.test");
+  await expect(page.getByTestId("report-table")).toContainText("totp");
 });

@@ -322,3 +322,14 @@ func toJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+// raw returns a successful response's body as text (CSV and the like).
+func (c *client) raw(t *testing.T, method, path string) string {
+	t.Helper()
+	status, out := c.do(method, path, nil)
+	if status != 200 {
+		t.Fatalf("%s %s: %d %v", method, path, status, out)
+	}
+	s, _ := out["raw"].(string)
+	return s
+}

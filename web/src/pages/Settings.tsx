@@ -310,11 +310,13 @@ function Git({ env }: { env: string }) {
 /** Four-eyes on change (spec 9.1); owners change it, everyone can see it. */
 function Governance() {
   const { me } = useAuth();
-  const { data, error, reload } = useLoad(() => get<{ four_eyes_publish: boolean; four_eyes_policies: boolean }>("/v1/governance"), []);
+  const { data, error, reload } = useLoad(() => get<{ four_eyes_publish: boolean; four_eyes_policies: boolean; default_retention: string }>("/v1/governance"), []);
+  const [retention, setRetention] = useState<string>();
   const act = useAction();
   const owner = me?.roles.includes("owner") ?? false;
   if (!data) return error ? <ErrorBox error={error} /> : null;
-  const set = (k: "four_eyes_publish" | "four_eyes_policies", v: boolean) => act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()));
+  const set = (k: "four_eyes_publish" | "four_eyes_policies" | "default_retention", v: boolean | string) =>
+    act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()));
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Four-eyes</h2>
@@ -329,6 +331,16 @@ function Governance() {
         <input type="checkbox" checked={data.four_eyes_policies} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_policies", e.target.checked)} /> A new
         approval policy version needs a second person
       </label>
+      <h2>Retention</h2>
+      <p className="hint">How long run data is kept after a run ends, when its workflow sets no retention (default 90d). The audit log is kept regardless.</p>
+      <div className="row">
+        <input value={retention ?? data.default_retention} placeholder="90d" disabled={!owner} onChange={(e) => setRetention(e.target.value)} style={{ maxWidth: 160 }} />
+        {owner && (
+          <button disabled={act.busy || retention === undefined} onClick={() => void set("default_retention", retention ?? "").then(() => setRetention(undefined))}>
+            Save retention
+          </button>
+        )}
+      </div>
     </section>
   );
 }

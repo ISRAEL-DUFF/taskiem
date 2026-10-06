@@ -27,16 +27,19 @@ import (
 // --- settings ---
 
 type governance struct {
-	FourEyesPublish  bool       `json:"four_eyes_publish"`
-	FourEyesPolicies bool       `json:"four_eyes_policies"`
+	FourEyesPublish  bool `json:"four_eyes_publish"`
+	FourEyesPolicies bool `json:"four_eyes_policies"`
+	// DefaultRetention keeps run payloads this long after a run ends when
+	// its workflow sets no settings.retention (spec 9.4); empty is 90 days.
+	DefaultRetention string     `json:"default_retention"`
 	UpdatedBy        string     `json:"updated_by,omitempty"`
 	UpdatedAt        *time.Time `json:"updated_at,omitempty"`
 }
 
 func governanceTx(ctx context.Context, tx pgx.Tx) (governance, error) {
 	var g governance
-	err := tx.QueryRow(ctx, `SELECT four_eyes_publish, four_eyes_policies, updated_by, updated_at FROM governance_settings`).
-		Scan(&g.FourEyesPublish, &g.FourEyesPolicies, &g.UpdatedBy, &g.UpdatedAt)
+	err := tx.QueryRow(ctx, `SELECT four_eyes_publish, four_eyes_policies, COALESCE(default_retention, ''), updated_by, updated_at FROM governance_settings`).
+		Scan(&g.FourEyesPublish, &g.FourEyesPolicies, &g.DefaultRetention, &g.UpdatedBy, &g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return governance{}, nil
 	}
@@ -70,19 +73,26 @@ func (s *Server) putGovernance(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if req.DefaultRetention != "" {
+		if d, err := wd.ParseDuration(req.DefaultRetention); err != nil || d < 24*time.Hour {
+			s.fail(w, r, fmt.Errorf("%w: default_retention is a duration of at least 1d, such as 30d", errBadRequest))
+			return
+		}
+	}
 	err := s.tx(r, func(tx pgx.Tx) error {
 		before, err := governanceTx(r.Context(), tx)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(r.Context(), `INSERT INTO governance_settings (tenant_id, four_eyes_publish, four_eyes_policies, updated_by) VALUES ($1, $2, $3, $4)
+		if _, err := tx.Exec(r.Context(), `INSERT INTO governance_settings (tenant_id, four_eyes_publish, four_eyes_policies, default_retention, updated_by) VALUES ($1, $2, $3, NULLIF($4, ''), $5)
 			ON CONFLICT (tenant_id) DO UPDATE SET four_eyes_publish = EXCLUDED.four_eyes_publish, four_eyes_policies = EXCLUDED.four_eyes_policies,
-			  updated_by = EXCLUDED.updated_by, updated_at = now()`, p.TenantID, req.FourEyesPublish, req.FourEyesPolicies, p.Actor()); err != nil {
+			  default_retention = EXCLUDED.default_retention, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+			p.TenantID, req.FourEyesPublish, req.FourEyesPolicies, req.DefaultRetention, p.Actor()); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "governance.change", "", map[string]any{
-			"before": map[string]bool{"four_eyes_publish": before.FourEyesPublish, "four_eyes_policies": before.FourEyesPolicies},
-			"after":  map[string]bool{"four_eyes_publish": req.FourEyesPublish, "four_eyes_policies": req.FourEyesPolicies},
+			"before": map[string]any{"four_eyes_publish": before.FourEyesPublish, "four_eyes_policies": before.FourEyesPolicies, "default_retention": before.DefaultRetention},
+			"after":  map[string]any{"four_eyes_publish": req.FourEyesPublish, "four_eyes_policies": req.FourEyesPolicies, "default_retention": req.DefaultRetention},
 		})
 	})
 	if err != nil {

@@ -154,3 +154,27 @@ func TestRetentionPurgesApprovals(t *testing.T) {
 		t.Errorf("%d approvals left", left)
 	}
 }
+
+// A tenant's default retention applies to workflows that set none; a
+// workflow's own setting still wins.
+func TestTenantDefaultRetention(t *testing.T) {
+	e := rt.New(t)
+	if _, err := e.DB.Admin.Exec(ctx, `INSERT INTO governance_settings (tenant_id, default_retention, updated_by) VALUES ($1, '30d', 'test')`, e.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	plain := e.Start(t, e.Publish(t, wfDoc(`{"id":"x","type":"transform","config":{"output":1}}`, "")), map[string]any{})
+	own := e.Start(t, e.Publish(t, wfDoc(`{"id":"x","type":"transform","config":{"output":1}}`, `{"retention":"7d"}`)), map[string]any{})
+	days := func(ref runtime.RunRef) float64 {
+		var d float64
+		if err := e.DB.Admin.QueryRow(ctx, `SELECT extract(epoch FROM retain_until - ended_at) / 86400 FROM runs WHERE id = $1`, ref.ID).Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	if d := days(plain); d < 29.9 || d > 30.1 {
+		t.Errorf("tenant default: %.1f days", d)
+	}
+	if d := days(own); d < 6.9 || d > 7.1 {
+		t.Errorf("workflow setting: %.1f days", d)
+	}
+}

@@ -30,11 +30,15 @@ export function Audit() {
         <a className="button" href="/v1/audit/export" download>
           Export
         </a>
+        <a className="button" href="/v1/audit/anchors" download="taskiem-anchors.json">
+          Anchors
+        </a>
       </div>
       <ErrorBox error={error ?? act.error} />
       {verdict && (
         <div className={verdict.intact ? "notice" : "error"} data-testid="audit-verdict">
-          {verdict.intact ? "The hash chain is intact." : `The chain is broken at entry ${verdict.first_broken_seq}.`} Verify an export offline with <code>taskiem audit verify FILE</code>.
+          {verdict.intact ? "The hash chain is intact." : `The chain is broken at entry ${verdict.first_broken_seq}.`} Verify an export offline with <code>taskiem audit verify FILE</code>, and against the daily signed anchors with{" "}
+          <code>taskiem audit verify --anchors taskiem-anchors.json --key KEY FILE</code> (the key is in the anchors file).
         </div>
       )}
       {data && (

@@ -16,6 +16,10 @@ x-taskiem-env: &taskiem-env
   TASKIEM_OPENBAO_TOKEN: dev
   TASKIEM_KMS_KEY: taskiem
   TASKIEM_ARCHIVE_DIR: /var/lib/taskiem/archive
+  # Daily signed audit-chain anchors (docs/operations.md). Set
+  # TASKIEM_ANCHOR_KEY in your shell or .env: openssl rand -base64 32
+  TASKIEM_ANCHOR_KEY: ${TASKIEM_ANCHOR_KEY:-}
+  TASKIEM_ANCHOR_DIR: /var/lib/taskiem/anchors
   TASKIEM_WEB_DIR: /web
   # Plain HTTP on localhost; set true behind TLS.
   TASKIEM_SECURE_COOKIES: "false"
@@ -64,7 +68,7 @@ services:
     command: ["serve", "--role", "all"]
     environment: *taskiem-env
     ports: ["8080:8080", "9090:9090"]
-    volumes: [archive:/var/lib/taskiem/archive]
+    volumes: [archive:/var/lib/taskiem/archive, anchors:/var/lib/taskiem/anchors]
     depends_on:
       migrate: { condition: service_completed_successfully }
       openbao-init: { condition: service_completed_successfully }
@@ -85,3 +89,4 @@ volumes:
   pgdata: {}
   seaweed: {}
   archive: {}
+  anchors: {}

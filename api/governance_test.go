@@ -123,6 +123,47 @@ func TestPolicyLevelsStepUpAndDelegation(t *testing.T) {
 	if c["alice"].must(200, "POST", "/v1/approvals/"+small+"/ok", map[string]any{"decision": "approved"})["status"] != "approved" {
 		t.Error("small amount")
 	}
+
+	// The approvals report shows every decision, who it was for, and bands.
+	rep := owner.must(200, "GET", "/v1/reports/approvals", nil)
+	rows := rep["rows"].([]any)
+	if len(rows) != 4 {
+		t.Fatalf("approval rows: %v", rows)
+	}
+	var daveRow map[string]any
+	for _, r := range rows {
+		if m := r.(map[string]any); m["approver"] == "dave@acme.test" {
+			daveRow = m
+		}
+	}
+	if daveRow == nil || daveRow["on_behalf_of"] != "carol@acme.test" || daveRow["level"] != float64(2) || daveRow["step_up"] != "totp" || daveRow["band"] != "₦1m – ₦10m" {
+		t.Errorf("dave's row: %v", daveRow)
+	}
+	if !strings.Contains(toJSON(rep["summary"]), `"band":"under ₦100k"`) {
+		t.Errorf("summary: %v", rep["summary"])
+	}
+	csv := owner.raw(t, "GET", "/v1/reports/approvals?format=csv")
+	if !strings.HasPrefix(csv, "decided_at,approver,on_behalf_of,decision,level") || !strings.Contains(csv, "dave@acme.test,carol@acme.test,approved,2,totp") {
+		t.Errorf("csv:\n%s", csv)
+	}
+	changes := owner.must(200, "GET", "/v1/reports/changes", nil)["rows"].([]any)
+	if len(changes) != 1 || changes[0].(map[string]any)["published_by"] == nil {
+		t.Errorf("changes: %v", changes)
+	}
+	chain := owner.must(200, "GET", "/v1/reports/chain", nil)["summary"].(map[string]any)
+	if chain["intact"] != true || chain["entries"].(float64) < 10 {
+		t.Errorf("chain: %v", chain)
+	}
+	owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	if pii := owner.must(200, "GET", "/v1/reports/pii?format=json", nil)["rows"].([]any); len(pii) != 1 || pii[0].(map[string]any)["action"] != "pii.reveal" {
+		t.Errorf("pii access: %v", pii)
+	}
+	if eff := owner.must(200, "GET", "/v1/reports/effects?from=2020-01-01&to=2099-01-01", nil); len(eff["rows"].([]any)) != 0 {
+		t.Errorf("effects: %v", eff)
+	}
+	c["dave"].must(403, "GET", "/v1/reports/approvals", nil) // audit.read only
+	owner.must(400, "GET", "/v1/reports/approvals?from=yesterday", nil)
+	owner.must(404, "GET", "/v1/reports/salaries", nil)
 }
 
 func TestFourEyesOnPublishingAndPolicies(t *testing.T) {

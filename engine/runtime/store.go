@@ -474,6 +474,13 @@ const DefaultRetention = 90 * 24 * time.Hour
 func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
 	run := r.ref.ID
 	retention := DefaultRetention
+	var tenantDefault string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(default_retention, '') FROM governance_settings WHERE tenant_id = $1`, r.ref.TenantID).Scan(&tenantDefault); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if d, err := wd.ParseDuration(tenantDefault); err == nil && d > 0 {
+		retention = d
+	}
 	if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
 		retention = d
 	}

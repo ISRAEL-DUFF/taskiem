@@ -10,7 +10,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | --- | --- | --- | --- | --- |
 | 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **Done** (below) |
 | 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **Done** (below), except a published Taskiem GitHub App and Bitbucket |
-| 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **In progress**: approval policies, levels, delegation, TOTP step-up, four-eyes and PII detection done (below); reports, anchoring and retention next |
+| 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **Done** (below), except passkey step-up (with milestone 5's passkeys) and emailed anchors (with milestone 5's email) |
 | 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | Not started |
 | 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | Not started |
 | 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people |
@@ -49,7 +49,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 
 Definitions are stored as `jsonb`, which reorders keys, so code generated from a stored version lists object keys in Postgres's order rather than the author's. Git sync will carry the author's file.
 
-## Milestone 3: what exists so far
+## Milestone 3: what exists
 
 | Area | Deliverable | Where |
 | --- | --- | --- |
@@ -58,6 +58,9 @@ Definitions are stored as `jsonb`, which reorders keys, so code generated from a
 | Delegation | Time-boxed (at most 90 days), reasoned, revocable hand-over of approval roles; inbox shows whom you cover for; audited | `api/governance.go`, Approvals page |
 | Step-up | TOTP (RFC 6238, verified against the RFC's vectors), enrolment under Account, single-use codes; asked for only after eligibility | `engine/totp`, Account page |
 | Four-eyes | Owner settings: publishing needs a second publisher (publish requests), policy versions need a second person | `api/governance.go`, Settings, Approvals pages |
+| Reports | Approvals by approver and amount band (with delegations, levels, step-up), failed and reconciled effects with operator resolutions, access to personal data, workflow changes with diffs, and the chain verified with its anchors; JSON or CSV, viewing audited | `api/reports.go`, Reports page, [compliance](compliance.md) |
+| Anchoring | Daily Ed25519-signed chain heads, appended outside the database first and recorded append-only; `taskiem audit verify --anchors` catches a chain rewritten with every hash recomputed | `engine/audit/anchor.go`, migration 00017, `cmd/taskiem` |
+| Retention | A tenant default for run data (a workflow's own setting still wins); crypto-shredding erasure was already in place | `engine/runtime/store.go`, Settings |
 | PII detection | Conservative validators for Nigerian identifiers (phone, BVN, NIN, NUBAN by check digit or field name, Luhn-valid cards by scheme, email) seal undeclared personal data in step results and every payload before it is written; copies are sealed by taint. Code step logs, provider error messages and the process's own logs are masked | `engine/pii/detect.go`, `engine/runtime`, `cmd/taskiem/serve.go`, [privacy](privacy.md) |
 
 Passkey step-up waits for passkey sign-in (milestone 5), which needs the same WebAuthn support.

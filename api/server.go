@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -50,6 +51,9 @@ type Server struct {
 	Static http.Handler
 	// Egress guards calls to Git hosts; nil uses a default guard.
 	Egress *egress.Guard
+	// AnchorKey is the public key audit anchors are signed with, published
+	// to tenants so they can check anchors themselves.
+	AnchorKey ed25519.PublicKey
 
 	limiters sync.Map // ip -> *rate.Limiter, for login attempts
 	defs     sync.Map // "workflow/version" -> *wd.Definition
@@ -120,6 +124,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermAuditRead)).Get("/audit", s.listAudit)
 			r.With(s.need(PermAuditRead)).Get("/audit/verify", s.verifyAudit)
 			r.With(s.need(PermAuditRead)).Get("/audit/export", s.exportAudit)
+			r.With(s.need(PermAuditRead)).Get("/audit/anchors", s.listAnchors)
+			r.With(s.need(PermAuditRead)).Get("/reports/{kind}", s.getReport)
 			r.With(s.need(PermPIIErase)).Post("/pii/erase", s.erase)
 
 			r.Get("/governance", s.getGovernance)

@@ -22,6 +22,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
+	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/ingest"
@@ -40,6 +41,7 @@ type config struct {
 	KMS, LocalKey                     string
 	OpenBaoAddr, OpenBaoToken, KMSKey string
 	ArchiveDir, WebDir                string
+	AnchorKey, AnchorDir              string
 	SecureCookies, TrustProxy, Signup bool
 	Queues                            []string
 	Connectors                        builtin.Options
@@ -75,6 +77,8 @@ func loadConfig() (config, error) {
 		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
 		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
 		ArchiveDir:    os.Getenv("TASKIEM_ARCHIVE_DIR"),
+		AnchorKey:     os.Getenv("TASKIEM_ANCHOR_KEY"),
+		AnchorDir:     os.Getenv("TASKIEM_ANCHOR_DIR"),
 		WebDir:        os.Getenv("TASKIEM_WEB_DIR"),
 		SecureCookies: envBool("TASKIEM_SECURE_COOKIES", true),
 		TrustProxy:    envBool("TASKIEM_TRUST_PROXY", false),
@@ -203,6 +207,9 @@ func serve(ctx context.Context, args []string) error {
 	if is("api") {
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log,
 			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy}
+		if signer := cfg.anchorSigner(nil); signer != nil {
+			srv.AnchorKey = signer.PublicKey()
+		}
 		if *role == "all" {
 			srv.Ingest = e.hooks() // one listener for a small install
 		}
@@ -228,6 +235,12 @@ func serve(ctx context.Context, args []string) error {
 		}
 		cron := &ingest.Cron{Store: e.store, Logger: log}
 		tasks = append(tasks, s.Run, cron.Run)
+		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
+			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
+			tasks = append(tasks, a.Run)
+		} else {
+			log.Warn("TASKIEM_ANCHOR_KEY or TASKIEM_ANCHOR_DIR unset: audit chain heads are not anchored outside the database")
+		}
 	}
 	if *role == "orchestrator" {
 		s := &runtime.Scheduler{Store: e.store, Logger: log, SweepOnly: true, Interval: 100 * time.Millisecond}
@@ -307,4 +320,23 @@ func redactAttr(_ []string, a slog.Attr) slog.Attr {
 		}
 	}
 	return a
+}
+
+// anchorSigner is the audit anchoring key, from TASKIEM_ANCHOR_KEY (a
+// base64 32-byte Ed25519 seed); nil when unset or invalid.
+func (c config) anchorSigner(log *slog.Logger) *audit.Signer {
+	if c.AnchorKey == "" {
+		return nil
+	}
+	seed, err := base64.StdEncoding.DecodeString(c.AnchorKey)
+	if err == nil {
+		var s *audit.Signer
+		if s, err = audit.NewSigner(seed); err == nil {
+			return s
+		}
+	}
+	if log != nil {
+		log.Error("TASKIEM_ANCHOR_KEY must be 32 bytes, base64 (openssl rand -base64 32)", "err", err)
+	}
+	return nil
 }

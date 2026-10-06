@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -387,4 +388,26 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true})
+}
+
+// listAnchors returns the tenant's signed audit-chain anchors and the key
+// they verify with. With an export, they let an auditor show the chain was
+// not rewritten after each anchor: taskiem audit verify --anchors.
+func (s *Server) listAnchors(w http.ResponseWriter, r *http.Request) {
+	var out []audit.Anchor
+	err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		out, err = audit.ListAnchors(r.Context(), tx)
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	resp := map[string]any{"anchors": nonNil(out)}
+	if s.AnchorKey != nil {
+		resp["public_key"] = base64.StdEncoding.EncodeToString(s.AnchorKey)
+		resp["key_id"] = audit.KeyID(s.AnchorKey)
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

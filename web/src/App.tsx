@@ -12,6 +12,7 @@ import { Audit } from "./pages/Audit";
 import { Members } from "./pages/Members";
 import { Policies } from "./pages/Policies";
 import { Account } from "./pages/Account";
+import { Reports } from "./pages/Reports";
 
 export function App() {
   return (
@@ -39,6 +40,7 @@ function Shell() {
     ["/connections", "Connections", can("connection.manage")],
     ["/settings", "Secrets & settings", can("secret.manage") || can("workflow.read")],
     ["/audit", "Audit log", can("audit.read")],
+    ["/reports", "Reports", can("audit.read")],
     ["/members", "Members & keys", can("member.manage")],
   ];
   return (
@@ -74,6 +76,7 @@ function Shell() {
           <Route path="/members" element={<Members />} />
           <Route path="/policies" element={<Policies />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<div className="empty">Not found</div>} />
         </Routes>
       </main>
