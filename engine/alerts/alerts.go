@@ -1,0 +1,615 @@
+// Package alerts watches each tenant's runs, approvals, connectors,
+// credentials and audit anchors (spec 15.1), records what its rules find
+// once, and delivers it to email, Slack or a signed webhook, retrying with
+// backoff until delivered or out of attempts.
+package alerts
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/egress"
+)
+
+// VaultEnv is the vault environment holding channels' secrets: the Slack
+// webhook URL, or a webhook's URL signing key.
+const VaultEnv = "_alerts"
+
+// SecretName is the vault name of a channel's secret.
+func SecretName(channel uuid.UUID) string { return "channel_" + channel.String() }
+
+// Rule kinds.
+const (
+	RunFailed           = "run_failed"
+	SlowRun             = "slow_run"
+	StuckApproval       = "stuck_approval"
+	NeedsReconciliation = "needs_reconciliation"
+	ConnectorDrift      = "connector_drift"
+	CredentialExpiry    = "credential_expiry" //nolint:gosec // a rule kind, not a credential
+	AuditAnchor         = "audit_anchor"
+)
+
+// Kinds lists rule kinds with their default thresholds (zero: none).
+var Kinds = map[string]time.Duration{
+	RunFailed:           0,
+	SlowRun:             time.Hour,
+	StuckApproval:       24 * time.Hour,
+	NeedsReconciliation: 0,
+	ConnectorDrift:      0,
+	CredentialExpiry:    7 * 24 * time.Hour,
+	AuditAnchor:         0,
+}
+
+// RuleConfig narrows a rule.
+type RuleConfig struct {
+	WorkflowID  string `json:"workflow_id,omitempty"`
+	Environment string `json:"environment,omitempty"`
+	Threshold   string `json:"threshold,omitempty"` // Go duration, e.g. "30m"
+}
+
+// ThresholdFor reads a rule's threshold, falling back to the kind's default.
+func (c RuleConfig) ThresholdFor(kind string) (time.Duration, error) {
+	if c.Threshold == "" {
+		return Kinds[kind], nil
+	}
+	d, err := time.ParseDuration(c.Threshold)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("threshold %q is not a positive duration such as 30m or 48h", c.Threshold)
+	}
+	return d, nil
+}
+
+// Mailer sends an email.
+type Mailer interface {
+	Send(ctx context.Context, from string, to []string, msg []byte) error
+}
+
+// Secrets reads channels' secrets from the vault.
+type Secrets interface {
+	Get(ctx context.Context, tenant uuid.UUID, env, name string) (string, error)
+}
+
+// Alerter evaluates rules and delivers alerts.
+type Alerter struct {
+	Pool    *pgxpool.Pool
+	Secrets Secrets
+	Egress  *egress.Guard
+	// Mailer sends email; nil leaves email deliveries failing with a reason.
+	Mailer Mailer
+	From   string // sender address for email
+	// PublicURL builds links back into the web app.
+	PublicURL string
+	Interval  time.Duration // default 30s
+	Logger    *slog.Logger
+	// Client, when set, replaces the egress-guarded client (tests).
+	Client *http.Client
+	// Rewrite, when set, changes a destination URL before sending (tests).
+	Rewrite func(string) string
+	// Now is the clock (tests).
+	Now func() time.Time
+}
+
+func (a *Alerter) now() time.Time {
+	if a.Now != nil {
+		return a.Now()
+	}
+	return time.Now()
+}
+
+func (a *Alerter) log() *slog.Logger {
+	if a.Logger == nil {
+		return slog.Default()
+	}
+	return a.Logger
+}
+
+// Run evaluates and delivers on a loop until ctx ends.
+func (a *Alerter) Run(ctx context.Context) error {
+	every := a.Interval
+	if every <= 0 {
+		every = 30 * time.Second
+	}
+	for {
+		if err := a.Tick(ctx); err != nil && ctx.Err() == nil {
+			a.log().Error("alerts", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(every):
+		}
+	}
+}
+
+// Tick evaluates every tenant's rules and delivers what is due.
+func (a *Alerter) Tick(ctx context.Context) error {
+	rows, err := a.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_alert_tenants()`)
+	if err != nil {
+		return err
+	}
+	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, t := range tenants {
+		if err := a.Evaluate(ctx, t); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: evaluate: %w", t, err))
+		}
+		if err := a.Deliver(ctx, t); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: deliver: %w", t, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// Alert is one finding.
+type Alert struct {
+	Kind   string         `json:"kind"`
+	Dedup  string         `json:"-"`
+	Title  string         `json:"title"`
+	Body   string         `json:"body"`
+	Link   string         `json:"link,omitempty"`
+	Detail map[string]any `json:"detail,omitempty"`
+}
+
+type rule struct {
+	id       uuid.UUID
+	name     string
+	kind     string
+	cfg      RuleConfig
+	channels []uuid.UUID
+	since    time.Time
+}
+
+// Evaluate runs a tenant's enabled rules and records new alerts, with a
+// delivery to each of the rule's channels.
+func (a *Alerter) Evaluate(ctx context.Context, tenant uuid.UUID) error {
+	now := a.now()
+	return db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id, name, kind, config, channel_ids, checked_until FROM alert_rules WHERE enabled ORDER BY created_at FOR UPDATE SKIP LOCKED`)
+		if err != nil {
+			return err
+		}
+		var rules []rule
+		for rows.Next() {
+			var r rule
+			var raw []byte
+			if err := rows.Scan(&r.id, &r.name, &r.kind, &raw, &r.channels, &r.since); err != nil {
+				rows.Close()
+				return err
+			}
+			_ = json.Unmarshal(raw, &r.cfg)
+			rules = append(rules, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, r := range rules {
+			found, err := a.find(ctx, tx, r, now)
+			if err != nil {
+				return fmt.Errorf("rule %s: %w", r.name, err)
+			}
+			for _, al := range found {
+				if err := a.record(ctx, tx, tenant, &r, al); err != nil {
+					return err
+				}
+			}
+			if _, err := tx.Exec(ctx, `UPDATE alert_rules SET checked_until = $2 WHERE id = $1`, r.id, now); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// record stores an alert once per rule and dedup key, queueing deliveries.
+func (a *Alerter) record(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, r *rule, al Alert) error {
+	id := uuid.Must(uuid.NewV7())
+	var rid *uuid.UUID
+	if r != nil {
+		rid = &r.id
+	}
+	detail, _ := json.Marshal(nonNil(al.Detail))
+	tag, err := tx.Exec(ctx, `INSERT INTO alerts (id, tenant_id, rule_id, kind, dedup_key, title, body, link, detail) VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9)
+		ON CONFLICT (rule_id, dedup_key) WHERE rule_id IS NOT NULL DO NOTHING`, id, tenant, rid, al.Kind, al.Dedup, al.Title, al.Body, al.Link, detail)
+	if err != nil || tag.RowsAffected() == 0 {
+		return err
+	}
+	if r == nil {
+		return nil
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO alert_deliveries (alert_id, channel_id, tenant_id)
+		SELECT $1, c.id, $2 FROM alert_channels c WHERE c.id = ANY ($3) AND c.disabled_at IS NULL`, id, tenant, r.channels)
+	return err
+}
+
+func nonNil(m map[string]any) map[string]any {
+	if m == nil {
+		return map[string]any{}
+	}
+	return m
+}
+
+func (a *Alerter) link(path string) string {
+	if a.PublicURL == "" {
+		return ""
+	}
+	return strings.TrimRight(a.PublicURL, "/") + path
+}
+
+// filters narrows run queries by workflow and environment; args are
+// appended after those already given.
+func filters(cfg RuleConfig, alias string, args []any) (string, []any) {
+	where := ""
+	if cfg.WorkflowID != "" {
+		args = append(args, cfg.WorkflowID)
+		where += fmt.Sprintf(" AND %s.workflow_id::text = $%d", alias, len(args))
+	}
+	if cfg.Environment != "" {
+		args = append(args, cfg.Environment)
+		where += fmt.Sprintf(" AND %s.environment = $%d", alias, len(args))
+	}
+	return where, args
+}
+
+// find looks for what a rule watches.
+func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([]Alert, error) {
+	threshold, err := r.cfg.ThresholdFor(r.kind)
+	if err != nil {
+		return nil, err
+	}
+	var out []Alert
+	runAlert := func(q string, args []any, mk func(id uuid.UUID, wf, env string, at time.Time) Alert) error {
+		rows, err := tx.Query(ctx, q, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id uuid.UUID
+			var wf, env string
+			var at time.Time
+			if err := rows.Scan(&id, &wf, &env, &at); err != nil {
+				return err
+			}
+			out = append(out, mk(id, wf, env, at))
+		}
+		return rows.Err()
+	}
+	runDetail := func(id uuid.UUID, wf, env string) map[string]any {
+		return map[string]any{"run_id": id, "workflow": wf, "environment": env}
+	}
+	switch r.kind {
+	case RunFailed:
+		where, args := filters(r.cfg, "r", []any{r.since, now})
+		err = runAlert(`SELECT r.id, w.name, r.environment, r.ended_at FROM runs r JOIN workflows w ON w.id = r.workflow_id
+			WHERE r.status = 'failed' AND r.ended_at > $1 AND r.ended_at <= $2`+where+` ORDER BY r.ended_at LIMIT 200`, args,
+			func(id uuid.UUID, wf, env string, at time.Time) Alert {
+				return Alert{Kind: r.kind, Dedup: id.String(), Title: fmt.Sprintf("%s failed in %s", wf, env),
+					Body: fmt.Sprintf("Run %s of %s failed at %s.", id, wf, at.UTC().Format(time.RFC1123)), Link: a.link("/runs/" + id.String()), Detail: runDetail(id, wf, env)}
+			})
+	case NeedsReconciliation:
+		where, args := filters(r.cfg, "r", nil)
+		err = runAlert(`SELECT r.id, w.name, r.environment, r.started_at FROM runs r JOIN workflows w ON w.id = r.workflow_id
+			WHERE r.status = 'needs_reconciliation'`+where+` ORDER BY r.started_at LIMIT 200`, args,
+			func(id uuid.UUID, wf, env string, _ time.Time) Alert {
+				return Alert{Kind: r.kind, Dedup: id.String(), Title: fmt.Sprintf("%s needs reconciliation in %s", wf, env),
+					Body: fmt.Sprintf("Run %s of %s made a call whose outcome is unknown. Someone with run.resolve must check with the provider and resolve the step.", id, wf),
+					Link: a.link("/runs/" + id.String()), Detail: runDetail(id, wf, env)}
+			})
+	case SlowRun:
+		where, args := filters(r.cfg, "r", []any{now.Add(-threshold)})
+		err = runAlert(`SELECT r.id, w.name, r.environment, r.started_at FROM runs r JOIN workflows w ON w.id = r.workflow_id
+			WHERE r.status IN ('queued', 'running', 'waiting') AND r.started_at < $1`+where+` ORDER BY r.started_at LIMIT 200`, args,
+			func(id uuid.UUID, wf, env string, at time.Time) Alert {
+				return Alert{Kind: r.kind, Dedup: id.String(), Title: fmt.Sprintf("%s has been running over %s in %s", wf, threshold, env),
+					Body: fmt.Sprintf("Run %s of %s started at %s and has not finished.", id, wf, at.UTC().Format(time.RFC1123)), Link: a.link("/runs/" + id.String()), Detail: runDetail(id, wf, env)}
+			})
+	case StuckApproval:
+		where, args := filters(r.cfg, "r", []any{now.Add(-threshold)})
+		rows, qerr := tx.Query(ctx, `SELECT ap.run_id, ap.step_id, w.name, r.environment, ap.requested_at, COALESCE(ap.role, ap.policy, '') FROM approvals ap
+			JOIN runs r ON r.id = ap.run_id JOIN workflows w ON w.id = r.workflow_id
+			WHERE ap.status = 'open' AND ap.requested_at < $1`+where+` ORDER BY ap.requested_at LIMIT 200`, args...)
+		if qerr != nil {
+			return nil, qerr
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var run uuid.UUID
+			var step, wf, env, who string
+			var at time.Time
+			if err := rows.Scan(&run, &step, &wf, &env, &at, &who); err != nil {
+				return nil, err
+			}
+			out = append(out, Alert{Kind: r.kind, Dedup: run.String() + "/" + step, Title: fmt.Sprintf("Approval waiting over %s: %s", threshold, wf),
+				Body: fmt.Sprintf("Step %s of run %s (%s, %s) has waited for %s since %s.", step, run, wf, env, who, at.UTC().Format(time.RFC1123)),
+				Link: a.link("/approvals"), Detail: map[string]any{"run_id": run, "step": step, "workflow": wf, "environment": env}})
+		}
+		err = rows.Err()
+	case ConnectorDrift:
+		rows, qerr := tx.Query(ctx, `SELECT connector, version, action, path, kind, expected, observed, first_seen FROM connector_drift
+			WHERE acknowledged_at IS NULL AND first_seen > $1 ORDER BY first_seen LIMIT 200`, r.since)
+		if qerr != nil {
+			return nil, qerr
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var conn, ver, action, path, kind, expected, observed string
+			var at time.Time
+			if err := rows.Scan(&conn, &ver, &action, &path, &kind, &expected, &observed, &at); err != nil {
+				return nil, err
+			}
+			out = append(out, Alert{Kind: r.kind, Dedup: strings.Join([]string{conn, ver, action, path, kind}, "|"), Title: fmt.Sprintf("%s changed its response to %s", conn, action),
+				Body: fmt.Sprintf("%s %s: at %s the contract says %s, the provider sent %s (%s).", conn, action, path, expected, observed, kind),
+				Link: a.link("/connections"), Detail: map[string]any{"connector": conn, "version": ver, "action": action, "path": path, "kind": kind}})
+		}
+		err = rows.Err()
+	case CredentialExpiry:
+		horizon := now.Add(threshold)
+		rows, qerr := tx.Query(ctx, `SELECT 'connection', id, connector || ' / ' || name || ' (' || environment || ')', expires_at FROM connections
+			WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < $1
+			UNION ALL
+			SELECT 'api key', id, name, expires_at FROM api_keys WHERE revoked_at IS NULL AND expires_at > $2 AND expires_at < $1`, horizon, now)
+		if qerr != nil {
+			return nil, qerr
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var what, name string
+			var id uuid.UUID
+			var at time.Time
+			if err := rows.Scan(&what, &id, &name, &at); err != nil {
+				return nil, err
+			}
+			verb := "expires"
+			if !at.After(now) {
+				verb = "expired"
+			}
+			out = append(out, Alert{Kind: r.kind, Dedup: id.String() + "@" + at.UTC().Format(time.RFC3339), Title: fmt.Sprintf("The %s %s %s %s", what, name, verb, at.UTC().Format("2 Jan 2006")),
+				Body:   fmt.Sprintf("The %s %s %s at %s. Renew it before work that uses it fails.", what, name, verb, at.UTC().Format(time.RFC1123)),
+				Detail: map[string]any{"type": what, "id": id, "name": name, "expires_at": at}})
+		}
+		err = rows.Err()
+	case AuditAnchor:
+		rows, qerr := tx.Query(ctx, `SELECT tenant_id::text, chain_seq, encode(head_hash, 'hex'), to_char(anchored_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+			key_id, translate(encode(signature, 'base64'), E'\n', '') FROM audit_anchors WHERE anchored_at > $1 ORDER BY chain_seq`, r.since)
+		if qerr != nil {
+			return nil, qerr
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var anchor struct {
+				TenantID  string `json:"tenant_id"`
+				Seq       int64  `json:"seq"`
+				Hash      string `json:"hash"`
+				At        string `json:"anchored_at"`
+				KeyID     string `json:"key_id"`
+				Signature string `json:"signature"`
+			}
+			if err := rows.Scan(&anchor.TenantID, &anchor.Seq, &anchor.Hash, &anchor.At, &anchor.KeyID, &anchor.Signature); err != nil {
+				return nil, err
+			}
+			line, _ := json.Marshal(anchor)
+			out = append(out, Alert{Kind: r.kind, Dedup: strconv.FormatInt(anchor.Seq, 10), Title: fmt.Sprintf("Audit anchor: entry %d", anchor.Seq),
+				Body: "Keep this message: it is a signed record of your audit log as it stood, held outside Taskiem. " +
+					"To check the log later, save the line below in a file and run `taskiem audit verify --anchors FILE` on an export.\n\n" + string(line),
+				Link: a.link("/audit"), Detail: map[string]any{"anchor": json.RawMessage(line)}})
+		}
+		err = rows.Err()
+	default:
+		return nil, fmt.Errorf("unknown rule kind %q", r.kind)
+	}
+	return out, err
+}
+
+// --- delivery ---
+
+// maxAttempts bounds retries; backoff grows from a minute to six hours.
+const maxAttempts = 8
+
+func backoff(attempt int) time.Duration {
+	d := time.Minute << (2 * (attempt - 1)) // 1m, 4m, 16m, 64m, ...
+	return min(d, 6*time.Hour)
+}
+
+type delivery struct {
+	alert    uuid.UUID
+	channel  uuid.UUID
+	attempts int
+}
+
+// Deliver sends a tenant's due deliveries. Each is claimed first, so two
+// alerters never send the same one at once, and sent outside the database
+// transaction.
+func (a *Alerter) Deliver(ctx context.Context, tenant uuid.UUID) error {
+	var due []delivery
+	err := db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `UPDATE alert_deliveries d SET next_attempt_at = now() + interval '5 minutes', attempts = d.attempts + 1
+			WHERE (d.alert_id, d.channel_id) IN (SELECT alert_id, channel_id FROM alert_deliveries
+			  WHERE status = 'pending' AND next_attempt_at <= now() ORDER BY next_attempt_at LIMIT 50 FOR UPDATE SKIP LOCKED)
+			RETURNING d.alert_id, d.channel_id, d.attempts`)
+		if err != nil {
+			return err
+		}
+		due, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (delivery, error) {
+			var d delivery
+			return d, r.Scan(&d.alert, &d.channel, &d.attempts)
+		})
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	for _, d := range due {
+		sendErr := a.send(ctx, tenant, d.alert, d.channel)
+		err := db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			switch {
+			case sendErr == nil:
+				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET status = 'sent', sent_at = now(), last_error = NULL WHERE alert_id = $1 AND channel_id = $2`, d.alert, d.channel)
+				return err
+			case d.attempts >= maxAttempts:
+				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET status = 'failed', last_error = $3 WHERE alert_id = $1 AND channel_id = $2`, d.alert, d.channel, truncate(sendErr.Error()))
+				return err
+			default:
+				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET last_error = $3, next_attempt_at = $4 WHERE alert_id = $1 AND channel_id = $2`,
+					d.alert, d.channel, truncate(sendErr.Error()), a.now().Add(backoff(d.attempts)))
+				return err
+			}
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func truncate(s string) string {
+	if len(s) > 500 {
+		return s[:500]
+	}
+	return s
+}
+
+// message is what is sent: the alert as recorded.
+type message struct {
+	ID        uuid.UUID       `json:"id"`
+	Kind      string          `json:"kind"`
+	Rule      *string         `json:"rule"`
+	Title     string          `json:"title"`
+	Body      string          `json:"body"`
+	Link      *string         `json:"link,omitempty"`
+	Detail    json.RawMessage `json:"detail"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
+func (a *Alerter) send(ctx context.Context, tenant, alertID, channelID uuid.UUID) error {
+	var m message
+	var kind string
+	var cfgRaw []byte
+	err := db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT a.id, a.kind, r.name, a.title, a.body, a.link, a.detail, a.created_at FROM alerts a LEFT JOIN alert_rules r ON r.id = a.rule_id WHERE a.id = $1`, alertID).
+			Scan(&m.ID, &m.Kind, &m.Rule, &m.Title, &m.Body, &m.Link, &m.Detail, &m.CreatedAt); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT kind, config FROM alert_channels WHERE id = $1`, channelID).Scan(&kind, &cfgRaw)
+	})
+	if err != nil {
+		return err
+	}
+	return a.SendTo(ctx, tenant, channelID, kind, cfgRaw, m)
+}
+
+// SendTest delivers a test message to one channel now.
+func (a *Alerter) SendTest(ctx context.Context, tenant, channelID uuid.UUID, kind string, cfg []byte) error {
+	m := message{ID: uuid.Must(uuid.NewV7()), Kind: "test", Title: "Test alert from Taskiem", Body: "This channel receives Taskiem alerts.", Detail: json.RawMessage(`{}`), CreatedAt: a.now().UTC()}
+	return a.SendTo(ctx, tenant, channelID, kind, cfg, m)
+}
+
+// SendTo delivers a message to a channel of the given kind and config.
+func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind string, cfgRaw []byte, m message) error {
+	text := m.Body
+	if m.Link != nil && *m.Link != "" {
+		text += "\n\n" + *m.Link
+	}
+	switch kind {
+	case "email":
+		var cfg struct {
+			To []string `json:"to"`
+		}
+		if err := json.Unmarshal(cfgRaw, &cfg); err != nil || len(cfg.To) == 0 {
+			return errors.New("the channel has no recipients")
+		}
+		if a.Mailer == nil || a.From == "" {
+			return errors.New("email is not configured on this deployment (TASKIEM_SMTP_URL, TASKIEM_ALERT_FROM)")
+		}
+		return a.Mailer.Send(ctx, a.From, cfg.To, BuildEmail(a.From, cfg.To, "[Taskiem] "+m.Title, text, m.ID.String()))
+	case "slack":
+		hook, err := a.Secrets.Get(ctx, tenant, VaultEnv, SecretName(channelID))
+		if err != nil {
+			return fmt.Errorf("reading the Slack webhook: %w", err)
+		}
+		body, _ := json.Marshal(map[string]any{"text": "*" + slackEscape(m.Title) + "*\n" + slackEscape(text)})
+		return a.post(ctx, tenant, hook, body, nil)
+	case "webhook":
+		var cfg struct {
+			URL string `json:"url"`
+		}
+		_ = json.Unmarshal(cfgRaw, &cfg)
+		key, err := a.Secrets.Get(ctx, tenant, VaultEnv, SecretName(channelID))
+		if err != nil {
+			return fmt.Errorf("reading the signing key: %w", err)
+		}
+		body, _ := json.Marshal(m)
+		ts := strconv.FormatInt(a.now().Unix(), 10)
+		mac := hmac.New(sha256.New, []byte(key))
+		mac.Write([]byte(ts + "."))
+		mac.Write(body)
+		return a.post(ctx, tenant, cfg.URL, body, http.Header{
+			"Taskiem-Signature": {"t=" + ts + ",v1=" + hex.EncodeToString(mac.Sum(nil))},
+			"Taskiem-Alert-Id":  {m.ID.String()},
+		})
+	}
+	return fmt.Errorf("unknown channel kind %q", kind)
+}
+
+// slackEscape escapes the three characters Slack's mrkdwn treats as markup.
+func slackEscape(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
+func (a *Alerter) post(ctx context.Context, tenant uuid.UUID, dest string, body []byte, hdr http.Header) error {
+	if a.Rewrite != nil {
+		dest = a.Rewrite(dest)
+	}
+	u, err := url.Parse(dest)
+	if err != nil {
+		return fmt.Errorf("bad destination: %w", err)
+	}
+	client := a.Client
+	if client == nil {
+		g := a.Egress
+		if g == nil {
+			g = &egress.Guard{Logger: a.Logger}
+		}
+		client = g.Client(egress.Policy{Tenant: tenant.String(), Hosts: []string{u.Hostname()}, Purpose: "alert"}, 15*time.Second)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	for k, v := range hdr {
+		req.Header[k] = v
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Taskiem-Alerts/1")
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("%s answered %s", u.Hostname(), resp.Status)
+	}
+	return nil
+}

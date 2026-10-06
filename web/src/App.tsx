@@ -9,6 +9,7 @@ import { Approvals } from "./pages/Approvals";
 import { Connections } from "./pages/Connections";
 import { Settings } from "./pages/Settings";
 import { Audit } from "./pages/Audit";
+import { Alerts } from "./pages/Alerts";
 import { Members } from "./pages/Members";
 import { Policies } from "./pages/Policies";
 import { Account, Passkeys } from "./pages/Account";
@@ -70,6 +71,7 @@ function Shell() {
     ["/policies", "Approval policies", can("workflow.read")],
     ["/connections", "Connections", can("connection.manage")],
     ["/settings", "Secrets & settings", can("secret.manage") || can("workflow.read")],
+    ["/alerts", "Alerts", can("alert.manage")],
     ["/audit", "Audit log", can("audit.read")],
     ["/reports", "Reports", can("audit.read")],
     ["/members", "Members & keys", can("member.manage")],
@@ -103,6 +105,7 @@ function Shell() {
           <Route path="/approvals" element={<Approvals />} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/alerts" element={<Alerts />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/members" element={<Members />} />
           <Route path="/policies" element={<Policies />} />

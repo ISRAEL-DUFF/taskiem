@@ -36,6 +36,8 @@ Every role serves Prometheus metrics on `TASKIEM_METRICS_LISTEN` (`:9090`). Runn
 | `TASKIEM_ARCHIVE_DIR` | — | Where runs past retention are archived (gzipped JSON lines) before purging. Unset: nothing is purged. |
 | `TASKIEM_ANCHOR_KEY` | — | Ed25519 seed (32 bytes, base64: `openssl rand -base64 32`) that signs the daily audit-chain anchors. Keep it like a KMS key; its public half is served at `GET /v1/audit/anchors`. Unset: no anchoring. |
 | `TASKIEM_ANCHOR_DIR` | — | Where the scheduler role appends each tenant's anchors (`<tenant>.jsonl`). Point it at write-once storage (an object-lock bucket, an append-only volume): anchors are only worth as much as their copy outside the database. |
+| `TASKIEM_SMTP_URL` | — | Mail server for alert emails: `smtp://user:pass@host:587` (STARTTLS, required when a password is given) or `smtps://user:pass@host:465`. Without it, email alert deliveries fail with a reason ([alerts](alerts.md)) |
+| `TASKIEM_ALERT_FROM` | — | Sender address of alert emails; required with `TASKIEM_SMTP_URL` |
 | `TASKIEM_WEB_DIR` | — | Built web app to serve (`/web` in the image). |
 | `TASKIEM_SECURE_COOKIES` | `true` | Set `false` only for plain-HTTP local use. |
 | `TASKIEM_PUBLIC_URL` | — | Where people reach the web app (`https://…`, or `http://localhost:…`). Turns on passkeys, which are bound to it |

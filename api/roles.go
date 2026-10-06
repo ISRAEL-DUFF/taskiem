@@ -40,6 +40,7 @@ var permissionInfo = map[string]string{
 	PermPolicyManage:     "Manage approval policies",
 	PermConnectorManage:  "Upload the tenant's own connectors",
 	PermRoleManage:       "Manage custom roles",
+	PermAlertManage:      "Manage alert channels and rules",
 	PermSCIM:             "Provision members over SCIM (for an identity provider's key)",
 }
 

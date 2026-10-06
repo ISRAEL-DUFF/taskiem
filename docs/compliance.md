@@ -18,7 +18,7 @@ Members with `audit.read` (owners, admins, auditors) get five reports over a per
 
 The audit log is a hash chain: changing or removing any entry breaks every hash after it, which `GET /v1/audit/verify` and `taskiem audit verify FILE` detect. Someone with write access to the database could still rewrite an entry and recompute every hash after it. Anchors close that gap (spec 9.2).
 
-Once a day, the scheduler role signs each tenant's chain head (sequence number and hash) with the platform's Ed25519 key (`TASKIEM_ANCHOR_KEY`), appends the signed anchor to `TASKIEM_ANCHOR_DIR/<tenant>.jsonl`, and records it in the database, where anchors are append-only. Point the directory at write-once storage: the anchors outside the database are the ones that count.
+Once a day, the scheduler role signs each tenant's chain head (sequence number and hash) with the platform's Ed25519 key (`TASKIEM_ANCHOR_KEY`), appends the signed anchor to `TASKIEM_ANCHOR_DIR/<tenant>.jsonl`, and records it in the database, where anchors are append-only. Point the directory at write-once storage: the anchors outside the database are the ones that count. Tenants can also have each anchor emailed to them as it is made, so a copy sits outside the platform altogether: an **audit anchor** [alert rule](alerts.md#emailed-audit-anchors).
 
 To check an export against them:
 

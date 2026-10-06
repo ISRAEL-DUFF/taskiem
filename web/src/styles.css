@@ -179,3 +179,4 @@ button.link {
   padding: 2px 8px;
   font-size: 0.85em;
 }
+.alert-row { padding: 6px 0; border-bottom: 1px solid var(--border); }

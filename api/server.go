@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -67,6 +68,8 @@ type Server struct {
 	// RequireAdminPasskeys holds members with administrative permissions to
 	// passkeys (spec 13.2: on by default in production).
 	RequireAdminPasskeys bool
+	// Alerts sends channels' test messages; nil refuses them.
+	Alerts *alerts.Alerter
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
@@ -136,6 +139,15 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/triggers", s.listTriggers)
 			r.With(s.need(PermWorkflowPublish)).Post("/workflows/{wf}/promote", s.promote)
 			r.With(s.need(PermWorkflowRead)).Get("/environments", s.listEnvironments)
+			r.With(s.need(PermAlertManage)).Get("/alerts", s.listAlerts)
+			r.With(s.need(PermAlertManage)).Get("/alerts/channels", s.listAlertChannels)
+			r.With(s.need(PermAlertManage)).Post("/alerts/channels", s.createAlertChannel)
+			r.With(s.need(PermAlertManage)).Delete("/alerts/channels/{id}", s.deleteAlertChannel)
+			r.With(s.need(PermAlertManage)).Post("/alerts/channels/{id}/test", s.testAlertChannel)
+			r.With(s.need(PermAlertManage)).Get("/alerts/rules", s.listAlertRules)
+			r.With(s.need(PermAlertManage)).Post("/alerts/rules", s.createAlertRule)
+			r.With(s.need(PermAlertManage)).Put("/alerts/rules/{id}", s.updateAlertRule)
+			r.With(s.need(PermAlertManage)).Delete("/alerts/rules/{id}", s.deleteAlertRule)
 			r.With(s.need(PermSecretManage)).Post("/environments", s.createEnvironment)
 			r.With(s.need(PermSecretManage)).Put("/environments/{env}", s.putEnvironment)
 			r.With(s.need(PermWorkflowEdit)).Post("/validate", s.validate)

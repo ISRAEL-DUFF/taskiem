@@ -23,6 +23,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
+	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -49,9 +50,11 @@ type config struct {
 	// PublicURL is where people reach the web app; passkeys are bound to it.
 	PublicURL, PasskeyRPID string
 	RequireAdminPasskeys   bool
-	Queues                 []string
-	Connectors             builtin.Options
-	PoolSize               int32
+	// SMTPURL and AlertFrom let alerts go out by email.
+	SMTPURL, AlertFrom string
+	Queues             []string
+	Connectors         builtin.Options
+	PoolSize           int32
 }
 
 func env(k, def string) string {
@@ -87,6 +90,8 @@ func loadConfig() (config, error) {
 		PasskeyRPID:   os.Getenv("TASKIEM_PASSKEY_RP_ID"),
 		AnchorKey:     os.Getenv("TASKIEM_ANCHOR_KEY"),
 		AnchorDir:     os.Getenv("TASKIEM_ANCHOR_DIR"),
+		SMTPURL:       os.Getenv("TASKIEM_SMTP_URL"),
+		AlertFrom:     os.Getenv("TASKIEM_ALERT_FROM"),
 		WebDir:        os.Getenv("TASKIEM_WEB_DIR"),
 		SecureCookies: envBool("TASKIEM_SECURE_COOKIES", true),
 		TrustProxy:    envBool("TASKIEM_TRUST_PROXY", false),
@@ -236,6 +241,10 @@ func serve(ctx context.Context, args []string) error {
 	defer e.connectors.Pool.Close()
 
 	is := func(r string) bool { return *role == r || *role == "all" }
+	alerter, err := cfg.alerter(e, log)
+	if err != nil {
+		return fmt.Errorf("serve: %w", err)
+	}
 	var tasks []func(context.Context) error
 	if is("api") {
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
@@ -249,6 +258,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
+		srv.Alerts = alerter
 		if *role == "all" {
 			srv.Ingest = e.hooks() // one listener for a small install
 		}
@@ -273,7 +283,7 @@ func serve(ctx context.Context, args []string) error {
 			log.Warn("TASKIEM_ARCHIVE_DIR unset: runs past retention are kept, not purged")
 		}
 		cron := &ingest.Cron{Store: e.store, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run)
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run)
 		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)
@@ -363,6 +373,23 @@ func redactAttr(_ []string, a slog.Attr) slog.Attr {
 
 // anchorSigner is the audit anchoring key, from TASKIEM_ANCHOR_KEY (a
 // base64 32-byte Ed25519 seed); nil when unset or invalid.
+// alerter delivers alerts; email needs TASKIEM_SMTP_URL and
+// TASKIEM_ALERT_FROM.
+func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
+	a := &alerts.Alerter{Pool: e.pool, Secrets: e.vault, Egress: &egress.Guard{Logger: log}, PublicURL: c.PublicURL, From: c.AlertFrom, Logger: log}
+	if c.SMTPURL != "" {
+		m, err := alerts.NewSMTPMailer(c.SMTPURL)
+		if err != nil {
+			return nil, err
+		}
+		if c.AlertFrom == "" {
+			return nil, errors.New("TASKIEM_SMTP_URL is set but TASKIEM_ALERT_FROM is not")
+		}
+		a.Mailer = m
+	}
+	return a, nil
+}
+
 func (c config) anchorSigner(log *slog.Logger) *audit.Signer {
 	if c.AnchorKey == "" {
 		return nil
