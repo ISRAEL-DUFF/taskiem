@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/flowcode"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 )
 
@@ -31,7 +32,9 @@ const usage = `taskiem — workflow automation engine
 
 Usage:
   taskiem migrate [--dsn DSN]        apply database migrations (as the schema owner)
-  taskiem validate FILE...           validate workflow definitions (*.wd.json) and connector manifests (*.yaml)
+  taskiem validate FILE...           validate workflow code (*.flow.ts), definitions (*.wd.json) and connector manifests (*.yaml)
+  taskiem build [--check] [PATH...]  compile workflow code (*.flow.ts) to definitions (*.wd.json) beside it
+  taskiem codegen [--write] FILE...  print definitions (*.wd.json) as workflow code (*.flow.ts)
   taskiem test [-run RE] [-v] [PATH...]
                                      run workflow tests (*.test.json) with mocked steps, offline
   taskiem diff [PATH...]             show what deploying local *.wd.json files would change (default path: flows)
@@ -74,6 +77,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return validate(args[1:], stdout)
 	case "test":
 		return testCmd(args[1:], stdout)
+	case "build":
+		return buildCmd(args[1:], stdout)
+	case "codegen":
+		return codegenCmd(args[1:], stdout)
 	case "diff":
 		return diffCmd(args[1:], stdout)
 	case "deploy":
@@ -141,7 +148,18 @@ func validate(files []string, stdout io.Writer) error {
 			return err
 		}
 		var probs []string
+		if strings.HasSuffix(f, ".flow.ts") {
+			def, err := flowcode.CompileFile(context.Background(), f)
+			if err != nil {
+				probs = append(probs, err.Error())
+			} else {
+				for _, p := range wdcheck.Check(def, reg) {
+					probs = append(probs, p.String())
+				}
+			}
+		}
 		switch {
+		case strings.HasSuffix(f, ".flow.ts"):
 		case strings.HasSuffix(f, ".wd.json"):
 			// The contract, plus this binary's connectors, code compilation
 			// and trigger checks: what publishing would check.
@@ -151,7 +169,7 @@ func validate(files []string, stdout io.Writer) error {
 		case strings.HasSuffix(f, ".yaml"), strings.HasSuffix(f, ".yml"):
 			_, probs = connector.Parse(src)
 		default:
-			return fmt.Errorf("validate: %s: expected *.wd.json or a connector manifest (*.yaml)", filepath.Base(f))
+			return fmt.Errorf("validate: %s: expected *.flow.ts, *.wd.json or a connector manifest (*.yaml)", filepath.Base(f))
 		}
 		if len(probs) == 0 {
 			fmt.Fprintf(stdout, "ok    %s\n", f)

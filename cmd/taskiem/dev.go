@@ -301,7 +301,7 @@ func (w *watcher) scan() []string {
 		if err != nil || d.IsDir() {
 			return nil //nolint:nilerr // an unreadable entry is skipped, not fatal to the watch
 		}
-		if !strings.HasSuffix(path, ".wd.json") && !strings.HasSuffix(path, ".test.json") {
+		if !strings.HasSuffix(path, ".wd.json") && !strings.HasSuffix(path, ".test.json") && !strings.HasSuffix(path, ".flow.ts") {
 			return nil
 		}
 		info, err := d.Info()
@@ -318,10 +318,23 @@ func (w *watcher) scan() []string {
 	return changed
 }
 
-// reload runs the workflow tests, then deploys the workflows that changed
-// if their tests pass (a failing test keeps the running version).
+// reload builds changed workflow code, runs the workflow tests, then deploys
+// the workflows that changed if their tests pass (a failing test keeps the
+// running version).
 func reload(ctx context.Context, c *client, dir string, changed []string, stdout io.Writer) {
 	fmt.Fprintf(stdout, "\n[%s] %d file(s) changed\n", time.Now().Format("15:04:05"), len(changed))
+	for _, f := range changed {
+		if !strings.HasSuffix(f, ".flow.ts") {
+			continue
+		}
+		wrote, err := buildFlow(ctx, f, true)
+		switch {
+		case err != nil:
+			fmt.Fprintf(stdout, "  build  %s: %v\n", f, err)
+		case wrote:
+			fmt.Fprintf(stdout, "  build  wrote %s\n", strings.TrimSuffix(f, ".flow.ts")+".wd.json")
+		}
+	}
 	failing := map[string]bool{} // workflow paths with a failing test
 	if files, err := wdtest.Discover([]string{dir}); err == nil && len(files) > 0 {
 		if reg, err := builtinRegistry(); err == nil {

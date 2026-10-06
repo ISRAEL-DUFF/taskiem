@@ -55,6 +55,7 @@ type Host struct {
 // Result is a completed execution.
 type Result struct {
 	Output any
+	JSON   string // Output as the script serialised it, key order kept
 	Logs   []string
 }
 
@@ -243,6 +244,7 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 	if lim.MaxOutput > 0 && len(s) > lim.MaxOutput {
 		return res, fmt.Errorf("%w: %d bytes, limit %d", ErrOutput, len(s), lim.MaxOutput)
 	}
+	res.JSON = s
 	if res.Output, err = expr.DecodeJSON([]byte(s)); err != nil {
 		return res, fmt.Errorf("%w: output is not JSON: %w", ErrScript, err)
 	}

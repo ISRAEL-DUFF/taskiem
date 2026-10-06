@@ -52,7 +52,7 @@ export function Editor() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [tab, setTab] = useState<"canvas" | "settings" | "json" | "triggers">("canvas");
+  const [tab, setTab] = useState<"canvas" | "settings" | "code" | "json" | "triggers">("canvas");
   const [notice, setNotice] = useState("");
   const [starting, setStarting] = useState(false);
   const act = useAction();
@@ -239,9 +239,9 @@ export function Editor() {
         </div>
       )}
       <div className="tabs" role="tablist">
-        {(["canvas", "settings", "json", "triggers"] as const).map((t) => (
+        {(["canvas", "settings", "code", "json", "triggers"] as const).map((t) => (
           <button key={t} role="tab" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-            {{ canvas: "Canvas", settings: "Trigger & settings", json: "JSON", triggers: "Endpoints" }[t]}
+            {{ canvas: "Canvas", settings: "Trigger & settings", code: "Code", json: "JSON", triggers: "Endpoints" }[t]}
           </button>
         ))}
       </div>
@@ -305,6 +305,15 @@ export function Editor() {
         </div>
       )}
       {tab === "settings" && <SettingsTab def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} />}
+      {tab === "code" && (
+        <CodeTab
+          def={def}
+          onApply={(next, probs) => {
+            edit(next);
+            setProblems(probs);
+          }}
+        />
+      )}
       {tab === "json" && (
         <div className="card">
           <p className="hint">The whole definition (wd/v1). Edits apply as you type, once the JSON is valid.</p>
@@ -528,5 +537,52 @@ function StartRun({ workflow, onClose, onStarted }: { workflow: string; onClose:
         <button onClick={onClose}>Cancel</button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * The workflow as code (spec 10.2): generated from the definition, editable,
+ * and applied back by compiling it on the server. Generated code always
+ * builds to the definition it came from.
+ */
+function CodeTab({ def, onApply }: { def: WorkflowDefinition; onApply: (def: WorkflowDefinition, problems: Problem[]) => void }) {
+  const [base, setBase] = useState<string>();
+  const [code, setCode] = useState("");
+  const gen = useAction();
+  const apply = useAction();
+  useEffect(() => {
+    void gen.run(async () => {
+      const r = await post<{ code: string }>("/v1/code/generate", { definition: def });
+      setBase(r.code);
+      setCode(r.code);
+    });
+  }, [def]);
+  const changed = base !== undefined && code !== base;
+  return (
+    <div className="card">
+      <p className="hint">
+        This workflow as TypeScript with <code>@taskiem/sdk</code>, the same code <code>taskiem codegen</code> writes. Edit it and apply: the code is
+        compiled to a definition, and the canvas shows the result. Expressions are arrow functions or CEL strings; logic belongs in code steps.
+      </p>
+      <ErrorBox error={gen.error ?? apply.error} />
+      <textarea className="mono" rows={32} value={code} spellCheck={false} onChange={(e) => setCode(e.target.value)} aria-label="Workflow code" />
+      <div className="row">
+        <button
+          className="primary"
+          disabled={!changed || apply.busy}
+          onClick={() =>
+            void apply.run(async () => {
+              const r = await post<{ definition: WorkflowDefinition; problems: Problem[] }>("/v1/code/compile", { source: code });
+              onApply(r.definition, r.problems);
+            })
+          }
+        >
+          {apply.busy ? "Compiling…" : "Apply to workflow"}
+        </button>
+        <button disabled={!changed} onClick={() => base !== undefined && setCode(base)}>
+          Discard changes
+        </button>
+      </div>
+    </div>
   );
 }

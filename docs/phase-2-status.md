@@ -9,7 +9,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | # | Weeks | Milestone | Deliverables (spec) | Status |
 | --- | --- | --- | --- | --- |
 | 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **Done** (below) |
-| 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | Not started |
+| 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **In progress**: SDK, compiler, code generation and the editor's Code tab done (below); three-way merge and Git next |
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | Not started |
 | 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | Not started |
 | 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | Not started |
@@ -34,6 +34,18 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | API | Workflow listings carry the definition's id (`key`), which the CLI matches local files by | `api/workflows.go` |
 
 `taskiem dev` uses the Postgres installed on the machine rather than downloading binaries at run time; `--dsn` covers machines without it. Recorded connector fixtures in `dev` are not wired yet: workflows that call providers need sandbox credentials or test mocks.
+
+## Milestone 2: what exists so far
+
+| Area | Deliverable | Where |
+| --- | --- | --- |
+| SDK | `@taskiem/sdk`: `workflow(...).step()/.next()`, helpers for every step type and trigger, typed helpers for every built-in connector action (generated from the manifests; a test fails when they are stale) | `sdk/src`, `tools/sdkgen`, [SDK guide](sdk.md) |
+| Expressions | Arrow functions over `{ trigger, steps, env, run, secrets, item, index }` compile to CEL; constructs without a CEL meaning are refused with the field and the alternative. Recognises the SDK's `cel` helpers after bundlers rename them | `sdk/src/expr.ts` |
+| Code generation | Definition to `.flow.ts`, deterministic and stable. An expression becomes an arrow function only when it compiles back to the identical CEL, so generated code always builds to its definition. All workflows in `flows/` have their code committed and are checked both ways (`go test`, `pnpm test`), and `tsc` checks the code | `sdk/src/codegen.ts`, `flows/**/*.flow.ts` |
+| In the binary | esbuild bundles flow code with the embedded SDK and QuickJS runs it: `taskiem build` (`--check` for CI), `taskiem codegen`, `validate` and `dev` accept `.flow.ts`. Identical output to Node | `engine/flowcode`, `sdk/sdk.go`, `cmd/taskiem` |
+| API and web app | `POST /v1/code/generate` and `/v1/code/compile` (sandboxed, SDK imports only, checked as publishing would); the editor's Code tab shows the workflow as code and applies edits | `api/code.go`, `web/src/pages/Editor.tsx` |
+
+Definitions are stored as `jsonb`, which reorders keys, so code generated from a stored version lists object keys in Postgres's order rather than the author's. Git sync will carry the author's file.
 
 ## Carried over from Phase 1
 

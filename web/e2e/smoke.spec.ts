@@ -23,6 +23,16 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
   await page.getByTestId("node-start").click();
   await page.getByRole("button", { name: "+ code" }).click();
   await expect(page.getByTestId("node-code")).toBeVisible();
+
+  // The code view shows the workflow as TypeScript; an edit there applies.
+  await page.getByRole("tab", { name: "Code" }).click();
+  const code = page.getByLabel("Workflow code");
+  await expect(code).toHaveValue(/\.next\("code", code\(/);
+  await code.fill((await code.inputValue()).replace(/name: "([^"]*)"/, 'name: "$1 (from code)"'));
+  await page.getByRole("button", { name: "Apply to workflow" }).click();
+  await expect(page.getByRole("button", { name: "Apply to workflow" })).toBeDisabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Canvas" }).click();
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText(/is published; new runs use it/)).toBeVisible();
   await page.getByTestId("node-code").click();

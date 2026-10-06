@@ -95,4 +95,16 @@ func TestDevReloads(t *testing.T) {
 	// Fixing the test deploys the change as version 2.
 	write("double.test.json", strings.Replace(test, `"double":4`, `"double":6`, 1))
 	waitOut("published version 2")
+
+	// Workflow code is built to its definition, then deployed.
+	write("triple.flow.ts", `import { workflow, manual, transform } from "@taskiem/sdk";
+export default workflow({ id: "wf_triple", name: "Triple", trigger: manual() })
+  .step("triple", transform(({ trigger }) => trigger.body.n * 3));
+`)
+	waitOut("build  wrote " + filepath.Join(flows, "triple.wd.json"))
+	waitOut(`+ wf_triple  new workflow "Triple"`)
+	raw, err := os.ReadFile(filepath.Join(flows, "triple.wd.json"))
+	if err != nil || !strings.Contains(string(raw), `"output": "=trigger.body.n * 3"`) {
+		t.Errorf("built definition: %v\n%s", err, raw)
+	}
 }
