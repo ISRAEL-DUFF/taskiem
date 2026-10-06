@@ -1,6 +1,7 @@
 // Package sandbox runs code steps: JavaScript (and TypeScript, stripped at
-// save time) in QuickJS compiled to WebAssembly on wazero (spec 7). A script
-// gets no network, filesystem, or clock except through the host object.
+// save time) in QuickJS, and Python in CPython, both compiled to
+// WebAssembly on wazero (spec 7). A script gets no network, filesystem, or
+// clock except through the host object.
 package sandbox
 
 import (
@@ -73,6 +74,9 @@ var (
 // types are stripped and the module is bundled into one expression; imports
 // are not allowed (packages are curated and bundled by the platform).
 func Compile(source, language string) (string, error) {
+	if language == "python" {
+		return compilePython(source)
+	}
 	loader := api.LoaderJS
 	if language == "typescript" {
 		loader = api.LoaderTS
@@ -140,6 +144,13 @@ func Init(maxMemoryBytes int) {
 // its JSON-compatible result. Each run gets a fresh runtime: no state is
 // shared between runs or tenants.
 func Run(ctx context.Context, script string, input any, host Host, lim Limits) (res Result, err error) {
+	if strings.HasPrefix(script, PythonHeader) {
+		now := ""
+		if !host.Now.IsZero() {
+			now = host.Now.UTC().Format(time.RFC3339Nano)
+		}
+		return runPython(ctx, script, map[string]any{"source": strings.TrimPrefix(script, PythonHeader), "input": input, "now": now}, host, lim)
+	}
 	Init(0)
 	if lim.Timeout <= 0 {
 		lim = DefaultLimits

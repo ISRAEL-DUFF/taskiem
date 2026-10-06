@@ -20,7 +20,7 @@ import (
 var compiled sync.Map
 
 func compileStep(c *wd.CodeConfig) (string, error) {
-	if c.Language != "javascript" && c.Language != "typescript" {
+	if c.Language != "javascript" && c.Language != "typescript" && c.Language != "python" {
 		return "", fmt.Errorf("%s code steps are not available in this engine version: %w", c.Language, effects.ErrFatal)
 	}
 	key := sha256.Sum256([]byte(c.Language + "\x00" + c.Source))

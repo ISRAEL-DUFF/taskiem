@@ -12,7 +12,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **Done** (below), except a published Taskiem GitHub App and Bitbucket |
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **Done** (below); emailed anchors arrived with milestone 5's alerts |
 | 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | **In progress** (below): WASM runtime, drift monitor, and Flutterwave, Anchor, Lenco and Breet done; more connectors to follow |
-| 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | **In progress** (below): custom roles, passkeys, SSO, SCIM, staging environments, alerts, dashboards and the live run view done |
+| 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | **Done** (below) |
 | 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people |
 
 ### What engineering cannot finish alone
@@ -90,7 +90,7 @@ Shared pieces: exact conversion between minor units and providers' decimal amoun
 
 Open questions for each provider are listed at the end of its guide. The one that blocks a feature: **Breet's documentation gives bank withdrawal amounts both in local currency and in USD**, so `withdraw_to_bank` is refused until a connection records the unit Breet confirmed. Live checks need a sandbox account per provider.
 
-## Milestone 5: what exists so far
+## Milestone 5: what exists
 
 | Area | Deliverable | Where |
 | --- | --- | --- |
@@ -101,9 +101,9 @@ Open questions for each provider are listed at the end of its guide. The one tha
 | Alerts | Rules for failed, slow and reconciling runs, stuck approvals, drift, expiring credentials and audit anchors; email (SMTP), Slack and HMAC-signed webhooks with retries; anchors emailed outside the platform | `engine/alerts`, `api/alerts.go`, migration 00025, [guide](alerts.md) |
 | Dashboards | Success rate, p50/p95 duration, runs per day, failing steps and connectors, runs needing reconciliation, approvals pending, per workflow; by environment and period | `api/dashboard.go`, `web/src/pages/Dashboard.tsx`, [guide](dashboard.md) |
 | Live run view | Run history streamed as server-sent events (resumable, sealed); the run page's canvas lights each step as it goes | `api/stream.go`, `web/src/canvas/RunCanvas.tsx`, [guide](dashboard.md#live-run-view) |
+| Python sandbox | CPython 3.12 for WASI on wazero, a fresh instance per run: `main(input, host)` with fetch (egress-guarded), declared secrets, logical time; standard library only; time, memory and output limits | `engine/sandbox/python.go`, `engine/sandbox/pywasm`, [guide](code-steps.md) |
 | SCIM 2.0 | Users and Groups for Okta, Entra ID and others; administrators map groups to roles; deactivation removes access and signs out; owners are never deprovisioned | `api/scim.go`, migration 00023, [governance](governance.md#provisioning-scim-20) |
 
-Still to come in this milestone: the Python sandbox.
 
 ## Carried over from Phase 1
 

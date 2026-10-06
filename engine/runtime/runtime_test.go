@@ -416,3 +416,48 @@ func TestCodeStepInRun(t *testing.T) {
 		t.Errorf("throwing script: %s", st)
 	}
 }
+
+func TestPythonCodeStepInRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compiles CPython")
+	}
+	e := rt.New(t)
+	fx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ngn_per_usd": "1500.50"}`))
+	}))
+	defer fx.Close()
+	e.Secrets["fx_key"] = "k-123"
+	if err := e.Store.AllowEgress(ctx, e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := json.Marshal(`from decimal import Decimal
+
+def main(input, host):
+    rate = Decimal(host.fetch(input["fx"]).json()["ngn_per_usd"])
+    print("rate", rate, "key", len(host.secret("fx_key")))
+    return {"total_kobo": int(sum(Decimal(l["usd"]) for l in input["lines"]) * rate * 100)}
+`)
+	wf := e.Publish(t, wfDoc(`{"id":"calc","type":"code","input":{"lines":"=trigger.lines","fx":"=trigger.fx"},
+	  "config":{"language":"python","secrets":["fx_key"],"source":`+string(src)+`}},
+	  {"id":"out","type":"transform","needs":["calc"],"config":{"output":"=steps.calc.output.total_kobo"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{"lines": []any{map[string]any{"usd": 2}, map[string]any{"usd": 3}}, "fx": fx.URL})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		for _, ev := range events(t, e, ref) {
+			t.Logf("%s(%s) %s", ev.Type, ev.StepID, ev.Payload)
+		}
+		t.Fatalf("status %s", st)
+	}
+	var calc, out history.CompletedPayload
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.StepCompleted && ev.StepID == "calc" {
+			_ = json.Unmarshal(ev.Payload, &calc)
+		}
+		if ev.Type == history.StepCompleted && ev.StepID == "out" {
+			_ = json.Unmarshal(ev.Payload, &out)
+		}
+	}
+	if out.Output != float64(750250) || len(calc.Logs) != 1 || calc.Logs[0] != "rate 1500.50 key 5" {
+		t.Errorf("out %v logs %q", out.Output, calc.Logs)
+	}
+}

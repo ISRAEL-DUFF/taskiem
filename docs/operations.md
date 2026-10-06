@@ -38,6 +38,8 @@ Every role serves Prometheus metrics on `TASKIEM_METRICS_LISTEN` (`:9090`). Runn
 | `TASKIEM_ANCHOR_DIR` | — | Where the scheduler role appends each tenant's anchors (`<tenant>.jsonl`). Point it at write-once storage (an object-lock bucket, an append-only volume): anchors are only worth as much as their copy outside the database. |
 | `TASKIEM_SMTP_URL` | — | Mail server for alert emails: `smtp://user:pass@host:587` (STARTTLS, required when a password is given) or `smtps://user:pass@host:465`. Without it, email alert deliveries fail with a reason ([alerts](alerts.md)) |
 | `TASKIEM_ALERT_FROM` | — | Sender address of alert emails; required with `TASKIEM_SMTP_URL` |
+| `TASKIEM_WASM_CACHE` | the user cache directory | Where workers keep compiled WebAssembly (the Python interpreter takes seconds to compile the first time). Point it at a writable directory that survives restarts |
+| `TASKIEM_LOGIN_BURST` | 10 | Sign-in attempts one address may make at once, then one every six seconds |
 | `TASKIEM_WEB_DIR` | — | Built web app to serve (`/web` in the image). |
 | `TASKIEM_SECURE_COOKIES` | `true` | Set `false` only for plain-HTTP local use. |
 | `TASKIEM_PUBLIC_URL` | — | Where people reach the web app (`https://…`, or `http://localhost:…`). Turns on passkeys, which are bound to it |

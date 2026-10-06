@@ -134,6 +134,13 @@ func (w *Worker) Run(ctx context.Context) error {
 	w.defaults()
 	if w.Queue == "sandbox" {
 		sandbox.Init(0)
+		// Compiling CPython takes seconds the first time; do it now, so no
+		// step's time limit pays for it.
+		go func() {
+			if err := sandbox.InitPython(); err != nil {
+				w.Logger.Error("python sandbox unavailable", "err", err)
+			}
+		}()
 	}
 	wake, stop, err := listen(ctx, w.Store, "taskiem_tasks")
 	if err != nil {

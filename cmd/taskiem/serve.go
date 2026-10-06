@@ -30,6 +30,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
@@ -55,6 +56,7 @@ type config struct {
 	Queues             []string
 	Connectors         builtin.Options
 	PoolSize           int32
+	LoginBurst         int
 }
 
 func env(k, def string) string {
@@ -113,6 +115,9 @@ func loadConfig() (config, error) {
 	}
 	// Administrators are held to passkeys wherever passkeys can work.
 	c.RequireAdminPasskeys = envBool("TASKIEM_REQUIRE_ADMIN_PASSKEYS", c.PublicURL != "")
+	if n, err := strconv.Atoi(os.Getenv("TASKIEM_LOGIN_BURST")); err == nil && n > 0 {
+		c.LoginBurst = n
+	}
 	if n, err := strconv.Atoi(os.Getenv("TASKIEM_DATABASE_POOL")); err == nil && n > 0 {
 		c.PoolSize = int32(n) //nolint:gosec // small operator-set value
 	}
@@ -259,6 +264,9 @@ func serve(ctx context.Context, args []string) error {
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
 		srv.Alerts = alerter
+		srv.LoginBurst = cfg.LoginBurst
+		// Checking a Python step compiles CPython first (seconds): do it now.
+		go func() { _ = sandbox.InitPython() }()
 		srv.Done = ctx.Done()
 		if *role == "all" {
 			srv.Ingest = e.hooks() // one listener for a small install
