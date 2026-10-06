@@ -730,7 +730,11 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 				return err
 			}
 			redactText(v)
-			if v, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, nil, p.taint); err != nil {
+			var paths []pii.Path
+			if result.Type == history.StepCompleted {
+				paths = outputPIIPaths(p.conn, p.action) // what the manifest declares personal
+			}
+			if v, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, paths, p.taint); err != nil {
 				return err
 			}
 			if payload, err = pii.SealDetected(ctx, w.Store.PII, tx, p.c.tenant, v, p.taint); err != nil {

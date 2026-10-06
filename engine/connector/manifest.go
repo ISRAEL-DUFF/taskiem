@@ -133,7 +133,11 @@ func (m *Manifest) check() []string {
 		if len(a.PII) > 0 {
 			props := inputProperties(a.Input)
 			for _, f := range a.PII {
-				if !props[f.Field] {
+				if segs, ok := OutputPIIPath(f.Field); ok {
+					if !schemaHasPath(a.Output, segs) {
+						add("%s/pii: %q is not in the output schema", p, f.Field)
+					}
+				} else if !props[f.Field] {
 					add("%s/pii: %q is not an input property", p, f.Field)
 				}
 			}
@@ -159,6 +163,44 @@ func inputProperties(schema json.RawMessage) map[string]bool {
 		out[k] = true
 	}
 	return out
+}
+
+// OutputPIIPath reads a pii field naming a place in the action's output:
+// "output.<key>[.<key>|.*]...", "*" standing for every array element.
+func OutputPIIPath(field string) ([]string, bool) {
+	rest, ok := strings.CutPrefix(field, "output.")
+	if !ok || rest == "" {
+		return nil, false
+	}
+	return strings.Split(rest, "."), true
+}
+
+// schemaHasPath reports whether a JSON Schema describes the path: object
+// keys through properties, "*" through items. A schema that leaves an
+// object open (no properties) accepts any key below it.
+func schemaHasPath(schema json.RawMessage, segs []string) bool {
+	var s struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+		Items      json.RawMessage            `json:"items"`
+		Ref        string                     `json:"$ref"`
+	}
+	if len(segs) == 0 {
+		return true
+	}
+	if json.Unmarshal(schema, &s) != nil {
+		return false
+	}
+	if s.Ref != "" {
+		return true // a reference to another action's output: trust it
+	}
+	if segs[0] == "*" {
+		return len(s.Items) > 0 && schemaHasPath(s.Items, segs[1:])
+	}
+	if s.Properties == nil {
+		return len(s.Items) == 0 // an open object
+	}
+	sub, ok := s.Properties[segs[0]]
+	return ok && schemaHasPath(sub, segs[1:])
 }
 
 // MustParse parses a manifest or panics; for connectors compiled into the binary.

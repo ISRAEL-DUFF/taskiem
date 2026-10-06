@@ -102,3 +102,40 @@ func TestWebhookTriggerNeedsVerify(t *testing.T) {
 		t.Error("webhook trigger without verify accepted")
 	}
 }
+
+func TestOutputPIIPaths(t *testing.T) {
+	src := func(field string) []byte {
+		return []byte(`
+manifest: connector/v1
+id: kyc
+version: 1.0.0
+name: KYC
+description: Lookups.
+category: identity
+auth: { type: none, fields: [] }
+base_url: https://kyc.test
+egress_hosts: [kyc.test]
+actions:
+  lookup:
+    title: Look up
+    class: read
+    input: { type: object, properties: { id: { type: string } } }
+    output:
+      type: object
+      properties:
+        record: { type: object, properties: { names: { type: array, items: { type: object, properties: { first: { type: string } } } } } }
+        raw: { type: object }
+    pii: [{ field: "` + field + `", category: name }]
+`)
+	}
+	for _, ok := range []string{"id", "output.record.names.*.first", "output.raw.anything"} {
+		if _, probs := Parse(src(ok)); len(probs) > 0 {
+			t.Errorf("%s refused: %v", ok, probs)
+		}
+	}
+	for _, bad := range []string{"missing", "output.record.nope", "output.record.names.first", "output."} {
+		if _, probs := Parse(src(bad)); len(probs) == 0 {
+			t.Errorf("%s accepted", bad)
+		}
+	}
+}

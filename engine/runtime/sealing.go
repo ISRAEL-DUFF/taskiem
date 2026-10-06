@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -79,13 +80,34 @@ func (s *Store) connectorPIIPaths(ctx context.Context, tenant uuid.UUID, p histo
 	}
 	var out []pii.Path
 	for _, f := range c.Manifest.Actions[p.Action].PII {
-		cat := f.Category
-		if cat == "" {
-			cat = "other"
+		if _, isOutput := connector.OutputPIIPath(f.Field); isOutput {
+			continue // sealed when the result is written (outputPIIPaths)
 		}
-		out = append(out, pii.Path{Segments: []string{"input", f.Field}, Category: cat})
+		out = append(out, pii.Path{Segments: []string{"input", f.Field}, Category: piiCategory(f.Category)})
 	}
 	return out, nil
+}
+
+// outputPIIPaths are the output places a connector action declares as PII,
+// as they sit in a StepCompleted payload.
+func outputPIIPaths(c *connector.Connector, action string) []pii.Path {
+	if c == nil {
+		return nil
+	}
+	var out []pii.Path
+	for _, f := range c.Manifest.Actions[action].PII {
+		if segs, ok := connector.OutputPIIPath(f.Field); ok {
+			out = append(out, pii.Path{Segments: append([]string{"output"}, segs...), Category: piiCategory(f.Category)})
+		}
+	}
+	return out
+}
+
+func piiCategory(c string) string {
+	if c == "" {
+		return "other"
+	}
+	return c
 }
 
 // openHistory decrypts sealed values for decide and the worker, inside the

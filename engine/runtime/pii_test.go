@@ -1,9 +1,11 @@
 package runtime_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -125,5 +127,83 @@ func TestDetectedPIIIsSealed(t *testing.T) {
 		if ev.Type == history.StepCompleted && ev.StepID == "lookup" && !strings.Contains(string(ev.Payload), "found BVN [bvn] for [phone]") {
 			t.Errorf("logs should be masked: %s", ev.Payload)
 		}
+	}
+}
+
+const kycManifest = `
+manifest: connector/v1
+id: kyc
+version: 1.0.0
+name: KYC test
+description: A lookup returning personal data.
+category: identity
+auth: { type: none, fields: [] }
+base_url: https://kyc.test
+egress_hosts: [kyc.test]
+actions:
+  lookup:
+    title: Look someone up
+    class: read
+    input: { type: object, properties: { id_number: { type: string } } }
+    output:
+      type: object
+      properties:
+        found: { type: boolean }
+        record:
+          type: object
+          properties:
+            first_name: { type: string }
+            date_of_birth: { type: string }
+            addresses: { type: array, items: { type: object, properties: { line: { type: string } } } }
+    pii:
+      - { field: id_number, category: other }
+      - { field: output.record.first_name, category: name }
+      - { field: output.record.date_of_birth, category: other }
+      - { field: output.record.addresses.*.line, category: address }
+`
+
+// What a KYC lookup returns about a person is sealed where the manifest
+// says, though no detector recognises names or dates; later steps still
+// read it.
+func TestDeclaredOutputPIIIsSealed(t *testing.T) {
+	e := rt.New(t)
+	m := connector.MustParse([]byte(kycManifest))
+	if err := e.Registry.Register(&connector.Connector{Manifest: m, Actions: map[string]connector.Action{
+		"lookup": connector.ActionFunc(func(context.Context, connector.Request) (connector.Response, error) {
+			return connector.Response{Output: map[string]any{"found": true, "record": map[string]any{
+				"first_name": "Adaeze", "date_of_birth": "1990-04-17", "addresses": []any{map[string]any{"line": "14 Bode Thomas Street"}}}}}, nil
+		})}}); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_lookup","version":1,"name":"lookup","trigger":{"type":"manual"},
+	  "steps":[{"id":"look","type":"connector","connector":"kyc@1","action":"lookup","input":{"id_number":"A123"}},
+	    {"id":"greet","type":"transform","needs":["look"],"config":{"output":{"found":"=steps.look.output.found","initial":"=steps.look.output.record.first_name.substring(0, 1)"}}}]}`)
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	for _, ev := range events(t, e, ref) {
+		for _, secret := range []string{"Adaeze", "1990-04-17", "Bode Thomas"} {
+			if strings.Contains(string(ev.Payload), secret) {
+				t.Errorf("plaintext %q in stored %s(%s): %s", secret, ev.Type, ev.StepID, ev.Payload)
+			}
+		}
+		if ev.Type == history.StepCompleted && ev.StepID == "look" && (!strings.Contains(string(ev.Payload), `"found": true`) && !strings.Contains(string(ev.Payload), `"found":true`)) {
+			t.Errorf("an undeclared field was sealed: %s", ev.Payload)
+		}
+	}
+	opened, err := e.Store.OpenedHistory(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok := false
+	for _, ev := range opened {
+		if ev.Type == history.StepCompleted && ev.StepID == "look" && strings.Contains(string(ev.Payload), "Adaeze") && strings.Contains(string(ev.Payload), "Bode Thomas") {
+			ok = true
+		}
+	}
+	if !ok {
+		t.Error("revealed history lacks the lookup's result")
 	}
 }
