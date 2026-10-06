@@ -11,6 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
+	"github.com/israel-duff/taskiem/connectors/mysql"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/s3"
@@ -41,6 +42,7 @@ func Register(r *connector.Registry, o Options) error {
 		moniepoint.New(moniepoint.Options{BaseURL: o.MoniepointURL}),
 		interswitch.New(interswitch.Options{BaseURL: o.InterswitchURL}),
 		postgres.New(),
+		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),
 		sftp.New(),
 	} {
