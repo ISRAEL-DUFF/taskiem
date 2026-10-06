@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "query": {
+   "fields": "spreadsheetId,spreadsheetUrl,properties.title,sheets.properties(sheetId,title,index)"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+   "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit",
+   "properties": {
+    "title": "Example Spreadsheet"
+   },
+   "sheets": [
+    {
+     "properties": {
+      "sheetId": 0,
+      "title": "Class Data",
+      "index": 0
+     }
+    }
+   ]
+  }
+ }
+}

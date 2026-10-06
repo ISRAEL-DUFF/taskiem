@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/users/me/messages/send"
+ },
+ "response": {
+  "status": 403,
+  "body": {
+   "error": {
+    "code": 403,
+    "message": "User Rate Limit Exceeded",
+    "errors": [
+     {
+      "domain": "usageLimits",
+      "reason": "userRateLimitExceeded",
+      "message": "User Rate Limit Exceeded"
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/users/me/messages/m1",
+  "query": {
+   "format": "metadata",
+   "metadataHeaders": "Subject"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "m1",
+   "threadId": "t1",
+   "labelIds": [
+    "INBOX"
+   ],
+   "snippet": "Invoice 42",
+   "internalDate": "1790000000000",
+   "payload": {
+    "mimeType": "multipart/mixed",
+    "headers": [
+     {
+      "name": "Subject",
+      "value": "Invoice 42"
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/users/me/messages",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "query": {
+   "q": "from:billing@example.com is:unread",
+   "maxResults": "10",
+   "pageToken": "p1",
+   "labelIds": "INBOX"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "messages": [
+    {
+     "id": "m1",
+     "threadId": "t1"
+    },
+    {
+     "id": "m2",
+     "threadId": "t1"
+    }
+   ],
+   "nextPageToken": "p2",
+   "resultSizeEstimate": 2
+  }
+ }
+}

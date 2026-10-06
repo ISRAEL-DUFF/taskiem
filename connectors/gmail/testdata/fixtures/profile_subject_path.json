@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/users/ops@example.com/profile",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "emailAddress": "ops@example.com",
+   "messagesTotal": 1,
+   "threadsTotal": 1,
+   "historyId": "1"
+  }
+ }
+}

@@ -1,0 +1,46 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values:batchGet",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "query": {
+   "ranges": "Sheet1!A1:B2"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+   "valueRanges": [
+    {
+     "range": "Sheet1!A1:B2",
+     "majorDimension": "ROWS",
+     "values": [
+      [
+       "id",
+       "amount"
+      ],
+      [
+       "7",
+       "100"
+      ]
+     ]
+    },
+    {
+     "range": "Sheet2!A1:A2",
+     "majorDimension": "ROWS",
+     "values": [
+      [
+       "name"
+      ],
+      [
+       "Ada"
+      ]
+     ]
+    }
+   ]
+  }
+ }
+}

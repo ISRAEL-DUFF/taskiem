@@ -1,0 +1,118 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/users/me/messages/m1",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "query": {
+   "format": "full"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "m1",
+   "threadId": "t1",
+   "labelIds": [
+    "INBOX",
+    "UNREAD"
+   ],
+   "snippet": "Invoice 42 is attached",
+   "historyId": "9",
+   "internalDate": "1790000000000",
+   "sizeEstimate": 5120,
+   "payload": {
+    "partId": "",
+    "mimeType": "multipart/mixed",
+    "filename": "",
+    "headers": [
+     {
+      "name": "From",
+      "value": "Billing <billing@example.com>"
+     },
+     {
+      "name": "To",
+      "value": "ops@example.com"
+     },
+     {
+      "name": "Subject",
+      "value": "Invoice 42"
+     },
+     {
+      "name": "Date",
+      "value": "Mon, 5 Oct 2026 09:00:00 +0100"
+     },
+     {
+      "name": "Message-ID",
+      "value": "<inv42@example.com>"
+     },
+     {
+      "name": "Received",
+      "value": "first"
+     },
+     {
+      "name": "Received",
+      "value": "second"
+     }
+    ],
+    "body": {
+     "size": 0
+    },
+    "parts": [
+     {
+      "partId": "0",
+      "mimeType": "multipart/alternative",
+      "filename": "",
+      "headers": [],
+      "body": {
+       "size": 0
+      },
+      "parts": [
+       {
+        "partId": "0.0",
+        "mimeType": "text/plain",
+        "filename": "",
+        "headers": [
+         {
+          "name": "Content-Type",
+          "value": "text/plain; charset=\"UTF-8\""
+         }
+        ],
+        "body": {
+         "size": 31,
+         "data": "SW52b2ljZSA0MiBpcyBhdHRhY2hlZC4g4oCTIEFkYQ0K"
+        }
+       },
+       {
+        "partId": "0.1",
+        "mimeType": "text/html",
+        "filename": "",
+        "headers": [],
+        "body": {
+         "size": 40,
+         "data": "PHA-SW52b2ljZSA0MiBpcyBhdHRhY2hlZC4g4oCTIEFkYTwvcD4"
+        }
+       }
+      ]
+     },
+     {
+      "partId": "1",
+      "mimeType": "application/pdf",
+      "filename": "invoice-42.pdf",
+      "headers": [
+       {
+        "name": "Content-Disposition",
+        "value": "attachment; filename=\"invoice-42.pdf\""
+       }
+      ],
+      "body": {
+       "attachmentId": "ANGjdJ8",
+       "size": 48213
+      }
+     }
+    ]
+   }
+  }
+ }
+}

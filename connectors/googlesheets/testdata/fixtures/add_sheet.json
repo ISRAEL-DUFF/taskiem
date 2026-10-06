@@ -1,0 +1,47 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms:batchUpdate",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "body": {
+   "requests": [
+    {
+     "addSheet": {
+      "properties": {
+       "title": "October",
+       "index": 0,
+       "gridProperties": {
+        "rowCount": 100,
+        "columnCount": 8
+       }
+      }
+     }
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+   "replies": [
+    {
+     "addSheet": {
+      "properties": {
+       "sheetId": 123456,
+       "title": "October",
+       "index": 0,
+       "sheetType": "GRID",
+       "gridProperties": {
+        "rowCount": 100,
+        "columnCount": 8
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}

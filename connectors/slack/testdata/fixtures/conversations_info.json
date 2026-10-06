@@ -1,0 +1,20 @@
+{
+ "status": 200,
+ "body": {
+  "ok": true,
+  "channel": {
+   "id": "C012AB3CD",
+   "name": "general",
+   "is_channel": true,
+   "is_private": false,
+   "is_archived": false,
+   "is_member": true,
+   "num_members": 23,
+   "topic": {
+    "value": "For public discussion of generalities",
+    "creator": "W012A3BCD",
+    "last_set": 1449709364
+   }
+  }
+ }
+}

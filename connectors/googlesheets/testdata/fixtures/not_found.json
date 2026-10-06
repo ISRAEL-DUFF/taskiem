@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/spreadsheets/missing"
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "error": {
+    "code": 404,
+    "message": "Requested entity was not found.",
+    "status": "NOT_FOUND"
+   }
+  }
+ }
+}

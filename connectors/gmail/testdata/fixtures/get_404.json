@@ -1,0 +1,23 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/users/me/messages/nope"
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "error": {
+    "code": 404,
+    "message": "Requested entity was not found.",
+    "errors": [
+     {
+      "domain": "global",
+      "reason": "notFound",
+      "message": "Requested entity was not found."
+     }
+    ],
+    "status": "NOT_FOUND"
+   }
+  }
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/users/me/labels",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "labels": [
+    {
+     "id": "INBOX",
+     "name": "INBOX",
+     "type": "system"
+    },
+    {
+     "id": "Label_12",
+     "name": "Invoices",
+     "type": "user"
+    }
+   ]
+  }
+ }
+}

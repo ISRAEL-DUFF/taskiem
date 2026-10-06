@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/users/me/drafts",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "r-5133318546283736587",
+   "message": {
+    "id": "18c2f0a1b2c3d4e6",
+    "threadId": "18c2f0a1b2c3d4e6",
+    "labelIds": [
+     "DRAFT"
+    ]
+   }
+  }
+ }
+}
