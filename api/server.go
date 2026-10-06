@@ -156,6 +156,7 @@ func (s *Server) Handler() http.Handler {
 
 			r.With(s.need(PermRunStart)).Post("/workflows/{wf}/runs", s.startRun)
 			r.With(s.need(PermRunRead)).Get("/runs", s.listRuns)
+			r.With(s.need(PermRunRead)).Get("/dashboard", s.dashboard)
 			r.With(s.need(PermRunRead)).Get("/runs/{run}", s.getRun)
 			r.With(s.need(PermRunCancel)).Post("/runs/{run}/cancel", s.cancelRun)
 			r.With(s.need(PermRunResolve)).Post("/runs/{run}/steps/{step}/resolve", s.resolveStep)

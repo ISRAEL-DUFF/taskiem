@@ -10,6 +10,7 @@ import { Connections } from "./pages/Connections";
 import { Settings } from "./pages/Settings";
 import { Audit } from "./pages/Audit";
 import { Alerts } from "./pages/Alerts";
+import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
 import { Policies } from "./pages/Policies";
 import { Account, Passkeys } from "./pages/Account";
@@ -65,6 +66,7 @@ function Shell() {
   if (me.enrol_passkey) return <EnrolPasskey />;
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || "/workflows"} replace />;
   const links: [string, string, boolean][] = [
+    ["/dashboard", "Dashboard", can("run.read")],
     ["/workflows", "Workflows", can("workflow.read")],
     ["/runs", "Runs", can("run.read")],
     ["/approvals", "Approvals", can("approval.decide") || can("workflow.publish")],
@@ -100,6 +102,7 @@ function Shell() {
           <Route path="/" element={<Navigate to="/workflows" replace />} />
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/workflows/:id" element={<Editor />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/runs" element={<Runs />} />
           <Route path="/runs/:id" element={<RunPage />} />
           <Route path="/approvals" element={<Approvals />} />
