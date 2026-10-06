@@ -122,6 +122,9 @@ func loadConfig() (config, error) {
 			GoogleTokenURL:    os.Getenv("TASKIEM_GOOGLE_TOKEN_URL"),
 			OpayURL:           os.Getenv("TASKIEM_OPAY_URL"),
 			RemitaURL:         os.Getenv("TASKIEM_REMITA_URL"),
+			MonoURL:           os.Getenv("TASKIEM_MONO_URL"),
+			PremblyURL:        os.Getenv("TASKIEM_PREMBLY_URL"),
+			YouverifyURL:      os.Getenv("TASKIEM_YOUVERIFY_URL"),
 		},
 		PoolSize: 20,
 	}

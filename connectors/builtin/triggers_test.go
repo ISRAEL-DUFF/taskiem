@@ -72,6 +72,11 @@ func TestTriggerExpressions(t *testing.T) {
 			"transaction-status", "9f605d69f04e94172875dc156537071cead060bbcaeaca94a7b8805af9f89611e2fdf6836713c9c90b028ca7e4470b1356e996975f2abc862315aaa9b7f2ae2d", "10023"},
 		{"remita@1", "invoice_payment", `[{"rrr":"110002071256","channel":"CARDPAYMENT","amount":650000.00,"orderId":"6954148807","type":"PY"}]`,
 			"payment_notification", "110002071256", "6954148807"},
+		{"mono@1", "event", `{"event":"mono.events.account_connected","event_id":"jU4i","data":{"id":"6979","customer":"6961"}}`, "mono.events.account_connected", "jU4i", "6979"},
+		{"mono@1", "event", `{"event":"direct_debit.payment_successful","event_id":"Psm1","data":{"object":{"id":"txd_1","reference":"ref123"}}}`, "direct_debit.payment_successful", "Psm1", "ref123"},
+		{"mono@1", "event", `{"event":"events.mandates.debit.successful","event_id":"d1","data":{"mandate":"mmc_1","reference_number":"dref"}}`, "events.mandates.debit.successful", "d1", "dref"},
+		{"prembly@1", "verification", `{"status":true,"response_code":"00","data":{"firstName":"A"},"verification":{"status":"NOT-VERIFIED","reference":"9a7c"}}`, "NOT-VERIFIED", "9a7c", "9a7c"},
+		{"youverify@1", "event", `{"event":"identity.verification.completed","apiVersion":"v2","data":{"id":"646b","status":"found","createdAt":"2024-03-27T08:30:03.367Z"}}`, "identity.verification.completed", "identity.verification.completed:646b:found::2024-03-27T08:30:03.367Z", "646b"},
 	} {
 		conn, ok := reg.Get(c.ref)
 		if !ok {

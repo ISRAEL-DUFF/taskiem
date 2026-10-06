@@ -679,6 +679,8 @@ triggers:
   event:
     type: webhook
     verify: { scheme: header_secret, header: mono-webhook-secret, secret_field: webhook_secret }
+    # The provider retries anything but 200, so accepted (and ignored) deliveries get 200.
+    ack: { status: 200, body: ok }
     events:
       - mono.events.account_connected
       - mono.events.account_updated

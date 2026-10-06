@@ -397,7 +397,7 @@ func TestWebhookSecret(t *testing.T) {
 
 func TestTriggerExpressions(t *testing.T) {
 	spec := New(Options{}).Manifest.Triggers["event"]
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
 	for _, c := range []struct{ body, event, dedup, correlation string }{
 		{`{"event":"mono.events.account_connected","event_id":"jU4i","data":{"id":"6979","customer":"6961","meta":{"data_status":"PROCESSING"}}}`,
 			"mono.events.account_connected", "jU4i", "6979"},

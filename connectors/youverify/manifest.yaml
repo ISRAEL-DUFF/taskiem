@@ -348,6 +348,8 @@ triggers:
   event:
     type: webhook
     verify: { scheme: hmac_sha256, header: x-yv-signature, secret_field: secret_key }
+    # The provider retries anything but 200, so accepted (and ignored) deliveries get 200.
+    ack: { status: 200, body: ok }
     events: [identity.verification.completed, address.verification.completed]
     event_type: '=body.event'
     # No event id is documented for KYC events: the verification, its

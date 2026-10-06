@@ -232,7 +232,7 @@ func TestWebhookSignature(t *testing.T) {
 
 func TestTriggerExpressions(t *testing.T) {
 	spec := New(Options{}).Manifest.Triggers["event"]
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
 	for _, c := range []struct{ body, event, dedup, correlation string }{
 		{`{"event":"identity.verification.completed","apiVersion":"v2","data":{"id":"646b","status":"found","type":"bvn","createdAt":"2024-03-27T08:30:03.367Z"}}`,
 			"identity.verification.completed", "identity.verification.completed:646b:found::2024-03-27T08:30:03.367Z", "646b"},

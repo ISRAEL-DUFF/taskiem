@@ -70,4 +70,4 @@ Mono retries any delivery not answered with HTTP 200 for up to 48 hours (25 atte
 5. Whether a Connect code can be exchanged twice (`exchange_token` parks on an unknown outcome).
 6. The exact "already active" wording for `reinstate_mandate`.
 7. Whether income and creditworthiness webhooks carry `event_id` (the documented examples do not; the connector falls back to the event, account and timestamp).
-8. Whether Mono accepts HTTP 202, which Taskiem's ingest answers with; Mono documents retrying anything but 200 (see the engine note in the delivery report).
+8. (Settled: the trigger answers accepted deliveries with 200, since Mono retries anything else.)

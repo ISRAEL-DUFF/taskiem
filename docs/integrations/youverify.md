@@ -56,4 +56,4 @@ Youverify posts every event to the callback URL in its dashboard, so there is on
 4. Whether `address.verification.completed`'s `referenceId` is the one returned when the verification was requested.
 5. The response shape of the AML name search (the documentation shows the request in place of the response); the connector reads it like the retrieve endpoint.
 6. Whether retrying a request after an unknown outcome can dispatch two agents, and whether `metadata` could carry an idempotency key.
-7. Whether Youverify accepts HTTP 202, which Taskiem's ingest answers with; Youverify documents retrying anything but 200.
+7. (Settled: the trigger answers accepted deliveries with 200, since Youverify retries anything else.)
