@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": [],
+    "paths": {
+      "@taskiem/sdk": [
+        "../sdk/src/index.ts"
+      ],
+      "@taskiem/connectors": [
+        "../sdk/src/connectors.gen.ts"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noImplicitAny": false
+  },
+  "include": [
+    "**/*.flow.ts"
+  ]
+}
