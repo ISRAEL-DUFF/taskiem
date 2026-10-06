@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func header(name, value string) http.Header {
@@ -63,5 +64,29 @@ func TestWebhookSchemes(t *testing.T) {
 	}
 	if VerifyWebhook(hs, "", header("X-Webhook-Secret", ""), body) == nil {
 		t.Error("empty secret accepted")
+	}
+}
+
+func TestSlackV0Scheme(t *testing.T) {
+	body := []byte(`{"type":"event_callback","event_id":"Ev1"}`)
+	ts := "1700000000"
+	Now = func() time.Time { return time.Unix(1700000030, 0) }
+	defer func() { Now = time.Now }()
+	m := hmac.New(sha256.New, []byte("signing-secret"))
+	m.Write([]byte("v0:" + ts + ":"))
+	m.Write(body)
+	h := http.Header{}
+	h.Set("X-Slack-Signature", "v0="+hex.EncodeToString(m.Sum(nil)))
+	h.Set("X-Slack-Request-Timestamp", ts)
+	spec := &VerifySpec{Scheme: "slack_v0", Header: "X-Slack-Signature", TimestampHeader: "X-Slack-Request-Timestamp"}
+	if err := VerifyWebhook(spec, "signing-secret", h, body); err != nil {
+		t.Fatalf("valid: %v", err)
+	}
+	if VerifyWebhook(spec, "signing-secret", h, append(body, ' ')) == nil {
+		t.Error("tampered body accepted")
+	}
+	Now = func() time.Time { return time.Unix(1700000000+600, 0) }
+	if VerifyWebhook(spec, "signing-secret", h, body) == nil {
+		t.Error("stale timestamp accepted")
 	}
 }

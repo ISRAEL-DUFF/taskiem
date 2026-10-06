@@ -29,6 +29,21 @@ type TriggerSpec struct {
 	EventType   string      `json:"event_type"`
 	Dedup       string      `json:"dedup"`
 	Correlation string      `json:"correlation"`
+	// Handshake answers a provider's endpoint check (Slack's
+	// url_verification, Meta's GET challenge).
+	Handshake *HandshakeSpec `json:"handshake"`
+}
+
+// HandshakeSpec is a trigger's endpoint check. GET: the query parameter
+// TokenQuery must equal the connection's SecretField, and Respond (over
+// query) is returned as text. POST: a delivery that passed verification
+// and for which When holds is answered with Respond instead of delivered.
+type HandshakeSpec struct {
+	Method      string `json:"method"`
+	When        string `json:"when"`
+	Respond     string `json:"respond"`
+	TokenQuery  string `json:"token_query"`
+	SecretField string `json:"secret_field"`
 }
 
 type VerifySpec struct {
@@ -74,6 +89,24 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 			return fmt.Errorf("%w: timestamp outside %s", ErrBadSignature, tol)
 		}
 		signed = append([]byte(ts+"."), body...)
+	case "slack_v0":
+		mac = sha256.New
+		ts := strings.TrimSpace(h.Get(v.TimestampHeader))
+		sec, err := strconv.ParseInt(ts, 10, 64)
+		if err != nil {
+			return fmt.Errorf("%w: missing or bad %s", ErrBadSignature, v.TimestampHeader)
+		}
+		tol := DefaultTolerance
+		if v.Tolerance != "" {
+			if d, err := time.ParseDuration(v.Tolerance); err == nil {
+				tol = d
+			}
+		}
+		if skew := Now().Sub(time.Unix(sec, 0)); skew > tol || skew < -tol {
+			return fmt.Errorf("%w: timestamp outside %s", ErrBadSignature, tol)
+		}
+		signed = append([]byte("v0:"+ts+":"), body...)
+		got = strings.TrimPrefix(got, "v0=")
 	case "hmac_sha256":
 		mac = sha256.New
 	case "hmac_sha512":

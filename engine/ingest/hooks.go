@@ -3,13 +3,16 @@ package ingest
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -83,6 +86,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.wdExprs = expr.MustNew()
 		rt := chi.NewRouter()
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
+		rt.Get("/{tenant}/connectors/{connector}/{trigger}", h.connectorHandshake)
 		rt.Post("/{tenant}/*", h.webhook)
 		h.router = rt
 	})
@@ -153,6 +157,18 @@ func parse(r *http.Request, body []byte, hide ...string) parsed {
 	p := parsed{headers: map[string]any{}, query: map[string]any{}}
 	if v, err := expr.DecodeJSON(body); err == nil {
 		p.body = v
+	} else if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "application/x-www-form-urlencoded" {
+		// Form posts (Africa's Talking callbacks, Slack interactions):
+		// fields become the body's keys.
+		fields := map[string]any{}
+		if vals, err := url.ParseQuery(string(body)); err == nil {
+			for k, v := range vals {
+				if len(v) > 0 {
+					fields[k] = v[0]
+				}
+			}
+		}
+		p.body = fields
 	} else {
 		p.body = string(body)
 	}
@@ -320,6 +336,19 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	p := parse(r, body, hide...)
 	act := p.activation()
+	if hs := spec.Handshake; hs != nil && hs.Method == "POST" {
+		v, err := h.exprs.Eval(hs.When, act)
+		if b, _ := v.(bool); err == nil && b {
+			answer, err := evalString(h.exprs, hs.Respond, act)
+			if err != nil {
+				replyErr(w, http.StatusBadRequest, "unexpected handshake for "+ref+" "+name)
+				return
+			}
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte(answer))
+			return
+		}
+	}
 	event, dedup, correlation := name, bodyHash(body), ""
 	for _, f := range []struct {
 		src string
@@ -395,4 +424,47 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	out["runs"] = runs
 	reply(w, http.StatusAccepted, out)
+}
+
+// connectorHandshake answers a provider's GET endpoint check (Meta's
+// hub.challenge): the token it sends must equal the connection's secret.
+func (h *Handler) connectorHandshake(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), budget)
+	defer cancel()
+	tenant, env, _, ok := h.receive(w, r)
+	if !ok {
+		return
+	}
+	ref, name := chi.URLParam(r, "connector"), chi.URLParam(r, "trigger")
+	reg, err := h.Registry.For(ctx, tenant.String())
+	if err != nil {
+		replyErr(w, http.StatusServiceUnavailable, "try again")
+		return
+	}
+	conn, ok := reg.Get(ref)
+	var hs *connector.HandshakeSpec
+	if ok {
+		hs = conn.Manifest.Triggers[name].Handshake
+	}
+	if hs == nil || hs.Method != "GET" {
+		replyErr(w, http.StatusNotFound, "no such connector trigger")
+		return
+	}
+	creds, err := h.Connections.Credentials(ctx, tenant, env, conn.Manifest.ID, r.URL.Query().Get("connection"))
+	if err != nil && !errors.Is(err, secrets.ErrNotFound) && !errors.Is(err, secrets.ErrAmbiguous) {
+		h.unavailable(w, r, err)
+		return
+	}
+	want, got := creds[hs.SecretField], r.URL.Query().Get(hs.TokenQuery)
+	if want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+		replyErr(w, http.StatusForbidden, "verification token does not match")
+		return
+	}
+	answer, err := evalString(h.exprs, hs.Respond, parse(r, nil).activation())
+	if err != nil {
+		replyErr(w, http.StatusBadRequest, "unexpected handshake for "+ref+" "+name)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(answer))
 }
