@@ -379,6 +379,20 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			_, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID)
 			return nil, err
 		}
+	case history.StepCancelled:
+		// A task a worker already holds is left to it: the worker checks for
+		// cancellation before recording intent, and decide waits for a write
+		// already under way.
+		for _, q := range []string{
+			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND lease_owner IS NULL`,
+			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
+			`DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`,
+			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
+		} {
+			if _, err := tx.Exec(ctx, q, run.ref.ID, ev.StepID); err != nil {
+				return nil, err
+			}
+		}
 	case history.RunCompleted:
 		return nil, s.endRun(ctx, tx, run, def, "completed")
 	case history.RunFailed:

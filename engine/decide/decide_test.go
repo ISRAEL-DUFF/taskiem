@@ -280,11 +280,9 @@ func TestExpressionErrorFailsStep(t *testing.T) {
 }
 
 func TestUnsupportedStepType(t *testing.T) {
-	s := newSim(t, wdDoc(`{"id":"p","type":"parallel","config":{"branches":[
-	  {"name":"a","steps":[{"id":"a1","type":"transform","config":{"output":1}}]},
-	  {"name":"b","steps":[{"id":"b1","type":"transform","config":{"output":2}}]}]}}`, ""), map[string]any{})
+	s := newSim(t, wdDoc(`{"id":"p","type":"subflow","config":{"workflow":"wf_other","version":1}}`, ""), map[string]any{})
 	if k := s.payload(history.StepFailed, "p")["error"].(map[string]any)["kind"]; k != "unsupported" {
-		t.Errorf("parallel should be unsupported in Phase 1: %v", k)
+		t.Errorf("subflow should be unsupported until Phase 3: %v", k)
 	}
 }
 

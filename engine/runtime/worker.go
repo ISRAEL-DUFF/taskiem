@@ -260,6 +260,21 @@ var errAbandoned = errors.New("abandoned")
 // errPostpone asks for the task to be requeued until p.intentAt + CallTimeout.
 var errPostpone = errors.New("postpone")
 
+// errCancelled: the step was cancelled (a losing parallel branch) before its
+// write could start; the task is dropped without an outcome.
+var errCancelled = errors.New("cancelled")
+
+// openIntent reports whether some attempt recorded EffectIntent and never
+// reported an outcome: its write may be under way or may have happened.
+func openIntent(attempts []int, failures map[int]history.Error) bool {
+	for _, a := range attempts {
+		if _, ok := failures[a]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
 type mode int
 
 const (
@@ -321,6 +336,10 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		if errors.Is(err, errFenced) {
 			*outcome = "fenced"
 			return nil
+		}
+		if errors.Is(err, errCancelled) {
+			*outcome = "cancelled"
+			return w.finish(ctx, p, nil)
 		}
 		return err
 	}
@@ -405,7 +424,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			return err
 		}
 		p.taint = taint
-		found := false
+		found, cancelled := false, false
 		var intents []history.IntentPayload
 		var intentAttempts []int
 		var intentTimes []time.Time
@@ -424,6 +443,8 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				}
 			case history.StepCompleted:
 				p.mode = modeDone
+			case history.StepCancelled:
+				cancelled = true
 			case history.StepFailed:
 				var fp history.FailedPayload
 				_ = json.Unmarshal(e.Payload, &fp)
@@ -443,6 +464,9 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		}
 		if !found {
 			return fmt.Errorf("no StepScheduled for %s attempt %d", c.step, c.attempt)
+		}
+		if cancelled && !openIntent(intentAttempts, outcomes) {
+			p.mode = modeDone // nothing of it reached a provider; never start it now
 		}
 		if p.mode == modeDone {
 			return nil
@@ -582,6 +606,19 @@ func (w *Worker) fence(ctx context.Context, tx pgx.Tx, c claim) error {
 func (w *Worker) recordIntent(ctx context.Context, tx pgx.Tx, p *plan) error {
 	if err := w.fence(ctx, tx, p.c); err != nil {
 		return err
+	}
+	// Under the run lock, so a cancellation decided since prepare read the
+	// history cannot slip in between the check and the intent.
+	if _, err := lockRun(ctx, tx, p.c.run); err != nil {
+		return err
+	}
+	var cancelled bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM run_events WHERE run_id = $1 AND step_id = $2 AND type = $3)`,
+		p.c.run, p.c.step, history.StepCancelled).Scan(&cancelled); err != nil {
+		return err
+	}
+	if cancelled {
+		return errCancelled
 	}
 	digest := sha256.New()
 	_ = json.NewEncoder(digest).Encode(p.sched.Input)

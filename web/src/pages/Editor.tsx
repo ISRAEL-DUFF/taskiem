@@ -11,7 +11,7 @@ import { merge } from "../lib/schema";
 import { Badge, ErrorBox, Field, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
 
 const nodeTypes = { step: StepNode };
-const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "signal", "wait", "branch", "foreach"];
+const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "signal", "wait", "branch", "parallel", "foreach"];
 
 interface Loaded {
   workflow: WorkflowSummary;

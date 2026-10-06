@@ -1,7 +1,7 @@
 // Rebuilds per-step status from a run's events (spec 15.1, run inspector).
 import type { RunEvent } from "../api";
 
-export type StepStatus = "scheduled" | "running" | "completed" | "failed" | "skipped" | "waiting" | "retrying" | "parked";
+export type StepStatus = "scheduled" | "running" | "completed" | "failed" | "skipped" | "cancelled" | "waiting" | "retrying" | "parked";
 
 export interface StepRow {
   id: string; // step instance id, e.g. pay_all[2].pay_employee
@@ -69,6 +69,10 @@ export function timeline(events: RunEvent[]): StepRow[] {
         break;
       case "StepSkipped":
         r.status = "skipped";
+        break;
+      case "StepCancelled":
+        r.status = "cancelled";
+        r.waitingFor = undefined;
         break;
     }
   }

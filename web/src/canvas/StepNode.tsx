@@ -22,6 +22,8 @@ export function summary(s: Step): string {
       return `each of ${s.config.items} · ${s.config.steps.length} steps`;
     case "branch":
       return `${s.config.paths.length} paths${s.config.default ? " + default" : ""}`;
+    case "parallel":
+      return `${s.config.branches.length} branches · join ${s.config.join ?? "all"}`;
     default:
       return s.when ? `when ${s.when}` : "";
   }

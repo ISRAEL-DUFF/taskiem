@@ -18,6 +18,7 @@ const (
 	StepCompleted         = "StepCompleted"
 	StepFailed            = "StepFailed"
 	StepSkipped           = "StepSkipped"
+	StepCancelled         = "StepCancelled" // a losing parallel branch's unfinished step
 	RetryScheduled        = "RetryScheduled"
 	TimerFired            = "TimerFired"
 	SignalReceived        = "SignalReceived"
@@ -160,7 +161,10 @@ type SignalPayload struct {
 
 type ControlStartedPayload struct {
 	Path  *string `json:"path,omitempty"`  // branch
-	Count *int    `json:"count,omitempty"` // foreach
+	Count *int    `json:"count,omitempty"` // foreach and parallel (branches)
+	// Winner is recorded once by a parallel step with join "any", in a
+	// second StepStarted, when its first branch finishes.
+	Winner *string `json:"winner,omitempty"`
 }
 
 type RunFailedPayload struct {

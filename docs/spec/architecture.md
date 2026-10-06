@@ -220,6 +220,8 @@ Each run has an ordered event log in `run_events`. Events are immutable and sequ
 | `EffectIntent` | Just before a side-effecting call; records idempotency key and request digest |
 | `StepCompleted` | Worker reports success with output (or output reference) |
 | `StepFailed` | Worker reports a failure with error class |
+| `StepSkipped` | A step's `when` was false or a step it needs did not run |
+| `StepCancelled` | A step in a losing branch of a `join: any` parallel step is stopped before it finished |
 | `RetryScheduled` | Failure is retryable; records next attempt time |
 | `TimerFired` | A `wait` or timeout elapses |
 | `SignalReceived` | External event matched the run (webhook, WhatsApp reply) |

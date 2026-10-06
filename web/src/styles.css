@@ -92,7 +92,7 @@ tr.clickable:hover td { background: var(--code-bg); }
 .badge.failed, .badge.rejected, .badge.cancelled, .badge.parked, .badge.needs_reconciliation { color: var(--danger); }
 .badge.waiting, .badge.queued, .badge.retrying, .badge.draft, .badge.open { color: var(--warn); }
 .badge.running, .badge.scheduled, .badge.info { color: var(--info); }
-.badge.skipped, .badge.deprecated { color: var(--muted); }
+.badge.skipped, .badge.cancelled, .badge.deprecated { color: var(--muted); }
 
 .error { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); padding: 8px 10px; border-radius: 6px; margin: 8px 0; }
 .error ul { margin: 4px 0 0 18px; padding: 0; }
