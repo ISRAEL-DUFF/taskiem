@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -61,11 +62,12 @@ type world struct {
 	env  *rt.Env
 	base string
 	srv  *api.Server
+	txt  map[string][]string // DNS TXT records, for SSO domain checks
 }
 
 func newWorld(t *testing.T) *world {
 	e := rt.New(t)
-	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress}
+	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress, Logger: slog.New(slog.DiscardHandler)}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return &world{env: e, base: ts.URL, srv: srv}

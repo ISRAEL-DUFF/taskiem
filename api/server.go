@@ -56,6 +56,9 @@ type Server struct {
 	// Connectors loads tenants' own WebAssembly connectors; nil refuses
 	// uploads.
 	Connectors *wasmconn.Source
+	// PublicURL is where people reach the web app (TASKIEM_PUBLIC_URL);
+	// single sign-on callbacks are built from it.
+	PublicURL string
 	// LoginBurst is how many sign-in attempts an address may make at once
 	// (then one every six seconds); default 10.
 	LoginBurst int
@@ -90,6 +93,11 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/login", s.login)
 		r.Post("/auth/passkey/options", s.passkeyLoginOptions)
 		r.Post("/auth/passkey", s.passkeyLogin)
+		r.Post("/auth/sso/discover", s.ssoDiscover)
+		r.Get("/auth/sso/{id}/start", s.ssoStart)
+		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
+		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
+		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup)
 		}
@@ -103,6 +111,11 @@ func (s *Server) Handler() http.Handler {
 			r.Delete("/me/passkeys/{id}", s.removePasskey)
 			r.Post("/me/step-up/options", s.stepUpOptions)
 			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
+			r.With(s.need(PermMemberManage)).Get("/sso", s.listSSO)
+			r.With(s.need(PermMemberManage)).Post("/sso", s.createSSO)
+			r.With(s.need(PermMemberManage)).Put("/sso/{id}", s.updateSSO)
+			r.With(s.need(PermMemberManage)).Post("/sso/{id}/domains", s.addSSODomain)
+			r.With(s.need(PermMemberManage)).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
 			r.Get("/connectors", s.listConnectors)
 			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
 			r.With(s.need(PermConnectionManage)).Post("/connector-drift/acknowledge", s.acknowledgeDrift)

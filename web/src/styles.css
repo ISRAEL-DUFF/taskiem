@@ -157,3 +157,12 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   cursor: pointer;
   color: inherit;
 }
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent, inherit);
+  text-decoration: underline;
+  cursor: pointer;
+}

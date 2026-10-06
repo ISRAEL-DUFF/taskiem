@@ -46,6 +46,15 @@ Members add passkeys under **Account** (WebAuthn: the device's fingerprint, face
 
 **Administrators are held to passkeys** when the deployment sets `TASKIEM_PUBLIC_URL` (on by default then; `TASKIEM_REQUIRE_ADMIN_PASSKEYS=false` turns it off). An administrator is anyone holding `member.manage`, `role.manage`, `secret.manage`, `policy.manage`, `git.manage`, `connector.manage`, `pii.reveal` or `pii.erase`. Signed in with a password, they can only add a passkey; once they have one, their password no longer signs them in. A member who loses their passkeys is reset by someone able to grant all their roles (Members, `DELETE /v1/members/{id}/passkeys`), which also ends their sessions; when no such person can, an operator runs `taskiem passkeys reset --email …`. Every addition, removal and reset is audited.
 
+## Single sign-on
+
+Owners and admins connect an OpenID Connect or SAML 2.0 identity provider under **Members → Single sign-on** (`POST /v1/sso`). It needs `TASKIEM_PUBLIC_URL`, which the provider's settings name: the OIDC redirect URI is `<public URL>/v1/auth/sso/oidc/callback`; for SAML, Taskiem publishes its metadata (entity id, ACS URL) at the address the page shows.
+
+- **Domains.** A connection serves email domains the tenant has proven with a DNS TXT record (`_taskiem-verify.<domain>`). An unverified domain routes nobody, a domain belongs to one tenant, and a provider can only sign in people whose email is on its verified domains: a tenant cannot claim another's people. The sign-in page offers single sign-on once the email's domain is verified.
+- **Members and roles.** With JIT on, the first sign-in creates the member. Everyone gets the connection's default roles, plus the roles mapped to their groups (OIDC groups claim, SAML groups attribute). At each sign-in, roles single sign-on granted follow the groups; roles granted by hand stay. No one can map a group to a role they could not grant themselves.
+- **Enforcement.** With enforce on, members whose email is on the connection's domains cannot sign in with a password or a passkey. Owners are exempt, so a broken provider cannot lock the tenant out ("Owner? Use your password" on the sign-in page).
+- **Checks.** OIDC: authorization code with PKCE, state and nonce single-use within ten minutes; ID tokens are RS256, PS256 or ES256 only, checked for issuer, audience, expiry and nonce; the email must be verified by the provider. SAML: SP-initiated only; the signed assertion must answer our request, for our audience and ACS URL, within its validity window. Provider calls go through the egress guard to the hosts found when the connection was saved. Every sign-in is audited with the groups seen and the roles granted or removed.
+
 ## Custom roles
 
 Besides the built-in roles, owners and admins define roles as named sets of permissions (Members → Roles, `PUT /v1/roles/{name}`). No one can create, widen, grant or take away a role carrying a permission they do not hold; this also applies to built-in roles. A role someone holds cannot be deleted. Narrowing a role takes effect on its members' next request.

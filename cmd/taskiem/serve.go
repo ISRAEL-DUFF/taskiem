@@ -248,6 +248,7 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
+		srv.PublicURL = cfg.PublicURL
 		if *role == "all" {
 			srv.Ingest = e.hooks() // one listener for a small install
 		}

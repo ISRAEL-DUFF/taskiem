@@ -484,21 +484,40 @@ func (s *Server) stepUpOptions(w http.ResponseWriter, r *http.Request) {
 
 // --- sessions shared by password, passkey and SSO sign-in ---
 
-// startSession signs user in to tenant (or their first), by method.
-func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want uuid.UUID, method string) {
+var (
+	errNoMembership = errors.New("no active membership")
+	errNotMember    = errors.New("not a member of that tenant")
+	errSSORequired  = errors.New("this organisation signs in with single sign-on")
+)
+
+type session struct {
+	token   string
+	tenant  uuid.UUID
+	tenants []uuid.UUID
+}
+
+// createSession signs user in to tenant (or their first), by method.
+func (s *Server) createSession(r *http.Request, user, want uuid.UUID, method string) (session, error) {
 	ctx := r.Context()
 	var tenants []uuid.UUID
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, user).Scan(&tenants); err != nil || len(tenants) == 0 {
-		writeErr(w, http.StatusUnauthorized, "no active membership")
-		return
+		return session{}, errNoMembership
 	}
 	tenant := tenants[0]
 	if want != uuid.Nil {
 		if !slices.Contains(tenants, want) {
-			writeErr(w, http.StatusUnauthorized, "not a member of that tenant")
-			return
+			return session{}, errNotMember
 		}
 		tenant = want
+	}
+	if method != "sso" {
+		var enforced bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_sso_enforced($1, $2)`, user, tenant).Scan(&enforced); err != nil {
+			return session{}, err
+		}
+		if enforced {
+			return session{}, errSSORequired
+		}
 	}
 	tok := newToken()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -510,14 +529,35 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 			tenant, user.String(), user.String(), clientIP(r), method)
 		return err
 	})
-	if err != nil {
+	return session{token: tok, tenant: tenant, tenants: tenants}, err
+}
+
+// setSessionCookie sets the session. SameSite=Lax, not Strict: after
+// single sign-on the browser arrives through a redirect chain that began at
+// the identity provider, on which a Strict cookie is not sent. Cross-site
+// POSTs still carry no cookie, and every mutation needs the CSRF header.
+func (s *Server) setSessionCookie(w http.ResponseWriter, tok string) {
+	//nolint:gosec // Secure is configuration: off only for plain-HTTP local development.
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: tok, Path: "/", HttpOnly: true, Secure: s.SecureCookies,
+		SameSite: http.SameSiteLaxMode, MaxAge: int(sessionTTL.Seconds())})
+}
+
+// startSession signs user in and answers with the session as JSON.
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want uuid.UUID, method string) {
+	sess, err := s.createSession(r, user, want, method)
+	switch {
+	case errors.Is(err, errSSORequired):
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": err.Error(), "sso_required": true})
+		return
+	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
+		writeErr(w, http.StatusUnauthorized, err.Error())
+		return
+	case err != nil:
 		s.fail(w, r, err)
 		return
 	}
-	//nolint:gosec // Secure is configuration: off only for plain-HTTP local development.
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: tok, Path: "/", HttpOnly: true, Secure: s.SecureCookies,
-		SameSite: http.SameSiteStrictMode, MaxAge: int(sessionTTL.Seconds())})
-	writeJSON(w, http.StatusOK, map[string]any{"token": tok, "tenant_id": tenant, "tenants": tenants, "user_id": user})
+	s.setSessionCookie(w, sess.token)
+	writeJSON(w, http.StatusOK, map[string]any{"token": sess.token, "tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user})
 }
 
 // ResetPasskeys removes every passkey of the person with email and ends

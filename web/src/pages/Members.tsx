@@ -173,6 +173,7 @@ export function Members() {
           </tbody>
         </table>
       )}
+      {can("member.manage") && <SingleSignOn />}
       {adding && <AddMember roles={roles.data?.roles ?? []} onClose={() => setAdding(false)} onDone={() => (setAdding(false), members.reload(), roles.reload())} />}
       {editing && <EditRole role={editing === "new" ? null : editing} onClose={() => setEditing(null)} onDone={() => (setEditing(null), roles.reload())} />}
       {minting && <NewKey onClose={() => (setMinting(false), keys.reload())} />}
@@ -336,6 +337,202 @@ function NewKey({ onClose }: { onClose: () => void }) {
         <div className="toolbar">
           <button type="submit" className="primary" disabled={act.busy || perms.length === 0}>
             Create
+          </button>
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+interface SSODomain {
+  domain: string;
+  txt_record: string;
+  txt_value: string;
+  verified_at: string | null;
+}
+interface SSOConnection {
+  id: string;
+  protocol: "oidc" | "saml";
+  name: string;
+  default_roles: string[];
+  group_roles: Record<string, string[]>;
+  jit: boolean;
+  enforce: boolean;
+  disabled: boolean;
+  domains: SSODomain[] | null;
+  redirect_uri?: string;
+  entity_id?: string;
+  acs_url?: string;
+  metadata_url?: string;
+}
+
+/** Single sign-on: the tenant's OIDC or SAML identity providers. */
+function SingleSignOn() {
+  const list = useLoad(() => get<{ connections: SSOConnection[] }>("/v1/sso"), []);
+  const [adding, setAdding] = useState(false);
+  const [domain, setDomain] = useState<Record<string, string>>({});
+  const act = useAction();
+  const update = (c: SSOConnection, change: Partial<SSOConnection>) =>
+    act.run(async () => {
+      const n = { ...c, ...change };
+      await put(`/v1/sso/${c.id}`, { default_roles: n.default_roles, group_roles: n.group_roles, jit: n.jit, enforce: n.enforce, disabled: n.disabled });
+      list.reload();
+    });
+  return (
+    <>
+      <div className="toolbar" style={{ marginTop: 24 }}>
+        <h2 className="grow" style={{ margin: 0 }}>
+          Single sign-on
+        </h2>
+        <button onClick={() => setAdding(true)}>Add identity provider</button>
+      </div>
+      <p className="hint">
+        People sign in through your identity provider when their email is on a domain you have verified. Roles follow their groups; single sign-on only manages the roles it gave. Enforced, members on those domains cannot use passwords or passkeys (owners excepted, so a broken provider cannot lock you out).
+      </p>
+      <ErrorBox error={list.error ?? act.error} />
+      {list.data?.connections.map((c) => (
+        <section key={c.id} className="card">
+          <div className="toolbar">
+            <strong className="grow">
+              {c.name} <span className="hint">{c.protocol.toUpperCase()}</span> {c.disabled && <span className="hint">disabled</span>}
+            </strong>
+            <label className="inline">
+              <input type="checkbox" checked={c.enforce} onChange={(e) => void update(c, { enforce: e.target.checked })} /> Enforce
+            </label>
+            <label className="inline">
+              <input type="checkbox" checked={c.jit} onChange={(e) => void update(c, { jit: e.target.checked })} /> Create members on first sign-in
+            </label>
+            <button onClick={() => void update(c, { disabled: !c.disabled })}>{c.disabled ? "Enable" : "Disable"}</button>
+          </div>
+          <p className="hint">
+            {c.protocol === "oidc" ? (
+              <>
+                Redirect URI for the provider: <code>{c.redirect_uri}</code>
+              </>
+            ) : (
+              <>
+                Entity ID <code>{c.entity_id}</code> · ACS URL <code>{c.acs_url}</code> · <a href={c.metadata_url}>SP metadata</a>
+              </>
+            )}
+          </p>
+          <p className="hint">
+            Default roles: {c.default_roles.join(", ") || "none"} · Groups: {Object.entries(c.group_roles).map(([g, r]) => `${g} → ${r.join(", ")}`).join("; ") || "none"}
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Domain</th>
+                <th>Verification</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {(c.domains ?? []).map((d) => (
+                <tr key={d.domain}>
+                  <td>{d.domain}</td>
+                  <td className="hint">
+                    {d.verified_at ? (
+                      `verified ${fmtTime(d.verified_at)}`
+                    ) : (
+                      <>
+                        Add a TXT record <code>{d.txt_record}</code> with value <code>{d.txt_value}</code>
+                      </>
+                    )}
+                  </td>
+                  <td>{!d.verified_at && <button onClick={() => void act.run(async () => (await post(`/v1/sso/domains/${d.domain}/verify`), list.reload()))}>Verify</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="row" style={{ alignItems: "flex-end" }}>
+            <Field label="Add a domain">
+              <input value={domain[c.id] ?? ""} placeholder="bank.com" onChange={(e) => setDomain({ ...domain, [c.id]: e.target.value })} />
+            </Field>
+            <button disabled={!domain[c.id]} onClick={() => void act.run(async () => (await post(`/v1/sso/${c.id}/domains`, { domain: domain[c.id] }), setDomain({ ...domain, [c.id]: "" }), list.reload()))}>
+              Add
+            </button>
+          </div>
+        </section>
+      ))}
+      {adding && <AddSSO onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} />}
+    </>
+  );
+}
+
+function AddSSO({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [protocol, setProtocol] = useState<"oidc" | "saml">("oidc");
+  const [name, setName] = useState("");
+  const [issuer, setIssuer] = useState("");
+  const [clientID, setClientID] = useState("");
+  const [secret, setSecret] = useState("");
+  const [groupsField, setGroupsField] = useState("groups");
+  const [metadata, setMetadata] = useState("");
+  const [defaults, setDefaults] = useState("viewer");
+  const [mapping, setMapping] = useState("");
+  const act = useAction();
+  const parseMapping = () => {
+    const out: Record<string, string[]> = {};
+    for (const line of mapping.split("\n")) {
+      const [g, roles] = line.split("=").map((x) => x.trim());
+      if (g && roles) out[g] = roles.split(",").map((r) => r.trim()).filter(Boolean);
+    }
+    return out;
+  };
+  return (
+    <Modal title="Add identity provider" onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const roles = defaults.split(",").map((r) => r.trim()).filter(Boolean);
+          const body =
+            protocol === "oidc"
+              ? { protocol, name, oidc: { issuer, client_id: clientID, client_secret: secret, groups_claim: groupsField }, default_roles: roles, group_roles: parseMapping() }
+              : { protocol, name, saml: { metadata_xml: metadata, name_attr: "name", groups_attr: groupsField }, default_roles: roles, group_roles: parseMapping() };
+          void act.run(async () => (await post("/v1/sso", body), onDone()));
+        }}
+      >
+        <Field label="Protocol">
+          <select value={protocol} onChange={(e) => setProtocol(e.target.value as "oidc" | "saml")}>
+            <option value="oidc">OpenID Connect</option>
+            <option value="saml">SAML 2.0</option>
+          </select>
+        </Field>
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Okta" required />
+        </Field>
+        {protocol === "oidc" ? (
+          <>
+            <Field label="Issuer URL">
+              <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://login.example.com" required />
+            </Field>
+            <Field label="Client ID">
+              <input value={clientID} onChange={(e) => setClientID(e.target.value)} required />
+            </Field>
+            <Field label="Client secret" hint="Encrypted when saved; never shown again">
+              <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} required />
+            </Field>
+          </>
+        ) : (
+          <Field label="Identity provider metadata (XML)">
+            <textarea rows={6} value={metadata} onChange={(e) => setMetadata(e.target.value)} required />
+          </Field>
+        )}
+        <Field label={protocol === "oidc" ? "Groups claim" : "Groups attribute"}>
+          <input value={groupsField} onChange={(e) => setGroupsField(e.target.value)} />
+        </Field>
+        <Field label="Default roles" hint="Comma-separated; everyone who signs in gets these">
+          <input value={defaults} onChange={(e) => setDefaults(e.target.value)} />
+        </Field>
+        <Field label="Group mapping" hint="One per line: group = role, role">
+          <textarea rows={3} value={mapping} onChange={(e) => setMapping(e.target.value)} placeholder={"treasury = operator\npayroll-approvers = approver, payroll_approver"} />
+        </Field>
+        <ErrorBox error={act.error} />
+        <div className="toolbar">
+          <button type="submit" className="primary" disabled={act.busy}>
+            Add
           </button>
           <button type="button" onClick={onClose}>
             Cancel
