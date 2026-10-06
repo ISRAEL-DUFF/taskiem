@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc/identity",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Request was successfully completed",
+   "timestamp": "2024-05-22T06:38:27.799Z",
+   "data": {
+    "full_name": "SAMUEL OLAMIDE NOMO",
+    "bvn": "22000000012",
+    "phone": "08012345678",
+    "gender": "Male",
+    "dob": "1997-08-07",
+    "address_line1": "Ikeja",
+    "state_of_origin": "Ogun State",
+    "lga_of_origin": "Abeokuta South",
+    "marital_status": "Single",
+    "verified": true,
+    "created_at": "2024-05-16T17:05:07.357Z",
+    "updated_at": "2024-05-16T17:05:07.357Z"
+   }
+  }
+ }
+}

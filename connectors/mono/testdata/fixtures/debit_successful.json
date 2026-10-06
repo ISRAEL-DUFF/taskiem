@@ -1,0 +1,48 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/debit",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "amount": 20000,
+   "reference": "AbCdEfGhIjKlMnOpQrStUv",
+   "narration": "Subscription"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Account debited successfully.",
+   "response_code": "00",
+   "data": {
+    "success": true,
+    "status": "successful",
+    "event": "successful",
+    "amount": 20000,
+    "mandate": "mmc_682b9c5803c0b736078889a3",
+    "reference_number": "AbCdEfGhIjKlMnOpQrStUv",
+    "date": "2025-05-29T22:16:25.547Z",
+    "live_mode": true,
+    "fee": 5500,
+    "fee_bearer": "business",
+    "narration": "Subscription",
+    "session_id": "999999250919103136775149584552",
+    "account_details": {
+     "bank_code": "035",
+     "account_name": "Samuel Olamide",
+     "account_number": "0123456789",
+     "bank_name": "Wema Bank"
+    },
+    "beneficiary": {
+     "bank_code": "000",
+     "account_name": "Mono",
+     "account_number": "P000001",
+     "bank_name": "MONO SETTLEMENT WALLET"
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/phone_number",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "08082838283"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "message": "Phone Number Verification (Basic) verification successful",
+   "data": {
+    "dateOfBirth": "1998-05-22",
+    "firstName": "AMANDA",
+    "middlename": "CHIDINMA",
+    "surname": "ZAYNE",
+    "phoneNumber": "08082838283"
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "4ebda4e1"
+   }
+  }
+ }
+}

@@ -1,0 +1,47 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/payments/initiate",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "type": "recurring-debit",
+   "method": "mandate",
+   "mandate_type": "emandate",
+   "debit_type": "variable",
+   "amount": 9190030,
+   "reference": "AbCdEfGhIjKlMnOpQrStUv",
+   "description": "Repayment",
+   "start_date": "2024-03-29",
+   "end_date": "2024-08-04",
+   "redirect_url": "https://mono.co",
+   "customer": {
+    "id": "65eb623b0000900009e5c1f21cd"
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Payment Initiated Successfully",
+   "data": {
+    "mono_url": "https://authorise.mono.co/RD3044259",
+    "mandate_id": "mmc_682b9c5803c0b736078889a3",
+    "type": "recurring-debit",
+    "method": "mandate",
+    "mandate_type": "emandate",
+    "amount": 9190030,
+    "description": "Repayment",
+    "reference": "AbCdEfGhIjKlMnOpQrStUv",
+    "customer": "65eb623b0000900009e5c1f21cd",
+    "redirect_url": "https://mono.co",
+    "created_at": "2024-03-12T14:17:31.548Z",
+    "updated_at": "2024-03-12T14:17:31.548Z",
+    "start_date": "2024-03-29",
+    "end_date": "2024-08-04"
+   }
+  }
+ }
+}

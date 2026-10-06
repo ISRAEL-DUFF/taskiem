@@ -1,0 +1,34 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc/statement",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "query": {
+   "period": "last6months"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Transactions retrieved successfully",
+   "timestamp": "2024-07-10T10:16:13.453Z",
+   "data": [
+    {
+     "id": "664f080293b88c7cb32d227f",
+     "type": "debit",
+     "amount": 20000,
+     "narration": "AirtimeALATMTN",
+     "balance": null,
+     "date": "2024-05-23T09:43:32.267Z",
+     "category": null
+    }
+   ],
+   "meta": {
+    "count": 1
+   }
+  }
+ }
+}

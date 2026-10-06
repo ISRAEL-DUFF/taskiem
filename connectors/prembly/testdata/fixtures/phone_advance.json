@@ -1,0 +1,34 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/phone_number/advance",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "08082838283"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "message": "Phone Number Verification verification successful",
+   "data": {
+    "telephoneno": "2348082838283",
+    "firstname": "JOHN",
+    "middlename": "DOE",
+    "surname": "JACKSON",
+    "gender": "M",
+    "birthdate": "1997-06-12",
+    "nin": "67291452100",
+    "photo": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG"
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "3988cb74"
+   }
+  }
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc/balance",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "ok",
+   "data": {
+    "id": "661d759280dbf646242634cc",
+    "balance": 35232.5,
+    "currency": "NGN"
+   }
+  }
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/debit",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 429,
+  "body": {
+   "status": "failed",
+   "response_code": "429",
+   "message": "You have been rate-limited for this mandate. You cannot attempt any more payments on this account until 2026-01-29",
+   "timestamp": "2026-01-28T13:47:11.712Z",
+   "documentation": "https://mono.co/docs/error-codes/429",
+   "data": null
+  }
+ }
+}

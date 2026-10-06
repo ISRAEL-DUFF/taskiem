@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/payments/initiate",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": "failed",
+   "message": "Invalid reference, please retry with a unique reference",
+   "timestamp": "2024-05-22T07:07:55.464Z",
+   "data": null
+  }
+ }
+}

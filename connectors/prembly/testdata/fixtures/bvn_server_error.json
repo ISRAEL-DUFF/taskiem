@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bvn",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  }
+ },
+ "response": {
+  "status": 500,
+  "body": {
+   "status": false,
+   "message": "Internal server error. Please try again later."
+  }
+ }
+}

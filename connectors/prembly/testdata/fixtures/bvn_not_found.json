@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bvn",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": false,
+   "response_code": "01",
+   "message": "Record not found.\nThe ID data you entered does not exist or may be incorrect. Please ensure all details are correct and resubmit",
+   "verification": {
+    "reference": "254d1801-db5d-450a-954b-3682ddae7072"
+   },
+   "session": {}
+  }
+ }
+}

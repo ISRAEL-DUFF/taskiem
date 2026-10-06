@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/bvn",
+  "headers": {
+   "token": "yv_test_key"
+  }
+ },
+ "response": {
+  "status": 402,
+  "body": {
+   "success": false,
+   "statusCode": 402,
+   "message": "Insufficient fund",
+   "name": "PaymentRequiredError",
+   "data": {}
+  }
+ }
+}

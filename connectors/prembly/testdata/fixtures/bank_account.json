@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bank_account/basic",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "4444444444",
+   "bank_code": "214"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "detail": "Verification Successful",
+   "account data": {
+    "account_number": "4444444444",
+    "account_name": "Test Account"
+   }
+  }
+ }
+}

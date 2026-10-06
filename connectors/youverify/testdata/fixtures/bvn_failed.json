@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/bvn",
+  "headers": {
+   "token": "yv_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "id": "646b5608427a7e688e3ef636",
+    "status": "failed",
+    "reason": "Upstream error",
+    "type": "bvn"
+   },
+   "links": []
+  }
+ }
+}

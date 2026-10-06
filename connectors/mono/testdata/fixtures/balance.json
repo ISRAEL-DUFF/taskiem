@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc/balance",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Request was successfully completed",
+   "timestamp": "2024-05-22T06:44:42.884Z",
+   "data": {
+    "id": "661d759280dbf646242634cc",
+    "name": "SAMUEL OLAMIDE NOMO",
+    "account_number": "0100000589",
+    "balance": 35232,
+    "currency": "NGN"
+   }
+  }
+ }
+}

@@ -1,0 +1,49 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc/transactions",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "query": {
+   "start": "01-10-2023",
+   "end": "31-12-2023",
+   "type": "debit",
+   "limit": "2"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Transaction retrieved successfully",
+   "timestamp": "2024-04-12T06:18:17.117Z",
+   "data": [
+    {
+     "id": "66141bbff58d2687e7d91234",
+     "narration": "PG00001",
+     "amount": 500,
+     "type": "debit",
+     "balance": 1500,
+     "date": "2023-12-14T00:02:00.500Z",
+     "category": "unknown"
+    },
+    {
+     "id": "66141bbff58d2687e7d91235",
+     "narration": "0000132312091322123456789012345 NIP TRANSFER",
+     "amount": 1000,
+     "type": "debit",
+     "balance": 2000,
+     "date": "2023-12-09T13:23:00.100Z",
+     "category": "bank_charges"
+    }
+   ],
+   "meta": {
+    "total": 307,
+    "page": 1,
+    "previous": null,
+    "next": "https://api.withmono.com/v2/661d759280dbf646242634cc/transactions?page=2"
+   }
+  }
+ }
+}

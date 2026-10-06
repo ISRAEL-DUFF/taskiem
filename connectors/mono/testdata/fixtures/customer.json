@@ -1,0 +1,40 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/customers",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "type": "individual",
+   "first_name": "Samuel",
+   "last_name": "Olamide",
+   "email": "samuel@olamide.com",
+   "phone": "08012345678",
+   "address": "23 shittu animashaun street",
+   "identity": {
+    "type": "bvn",
+    "number": "22110033445"
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Created customer successfully",
+   "data": {
+    "id": "6578295bbf09b0a505bc567c",
+    "name": "Samuel Olamide",
+    "first_name": "Samuel",
+    "last_name": "Olamide",
+    "email": "samuel@olamide.com",
+    "phone": "08012345678",
+    "address": "23 shittu animashaun street",
+    "identification_no": "22110033445",
+    "identification_type": "bvn",
+    "bvn": "22110033445"
+   }
+  }
+ }
+}

@@ -1,0 +1,42 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/verifications/ng/company/basic",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "registrationNumber": "RC00000000",
+   "isConsent": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "id": "68d57134c904ee5fcb605833",
+    "status": "found",
+    "type": "basic_company_check",
+    "searchTerm": "RC00000000",
+    "name": "John Doe Inc",
+    "registrationNumber": "RC00000000",
+    "companyStatus": "ACTIVE",
+    "country": "Nigeria",
+    "typeOfEntity": "PRIVATE COMPANY LIMITED BY SHARES",
+    "registrationDate": "2017-06-09",
+    "natureOfBusiness": "Information service activities",
+    "amlReport": null,
+    "requestedBy": {
+     "firstName": "API",
+     "lastName": "User",
+     "middleName": "",
+     "id": "62c2a4868d3193700828014e"
+    }
+   },
+   "links": []
+  }
+ }
+}

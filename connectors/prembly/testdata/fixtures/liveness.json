@@ -1,0 +1,30 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/biometrics/face/liveliness_check",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "image": "https://example.com/a.jpg"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "detail": "Liveliness Detected",
+   "response_code": "00",
+   "data": {
+    "confidence": 0.9999910736083985,
+    "confidence_in_percentage": 99.99910736083984
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "661",
+    "verification_id": 661
+   },
+   "endpoint_name": "Face Liveliness"
+  }
+ }
+}

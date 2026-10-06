@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "PATCH",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/cancel",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": "failed",
+   "response_code": "50",
+   "message": "The Mono mandate code provided is incorrect, invalid, or does not exist. Please verify the code and try again.",
+   "timestamp": "2025-05-19T22:19:23.583Z",
+   "data": null
+  }
+ }
+}

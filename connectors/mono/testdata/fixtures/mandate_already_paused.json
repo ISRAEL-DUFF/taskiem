@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "PATCH",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/pause",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": "failed",
+   "response_code": "400",
+   "message": "This mandate is already paused, but you can reinstate it back.",
+   "timestamp": "2025-05-19T21:30:38.195Z",
+   "documentation": "https://mono.co/docs/error-codes/400",
+   "data": null
+  }
+ }
+}

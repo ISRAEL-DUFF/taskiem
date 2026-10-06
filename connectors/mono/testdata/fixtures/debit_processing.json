@@ -1,0 +1,41 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/debit",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "amount": 20000,
+   "reference": "AbCdEfGhIjKlMnOpQrStUv",
+   "narration": "Subscription"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Payment is currently in processing state, please wait for a final state webhook before giving value",
+   "response_code": "01",
+   "data": {
+    "success": false,
+    "status": "processing",
+    "event": "processing",
+    "amount": 20000,
+    "mandate": "mmc_682b9c5803c0b736078889a3",
+    "reference_number": "AbCdEfGhIjKlMnOpQrStUv",
+    "date": "2026-09-11T11:14:46.843Z",
+    "live_mode": true,
+    "fee": 0,
+    "fee_bearer": "business",
+    "narration": "Subscription",
+    "account_details": {
+     "bank_code": "044",
+     "account_name": "Jane Doe",
+     "account_number": "0123456789",
+     "bank_name": "Access Bank"
+    }
+   }
+  }
+ }
+}

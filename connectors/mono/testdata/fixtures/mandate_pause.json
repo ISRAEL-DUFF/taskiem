@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "PATCH",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/pause",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "success",
+   "response_code": "200",
+   "message": "This mandate is now paused and can't be used for debit or balance inquiry, but you can reinstate it back.",
+   "timestamps": "2023-12-13T20:23:07.074Z",
+   "documentation": "https://mono.co/docs/error-codes/400",
+   "data": null
+  }
+ }
+}

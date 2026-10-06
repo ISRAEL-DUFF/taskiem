@@ -1,0 +1,60 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/payments/mandates",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "customer": "68274fb5565971e625b9115c",
+   "mandate_type": "emandate",
+   "debit_type": "variable",
+   "amount": 5000000,
+   "reference": "AbCdEfGhIjKlMnOpQrStUv",
+   "account_number": "0123456789",
+   "bank_code": "035",
+   "description": "Loan repayment",
+   "start_date": "2025-05-28",
+   "end_date": "2026-05-29"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "To proceed, please authorize this mandate by transferring N50.00 to any of the listed banks below",
+   "data": {
+    "meta": {},
+    "id": "mmc_682b9c5803c0b736078889a3",
+    "status": "initiated",
+    "mandate_type": "emandate",
+    "debit_type": "variable",
+    "ready_to_debit": false,
+    "nibss_code": "RC227914/1580/0008722498",
+    "approved": false,
+    "reference": "AbCdEfGhIjKlMnOpQrStUv",
+    "account_name": "SAMUEL OLAMIDE",
+    "account_number": "0123456789",
+    "bank": "Wema Bank",
+    "bank_code": "035",
+    "customer": "68274fb5565971e625b9115c",
+    "fee_bearer": "business",
+    "verification_method": "transfer_verification",
+    "description": "Loan repayment",
+    "live_mode": true,
+    "start_date": "2025-05-28T00:00:00.000Z",
+    "end_date": "2026-05-29T22:59:59.999Z",
+    "date": "2025-05-19T22:50:38.529Z",
+    "transfer_destinations": [
+     {
+      "bank_name": "Fidelity",
+      "account_number": 9020025928,
+      "icon": "https://x/i.png",
+      "primary_color": "#081A6F"
+     }
+    ],
+    "amount": 5000000
+   }
+  }
+ }
+}

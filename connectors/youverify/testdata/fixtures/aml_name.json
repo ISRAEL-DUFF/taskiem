@@ -1,0 +1,55 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/verifications/advanced/name/aml-checks",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "query": "Muhammed Gudaji",
+   "type": "individual",
+   "isSubjectConsent": true,
+   "advancedSearch": {
+    "country": "Nigeria"
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "categoryCount": {
+     "sanctions": 0,
+     "pep": 1,
+     "crime": 0
+    },
+    "status": "review_required",
+    "isSubjectConsent": true,
+    "type": "individual",
+    "sanctions": [],
+    "pep": [
+     {
+      "name": [
+       "Muhammed Gudaji"
+      ],
+      "entityType": "Person",
+      "datasets": [
+       "wd_peps"
+      ],
+      "topics": [
+       "role.pep"
+      ]
+     }
+    ],
+    "totalEntity": 1,
+    "queriedWith": "Name",
+    "query": "Muhammed Gudaji",
+    "id": "64d5c3dfdf93fda73eeff33e"
+   },
+   "links": []
+  }
+ }
+}

@@ -1,0 +1,44 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/api/addresses/61882ca9a7422a684a3d0cdf",
+  "headers": {
+   "token": "yv_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "Address retrieved successfully!",
+   "data": {
+    "referenceId": "61883f9ebc2c9",
+    "candidate": {
+     "candidateId": "618e539d540fb2e1d076427a",
+     "firstName": "FAMOUS",
+     "lastName": "EHICHIOYA",
+     "photo": "https://cdn.youverify.co/p.jpg",
+     "mobile": "08036000000"
+    },
+    "address": {
+     "buildingNumber": "350",
+     "street": "Borno way",
+     "landmark": "Police Station",
+     "state": "Lagos",
+     "city": "Yaba",
+     "country": "Nigeria"
+    },
+    "status": "completed",
+    "taskStatus": "VERIFIED",
+    "isFlagged": false,
+    "downloadUrl": "https://api.youverify.co/v1/reports/r1/download/pdf",
+    "completedAt": "2022-02-13T02:20:03.000Z",
+    "type": "individual",
+    "id": "61882ca9a7422a684a3d0cdf",
+    "verificationId": "61883f9ebc2c9"
+   },
+   "links": []
+  }
+ }
+}

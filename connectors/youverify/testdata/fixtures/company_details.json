@@ -1,0 +1,37 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/api/verifications/ng/company-details/6266b83130b6f4cba3a5a2dc",
+  "headers": {
+   "token": "yv_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "Company details retrieved successfully!",
+   "data": {
+    "id": "6266b83130b6f4cba3a5a2dc",
+    "status": "found",
+    "type": "company_lookup",
+    "name": "JOHN DOE LTD",
+    "registrationNumber": "RC00000000",
+    "tin": "00000000-0000",
+    "email": "johndoe@example.com",
+    "phone": "08000000000",
+    "typeOfEntity": "Private Unlimited Company",
+    "registrationDate": "1971-12-18",
+    "address": "13B, Fake street, Yaba, LAGOS",
+    "keyPersonnel": [
+     {
+      "name": "Sarah Doe",
+      "designation": "Director"
+     }
+    ]
+   },
+   "links": []
+  }
+ }
+}

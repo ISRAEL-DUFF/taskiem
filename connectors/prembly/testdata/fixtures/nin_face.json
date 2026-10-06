@@ -1,0 +1,43 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/nin_w_face",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number_nin": 12345678901,
+   "image": "https://example.com/face.jpg",
+   "date_of_birth": "1990-01-01"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "detail": "NIN Verification Successful",
+   "response_code": "00",
+   "nin_data": {
+    "surname": "DOE",
+    "firstname": "JANE",
+    "gender": "f",
+    "birthdate": "01-01-1990",
+    "nin": "12345678901",
+    "photo": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG",
+    "telephoneno": "08012345678",
+    "face_data": {
+     "status": false,
+     "response_code": "01",
+     "message": "Face does not match",
+     "confidence": 12.5
+    }
+   },
+   "face_data": {
+    "status": false,
+    "response_code": "01",
+    "message": "Face does not match",
+    "confidence": 12.5
+   }
+  }
+ }
+}

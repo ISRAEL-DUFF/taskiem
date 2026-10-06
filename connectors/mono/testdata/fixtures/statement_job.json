@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc/statement/jobs/2ojHeRva4Bfk9vvIuCuO",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Request was successfully completed",
+   "data": {
+    "id": "2ojHeRva4Bfk9vvIuCuO",
+    "status": "BUILT",
+    "path": "https://api.withmono.com/statements/0XmnvkiJZ8dWOYQOF6tM.pdf"
+   }
+  }
+ }
+}

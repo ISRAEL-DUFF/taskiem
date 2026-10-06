@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/api/verifications/global/search-companies",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "query": {
+   "query": "John Doe",
+   "countryCode": "NG",
+   "limit": "5"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": [
+    {
+     "name": "JOHN DOE ONLINE SERVICES LTD",
+     "companyNumber": "000000",
+     "countryCode": "NG",
+     "countryName": "Nigeria"
+    }
+   ],
+   "links": []
+  }
+ }
+}

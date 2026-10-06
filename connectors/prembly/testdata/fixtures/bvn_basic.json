@@ -1,0 +1,33 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bvn_validation",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "22451333604"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "detail": "Verification Successfull",
+   "response_code": "00",
+   "data": {
+    "watchListed": false,
+    "firstName": "John",
+    "middleName": "Doe",
+    "lastName": "Jane",
+    "dateOfBirth": "01-Jan-2000",
+    "phoneNumber": "08012345678"
+   },
+   "source": "API",
+   "user_info": null,
+   "request_data": {
+    "number": "22451333604"
+   }
+  }
+ }
+}

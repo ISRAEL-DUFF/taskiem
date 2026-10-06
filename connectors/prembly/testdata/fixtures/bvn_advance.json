@@ -1,0 +1,62 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bvn",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "22418321365"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "message": "Bank Verification Number (BVN) verification successful",
+   "detail": "Bank Verification Number (BVN) verification successful",
+   "data": {
+    "watchListed": true,
+    "watchListMessage": "BVN has been watchlisted by NIBSS",
+    "bvn": "22418321365",
+    "base64Image": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG",
+    "dateOfBirth": "11-May-2004",
+    "email": "ronald@example.com",
+    "enrollmentBank": "070",
+    "enrollmentBranch": "UNIPORT",
+    "firstName": "RONALD",
+    "middleName": "DONATIUS",
+    "lastName": "EKOM",
+    "nameOnCard": "EKOM RONALD DONATIUS",
+    "gender": "Male",
+    "maritalStatus": "Single",
+    "nationality": "Nigeria",
+    "phoneNumber1": "07058690798",
+    "phoneNumber2": "",
+    "residentialAddress": "C/O OTORO NEW P.A, EYIM EKPO",
+    "lgaOfOrigin": "Inyem Ekpo",
+    "stateOfOrigin": "Akwa Ibom State",
+    "levelOfAccount": "Level 1 - Low Level Accounts",
+    "registrationDate": "01-Apr-2015",
+    "title": "Mr",
+    "nin": ""
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "9a7cb406-c59b-4e09-bde4-c0ea65f40d2f",
+    "verification_id": "710dfdd4"
+   },
+   "billing_info": {
+    "was_charged": true,
+    "amount": "60.00",
+    "currency": "NGN",
+    "note": "Wallet charged 60.00 NGN"
+   },
+   "meta": {},
+   "reference_id": "VER-BVN-N6JEKOFOWI",
+   "transaction_id": "89bcdc97",
+   "verification_status": "verified"
+  }
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/debit",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 504,
+  "body": {
+   "status": "failed",
+   "message": "Gateway timeout"
+  }
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/banks/list",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "request completed successfully",
+   "data": {
+    "banks": [
+     {
+      "name": "NIBSS",
+      "bank_code": "999",
+      "nip_code": "999999",
+      "direct_debit": false
+     },
+     {
+      "name": "ACCESS BANK PLC",
+      "bank_code": "044",
+      "nip_code": "000014",
+      "direct_debit": true
+     }
+    ]
+   }
+  }
+ }
+}

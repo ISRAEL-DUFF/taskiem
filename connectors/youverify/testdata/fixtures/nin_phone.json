@@ -1,0 +1,32 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/nin-phone",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "mobile": "08000000000",
+   "isSubjectConsent": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "id": "65d271690087745246b6d9bb",
+    "address": {
+     "addressLine": "13B Fake Street"
+    },
+    "status": "found",
+    "firstName": "Sarah",
+    "lastName": "Doe",
+    "image": "data:image/jpg;base64,/9j"
+   },
+   "links": []
+  }
+ }
+}

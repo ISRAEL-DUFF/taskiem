@@ -1,0 +1,49 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/payments/initiate",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "amount": 21000,
+   "type": "onetime-debit",
+   "description": "Ticket",
+   "reference": "AbCdEfGhIjKlMnOpQrStUv",
+   "redirect_url": "https://mono.co",
+   "customer": {
+    "name": "Samuel Olamide",
+    "email": "samuel@neem.com",
+    "identity": {
+     "type": "bvn",
+     "number": "22110033445"
+    }
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Payment Initiated Successfully",
+   "timestamp": "2025-05-21T21:58:21.087Z",
+   "data": {
+    "id": "ODW2QV0WLIDG",
+    "mono_url": "https://checkout.mono.co/ODW2QV0WLIDG",
+    "type": "onetime-debit",
+    "method": "account",
+    "amount": 21000,
+    "description": "Ticket",
+    "reference": "AbCdEfGhIjKlMnOpQrStUv",
+    "customer": "67aa0961271cb661d8cbae3b",
+    "institution": "5f2d08bf60b92e2888287704",
+    "auth_method": "internet_banking",
+    "redirect_url": "https://mono.co",
+    "created_at": "2025-05-21T21:58:21.078Z",
+    "updated_at": "2025-05-21T21:58:21.078Z",
+    "meta": {},
+    "liveMode": true
+   }
+  }
+ }
+}

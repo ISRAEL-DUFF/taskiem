@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/payments/verify/AbCdEfGhIjKlMnOpQrStUv",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "status": "failed",
+   "message": "Invalid reference, payment not found",
+   "timestamp": "2024-04-27T22:02:36.893Z",
+   "data": null
+  }
+ }
+}

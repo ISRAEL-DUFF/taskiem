@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/bvn",
+  "headers": {
+   "token": "yv_test_key"
+  }
+ },
+ "response": {
+  "status": 429,
+  "body": {
+   "success": false,
+   "statusCode": 429,
+   "message": "Too many requests",
+   "name": "RateLimitError",
+   "data": {}
+  }
+ }
+}

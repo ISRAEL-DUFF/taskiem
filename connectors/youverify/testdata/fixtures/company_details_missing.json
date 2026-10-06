@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/api/verifications/ng/company-details/nope",
+  "headers": {
+   "token": "yv_test_key"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "success": false,
+   "statusCode": 404,
+   "message": "You have attempted to get a resource that does not exist.",
+   "name": "ResourceNotFoundError",
+   "data": {}
+  }
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/payments/mandates",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": "failed",
+   "response_code": "400",
+   "message": "Customer not found. Add a customer and try again",
+   "timestamps": "2024-02-15T13:13:25.491Z",
+   "documentation": "https://mono.co/docs/error-codes/400",
+   "data": null
+  }
+ }
+}
