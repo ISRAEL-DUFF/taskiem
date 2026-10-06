@@ -37,7 +37,31 @@ func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, pa
 	if err != nil {
 		return nil, err
 	}
-	return pii.Seal(ctx, s.PII, tx, tenant, v, paths, taint)
+	if v, err = pii.Seal(ctx, s.PII, tx, tenant, v, paths, taint); err != nil {
+		return nil, err
+	}
+	return pii.SealDetected(ctx, s.PII, tx, tenant, v, taint)
+}
+
+// redactText masks personal data in the free text of a worker result:
+// a failure's message and a code step's log lines.
+func redactText(v any) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return
+	}
+	if e, ok := m["error"].(map[string]any); ok {
+		if msg, ok := e["message"].(string); ok {
+			e["message"] = pii.Redact(msg)
+		}
+	}
+	if logs, ok := m["logs"].([]any); ok {
+		for i, l := range logs {
+			if s, ok := l.(string); ok {
+				logs[i] = pii.Redact(s)
+			}
+		}
+	}
 }
 
 // connectorPIIPaths are the input fields a connector action declares as PII.

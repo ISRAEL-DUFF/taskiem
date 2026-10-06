@@ -675,12 +675,19 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 			return nil
 		}
 		var payload any = result.Payload
-		if w.Store.PII != nil && len(p.taint) > 0 {
+		if w.Store.PII != nil {
+			// Personal data in what the provider returned is sealed before it
+			// is written: values seen earlier in the run, and values the
+			// detectors recognise (spec 9.3). Free text is masked.
 			v, err := expr.DecodeJSON(result.Payload)
 			if err != nil {
 				return err
 			}
-			if payload, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, nil, p.taint); err != nil {
+			redactText(v)
+			if v, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, nil, p.taint); err != nil {
+				return err
+			}
+			if payload, err = pii.SealDetected(ctx, w.Store.PII, tx, p.c.tenant, v, p.taint); err != nil {
 				return err
 			}
 		}

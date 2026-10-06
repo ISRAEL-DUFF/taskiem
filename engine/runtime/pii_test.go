@@ -87,3 +87,43 @@ func TestDeclaredPIIIsSealedEverywhere(t *testing.T) {
 		t.Errorf("after erasure the BVN reads %q and the phone (another subject) stays readable: %s", pii.Erased, after[0].Payload)
 	}
 }
+
+// Personal data no schema declared is recognised in what a step returns,
+// sealed before it is written, and still usable by later steps; log lines
+// are masked.
+func TestDetectedPIIIsSealed(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"lookup","type":"code","config":{"language":"typescript",
+	    "source":"export default () => { console.log('found BVN 22298765432 for 08031234567'); return { customer: { bvn: '22298765432', phone: '+2348031234567', email: 'ada@example.ng' }, amount: 5000 }; }"}},
+	  {"id":"use","type":"transform","needs":["lookup"],"config":{"output":{"contact":"=steps.lookup.output.customer.phone","amount":"=steps.lookup.output.amount"}}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	for _, ev := range events(t, e, ref) {
+		for _, leak := range []string{"22298765432", "8031234567", "ada@example.ng"} {
+			if strings.Contains(string(ev.Payload), leak) {
+				t.Errorf("plaintext %s in stored %s(%s): %s", leak, ev.Type, ev.StepID, ev.Payload)
+			}
+		}
+	}
+	opened, err := e.Store.OpenedHistory(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var use string
+	for _, ev := range opened {
+		if ev.Type == history.StepCompleted && ev.StepID == "use" {
+			use = string(ev.Payload)
+		}
+	}
+	if !strings.Contains(use, "+2348031234567") || !strings.Contains(use, `"amount":5000`) {
+		t.Errorf("a later step should see the value, and amounts stay plain: %s", use)
+	}
+	for _, ev := range opened {
+		if ev.Type == history.StepCompleted && ev.StepID == "lookup" && !strings.Contains(string(ev.Payload), "found BVN [bvn] for [phone]") {
+			t.Errorf("logs should be masked: %s", ev.Payload)
+		}
+	}
+}

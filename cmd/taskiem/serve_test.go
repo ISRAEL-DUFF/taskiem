@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -169,4 +171,19 @@ func TestServeAllSmoke(t *testing.T) {
 func toJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+func TestLogsAreRedacted(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{ReplaceAttr: redactAttr}))
+	log.Error("provider said account holder ada@example.ng has BVN 22212345678", "err", errors.New("rejected +2348031234567"), "amount", 5000)
+	out := buf.String()
+	for _, leak := range []string{"ada@example.ng", "22212345678", "+2348031234567"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("%s leaked: %s", leak, out)
+		}
+	}
+	if !strings.Contains(out, `"amount":5000`) {
+		t.Errorf("numbers are not personal: %s", out)
+	}
 }

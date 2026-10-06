@@ -25,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -184,7 +185,7 @@ func serve(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("role", *role, "version", version)
+	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{ReplaceAttr: redactAttr})).With("role", *role, "version", version)
 	slog.SetDefault(log)
 	shutdownTracing, err := telemetry.Setup(ctx, "taskiem", version)
 	if err != nil {
@@ -292,4 +293,18 @@ func httpTask(name, addr string, h http.Handler, log *slog.Logger) func(context.
 		defer cancel()
 		return srv.Shutdown(sctx)
 	}
+}
+
+// redactAttr masks personal data in every string and error the process
+// logs (spec 9.3: logs are redacted like the UI).
+func redactAttr(_ []string, a slog.Attr) slog.Attr {
+	switch a.Value.Kind() {
+	case slog.KindString:
+		a.Value = slog.StringValue(pii.Redact(a.Value.String()))
+	case slog.KindAny:
+		if err, ok := a.Value.Any().(error); ok {
+			a.Value = slog.StringValue(pii.Redact(err.Error()))
+		}
+	}
+	return a
 }
