@@ -41,6 +41,8 @@ actions:
         messages_total: { type: integer }
         threads_total:  { type: integer }
         history_id:     { type: string }
+    pii:
+      - { field: output.email_address, category: email }
   send_message:
     title: Send an email
     description: >-
@@ -167,6 +169,15 @@ actions:
               mime_type:     { type: string }
               size:          { type: integer }
               attachment_id: { type: string }
+    pii:
+      - { field: output.snippet, category: other }
+      - { field: output.headers, category: other }
+      - { field: output.from, category: email }
+      - { field: output.to, category: email }
+      - { field: output.subject, category: other }
+      - { field: output.text, category: other }
+      - { field: output.html, category: other }
+      - { field: output.attachments.*.filename, category: other }
   modify_labels:
     title: Add or remove labels
     description: >-

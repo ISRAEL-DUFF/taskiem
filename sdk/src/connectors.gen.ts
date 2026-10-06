@@ -3,6 +3,45 @@
 
 import { connector, type ConnectorExtra, type StepSpec, type Val, type Value } from "./builder.js";
 
+// Africa's Talking (africastalking@1)
+export interface AfricastalkingFetchMessagesInput {
+  /** Id of the last message already processed; 0 (default) for the start */
+  last_received_id?: Value;
+}
+export interface AfricastalkingGetAirtimeStatusInput {
+  /** The request_id send_airtime returned */
+  transaction_id: Val<string>;
+}
+export interface AfricastalkingGetBalanceInput {
+  [key: string]: Value;
+}
+export interface AfricastalkingSendAirtimeInput {
+  /** Retries Africa's Talking makes if the telco is unavailable */
+  max_num_retry?: Val<number>;
+  recipients: Value;
+}
+export interface AfricastalkingSendSmsInput {
+  /** Queue the messages and answer at once (for large sends) */
+  enqueue?: Val<boolean>;
+  message: Val<string>;
+  /** Registered sender ID or short code; defaults to the connection's */
+  sender_id?: Val<string>;
+  /** Numbers in international format, e.g. [+254711000000] */
+  to: Value;
+}
+export const africastalking = {
+  /** Fetch incoming messages (read) */
+  fetch_messages: (input?: AfricastalkingFetchMessagesInput, extra?: ConnectorExtra): StepSpec => connector("africastalking@1", "fetch_messages", input, extra),
+  /** Get an airtime transaction's status (read) */
+  get_airtime_status: (input: AfricastalkingGetAirtimeStatusInput, extra?: ConnectorExtra): StepSpec => connector("africastalking@1", "get_airtime_status", input, extra),
+  /** Get the application balance (read) */
+  get_balance: (input?: AfricastalkingGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("africastalking@1", "get_balance", input, extra),
+  /** Send airtime (unsafe_write) */
+  send_airtime: (input: AfricastalkingSendAirtimeInput, extra?: ConnectorExtra): StepSpec => connector("africastalking@1", "send_airtime", input, extra),
+  /** Send SMS (unsafe_write) */
+  send_sms: (input: AfricastalkingSendSmsInput, extra?: ConnectorExtra): StepSpec => connector("africastalking@1", "send_sms", input, extra),
+};
+
 // Anchor (anchor@1)
 export interface AnchorBookTransferInput {
   /** Deposit account to pay from; defaults to the connection's */
@@ -225,6 +264,227 @@ export const flutterwave = {
   verify_payment: (input?: FlutterwaveVerifyPaymentInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "verify_payment", input, extra),
 };
 
+// Gmail (gmail@1)
+export interface GmailCreateDraftInput {
+  attachments?: Value;
+  bcc?: Value;
+  cc?: Value;
+  /** Must be the mailbox or one of its verified send-as aliases */
+  from?: Val<string>;
+  /** HTML body; with text */
+  html?: Val<string>;
+  /** <message-id> of the message replied to */
+  in_reply_to?: Val<string>;
+  /** <message-id> list */
+  references?: Val<string>;
+  reply_to?: Val<string>;
+  subject?: Val<string>;
+  /** Plain-text body */
+  text?: Val<string>;
+  /** Gmail thread to add the message to (with in_reply_to/references and the same subject) */
+  thread_id?: Val<string>;
+  /** Addresses, e.g. Ada <ada@example.com> */
+  to?: Value;
+}
+export interface GmailGetMessageInput {
+  format?: Val<"metadata" | "full" | "minimal">;
+  id: Val<string>;
+  /** metadata only: headers to include, e.g. [From, Subject] */
+  metadata_headers?: Value;
+}
+export interface GmailGetProfileInput {
+  [key: string]: Value;
+}
+export interface GmailListLabelsInput {
+  [key: string]: Value;
+}
+export interface GmailListMessagesInput {
+  include_spam_trash?: Val<boolean>;
+  /** Messages with all of these labels */
+  label_ids?: Value;
+  /** Default 100 */
+  max_results?: Val<number>;
+  page_token?: Val<string>;
+  /** Gmail search, e.g. from:billing@example.com is:unread newer_than:1d */
+  q?: Val<string>;
+}
+export interface GmailModifyLabelsInput {
+  add_label_ids?: Value;
+  id: Val<string>;
+  remove_label_ids?: Value;
+  /** Set by the engine; not sent to Gmail */
+  request_key?: Val<string>;
+}
+export interface GmailSendMessageInput {
+  attachments?: Value;
+  bcc?: Value;
+  cc?: Value;
+  /** Must be the mailbox or one of its verified send-as aliases */
+  from?: Val<string>;
+  /** HTML body; with text */
+  html?: Val<string>;
+  /** <message-id> of the message replied to */
+  in_reply_to?: Val<string>;
+  /** <message-id> list */
+  references?: Val<string>;
+  reply_to?: Val<string>;
+  subject?: Val<string>;
+  /** Plain-text body */
+  text?: Val<string>;
+  /** Gmail thread to add the message to (with in_reply_to/references and the same subject) */
+  thread_id?: Val<string>;
+  /** Addresses, e.g. Ada <ada@example.com> */
+  to?: Value;
+}
+export const gmail = {
+  /** Create a draft (unsafe_write) */
+  create_draft: (input?: GmailCreateDraftInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "create_draft", input, extra),
+  /** Get a message (read) */
+  get_message: (input: GmailGetMessageInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "get_message", input, extra),
+  /** Get the mailbox profile (read) */
+  get_profile: (input?: GmailGetProfileInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "get_profile", input, extra),
+  /** List labels (read) */
+  list_labels: (input?: GmailListLabelsInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "list_labels", input, extra),
+  /** Search messages (read) */
+  list_messages: (input?: GmailListMessagesInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "list_messages", input, extra),
+  /** Add or remove labels (idempotent_write) */
+  modify_labels: (input: GmailModifyLabelsInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "modify_labels", input, extra),
+  /** Send an email (unsafe_write) */
+  send_message: (input?: GmailSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "send_message", input, extra),
+};
+
+// Google Sheets (googlesheets@1)
+export interface GooglesheetsAddSheetInput {
+  column_count?: Val<number>;
+  index?: Val<number>;
+  row_count?: Val<number>;
+  spreadsheet_id: Val<string>;
+  title: Val<string>;
+}
+export interface GooglesheetsAppendRowsInput {
+  insert_data_option?: Val<"INSERT_ROWS" | "OVERWRITE">;
+  /** Where to look for the table, e.g. Sheet1!A:D */
+  range: Val<string>;
+  spreadsheet_id: Val<string>;
+  /** RAW stores text as given (a leading = stays text); USER_ENTERED parses numbers, dates and formulas as if typed */
+  value_input_option?: Val<"RAW" | "USER_ENTERED">;
+  /** Rows of cells */
+  values: Value;
+}
+export interface GooglesheetsBatchGetValuesInput {
+  date_time_render_option?: Val<"SERIAL_NUMBER" | "FORMATTED_STRING">;
+  header_row?: Val<boolean>;
+  major_dimension?: Val<"ROWS" | "COLUMNS">;
+  ranges: Value;
+  spreadsheet_id: Val<string>;
+  value_render_option?: Val<"FORMATTED_VALUE" | "UNFORMATTED_VALUE" | "FORMULA">;
+}
+export interface GooglesheetsClearValuesInput {
+  range: Val<string>;
+  /** Set by the engine; not sent to Google */
+  request_key?: Val<string>;
+  spreadsheet_id: Val<string>;
+}
+export interface GooglesheetsCreateSpreadsheetInput {
+  /** e.g. en_GB */
+  locale?: Val<string>;
+  /** Sheets to create; default one called Sheet1 */
+  sheet_titles?: Value;
+  /** e.g. Africa/Lagos */
+  time_zone?: Val<string>;
+  title: Val<string>;
+}
+export interface GooglesheetsGetSpreadsheetInput {
+  spreadsheet_id: Val<string>;
+}
+export interface GooglesheetsGetValuesInput {
+  date_time_render_option?: Val<"SERIAL_NUMBER" | "FORMATTED_STRING">;
+  /** Also return the rows after the first as objects keyed by the first row (ROWS only) */
+  header_row?: Val<boolean>;
+  /** Default ROWS */
+  major_dimension?: Val<"ROWS" | "COLUMNS">;
+  /** A1 notation, e.g. Sheet1!A1:D or Sheet1 */
+  range: Val<string>;
+  /** From the spreadsheet's URL */
+  spreadsheet_id: Val<string>;
+  /** Default FORMATTED_VALUE */
+  value_render_option?: Val<"FORMATTED_VALUE" | "UNFORMATTED_VALUE" | "FORMULA">;
+}
+export interface GooglesheetsUpdateValuesInput {
+  range: Val<string>;
+  /** Set by the engine; not sent to Google */
+  request_key?: Val<string>;
+  spreadsheet_id: Val<string>;
+  value_input_option?: Val<"RAW" | "USER_ENTERED">;
+  values: Value;
+}
+export const googlesheets = {
+  /** Add a sheet (unsafe_write) */
+  add_sheet: (input: GooglesheetsAddSheetInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "add_sheet", input, extra),
+  /** Append rows (unsafe_write) */
+  append_rows: (input: GooglesheetsAppendRowsInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "append_rows", input, extra),
+  /** Read several ranges (read) */
+  batch_get_values: (input: GooglesheetsBatchGetValuesInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "batch_get_values", input, extra),
+  /** Clear a range (idempotent_write) */
+  clear_values: (input: GooglesheetsClearValuesInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "clear_values", input, extra),
+  /** Create a spreadsheet (unsafe_write) */
+  create_spreadsheet: (input: GooglesheetsCreateSpreadsheetInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "create_spreadsheet", input, extra),
+  /** Get a spreadsheet's sheets (read) */
+  get_spreadsheet: (input: GooglesheetsGetSpreadsheetInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "get_spreadsheet", input, extra),
+  /** Read a range (read) */
+  get_values: (input: GooglesheetsGetValuesInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "get_values", input, extra),
+  /** Write a range (idempotent_write) */
+  update_values: (input: GooglesheetsUpdateValuesInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "update_values", input, extra),
+};
+
+// Interswitch (interswitch@1)
+export interface InterswitchGetPaymentInput {
+  /** Kobo you expected */
+  amount: Val<number>;
+  /** Defaults to the connection's */
+  merchant_code?: Val<string>;
+  /** The txn_ref you sent to checkout */
+  reference: Val<string>;
+}
+export interface InterswitchGetTransferInput {
+  reference: Val<string>;
+}
+export interface InterswitchListBanksInput {
+  /** Optional filter on the bank's name (e.g. GUA) */
+  name?: Val<string>;
+}
+export interface InterswitchResolveAccountInput {
+  account_number: Val<string>;
+  /** From list_banks: Interswitch, CBN or NIP code */
+  bank_code: Val<string>;
+}
+export interface InterswitchTransferInput {
+  account_number: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  /** From list_banks: Interswitch, CBN or NIP code */
+  bank_code: Val<string>;
+  narration: Val<string>;
+  reference?: Val<string>;
+  /** Sender name shown to the recipient */
+  source_account_name?: Val<string>;
+  source_account_number?: Val<string>;
+  /** Defaults to the connection's */
+  wallet_id?: Val<string>;
+}
+export const interswitch = {
+  /** Confirm a Web Checkout payment (read) */
+  get_payment: (input: InterswitchGetPaymentInput, extra?: ConnectorExtra): StepSpec => connector("interswitch@1", "get_payment", input, extra),
+  /** Get payout by reference (read) */
+  get_transfer: (input: InterswitchGetTransferInput, extra?: ConnectorExtra): StepSpec => connector("interswitch@1", "get_transfer", input, extra),
+  /** List receiving banks (read) */
+  list_banks: (input?: InterswitchListBanksInput, extra?: ConnectorExtra): StepSpec => connector("interswitch@1", "list_banks", input, extra),
+  /** Resolve account name (read) */
+  resolve_account: (input: InterswitchResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("interswitch@1", "resolve_account", input, extra),
+  /** Pay out to a bank account (idempotent_write) */
+  transfer: (input: InterswitchTransferInput, extra?: ConnectorExtra): StepSpec => connector("interswitch@1", "transfer", input, extra),
+};
+
 // iswallet (iswallet@1)
 export interface IswalletGetBalanceInput {
   wallet_id: Val<string>;
@@ -337,6 +597,448 @@ export const lenco = {
   transfer: (input: LencoTransferInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "transfer", input, extra),
 };
 
+// Moniepoint (Monnify) (moniepoint@1)
+export interface MoniepointCreateReservedAccountInput {
+  /** Shown when payers resolve the number */
+  account_name: Val<string>;
+  account_reference?: Val<string>;
+  /** BVN or NIN is required by Monnify depending on the account tier */
+  bvn?: Val<string>;
+  customer_email: Val<string>;
+  customer_name?: Val<string>;
+  nin?: Val<string>;
+  /** Partner bank codes (e.g. "50515"); omit for all available banks */
+  preferred_banks?: Value;
+}
+export interface MoniepointGetBalanceInput {
+  /** Defaults to the connection's wallet */
+  wallet_account_number?: Val<string>;
+}
+export interface MoniepointGetReservedAccountInput {
+  account_reference: Val<string>;
+}
+export interface MoniepointGetTransactionInput {
+  payment_reference?: Val<string>;
+  transaction_reference?: Val<string>;
+}
+export interface MoniepointGetTransferInput {
+  reference: Val<string>;
+}
+export interface MoniepointInitTransactionInput {
+  /** Kobo */
+  amount: Val<number>;
+  customer_email: Val<string>;
+  customer_name: Val<string>;
+  description: Val<string>;
+  payment_methods?: Value;
+  payment_reference?: Val<string>;
+  redirect_url?: Val<string>;
+}
+export interface MoniepointListBanksInput {
+  [key: string]: Value;
+}
+export interface MoniepointResolveAccountInput {
+  account_number: Val<string>;
+  /** From list_banks */
+  bank_code: Val<string>;
+}
+export interface MoniepointTransferInput {
+  /** Beneficiary name; when given, Monnify skips its own name enquiry, so resolve it first */
+  account_name?: Val<string>;
+  account_number: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  /** Answer PENDING at once and settle later (default false) */
+  async?: Val<boolean>;
+  /** From list_banks */
+  bank_code: Val<string>;
+  narration: Val<string>;
+  reference?: Val<string>;
+  /** Wallet to pay from; defaults to the connection's */
+  wallet_account_number?: Val<string>;
+}
+export const moniepoint = {
+  /** Reserve a bank account for a customer (idempotent_write) */
+  create_reserved_account: (input: MoniepointCreateReservedAccountInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "create_reserved_account", input, extra),
+  /** Get wallet balance (read) */
+  get_balance: (input?: MoniepointGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "get_balance", input, extra),
+  /** Get reserved account (read) */
+  get_reserved_account: (input: MoniepointGetReservedAccountInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "get_reserved_account", input, extra),
+  /** Get payment status (read) */
+  get_transaction: (input?: MoniepointGetTransactionInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "get_transaction", input, extra),
+  /** Get transfer by reference (read) */
+  get_transfer: (input: MoniepointGetTransferInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "get_transfer", input, extra),
+  /** Start a checkout payment (idempotent_write) */
+  init_transaction: (input: MoniepointInitTransactionInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "init_transaction", input, extra),
+  /** List banks (read) */
+  list_banks: (input?: MoniepointListBanksInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "list_banks", input, extra),
+  /** Resolve account name (read) */
+  resolve_account: (input: MoniepointResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "resolve_account", input, extra),
+  /** Transfer to a bank account (idempotent_write) */
+  transfer: (input: MoniepointTransferInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "transfer", input, extra),
+};
+
+// Mono (mono@1)
+export interface MonoCancelMandateInput {
+  mandate_id: Val<string>;
+}
+export interface MonoCheckMandateBalanceInput {
+  /** Kobo */
+  amount?: Val<number>;
+  mandate_id: Val<string>;
+}
+export interface MonoCreateCustomerInput {
+  address: Val<string>;
+  bvn: Val<string>;
+  email: Val<string>;
+  first_name: Val<string>;
+  last_name: Val<string>;
+  phone: Val<string>;
+}
+export interface MonoCreateMandateInput {
+  /** A linked Mono account instead of account_number and bank_code */
+  account_id?: Val<string>;
+  /** With bank_code */
+  account_number?: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  /** From list_banks */
+  bank_code?: Val<string>;
+  customer_id: Val<string>;
+  debit_type: Val<"variable" | "fixed">;
+  description: Val<string>;
+  /** YYYY-MM-DD */
+  end_date: Val<string>;
+  fee_bearer?: Val<"business" | "customer">;
+  /** Fixed mandates: daily, weekly, monthly, yearly, or days/weeks/months with interval */
+  frequency?: Val<string>;
+  grace_period?: Val<number>;
+  /** Kobo */
+  initial_debit_amount?: Val<number>;
+  initial_debit_date?: Val<string>;
+  interval?: Val<number>;
+  mandate_type: Val<"emandate" | "sweep">;
+  meta?: Value;
+  /** Kobo */
+  minimum_due?: Val<number>;
+  reference: Val<string>;
+  retrial_frequency?: Val<number>;
+  /** YYYY-MM-DD */
+  start_date: Val<string>;
+  verification_method?: Val<"transfer_verification" | "selfie_verification">;
+}
+export interface MonoDebitMandateInput {
+  /** Kobo */
+  amount: Val<number>;
+  /** Settle straight to this NUBAN (Mono enables this on request) */
+  beneficiary_account_number?: Val<string>;
+  beneficiary_nip_code?: Val<string>;
+  fee_bearer?: Val<"business" | "customer">;
+  mandate_id: Val<string>;
+  meta?: Value;
+  narration: Val<string>;
+  reference: Val<string>;
+}
+export interface MonoExchangeTokenInput {
+  code: Val<string>;
+}
+export interface MonoGetAccountInput {
+  account_id: Val<string>;
+  /** Ask the bank for a fresh balance (x-realtime) */
+  realtime?: Val<boolean>;
+}
+export interface MonoGetBalanceInput {
+  account_id: Val<string>;
+  realtime?: Val<boolean>;
+}
+export interface MonoGetDebitInput {
+  mandate_id: Val<string>;
+  reference: Val<string>;
+}
+export interface MonoGetIdentityInput {
+  account_id: Val<string>;
+}
+export interface MonoGetIncomeRecordsInput {
+  account_id: Val<string>;
+  page?: Val<number>;
+}
+export interface MonoGetMandateInput {
+  mandate_id?: Val<string>;
+  reference?: Val<string>;
+}
+export interface MonoGetStatementInput {
+  account_id: Val<string>;
+  months: Val<number>;
+  output?: Val<"json" | "pdf">;
+  realtime?: Val<boolean>;
+}
+export interface MonoGetStatementPdfInput {
+  account_id: Val<string>;
+  job_id: Val<string>;
+}
+export interface MonoInitiateAccountLinkingInput {
+  auth_method?: Val<"internet_banking" | "mobile_banking">;
+  /** Required unless customer_id is given */
+  customer_email?: Val<string>;
+  /** An existing Mono customer */
+  customer_id?: Val<string>;
+  /** Required unless customer_id is given */
+  customer_name?: Val<string>;
+  /** Preselect a bank (Mono institution id) */
+  institution_id?: Val<string>;
+  /** https:// URL the customer returns to */
+  redirect_url: Val<string>;
+  /** Your unique reference (meta.ref) */
+  ref?: Val<string>;
+}
+export interface MonoInitiateMandateInput {
+  account_number?: Val<string>;
+  allow_partial_sweep?: Val<boolean>;
+  /** Kobo */
+  amount: Val<number>;
+  bank_code?: Val<string>;
+  customer_id: Val<string>;
+  debit_type: Val<"variable" | "fixed">;
+  description: Val<string>;
+  end_date: Val<string>;
+  frequency?: Val<string>;
+  grace_period?: Val<number>;
+  initial_debit_date?: Val<string>;
+  interval?: Val<number>;
+  mandate_type: Val<"emandate" | "sweep">;
+  meta?: Value;
+  minimum_due?: Val<number>;
+  redirect_url?: Val<string>;
+  reference: Val<string>;
+  retrial_frequency?: Val<number>;
+  start_date: Val<string>;
+}
+export interface MonoInitiatePaymentInput {
+  /** A linked account to pay from */
+  account_id?: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  auth_method?: Val<"internet_banking" | "mobile_banking">;
+  customer_address?: Val<string>;
+  customer_bvn?: Val<string>;
+  customer_email?: Val<string>;
+  customer_name?: Val<string>;
+  customer_phone?: Val<string>;
+  description: Val<string>;
+  institution_id?: Val<string>;
+  meta?: Value;
+  method?: Val<"account" | "transfer" | "whatsapp">;
+  redirect_url?: Val<string>;
+  reference: Val<string>;
+}
+export interface MonoInitiateReauthorisationInput {
+  account_id: Val<string>;
+  redirect_url: Val<string>;
+  ref?: Val<string>;
+}
+export interface MonoListBanksInput {
+  [key: string]: Value;
+}
+export interface MonoListTransactionsInput {
+  account_id: Val<string>;
+  end?: Val<string>;
+  limit?: Val<number>;
+  narration?: Val<string>;
+  page?: Val<number>;
+  realtime?: Val<boolean>;
+  /** DD-MM-YYYY; needs end */
+  start?: Val<string>;
+  type?: Val<"debit" | "credit">;
+}
+export interface MonoPauseMandateInput {
+  mandate_id: Val<string>;
+}
+export interface MonoReinstateMandateInput {
+  mandate_id: Val<string>;
+}
+export interface MonoRequestCreditworthinessInput {
+  account_id: Val<string>;
+  bvn: Val<string>;
+  /** Loans you know of, in Mono's existing_loans shape (amounts in kobo) */
+  existing_loans?: Value;
+  /** Percent, e.g. 5 */
+  interest_rate: Val<number>;
+  /** Kobo */
+  principal: Val<number>;
+  run_credit_check: Val<boolean>;
+  /** Months */
+  term: Val<number>;
+}
+export interface MonoRequestIncomeInput {
+  account_id: Val<string>;
+  /** Months to analyse; the account's whole history when omitted */
+  months?: Val<number>;
+}
+export interface MonoUnlinkAccountInput {
+  account_id: Val<string>;
+}
+export interface MonoVerifyPaymentInput {
+  reference: Val<string>;
+}
+export const mono = {
+  /** Cancel a mandate (unsafe_write) */
+  cancel_mandate: (input: MonoCancelMandateInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "cancel_mandate", input, extra),
+  /** Check a mandated account's balance (read) */
+  check_mandate_balance: (input: MonoCheckMandateBalanceInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "check_mandate_balance", input, extra),
+  /** Create a customer (unsafe_write) */
+  create_customer: (input: MonoCreateCustomerInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "create_customer", input, extra),
+  /** Create a Direct Debit mandate (reconcilable_write) */
+  create_mandate: (input: MonoCreateMandateInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "create_mandate", input, extra),
+  /** Debit an account under a mandate (reconcilable_write) */
+  debit_mandate: (input: MonoDebitMandateInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "debit_mandate", input, extra),
+  /** Exchange a Connect code for an account id (unsafe_write) */
+  exchange_token: (input: MonoExchangeTokenInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "exchange_token", input, extra),
+  /** Get account details (read) */
+  get_account: (input: MonoGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "get_account", input, extra),
+  /** Get account balance (read) */
+  get_balance: (input: MonoGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "get_balance", input, extra),
+  /** Get a mandate debit (read) */
+  get_debit: (input: MonoGetDebitInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "get_debit", input, extra),
+  /** Get the account holder's identity (read) */
+  get_identity: (input: MonoGetIdentityInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "get_identity", input, extra),
+  /** Get income reports (read) */
+  get_income_records: (input: MonoGetIncomeRecordsInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "get_income_records", input, extra),
+  /** Get a mandate (read) */
+  get_mandate: (input?: MonoGetMandateInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "get_mandate", input, extra),
+  /** Get a bank statement (read) */
+  get_statement: (input: MonoGetStatementInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "get_statement", input, extra),
+  /** Get a PDF statement's status (read) */
+  get_statement_pdf: (input: MonoGetStatementPdfInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "get_statement_pdf", input, extra),
+  /** Start linking a bank account (unsafe_write) */
+  initiate_account_linking: (input: MonoInitiateAccountLinkingInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "initiate_account_linking", input, extra),
+  /** Start a Mono-hosted mandate authorisation (reconcilable_write) */
+  initiate_mandate: (input: MonoInitiateMandateInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "initiate_mandate", input, extra),
+  /** Start a one-time DirectPay payment (reconcilable_write) */
+  initiate_payment: (input: MonoInitiatePaymentInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "initiate_payment", input, extra),
+  /** Start re-authorising a linked account (unsafe_write) */
+  initiate_reauthorisation: (input: MonoInitiateReauthorisationInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "initiate_reauthorisation", input, extra),
+  /** List banks (read) */
+  list_banks: (input?: MonoListBanksInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "list_banks", input, extra),
+  /** List account transactions (read) */
+  list_transactions: (input: MonoListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "list_transactions", input, extra),
+  /** Pause a mandate (unsafe_write) */
+  pause_mandate: (input: MonoPauseMandateInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "pause_mandate", input, extra),
+  /** Reinstate a paused mandate (unsafe_write) */
+  reinstate_mandate: (input: MonoReinstateMandateInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "reinstate_mandate", input, extra),
+  /** Request a creditworthiness assessment (read) */
+  request_creditworthiness: (input: MonoRequestCreditworthinessInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "request_creditworthiness", input, extra),
+  /** Request an income analysis (read) */
+  request_income: (input: MonoRequestIncomeInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "request_income", input, extra),
+  /** Unlink an account (unsafe_write) */
+  unlink_account: (input: MonoUnlinkAccountInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "unlink_account", input, extra),
+  /** Verify a payment by reference (read) */
+  verify_payment: (input: MonoVerifyPaymentInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "verify_payment", input, extra),
+};
+
+// MySQL (mysql@1)
+export interface MysqlExecuteInput {
+  params?: Value;
+  sql: Val<string>;
+}
+export interface MysqlQueryInput {
+  max_rows?: Val<number>;
+  params?: Value;
+  sql: Val<string>;
+}
+export const mysql = {
+  /** Run a statement that changes data (unsafe_write) */
+  execute: (input: MysqlExecuteInput, extra?: ConnectorExtra): StepSpec => connector("mysql@1", "execute", input, extra),
+  /** Run a read-only query (read) */
+  query: (input: MysqlQueryInput, extra?: ConnectorExtra): StepSpec => connector("mysql@1", "query", input, extra),
+};
+
+// OPay (opay@1)
+export interface OpayClosePaymentInput {
+  order_no?: Val<string>;
+  reference?: Val<string>;
+}
+export interface OpayCreateBankTransferPaymentInput {
+  /** Kobo */
+  amount: Val<number>;
+  callback_url?: Val<string>;
+  currency?: Val<string>;
+  customer_email?: Val<string>;
+  customer_id?: Val<string>;
+  customer_name?: Val<string>;
+  customer_phone?: Val<string>;
+  expire_minutes?: Val<number>;
+  product_description?: Val<string>;
+  product_name: Val<string>;
+  reference?: Val<string>;
+}
+export interface OpayCreateCashierPaymentInput {
+  /** Kobo */
+  amount: Val<number>;
+  /** Defaults to the webhook URL on the OPay dashboard */
+  callback_url?: Val<string>;
+  cancel_url?: Val<string>;
+  currency?: Val<string>;
+  customer_email?: Val<string>;
+  customer_id?: Val<string>;
+  customer_mobile?: Val<string>;
+  customer_name?: Val<string>;
+  /** Sub-merchant name shown on the cashier page */
+  display_name?: Val<string>;
+  /** OPay's default is 30 */
+  expire_minutes?: Val<number>;
+  /** Preferred method, e.g. BankCard, BankTransfer, BankUssd, OpayWalletNg; all when empty */
+  pay_method?: Val<string>;
+  product_description: Val<string>;
+  product_name: Val<string>;
+  reference?: Val<string>;
+  /** Where the cashier returns the payer */
+  return_url: Val<string>;
+}
+export interface OpayGetPaymentInput {
+  order_no?: Val<string>;
+  reference?: Val<string>;
+}
+export interface OpayGetRefundInput {
+  /** The refund's reference */
+  reference: Val<string>;
+}
+export interface OpayRefundPaymentInput {
+  /** Kobo */
+  amount: Val<number>;
+  bank_account_no?: Val<string>;
+  /** BankAccount refunds */
+  bank_code?: Val<string>;
+  /** Defaults to the connection's callback_url */
+  callback_url?: Val<string>;
+  currency?: Val<string>;
+  /** The payment's reference */
+  original_reference: Val<string>;
+  /** The refund's own reference */
+  reference?: Val<string>;
+  refund_reason?: Val<string>;
+  refund_way?: Val<"Original" | "BankAccount">;
+}
+export interface OpayVerifyCallbackInput {
+  payload: Value;
+  sha512: Val<string>;
+}
+export const opay = {
+  /** Cancel an unpaid payment (unsafe_write) */
+  close_payment: (input?: OpayClosePaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay@1", "close_payment", input, extra),
+  /** Create a bank-transfer payment (idempotent_write) */
+  create_bank_transfer_payment: (input: OpayCreateBankTransferPaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay@1", "create_bank_transfer_payment", input, extra),
+  /** Create a Cashier payment (idempotent_write) */
+  create_cashier_payment: (input: OpayCreateCashierPaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay@1", "create_cashier_payment", input, extra),
+  /** Get payment status (read) */
+  get_payment: (input?: OpayGetPaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay@1", "get_payment", input, extra),
+  /** Get refund status (read) */
+  get_refund: (input: OpayGetRefundInput, extra?: ConnectorExtra): StepSpec => connector("opay@1", "get_refund", input, extra),
+  /** Refund a payment (idempotent_write) */
+  refund_payment: (input: OpayRefundPaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay@1", "refund_payment", input, extra),
+  /** Verify a payment callback's signature (read) */
+  verify_callback: (input: OpayVerifyCallbackInput, extra?: ConnectorExtra): StepSpec => connector("opay@1", "verify_callback", input, extra),
+};
+
 // Paystack (paystack@1)
 export interface PaystackCheckBalanceInput {
   [key: string]: Value;
@@ -383,6 +1085,579 @@ export const postgres = {
   query: (input: PostgresQueryInput, extra?: ConnectorExtra): StepSpec => connector("postgres@1", "query", input, extra),
 };
 
+// Prembly (prembly@1)
+export interface PremblyCheckLivenessInput {
+  /** Image URL or base64 */
+  image: Val<string>;
+}
+export interface PremblyCompareFacesInput {
+  /** Image URL or base64 */
+  image_one: Val<string>;
+  /** Image URL or base64 */
+  image_two: Val<string>;
+}
+export interface PremblyGetWalletBalanceInput {
+  [key: string]: Value;
+}
+export interface PremblyLookupBvnInput {
+  bvn: Val<string>;
+  /** The photo is large and personal; omitted unless asked for */
+  include_image?: Val<boolean>;
+}
+export interface PremblyLookupBvnBasicInput {
+  bvn: Val<string>;
+}
+export interface PremblyLookupBvnByPhoneInput {
+  include_image?: Val<boolean>;
+  phone_number: Val<string>;
+}
+export interface PremblyLookupCacInput {
+  advanced?: Val<boolean>;
+  company_name?: Val<string>;
+  company_type?: Val<"RC" | "BN" | "IT" | "LP" | "LLP">;
+  rc_number: Val<string>;
+}
+export interface PremblyLookupNinInput {
+  include_image?: Val<boolean>;
+  nin: Val<string>;
+}
+export interface PremblyLookupNinBasicInput {
+  include_image?: Val<boolean>;
+  nin: Val<string>;
+}
+export interface PremblyLookupPhoneInput {
+  include_image?: Val<boolean>;
+  phone_number: Val<string>;
+}
+export interface PremblyLookupPhoneBasicInput {
+  phone_number: Val<string>;
+}
+export interface PremblyResolveBankAccountInput {
+  account_number: Val<string>;
+  /** CBN bank code */
+  bank_code: Val<string>;
+}
+export interface PremblyVerifyBvnWithFaceInput {
+  bvn: Val<string>;
+  /** Image URL or base64 */
+  image: Val<string>;
+  include_image?: Val<boolean>;
+}
+export interface PremblyVerifyDriversLicenseInput {
+  first_name: Val<string>;
+  include_image?: Val<boolean>;
+  last_name: Val<string>;
+  license_number: Val<string>;
+}
+export interface PremblyVerifyNinWithFaceInput {
+  /** YYYY-MM-DD */
+  date_of_birth?: Val<string>;
+  /** Image URL or base64 */
+  image: Val<string>;
+  include_image?: Val<boolean>;
+  nin: Val<string>;
+}
+export interface PremblyVerifyPassportInput {
+  /** YYYY-MM-DD */
+  date_of_birth: Val<string>;
+  nin?: Val<string>;
+  passport_number: Val<string>;
+}
+export interface PremblyVerifyVotersCardInput {
+  /** YYYY-MM-DD */
+  date_of_birth: Val<string>;
+  last_name: Val<string>;
+  lga?: Val<string>;
+  state: Val<string>;
+  /** Voter identification number */
+  vin: Val<string>;
+}
+export const prembly = {
+  /** Check a face for liveness (read) */
+  check_liveness: (input: PremblyCheckLivenessInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "check_liveness", input, extra),
+  /** Compare two faces (read) */
+  compare_faces: (input: PremblyCompareFacesInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "compare_faces", input, extra),
+  /** Get wallet balance (read) */
+  get_wallet_balance: (input?: PremblyGetWalletBalanceInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "get_wallet_balance", input, extra),
+  /** Look up a BVN (advanced) (read) */
+  lookup_bvn: (input: PremblyLookupBvnInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "lookup_bvn", input, extra),
+  /** Validate a BVN (basic) (read) */
+  lookup_bvn_basic: (input: PremblyLookupBvnBasicInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "lookup_bvn_basic", input, extra),
+  /** Find a BVN by phone number (read) */
+  lookup_bvn_by_phone: (input: PremblyLookupBvnByPhoneInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "lookup_bvn_by_phone", input, extra),
+  /** Look up a company (CAC) (read) */
+  lookup_cac: (input: PremblyLookupCacInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "lookup_cac", input, extra),
+  /** Look up a NIN (advanced) (read) */
+  lookup_nin: (input: PremblyLookupNinInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "lookup_nin", input, extra),
+  /** Look up a NIN (basic) (read) */
+  lookup_nin_basic: (input: PremblyLookupNinBasicInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "lookup_nin_basic", input, extra),
+  /** Look up a phone number (advanced) (read) */
+  lookup_phone: (input: PremblyLookupPhoneInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "lookup_phone", input, extra),
+  /** Look up a phone number (basic) (read) */
+  lookup_phone_basic: (input: PremblyLookupPhoneBasicInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "lookup_phone_basic", input, extra),
+  /** Resolve a bank account name (read) */
+  resolve_bank_account: (input: PremblyResolveBankAccountInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "resolve_bank_account", input, extra),
+  /** Verify a BVN against a face (read) */
+  verify_bvn_with_face: (input: PremblyVerifyBvnWithFaceInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_bvn_with_face", input, extra),
+  /** Verify a driver's licence (read) */
+  verify_drivers_license: (input: PremblyVerifyDriversLicenseInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_drivers_license", input, extra),
+  /** Verify a NIN against a face (read) */
+  verify_nin_with_face: (input: PremblyVerifyNinWithFaceInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_nin_with_face", input, extra),
+  /** Verify a Nigerian passport (read) */
+  verify_passport: (input: PremblyVerifyPassportInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_passport", input, extra),
+  /** Verify a voter's card (read) */
+  verify_voters_card: (input: PremblyVerifyVotersCardInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_voters_card", input, extra),
+};
+
+// Remita (remita@1)
+export interface RemitaBulkTransferInput {
+  batch_payment_identifier?: Val<string>;
+  custom_reference?: Val<string>;
+  /** The batch's narration */
+  narration: Val<string>;
+  source_account_name?: Val<string>;
+  source_account_number?: Val<string>;
+  source_bank_code?: Val<string>;
+  transfers: Value;
+}
+export interface RemitaCancelInvoiceInput {
+  rrr: Val<string>;
+}
+export interface RemitaGenerateInvoiceInput {
+  /** Kobo */
+  amount: Val<number>;
+  custom_fields?: Value;
+  description: Val<string>;
+  /** DD/MM/YYYY */
+  expiry_date?: Val<string>;
+  line_items?: Value;
+  order_id?: Val<string>;
+  payer_email: Val<string>;
+  payer_name: Val<string>;
+  payer_phone: Val<string>;
+  /** Defaults to the connection's */
+  service_type_id?: Val<string>;
+}
+export interface RemitaGetBulkTransferInput {
+  batch_payment_identifier: Val<string>;
+}
+export interface RemitaGetInvoiceInput {
+  order_id?: Val<string>;
+  rrr?: Val<string>;
+}
+export interface RemitaGetTransferInput {
+  payment_identifier: Val<string>;
+}
+export interface RemitaListBanksInput {
+  [key: string]: Value;
+}
+export interface RemitaResolveAccountInput {
+  account_number: Val<string>;
+  /** From list_banks */
+  bank_code: Val<string>;
+}
+export interface RemitaTransferInput {
+  /** From resolve_account */
+  account_name: Val<string>;
+  account_number: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  /** From list_banks */
+  bank_code: Val<string>;
+  narration: Val<string>;
+  payment_identifier?: Val<string>;
+  source_account_name?: Val<string>;
+  /** Defaults to the connection's */
+  source_account_number?: Val<string>;
+  source_bank_code?: Val<string>;
+}
+export const remita = {
+  /** Transfer to several bank accounts (bulk payment) (idempotent_write) */
+  bulk_transfer: (input: RemitaBulkTransferInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "bulk_transfer", input, extra),
+  /** Cancel an unpaid invoice (unsafe_write) */
+  cancel_invoice: (input: RemitaCancelInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "cancel_invoice", input, extra),
+  /** Generate an invoice (RRR) (idempotent_write) */
+  generate_invoice: (input: RemitaGenerateInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "generate_invoice", input, extra),
+  /** Get a bulk payment's status (read) */
+  get_bulk_transfer: (input: RemitaGetBulkTransferInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "get_bulk_transfer", input, extra),
+  /** Get an invoice's payment status (read) */
+  get_invoice: (input?: RemitaGetInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "get_invoice", input, extra),
+  /** Get a single payment's status (read) */
+  get_transfer: (input: RemitaGetTransferInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "get_transfer", input, extra),
+  /** List banks (read) */
+  list_banks: (input?: RemitaListBanksInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "list_banks", input, extra),
+  /** Resolve account name (read) */
+  resolve_account: (input: RemitaResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "resolve_account", input, extra),
+  /** Transfer to a bank account (single payment) (idempotent_write) */
+  transfer: (input: RemitaTransferInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "transfer", input, extra),
+};
+
+// Amazon S3 (s3@1)
+export interface S3CopyObjectInput {
+  /** Destination; defaults to the connection's bucket */
+  bucket?: Val<string>;
+  content_type?: Val<string>;
+  /** Set by the engine; only logged */
+  idempotency_key?: Val<string>;
+  key: Val<string>;
+  metadata?: Value;
+  /** Defaults to the connection's bucket */
+  source_bucket?: Val<string>;
+  source_key: Val<string>;
+  source_version_id?: Val<string>;
+}
+export interface S3DeleteObjectInput {
+  bucket?: Val<string>;
+  /** Set by the engine; only logged */
+  idempotency_key?: Val<string>;
+  key: Val<string>;
+  version_id?: Val<string>;
+}
+export interface S3GetObjectInput {
+  bucket?: Val<string>;
+  /** text requires valid UTF-8 */
+  encoding?: Val<"text" | "base64">;
+  key: Val<string>;
+  max_bytes?: Val<number>;
+  version_id?: Val<string>;
+}
+export interface S3HeadObjectInput {
+  bucket?: Val<string>;
+  key: Val<string>;
+  version_id?: Val<string>;
+}
+export interface S3ListObjectsInput {
+  bucket?: Val<string>;
+  continuation_token?: Val<string>;
+  /** Usually /; groups keys into common_prefixes */
+  delimiter?: Val<string>;
+  max_keys?: Val<number>;
+  prefix?: Val<string>;
+  start_after?: Val<string>;
+}
+export interface S3PresignUrlInput {
+  bucket?: Val<string>;
+  /** PUT only: the uploader must send exactly this Content-Type */
+  content_type?: Val<string>;
+  /** Seconds (at most 7 days; temporary credentials expire sooner) */
+  expires_in?: Val<number>;
+  key: Val<string>;
+  method?: Val<"GET" | "PUT">;
+}
+export interface S3PutObjectInput {
+  /** The object's content */
+  body: Val<string>;
+  body_encoding?: Val<"text" | "base64">;
+  /** Defaults to the connection's bucket */
+  bucket?: Val<string>;
+  cache_control?: Val<string>;
+  content_disposition?: Val<string>;
+  /** Defaults to text/plain; charset=utf-8 for text and application/octet-stream for base64 */
+  content_type?: Val<string>;
+  /** Set by the engine; S3 needs no key */
+  idempotency_key?: Val<string>;
+  key: Val<string>;
+  /** User metadata (x-amz-meta-*); ASCII names and values */
+  metadata?: Value;
+}
+export const s3 = {
+  /** Copy an object (idempotent_write) */
+  copy_object: (input: S3CopyObjectInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "copy_object", input, extra),
+  /** Delete an object (idempotent_write) */
+  delete_object: (input: S3DeleteObjectInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "delete_object", input, extra),
+  /** Get an object (read) */
+  get_object: (input: S3GetObjectInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "get_object", input, extra),
+  /** Get an object's details (read) */
+  head_object: (input: S3HeadObjectInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "head_object", input, extra),
+  /** List objects (read) */
+  list_objects: (input?: S3ListObjectsInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "list_objects", input, extra),
+  /** Make a presigned link (read) */
+  presign_url: (input: S3PresignUrlInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "presign_url", input, extra),
+  /** Put an object (idempotent_write) */
+  put_object: (input: S3PutObjectInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "put_object", input, extra),
+};
+
+// SFTP (sftp@1)
+export interface SftpDeleteInput {
+  /** Set by the engine; only logged */
+  idempotency_key?: Val<string>;
+  /** When false a missing path fails the step */
+  missing_ok?: Val<boolean>;
+  path: Val<string>;
+}
+export interface SftpDownloadFileInput {
+  /** text requires valid UTF-8 */
+  encoding?: Val<"text" | "base64">;
+  max_bytes?: Val<number>;
+  path: Val<string>;
+}
+export interface SftpListDirectoryInput {
+  max_entries?: Val<number>;
+  /** Defaults to the login directory */
+  path?: Val<string>;
+}
+export interface SftpMkdirInput {
+  /** Set by the engine; only logged */
+  idempotency_key?: Val<string>;
+  /** Create missing parents too (mkdir -p) */
+  parents?: Val<boolean>;
+  path: Val<string>;
+}
+export interface SftpRenameInput {
+  create_dirs?: Val<boolean>;
+  from: Val<string>;
+  /** Set by the engine; only logged */
+  idempotency_key?: Val<string>;
+  overwrite?: Val<boolean>;
+  to: Val<string>;
+}
+export interface SftpStatInput {
+  path?: Val<string>;
+}
+export interface SftpUploadFileInput {
+  content: Val<string>;
+  /** Create missing parent directories (mkdir -p) */
+  create_dirs?: Val<boolean>;
+  encoding?: Val<"text" | "base64">;
+  /** Set by the engine; names the temporary file */
+  idempotency_key?: Val<string>;
+  /** Permissions, e.g. 0640 */
+  mode?: Val<string>;
+  /** When false an existing file with different content fails the step */
+  overwrite?: Val<boolean>;
+  /** Server path; relative paths start at the login directory */
+  path: Val<string>;
+}
+export const sftp = {
+  /** Delete a file or empty directory (idempotent_write) */
+  delete: (input: SftpDeleteInput, extra?: ConnectorExtra): StepSpec => connector("sftp@1", "delete", input, extra),
+  /** Download a file (read) */
+  download_file: (input: SftpDownloadFileInput, extra?: ConnectorExtra): StepSpec => connector("sftp@1", "download_file", input, extra),
+  /** List a directory (read) */
+  list_directory: (input?: SftpListDirectoryInput, extra?: ConnectorExtra): StepSpec => connector("sftp@1", "list_directory", input, extra),
+  /** Create a directory (idempotent_write) */
+  mkdir: (input: SftpMkdirInput, extra?: ConnectorExtra): StepSpec => connector("sftp@1", "mkdir", input, extra),
+  /** Rename or move a file (idempotent_write) */
+  rename: (input: SftpRenameInput, extra?: ConnectorExtra): StepSpec => connector("sftp@1", "rename", input, extra),
+  /** Get file details (read) */
+  stat: (input?: SftpStatInput, extra?: ConnectorExtra): StepSpec => connector("sftp@1", "stat", input, extra),
+  /** Upload a file (idempotent_write) */
+  upload_file: (input: SftpUploadFileInput, extra?: ConnectorExtra): StepSpec => connector("sftp@1", "upload_file", input, extra),
+};
+
+// Slack (slack@1)
+export interface SlackAddReactionInput {
+  channel: Val<string>;
+  /** Emoji name without colons, e.g. white_check_mark */
+  name: Val<string>;
+  /** Set by the engine; not sent to Slack */
+  request_key?: Val<string>;
+  /** The message's ts */
+  timestamp: Val<string>;
+}
+export interface SlackAuthTestInput {
+  [key: string]: Value;
+}
+export interface SlackGetConversationInput {
+  channel: Val<string>;
+  include_num_members?: Val<boolean>;
+}
+export interface SlackListConversationsInput {
+  /** next_cursor from the previous page */
+  cursor?: Val<string>;
+  exclude_archived?: Val<boolean>;
+  /** Page size (Slack's default 100) */
+  limit?: Val<number>;
+  /** Required for org-wide apps */
+  team_id?: Val<string>;
+  /** Comma-separated: public_channel (default), private_channel, mpim, im */
+  types?: Val<string>;
+}
+export interface SlackLookupUserByEmailInput {
+  email: Val<string>;
+}
+export interface SlackPostEphemeralInput {
+  blocks?: Value;
+  channel: Val<string>;
+  text?: Val<string>;
+  thread_ts?: Val<string>;
+  /** User id; must be in the channel */
+  user: Val<string>;
+}
+export interface SlackPostMessageInput {
+  /** Block Kit blocks */
+  blocks?: Value;
+  /** Channel id (C... */
+  channel: Val<string>;
+  /** Needs chat:write.customize */
+  icon_emoji?: Val<string>;
+  /** Needs chat:write.customize */
+  icon_url?: Val<string>;
+  /** {event_type, event_payload} */
+  metadata?: Value;
+  mrkdwn?: Val<boolean>;
+  reply_broadcast?: Val<boolean>;
+  /** The message */
+  text?: Val<string>;
+  /** Reply in the thread of this parent message */
+  thread_ts?: Val<string>;
+  unfurl_links?: Val<boolean>;
+  unfurl_media?: Val<boolean>;
+  /** Needs chat:write.customize */
+  username?: Val<string>;
+}
+export interface SlackUpdateMessageInput {
+  /** Replaces the blocks; [] removes them */
+  blocks?: Value;
+  /** Channel id (for DMs the D... id) */
+  channel: Val<string>;
+  metadata?: Value;
+  /** Set by the engine; not sent to Slack */
+  request_key?: Val<string>;
+  text?: Val<string>;
+  ts: Val<string>;
+}
+export interface SlackUploadFileInput {
+  /** Image description for screen readers */
+  alt_text?: Val<string>;
+  /** Share in this channel; without it the file stays private to the app */
+  channel_id?: Val<string>;
+  /** Text content; or content_base64 */
+  content?: Val<string>;
+  /** Binary content */
+  content_base64?: Val<string>;
+  filename: Val<string>;
+  initial_comment?: Val<string>;
+  snippet_type?: Val<string>;
+  thread_ts?: Val<string>;
+  title?: Val<string>;
+}
+export const slack = {
+  /** Add a reaction (idempotent_write) */
+  add_reaction: (input: SlackAddReactionInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "add_reaction", input, extra),
+  /** Check the token (read) */
+  auth_test: (input?: SlackAuthTestInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "auth_test", input, extra),
+  /** Get a channel (read) */
+  get_conversation: (input: SlackGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "get_conversation", input, extra),
+  /** List channels (read) */
+  list_conversations: (input?: SlackListConversationsInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "list_conversations", input, extra),
+  /** Find a user by email (read) */
+  lookup_user_by_email: (input: SlackLookupUserByEmailInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "lookup_user_by_email", input, extra),
+  /** Post an ephemeral message (unsafe_write) */
+  post_ephemeral: (input: SlackPostEphemeralInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "post_ephemeral", input, extra),
+  /** Post a message (unsafe_write) */
+  post_message: (input: SlackPostMessageInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "post_message", input, extra),
+  /** Update a message (idempotent_write) */
+  update_message: (input: SlackUpdateMessageInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "update_message", input, extra),
+  /** Upload a file (unsafe_write) */
+  upload_file: (input: SlackUploadFileInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "upload_file", input, extra),
+};
+
+// Telegram (telegram@1)
+export interface TelegramAnswerCallbackQueryInput {
+  cache_time?: Val<number>;
+  /** body.callback_query.id from the update */
+  callback_query_id: Val<string>;
+  show_alert?: Val<boolean>;
+  text?: Val<string>;
+  url?: Val<string>;
+}
+export interface TelegramDeleteWebhookInput {
+  drop_pending_updates?: Val<boolean>;
+}
+export interface TelegramEditMessageTextInput {
+  /** With message_id */
+  chat_id?: Value;
+  disable_link_preview?: Val<boolean>;
+  inline_message_id?: Val<string>;
+  message_id?: Val<number>;
+  parse_mode?: Val<"MarkdownV2" | "HTML" | "Markdown">;
+  /** An InlineKeyboardMarkup; omit to remove the keyboard */
+  reply_markup?: Value;
+  text: Val<string>;
+}
+export interface TelegramGetChatInput {
+  /** Chat id */
+  chat_id: Value;
+}
+export interface TelegramGetMeInput {
+  [key: string]: Value;
+}
+export interface TelegramGetWebhookInfoInput {
+  [key: string]: Value;
+}
+export interface TelegramSendDocumentInput {
+  caption?: Val<string>;
+  chat_id: Value;
+  disable_notification?: Val<boolean>;
+  /** HTTP URL or file_id */
+  document: Val<string>;
+  message_thread_id?: Val<number>;
+  parse_mode?: Val<"MarkdownV2" | "HTML" | "Markdown">;
+  protect_content?: Val<boolean>;
+  reply_markup?: Value;
+  reply_to_message_id?: Val<number>;
+}
+export interface TelegramSendMessageInput {
+  allow_sending_without_reply?: Val<boolean>;
+  /** Chat id */
+  chat_id: Value;
+  disable_link_preview?: Val<boolean>;
+  disable_notification?: Val<boolean>;
+  /** Forum topic */
+  message_thread_id?: Val<number>;
+  parse_mode?: Val<"MarkdownV2" | "HTML" | "Markdown">;
+  protect_content?: Val<boolean>;
+  /** An InlineKeyboardMarkup ({inline_keyboard: [[{text, callback_data}]]}), ReplyKeyboardMarkup, ReplyKeyboardRemove or ForceReply, passed through */
+  reply_markup?: Value;
+  /** Message in the same chat to reply to */
+  reply_to_message_id?: Val<number>;
+  text: Val<string>;
+}
+export interface TelegramSendPhotoInput {
+  caption?: Val<string>;
+  chat_id: Value;
+  disable_notification?: Val<boolean>;
+  message_thread_id?: Val<number>;
+  parse_mode?: Val<"MarkdownV2" | "HTML" | "Markdown">;
+  /** HTTP URL or file_id */
+  photo: Val<string>;
+  protect_content?: Val<boolean>;
+  reply_markup?: Value;
+  reply_to_message_id?: Val<number>;
+}
+export interface TelegramSetWebhookInput {
+  /** Update types to receive, e.g. [message, callback_query]; empty for Telegram's default */
+  allowed_updates?: Value;
+  drop_pending_updates?: Val<boolean>;
+  ip_address?: Val<string>;
+  max_connections?: Val<number>;
+  /** https://<public URL>/hooks/<tenant>/connectors/telegram@1/update?env=prod */
+  url: Val<string>;
+}
+export const telegram = {
+  /** Answer a button press (idempotent_write) */
+  answer_callback_query: (input: TelegramAnswerCallbackQueryInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "answer_callback_query", input, extra),
+  /** Delete the webhook (idempotent_write) */
+  delete_webhook: (input?: TelegramDeleteWebhookInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "delete_webhook", input, extra),
+  /** Edit a message's text (idempotent_write) */
+  edit_message_text: (input: TelegramEditMessageTextInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "edit_message_text", input, extra),
+  /** Get a chat (read) */
+  get_chat: (input: TelegramGetChatInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_chat", input, extra),
+  /** Get the bot (read) */
+  get_me: (input?: TelegramGetMeInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_me", input, extra),
+  /** Get the webhook's status (read) */
+  get_webhook_info: (input?: TelegramGetWebhookInfoInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_webhook_info", input, extra),
+  /** Send a document (unsafe_write) */
+  send_document: (input: TelegramSendDocumentInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_document", input, extra),
+  /** Send a message (unsafe_write) */
+  send_message: (input: TelegramSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_message", input, extra),
+  /** Send a photo (unsafe_write) */
+  send_photo: (input: TelegramSendPhotoInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_photo", input, extra),
+  /** Set the webhook (idempotent_write) */
+  set_webhook: (input: TelegramSetWebhookInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "set_webhook", input, extra),
+};
+
 // Termii (termii@1)
 export interface TermiiCheckBalanceInput {
   [key: string]: Value;
@@ -402,15 +1677,235 @@ export const termii = {
   send_sms: (input: TermiiSendSmsInput, extra?: ConnectorExtra): StepSpec => connector("termii@1", "send_sms", input, extra),
 };
 
+// WhatsApp (whatsapp@1)
+export interface WhatsappGetPhoneNumberInput {
+  [key: string]: Value;
+}
+export interface WhatsappMarkAsReadInput {
+  /** The wamid from an inbound message event */
+  message_id: Val<string>;
+}
+export interface WhatsappSendInteractiveInput {
+  biz_opaque_callback_data?: Val<string>;
+  interactive: Value;
+  reply_to?: Val<string>;
+  to: Val<string>;
+}
+export interface WhatsappSendMediaInput {
+  biz_opaque_callback_data?: Val<string>;
+  /** Image */
+  caption?: Val<string>;
+  /** Document only */
+  filename?: Val<string>;
+  /** HTTPS URL of the file; or media_id */
+  link?: Val<string>;
+  media_id?: Val<string>;
+  media_type: Val<"image" | "document" | "audio" | "video" | "sticker">;
+  reply_to?: Val<string>;
+  to: Val<string>;
+}
+export interface WhatsappSendTemplateInput {
+  biz_opaque_callback_data?: Val<string>;
+  /** [{type: body, parameters: [{type: text, text: "Ada"}]}, ...]; named parameters add parameter_name */
+  components?: Value;
+  /** Template language code, e.g. en_US */
+  language: Val<string>;
+  /** Template name */
+  name: Val<string>;
+  reply_to?: Val<string>;
+  to: Val<string>;
+}
+export interface WhatsappSendTextInput {
+  /** Returned in this message's status webhooks */
+  biz_opaque_callback_data?: Val<string>;
+  body: Val<string>;
+  preview_url?: Val<boolean>;
+  /** wamid of a message to quote */
+  reply_to?: Val<string>;
+  /** Recipient's number with + and country code, e.g. +2348012345678 */
+  to: Val<string>;
+}
+export const whatsapp = {
+  /** Get the business phone number (read) */
+  get_phone_number: (input?: WhatsappGetPhoneNumberInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "get_phone_number", input, extra),
+  /** Mark a message as read (idempotent_write) */
+  mark_as_read: (input: WhatsappMarkAsReadInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "mark_as_read", input, extra),
+  /** Send an interactive message (buttons or list) (unsafe_write) */
+  send_interactive: (input: WhatsappSendInteractiveInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_interactive", input, extra),
+  /** Send an image, document, audio, video or sticker (unsafe_write) */
+  send_media: (input: WhatsappSendMediaInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_media", input, extra),
+  /** Send a template message (unsafe_write) */
+  send_template: (input: WhatsappSendTemplateInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_template", input, extra),
+  /** Send a text message (unsafe_write) */
+  send_text: (input: WhatsappSendTextInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_text", input, extra),
+};
+
+// Youverify (youverify@1)
+export interface YouverifyCompareFacesInput {
+  image1: Val<string>;
+  image2: Val<string>;
+  subject_consent: Val<boolean>;
+}
+export interface YouverifyCreateAddressCandidateInput {
+  date_of_birth?: Val<string>;
+  email?: Val<string>;
+  first_name: Val<string>;
+  /** Photo URL */
+  image: Val<string>;
+  last_name: Val<string>;
+  middle_name?: Val<string>;
+  mobile: Val<string>;
+}
+export interface YouverifyGetAddressVerificationInput {
+  id: Val<string>;
+}
+export interface YouverifyGetAmlCheckInput {
+  verification_id: Val<string>;
+}
+export interface YouverifyGetBusinessDetailsInput {
+  verification_id: Val<string>;
+}
+export interface YouverifyRequestAddressVerificationInput {
+  building_name?: Val<string>;
+  building_number: Val<string>;
+  candidate_id: Val<string>;
+  city: Val<string>;
+  /** Notes for the agent */
+  description?: Val<string>;
+  flat_number?: Val<string>;
+  landmark: Val<string>;
+  lga?: Val<string>;
+  metadata?: Value;
+  state: Val<string>;
+  street: Val<string>;
+  sub_street?: Val<string>;
+  subject_consent: Val<boolean>;
+}
+export interface YouverifyResolveBankAccountInput {
+  account_number: Val<string>;
+  bank_code: Val<string>;
+  subject_consent: Val<boolean>;
+}
+export interface YouverifyScreenAmlInput {
+  country?: Val<string>;
+  first_name?: Val<string>;
+  gender?: Val<string>;
+  last_name?: Val<string>;
+  /** Full name */
+  query: Val<string>;
+  /** Match the query as given */
+  strict?: Val<boolean>;
+  subject_consent: Val<boolean>;
+  type?: Val<"all" | "individual" | "business">;
+}
+export interface YouverifySearchBusinessesInput {
+  /** e.g. NG */
+  country_code?: Val<string>;
+  limit?: Val<number>;
+  query: Val<string>;
+}
+export interface YouverifySearchPhoneInput {
+  include_image?: Val<boolean>;
+  phone: Val<string>;
+  subject_consent: Val<boolean>;
+}
+export interface YouverifyVerifyBusinessInput {
+  registration_number: Val<string>;
+  subject_consent: Val<boolean>;
+}
+export interface YouverifyVerifyBvnInput {
+  bvn: Val<string>;
+  /** To validate, YYYY-MM-DD */
+  date_of_birth?: Val<string>;
+  /** To validate */
+  first_name?: Val<string>;
+  /** The photo is large and personal; omitted unless asked for */
+  include_image?: Val<boolean>;
+  /** To validate */
+  last_name?: Val<string>;
+  /** Premium BVN (adds gender */
+  premium?: Val<boolean>;
+  /** The subject has consented to this check */
+  subject_consent: Val<boolean>;
+}
+export interface YouverifyVerifyDriversLicenseInput {
+  include_image?: Val<boolean>;
+  license_number: Val<string>;
+  subject_consent: Val<boolean>;
+}
+export interface YouverifyVerifyNinInput {
+  date_of_birth?: Val<string>;
+  first_name?: Val<string>;
+  include_image?: Val<boolean>;
+  last_name?: Val<string>;
+  nin: Val<string>;
+  premium?: Val<boolean>;
+  /** Image URL or base64 to compare with the NIMC photo */
+  selfie_image?: Val<string>;
+  subject_consent: Val<boolean>;
+}
+export interface YouverifyVerifyPhoneInput {
+  phone: Val<string>;
+  subject_consent: Val<boolean>;
+}
+export const youverify = {
+  /** Compare two faces (read) */
+  compare_faces: (input: YouverifyCompareFacesInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "compare_faces", input, extra),
+  /** Create an address-verification candidate (unsafe_write) */
+  create_address_candidate: (input: YouverifyCreateAddressCandidateInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "create_address_candidate", input, extra),
+  /** Get an address verification (read) */
+  get_address_verification: (input: YouverifyGetAddressVerificationInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "get_address_verification", input, extra),
+  /** Get an AML screening (read) */
+  get_aml_check: (input: YouverifyGetAmlCheckInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "get_aml_check", input, extra),
+  /** Get a business verification (read) */
+  get_business_details: (input: YouverifyGetBusinessDetailsInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "get_business_details", input, extra),
+  /** Request a physical address verification (unsafe_write) */
+  request_address_verification: (input: YouverifyRequestAddressVerificationInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "request_address_verification", input, extra),
+  /** Resolve a bank account name (read) */
+  resolve_bank_account: (input: YouverifyResolveBankAccountInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "resolve_bank_account", input, extra),
+  /** Screen a name for PEP, sanctions and adverse media (read) */
+  screen_aml: (input: YouverifyScreenAmlInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "screen_aml", input, extra),
+  /** Search businesses by name (read) */
+  search_businesses: (input: YouverifySearchBusinessesInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "search_businesses", input, extra),
+  /** Find the NIN record for a phone number (read) */
+  search_phone: (input: YouverifySearchPhoneInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "search_phone", input, extra),
+  /** Verify a Nigerian business (CAC) (read) */
+  verify_business: (input: YouverifyVerifyBusinessInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "verify_business", input, extra),
+  /** Verify a BVN (read) */
+  verify_bvn: (input: YouverifyVerifyBvnInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "verify_bvn", input, extra),
+  /** Verify a driver's licence (read) */
+  verify_drivers_license: (input: YouverifyVerifyDriversLicenseInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "verify_drivers_license", input, extra),
+  /** Verify a NIN (read) */
+  verify_nin: (input: YouverifyVerifyNinInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "verify_nin", input, extra),
+  /** Verify a phone number's owner (read) */
+  verify_phone: (input: YouverifyVerifyPhoneInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "verify_phone", input, extra),
+};
+
 /** Connector refs with helpers here, for code generation. */
 export const CONNECTOR_HELPERS: Record<string, string> = {
+  "africastalking@1": "africastalking",
   "anchor@1": "anchor",
   "breet@1": "breet",
   "dojah@1": "dojah",
   "flutterwave@1": "flutterwave",
+  "gmail@1": "gmail",
+  "googlesheets@1": "googlesheets",
+  "interswitch@1": "interswitch",
   "iswallet@1": "iswallet",
   "lenco@1": "lenco",
+  "moniepoint@1": "moniepoint",
+  "mono@1": "mono",
+  "mysql@1": "mysql",
+  "opay@1": "opay",
   "paystack@1": "paystack",
   "postgres@1": "postgres",
+  "prembly@1": "prembly",
+  "remita@1": "remita",
+  "s3@1": "s3",
+  "sftp@1": "sftp",
+  "slack@1": "slack",
+  "telegram@1": "telegram",
   "termii@1": "termii",
+  "whatsapp@1": "whatsapp",
+  "youverify@1": "youverify",
 };

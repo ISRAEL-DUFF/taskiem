@@ -85,6 +85,8 @@ actions:
         bank_name:      { type: string }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   transfer:
     title: Transfer to a bank account
     description: >-
@@ -114,6 +116,7 @@ actions:
     output: { $ref: '#/actions/get_transfer/output' }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
   get_transfer:
     title: Get transfer by reference
     class: read
@@ -132,6 +135,8 @@ actions:
         account_name:       { type: string }
         nip_session_id:     { type: string }
         reason_for_failure: { type: string }
+    pii:
+      - { field: output.account_name, category: name }
   create_virtual_account:
     title: Create a virtual account
     description: >-
@@ -162,7 +167,10 @@ actions:
         status:            { type: string }
         expires_at:        { type: string }
     pii:
+      - { field: account_name, category: name }
       - { field: bvn, category: bvn }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
 triggers:
   # Lenco sends every event to the one URL registered with support.
   event:

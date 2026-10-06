@@ -50,6 +50,11 @@ actions:
         first_name: { type: string }
         last_name:  { type: string }
         chat:       { type: object, description: Telegram's ChatFullInfo as returned }
+    pii:
+      - { field: output.username, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.chat, category: other }
   send_message:
     title: Send a message
     description: >-
@@ -75,6 +80,7 @@ actions:
     output: { $ref: '#/actions/send_photo/output' }
     pii:
       - { field: text, category: other }
+      - { field: output.message, category: other }
   send_photo:
     title: Send a photo
     description: By URL (Telegram fetches it; 5 MB) or by a file_id Telegram gave the bot. Not idempotent, like send_message.
@@ -102,6 +108,7 @@ actions:
         message:    { type: object, description: Telegram's Message as returned }
     pii:
       - { field: caption, category: other }
+      - { field: output.message, category: other }
   send_document:
     title: Send a document
     description: >-
@@ -125,6 +132,7 @@ actions:
     output: { $ref: '#/actions/send_photo/output' }
     pii:
       - { field: caption, category: other }
+      - { field: output.message, category: other }
   edit_message_text:
     title: Edit a message's text
     description: >-
@@ -155,6 +163,7 @@ actions:
         message:    { type: object, description: The edited Message (absent for inline messages) }
     pii:
       - { field: text, category: other }
+      - { field: output.message, category: other }
   answer_callback_query:
     title: Answer a button press
     description: >-

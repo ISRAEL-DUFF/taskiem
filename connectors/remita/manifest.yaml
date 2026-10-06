@@ -63,6 +63,8 @@ actions:
         bank_code:      { type: string }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   transfer:
     title: Transfer to a bank account (single payment)
     description: >-
@@ -92,6 +94,8 @@ actions:
         payment_identifier:    { type: string }
     output: { $ref: '#/actions/get_transfer/output' }
     pii:
+      - { field: source_account_name, category: name }
+      - { field: source_account_number, category: account_number }
       - { field: account_number, category: account_number }
       - { field: account_name, category: name }
   get_transfer:
@@ -151,6 +155,8 @@ actions:
         source_account_name:      { type: string }
         batch_payment_identifier: { type: string }
     output: { $ref: '#/actions/get_bulk_transfer/output' }
+    pii:
+      - { field: output.transfers.*.account_number, category: account_number }
   get_bulk_transfer:
     title: Get a bulk payment's status
     class: read
@@ -183,6 +189,8 @@ actions:
               account_number:     { type: string }
               amount:             { type: integer, description: Kobo }
         more_transfers:            { type: boolean, description: Remita has more items than its first page }
+    pii:
+      - { field: output.transfers.*.account_number, category: account_number }
   generate_invoice:
     title: Generate an invoice (RRR)
     description: >-

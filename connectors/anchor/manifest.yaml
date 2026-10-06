@@ -68,6 +68,8 @@ actions:
         bank_code:      { type: string }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   transfer:
     title: Transfer to a bank account (NIP)
     description: >-

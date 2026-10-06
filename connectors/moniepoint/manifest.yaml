@@ -72,6 +72,8 @@ actions:
         bank_code:      { type: string }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   transfer:
     title: Transfer to a bank account
     description: >-
@@ -105,6 +107,8 @@ actions:
     pii:
       - { field: account_number, category: account_number }
       - { field: account_name, category: name }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   get_transfer:
     title: Get transfer by reference
     class: read
@@ -127,6 +131,9 @@ actions:
         session_id:             { type: string }
         reason:                 { type: string, description: Monnify's comment or description }
         requires_authorization: { type: boolean, description: Waiting for the OTP Monnify emailed (two-factor authorisation) }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   create_reserved_account:
     title: Reserve a bank account for a customer
     description: >-
@@ -155,10 +162,15 @@ actions:
         account_reference: { type: string }
     output: { $ref: '#/actions/get_reserved_account/output' }
     pii:
+      - { field: account_name, category: name }
       - { field: customer_email, category: email }
       - { field: customer_name, category: name }
       - { field: bvn, category: bvn }
       - { field: nin, category: nin }
+      - { field: output.account_name, category: name }
+      - { field: output.customer_email, category: email }
+      - { field: output.accounts.*.account_name, category: name }
+      - { field: output.accounts.*.account_number, category: account_number }
   get_reserved_account:
     title: Get reserved account
     class: read
@@ -183,6 +195,11 @@ actions:
               account_name:   { type: string }
               bank_code:      { type: string }
               bank_name:      { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.customer_email, category: email }
+      - { field: output.accounts.*.account_name, category: name }
+      - { field: output.accounts.*.account_number, category: account_number }
   init_transaction:
     title: Start a checkout payment
     description: >-
@@ -246,6 +263,8 @@ actions:
         product_type:          { type: string }
         product_reference:     { type: string, description: "The reserved account's account_reference, or the checkout's payment_reference" }
         customer_email:        { type: string }
+    pii:
+      - { field: output.customer_email, category: email }
 triggers:
   # Monnify posts transaction, disbursement, refund and settlement events to
   # the URLs set under Developer → Webhook URLs; all can point here.

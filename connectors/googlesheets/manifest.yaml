@@ -51,6 +51,9 @@ actions:
         values:          { type: array, items: { type: array }, description: Rows of cells; Google omits trailing empty cells and rows }
         headers:         { type: array, items: { type: string }, description: With header_row }
         objects:         { type: array, items: { type: object }, description: "With header_row: one object per row; missing cells are null" }
+    pii:
+      - { field: output.values, category: other }
+      - { field: output.objects, category: other }
   batch_get_values:
     title: Read several ranges
     class: read
@@ -68,6 +71,9 @@ actions:
       type: object
       properties:
         value_ranges: { type: array, items: { type: object, properties: *rangeout }, description: In the order requested }
+    pii:
+      - { field: output.value_ranges.*.values, category: other }
+      - { field: output.value_ranges.*.objects, category: other }
   append_rows:
     title: Append rows
     description: >-
@@ -95,6 +101,8 @@ actions:
         updated_rows:    { type: integer }
         updated_columns: { type: integer }
         updated_cells:   { type: integer }
+    pii:
+      - { field: values, category: other }
   update_values:
     title: Write a range
     description: >-
@@ -120,6 +128,8 @@ actions:
         updated_rows:    { type: integer }
         updated_columns: { type: integer }
         updated_cells:   { type: integer }
+    pii:
+      - { field: values, category: other }
   clear_values:
     title: Clear a range
     description: values.clear (values only; formatting stays). Repeating it changes nothing, so a retry is safe.

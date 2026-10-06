@@ -128,6 +128,10 @@ actions:
         data_status:      { type: string, enum: [AVAILABLE, PARTIAL, UNAVAILABLE, FAILED, PROCESSING] }
         auth_method:      { type: string }
         retrieved_data:   { type: array, items: { type: string } }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.account_number, category: account_number }
+      - { field: output.bvn_last4, category: bvn }
   get_balance:
     title: Get account balance
     class: read
@@ -145,6 +149,9 @@ actions:
         account_number: { type: string }
         balance:        { type: integer, description: Kobo }
         currency:       { type: string }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.account_number, category: account_number }
   get_identity:
     title: Get the account holder's identity
     description: The bank's KYC record for the account holder, including the full BVN.
@@ -168,6 +175,17 @@ actions:
         lga_of_origin:   { type: string }
         marital_status:  { type: string }
         verified:        { type: boolean }
+    pii:
+      - { field: output.full_name, category: name }
+      - { field: output.bvn, category: bvn }
+      - { field: output.phone, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.gender, category: other }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.address, category: address }
+      - { field: output.state_of_origin, category: other }
+      - { field: output.lga_of_origin, category: other }
+      - { field: output.marital_status, category: other }
   list_transactions:
     title: List account transactions
     description: Newest first; one page per call (page, has_more). Dates are DD-MM-YYYY.
@@ -202,6 +220,8 @@ actions:
         total:    { type: integer }
         page:     { type: integer }
         has_more: { type: boolean }
+    pii:
+      - { field: output.transactions.*.narration, category: other }
   get_statement:
     title: Get a bank statement
     description: >-
@@ -224,6 +244,8 @@ actions:
         job_id:       { type: string, description: PDF only }
         status:       { type: string, description: "PDF only: BUILDING or BUILT" }
         pdf_url:      { type: string, description: PDF only }
+    pii:
+      - { field: output.transactions.*.narration, category: other }
   get_statement_pdf:
     title: Get a PDF statement's status
     class: read
@@ -273,6 +295,8 @@ actions:
         records:  { type: array, items: { type: object } }
         total:    { type: integer }
         has_more: { type: boolean }
+    pii:
+      - { field: output.records, category: other }
   request_creditworthiness:
     title: Request a creditworthiness assessment
     description: >-
@@ -396,6 +420,9 @@ actions:
         customer_id:    { type: string }
         refunded:       { type: boolean }
         created_at:     { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   # ---- Direct Debit ----
   create_customer:
     title: Create a customer
@@ -425,6 +452,8 @@ actions:
       - { field: phone, category: phone }
       - { field: address, category: address }
       - { field: bvn, category: bvn }
+      - { field: output.name, category: name }
+      - { field: output.email, category: email }
   create_mandate:
     title: Create a Direct Debit mandate
     description: >-
@@ -469,6 +498,8 @@ actions:
     output: { $ref: '#/actions/get_mandate/output' }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   initiate_mandate:
     title: Start a Mono-hosted mandate authorisation
     description: >-
@@ -508,6 +539,8 @@ actions:
     output: { $ref: '#/actions/get_mandate/output' }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   get_mandate:
     title: Get a mandate
     description: By mandate id (mmc_...) or by the reference it was created with.
@@ -546,6 +579,9 @@ actions:
             properties:
               bank_name:      { type: string }
               account_number: { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   pause_mandate:
     title: Pause a mandate
     description: No debits or balance enquiries until reinstated. A mandate already paused counts as done.
@@ -606,6 +642,9 @@ actions:
         account_number:         { type: string }
         bank_code:              { type: string }
         bank_name:              { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   debit_mandate:
     title: Debit an account under a mandate
     description: >-
@@ -653,6 +692,8 @@ actions:
         message:          { type: string }
     pii:
       - { field: beneficiary_account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   get_debit:
     title: Get a mandate debit
     class: read
@@ -674,6 +715,8 @@ actions:
         narration:  { type: string }
         refunded:   { type: boolean }
         date:       { type: string }
+    pii:
+      - { field: output.narration, category: other }
 triggers:
   # Mono sends every event for an app to the one webhook URL set on the app.
   event:

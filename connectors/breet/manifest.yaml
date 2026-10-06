@@ -141,6 +141,8 @@ actions:
         bank_name:      { type: string }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   add_bank:
     title: Save a bank account for withdrawals
     description: Breet keeps at most three. Saving one already saved returns it. Declared unsafe, so an unknown outcome parks.
@@ -164,6 +166,8 @@ actions:
         currency:       { type: string }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   withdraw_crypto:
     title: Withdraw stablecoins or crypto
     description: >-

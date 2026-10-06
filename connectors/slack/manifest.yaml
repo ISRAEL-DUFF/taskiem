@@ -106,6 +106,7 @@ actions:
     pii:
       - { field: text, category: other }
       - { field: blocks, category: other }
+      - { field: output.text, category: other }
   post_ephemeral:
     title: Post an ephemeral message
     description: chat.postEphemeral, visible only to one user in the channel. Not idempotent.
@@ -208,6 +209,9 @@ actions:
         is_bot:       { type: boolean }
     pii:
       - { field: email, category: email }
+      - { field: output.name, category: name }
+      - { field: output.real_name, category: name }
+      - { field: output.display_name, category: name }
   upload_file:
     title: Upload a file
     description: >-

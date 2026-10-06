@@ -33,6 +33,8 @@ actions:
         rows:      { type: array }
         row_count: { type: integer }
         truncated: { type: boolean }
+    pii:
+      - { field: output.rows, category: other }
   execute:
     title: Run a statement that changes data
     description: Without a key the database cannot deduplicate, so an unknown outcome parks the step. Make statements idempotent where you can (for example INSERT ... ON CONFLICT DO NOTHING).

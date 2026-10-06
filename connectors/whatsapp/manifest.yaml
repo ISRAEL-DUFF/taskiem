@@ -62,6 +62,8 @@ actions:
     pii:
       - { field: to, category: phone }
       - { field: body, category: other }
+      - { field: output.input, category: phone }
+      - { field: output.wa_id, category: phone }
   send_template:
     title: Send a template message
     description: >-
@@ -94,6 +96,8 @@ actions:
     pii:
       - { field: to, category: phone }
       - { field: components, category: other }
+      - { field: output.input, category: phone }
+      - { field: output.wa_id, category: phone }
   send_media:
     title: Send an image, document, audio, video or sticker
     description: >-
@@ -117,6 +121,8 @@ actions:
     pii:
       - { field: to, category: phone }
       - { field: caption, category: other }
+      - { field: output.input, category: phone }
+      - { field: output.wa_id, category: phone }
   send_interactive:
     title: Send an interactive message (buttons or list)
     description: >-
@@ -140,6 +146,8 @@ actions:
     pii:
       - { field: to, category: phone }
       - { field: interactive, category: other }
+      - { field: output.input, category: phone }
+      - { field: output.wa_id, category: phone }
   mark_as_read:
     title: Mark a message as read
     description: >-

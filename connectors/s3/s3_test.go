@@ -617,8 +617,14 @@ func TestErrorClassification(t *testing.T) {
 	if _, err := h.call("put_object", map[string]any{"key": "m", "body": "x", "metadata": map[string]any{"note": "naïve"}}); effects.Classify(err) != effects.KindFatal {
 		t.Errorf("non-ASCII metadata accepted: %v", err)
 	}
-	// Transport: nothing listening proves nothing was sent.
+	// Transport: nothing listening proves nothing was sent. Pooled
+	// connections are dropped first: a write on a connection the server
+	// closed after accepting it is (rightly) an unknown outcome instead.
 	h.srv.Close()
+	if tr, ok := h.hc.Transport.(interface{ CloseIdleConnections() }); ok {
+		tr.CloseIdleConnections()
+	}
+	h.hc.CloseIdleConnections()
 	if _, err := h.call("put_object", map[string]any{"key": "k", "body": "x"}); effects.Classify(err) != effects.KindNotSent {
 		t.Errorf("connection refused: %v (%v)", err, effects.Classify(err))
 	}

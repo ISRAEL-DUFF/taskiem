@@ -61,6 +61,8 @@ actions:
         sha256:    { type: string }
         atomic:    { type: boolean, description: False when the server lacked posix-rename and an existing file was replaced by delete then rename }
         unchanged: { type: boolean, description: The file already had this content (overwrite false) }
+    pii:
+      - { field: content, category: other }
   download_file:
     title: Download a file
     description: Returns the content as text or base64. A file larger than max_bytes is refused rather than cut short.
@@ -82,6 +84,8 @@ actions:
         sha256:   { type: string }
         modified: { type: string }
         mode:     { type: string }
+    pii:
+      - { field: output.content, category: other }
   list_directory:
     title: List a directory
     class: read

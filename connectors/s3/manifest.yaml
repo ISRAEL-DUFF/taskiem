@@ -71,6 +71,8 @@ actions:
         etag:       { type: string }
         version_id: { type: string }
         size:       { type: integer }
+    pii:
+      - { field: body, category: other }
   get_object:
     title: Get an object
     description: Returns the content as text or base64. An object larger than max_bytes is refused rather than cut short.
@@ -99,6 +101,9 @@ actions:
         cache_control:       { type: string }
         content_disposition: { type: string }
         metadata:            { type: object }
+    pii:
+      - { field: output.body, category: other }
+      - { field: output.metadata, category: other }
   head_object:
     title: Get an object's details
     description: Size, type, ETag and metadata without the content. A missing object returns exists=false instead of failing.
@@ -125,6 +130,8 @@ actions:
         cache_control:       { type: string }
         content_disposition: { type: string }
         metadata:            { type: object }
+    pii:
+      - { field: output.metadata, category: other }
   list_objects:
     title: List objects
     description: One page of keys (ListObjectsV2). Pass next_continuation_token back as continuation_token for the next page.

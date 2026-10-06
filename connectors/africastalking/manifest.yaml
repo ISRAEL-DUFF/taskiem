@@ -73,6 +73,7 @@ actions:
     pii:
       - { field: to, category: phone }
       - { field: message, category: other }
+      - { field: output.recipients.*.number, category: phone }
   fetch_messages:
     title: Fetch incoming messages
     description: Messages sent to your short codes, oldest first, after last_received_id.
@@ -95,6 +96,9 @@ actions:
               text:    { type: string }
               date:    { type: string }
               link_id: { type: string }
+    pii:
+      - { field: output.messages.*.from, category: phone }
+      - { field: output.messages.*.text, category: other }
   send_airtime:
     title: Send airtime
     description: >-
@@ -141,6 +145,7 @@ actions:
               error_message: { type: string }
     pii:
       - { field: recipients, category: phone }
+      - { field: output.responses.*.phone_number, category: phone }
   get_airtime_status:
     title: Get an airtime transaction's status
     class: read
