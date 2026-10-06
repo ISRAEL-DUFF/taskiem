@@ -11,6 +11,7 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public problems: Problem[] | string[] = [],
+    public body: Record<string, unknown> = {},
   ) {
     super(message);
   }
@@ -33,9 +34,18 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   }
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith("/v1/auth/")) window.dispatchEvent(new Event("taskiem:unauthorised"));
-    throw new ApiError(res.status, (data.error as string) ?? res.statusText, (data.problems as Problem[]) ?? []);
+    throw new ApiError(res.status, (data.error as string) ?? res.statusText, (data.problems as Problem[]) ?? [], data);
   }
   return data as T;
+}
+
+/** A unit both an edit and a newer version changed (409 from saving a version). */
+export interface MergeConflict {
+  path: string;
+  kind: "both_changed" | "changed_and_deleted" | "both_added";
+  base?: unknown;
+  ours?: unknown;
+  theirs?: unknown;
 }
 
 export const get = <T>(path: string) => api<T>("GET", path);

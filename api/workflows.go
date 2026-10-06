@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
+	"github.com/israel-duff/taskiem/engine/wdmerge"
 )
 
 // problem is one validation failure, as returned to builders.
@@ -79,7 +81,23 @@ type versionReq struct {
 	Name       string          `json:"name,omitempty"`
 	Definition json.RawMessage `json:"definition"`
 	Layout     json.RawMessage `json:"layout,omitempty"`
+	// ParentDigest is the digest of the version this edit started from.
+	// When another version was saved since, the two edits are merged
+	// three ways (spec 10.2). Without it the definition is saved as is.
+	ParentDigest string `json:"parent_digest,omitempty"`
+	// Resolutions settle conflicts a previous attempt reported:
+	// conflict path -> "ours" | "theirs".
+	Resolutions map[string]wdmerge.Resolution `json:"resolutions,omitempty"`
 }
+
+// mergeConflict is a save whose edits conflict with a newer version.
+type mergeConflict struct {
+	conflicts []wdmerge.Conflict
+	latest    int
+	digest    string
+}
+
+func (m *mergeConflict) Error() string { return "edits conflict with a newer version" }
 
 // createWorkflow creates a workflow with its first draft. Drafts may be
 // incomplete; the response lists their problems. Only valid versions publish.
@@ -115,7 +133,8 @@ func (s *Server) createWorkflow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "version": 1, "problems": nonNil(s.check(doc))})
+	sum := sha256.Sum256(doc)
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "version": 1, "digest": hex.EncodeToString(sum[:]), "problems": nonNil(s.check(doc))})
 }
 
 func insertVersion(r *http.Request, tx pgx.Tx, wf uuid.UUID, v int, doc []byte, layout json.RawMessage) error {
@@ -147,22 +166,56 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var v int
+	merged := false
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		// The row lock serialises version numbering per workflow.
 		if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM workflow_versions WHERE workflow_id = $1`, wf).Scan(&v); err != nil {
+		var latest int
+		var latestDigest string
+		var latestDef []byte
+		if err := tx.QueryRow(ctx, `SELECT version, encode(digest, 'hex'), definition FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC LIMIT 1`, wf).
+			Scan(&latest, &latestDigest, &latestDef); err != nil {
 			return err
+		}
+		v = latest + 1
+		if req.ParentDigest != "" && req.ParentDigest != latestDigest {
+			var base []byte
+			err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND digest = decode($2, 'hex') ORDER BY version DESC LIMIT 1`,
+				wf, req.ParentDigest).Scan(&base)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("%w: parent_digest %s is not a version of this workflow", errConflict, req.ParentDigest)
+			}
+			if err != nil {
+				return err
+			}
+			out, conflicts, err := wdmerge.Merge(base, doc, latestDef, req.Resolutions)
+			if err != nil {
+				return fmt.Errorf("%w: %w", errBadRequest, err)
+			}
+			if len(conflicts) > 0 {
+				return &mergeConflict{conflicts: conflicts, latest: latest, digest: latestDigest}
+			}
+			if doc, err = canonical(out); err != nil {
+				return err
+			}
+			merged = true
 		}
 		return insertVersion(r, tx, wf, v, doc, req.Layout)
 	})
+	var mc *mergeConflict
+	if errors.As(err, &mc) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": mc.Error(), "conflicts": mc.conflicts, "latest_version": mc.latest, "latest_digest": mc.digest})
+		return
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": v, "problems": nonNil(s.check(doc))})
+	sum := sha256.Sum256(doc)
+	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": v, "digest": hex.EncodeToString(sum[:]), "merged": merged, "problems": nonNil(s.check(doc))})
 }
 
 type versionInfo struct {

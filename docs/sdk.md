@@ -60,6 +60,8 @@ The spec's sketch passes `(t) => t.body...` and `(s) => s.approve...`. The SDK u
 | `.wd.json` | `.flow.ts` | `taskiem codegen --write`. Output is deterministic, so Git diffs show only the change |
 | Canvas | Code | The editor's Code tab shows the workflow as code; edits there are compiled and applied |
 
+Two people editing the same workflow do not overwrite each other: each save names the version it started from, and if another save landed since, the server merges them by top-level step and field. Edits to different steps merge; the same step changed both ways is shown to the second person to choose. Merging is per top-level step, so two edits inside one `foreach` body are a conflict even if they touch different nested steps.
+
 Generated code always builds to exactly the definition it came from: an expression is printed as an arrow function only when compiling that function gives back the identical CEL text, and is kept as a CEL string otherwise. Every workflow in `flows/` is checked in both directions by `go test` and `pnpm test`.
 
 Flow code runs in the sandbox when it is built. It may import `@taskiem/sdk`, `@taskiem/connectors`, and (from the CLI) other local files; other packages are refused.

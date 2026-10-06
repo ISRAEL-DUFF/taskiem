@@ -48,6 +48,7 @@ type apiError struct {
 		Path    string `json:"path"`
 		Message string `json:"message"`
 	}
+	Conflicts []string // paths of merge conflicts (409 on saving a version)
 }
 
 func (e *apiError) Error() string {
@@ -90,9 +91,15 @@ func (c *client) do(ctx context.Context, method, path string, body, out any) err
 				Path    string `json:"path"`
 				Message string `json:"message"`
 			} `json:"problems"`
+			Conflicts []struct {
+				Path string `json:"path"`
+			} `json:"conflicts"`
 		}
 		if json.Unmarshal(raw, &m) == nil && m.Error != "" {
 			e.Message, e.Problems = m.Error, m.Problems
+			for _, c := range m.Conflicts {
+				e.Conflicts = append(e.Conflicts, c.Path)
+			}
 		} else {
 			e.Message = strings.TrimSpace(string(raw))
 		}
@@ -198,6 +205,7 @@ type plan struct {
 	action  string // create | new_version | publish | unchanged
 	against int    // the version compared with (the published one, else the latest)
 	changes []string
+	parent  string // digest of the latest version: a save made since is merged, not overwritten
 }
 
 func (c *client) plan(ctx context.Context, locals []localWorkflow) ([]plan, error) {
@@ -250,6 +258,7 @@ func (c *client) plan(ctx context.Context, locals []localWorkflow) ([]plan, erro
 			continue
 		}
 		p.action = "new_version"
+		p.parent = latest.Version.Digest
 		base := latest
 		if p.remote.ActiveVersion != nil {
 			if base, err = c.version(ctx, p.remote.ID, *p.remote.ActiveVersion); err != nil {
@@ -489,7 +498,12 @@ func (c *client) apply(ctx context.Context, p plan, stdout io.Writer) error {
 			return err
 		}
 	case "new_version":
-		if err := c.do(ctx, "POST", "/v1/workflows/"+p.remote.ID+"/versions", map[string]any{"definition": p.local.doc}, &created); err != nil {
+		body := map[string]any{"definition": p.local.doc, "parent_digest": p.parent}
+		if err := c.do(ctx, "POST", "/v1/workflows/"+p.remote.ID+"/versions", body, &created); err != nil {
+			var ae *apiError
+			if errors.As(err, &ae) && ae.Status == http.StatusConflict {
+				return fmt.Errorf("someone saved a newer version that changes the same parts (%s); run diff and deploy again", strings.Join(ae.Conflicts, ", "))
+			}
 			return err
 		}
 	case "publish":

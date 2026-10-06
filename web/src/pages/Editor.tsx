@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Background, Controls, ReactFlow, useReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
 import type { Step, WorkflowDefinition } from "@sdk/wd";
-import { ApiError, get, post, put, type ConnectorInfo, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
+import { ApiError, get, post, put, type ConnectorInfo, type MergeConflict, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
 import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
@@ -55,6 +55,7 @@ export function Editor() {
   const [tab, setTab] = useState<"canvas" | "settings" | "code" | "json" | "triggers">("canvas");
   const [notice, setNotice] = useState("");
   const [starting, setStarting] = useState(false);
+  const [merge, setMerge] = useState<{ conflicts: MergeConflict[]; latest: number }>();
   const act = useAction();
 
   useEffect(() => {
@@ -139,10 +140,23 @@ export function Editor() {
     setSelected(sid);
   };
 
-  const save = async (): Promise<number> => {
+  // A save names the version it started from; if someone saved since, the
+  // server merges the two edits, or reports conflicts to resolve.
+  const save = async (resolutions?: Record<string, "ours" | "theirs">): Promise<number> => {
     if (!def) return version;
     if (!dirty) return version;
-    const r = await post<{ version: number; problems: Problem[] }>(`/v1/workflows/${id}/versions`, { definition: def, layout });
+    let r: { version: number; problems: Problem[]; merged: boolean };
+    try {
+      r = await post(`/v1/workflows/${id}/versions`, { definition: def, layout, parent_digest: doc.data?.version.digest, resolutions });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && Array.isArray(e.body.conflicts)) {
+        setMerge({ conflicts: e.body.conflicts as MergeConflict[], latest: Number(e.body.latest_version) });
+        throw new Error(`Version ${String(e.body.latest_version)} was saved while you were editing, and changes the same parts. Choose which to keep.`, { cause: e });
+      }
+      throw e;
+    }
+    setMerge(undefined);
+    if (r.merged) setNotice(`Saved as version ${r.version}, merged with changes saved since you started.`);
     setProblems(r.problems);
     setDirty(false);
     setParams({ v: String(r.version) }, { replace: true });
@@ -204,7 +218,7 @@ export function Editor() {
             <button onClick={() => void validate()} disabled={act.busy}>
               Validate
             </button>
-            <button onClick={() => void act.run(save)} disabled={act.busy || !dirty}>
+            <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
               Save draft
             </button>
           </>
@@ -328,6 +342,15 @@ export function Editor() {
         </p>
       )}
       {starting && <StartRun workflow={id} onClose={() => setStarting(false)} onStarted={(run) => nav(`/runs/${run}`)} />}
+      {merge && (
+        <MergeDialog
+          conflicts={merge.conflicts}
+          latest={merge.latest}
+          busy={act.busy}
+          onClose={() => setMerge(undefined)}
+          onResolve={(res) => void act.run(() => save(res))}
+        />
+      )}
     </>
   );
 }
@@ -584,5 +607,53 @@ function CodeTab({ def, onApply }: { def: WorkflowDefinition; onApply: (def: Wor
         </button>
       </div>
     </div>
+  );
+}
+
+/** Lets an editor choose, for each conflict, their edit or the newer version's. */
+function MergeDialog({
+  conflicts,
+  latest,
+  busy,
+  onClose,
+  onResolve,
+}: {
+  conflicts: MergeConflict[];
+  latest: number;
+  busy: boolean;
+  onClose: () => void;
+  onResolve: (res: Record<string, "ours" | "theirs">) => void;
+}) {
+  const [choice, setChoice] = useState<Record<string, "ours" | "theirs">>({});
+  const show = (v: unknown) => (v === undefined ? "(removed)" : JSON.stringify(v, null, 2));
+  const label = (c: MergeConflict) => (c.path.startsWith("steps/") ? `Step ${c.path.slice(6)}` : `Workflow ${c.path}`);
+  return (
+    <Modal title="Resolve conflicting edits" onClose={onClose}>
+      <p className="hint">
+        Version {latest} changed these parts too. Everything else is merged. Choose which version of each to keep, then save.
+      </p>
+      {conflicts.map((c) => (
+        <fieldset key={c.path} className="card" data-testid={`conflict-${c.path}`}>
+          <legend>
+            {label(c)} {c.kind === "changed_and_deleted" && "(changed on one side, removed on the other)"}
+          </legend>
+          <div className="row">
+            {(["ours", "theirs"] as const).map((side) => (
+              <label key={side} className="grow">
+                <input type="radio" name={c.path} checked={choice[c.path] === side} onChange={() => setChoice({ ...choice, [c.path]: side })} />{" "}
+                {side === "ours" ? "Yours" : `Version ${latest}`}
+                <pre className="mono">{show(c[side])}</pre>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ))}
+      <div className="row">
+        <button className="primary" disabled={busy || conflicts.some((c) => !choice[c.path])} onClick={() => onResolve(choice)}>
+          Save merged version
+        </button>
+        <button onClick={onClose}>Cancel</button>
+      </div>
+    </Modal>
   );
 }
