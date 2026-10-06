@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/merchant/transactions/init-transaction",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "body": {
+   "amount": 1500.5,
+   "customerName": "Ada Obi",
+   "customerEmail": "ada@example.com",
+   "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "paymentDescription": "Order 17",
+   "currencyCode": "NGN",
+   "contractCode": "8389328412",
+   "redirectUrl": "https://shop.example.com/done",
+   "paymentMethods": [
+    "CARD",
+    "ACCOUNT_TRANSFER"
+   ]
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Duplicate payment reference",
+   "responseCode": "99"
+  }
+ }
+}

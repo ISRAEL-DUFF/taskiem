@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/payouts/customer-lookup",
+  "headers": {
+   "Authorization": "Bearer isw-tok-1"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "responseCode": "Z2",
+   "responseDescription": "Invalid account number"
+  }
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/payouts/receiving-institutions",
+  "headers": {
+   "Authorization": "Bearer isw-tok-2"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": [
+   {
+    "code": "GTB",
+    "name": "Guaranty Trust Bank",
+    "nipCode": "000013",
+    "cbnCode": "058"
+   },
+   {
+    "code": "AYM",
+    "name": "ADEYEMI COLLEGE STAFF MFB",
+    "nipCode": "090268"
+   }
+  ]
+ }
+}

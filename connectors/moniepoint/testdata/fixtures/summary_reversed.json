@@ -1,0 +1,36 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v2/disbursements/single/summary",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "query": {
+   "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": true,
+   "responseMessage": "success",
+   "responseCode": "0",
+   "responseBody": {
+    "amount": 2000.0,
+    "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "narration": "Sept salary",
+    "currency": "NGN",
+    "fee": 10.75,
+    "twoFaEnabled": false,
+    "status": "REVERSED",
+    "transactionDescription": "Beneficiary bank reversal",
+    "transactionReference": "MFDS20261006091338AAAAFE",
+    "destinationBankCode": "057",
+    "destinationAccountNumber": "2085096393",
+    "destinationAccountName": "ADA NGOZI OBI",
+    "destinationBankName": "Zenith bank",
+    "createdOn": "06/10/2026 09:13:38 AM"
+   }
+  }
+ }
+}

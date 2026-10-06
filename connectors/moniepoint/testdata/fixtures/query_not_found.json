@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v2/merchant/transactions/query",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "query": {
+   "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Could not find transaction with the specified payment reference",
+   "responseCode": "99"
+  }
+ }
+}

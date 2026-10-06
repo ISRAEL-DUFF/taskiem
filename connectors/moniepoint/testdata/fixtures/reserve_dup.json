@@ -1,0 +1,30 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v2/bank-transfer/reserved-accounts",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "body": {
+   "accountReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "accountName": "Acme / Ada Obi",
+   "currencyCode": "NGN",
+   "contractCode": "8389328412",
+   "customerEmail": "ada@example.com",
+   "customerName": "Ada Obi",
+   "bvn": "21212121212",
+   "getAllAvailableBanks": false,
+   "preferredBanks": [
+    "50515"
+   ]
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Duplicate account reference",
+   "responseCode": "99"
+  }
+ }
+}

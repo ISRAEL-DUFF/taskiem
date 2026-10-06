@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/auth/login",
+  "headers": {
+   "Authorization": "Basic TUtfVEVTVF9UQVNLSUVNMDE6VFNLU0VDUkVUMDAwMDAwMDAwMDAwMDAwMDAwMDAwMQ=="
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Invalid client credentials",
+   "responseCode": "99"
+  }
+ }
+}

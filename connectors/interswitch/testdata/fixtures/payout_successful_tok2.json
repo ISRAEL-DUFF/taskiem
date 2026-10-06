@@ -1,0 +1,55 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/payouts",
+  "headers": {
+   "Authorization": "Bearer isw-tok-2"
+  },
+  "body": {
+   "transactionReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "payoutChannel": "BANK_TRANSFER",
+   "currencyCode": "NGN",
+   "amount": 1500.5,
+   "narration": "Sept salary",
+   "walletDetails": {
+    "pin": "1234",
+    "walletId": "2700007687"
+   },
+   "recipient": {
+    "recipientAccount": "0037320662",
+    "recipientBank": "TRP",
+    "currencyCode": "NGN"
+   },
+   "singleCall": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": 102865,
+   "reference": "aea5229d-ad84-4203-88fa-5eb046b5f1a5",
+   "transactionReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "clientId": "MX18227",
+   "recipientAccount": "0037320662",
+   "recipientBank": "TRP",
+   "recipientName": "JAMES MODUPE",
+   "sourceAccount": "2700007687",
+   "channel": "BANK_TRANSFER",
+   "amount": 1500.5,
+   "fee": 10.0,
+   "commission": 0.0,
+   "responseCode": "00",
+   "responseDescription": "Approved or completed successfully",
+   "currencyCode": "NGN",
+   "retryCount": 0,
+   "status": "SUCCESSFUL",
+   "narration": "Sept salary",
+   "payoutSource": "API",
+   "processingReference": "CR|AFZ|TRP|061026145301|1525122",
+   "reversed": false,
+   "walletDebit": true,
+   "createdOn": "2026-10-06T14:53:03.511338",
+   "lastUpdatedOn": "2026-10-06T14:53:11.010927"
+  }
+ }
+}

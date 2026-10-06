@@ -1,0 +1,39 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v2/disbursements/single",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "body": {
+   "amount": 2000.5,
+   "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "narration": "Sept salary",
+   "destinationBankCode": "057",
+   "destinationAccountNumber": "2085096393",
+   "currency": "NGN",
+   "sourceAccountNumber": "8016472829",
+   "destinationAccountName": "Ada Obi",
+   "async": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": true,
+   "responseMessage": "success",
+   "responseCode": "0",
+   "responseBody": {
+    "amount": 2000.5,
+    "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "status": "PENDING",
+    "dateCreated": "2026-10-06T09:13:38.140+0000",
+    "totalFee": 10.75,
+    "destinationAccountName": "ADA NGOZI OBI",
+    "destinationBankName": "Zenith bank",
+    "destinationAccountNumber": "2085096393",
+    "destinationBankCode": "057"
+   }
+  }
+ }
+}

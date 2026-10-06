@@ -1,0 +1,27 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/collections/api/v1/gettransaction.json",
+  "headers": {},
+  "query": {
+   "merchantcode": "MX6072",
+   "transactionreference": "order-17",
+   "amount": "150050"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "Amount": 1500.5,
+   "CardNumber": "",
+   "MerchantReference": "order-17",
+   "PaymentReference": "UBA|API|MX6072|06-10-2026|249510|719456",
+   "RetrievalReferenceNumber": "000647661227",
+   "SplitAccounts": [],
+   "TransactionDate": "2026-10-06T06:57:24",
+   "ResponseCode": "00",
+   "ResponseDescription": "Approved by Financial Institution",
+   "AccountNumber": "9999999999"
+  }
+ }
+}

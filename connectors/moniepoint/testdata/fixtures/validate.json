@@ -1,0 +1,26 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/disbursements/account/validate",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "query": {
+   "accountNumber": "0068687503",
+   "bankCode": "232"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": true,
+   "responseMessage": "success",
+   "responseCode": "0",
+   "responseBody": {
+    "accountNumber": "0068687503",
+    "accountName": "ADA NGOZI OBI",
+    "bankCode": "232"
+   }
+  }
+ }
+}

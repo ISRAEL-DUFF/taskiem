@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/passport/oauth/token",
+  "headers": {
+   "Authorization": "Basic SUtJQVRBU0tJRU0wMDAxOnRzay1pc3ctc2VjcmV0"
+  },
+  "query": {
+   "grant_type": "client_credentials"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "access_token": "isw-tok-2",
+   "token_type": "bearer",
+   "expires_in": 86400,
+   "scope": "profile",
+   "merchant_code": "MX18227",
+   "requestor_id": "0055614992",
+   "jti": "a5352465"
+  }
+ }
+}

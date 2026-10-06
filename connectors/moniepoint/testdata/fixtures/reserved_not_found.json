@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v2/bank-transfer/reserved-accounts/tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Cannot find reserved account",
+   "responseCode": "99"
+  }
+ }
+}

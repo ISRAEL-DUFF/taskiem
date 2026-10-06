@@ -1,0 +1,26 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v2/disbursements/single",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "body": {
+   "amount": 2000,
+   "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "narration": "Sept salary",
+   "destinationBankCode": "057",
+   "destinationAccountNumber": "2085096393",
+   "currency": "NGN",
+   "sourceAccountNumber": "8016472829"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Supplied reference already exists",
+   "responseCode": "D05"
+  }
+ }
+}
