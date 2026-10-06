@@ -2,6 +2,8 @@
 
 Phase 2 (build plan) is about 12 weeks: it makes the platform fit for the first external design partners. Started 2026-10-06, while Phase 1's go-live and soak (milestones 4 and 5) wait on people and production; see [Carried over from Phase 1](#carried-over-from-phase-1). Last updated 2026-10-06.
 
+> Everything here that needs people (signatures, owners' confirmations, credentials, hardware, reviews, partners) is tracked in one place: [What needs people](needs-people.md).
+
 ## Milestones
 
 The build plan lists Phase 2's deliverables without an order. This is the order they are built in: each milestone gives the next something to stand on (tests before Git-led deploys, policies before four-eyes publishing, the WASM runtime before third-party connectors).
@@ -13,7 +15,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **Done** (below); emailed anchors arrived with milestone 5's alerts |
 | 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | **In progress** (below): WASM runtime, drift monitor, and Flutterwave, Anchor, Lenco and Breet done; more connectors to follow |
 | 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | **Done** (below) |
-| 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people |
+| 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people: [X1–X5](needs-people.md#external-readiness-phase-2-milestone-6-gate-g2) |
 
 ### What engineering cannot finish alone
 

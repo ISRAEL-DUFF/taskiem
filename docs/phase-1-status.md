@@ -2,6 +2,8 @@
 
 Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, UI, then dogfooding and a 4-week soak. Started 2026-10-05, while gate G0's people items were still open (clean-room signatures, trademark search, dogfood confirmation; see [Phase 0 status](phase-0-status.md)). Last updated 2026-10-05 (milestone 4, engineering part).
 
+> Everything here that needs people (signatures, owners' confirmations, credentials, hardware, reviews, partners) is tracked in one place: [What needs people](needs-people.md).
+
 ## Milestones
 
 | # | Weeks | Milestone | Status |

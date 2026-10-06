@@ -6,7 +6,7 @@ A workflow automation engine that regulated businesses can trust with money move
 
 ## Status: Phase 2 (Hardening)
 
-See [Phase 2 status](docs/phase-2-status.md). Phase 1's engineering is complete; its go-live and production soak wait on deployment and the product teams ([Phase 1 status](docs/phase-1-status.md)). Phase 0's remaining people items are in [Phase 0 status](docs/phase-0-status.md).
+See [Phase 2 status](docs/phase-2-status.md). Phase 1's engineering is complete; its go-live and production soak wait on deployment and the product teams ([Phase 1 status](docs/phase-1-status.md)). Phase 0's remaining people items are in [Phase 0 status](docs/phase-0-status.md). Everything waiting on people, across all phases, is in one register: [What needs people](docs/needs-people.md).
 
 | Start here | |
 | --- | --- |
