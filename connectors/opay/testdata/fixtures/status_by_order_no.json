@@ -1,0 +1,36 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/cashier/status",
+  "headers": {
+   "MerchantId": "256621051120756",
+   "Authorization": "Bearer 1db5917c6f88d35b6b09c8c9810c1e7251ff0fd0ddc893bb640591969ad1258a523fe40f7b6a4bf1aae9407a36dca052a12ad495b48471645e305d1563f2c260"
+  },
+  "body": {
+   "country": "NG",
+   "orderNo": "211009140896593010"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": "00000",
+   "message": "SUCCESSFUL",
+   "data": {
+    "reference": "tskab12cd34ef56gh78ij90kl12mn34op5",
+    "orderNo": "211009140896593010",
+    "vat": {
+     "total": 0,
+     "currency": "NGN"
+    },
+    "amount": {
+     "total": 150000,
+     "currency": "NGN"
+    },
+    "createTime": 1633788085000,
+    "status": "PENDING",
+    "isVoided": false
+   }
+  }
+ }
+}

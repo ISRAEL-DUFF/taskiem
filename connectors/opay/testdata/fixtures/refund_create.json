@@ -1,0 +1,41 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/payment/refund/create",
+  "headers": {
+   "MerchantId": "256621051120756",
+   "Authorization": "Bearer 001d915795d5a0cd51d471634770ee398b02bf3b8245699af154487e96857f4f9a07dacd58a4331ed2e1cca2c761b0c96403a96316d5204eb7ef60ef93442b94"
+  },
+  "body": {
+   "amount": {
+    "currency": "NGN",
+    "total": 40000
+   },
+   "callbackUrl": "https://hooks.example/opay",
+   "country": "NG",
+   "originalReference": "order-17",
+   "reference": "tskrf12cd34ef56gh78ij90kl12mn34op5",
+   "refundWay": "Original",
+   "refundReason": "Out of stock"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": "00000",
+   "message": "SUCCESSFUL",
+   "data": {
+    "reference": "tskrf12cd34ef56gh78ij90kl12mn34op5",
+    "originalReference": "order-17",
+    "orderNo": "211003140885499643",
+    "originalOrderNo": "211003140885503763",
+    "country": "NG",
+    "refundAmount": {
+     "currency": "NGN",
+     "total": 40000
+    },
+    "orderStatus": "PENDING"
+   }
+  }
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/echannelsvc/2547916/0f1e2d3c4b5a69788796a5b4c3d2e1f0/1a0952d34a904924433a9b4dd1cc32976c4fa8448fc1dc36a584e521171e4fd5a4d9d47d9259dd22f2d079804e145f7860cc08bca32a820903fcce392aadc351/orderstatus.reg",
+  "headers": {
+   "Authorization": "remitaConsumerKey=2547916,remitaConsumerToken=1a0952d34a904924433a9b4dd1cc32976c4fa8448fc1dc36a584e521171e4fd5a4d9d47d9259dd22f2d079804e145f7860cc08bca32a820903fcce392aadc351"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "026",
+   "message": "No such Order Request"
+  }
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/echannelsvc/merchant/api/paymentinit",
+  "headers": {
+   "Authorization": "remitaConsumerKey=2547916,remitaConsumerToken=949c2c31adff04d3d54a8fbf895625a74b2c4d45d08fbc085ce61698c6e3f9dd2fcd4c64674fb8d79b61fd04e0d592035280ccb33c1a342d38d55b43cb7e7ce7"
+  },
+  "body": {
+   "serviceTypeId": "4430731",
+   "amount": "21000",
+   "orderId": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+   "payerName": "John Doe",
+   "payerEmail": "doe@example.com",
+   "payerPhone": "09062067384",
+   "description": "September fees"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "statuscode": "028",
+   "status": "Duplicate Order Ref"
+  }
+ }
+}

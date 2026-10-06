@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/interbank/query-transaction/ab12cd34ef56ab12cd34ef56ab12cd34",
+  "headers": {
+   "secretKey": "rmt_sk_test"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "25",
+   "message": "Unable to locate record",
+   "meta": null,
+   "links": null,
+   "code": null,
+   "data": null
+  }
+ }
+}

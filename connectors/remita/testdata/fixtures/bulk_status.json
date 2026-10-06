@@ -1,0 +1,28 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/interbank/bulk/query-transaction/11223344556677889900aabbccddeeff",
+  "headers": {
+   "secretKey": "rmt_sk_test"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "00",
+   "message": "Approved or completed successfully",
+   "meta": null,
+   "links": null,
+   "code": null,
+   "data": {
+    "batchPaymentIdentifier": "11223344556677889900aabbccddeeff",
+    "status": "COMPLETED",
+    "totalDebitAmount": 3500.25,
+    "totalCreditedAmount": 1000,
+    "transactionCount": 2,
+    "successfulTransactions": 1,
+    "failedTransactions": 1
+   }
+  }
+ }
+}
