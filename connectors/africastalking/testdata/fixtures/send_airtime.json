@@ -1,0 +1,41 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/version1/airtime/send",
+  "headers": {
+   "apiKey": "atsk_test_key",
+   "Accept": "application/json",
+   "Idempotency-Key": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "Content-Type": "application/json"
+  },
+  "body": {
+   "username": "acme",
+   "recipients": [
+    {
+     "phoneNumber": "+254711000001",
+     "amount": "KES 100.50"
+    }
+   ],
+   "maxNumRetry": 2
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "errorMessage": "None",
+   "numSent": 1,
+   "totalAmount": "KES 100.5000",
+   "totalDiscount": "KES 4.0200",
+   "responses": [
+    {
+     "phoneNumber": "+254711000001",
+     "errorMessage": "None",
+     "amount": "KES 100.5000",
+     "status": "Sent",
+     "requestId": "ATQid_1be914ac47845eef1a1dab5d89ec50ff",
+     "discount": "KES 4.0200"
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,42 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/sendPhoto",
+  "body": {
+   "chat_id": -1001234567890,
+   "photo": "https://example.com/receipt.png",
+   "caption": "Receipt for order 17"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": {
+    "message_id": 4242,
+    "from": {
+     "id": 7000000001,
+     "is_bot": true,
+     "first_name": "Taskiem Ops",
+     "username": "taskiem_ops_bot"
+    },
+    "chat": {
+     "id": -1001234567890,
+     "title": "Ops approvals",
+     "type": "supergroup"
+    },
+    "date": 1791320000,
+    "photo": [
+     {
+      "file_id": "AgACAgQAAxk",
+      "file_unique_id": "AQAD",
+      "width": 320,
+      "height": 240,
+      "file_size": 20480
+     }
+    ],
+    "caption": "Receipt for order 17"
+   }
+  }
+ }
+}

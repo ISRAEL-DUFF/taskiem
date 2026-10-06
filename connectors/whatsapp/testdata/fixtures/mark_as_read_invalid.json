@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "error": {
+    "message": "(#131009) Parameter value is not valid",
+    "type": "OAuthException",
+    "code": 131009,
+    "error_data": {
+     "messaging_product": "whatsapp",
+     "details": "Parameter value is not valid"
+    },
+    "fbtrace_id": "A1b2C3d4"
+   }
+  }
+ }
+}

@@ -1,0 +1,40 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  },
+  "body": {
+   "messaging_product": "whatsapp",
+   "recipient_type": "individual",
+   "to": "+2348012345678",
+   "type": "text",
+   "text": {
+    "body": "Your payslip is ready: https://acme.example/p/17",
+    "preview_url": true
+   },
+   "context": {
+    "message_id": "wamid.IN1"
+   },
+   "biz_opaque_callback_data": "run-17"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "messaging_product": "whatsapp",
+   "contacts": [
+    {
+     "input": "+2348012345678",
+     "wa_id": "2348012345678"
+    }
+   ],
+   "messages": [
+    {
+     "id": "wamid.HBgLMTY0NjcwNDM1OTUVAgARGBI1RjQyNUE3NEYxMzAzMzQ5MkEA"
+    }
+   ]
+  }
+ }
+}

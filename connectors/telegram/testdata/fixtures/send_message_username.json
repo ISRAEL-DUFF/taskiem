@@ -1,0 +1,32 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/sendMessage",
+  "body": {
+   "chat_id": "@ops_channel",
+   "text": "Deploy finished"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": {
+    "message_id": 4242,
+    "from": {
+     "id": 7000000001,
+     "is_bot": true,
+     "first_name": "Taskiem Ops",
+     "username": "taskiem_ops_bot"
+    },
+    "chat": {
+     "id": -1009876543210,
+     "type": "channel",
+     "title": "Ops"
+    },
+    "date": 1791320000,
+    "text": "Deploy finished"
+   }
+  }
+ }
+}

@@ -1,0 +1,191 @@
+# WhatsApp Cloud API (Meta Graph API v25.0). Built from Meta's public
+# documentation only, read 6 October 2026 (docs/integrations/whatsapp.md):
+#   https://developers.facebook.com/docs/whatsapp/cloud-api/ (now served from
+#   https://developers.facebook.com/documentation/business-messaging/whatsapp/):
+#   messages/send-messages, text-messages, document-messages, image-messages,
+#   interactive-reply-buttons-messages, interactive-list-messages,
+#   mark-message-as-read, templates/overview, throughput,
+#   business-phone-numbers/phone-numbers, support/error-codes,
+#   webhooks/create-webhook-endpoint, webhooks/reference/messages (+ status,
+#   text, interactive, errors), reference/whatsapp-business-phone-number/message-api
+manifest: connector/v1
+id: whatsapp
+version: 1.0.0
+name: WhatsApp
+description: Send WhatsApp text, template, media and interactive messages through the Cloud API, mark messages read, and receive messages and delivery statuses.
+category: messaging
+auth:
+  type: api_key
+  fields:
+    - { key: access_token, label: System user access token, secret: true }
+    - { key: phone_number_id, label: Business phone number ID (not the phone number) }
+    - { key: app_secret, label: App secret (verifies webhook signatures), secret: true, required: false }
+    - { key: verify_token, label: Verify token (any string; enter the same in the App Dashboard), secret: true, required: false }
+  test: { action: get_phone_number }
+# Meta: 80 messages a second per business phone number by default.
+rate_limit: { requests: 80, per: 1s, scope: connection }
+base_url: https://graph.facebook.com/v25.0
+egress_hosts: [graph.facebook.com]
+actions:
+  get_phone_number:
+    title: Get the business phone number
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        id:                       { type: string }
+        display_phone_number:     { type: string }
+        verified_name:            { type: string }
+        quality_rating:           { type: string }
+        code_verification_status: { type: string }
+  send_text:
+    title: Send a text message
+    description: >-
+      Only inside a customer service window (24 hours after the user last
+      wrote); otherwise send a template. The Cloud API has no idempotency key,
+      so a send whose outcome is unknown is parked for a person, never
+      repeated. A throughput refusal (130429 and the other rate limits)
+      proves nothing was sent and is retried.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [to, body]
+      properties:
+        to:          { type: string, description: "Recipient's number with + and country code, e.g. +2348012345678" }
+        body:        { type: string, minLength: 1, maxLength: 4096 }
+        preview_url: { type: boolean }
+        reply_to:    { type: string, description: wamid of a message to quote }
+        biz_opaque_callback_data: { type: string, description: Returned in this message's status webhooks }
+    output: { $ref: '#/actions/send_template/output' }
+    pii:
+      - { field: to, category: phone }
+      - { field: body, category: other }
+  send_template:
+    title: Send a template message
+    description: >-
+      An approved template, the only kind of message allowed outside a
+      customer service window. components carries the header, body and
+      button parameters exactly as Meta documents them. Not idempotent, like
+      send_text.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [to, name, language]
+      properties:
+        to:         { type: string }
+        name:       { type: string, description: Template name }
+        language:   { type: string, description: "Template language code, e.g. en_US" }
+        components:
+          type: array
+          description: '[{type: body, parameters: [{type: text, text: "Ada"}]}, ...]; named parameters add parameter_name'
+          items: { type: object }
+        reply_to:   { type: string }
+        biz_opaque_callback_data: { type: string }
+    output:
+      type: object
+      properties:
+        message_id:     { type: string, description: The wamid; correlation for this message's status events }
+        wa_id:          { type: string, description: "The user's WhatsApp ID; correlation for the user's replies (inbound message events)" }
+        input:          { type: string }
+        message_status: { type: string, description: "Template pacing only: accepted, held_for_quality_assessment or paused" }
+    pii:
+      - { field: to, category: phone }
+      - { field: components, category: other }
+  send_media:
+    title: Send an image, document, audio, video or sticker
+    description: >-
+      By public link (Meta fetches and caches it for 10 minutes) or by the id
+      of uploaded media. Not idempotent, like send_text.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [to, media_type]
+      properties:
+        to:         { type: string }
+        media_type: { type: string, enum: [image, document, audio, video, sticker] }
+        link:       { type: string, description: HTTPS URL of the file; or media_id }
+        media_id:   { type: string }
+        caption:    { type: string, maxLength: 1024, description: Image, document and video only }
+        filename:   { type: string, description: Document only, with extension }
+        reply_to:   { type: string }
+        biz_opaque_callback_data: { type: string }
+    output: { $ref: '#/actions/send_template/output' }
+    pii:
+      - { field: to, category: phone }
+      - { field: caption, category: other }
+  send_interactive:
+    title: Send an interactive message (buttons or list)
+    description: >-
+      interactive is Meta's object: {type: button, body: {text}, action:
+      {buttons: [{type: reply, reply: {id, title}}]}} for up to three reply
+      buttons, or {type: list, body: {text}, action: {button, sections: [{title,
+      rows: [{id, title, description}]}]}}. The user's choice arrives as an
+      inbound message event with interactive.button_reply or list_reply. Not
+      idempotent, like send_text.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [to, interactive]
+      properties:
+        to:          { type: string }
+        interactive: { type: object, required: [type, action] }
+        reply_to:    { type: string }
+        biz_opaque_callback_data: { type: string }
+    output: { $ref: '#/actions/send_template/output' }
+    pii:
+      - { field: to, category: phone }
+      - { field: interactive, category: other }
+  mark_as_read:
+    title: Mark a message as read
+    description: >-
+      Shows read receipts for an inbound message (and the ones before it),
+      within 30 days of receipt. Marking twice changes nothing, so a retry is
+      safe; the engine's key is not sent.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [message_id]
+      properties:
+        message_id: { type: string, description: The wamid from an inbound message event }
+    output:
+      type: object
+      properties:
+        success: { type: boolean }
+triggers:
+  # Meta sends every subscribed field of the app to its one callback URL.
+  # This trigger takes the messages field; other fields are acknowledged and
+  # ignored. Meta may batch several messages or statuses in one delivery:
+  # the event, dedup and correlation describe the first.
+  messages:
+    type: webhook
+    verify: { scheme: hmac_sha256, header: X-Hub-Signature-256, secret_field: app_secret }
+    handshake: { method: GET, token_query: hub.verify_token, secret_field: verify_token, respond: '=query["hub.challenge"]' }
+    events: [message, status.sent, status.delivered, status.read, status.failed, status.played, error]
+    event_type: >-
+      =body.entry[0].changes[0].field != "messages" ? body.entry[0].changes[0].field
+      : has(body.entry[0].changes[0].value.messages) ? "message"
+      : has(body.entry[0].changes[0].value.statuses) ? "status." + body.entry[0].changes[0].value.statuses[0].status
+      : has(body.entry[0].changes[0].value.errors) ? "error"
+      : "unknown"
+    # Inbound: the message's wamid. Status: wamid and status (one message has
+    # several). Errors carry no id: not deduplicated.
+    dedup: >-
+      =body.entry[0].changes[0].field != "messages" ? ""
+      : has(body.entry[0].changes[0].value.messages) ? body.entry[0].changes[0].value.messages[0].id
+      : has(body.entry[0].changes[0].value.statuses) ? body.entry[0].changes[0].value.statuses[0].id + ":" + body.entry[0].changes[0].value.statuses[0].status
+      : ""
+    # Inbound: the sender's WhatsApp ID (send_* output wa_id), so a run can
+    # wait for the user's reply or button press. Status: the wamid (send_*
+    # output message_id), so a run can wait for delivered, read or failed.
+    correlation: >-
+      =body.entry[0].changes[0].field != "messages" ? ""
+      : has(body.entry[0].changes[0].value.messages) ? body.entry[0].changes[0].value.messages[0].from
+      : has(body.entry[0].changes[0].value.statuses) ? body.entry[0].changes[0].value.statuses[0].id
+      : ""

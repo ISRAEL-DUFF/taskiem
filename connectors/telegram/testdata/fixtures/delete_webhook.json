@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/deleteWebhook",
+  "body": {
+   "drop_pending_updates": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": true
+  }
+ }
+}

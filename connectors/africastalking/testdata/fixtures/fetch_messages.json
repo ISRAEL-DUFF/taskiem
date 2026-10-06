@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/version1/messaging",
+  "headers": {
+   "apiKey": "atsk_test_key",
+   "Accept": "application/json"
+  },
+  "query": {
+   "username": "acme",
+   "lastReceivedId": "5"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "SMSMessageData": {
+    "Messages": [
+     {
+      "linkId": "SampleLinkId123",
+      "text": "STOP",
+      "to": "28901",
+      "id": 15071,
+      "date": "2026-10-06T11:20:46Z",
+      "from": "+254711000001"
+     }
+    ]
+   }
+  }
+ }
+}

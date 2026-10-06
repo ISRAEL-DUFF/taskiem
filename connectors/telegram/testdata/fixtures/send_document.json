@@ -1,0 +1,42 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/sendDocument",
+  "body": {
+   "chat_id": -1001234567890,
+   "document": "BQACAgQAAxkBAAIBY2",
+   "caption": "October payslips",
+   "reply_parameters": {
+    "message_id": 4200
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": {
+    "message_id": 4242,
+    "from": {
+     "id": 7000000001,
+     "is_bot": true,
+     "first_name": "Taskiem Ops",
+     "username": "taskiem_ops_bot"
+    },
+    "chat": {
+     "id": -1001234567890,
+     "title": "Ops approvals",
+     "type": "supergroup"
+    },
+    "date": 1791320000,
+    "document": {
+     "file_id": "BQACAgQAAxkBAAIBY2",
+     "file_unique_id": "AgAD",
+     "file_name": "payslips.zip",
+     "mime_type": "application/zip"
+    },
+    "caption": "October payslips"
+   }
+  }
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "messaging_product": "whatsapp",
+   "contacts": [
+    {
+     "input": "+2348012345678",
+     "wa_id": "2348012345678"
+    }
+   ],
+   "messages": []
+  }
+ }
+}

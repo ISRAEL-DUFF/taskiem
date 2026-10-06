@@ -1,0 +1,51 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/version1/messaging/bulk",
+  "headers": {
+   "apiKey": "atsk_test_key",
+   "Accept": "application/json"
+  },
+  "body": {
+   "username": "acme",
+   "phoneNumbers": [
+    "+254711000001",
+    "+254711000002",
+    "+25471100"
+   ],
+   "message": "Your payslip is ready",
+   "senderId": "ACME"
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "SMSMessageData": {
+    "Message": "Sent to 2/3 Total Cost: KES 1.6000",
+    "Recipients": [
+     {
+      "statusCode": 101,
+      "number": "+254711000001",
+      "status": "Success",
+      "cost": "KES 0.8000",
+      "messageId": "ATXid_a1"
+     },
+     {
+      "statusCode": 102,
+      "number": "+254711000002",
+      "status": "Queued",
+      "cost": "KES 0.8000",
+      "messageId": "ATXid_a2"
+     },
+     {
+      "statusCode": 403,
+      "number": "+25471100",
+      "status": "InvalidPhoneNumber",
+      "cost": "0",
+      "messageId": "None"
+     }
+    ]
+   }
+  }
+ }
+}

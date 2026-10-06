@@ -1,0 +1,56 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  },
+  "body": {
+   "messaging_product": "whatsapp",
+   "recipient_type": "individual",
+   "to": "+2348012345678",
+   "type": "interactive",
+   "interactive": {
+    "type": "button",
+    "body": {
+     "text": "Approve the October payroll?"
+    },
+    "action": {
+     "buttons": [
+      {
+       "type": "reply",
+       "reply": {
+        "id": "approve:run-17",
+        "title": "Approve"
+       }
+      },
+      {
+       "type": "reply",
+       "reply": {
+        "id": "reject:run-17",
+        "title": "Reject"
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "messaging_product": "whatsapp",
+   "contacts": [
+    {
+     "input": "+2348012345678",
+     "wa_id": "2348012345678"
+    }
+   ],
+   "messages": [
+    {
+     "id": "wamid.HBgLMTY0NjcwNDM1OTUVAgARGBI1RjQyNUE3NEYxMzAzMzQ5MkEA"
+    }
+   ]
+  }
+ }
+}

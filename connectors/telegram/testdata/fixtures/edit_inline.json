@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/editMessageText",
+  "body": {
+   "inline_message_id": "AAEAAAB",
+   "text": "Done"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": true
+  }
+ }
+}

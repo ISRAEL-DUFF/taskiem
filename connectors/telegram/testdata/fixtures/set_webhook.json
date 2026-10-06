@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/setWebhook",
+  "body": {
+   "url": "https://taskiem.example.com/hooks/7f0c/connectors/telegram@1/update?env=prod",
+   "secret_token": "tsk_Hook-Secret_42",
+   "allowed_updates": [
+    "message",
+    "callback_query"
+   ],
+   "drop_pending_updates": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": true
+  }
+ }
+}

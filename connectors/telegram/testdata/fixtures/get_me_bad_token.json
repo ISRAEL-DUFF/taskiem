@@ -1,0 +1,14 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/getMe"
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "ok": false,
+   "error_code": 401,
+   "description": "Unauthorized"
+  }
+ }
+}

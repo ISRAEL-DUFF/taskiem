@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/getMe",
+  "body": {}
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": {
+    "id": 7000000001,
+    "is_bot": true,
+    "first_name": "Taskiem Ops",
+    "username": "taskiem_ops_bot",
+    "can_join_groups": true
+   }
+  }
+ }
+}

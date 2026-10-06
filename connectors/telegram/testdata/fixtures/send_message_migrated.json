@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/sendMessage"
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "ok": false,
+   "error_code": 400,
+   "description": "Bad Request: group chat was upgraded to a supergroup chat",
+   "parameters": {
+    "migrate_to_chat_id": -1001234567890
+   }
+  }
+ }
+}

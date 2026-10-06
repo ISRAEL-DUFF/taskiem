@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "error": {
+    "message": "(#132001) Template name does not exist in the translation",
+    "type": "OAuthException",
+    "code": 132001,
+    "error_data": {
+     "messaging_product": "whatsapp",
+     "details": "template name (payslip_ready) does not exist in en_US"
+    },
+    "fbtrace_id": "A1b2C3d4"
+   }
+  }
+ }
+}
