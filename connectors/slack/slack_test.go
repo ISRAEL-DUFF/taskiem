@@ -388,7 +388,7 @@ func TestSignatures(t *testing.T) {
 // eval runs a trigger expression the way ingest does.
 func eval(t *testing.T, src string, body any, headers map[string]any) any {
 	t.Helper()
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
 	v, err := e.Eval(src, map[string]any{"body": body, "headers": headers, "query": map[string]any{}})
 	if err != nil {
 		t.Fatalf("%s: %v", src, err)
@@ -471,7 +471,7 @@ func TestInteractionsTrigger(t *testing.T) {
 		{plain, "shortcut", nil},
 		{quoted, "block_actions", nil},
 		{`{"type":"view_closed","view":{"type":"modal"}}`, "view_closed", nil},
-		{`{"type":"something_new"}`, "interaction", nil},
+		{`{"type":"something_new"}`, "something_new", nil},
 	} {
 		// What ingest makes of the form post.
 		form, _ := url.ParseQuery("payload=" + url.QueryEscape(c.payload))

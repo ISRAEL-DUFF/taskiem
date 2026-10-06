@@ -17,7 +17,7 @@ func TestNotificationExpressions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := expr.MustNewWithRoots("body", "headers", "query", "item")
+	e := expr.MustNewTriggerEngine("body", "headers", "query", "item")
 	act := map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}, "item": nil}
 	v, err := e.Eval(spec.Split, act)
 	list, _ := v.([]any)

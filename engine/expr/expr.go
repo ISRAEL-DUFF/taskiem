@@ -48,6 +48,43 @@ func NewWithRoots(roots ...string) (*Engine, error) {
 	return &Engine{env: env, costLimit: DefaultCostLimit}, nil
 }
 
+// NewTriggerEngine returns an engine for connector trigger expressions:
+// NewWithRoots plus parseJSON(string), for providers that carry JSON inside
+// a form field (Slack's interaction payload). Workflow expressions do not
+// get it, so the SDK and codegen need not mirror it.
+func NewTriggerEngine(roots ...string) (*Engine, error) {
+	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(),
+		cel.Function("parseJSON", cel.Overload("parseJSON_string", []*cel.Type{cel.StringType}, cel.DynType,
+			cel.UnaryBinding(func(v ref.Val) ref.Val {
+				s, ok := v.(types.String)
+				if !ok {
+					return types.NewErr("parseJSON: not a string")
+				}
+				x, err := DecodeJSON([]byte(s))
+				if err != nil {
+					return types.NewErr("parseJSON: %v", err)
+				}
+				return types.DefaultTypeAdapter.NativeToValue(x)
+			})))}
+	for _, r := range roots {
+		opts = append(opts, cel.Variable(r, cel.DynType))
+	}
+	env, err := cel.NewEnv(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &Engine{env: env, costLimit: DefaultCostLimit}, nil
+}
+
+// MustNewTriggerEngine is NewTriggerEngine for package-level engines.
+func MustNewTriggerEngine(roots ...string) *Engine {
+	e, err := NewTriggerEngine(roots...)
+	if err != nil {
+		panic(err)
+	}
+	return e
+}
+
 // MustNew is New for package-level engines.
 func MustNew() *Engine {
 	e, err := New()

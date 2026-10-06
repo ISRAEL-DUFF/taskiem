@@ -336,7 +336,7 @@ func TestWebhookSignature(t *testing.T) {
 
 func TestTriggerExpressions(t *testing.T) {
 	spec := New(Options{}).Manifest.Triggers["event"]
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
 	for _, c := range []struct{ body, event, dedup, correlation string }{
 		{`{"eventType":"SUCCESSFUL_DISBURSEMENT","eventData":{"amount":10,"transactionReference":"MFDS|20210317032332|002431","fee":8,"reference":"tsk_1","status":"SUCCESS"}}`,
 			"SUCCESSFUL_DISBURSEMENT", "SUCCESSFUL_DISBURSEMENT:MFDS|20210317032332|002431", "tsk_1"},

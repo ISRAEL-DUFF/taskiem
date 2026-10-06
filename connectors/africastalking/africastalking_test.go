@@ -217,7 +217,7 @@ func TestCallbacksCarryAToken(t *testing.T) {
 // Callbacks are form posts; ingest exposes the fields as body.<field>.
 func TestTriggerExpressions(t *testing.T) {
 	m := New(Options{}).Manifest
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
 	for _, c := range []struct{ trigger, form, event, dedup, correlation string }{
 		{"delivery_report", "id=ATXid_a1&status=Success&phoneNumber=%2B254711000001&networkCode=63902&retryCount=0",
 			"Success", "ATXid_a1:Success", "ATXid_a1"},

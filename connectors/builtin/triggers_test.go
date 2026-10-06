@@ -15,7 +15,7 @@ func TestTriggerExpressions(t *testing.T) {
 	if err := Register(reg, Options{}); err != nil {
 		t.Fatal(err)
 	}
-	e := expr.MustNewWithRoots("body", "headers", "query", "item")
+	e := expr.MustNewTriggerEngine("body", "headers", "query", "item")
 	for _, c := range []struct {
 		ref, trigger, body        string
 		event, dedup, correlation string

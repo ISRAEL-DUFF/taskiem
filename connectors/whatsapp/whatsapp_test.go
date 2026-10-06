@@ -197,7 +197,7 @@ func TestVerificationHandshake(t *testing.T) {
 	if hs == nil || hs.Method != "GET" || hs.TokenQuery != "hub.verify_token" || hs.SecretField != "verify_token" {
 		t.Fatalf("handshake %+v", hs)
 	}
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
 	act := map[string]any{"body": nil, "headers": map[string]any{},
 		"query": map[string]any{"hub.mode": "subscribe", "hub.verify_token": "vt-taskiem-7", "hub.challenge": "1158201444"}}
 	v, err := e.Eval(hs.Respond, act)
@@ -222,7 +222,7 @@ func items(t *testing.T, e *expr.Engine, split string, body any) []any {
 
 func TestTriggerExpressions(t *testing.T) {
 	spec := New(Options{}).Manifest.Triggers["messages"]
-	e := expr.MustNewWithRoots("body", "headers", "query", "item")
+	e := expr.MustNewTriggerEngine("body", "headers", "query", "item")
 	wrap := func(field, value string) string {
 		return `{"object":"whatsapp_business_account","entry":[{"id":"102290129340398","changes":[{"value":` + value + `,"field":"` + field + `"}]}]}`
 	}

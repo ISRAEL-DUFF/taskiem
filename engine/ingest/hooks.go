@@ -82,7 +82,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.Rate == 0 {
 			h.Rate, h.Burst = 50, 200
 		}
-		h.exprs = expr.MustNewWithRoots("body", "headers", "query", "item")
+		h.exprs = expr.MustNewTriggerEngine("body", "headers", "query", "item")
 		h.wdExprs = expr.MustNew()
 		rt := chi.NewRouter()
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)

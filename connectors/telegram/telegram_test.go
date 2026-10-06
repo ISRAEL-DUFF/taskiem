@@ -239,7 +239,7 @@ func TestWebhookSecretToken(t *testing.T) {
 
 func TestTriggerExpressions(t *testing.T) {
 	spec := New(Options{}).Manifest.Triggers["update"]
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
 	for _, c := range []struct{ body, event, dedup, correlation string }{
 		{`{"update_id":10000,"message":{"message_id":1365,"from":{"id":1111111,"is_bot":false,"first_name":"Ada"},"chat":{"id":1111111,"type":"private","first_name":"Ada"},"date":1791320000,"text":"/start"}}`,
 			"message", "10000", "1111111"},

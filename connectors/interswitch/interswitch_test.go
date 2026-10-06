@@ -282,7 +282,7 @@ func TestWebhookSignature(t *testing.T) {
 
 func TestTriggerExpressions(t *testing.T) {
 	spec := New(Options{}).Manifest.Triggers["event"]
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
 	for _, c := range []struct{ body, event, dedup, correlation string }{
 		{`{"event":"TRANSACTION.COMPLETED","uuid":"2Xdf35faAyX2Sk5Dalu405rUD","timestamp":1594646111460,"data":{"amount":12000,"responseCode":"00","merchantReference":"order-17","paymentReference":"FBN|WEB|MX6072|13-07-2020|3481032|762672"}}`,
 			"TRANSACTION.COMPLETED", "TRANSACTION.COMPLETED:2Xdf35faAyX2Sk5Dalu405rUD:1594646111460", "order-17"},

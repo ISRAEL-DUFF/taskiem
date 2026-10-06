@@ -268,16 +268,18 @@ triggers:
   interactions:
     type: webhook
     verify: { scheme: slack_v0, header: X-Slack-Signature, timestamp_header: X-Slack-Request-Timestamp, secret_field: signing_secret }
-    event_type: >-
-      =!has(body.payload) ? "unknown"
-      : body.payload.matches('"type"\\s*:\\s*"block_actions"') ? "block_actions"
-      : body.payload.matches('"type"\\s*:\\s*"view_submission"') ? "view_submission"
-      : body.payload.matches('"type"\\s*:\\s*"view_closed"') ? "view_closed"
-      : body.payload.matches('"type"\\s*:\\s*"shortcut"') ? "shortcut"
-      : body.payload.matches('"type"\\s*:\\s*"message_action"') ? "message_action"
-      : body.payload.matches('"type"\\s*:\\s*"block_suggestion"') ? "block_suggestion"
-      : "interaction"
+    # The interaction arrives as a form field holding JSON; parseJSON reads it.
+    event_type: '=!has(body.payload) ? "unknown" : string(parseJSON(body.payload).type)'
+    # Correlation: the workflow marks its buttons (value "taskiem-corr:<key>|<choice>")
+    # or modal (private_metadata "taskiem-corr:<key>"); the clicked action's
+    # key, so a run waiting on <key> wakes with the choice in the payload.
     correlation: >-
-      =has(body.payload) && body.payload.contains("taskiem-corr:")
-      ? dyn(body.payload.split("taskiem-corr:")[1].split("\"")[0].split("|")[0])
+      =!has(body.payload) ? null
+      : parseJSON(body.payload).type == "block_actions" && has(parseJSON(body.payload).actions)
+        && size(parseJSON(body.payload).actions) > 0 && has(parseJSON(body.payload).actions[0].value)
+        && string(parseJSON(body.payload).actions[0].value).startsWith("taskiem-corr:")
+        ? dyn(string(parseJSON(body.payload).actions[0].value).substring(13).split("|")[0])
+      : parseJSON(body.payload).type == "view_submission" && has(parseJSON(body.payload).view.private_metadata)
+        && string(parseJSON(body.payload).view.private_metadata).startsWith("taskiem-corr:")
+        ? dyn(string(parseJSON(body.payload).view.private_metadata).substring(13).split("|")[0])
       : null
