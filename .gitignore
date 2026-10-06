@@ -12,3 +12,6 @@ web/test-results/
 web/playwright-report/
 .taskiem/
 connector.wasm
+
+# Agent worktrees (local only)
+.claude/worktrees/
