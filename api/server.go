@@ -126,6 +126,11 @@ func (s *Server) Handler() http.Handler {
 
 			r.With(s.need(PermMemberManage)).Get("/members", s.listMembers)
 			r.With(s.need(PermMemberManage)).Post("/members", s.addMember)
+			r.With(s.need(PermMemberManage)).Delete("/members/{user}/roles/{role}", s.revokeRole)
+			r.Get("/permissions", s.listPermissions)
+			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)
+			r.With(s.need(PermRoleManage)).Put("/roles/{name}", s.putRole)
+			r.With(s.need(PermRoleManage)).Delete("/roles/{name}", s.deleteRole)
 			r.With(s.need(PermMemberManage)).Get("/api-keys", s.listKeys)
 			r.With(s.need(PermMemberManage)).Post("/api-keys", s.createKey)
 			r.With(s.need(PermMemberManage)).Delete("/api-keys/{id}", s.revokeKey)

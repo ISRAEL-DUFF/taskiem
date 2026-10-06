@@ -41,17 +41,18 @@ const (
 	PermGitManage        = "git.manage"
 	PermPolicyManage     = "policy.manage"
 	PermConnectorManage  = "connector.manage"
+	PermRoleManage       = "role.manage"
 )
 
 var allPermissions = []string{PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel,
-	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage}
+	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage}
 
 // rolePermissions are the built-in roles (spec 13.3). Any other membership
 // role (e.g. "credit_officer") is a business role that only qualifies the
 // member for approval steps naming it, on top of approval.decide.
 var rolePermissions = map[string][]string{
 	"owner":    allPermissions,
-	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage},
+	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage},
 	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart},
 	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve},
 	"approver": {PermWorkflowRead, PermRunRead, PermApprovalDecide},
@@ -206,20 +207,32 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return nil, err
 	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT role FROM memberships WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, p.UserID)
+		rows, err := tx.Query(ctx, `SELECT m.role, r.permissions FROM memberships m
+			LEFT JOIN roles r ON r.tenant_id = m.tenant_id AND r.name = m.role
+			WHERE m.tenant_id = $1 AND m.user_id = $2 ORDER BY m.role`, p.TenantID, p.UserID)
 		if err != nil {
 			return err
 		}
-		p.Roles, err = pgx.CollectRows(rows, pgx.RowTo[string])
-		return err
+		defer rows.Close()
+		for rows.Next() {
+			var role string
+			var custom []string
+			if err := rows.Scan(&role, &custom); err != nil {
+				return err
+			}
+			p.Roles = append(p.Roles, role)
+			perms, builtin := rolePermissions[role]
+			if !builtin {
+				perms = custom // a custom role, or none for a business role
+			}
+			for _, perm := range perms {
+				p.Permissions[perm] = true
+			}
+		}
+		return rows.Err()
 	})
 	if err != nil {
 		return nil, err
-	}
-	for _, role := range p.Roles {
-		for _, perm := range rolePermissions[role] {
-			p.Permissions[perm] = true
-		}
 	}
 	if len(p.Roles) == 0 {
 		return nil, errors.New("no membership")
@@ -449,6 +462,10 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	if slices.Contains(req.Roles, "owner") && !slices.Contains(p.Roles, "owner") {
 		s.fail(w, r, fmt.Errorf("%w: only an owner can grant owner", errForbidden))
+		return
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error { return canGrant(r.Context(), tx, p, req.Roles) }); err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	if len(req.Roles) == 0 || !strings.Contains(req.Email, "@") {

@@ -139,3 +139,21 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   .canvas { height: 420px; }
   .main { padding: 16px; }
 }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 4px 4px 0;
+  padding: 1px 2px 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85em;
+}
+.chip-x {
+  border: none;
+  background: none;
+  padding: 0 6px;
+  cursor: pointer;
+  color: inherit;
+}
