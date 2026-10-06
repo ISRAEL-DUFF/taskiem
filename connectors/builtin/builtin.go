@@ -13,6 +13,8 @@ import (
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
+	"github.com/israel-duff/taskiem/connectors/s3"
+	"github.com/israel-duff/taskiem/connectors/sftp"
 	"github.com/israel-duff/taskiem/connectors/termii"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
@@ -22,6 +24,7 @@ type Options struct {
 	PaystackURL, TermiiURL, DojahURL, IswalletURL string
 	FlutterwaveURL, AnchorURL, LencoURL, BreetURL string
 	MoniepointURL, InterswitchURL                 string
+	S3URL                                         string
 }
 
 // Register adds every built-in connector to r.
@@ -38,6 +41,8 @@ func Register(r *connector.Registry, o Options) error {
 		moniepoint.New(moniepoint.Options{BaseURL: o.MoniepointURL}),
 		interswitch.New(interswitch.Options{BaseURL: o.InterswitchURL}),
 		postgres.New(),
+		s3.New(s3.Options{BaseURL: o.S3URL}),
+		sftp.New(),
 	} {
 		if err := r.Register(c); err != nil {
 			return err

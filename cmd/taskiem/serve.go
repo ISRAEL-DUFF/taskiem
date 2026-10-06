@@ -112,6 +112,7 @@ func loadConfig() (config, error) {
 			BreetURL:       os.Getenv("TASKIEM_BREET_URL"),
 			MoniepointURL:  os.Getenv("TASKIEM_MONIEPOINT_URL"),
 			InterswitchURL: os.Getenv("TASKIEM_INTERSWITCH_URL"),
+			S3URL:          os.Getenv("TASKIEM_S3_URL"),
 		},
 		PoolSize: 20,
 	}
