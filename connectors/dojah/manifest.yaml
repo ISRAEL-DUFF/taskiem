@@ -38,6 +38,14 @@ actions:
         image:         { type: string }
     pii:
       - { field: bvn, category: bvn }
+      - { field: output.bvn, category: bvn }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number1, category: phone }
+      - { field: output.image, category: other }
   lookup_nin:
     title: Look up NIN
     class: read
@@ -55,6 +63,10 @@ actions:
         date_of_birth: { type: string }
     pii:
       - { field: nin, category: nin }
+      - { field: output.nin, category: nin }
+      - { field: output.first_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
   check_balance:
     title: Check wallet balance
     class: read

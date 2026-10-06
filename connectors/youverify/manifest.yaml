@@ -64,6 +64,16 @@ actions:
       - { field: first_name, category: name }
       - { field: last_name, category: name }
       - { field: date_of_birth, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
   verify_nin:
     title: Verify a NIN
     description: The NIN holder's record; optionally validates names and date of birth, and a selfie against the NIMC photo.
@@ -87,6 +97,16 @@ actions:
       - { field: last_name, category: name }
       - { field: date_of_birth, category: other }
       - { field: selfie_image, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
   verify_drivers_license:
     title: Verify a driver's licence
     class: read
@@ -100,6 +120,16 @@ actions:
     output: { $ref: '#/actions/verify_bvn/output' }
     pii:
       - { field: license_number, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
   verify_phone:
     title: Verify a phone number's owner
     description: Names and dates of birth registered to the number (record.phoneDetails).
@@ -113,6 +143,16 @@ actions:
     output: { $ref: '#/actions/verify_bvn/output' }
     pii:
       - { field: phone, category: phone }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
   search_phone:
     title: Find the NIN record for a phone number
     class: read
@@ -126,6 +166,16 @@ actions:
     output: { $ref: '#/actions/verify_bvn/output' }
     pii:
       - { field: phone, category: phone }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
   resolve_bank_account:
     title: Resolve a bank account name
     class: read
@@ -146,6 +196,8 @@ actions:
         bank_name:      { type: string }
     pii:
       - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
   compare_faces:
     title: Compare two faces
     description: Whether two images (URL or base64, up to 1MB each) show the same person. A non-match is a result (match false).
@@ -191,6 +243,8 @@ actions:
         registration_date:   { type: string }
         nature_of_business:  { type: string }
         record:              { type: object }
+    pii:
+      - { field: output.record, category: other }
   search_businesses:
     title: Search businesses by name
     class: read
@@ -223,6 +277,8 @@ actions:
       properties:
         verification_id: { type: string }
     output: { $ref: '#/actions/verify_business/output' }
+    pii:
+      - { field: output.record, category: other }
   screen_aml:
     title: Screen a name for PEP, sanctions and adverse media
     description: >-
@@ -254,6 +310,7 @@ actions:
       - { field: query, category: name }
       - { field: first_name, category: name }
       - { field: last_name, category: name }
+      - { field: output.record, category: other }
   get_aml_check:
     title: Get an AML screening
     class: read
@@ -263,6 +320,8 @@ actions:
       properties:
         verification_id: { type: string }
     output: { $ref: '#/actions/screen_aml/output' }
+    pii:
+      - { field: output.record, category: other }
   create_address_candidate:
     title: Create an address-verification candidate
     description: The person whose address a field agent will verify. Not idempotent; an unknown outcome parks the step.
