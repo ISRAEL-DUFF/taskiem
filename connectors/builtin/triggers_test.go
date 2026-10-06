@@ -15,7 +15,7 @@ func TestTriggerExpressions(t *testing.T) {
 	if err := Register(reg, Options{}); err != nil {
 		t.Fatal(err)
 	}
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewWithRoots("body", "headers", "query", "item")
 	for _, c := range []struct {
 		ref, trigger, body        string
 		event, dedup, correlation string
@@ -78,7 +78,15 @@ func TestTriggerExpressions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		act := map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}}
+		act := map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}, "item": nil}
+		if spec.Split != "" { // batched deliveries: check the first event
+			v, err := e.Eval(spec.Split, act)
+			list, _ := v.([]any)
+			if err != nil || len(list) == 0 {
+				t.Fatalf("%s %s split: %v %v", c.ref, c.trigger, v, err)
+			}
+			act["item"] = list[0]
+		}
 		for _, f := range []struct{ name, src, want string }{{"event_type", spec.EventType, c.event}, {"dedup", spec.Dedup, c.dedup}, {"correlation", spec.Correlation, c.correlation}} {
 			v, err := e.Eval(f.src, act)
 			if err != nil {

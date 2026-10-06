@@ -209,9 +209,20 @@ func TestVerificationHandshake(t *testing.T) {
 	}
 }
 
+// items runs the trigger's split over a delivery, as ingest does.
+func items(t *testing.T, e *expr.Engine, split string, body any) []any {
+	t.Helper()
+	v, err := e.Eval(split, map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}, "item": nil})
+	list, ok := v.([]any)
+	if err != nil || !ok {
+		t.Fatalf("split: %v (%T) %v", v, v, err)
+	}
+	return list
+}
+
 func TestTriggerExpressions(t *testing.T) {
 	spec := New(Options{}).Manifest.Triggers["messages"]
-	e := expr.MustNewWithRoots("body", "headers", "query")
+	e := expr.MustNewWithRoots("body", "headers", "query", "item")
 	wrap := func(field, value string) string {
 		return `{"object":"whatsapp_business_account","entry":[{"id":"102290129340398","changes":[{"value":` + value + `,"field":"` + field + `"}]}]}`
 	}
@@ -228,13 +239,23 @@ func TestTriggerExpressions(t *testing.T) {
 		{"system error", wrap("messages", `{`+meta+`,"errors":[{"code":130429,"title":"Rate limit hit","message":"Rate limit hit"}]}`),
 			"error", "", ""},
 		{"another field", wrap("message_template_status_update", `{"event":"APPROVED","message_template_id":12345678,"message_template_name":"payslip_ready","message_template_language":"en_US"}`),
-			"message_template_status_update", "", ""},
+			"", "", ""}, // no items: acknowledged, nothing delivered
 	} {
 		body, err := expr.DecodeJSON([]byte(c.body))
 		if err != nil {
 			t.Fatal(err)
 		}
-		act := map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}}
+		list := items(t, e, spec.Split, body)
+		if c.event == "" {
+			if len(list) != 0 {
+				t.Errorf("%s: %d items, want none", c.name, len(list))
+			}
+			continue
+		}
+		if len(list) != 1 {
+			t.Fatalf("%s: %d items", c.name, len(list))
+		}
+		act := map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}, "item": list[0]}
 		for _, f := range []struct{ name, src, want string }{{"event_type", spec.EventType, c.event}, {"dedup", spec.Dedup, c.dedup}, {"correlation", spec.Correlation, c.correlation}} {
 			v, err := e.Eval(f.src, act)
 			if err != nil {
@@ -245,6 +266,24 @@ func TestTriggerExpressions(t *testing.T) {
 				t.Errorf("%s %s = %v, want %q", c.name, f.name, v, f.want)
 			}
 		}
+	}
+
+	// A batch: every message and status is its own event.
+	batch := `{"object":"whatsapp_business_account","entry":[{"id":"1","changes":[{"value":{` + meta + `,"statuses":[{"id":"wamid.A","status":"sent","recipient_id":"1"},{"id":"wamid.B","status":"read","recipient_id":"2"}]},"field":"messages"}]},
+	  {"id":"2","changes":[{"value":{` + meta + `,"messages":[{"from":"16505551234","id":"wamid.C","type":"text","text":{"body":"hi"}}]},"field":"messages"}]}]}`
+	body, err := expr.DecodeJSON([]byte(batch))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, it := range items(t, e, spec.Split, body) {
+		act := map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}, "item": it}
+		ev, _ := e.Eval(spec.EventType, act)
+		dd, _ := e.Eval(spec.Dedup, act)
+		got = append(got, ev.(string)+"/"+dd.(string))
+	}
+	if strings.Join(got, ",") != "status.sent/wamid.A:sent,status.read/wamid.B:read,message/wamid.C" {
+		t.Errorf("batch: %v", got)
 	}
 	// Other fields of the app's subscription are acknowledged, not delivered.
 	for _, ev := range spec.Events {

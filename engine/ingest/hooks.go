@@ -82,7 +82,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.Rate == 0 {
 			h.Rate, h.Burst = 50, 200
 		}
-		h.exprs = expr.MustNewWithRoots("body", "headers", "query")
+		h.exprs = expr.MustNewWithRoots("body", "headers", "query", "item")
 		h.wdExprs = expr.MustNew()
 		rt := chi.NewRouter()
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
@@ -349,34 +349,7 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	event, dedup, correlation := name, bodyHash(body), ""
-	for _, f := range []struct {
-		src string
-		dst *string
-	}{{spec.EventType, &event}, {spec.Dedup, &dedup}, {spec.Correlation, &correlation}} {
-		if f.src == "" {
-			continue
-		}
-		if *f.dst, err = evalString(h.exprs, f.src, act); err != nil {
-			replyErr(w, http.StatusBadRequest, "unexpected payload for "+ref+" "+name)
-			return
-		}
-	}
-	if len(spec.Events) > 0 && !slices.Contains(spec.Events, event) {
-		reply(w, http.StatusAccepted, map[string]any{"ignored": event})
-		return
-	}
-	out := map[string]any{"event": event}
-	payload := map[string]any{"event": event, "body": p.body}
-	if correlation != "" {
-		woke, fresh, err := h.Store.DeliverSignalOnce(ctx, tenant, ref+":"+name, correlation, dedup, payload)
-		if err != nil {
-			h.unavailable(w, r, err)
-			return
-		}
-		out["signalled"], out["duplicate"] = len(woke), !fresh
-	}
-
+	// Subscribed workflows, loaded once for every event in the delivery.
 	type sub struct {
 		workflow   uuid.UUID
 		version    int
@@ -403,27 +376,88 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		h.unavailable(w, r, err)
 		return
 	}
-	runs := []uuid.UUID{}
-	for _, s := range subs {
-		if len(s.events) > 0 && !slices.Contains(s.events, event) {
-			continue
-		}
-		if s.connection != nil && *s.connection != connection {
-			continue
-		}
-		run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
-			TenantID: tenant, WorkflowID: s.workflow, Version: s.version, Environment: env,
-			Trigger:   map[string]any{"type": "connector_event", "connector": ref, "trigger": name, "event": event, "body": p.body},
-			StartedBy: "connector:" + ref, TriggerID: "event/" + s.workflow.String() + "/" + env, DedupKey: dedup,
-		})
-		if err != nil {
-			h.unavailable(w, r, err)
+
+	// A provider that batches events gets one delivery per item.
+	items := []any{nil}
+	if spec.Split != "" {
+		v, err := h.exprs.Eval(spec.Split, act)
+		list, ok := v.([]any)
+		if err != nil || !ok {
+			replyErr(w, http.StatusBadRequest, "unexpected payload for "+ref+" "+name)
 			return
 		}
-		runs = append(runs, run.ID)
+		items = list
 	}
-	out["runs"] = runs
-	reply(w, http.StatusAccepted, out)
+	results := []map[string]any{}
+	for i, item := range items {
+		ia := act
+		if spec.Split != "" {
+			ia = map[string]any{"body": act["body"], "headers": act["headers"], "query": act["query"], "item": item}
+		}
+		event, dedup, correlation := name, bodyHash(body), ""
+		if spec.Split != "" {
+			dedup += ":" + strconv.Itoa(i)
+		}
+		bad := false
+		for _, f := range []struct {
+			src string
+			dst *string
+		}{{spec.EventType, &event}, {spec.Dedup, &dedup}, {spec.Correlation, &correlation}} {
+			if f.src == "" {
+				continue
+			}
+			if *f.dst, err = evalString(h.exprs, f.src, ia); err != nil {
+				bad = true
+			}
+		}
+		if bad {
+			replyErr(w, http.StatusBadRequest, "unexpected payload for "+ref+" "+name)
+			return
+		}
+		if len(spec.Events) > 0 && !slices.Contains(spec.Events, event) {
+			results = append(results, map[string]any{"ignored": event})
+			continue
+		}
+		out := map[string]any{"event": event}
+		payload := map[string]any{"event": event, "body": p.body}
+		trig := map[string]any{"type": "connector_event", "connector": ref, "trigger": name, "event": event, "body": p.body}
+		if spec.Split != "" {
+			payload["item"], trig["item"] = item, item
+		}
+		if correlation != "" {
+			woke, fresh, err := h.Store.DeliverSignalOnce(ctx, tenant, ref+":"+name, correlation, dedup, payload)
+			if err != nil {
+				h.unavailable(w, r, err)
+				return
+			}
+			out["signalled"], out["duplicate"] = len(woke), !fresh
+		}
+		runs := []uuid.UUID{}
+		for _, s := range subs {
+			if len(s.events) > 0 && !slices.Contains(s.events, event) {
+				continue
+			}
+			if s.connection != nil && *s.connection != connection {
+				continue
+			}
+			run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
+				TenantID: tenant, WorkflowID: s.workflow, Version: s.version, Environment: env,
+				Trigger: trig, StartedBy: "connector:" + ref, TriggerID: "event/" + s.workflow.String() + "/" + env, DedupKey: dedup,
+			})
+			if err != nil {
+				h.unavailable(w, r, err)
+				return
+			}
+			runs = append(runs, run.ID)
+		}
+		out["runs"] = runs
+		results = append(results, out)
+	}
+	if spec.Split != "" {
+		reply(w, http.StatusAccepted, map[string]any{"events": results})
+		return
+	}
+	reply(w, http.StatusAccepted, results[0])
 }
 
 // connectorHandshake answers a provider's GET endpoint check (Meta's

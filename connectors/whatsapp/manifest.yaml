@@ -159,33 +159,26 @@ actions:
       properties:
         success: { type: boolean }
 triggers:
-  # Meta sends every subscribed field of the app to its one callback URL.
-  # This trigger takes the messages field; other fields are acknowledged and
-  # ignored. Meta may batch several messages or statuses in one delivery:
-  # the event, dedup and correlation describe the first.
+  # Meta sends every subscribed field of the app to its one callback URL and
+  # may batch many messages, statuses and errors in one delivery: split
+  # makes each its own event (as item). Fields other than messages yield no
+  # items and are acknowledged.
   messages:
     type: webhook
     verify: { scheme: hmac_sha256, header: X-Hub-Signature-256, secret_field: app_secret }
     handshake: { method: GET, token_query: hub.verify_token, secret_field: verify_token, respond: '=query["hub.challenge"]' }
     events: [message, status.sent, status.delivered, status.read, status.failed, status.played, error]
-    event_type: >-
-      =body.entry[0].changes[0].field != "messages" ? body.entry[0].changes[0].field
-      : has(body.entry[0].changes[0].value.messages) ? "message"
-      : has(body.entry[0].changes[0].value.statuses) ? "status." + body.entry[0].changes[0].value.statuses[0].status
-      : has(body.entry[0].changes[0].value.errors) ? "error"
-      : "unknown"
+    split: >-
+      =body.entry.map(e, e.changes.filter(c, c.field == "messages").map(c,
+        (has(c.value.messages) ? c.value.messages.map(m, {"kind": "message", "message": m, "metadata": c.value.metadata}) : [])
+        + (has(c.value.statuses) ? c.value.statuses.map(st, {"kind": "status", "status": st, "metadata": c.value.metadata}) : [])
+        + (has(c.value.errors) ? c.value.errors.map(x, {"kind": "error", "error": x, "metadata": c.value.metadata}) : [])
+      )).flatten(2)
+    event_type: '=item.kind == "status" ? "status." + item.status.status : item.kind'
     # Inbound: the message's wamid. Status: wamid and status (one message has
     # several). Errors carry no id: not deduplicated.
-    dedup: >-
-      =body.entry[0].changes[0].field != "messages" ? ""
-      : has(body.entry[0].changes[0].value.messages) ? body.entry[0].changes[0].value.messages[0].id
-      : has(body.entry[0].changes[0].value.statuses) ? body.entry[0].changes[0].value.statuses[0].id + ":" + body.entry[0].changes[0].value.statuses[0].status
-      : ""
+    dedup: '=item.kind == "message" ? item.message.id : item.kind == "status" ? item.status.id + ":" + item.status.status : ""'
     # Inbound: the sender's WhatsApp ID (send_* output wa_id), so a run can
     # wait for the user's reply or button press. Status: the wamid (send_*
     # output message_id), so a run can wait for delivered, read or failed.
-    correlation: >-
-      =body.entry[0].changes[0].field != "messages" ? ""
-      : has(body.entry[0].changes[0].value.messages) ? body.entry[0].changes[0].value.messages[0].from
-      : has(body.entry[0].changes[0].value.statuses) ? body.entry[0].changes[0].value.statuses[0].id
-      : ""
+    correlation: '=item.kind == "message" ? item.message.from : item.kind == "status" ? item.status.id : ""'

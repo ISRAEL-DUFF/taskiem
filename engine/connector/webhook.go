@@ -23,12 +23,15 @@ var ErrBadSignature = errors.New("webhook signature invalid")
 
 // TriggerSpec is a manifest trigger's verification block.
 type TriggerSpec struct {
-	Type        string      `json:"type"`
-	Verify      *VerifySpec `json:"verify"`
-	Events      []string    `json:"events"`
-	EventType   string      `json:"event_type"`
-	Dedup       string      `json:"dedup"`
-	Correlation string      `json:"correlation"`
+	Type   string      `json:"type"`
+	Verify *VerifySpec `json:"verify"`
+	Events []string    `json:"events"`
+	// Split, when set, turns one delivery into several events: a list
+	// expression whose elements the other expressions see as item.
+	Split       string `json:"split"`
+	EventType   string `json:"event_type"`
+	Dedup       string `json:"dedup"`
+	Correlation string `json:"correlation"`
 	// Handshake answers a provider's endpoint check (Slack's
 	// url_verification, Meta's GET challenge).
 	Handshake *HandshakeSpec `json:"handshake"`

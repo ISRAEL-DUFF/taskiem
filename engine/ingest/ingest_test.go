@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -328,6 +329,13 @@ triggers:
     verify: { scheme: header_secret, header: X-Secret, secret_field: secret }
     handshake: { method: GET, token_query: hub.verify_token, secret_field: verify_token, respond: '=query["hub.challenge"]' }
     event_type: =body.kind
+  batch:
+    type: webhook
+    verify: { scheme: header_secret, header: X-Secret, secret_field: secret }
+    split: =body.items
+    event_type: =item.kind
+    dedup: =item.id
+    correlation: =item.ref
   slack:
     type: webhook
     verify: { scheme: header_secret, header: X-Secret, secret_field: secret }
@@ -381,6 +389,27 @@ func TestConnectorHandshakes(t *testing.T) {
 	}
 	if st, body := post(`{"type":"event_callback"}`, "s1"); st != 202 || !bytes.Contains([]byte(body), []byte(`"event":"event_callback"`)) {
 		t.Errorf("delivery: %d %s", st, body)
+	}
+
+	// A batch is split into one event per item, each deduplicated alone.
+	batch := func(body string) (int, string) {
+		req, _ := http.NewRequest("POST", w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/batch", bytes.NewReader([]byte(body)))
+		req.Header.Set("X-Secret", "s1")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	st, out := batch(`{"items":[{"kind":"sent","id":"a","ref":"r1"},{"kind":"read","id":"b","ref":"r1"}]}`)
+	if st != 202 || !strings.Contains(out, `"event":"sent"`) || !strings.Contains(out, `"event":"read"`) || strings.Contains(out, `"duplicate":true`) {
+		t.Errorf("batch: %d %s", st, out)
+	}
+	st, out = batch(`{"items":[{"kind":"read","id":"b","ref":"r1"},{"kind":"failed","id":"c","ref":"r2"}]}`)
+	if st != 202 || strings.Count(out, `"duplicate":true`) != 1 || !strings.Contains(out, `"event":"failed"`) {
+		t.Errorf("redelivered batch: %d %s", st, out)
 	}
 
 	// Form-encoded deliveries arrive as fields.

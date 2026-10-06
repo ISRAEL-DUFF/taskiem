@@ -207,6 +207,7 @@
           ]
         },
         "events": { "type": "array", "items": { "type": "string" } },
+        "split": { "$ref": "#/$defs/expr", "description": "A list-valued expression: each element becomes one event, seen by event_type, dedup and correlation as item (for providers that batch several events in one delivery)." },
         "event_type": { "$ref": "#/$defs/expr" },
         "dedup": { "$ref": "#/$defs/expr" },
         "correlation": { "$ref": "#/$defs/expr" }
