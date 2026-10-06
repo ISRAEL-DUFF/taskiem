@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/transfers/999","headers":{"Authorization":"Bearer FLWSECK_TEST-abc"}},
+ "response":{"status":404,"body":{"status":"error","message":"Transfer not found","data":null}}}

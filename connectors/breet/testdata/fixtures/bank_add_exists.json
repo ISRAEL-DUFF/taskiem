@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/payments/banks/add","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"},"body":{"id":"39","accountNumber":"3154021148","currency":"ngn"}},
+ "response":{"status":400,"body":{"success":false,"message":"account already exists.","meta":{},"errors":[],"data":{}}}}

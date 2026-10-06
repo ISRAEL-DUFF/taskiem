@@ -1,0 +1,252 @@
+# Breet (crypto to naira/cedi): deposit addresses with optional automatic
+# settlement to a bank, crypto and bank withdrawals, and their events.
+# Built from Breet's public documentation and OpenAPI description at
+# docs.breet.io, read 6 October 2026 (docs/integrations/breet.md).
+manifest: connector/v1
+id: breet
+version: 1.0.0
+name: Breet
+description: Crypto deposit addresses, auto-settlement, crypto and bank withdrawals, and trade and withdrawal events on Breet.
+category: payments
+regions: [NG, GH]
+auth:
+  type: api_key
+  fields:
+    - { key: app_id, label: App id, secret: false }
+    - { key: app_secret, label: App secret, secret: true }
+    - { key: pin, label: Withdrawal PIN (set on the Breet dashboard), secret: true, required: false }
+    - { key: environment, label: "Environment: production (default) or sandbox", secret: false, required: false }
+    - { key: webhook_secret, label: Webhook secret (x-webhook-secret), secret: true, required: false }
+    - { key: bank_withdrawal_unit, label: "Unit of bank withdrawal amounts as confirmed with Breet for this account: local (NGN/GHS) or usd. Bank withdrawals are refused until it is set", secret: false, required: false }
+  test: { action: list_assets }
+# 500 requests a minute (200 for crypto withdrawals).
+rate_limit: { requests: 200, per: 1m, scope: connection }
+base_url: https://api.breet.io/v1
+actions:
+  list_assets:
+    title: List deposit assets
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        assets:
+          type: array
+          items:
+            type: object
+            properties:
+              id:         { type: string, description: Pass as asset_id to generate_address }
+              identifier: { type: string }
+              name:       { type: string }
+              symbol:     { type: string }
+              network:    { type: string }
+              minimum:    { type: string, description: Minimum deposit, as Breet states it }
+  get_balances:
+    title: Get fiat balances
+    description: The integration's fiat wallets. Amounts are minor units rounded down (what can be spent); balance_exact is Breet's figure.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        balances:
+          type: array
+          items:
+            type: object
+            properties:
+              currency:      { type: string }
+              balance:       { type: integer, description: Minor units, rounded down }
+              balance_exact: { type: string }
+  generate_address:
+    title: Generate a deposit address
+    description: >-
+      A permanent address for one payer (label) and asset. Repeating it for
+      the same label and asset returns the existing address. With bank_id and
+      account_number, deposits can settle to that bank automatically. Declared
+      unsafe (the label, not a key, deduplicates), so an unknown outcome parks.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [asset_id, label]
+      properties:
+        asset_id:        { type: string, description: From list_assets }
+        label:           { type: string, description: Your id for the payer; comes back on deposit events }
+        bank_id:         { type: string, description: From list_banks; with account_number, for automatic settlement }
+        account_number:  { type: string }
+        auto_settlement: { type: boolean }
+        narration:       { type: string, maxLength: 32 }
+    output:
+      type: object
+      properties:
+        wallet_id: { type: string }
+        address:   { type: string, description: Correlation for deposit events }
+        label:     { type: string }
+        asset_id:  { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+  get_deposit:
+    title: Get a deposit (trade)
+    class: read
+    input:
+      type: object
+      required: [trade_id]
+      properties: { trade_id: { type: string } }
+    output:
+      type: object
+      properties:
+        trade_id:        { type: string }
+        status:          { type: string, description: "pending, completed, flagged (not final) or deleted" }
+        address:         { type: string }
+        amount_usd:      { type: string, description: Value received, in USD, as Breet states it }
+        crypto_received: { type: string }
+        rate:            { type: string }
+        currency:        { type: string }
+        fee:             { type: string }
+        tx_hash:         { type: string }
+        wallet_credited: { type: boolean }
+  list_banks:
+    title: List banks
+    class: read
+    input:
+      type: object
+      properties:
+        currency: { type: string, enum: [ngn, ghs], default: ngn }
+    output:
+      type: object
+      properties:
+        banks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:       { type: string }
+              name:     { type: string }
+              currency: { type: string }
+  verify_bank_account:
+    title: Resolve account name
+    class: read
+    input:
+      type: object
+      required: [bank_id, account_number]
+      properties:
+        bank_id:        { type: string }
+        account_number: { type: string }
+        currency:       { type: string, enum: [ngn, ghs] }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_name:      { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+  add_bank:
+    title: Save a bank account for withdrawals
+    description: Breet keeps at most three. Saving one already saved returns it. Declared unsafe, so an unknown outcome parks.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [bank_id, account_number]
+      properties:
+        bank_id:        { type: string }
+        account_number: { type: string }
+        currency:       { type: string, enum: [ngn, ghs] }
+        narration:      { type: string, maxLength: 32 }
+    output:
+      type: object
+      properties:
+        saved_bank_id:  { type: string, description: Pass as saved_bank_id to withdraw_to_bank }
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_name:      { type: string }
+        currency:       { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+  withdraw_crypto:
+    title: Withdraw stablecoins or crypto
+    description: >-
+      Debits the USD balance when accepted (pending); the outcome arrives as a
+      withdrawal event or from get_withdrawal. completed is final; reversed and
+      rejected refund the balance.
+    class: reconcilable_write
+    idempotency:
+      field: external_id
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 64, charset: "a-z0-9_-" }
+    reconcile: get_withdrawal
+    compensate: null
+    input:
+      type: object
+      required: [token, wallet_address]
+      properties:
+        amount_usd:     { type: integer, minimum: 1, description: US cents; or crypto_amount }
+        crypto_amount:  { type: string, description: Crypto units, up to 8 decimal places }
+        token:          { type: string, enum: [USDT, USDC, BTC, LTC, DOGE, BCH] }
+        network:        { type: string, enum: [ERC20, TRC20, BSC, SOL, TON, BASE], description: Stablecoins only }
+        fee_level:      { type: string, enum: [low, medium, high], description: Required for BTC, LTC, DOGE and BCH }
+        wallet_address: { type: string }
+        external_id:    { type: string }
+    output: { $ref: '#/actions/get_withdrawal/output' }
+    pii:
+      - { field: wallet_address, category: other }
+  withdraw_to_bank:
+    title: Withdraw to a bank account
+    description: >-
+      Pays a saved bank account (add_bank). Breet's documentation disagrees on
+      the unit of the amount (local currency or USD), so this is refused until
+      the connection's bank_withdrawal_unit records the unit Breet confirmed,
+      and the step's currency must match it.
+    class: reconcilable_write
+    idempotency:
+      field: external_id
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 64, charset: "a-z0-9_-" }
+    reconcile: get_withdrawal
+    compensate: null
+    input:
+      type: object
+      required: [saved_bank_id, amount, currency]
+      properties:
+        saved_bank_id: { type: string, description: From add_bank }
+        amount:        { type: integer, minimum: 1, description: Minor units of currency (kobo, pesewas or cents) }
+        currency:      { type: string, enum: [NGN, GHS, USD] }
+        narration:     { type: string, maxLength: 32 }
+        external_id:   { type: string }
+    output: { $ref: '#/actions/get_withdrawal/output' }
+  get_withdrawal:
+    title: Get a withdrawal
+    class: read
+    input:
+      type: object
+      properties:
+        withdrawal_id: { type: string }
+        external_id:   { type: string }
+    output:
+      type: object
+      properties:
+        withdrawal_id: { type: string, description: Correlation for withdrawal events }
+        external_id:   { type: string }
+        status:        { type: string, enum: [pending, processing, completed, reversed, rejected] }
+        amount:        { type: integer, description: Minor units of currency, as debited }
+        fee:           { type: integer, description: Minor units, rounded up }
+        currency:      { type: string }
+        crypto_amount: { type: string }
+        tx_hash:       { type: string }
+        reason:        { type: string }
+triggers:
+  # The integration has one webhook URL, which receives every event.
+  event:
+    type: webhook
+    verify: { scheme: header_secret, header: x-webhook-secret, secret_field: webhook_secret }
+    events: [trade.pending, trade.completed, trade.flagged, trade.deleted, trade.address.created,
+             withdrawal.pending, withdrawal.processing, withdrawal.completed, withdrawal.reversed, withdrawal.rejected]
+    event_type: =body.event
+    dedup: =body.eventId
+    # Deposits: the deposit address. Withdrawals: the withdrawal id. New addresses: the address.
+    correlation: '=body.event.startsWith("withdrawal.") ? body.id : (body.event == "trade.address.created" ? body.address : body.destinationAddress)'

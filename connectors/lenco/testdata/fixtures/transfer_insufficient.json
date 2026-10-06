@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/transfer","headers":{"Authorization":"Bearer lenco_test_token"},"body":{"accountId":"056ffebf-812a-433a-83a0-9c67cd8c089c","accountNumber":"8144374977","bankCode":"000014","amount":"2000.00","narration":"Sept salary","reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}},
+ "response":{"status":400,"body":{"status":false,"message":"Insufficient funds in your account","data":[],"errorCode":"02"}}}

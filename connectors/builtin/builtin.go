@@ -3,8 +3,12 @@
 package builtin
 
 import (
+	"github.com/israel-duff/taskiem/connectors/anchor"
+	"github.com/israel-duff/taskiem/connectors/breet"
 	"github.com/israel-duff/taskiem/connectors/dojah"
+	"github.com/israel-duff/taskiem/connectors/flutterwave"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
+	"github.com/israel-duff/taskiem/connectors/lenco"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/termii"
@@ -14,6 +18,7 @@ import (
 // Options override provider base URLs (sandboxes, tests).
 type Options struct {
 	PaystackURL, TermiiURL, DojahURL, IswalletURL string
+	FlutterwaveURL, AnchorURL, LencoURL, BreetURL string
 }
 
 // Register adds every built-in connector to r.
@@ -23,6 +28,10 @@ func Register(r *connector.Registry, o Options) error {
 		termii.New(termii.Options{BaseURL: o.TermiiURL}),
 		dojah.New(dojah.Options{BaseURL: o.DojahURL}),
 		iswallet.New(iswallet.Options{BaseURL: o.IswalletURL}),
+		flutterwave.New(flutterwave.Options{BaseURL: o.FlutterwaveURL}),
+		anchor.New(anchor.Options{BaseURL: o.AnchorURL}),
+		lenco.New(lenco.Options{BaseURL: o.LencoURL}),
+		breet.New(breet.Options{BaseURL: o.BreetURL}),
 		postgres.New(),
 	} {
 		if err := r.Register(c); err != nil {

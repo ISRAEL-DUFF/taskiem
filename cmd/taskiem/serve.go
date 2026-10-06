@@ -90,6 +90,12 @@ func loadConfig() (config, error) {
 			TermiiURL:   os.Getenv("TASKIEM_TERMII_URL"),
 			DojahURL:    os.Getenv("TASKIEM_DOJAH_URL"),
 			IswalletURL: os.Getenv("TASKIEM_ISWALLET_URL"),
+			// Sandboxes and tests; Anchor and Lenco connections also pick
+			// their provider's sandbox with environment=sandbox.
+			FlutterwaveURL: os.Getenv("TASKIEM_FLUTTERWAVE_URL"),
+			AnchorURL:      os.Getenv("TASKIEM_GETANCHOR_URL"), // not TASKIEM_ANCHOR_*: those are audit anchors
+			LencoURL:       os.Getenv("TASKIEM_LENCO_URL"),
+			BreetURL:       os.Getenv("TASKIEM_BREET_URL"),
 		},
 		PoolSize: 20,
 	}

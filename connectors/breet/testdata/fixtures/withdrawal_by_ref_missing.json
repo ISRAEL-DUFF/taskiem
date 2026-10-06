@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/payments/withdrawal/tsk_ab12cd34ef56gh78ij90kl12mn34op56","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"}},
+ "response":{"status":404,"body":{"success":false,"message":"withdrawal not found","meta":{},"errors":[],"data":{}}}}

@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/resolve","query":{"accountNumber":"8144374977","bankCode":"000014"},"headers":{"Authorization":"Bearer lenco_test_token"}},
+ "response":{"status":400,"body":{"status":false,"message":"Account Details could not be verified","data":[]}}}

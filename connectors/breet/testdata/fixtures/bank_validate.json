@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/payments/banks/validate","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"},"body":{"id":"39","accountNumber":"3154021148","currency":"ngn"}},
+ "response":{"status":200,"body":{"message":"ok","success":true,"data":{"accountNumber":"3154021148","type":"nuban","bankName":"United Bank For Africa","accountName":"CHIROMA AHMED OLABANJI"},"meta":{}}}}

@@ -1,0 +1,4 @@
+{"request":{"method":"GET","path":"/accounts","headers":{"Authorization":"Bearer lenco_test_token"}},
+ "response":{"status":200,"body":{"status":true,"message":"Success","data":[{"id":"056ffebf-812a-433a-83a0-9c67cd8c089c","name":"DISBURSEMENT","currency":"NGN",
+   "bankAccount":{"accountName":"DISBURSEMENT","accountNumber":"0000000077","bank":{"code":"000023","name":"PROVIDUS BANK"}},
+   "type":"Lenco Current","status":"active","availableBalance":"99995404316.07","currentBalance":"99995404316.07","createdAt":"2021-03-30T13:30:58.218Z"}]}}}

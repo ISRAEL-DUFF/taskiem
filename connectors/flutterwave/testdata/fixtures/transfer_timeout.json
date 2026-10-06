@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/transfers","headers":{"Authorization":"Bearer FLWSECK_TEST-abc"},"body":{"account_bank":"044","account_number":"0690000040","amount":5500,"currency":"NGN","debit_currency":"NGN","reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","narration":"Sept salary"}},
+ "response":{"status":503,"body":{"status":"error","message":"Request timed out","data":null}}}

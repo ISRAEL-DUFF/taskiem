@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/trades/wallets","query":{"page":"1","size":"100"},"headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"}},
+ "response":{"status":200,"body":{"message":"ok","success":true,"data":[{"id":"696a","label":"Partner_B-LBNS1M85_someone-else","address":"TB1","asset":"67063f653b4a1f6c7a60ec58"},{"id":"6932dc98c2ceccdea367388a","label":"Partner_B-LBNS1M85_user-12345","address":"TV8dNYYBgL3xLbQcJLMBNavY4gYNqPF8Jv","asset":"67063f653b4a1f6c7a60ec58"}],"meta":{}}}}

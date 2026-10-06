@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/users/fetch-integration","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"}},
+ "response":{"status":200,"body":{"message":"ok","success":true,"data":{"id":"692d","webhook":{"url":"https://x","secret":"breet_whsec_test_x"},"user":{"name":"AB","email":"ab@example.com"},"fiatWallets":[{"id":"1","balance":20672860.25790078,"currency":"ngn"},{"id":"2","balance":44080.5,"currency":"usd"}]},"meta":{}}}}

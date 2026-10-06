@@ -3,6 +3,152 @@
 
 import { connector, type ConnectorExtra, type StepSpec, type Val, type Value } from "./builder.js";
 
+// Anchor (anchor@1)
+export interface AnchorBookTransferInput {
+  /** Deposit account to pay from; defaults to the connection's */
+  account_id?: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  destination_account_id: Val<string>;
+  destination_type?: Val<"DepositAccount" | "SubAccount">;
+  reason: Val<string>;
+}
+export interface AnchorGetBalanceInput {
+  /** Defaults to the connection's account */
+  account_id?: Val<string>;
+}
+export interface AnchorGetTransferInput {
+  transfer_id: Val<string>;
+}
+export interface AnchorGetTransferByReferenceInput {
+  reference: Val<string>;
+}
+export interface AnchorListBanksInput {
+  [key: string]: Value;
+}
+export interface AnchorTransferInput {
+  /** Deposit account to pay from; defaults to the connection's */
+  account_id?: Val<string>;
+  /** The name you expect; checked against the bank's */
+  account_name?: Val<string>;
+  /** With bank_code and account_name */
+  account_number?: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  /** Six-digit NIP code */
+  bank_code?: Val<string>;
+  /** Refuse to pay when the bank's name differs from account_name */
+  check_name?: Val<boolean>;
+  /** An existing Anchor counterparty (…-anc_cp) instead */
+  counterparty_id?: Val<string>;
+  reason: Val<string>;
+}
+export interface AnchorVerifyAccountInput {
+  account_number: Val<string>;
+  /** Six-digit NIP code */
+  bank_code: Val<string>;
+}
+export const anchor = {
+  /** Transfer between Anchor accounts (idempotent_write) */
+  book_transfer: (input: AnchorBookTransferInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "book_transfer", input, extra),
+  /** Get deposit account balance (read) */
+  get_balance: (input?: AnchorGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "get_balance", input, extra),
+  /** Get transfer status (read) */
+  get_transfer: (input: AnchorGetTransferInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "get_transfer", input, extra),
+  /** Get transfer by reference (read) */
+  get_transfer_by_reference: (input: AnchorGetTransferByReferenceInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "get_transfer_by_reference", input, extra),
+  /** List banks (read) */
+  list_banks: (input?: AnchorListBanksInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "list_banks", input, extra),
+  /** Transfer to a bank account (NIP) (idempotent_write) */
+  transfer: (input: AnchorTransferInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "transfer", input, extra),
+  /** Resolve account name (read) */
+  verify_account: (input: AnchorVerifyAccountInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "verify_account", input, extra),
+};
+
+// Breet (breet@1)
+export interface BreetAddBankInput {
+  account_number: Val<string>;
+  bank_id: Val<string>;
+  currency?: Val<"ngn" | "ghs">;
+  narration?: Val<string>;
+}
+export interface BreetGenerateAddressInput {
+  account_number?: Val<string>;
+  /** From list_assets */
+  asset_id: Val<string>;
+  auto_settlement?: Val<boolean>;
+  /** From list_banks; with account_number */
+  bank_id?: Val<string>;
+  /** Your id for the payer; comes back on deposit events */
+  label: Val<string>;
+  narration?: Val<string>;
+}
+export interface BreetGetBalancesInput {
+  [key: string]: Value;
+}
+export interface BreetGetDepositInput {
+  trade_id: Val<string>;
+}
+export interface BreetGetWithdrawalInput {
+  external_id?: Val<string>;
+  withdrawal_id?: Val<string>;
+}
+export interface BreetListAssetsInput {
+  [key: string]: Value;
+}
+export interface BreetListBanksInput {
+  currency?: Val<"ngn" | "ghs">;
+}
+export interface BreetVerifyBankAccountInput {
+  account_number: Val<string>;
+  bank_id: Val<string>;
+  currency?: Val<"ngn" | "ghs">;
+}
+export interface BreetWithdrawCryptoInput {
+  /** US cents; or crypto_amount */
+  amount_usd?: Val<number>;
+  /** Crypto units */
+  crypto_amount?: Val<string>;
+  external_id?: Val<string>;
+  /** Required for BTC */
+  fee_level?: Val<"low" | "medium" | "high">;
+  /** Stablecoins only */
+  network?: Val<"ERC20" | "TRC20" | "BSC" | "SOL" | "TON" | "BASE">;
+  token: Val<"USDT" | "USDC" | "BTC" | "LTC" | "DOGE" | "BCH">;
+  wallet_address: Val<string>;
+}
+export interface BreetWithdrawToBankInput {
+  /** Minor units of currency (kobo */
+  amount: Val<number>;
+  currency: Val<"NGN" | "GHS" | "USD">;
+  external_id?: Val<string>;
+  narration?: Val<string>;
+  /** From add_bank */
+  saved_bank_id: Val<string>;
+}
+export const breet = {
+  /** Save a bank account for withdrawals (unsafe_write) */
+  add_bank: (input: BreetAddBankInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "add_bank", input, extra),
+  /** Generate a deposit address (unsafe_write) */
+  generate_address: (input: BreetGenerateAddressInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "generate_address", input, extra),
+  /** Get fiat balances (read) */
+  get_balances: (input?: BreetGetBalancesInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "get_balances", input, extra),
+  /** Get a deposit (trade) (read) */
+  get_deposit: (input: BreetGetDepositInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "get_deposit", input, extra),
+  /** Get a withdrawal (read) */
+  get_withdrawal: (input?: BreetGetWithdrawalInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "get_withdrawal", input, extra),
+  /** List deposit assets (read) */
+  list_assets: (input?: BreetListAssetsInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "list_assets", input, extra),
+  /** List banks (read) */
+  list_banks: (input?: BreetListBanksInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "list_banks", input, extra),
+  /** Resolve account name (read) */
+  verify_bank_account: (input: BreetVerifyBankAccountInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "verify_bank_account", input, extra),
+  /** Withdraw stablecoins or crypto (reconcilable_write) */
+  withdraw_crypto: (input: BreetWithdrawCryptoInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "withdraw_crypto", input, extra),
+  /** Withdraw to a bank account (reconcilable_write) */
+  withdraw_to_bank: (input: BreetWithdrawToBankInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "withdraw_to_bank", input, extra),
+};
+
 // Dojah (dojah@1)
 export interface DojahCheckBalanceInput {
   [key: string]: Value;
@@ -22,6 +168,61 @@ export const dojah = {
   lookup_bvn: (input: DojahLookupBvnInput, extra?: ConnectorExtra): StepSpec => connector("dojah@1", "lookup_bvn", input, extra),
   /** Look up NIN (read) */
   lookup_nin: (input: DojahLookupNinInput, extra?: ConnectorExtra): StepSpec => connector("dojah@1", "lookup_nin", input, extra),
+};
+
+// Flutterwave (flutterwave@1)
+export interface FlutterwaveGetBalanceInput {
+  currency?: Val<string>;
+}
+export interface FlutterwaveGetTransferInput {
+  transfer_id: Val<number>;
+}
+export interface FlutterwaveGetTransferByReferenceInput {
+  reference: Val<string>;
+}
+export interface FlutterwaveGetTransferFeeInput {
+  /** Kobo */
+  amount: Val<number>;
+}
+export interface FlutterwaveListBanksInput {
+  country?: Val<string>;
+}
+export interface FlutterwaveResolveAccountInput {
+  account_number: Val<string>;
+  /** From list_banks */
+  bank_code: Val<string>;
+}
+export interface FlutterwaveTransferInput {
+  account_number: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  /** From list_banks */
+  bank_code: Val<string>;
+  beneficiary_name?: Val<string>;
+  narration?: Val<string>;
+  reference?: Val<string>;
+}
+export interface FlutterwaveVerifyPaymentInput {
+  transaction_id?: Val<number>;
+  tx_ref?: Val<string>;
+}
+export const flutterwave = {
+  /** Get wallet balance (read) */
+  get_balance: (input?: FlutterwaveGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "get_balance", input, extra),
+  /** Get transfer (read) */
+  get_transfer: (input: FlutterwaveGetTransferInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "get_transfer", input, extra),
+  /** Get transfer by reference (read) */
+  get_transfer_by_reference: (input: FlutterwaveGetTransferByReferenceInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "get_transfer_by_reference", input, extra),
+  /** Quote a transfer fee (read) */
+  get_transfer_fee: (input: FlutterwaveGetTransferFeeInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "get_transfer_fee", input, extra),
+  /** List banks (read) */
+  list_banks: (input?: FlutterwaveListBanksInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "list_banks", input, extra),
+  /** Resolve account name (read) */
+  resolve_account: (input: FlutterwaveResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "resolve_account", input, extra),
+  /** Pay out to a Nigerian bank account (idempotent_write) */
+  transfer: (input: FlutterwaveTransferInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "transfer", input, extra),
+  /** Verify a payment (read) */
+  verify_payment: (input?: FlutterwaveVerifyPaymentInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "verify_payment", input, extra),
 };
 
 // iswallet (iswallet@1)
@@ -72,6 +273,68 @@ export const iswallet = {
   payout: (input: IswalletPayoutInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "payout", input, extra),
   /** Transfer between wallets (idempotent_write) */
   transfer: (input: IswalletTransferInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "transfer", input, extra),
+};
+
+// Lenco (lenco@1)
+export interface LencoCreateVirtualAccountInput {
+  /** Shown when payers resolve the number */
+  account_name: Val<string>;
+  /** Kobo; transfers of any other amount are rejected (dynamic only) */
+  amount?: Val<number>;
+  /** Required for static accounts */
+  bvn?: Val<string>;
+  is_static?: Val<boolean>;
+  /** Kobo; smaller transfers are rejected (dynamic only) */
+  min_amount?: Val<number>;
+  /** Returned with every transfer into the account */
+  transaction_reference?: Val<string>;
+}
+export interface LencoGetBalanceInput {
+  /** Defaults to the connection's account */
+  account_id?: Val<string>;
+}
+export interface LencoGetTransferInput {
+  reference: Val<string>;
+}
+export interface LencoListAccountsInput {
+  [key: string]: Value;
+}
+export interface LencoListBanksInput {
+  [key: string]: Value;
+}
+export interface LencoResolveAccountInput {
+  account_number: Val<string>;
+  /** From list_banks (six digits) */
+  bank_code: Val<string>;
+}
+export interface LencoTransferInput {
+  /** Account to pay from; defaults to the connection's */
+  account_id?: Val<string>;
+  /** Ten-digit NUBAN; with bank_code */
+  account_number?: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  bank_code?: Val<string>;
+  narration: Val<string>;
+  /** A saved Lenco recipient instead of account_number and bank_code */
+  recipient_id?: Val<string>;
+  reference?: Val<string>;
+}
+export const lenco = {
+  /** Create a virtual account (unsafe_write) */
+  create_virtual_account: (input: LencoCreateVirtualAccountInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "create_virtual_account", input, extra),
+  /** Get account balance (read) */
+  get_balance: (input?: LencoGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "get_balance", input, extra),
+  /** Get transfer by reference (read) */
+  get_transfer: (input: LencoGetTransferInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "get_transfer", input, extra),
+  /** List accounts and balances (read) */
+  list_accounts: (input?: LencoListAccountsInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "list_accounts", input, extra),
+  /** List banks (read) */
+  list_banks: (input?: LencoListBanksInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "list_banks", input, extra),
+  /** Resolve account name (read) */
+  resolve_account: (input: LencoResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "resolve_account", input, extra),
+  /** Transfer to a bank account (idempotent_write) */
+  transfer: (input: LencoTransferInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "transfer", input, extra),
 };
 
 // Paystack (paystack@1)
@@ -141,8 +404,12 @@ export const termii = {
 
 /** Connector refs with helpers here, for code generation. */
 export const CONNECTOR_HELPERS: Record<string, string> = {
+  "anchor@1": "anchor",
+  "breet@1": "breet",
   "dojah@1": "dojah",
+  "flutterwave@1": "flutterwave",
   "iswallet@1": "iswallet",
+  "lenco@1": "lenco",
   "paystack@1": "paystack",
   "postgres@1": "postgres",
   "termii@1": "termii",

@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/payments/integration-banks","query":{"page":"1","size":"50"},"headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"}},
+ "response":{"status":200,"body":{"message":"ok","success":true,"data":[{"id":"69737920df8b52679a8b198e","accountName":"CHIROMA AHMED OLABANJI","accountNumber":"3154021148","bankId":"39","bankName":"United Bank For Africa","currency":"ngn"}],"meta":{}}}}

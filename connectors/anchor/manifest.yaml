@@ -1,0 +1,164 @@
+# Anchor (getanchor.co), banking as a service. Built from Anchor's public
+# API documentation at docs.getanchor.co, read 6 October 2026
+# (docs/integrations/anchor.md).
+manifest: connector/v1
+id: anchor
+version: 1.0.0
+name: Anchor
+description: NIP and book transfers, balances, name enquiry and transfer events on Anchor deposit accounts.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: api_key, label: API key, secret: true }
+    - { key: account_id, label: Default deposit account id (…-anc_acc) to pay from, secret: false, required: false }
+    - { key: environment, label: "Environment: live (default) or sandbox", secret: false, required: false }
+    - { key: webhook_token, label: Webhook token (set on the Anchor webhook), secret: true, required: false }
+  test: { action: list_banks }
+base_url: https://api.getanchor.co/api/v1
+egress_hosts: [api.getanchor.co, api.sandbox.getanchor.co]
+actions:
+  get_balance:
+    title: Get deposit account balance
+    class: read
+    input:
+      type: object
+      properties:
+        account_id: { type: string, description: Defaults to the connection's account }
+    output:
+      type: object
+      properties:
+        account_id:        { type: string }
+        available_balance: { type: integer, description: Kobo }
+        ledger_balance:    { type: integer, description: Kobo }
+        hold:              { type: integer, description: Kobo committed to outgoing transfers }
+        pending:           { type: integer, description: Kobo expected in }
+  list_banks:
+    title: List banks
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        banks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:       { type: string }
+              name:     { type: string }
+              nip_code: { type: string }
+  verify_account:
+    title: Resolve account name
+    description: Call before paying a new account; a transfer to the wrong valid account cannot be recovered.
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code]
+      properties:
+        account_number: { type: string }
+        bank_code:      { type: string, description: Six-digit NIP code, or Anchor's bank id }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_name:      { type: string }
+        bank_code:      { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+  transfer:
+    title: Transfer to a bank account (NIP)
+    description: >-
+      Creates (or reuses) the counterparty with Anchor's name check, refuses
+      to pay when the bank's name for the account does not match
+      account_name, then sends the transfer. Returns PENDING; the outcome
+      arrives as a transfer_event (correlation: transfer_id) or from
+      get_transfer. A COMPLETED transfer can later be REVERSED.
+    class: idempotent_write
+    idempotency:
+      field: header:x-anchor-idempotent-key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 99, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, reason]
+      properties:
+        amount:          { type: integer, minimum: 100, description: Kobo }
+        account_number:  { type: string, description: With bank_code and account_name, or use counterparty_id }
+        bank_code:       { type: string, description: Six-digit NIP code }
+        account_name:    { type: string, description: The name you expect; checked against the bank's }
+        check_name:      { type: boolean, default: true, description: Refuse to pay when the bank's name differs from account_name }
+        counterparty_id: { type: string, description: An existing Anchor counterparty (…-anc_cp) instead }
+        reason:          { type: string, maxLength: 100 }
+        account_id:      { type: string, description: Deposit account to pay from; defaults to the connection's }
+    output: { $ref: '#/actions/get_transfer/output' }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: account_name, category: name }
+  book_transfer:
+    title: Transfer between Anchor accounts
+    class: idempotent_write
+    idempotency:
+      field: header:x-anchor-idempotent-key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 99, charset: "a-z0-9_-" }
+    compensate: book_transfer
+    input:
+      type: object
+      required: [amount, destination_account_id, reason]
+      properties:
+        amount:                 { type: integer, minimum: 1, description: Kobo }
+        destination_account_id: { type: string }
+        destination_type:       { type: string, enum: [DepositAccount, SubAccount], default: DepositAccount }
+        reason:                 { type: string, maxLength: 100 }
+        account_id:             { type: string, description: Deposit account to pay from; defaults to the connection's }
+    output: { $ref: '#/actions/get_transfer/output' }
+  get_transfer:
+    title: Get transfer status
+    description: Asks Anchor to re-check the transfer with the provider before answering.
+    class: read
+    input:
+      type: object
+      required: [transfer_id]
+      properties: { transfer_id: { type: string } }
+    output:
+      type: object
+      properties:
+        transfer_id:    { type: string }
+        type:           { type: string }
+        reference:      { type: string }
+        status:         { type: string, description: "PENDING, COMPLETED, FAILED or REVERSED (Anchor lists other in-progress states)" }
+        amount:         { type: integer, description: Kobo }
+        currency:       { type: string }
+        failure_reason: { type: string }
+        session_id:     { type: string }
+  get_transfer_by_reference:
+    title: Get transfer by reference
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output: { $ref: '#/actions/get_transfer/output' }
+triggers:
+  transfer_event:
+    type: webhook
+    verify: { scheme: hmac_sha1, header: x-anchor-signature, encoding: base64_of_hex, secret_field: webhook_token }
+    events: [nip.transfer.initiated, nip.transfer.successful, nip.transfer.failed, nip.transfer.reversed, book.transfer.initiated, book.transfer.successful, book.transfer.failed]
+    event_type: '=has(body.data) ? body.data.type : body.type'
+    dedup: '=has(body.data) ? body.data.id : body.id'
+    correlation: '=has(body.data) ? body.data.relationships.transfer.data.id : body.relationships.transfer.data.id'
+  inflow_event:
+    type: webhook
+    verify: { scheme: hmac_sha1, header: x-anchor-signature, encoding: base64_of_hex, secret_field: webhook_token }
+    events: [nip.inbound.received, nip.inbound.completed, payment.received, payment.settled, payin.received]
+    event_type: '=has(body.data) ? body.data.type : body.type'
+    dedup: '=has(body.data) ? body.data.id : body.id'
+    correlation: '=has(body.data) ? body.data.relationships.account.data.id : body.relationships.account.data.id'

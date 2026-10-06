@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/banks","headers":{"Authorization":"Bearer lenco_test_token"}},
+ "response":{"status":200,"body":{"status":true,"message":"Success","data":[{"code":"120001","name":"9 PAYMENT SOLUTIONS BANK"},{"code":"000014","name":"ACCESS BANK"}]}}}

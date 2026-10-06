@@ -11,7 +11,7 @@ The build plan lists Phase 2's deliverables without an order. This is the order 
 | 1 | 1–3 | Engine and local tooling | `parallel` step (3.2); workflow tests with mocked connector outputs (10.5); CLI: `validate`, `test`, `diff`, `deploy`, `runs tail`, `dev` (10.4) | **Done** (below) |
 | 2 | 2–6 | Code and Git | TypeScript SDK and compiler to WD; deterministic codegen from the canvas; three-way merge on parent digest (10.1, 10.2); GitHub and GitLab, platform-led and Git-led (10.3) | **Done** (below), except a published Taskiem GitHub App and Bitbucket |
 | 3 | 3–8 | Governance and privacy | Policy objects: amount rules, multi-level approvers, escalation, delegation, step-up with passkey or TOTP; four-eyes on production publishing and policy edits (9.1); Nigerian-identifier PII detectors, redaction everywhere, `pii.reveal` (9.3); per-workflow retention (9.4); compliance reports and audit-chain anchoring (9.2, 9.6) | **Done** (below), except passkey step-up (with milestone 5's passkeys) and emailed anchors (with milestone 5's email) |
-| 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | **In progress** (below): WASM runtime and drift monitor done; provider connectors wait on documentation access |
+| 4 | 4–10 | Connectors | WASM runtime for third-party connectors; contract-drift monitor (6.3, 6.4); 13 African connectors and 7 global ones (6.5) | **In progress** (below): WASM runtime, drift monitor, and Flutterwave, Anchor, Lenco and Breet done; more connectors to follow |
 | 5 | 6–11 | Identity and operations | Passkeys by default for admins; SSO (OIDC, SAML); SCIM; custom roles (13.2, 13.3); staging environments, alerts to email and Slack, dashboards, live run view on the canvas (15.1); Python sandbox (7.1) | Not started |
 | 6 | 11–12 | External readiness | First external penetration test (14.4); design partners onboarded | Needs people |
 
@@ -77,7 +77,18 @@ Passkey step-up waits for passkey sign-in (milestone 5), which needs the same We
 
 ### Provider connectors: Flutterwave, Anchor, Lenco, Breet
 
-The products use Flutterwave, Anchor, Lenco and Breet, so these are built first, ahead of the spec's list (parts of which are out of date: Okra has shut down; Stitch serves South Africa; NIBSS needs a licensed partner). Research on 6 October 2026 could not reach any of the four providers' documentation from the build environment (its network policy refuses the hosts), so the notes came from search extracts and are not enough to move money safely: Lenco's docs do not say whether amounts are naira or kobo; Breet's request and response formats and webhook signing are not published in what could be reached; Flutterwave's behaviour on a repeated transfer reference is unconfirmed. They will be built once the documentation hosts are allowed (developer.flutterwave.com, docs.getanchor.co, docs.lenco.co, docs.breet.io).
+The products use Flutterwave, Anchor, Lenco and Breet, so these come first, ahead of the spec's list (parts of which are out of date: Okra has shut down; Stitch serves South Africa; NIBSS needs a licensed partner). Each was built from the provider's own documentation, read 6 October 2026, with recorded fixtures and tests; the two hardest guarantees also run end to end through the engine (`e2e/providers_test.go`).
+
+| Connector | API | Never twice | Webhooks | Guide |
+| --- | --- | --- | --- | --- |
+| `flutterwave@1` | v3 (stable; v4 is in beta) | Unique reference; a refused repeat is looked up by reference. A 503 is Flutterwave's timeout: an unknown outcome | `verif-hash` shared secret | [flutterwave.md](integrations/flutterwave.md) |
+| `anchor@1` | v1 | Idempotency header and reference; a resend asks for the reference first, so the 24-hour replay window does not matter. Counterparty name checked before paying | base64 of hex HMAC-SHA1 | [anchor.md](integrations/anchor.md) |
+| `lenco@1` | v1 (NGN) | Unique reference; a refused repeat is looked up by reference | HMAC-SHA512 keyed with SHA-256 of the token | [lenco.md](integrations/lenco.md) |
+| `breet@1` | v1 | No idempotency key: withdrawals are reconcilable by `externalId`, never resent blind | `x-webhook-secret` shared secret | [breet.md](integrations/breet.md) |
+
+Shared pieces: exact conversion between minor units and providers' decimal amounts (`connectors/internal/money`; an amount that cannot be read exactly is an error, never a zero), and new webhook schemes (`hmac_sha1`, `header_secret`, base64 and base64-of-hex encodings, SHA-256 key derivation) in the connector/v1 contract.
+
+Open questions for each provider are listed at the end of its guide. The one that blocks a feature: **Breet's documentation gives bank withdrawal amounts both in local currency and in USD**, so `withdraw_to_bank` is refused until a connection records the unit Breet confirmed. Live checks need a sandbox account per provider.
 
 ## Carried over from Phase 1
 

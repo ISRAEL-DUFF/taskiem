@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/banks/NG","headers":{"Authorization":"Bearer FLWSECK_TEST-abc"}},
+ "response":{"status":200,"body":{"status":"success","message":"Banks fetched successfully","data":[{"id":132,"code":"044","name":"Access Bank"}]}}}

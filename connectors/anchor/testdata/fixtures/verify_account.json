@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/payments/verify-account/000014/0000000010","headers":{"x-anchor-key":"anc_test_key"}},
+ "response":{"status":200,"body":{"data":{"id":"0","type":"AccountDetail","attributes":{"accountName":"Test Account","accountNumber":"0000000010","bank":{"id":"16565854883910-anc_bk","name":"ACCESS BANK","nipCode":"000014"}}}}}}
