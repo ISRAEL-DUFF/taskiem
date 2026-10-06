@@ -20,7 +20,7 @@ Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](p
 | D2 | [ ] Payrolla implements the [integration guide](integrations/payrolla.md) | Payrolla engineering | Guide and webhook endpoint ready | G1 |
 | D3 | [ ] iSpend's owner confirms the wallet-credit-exception workflow, and iSpend builds `POST /internal/wallet-credit-exceptions` honouring `Idempotency-Key` | iSpend product owner and engineering | Workflow built and tested; the fields iswallet sends on `wallet.credit.reversed` to confirm too | G0, G1 |
 | D4 | [ ] Ops confirms the payout-failure alert workflow: on-call phone, Slack webhook, Termii sender and channel | Ops lead | Workflow built and tested | G0, G1 |
-| D5 | [ ] Production access to the holdco environment; Taskiem deployed with a public URL (`TASKIEM_PUBLIC_URL`) | Infra / ops | One binary runs every role; Dockerfile and Compose file written but not yet built where a Docker daemon runs; no Kubernetes manifests yet ([operations](operations.md)) | D6, D7, passkeys and SSO in production |
+| D5 | [ ] Production access to the holdco environment; Taskiem deployed with a public URL (`TASKIEM_PUBLIC_URL`) | Infra / ops | Ready to apply: the image builds and runs read-only as non-root; Compose stack verified; Helm chart and plain manifests in `deploy/` ([kubernetes](kubernetes.md)). Needs a cluster, a Postgres 16, OpenBao, a DNS name and a registry to push the image to | D6, D7, passkeys and SSO in production |
 | D6 | [ ] Production iswallet credentials entered (Connections and Secrets pages) | iswallet account holder | Connector built against iswallet's answers | G1 |
 | D7 | [ ] Webhook URLs and signing secrets generated in Taskiem and registered with iswallet and Payrolla | Ops, with iswallet and Payrolla | Ingest and signature checks ready | G1 |
 | D8 | [ ] Four consecutive weeks of the three dogfood workflows in production | Everyone above | — | G1 |
@@ -92,7 +92,7 @@ None of the items above stops code. Work that needs no one:
 
 - **Connectors** are built: 16 African (Paystack, Dojah, Termii, iswallet, Flutterwave, Anchor, Lenco, Breet, Moniepoint, Interswitch, OPay, Remita, Mono, Prembly, Youverify, Africa's Talking), against G2's 15, and the global set (WhatsApp, Telegram, Slack, Gmail, Google Sheets, MySQL, S3, SFTP, PostgreSQL). What remains for each is its live sandbox check (P1).
 - **Bitbucket** for Git-led and platform-led modes.
-- **Deployment**: Kubernetes manifests and a Helm chart (spec 15.4), so D5 is a matter of applying them.
+- **Deployment** (done): image, Helm chart and Kubernetes manifests (spec 15.4), so D5 is a matter of applying them ([kubernetes](kubernetes.md)).
 - **Known gaps** carried from Phase 1: incremental decision state for long histories, plan caps and soft ingest limits, password reset, per-use `secret.read` auditing, a design for reaching private databases.
 - **Pen-test preparation**: a threat model and scope document, so X1 can start the day a firm is chosen.
 - **Phase 3** deliverables, once G2's engineering criteria are met.

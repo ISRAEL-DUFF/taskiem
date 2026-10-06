@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "taskiem.fullname" . }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+data:
+  {{- range $k, $v := .Values.config }}
+  {{- if ne (toString $v) "" }}
+  {{ $k }}: {{ toString $v | quote }}
+  {{- end }}
+  {{- end }}
+  {{- with .Values.publicURL }}
+  TASKIEM_PUBLIC_URL: {{ . | quote }}
+  {{- end }}
+  TASKIEM_WASM_CACHE: /cache/wazero

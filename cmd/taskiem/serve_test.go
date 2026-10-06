@@ -152,6 +152,16 @@ func TestServeAllSmoke(t *testing.T) {
 		}
 	}
 
+	// Liveness on the metrics port, for roles that serve nothing else.
+	resp, err = http.Get("http://" + metricsAddr + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("metrics /healthz: %d", resp.StatusCode)
+	}
+
 	req, _ := http.NewRequest("GET", base+"/v1/audit/export", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	resp, err = http.DefaultClient.Do(req)

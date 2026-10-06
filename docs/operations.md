@@ -23,7 +23,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `scheduler` | Timers, lease recovery, the orchestrator sweep, cron triggers, retention purge, partitions | — |
 | `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`); drains in-flight steps for up to 30 s on shutdown | — |
 
-Every role serves Prometheus metrics on `TASKIEM_METRICS_LISTEN` (`:9090`). Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
+Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/healthz`) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
 
 ## Configuration
 
@@ -85,3 +85,7 @@ Traces span API requests, ingest, and worker steps, with `tenant_id`, `run_id`, 
 ## Docker Compose
 
 `deploy/docker-compose.yml` runs Postgres, OpenBao (dev mode), and Taskiem with every role; see the comments at its top. OpenBao dev mode keeps keys in memory: restarting it loses every encrypted secret. Use a persistent, unsealed OpenBao in any shared environment.
+
+## Kubernetes
+
+A Helm chart (`deploy/helm/taskiem`) and manifests rendered from it (`deploy/kubernetes/taskiem.yaml`); see [kubernetes.md](kubernetes.md).

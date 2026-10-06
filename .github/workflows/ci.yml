@@ -159,3 +159,18 @@ jobs:
         with:
           name: taskiem-${{ github.sha }}
           path: bin/
+
+  # The image builds, the chart lints, and deploy/kubernetes is regenerated from it.
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+      - name: Chart and generated manifests
+        run: |
+          make chart
+          git diff --exit-code deploy/kubernetes
+      - name: Image
+        run: docker build --build-arg VERSION=ci -t taskiem:ci .

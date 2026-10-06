@@ -1,0 +1,142 @@
+# Taskiem Helm chart. See docs/kubernetes.md for a walk-through.
+
+image:
+  repository: ghcr.io/israel-duff/taskiem
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# split: one Deployment per role (production). all: one Deployment running
+# every role in one process (small installs; set replicas to 1).
+mode: split
+
+# Where people reach the web app, e.g. https://taskiem.example.com.
+# Turns on passkeys, single sign-on callbacks and SCIM endpoints.
+publicURL: ""
+
+# A Secret you create (kubectl create secret generic ...) whose keys are
+# environment variables: TASKIEM_DATABASE_URL is required; also, as you use
+# them, TASKIEM_LOCAL_KMS_KEY or TASKIEM_OPENBAO_TOKEN, TASKIEM_ANCHOR_KEY,
+# TASKIEM_SMTP_URL. Nothing secret is ever put in values.
+existingSecret: taskiem
+
+# Non-secret settings, as environment variables (docs/operations.md).
+config:
+  TASKIEM_KMS: openbao            # local | openbao
+  TASKIEM_OPENBAO_ADDR: ""
+  TASKIEM_KMS_KEY: taskiem
+  TASKIEM_SECURE_COOKIES: "true"
+  TASKIEM_TRUST_PROXY: "true"     # behind an ingress controller
+  TASKIEM_ALLOW_SIGNUP: "false"
+  TASKIEM_ALERT_FROM: ""
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
+
+# Extra environment variables for every pod: [{name, value}] or valueFrom.
+extraEnv: []
+
+roles:
+  api:
+    replicas: 2
+    databasePool: 20
+    resources:
+      requests: { cpu: 250m, memory: 256Mi }
+      limits: { memory: 512Mi }
+  edge:
+    replicas: 2
+    databasePool: 10
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { memory: 256Mi }
+  orchestrator:
+    replicas: 2
+    databasePool: 20
+    resources:
+      requests: { cpu: 250m, memory: 256Mi }
+      limits: { memory: 512Mi }
+  # Schedules, timers, retention archiving, audit anchoring, alerts. Several
+  # replicas are safe (claims use SKIP LOCKED); one is usually enough.
+  scheduler:
+    replicas: 1
+    databasePool: 10
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { memory: 256Mi }
+  worker:
+    replicas: 2
+    databasePool: 20
+    queues: connector,sandbox
+    # Python steps need room: the interpreter's memory cap is 256 MiB per
+    # running step, on top of the process.
+    resources:
+      requests: { cpu: 500m, memory: 512Mi }
+      limits: { memory: 2Gi }
+    autoscaling:
+      enabled: false
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+  # Used when mode is "all".
+  all:
+    replicas: 1
+    databasePool: 30
+    resources:
+      requests: { cpu: 500m, memory: 512Mi }
+      limits: { memory: 2Gi }
+
+# The scheduler archives runs past retention and appends signed audit
+# anchors here. Anchors are only worth their copy outside the database:
+# use a write-once class (object lock) where you can.
+storage:
+  enabled: true
+  storageClass: ""
+  size: 10Gi
+  accessModes: [ReadWriteOnce]
+  # Use a claim you created instead.
+  existingClaim: ""
+
+migrations:
+  # Runs `taskiem migrate` before every install and upgrade.
+  enabled: true
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 256Mi }
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: taskiem.example.com
+  # Webhooks (/hooks, /git-hooks) go to the edge role; everything else to the API.
+  tls:
+    enabled: true
+    secretName: taskiem-tls
+
+podDisruptionBudget:
+  enabled: true
+
+# Restrict traffic: ingress only to the API and edge ports (and metrics from
+# the monitoring namespace); egress is left to the egress guard and to your
+# own policies, since connectors call many providers.
+networkPolicy:
+  enabled: false
+  monitoringNamespace: monitoring
+
+serviceMonitor:
+  # Needs the Prometheus Operator CRDs.
+  enabled: false
+  interval: 30s
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

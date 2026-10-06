@@ -1,0 +1,145 @@
+{{- $root := . -}}
+{{- range $role := splitList " " (include "taskiem.roles" .) }}
+{{- $r := index $root.Values.roles $role }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "taskiem.fullname" $root }}-{{ $role }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  {{- if not (and (eq $role "worker") $r.autoscaling.enabled) }}
+  replicas: {{ $r.replicas }}
+  {{- end }}
+  {{- if or (eq $role "scheduler") (eq $role "all") }}
+  # The archive volume is ReadWriteOnce: never run two pods on it at once.
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $role }}
+  template:
+    metadata:
+      labels:
+        {{- include "taskiem.selectorLabels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $role }}
+        {{- with $root.Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        {{- with $root.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "taskiem.serviceAccountName" $root }}
+      automountServiceAccountToken: false
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "taskiem.podSecurityContext" $root | nindent 8 }}
+      # Runs finish their current step on SIGTERM; give them time.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: taskiem
+          image: {{ include "taskiem.image" $root }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          args: [serve, --role, {{ $role }}]
+          securityContext:
+            {{- include "taskiem.containerSecurityContext" $root | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "taskiem.fullname" $root }}
+            - secretRef:
+                name: {{ $root.Values.existingSecret }}
+          env:
+            - name: TASKIEM_DATABASE_POOL
+              value: {{ $r.databasePool | quote }}
+            {{- if or (eq $role "worker") (eq $role "all") }}
+            - name: TASKIEM_WORKER_QUEUES
+              value: {{ default "connector,sandbox" $r.queues | quote }}
+            {{- end }}
+            {{- if and $root.Values.storage.enabled (or (eq $role "scheduler") (eq $role "all")) }}
+            - name: TASKIEM_ARCHIVE_DIR
+              value: /var/lib/taskiem/archive
+            - name: TASKIEM_ANCHOR_DIR
+              value: /var/lib/taskiem/anchors
+            {{- end }}
+            {{- with $root.Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            {{- if or (eq $role "api") (eq $role "all") }}
+            - name: http
+              containerPort: 8080
+            {{- end }}
+            {{- if eq $role "edge" }}
+            - name: edge
+              containerPort: 8081
+            {{- end }}
+            - name: metrics
+              containerPort: 9090
+          {{- if or (eq $role "api") (eq $role "all") }}
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 6
+          {{- else if eq $role "edge" }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: edge }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: edge }
+            periodSeconds: 10
+            failureThreshold: 6
+          {{- else }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+            failureThreshold: 6
+          {{- end }}
+          resources:
+            {{- toYaml $r.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /cache }
+            {{- if and $root.Values.storage.enabled (or (eq $role "scheduler") (eq $role "all")) }}
+            - { name: data, mountPath: /var/lib/taskiem }
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # Compiled WebAssembly (the Python interpreter, connectors): rebuilt on start if empty.
+        - name: cache
+          emptyDir: {}
+        {{- if and $root.Values.storage.enabled (or (eq $role "scheduler") (eq $role "all")) }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "taskiem.storageClaim" $root }}
+        {{- end }}
+      {{- with $root.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -132,6 +132,12 @@ Engine features they needed, all in the connector/v1 contract: `slack_v0`, `quer
 | SCIM 2.0 | Users and Groups for Okta, Entra ID and others; administrators map groups to roles; deactivation removes access and signs out; owners are never deprovisioned | `api/scim.go`, migration 00023, [governance](governance.md#provisioning-scim-20) |
 
 
+## Gate G2 engineering: what exists
+
+| Area | Deliverable | Where |
+| --- | --- | --- |
+| Deployment | Distroless non-root image (built and run read-only); Helm chart with split or single-process modes, migration hook, archive volume, PDBs, worker autoscaling, network policies, ServiceMonitor; plain manifests rendered from it and checked in CI | `Dockerfile`, `deploy/helm/taskiem`, `deploy/kubernetes`, [kubernetes](kubernetes.md) |
+
 ## Carried over from Phase 1
 
 Kept pending while Phase 2 is built. Phase 1's milestones 4 and 5 and gate G1 stay open until these are done ([Phase 1 status](phase-1-status.md)):

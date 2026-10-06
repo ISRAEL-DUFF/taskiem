@@ -1,0 +1,126 @@
+# Running Taskiem on Kubernetes
+
+Two ways to install, from one source:
+
+- **Helm chart**, `deploy/helm/taskiem`. Use this one.
+- **Plain manifests**, `deploy/kubernetes/taskiem.yaml`, rendered from the chart with its defaults and the ingress turned on (`make chart`). CI fails if the file is stale. Use it with `kubectl apply` or as a Kustomize base when Helm is not an option.
+
+Both need Kubernetes 1.27 or later, a Postgres 16 database, and (in production) OpenBao for key management.
+
+## What gets installed
+
+`mode: split`, the default, runs one Deployment per role. Each role is the same image started as `taskiem serve --role <role>`:
+
+| Role | Default replicas | Serves | Probes |
+|---|---|---|---|
+| `api` | 2 | Web app and HTTP API on 8080 | `/readyz` (readiness) and `/healthz` (liveness) on 8080 |
+| `edge` | 2 | Webhooks (`/hooks/`) and Git push hooks (`/git-hooks/`) on 8081 | `/healthz` on 8081 |
+| `orchestrator` | 2 | Nothing; advances runs | `/healthz` on 9090 |
+| `scheduler` | 1 | Nothing; runs schedules, timers, retention archiving, audit anchoring and alerts | `/healthz` on 9090 |
+| `worker` | 2, or autoscaled | Nothing; runs connector and sandbox steps | `/healthz` on 9090 |
+
+Every role also serves Prometheus metrics on 9090. `mode: all` runs every role in a single Deployment instead, which suits small installs and trials.
+
+Alongside the Deployments the chart creates:
+
+- a Service per role;
+- an Ingress, if enabled, that sends `/hooks/` and `/git-hooks/` to the edge role and everything else to the API;
+- a migration Job (a Helm pre-install and pre-upgrade hook);
+- a PersistentVolumeClaim for the scheduler;
+- PodDisruptionBudgets;
+- optionally: a worker HorizontalPodAutoscaler, NetworkPolicies and a Prometheus Operator ServiceMonitor.
+
+## Install
+
+1. **Create the database and the Secret.** The chart never holds secrets. Put them in a Secret whose keys are environment variables:
+
+   ```sh
+   kubectl create namespace taskiem
+   kubectl -n taskiem create secret generic taskiem \
+     --from-literal=TASKIEM_DATABASE_URL='postgres://taskiem@db.internal:5432/taskiem?sslmode=verify-full' \
+     --from-file=TASKIEM_OPENBAO_TOKEN=./openbao-token \
+     --from-file=TASKIEM_ANCHOR_KEY=./anchor-key
+   ```
+
+   Add these keys only if you use them:
+
+   - `TASKIEM_LOCAL_KMS_KEY`, only with `TASKIEM_KMS=local`, which is not for production;
+   - `TASKIEM_SMTP_URL`, for email alerts.
+
+   The database user must own the schema, because migrations run as it. Pods switch to `taskiem_app` on every connection, and row-level security applies to that role (`TASKIEM_DATABASE_ROLE`; see [operations.md](operations.md)).
+
+2. **Write your values.** At minimum:
+
+   ```yaml
+   image:
+     tag: "0.1.0"
+   publicURL: https://taskiem.example.com
+   config:
+     TASKIEM_OPENBAO_ADDR: https://openbao.internal:8200
+     TASKIEM_ALERT_FROM: taskiem@example.com
+   ingress:
+     enabled: true
+     className: nginx
+     host: taskiem.example.com
+     annotations:
+       cert-manager.io/cluster-issuer: letsencrypt
+   ```
+
+3. **Install:**
+
+   ```sh
+   helm install taskiem deploy/helm/taskiem -n taskiem -f values.yaml
+   ```
+
+   The migration Job runs first. If it fails, the install stops and the old pods keep running. The schema only moves forward, and each release works with the schema of the release before it, so upgrades follow the same path: `helm upgrade` with the new tag.
+
+4. **Create the first tenant (once).** Add a `TASKIEM_BOOTSTRAP_PASSWORD` key (12 or more characters) to the Secret and restart the API pods. Then run:
+
+   ```sh
+   kubectl -n taskiem exec deploy/taskiem-api -- taskiem bootstrap --tenant Acme --email you@example.com
+   ```
+
+   Remove the key afterwards. The image is distroless, so `exec` can only run `taskiem`; there is no shell.
+
+With the plain manifests the steps are the same, except that you run `taskiem migrate` yourself first. The Job's hook annotations mean nothing to `kubectl apply`, so the Job runs as soon as it is applied, and Kubernetes will not update the finished Job in place. Delete it before applying a new version.
+
+## Security defaults
+
+- **Pods:**
+  - run as uid 65532, the distroless `nonroot` user;
+  - use a read-only root filesystem;
+  - drop every capability;
+  - use the `RuntimeDefault` seccomp profile;
+  - mount no service-account token (Taskiem never calls the Kubernetes API).
+- **Writable storage** is limited to two `emptyDir` volumes, `/tmp` and `/cache`. `/cache` holds compiled WebAssembly for the Python interpreter and connectors, and is rebuilt on start.
+- **`TASKIEM_TRUST_PROXY` defaults to true** because traffic arrives through the ingress controller. Turn it off if pods are reachable any other way, since otherwise clients could forge `X-Forwarded-For`.
+- **`networkPolicy.enabled`:**
+  - Inbound traffic is limited to the API and edge ports, plus metrics from `networkPolicy.monitoringNamespace`.
+  - Outbound traffic is not restricted, because connectors call many providers. The worker's egress guard already blocks private and metadata addresses; add your own egress policy if you need an allow-list.
+
+## Storage
+
+The scheduler mounts the claim at `/var/lib/taskiem`:
+
+- `archive/` holds runs past retention.
+- `anchors/` holds signed audit-chain heads.
+
+Anchors are only worth something as a copy outside the database. Use a storage class with write-once (object-lock) semantics where you can, and back the volume up.
+
+The claim is `ReadWriteOnce` and is kept when the release is uninstalled (`helm.sh/resource-policy: keep`). The scheduler (or `all`) Deployment uses the `Recreate` strategy so that two pods never mount it at once. Set `storage.existingClaim` to bring your own.
+
+If `storage.enabled` is false:
+
+- runs past retention are kept rather than purged;
+- audit heads are not anchored outside the database;
+- the scheduler logs a warning about both.
+
+## Sizing
+
+The defaults are per-role `databasePool` and `resources`. Each pod opens up to `databasePool` connections, plus 2 for loading tenant connectors. Size Postgres `max_connections` to cover (pool + 2) × replicas, summed across roles, with headroom for the migration Job. The defaults need about 170.
+
+Workers need the most memory. Each running Python step can use up to 256 MiB of interpreter memory, which is why the default limit is 2 GiB. Scale workers on CPU with `roles.worker.autoscaling`, or on queue backlog (`taskiem_queue_ready`, `taskiem_queue_oldest_ready_seconds`) with KEDA.
+
+## Values
+
+[`values.yaml`](../deploy/helm/taskiem/values.yaml) documents every value. `config` becomes a ConfigMap of environment variables, and empty strings are left out. Every variable is described in [operations.md](operations.md). `extraEnv` adds raw `env` entries to every pod, for example `valueFrom` references to other Secrets.

@@ -328,7 +328,12 @@ func serve(ctx context.Context, args []string) error {
 		}
 	}
 	_ = prometheus.Register(telemetry.QueueCollector{Pool: e.pool}) // already registered when serve runs twice in one process (tests)
-	tasks = append(tasks, httpTask("metrics", cfg.MetricsListen, promhttp.Handler(), log))
+	// Every role serves metrics and a liveness check (/healthz) here, so
+	// roles without the API can be probed too.
+	metrics := http.NewServeMux()
+	metrics.Handle("/metrics", promhttp.Handler())
+	metrics.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	tasks = append(tasks, httpTask("metrics", cfg.MetricsListen, metrics, log))
 
 	log.Info("taskiem starting")
 	ctx, cancel := context.WithCancel(ctx)
