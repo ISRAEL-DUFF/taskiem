@@ -225,7 +225,7 @@ func TestErrorMapping(t *testing.T) {
 		{pgdocktest.Failure{Status: 404}, pgdock.ClassNotFound, effects.KindFatal, 0},
 		{pgdocktest.Failure{Status: 409}, pgdock.ClassConflict, effects.KindFatal, 0},
 		{pgdocktest.Failure{Status: 402, Body: map[string]any{"code": "quota_exceeded", "message": "over", "quota": map[string]any{"name": "rows"}}}, pgdock.ClassQuota, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "40001", "message": "could not serialize"}}}, pgdock.ClassConflict, effects.KindRetryable, 0},
+		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "40001", "message": "could not serialise access"}}}, pgdock.ClassConflict, effects.KindRetryable, 0},
 		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "40P01", "message": "deadlock"}}}, pgdock.ClassConflict, effects.KindRetryable, 0},
 		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "57014", "message": "canceling statement due to statement timeout"}}}, pgdock.ClassTimeout, effects.KindRetryable, 0},
 		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "23505", "message": "duplicate key"}}}, pgdock.ClassConflict, effects.KindFatal, 0},

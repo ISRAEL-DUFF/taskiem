@@ -84,7 +84,7 @@ type apiError struct {
 // again may succeed.
 func sqlClass(state string) (class string, retry bool) {
 	switch {
-	case state == "40001", state == "40P01": // serialization failure, deadlock: nothing committed
+	case state == "40001", state == "40P01": // serialisation failure, deadlock: nothing committed
 		return ClassConflict, true
 	case state == "57014": // statement timeout, cancelled
 		return ClassTimeout, true

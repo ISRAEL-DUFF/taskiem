@@ -490,6 +490,13 @@ func TestRemoteLifecycle(t *testing.T) {
 	if s, _ := w.only(t); s.Health != "paused" {
 		t.Errorf("paused: %+v", s)
 	}
+	// A health check PGDock refuses is recorded and never turns into a repair.
+	w.pg.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/" + project + "/webhooks/", Status: 503})
+	w.tick(t)
+	w.tick(t)
+	if s, _ := w.only(t); s.Health != "paused" || w.pg.Hook(project, hook.ID).Enabled {
+		t.Errorf("after a failed health check: %+v", s)
+	}
 	repair(t, w, wf)
 	if h := w.pg.Hook(project, hook.ID); !h.Enabled || h.Status != "healthy" {
 		t.Errorf("resumed: %+v", h)

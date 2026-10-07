@@ -404,10 +404,6 @@ func (f *Fake) Queued(projectID, webhookID string) int {
 // returns how many events were delivered.
 func (f *Fake) Deliver() int {
 	f.mu.Lock()
-	type job struct {
-		w *Webhook
-		e *Event
-	}
 	var hooks []*Webhook
 	for _, p := range f.projects {
 		hooks = append(hooks, p.Webhooks...)
@@ -582,7 +578,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	tok, ok := f.tokens[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
 	f.mu.Unlock()
 	if !ok || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
-		refuse(w, http.StatusUnauthorized, "unauthorized", "sign in or send an API token")
+		refuse(w, http.StatusUnauthorized, "unauthenticated", "sign in or send an API token")
 		return
 	}
 	if f.Now().After(tok.ExpiresAt) {

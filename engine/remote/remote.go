@@ -548,11 +548,19 @@ func (r *Reconciler) record(ctx context.Context, tenant uuid.UUID, x row, out ou
 			if len(msg) > 500 {
 				msg = msg[:500]
 			}
-			// An intent changed while this pass ran (a redeploy) is due at once.
-			_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET state = CASE WHEN $5 THEN state ELSE $2 END, last_error = $3, attempts = attempts + 1,
-				next_attempt_at = CASE WHEN updated_at = $6 THEN now() + $4::interval ELSE next_attempt_at END,
-				checked_at = CASE WHEN $5 THEN now() ELSE checked_at END, lease_until = NULL WHERE id = $1`,
-				x.id, state, msg, backoff(x.attempts, fatal).String(), x.healthCheck && x.desired == "present" && x.appliedHash != "", x.updatedAt)
+			// A health check that failed changes nothing but the error: it
+			// is retried at the next check, and never turns into a repair.
+			if check := x.healthCheck && x.desired == "present" && x.appliedHash != ""; check {
+				_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET last_error = $2, checked_at = now(), lease_until = NULL WHERE id = $1`, x.id, msg)
+				return err
+			}
+			// An intent changed while this pass ran (a redeploy) is due at
+			// once; checked_at moves too, so the health check does not
+			// retry before the backoff ends.
+			_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET state = $2, last_error = $3, attempts = attempts + 1,
+				next_attempt_at = CASE WHEN updated_at = $5 THEN now() + $4::interval ELSE next_attempt_at END,
+				checked_at = now(), lease_until = NULL WHERE id = $1`,
+				x.id, state, msg, backoff(x.attempts, fatal).String(), x.updatedAt)
 			if err == nil {
 				err = audit(ctx, tx, tenant, "remote_subscription.error", x, map[string]any{"error": msg, "fatal": fatal})
 			}
