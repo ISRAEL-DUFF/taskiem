@@ -89,8 +89,8 @@ tr.clickable:hover td { background: var(--code-bg); }
 
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; white-space: nowrap; }
 .badge.completed, .badge.approved, .badge.published, .badge.ok { color: var(--ok); }
-.badge.failed, .badge.rejected, .badge.cancelled, .badge.parked, .badge.needs_reconciliation { color: var(--danger); }
-.badge.waiting, .badge.queued, .badge.retrying, .badge.draft, .badge.open { color: var(--warn); }
+.badge.failed, .badge.rejected, .badge.cancelled, .badge.parked, .badge.needs_reconciliation, .badge.broken, .badge.missing { color: var(--danger); }
+.badge.waiting, .badge.queued, .badge.retrying, .badge.draft, .badge.open, .badge.paused, .badge.failing, .badge.pending, .badge.removing { color: var(--warn); }
 .badge.running, .badge.scheduled, .badge.info { color: var(--info); }
 .badge.skipped, .badge.cancelled, .badge.deprecated { color: var(--muted); }
 

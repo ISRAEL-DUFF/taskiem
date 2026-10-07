@@ -564,7 +564,14 @@ function Endpoints({ workflow }: { workflow: string }) {
             <td>{t.environment}</td>
             <td>{t.type.replaceAll("_", " ")}</td>
             <td>
-              {t.url && <code>{window.location.origin + t.url}</code>}
+              {t.remote && (
+                <div>
+                  <Badge value={t.remote.health} /> Registered with the provider by Taskiem
+                  {(t.remote.status_reason || t.remote.last_error) && <div className="hint">{t.remote.status_reason ?? t.remote.last_error}</div>}
+                  {t.remote.health !== "ok" && t.remote.health !== "pending" && <div className="hint">Publish again to repair it.</div>}
+                </div>
+              )}
+              {t.url && !t.remote && <code>{window.location.origin + t.url}</code>}
               {t.secret_name && t.auth !== "none" && <div className="hint">Signed with the secret {t.secret_name} ({t.auth})</div>}
               {t.cron && (
                 <>

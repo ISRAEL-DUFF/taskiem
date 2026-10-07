@@ -14,6 +14,24 @@ interface Conn {
   status: string;
   created_at: string;
   last_used_at: string | null;
+  /** Subscriptions Taskiem keeps at the provider through this connection (a PGDock webhook per workflow). */
+  remote?: {
+    subscriptions: number;
+    health: string;
+    problems: { workflow_id: string; environment: string; health: string; status_reason: string | null; last_error: string | null }[];
+  };
+}
+
+/** The worst state of a connection's remote subscriptions, with what is wrong. */
+function Remote({ remote }: { remote: Conn["remote"] }) {
+  if (!remote) return <span className="hint">—</span>;
+  const why = remote.problems.map((p) => `${p.environment}: ${p.health}${p.status_reason ? ` (${p.status_reason})` : ""}${p.last_error ? ` (${p.last_error})` : ""}`).join("\n");
+  return (
+    <span title={why || undefined}>
+      <Badge value={remote.health} /> <span className="hint">{remote.subscriptions === 1 ? "1 webhook" : `${remote.subscriptions} webhooks`}</span>
+      {remote.health !== "ok" && remote.health !== "pending" && <div className="hint">Publish the workflow again to repair it.</div>}
+    </span>
+  );
 }
 
 export function Connections() {
@@ -42,6 +60,7 @@ export function Connections() {
               <th>Name</th>
               <th>Environment</th>
               <th>Status</th>
+              <th>Webhooks</th>
               <th>Created</th>
               <th>Last used</th>
             </tr>
@@ -54,6 +73,9 @@ export function Connections() {
                 <td>{c.environment}</td>
                 <td>
                   <Badge value={c.status === "active" ? "ok" : c.status} />
+                </td>
+                <td>
+                  <Remote remote={c.remote} />
                 </td>
                 <td>{fmtTime(c.created_at)}</td>
                 <td>{c.last_used_at ? fmtTime(c.last_used_at) : <span className="hint">never</span>}</td>

@@ -272,6 +272,22 @@ export interface TriggerInfo {
   timezone?: string;
   next_fire_at?: string;
   url?: string;
+  /** A remotely registered trigger: the subscription Taskiem keeps at the provider (decision 0021). */
+  remote?: RemoteSubscription;
+}
+
+/** A provider subscription Taskiem created for a trigger (a PGDock webhook). */
+export interface RemoteSubscription {
+  id: string;
+  environment: string;
+  connector: string;
+  trigger: string;
+  /** ok, pending, failed, failing, paused, broken, missing or removing */
+  health: string;
+  status_reason: string | null;
+  last_error: string | null;
+  checked_at: string | null;
+  last_test_at: string | null;
 }
 
 // A JSON Schema as connector manifests and WD inputs use it.
