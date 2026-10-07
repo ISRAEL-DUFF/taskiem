@@ -227,7 +227,7 @@ func (c *Checker) hosts(ctx context.Context, hosts []string, seen map[string][]s
 	return nil
 }
 
-// Semver applies connector/v1 rule 8 to a new version: it must be newer
+// Semver applies connector/v1 rule 11 to a new version: it must be newer
 // than every published version of its major, and must not remove actions,
 // input or output fields, or change an action's class.
 func Semver(m *connector.Manifest, published []Published) error {
