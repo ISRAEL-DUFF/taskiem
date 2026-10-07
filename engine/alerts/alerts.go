@@ -115,6 +115,10 @@ type Secrets interface {
 // outside their 24-hour window (whatsapp.Platform).
 type WhatsApp interface {
 	Notify(ctx context.Context, tenant uuid.UUID, members []uuid.UUID, kind, title, body, link string, detail map[string]any) error
+	// Queue hands a recorded alert to the WhatsApp outbox, one message per
+	// member with a number, each retried on its own
+	// (docs/whatsapp.md#delivery-and-retries).
+	Queue(ctx context.Context, tenant, alert uuid.UUID, members []uuid.UUID) error
 }
 
 // Alerter evaluates rules and delivers alerts.
@@ -680,6 +684,11 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 		}
 		if a.WhatsApp == nil {
 			return errors.New("WhatsApp is not configured on this deployment (TASKIEM_WHATSAPP_*)")
+		}
+		if m.Kind != "test" {
+			// Delivered once queued: each member's message is retried by
+			// the outbox, so a failure for one never resends to the rest.
+			return a.WhatsApp.Queue(ctx, tenant, m.ID, cfg.Members)
 		}
 		var detail map[string]any
 		_ = json.Unmarshal(m.Detail, &detail)

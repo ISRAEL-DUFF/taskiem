@@ -46,6 +46,19 @@ type Graph struct {
 	sent    []Sent
 	// Fail, when set, answers a send with this Graph error code.
 	Fail int
+	// failTo answers sends to one number with a Graph error code.
+	failTo map[string]int
+}
+
+// SetFailTo makes sends to one number fail with a Graph error code (0:
+// succeed), whatever the message.
+func (g *Graph) SetFailTo(number string, code int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.failTo == nil {
+		g.failTo = map[string]int{}
+	}
+	g.failTo[number] = code
 }
 
 // New starts a fake for the given phone number id and token.
@@ -156,8 +169,12 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	g.mu.Lock()
-	fail := g.Fail
+	fail, failTo := g.Fail, g.failTo[m.To]
 	g.mu.Unlock()
+	if failTo != 0 {
+		refuse(w, http.StatusBadRequest, failTo, "refused by the fake")
+		return
+	}
 	if fail != 0 && (fail != 131047 || m.Type != "template") {
 		refuse(w, http.StatusBadRequest, fail, "refused by the fake")
 		return

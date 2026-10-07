@@ -164,6 +164,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/whatsapp/number", s.putWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/whatsapp/number", s.deleteWhatsAppNumber)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
+			r.With(s.need(PermAlertManage)).Get("/whatsapp/outbox", s.listWhatsAppOutbox)
+			r.With(s.need(PermAlertManage), s.tenantWide).Post("/whatsapp/outbox/{id}/retry", s.retryWhatsAppOutbox)
 			r.With(s.need(PermApprovalDecide)).Get("/whatsapp/handoff/{token}", s.getHandoff)
 			r.With(s.need(PermApprovalDecide)).Post("/whatsapp/handoff/{token}", s.completeHandoff)
 			r.With(s.need(PermSecretManage)).Get("/ussd", s.getUSSD)

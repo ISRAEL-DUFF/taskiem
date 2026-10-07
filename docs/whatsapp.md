@@ -172,7 +172,17 @@ An organisation with its own number may offer a menu to anyone who writes to it 
 
 ## Alerts to WhatsApp
 
-An alert channel of kind **WhatsApp** names members by email (Alerts > Channels). Each alert goes to those of them who have linked a number: as text when they wrote in the last 24 hours, otherwise as the template for the rule's kind. A delivery fails, with the reason, when none of them has a number. Retries resend to every member of the channel.
+An alert channel of kind **WhatsApp** names members by email (Alerts > Channels). Each alert goes to those of them who have linked a number: as text when they wrote in the last 24 hours, otherwise as the template for the rule's kind. A delivery fails, with the reason, when none of them has a number. Otherwise the alert is handed to the [outbox](#delivery-and-retries), one message per member: the delivery is done once queued, and a member whose message fails is retried on their own, so the others never get it twice.
+
+## Delivery and retries
+
+Messages that must arrive go through a durable outbox (`whatsapp_outbox`, migration 00086): **approval requests**, **how runs started from WhatsApp ended**, and **alerts** to WhatsApp channels. Each is one row per person, naming what to send (the approval, the run, the alert) and to whom (the person, not their number). The message is rendered at each attempt, from the record as it then stands: an approval request gets fresh decision tokens, so the database never holds message text, tokens or numbers.
+
+- **Claimed once.** Each attempt claims its row (`FOR UPDATE SKIP LOCKED`, a five-minute lease), so two notifiers never send the same message at once. The `api` role's notifier drains the outbox every five seconds; an alert is also tried at once by the role that raised it.
+- **Backoff.** A failed attempt waits 1, 4, 16, 64 and 256 minutes, then six hours, up to eight attempts. Ordering across messages is not kept.
+- **Dead letters.** After the last attempt, or at once when waiting cannot help (a marketing template held back by the allowance, a message with no template outside the window), the message is **dead**. `GET /v1/whatsapp/outbox` (`alert.manage`) lists dead letters by default, or `?status=pending|sent|dropped`, with the person (by email), what it was about, the attempts and the last error (numbers masked); `POST /v1/whatsapp/outbox/{id}/retry` sends a dead letter again from a fresh set of attempts (audited, `whatsapp.outbox.retry`).
+- **Dropped.** A message that became moot is dropped, not sent: the approval was decided or expired, the person no longer decides approvals, unlinked their number, or the alert or run is gone.
+- **Not queued.** One-time codes, chat replies, hand-off links and the approvals a person asks for (`approvals`) are sent directly and not retried: the person is waiting and asks again, and a code or reply arriving minutes later would only confuse.
 
 ## Security model
 
@@ -193,7 +203,8 @@ An alert channel of kind **WhatsApp** names members by email (Alerts > Channels)
 | Personal data in messages | Masked as above; free text passed through the PII redactor; inputs typed in chat are sealed (`x-pii` fields) while they wait for confirmation |
 | Tenant isolation | Bindings, codes, the window and message ids are a person's, not a tenant's: no tenant reads them; functions do one narrow thing each. Conversation state, tokens, flows, notices, run watches, own numbers, public sessions and template usage are tenant data under forced row-level security, read only with the conversation's current organisation (or the token's) in scope. The PIN is a person's, like the binding |
 | Own numbers' credentials | In the organisation's vault, never in tables, responses or logs; connecting needs `secret.manage` and a token the Graph API accepts for that number |
-| Audit | `whatsapp.code_sent`, `whatsapp.bind`, `whatsapp.unbind`, `whatsapp.pin.set`, `whatsapp.pin.remove` (in every organisation the person belongs to, with the number masked), `whatsapp.pin.fail`, `whatsapp.pin.locked`, `approval.decide` with `channel: whatsapp` and `via: button`, `handoff` or `flow_pin`, `run.start` with `channel: whatsapp` (or by `whatsapp_public:<masked number>`), `whatsapp.number.connect`, `whatsapp.number.disconnect`, `whatsapp.public_menu.update`; the approval's history records the channel and the step-up used |
+| Retried sends | The outbox holds only references (kind, person, run, step, level, alert): no text, decision token or number; rows are tenant data under forced row-level security |
+| Audit | `whatsapp.code_sent`, `whatsapp.bind`, `whatsapp.unbind`, `whatsapp.pin.set`, `whatsapp.pin.remove` (in every organisation the person belongs to, with the number masked), `whatsapp.pin.fail`, `whatsapp.pin.locked`, `approval.decide` with `channel: whatsapp` and `via: button`, `handoff` or `flow_pin`, `run.start` with `channel: whatsapp` (or by `whatsapp_public:<masked number>`), `whatsapp.number.connect`, `whatsapp.number.disconnect`, `whatsapp.public_menu.update`, `whatsapp.outbox.retry`; the approval's history records the channel and the step-up used |
 
 Limits are per `edge` replica (in memory), like the sign-in limiter.
 
