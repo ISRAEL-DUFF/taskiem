@@ -44,11 +44,11 @@ func (v *Vault) CreateConnectionTx(ctx context.Context, tx pgx.Tx, tenant uuid.U
 	if len(creds) > 0 {
 		sid := uuid.Must(uuid.NewV7())
 		raw, _ := json.Marshal(creds)
-		ct, wdek, ver, err := v.encrypt(ctx, tx, tenant, sid, raw)
+		ct, wdek, ver, err := v.encrypt(ctx, tx, tenant, sid, env, connectionBinding(id), raw)
 		if err != nil {
 			return id, err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, environment, ciphertext, wrapped_key, kek_version, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		if _, err := tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, environment, ciphertext, wrapped_key, kek_version, aad_version, created_by) VALUES ($1, $2, $3, $4, $5, $6, 2, $7)`,
 			sid, tenant, env, ct, wdek, ver, by); err != nil {
 			return id, err
 		}
@@ -80,14 +80,14 @@ func (v *Vault) ReplaceCredentialsTx(ctx context.Context, tx pgx.Tx, tenant, con
 	if ref != nil {
 		sid = *ref
 	}
-	ct, wdek, ver, err := v.encrypt(ctx, tx, tenant, sid, raw)
+	ct, wdek, ver, err := v.encrypt(ctx, tx, tenant, sid, env, connectionBinding(conn), raw)
 	if err != nil {
 		return err
 	}
 	if ref != nil {
-		_, err = tx.Exec(ctx, `UPDATE secrets SET ciphertext = $2, wrapped_key = $3, kek_version = $4, updated_at = now() WHERE id = $1`, sid, ct, wdek, ver)
+		_, err = tx.Exec(ctx, `UPDATE secrets SET ciphertext = $2, wrapped_key = $3, kek_version = $4, aad_version = 2, updated_at = now() WHERE id = $1`, sid, ct, wdek, ver)
 	} else {
-		_, err = tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, environment, ciphertext, wrapped_key, kek_version, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		_, err = tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, environment, ciphertext, wrapped_key, kek_version, aad_version, created_by) VALUES ($1, $2, $3, $4, $5, $6, 2, $7)`,
 			sid, tenant, env, ct, wdek, ver, by)
 	}
 	if err != nil {
@@ -141,11 +141,11 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 			return nil
 		}
 		var ct, wdek []byte
-		var ver int
-		if err := tx.QueryRow(ctx, `SELECT ciphertext, wrapped_key, kek_version FROM secrets WHERE id = $1`, *ms[0].ref).Scan(&ct, &wdek, &ver); err != nil {
+		var ver, aad int
+		if err := tx.QueryRow(ctx, `SELECT ciphertext, wrapped_key, kek_version, aad_version FROM secrets WHERE id = $1`, *ms[0].ref).Scan(&ct, &wdek, &ver, &aad); err != nil {
 			return err
 		}
-		raw, err := v.decrypt(ctx, tx, tenant, *ms[0].ref, ct, wdek, ver)
+		raw, err := v.decrypt(ctx, tx, tenant, *ms[0].ref, env, connectionBinding(ms[0].id), aad, ct, wdek, ver)
 		if err != nil {
 			return err
 		}

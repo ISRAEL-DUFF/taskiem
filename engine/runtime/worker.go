@@ -623,6 +623,8 @@ func kindOf(k string) effects.ErrorKind {
 		return effects.KindNotSent
 	case "indeterminate":
 		return effects.KindIndeterminate
+	case KindKeyRestored:
+		return effects.KindNotSent // parked before anything was sent
 	}
 	return effects.KindUnknownOutcome
 }
@@ -846,6 +848,16 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 					return err
 				}
 			}
+			if fp.Error.Kind == KindKeyUnavailable {
+				mode := "send"
+				if p.mode == modeReconcile {
+					mode = "reconcile"
+				}
+				if _, err := tx.Exec(ctx, `INSERT INTO key_parked_steps (tenant_id, run_id, step_id, attempt, mode) VALUES ($1, $2, $3, $4, $5)
+					ON CONFLICT DO NOTHING`, p.c.tenant, p.c.run, p.c.step, p.c.attempt, mode); err != nil {
+					return err
+				}
+			}
 		}
 		return w.Store.decideInline(ctx, tx, RunRef{ID: p.c.run, TenantID: p.c.tenant})
 	})
@@ -870,11 +882,14 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	}
 	creds, err := w.credentials(ctx, p)
 	if err != nil {
-		return failed(p.c, "fatal", err.Error(), "fail"), nil
+		return w.secretFailure(p, err), nil
 	}
 	rctx, cancel := context.WithTimeout(ctx, w.CallTimeout)
 	defer cancel()
 	hc, err := w.client(ctx, p, w.CallTimeout)
+	if ev, ok := keyParked(p, err); ok {
+		return ev, nil
+	}
 	if err != nil {
 		return history.Event{}, err
 	}
@@ -910,7 +925,7 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 	in, err := w.resolveSecrets(ctx, p)
 	if err != nil {
-		return failed(p.c, "fatal", err.Error(), "fail")
+		return w.secretFailure(p, err)
 	}
 	if p.stepType == "code" {
 		w.scrubCodeSecrets(ctx, p)
@@ -948,15 +963,15 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		creds, err := w.credentials(ctx, p)
 		if err != nil {
-			return failed(p.c, "fatal", err.Error(), "fail")
+			return w.secretFailure(p, err)
 		}
 		hc, err := w.client(ctx, p, w.CallTimeout)
 		if err != nil {
-			return failed(p.c, "fatal", err.Error(), "fail")
+			return w.secretFailure(p, err)
 		}
 		dial, err := w.dialer(ctx, p, creds)
 		if err != nil {
-			return failed(p.c, "fatal", err.Error(), "fail")
+			return w.secretFailure(p, err)
 		}
 		var resp connector.Response
 		resp, err = p.conn.Actions[p.action].Execute(ctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
@@ -974,7 +989,40 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 	return completedEvent(p.c, out, false)
 }
 
+// KindKeyUnavailable is the failure kind of a step parked because the
+// tenant's key could not be unwrapped (decision 0019, docs/byok.md). The
+// key job resumes it once the key works: as KindKeyRestored (nothing was
+// sent: retry) or KindKeyRestoredReconcile (an earlier attempt may have
+// been: reconcile first). Neither spends the step's retry budget.
+const (
+	KindKeyUnavailable       = history.KindKeyUnavailable
+	KindKeyRestored          = history.KindKeyRestored
+	KindKeyRestoredReconcile = history.KindKeyRestoredReconcile
+)
+
+// keyParked is the failure for a step that could not get its tenant key:
+// it parks rather than failing the run, and nothing is lost.
+func keyParked(p *plan, err error) (history.Event, bool) {
+	if err == nil || !errors.Is(err, secrets.ErrKeyUnavailable) {
+		return history.Event{}, false
+	}
+	return failed(p.c, KindKeyUnavailable, "the tenant's encryption key is unavailable (a customer key revoked, disabled or unreachable, or the KMS down); "+
+		"the step waits and resumes when it works again: "+err.Error(), "park"), true
+}
+
+// secretFailure is the failure for a step whose secrets or credentials
+// could not be read before anything was sent.
+func (w *Worker) secretFailure(p *plan, err error) history.Event {
+	if ev, ok := keyParked(p, err); ok {
+		return ev
+	}
+	return failed(p.c, "fatal", err.Error(), "fail")
+}
+
 func (w *Worker) classify(p *plan, err error) history.Event {
+	if ev, ok := keyParked(p, err); ok {
+		return ev // code and container steps read their secrets before running
+	}
 	kind := effects.Classify(err)
 	next := map[effects.Next]string{effects.Retry: "retry", effects.Reconcile: "reconcile", effects.Park: "park", effects.Fail: "fail"}[effects.AfterError(p.class, kind)]
 	e := history.Error{Kind: kind.String(), Message: err.Error(), Next: next, MaybeApplied: p.class.MayHaveApplied(kind)}

@@ -86,6 +86,9 @@ func TestPutGetIsolationRotation(t *testing.T) {
 	if err != nil || ver != 2 {
 		t.Fatalf("rotate: %d %v", ver, err)
 	}
+	if r, err := v.RewrapAll(ctx, a.ID); err != nil || r.Secrets != 1 || !r.Done {
+		t.Fatalf("rewrap: %+v %v", r, err)
+	}
 	cold := localVault(t, d)
 	if got, err := cold.Get(ctx, a.ID, "prod", "paystack_key"); err != nil || got != "sk_live_A" {
 		t.Errorf("after rotation: %q %v", got, err)

@@ -19,20 +19,24 @@ import (
 )
 
 // subjectID derives a stable pseudonymous id for a data subject from the
-// value, keyed by the tenant's first KEK (spec 5.2: hmac(tenant key, bvn)).
+// value, keyed by the tenant's pseudonymisation key (spec 5.2: hmac(tenant
+// key, bvn)). That key started as tenant key version 1's material and is
+// kept apart from it since migration 00100, so ids never change while
+// tenant keys rotate.
 func (v *Vault) subjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
-	if _, _, err := v.currentKEK(ctx, tx, tenant); err != nil { // ensure version 1 exists
-		return "", err
-	}
-	k1, err := v.kek(ctx, tx, tenant, 1)
+	key, err := v.pseudonymKey(ctx, tx, tenant)
 	if err != nil {
 		return "", err
 	}
+	return subjectIDWith(key, category, value), nil
+}
+
+func subjectIDWith(key []byte, category string, value any) string {
 	raw, _ := json.Marshal(value)
-	m := hmac.New(sha256.New, append([]byte("taskiem/subject/v1\x00"), k1...))
+	m := hmac.New(sha256.New, append([]byte("taskiem/subject/v1\x00"), key...))
 	m.Write([]byte(category + "\x00"))
 	m.Write(raw)
-	return category + ":" + hex.EncodeToString(m.Sum(nil))[:32], nil
+	return category + ":" + hex.EncodeToString(m.Sum(nil))[:32]
 }
 
 // subjectKey returns the subject's data key, creating it if needed.

@@ -125,6 +125,23 @@ type Error struct {
 	RetryAfterMS int64 `json:"retry_after_ms,omitempty"`
 }
 
+// Failure kinds for a tenant key that could not be unwrapped (decision
+// 0019): the worker parks the step with KeyUnavailable; the key job
+// resumes it with KeyRestored (nothing was sent: retry) or
+// KeyRestoredReconcile (an earlier attempt may have been: reconcile).
+// A resumption never spends the step's retry budget.
+const (
+	KindKeyUnavailable       = "key_unavailable"
+	KindKeyRestored          = "key_restored"
+	KindKeyRestoredReconcile = "key_restored_reconcile"
+)
+
+// Resumed reports whether a failure is a resumption after a parked key
+// failure, which does not count against the retry budget.
+func (e Error) Resumed() bool {
+	return e.Kind == KindKeyRestored || e.Kind == KindKeyRestoredReconcile
+}
+
 type FailedPayload struct {
 	Error Error `json:"error"`
 }
