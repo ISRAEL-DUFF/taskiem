@@ -87,6 +87,21 @@ func TestTenantsPartnerCLI(t *testing.T) {
 	if !strings.Contains(out.String(), "max_subtenants 50, subtenant_runs_per_day 1000, subtenant_runs_per_month 0") {
 		t.Errorf("output:\n%s", out.String())
 	}
+	if err := run([]string{"tenants", "partner", tn.ID.String(), "--capabilities", "custom_domains, white_label"}, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "capabilities custom_domains,white_label") {
+		t.Errorf("capabilities output:\n%s", out.String())
+	}
+	if err := run([]string{"tenants", "partner", tn.ID.String(), "--capabilities", "teleport"}, &out, &out); err == nil || !strings.Contains(err.Error(), "unknown capability") {
+		t.Errorf("unknown capability: %v", err)
+	}
+	if err := run([]string{"tenants", "partner", tn.ID.String(), "--max-subtenants", "51"}, &out, &out); err != nil || !strings.HasSuffix(strings.TrimSpace(out.String()), "capabilities custom_domains,white_label") {
+		t.Errorf("a change without --capabilities keeps them: %v\n%s", err, out.String())
+	}
+	if err := run([]string{"tenants", "partner", tn.ID.String(), "--capabilities", ""}, &out, &out); err != nil || !strings.HasSuffix(strings.TrimSpace(out.String()), "capabilities none") {
+		t.Errorf("clearing capabilities: %v\n%s", err, out.String())
+	}
 	if err := run([]string{"tenants", "partner", sub.ID.String()}, &out, &out); err == nil || !strings.Contains(err.Error(), "sub-tenant cannot be a partner") {
 		t.Errorf("sub-tenant as partner: %v", err)
 	}
@@ -95,8 +110,8 @@ func TestTenantsPartnerCLI(t *testing.T) {
 	}
 	var n, partners int
 	ctx := context.Background()
-	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action IN ('partner.enable', 'partner.disable') AND actor_id = 'cli:ops'`, tn.ID).Scan(&n); err != nil || n != 3 {
-		t.Errorf("audited %d changes (%v), want 3", n, err)
+	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action IN ('partner.enable', 'partner.disable') AND actor_id = 'cli:ops'`, tn.ID).Scan(&n); err != nil || n != 6 {
+		t.Errorf("audited %d changes (%v), want 6", n, err)
 	}
 	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM partners`).Scan(&partners); err != nil || partners != 0 {
 		t.Errorf("%d partners after --disable (%v)", partners, err)

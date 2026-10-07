@@ -55,6 +55,9 @@ type Server struct {
 	TrustProxy bool
 	// Static serves the web app; nil omits it.
 	Static http.Handler
+	// EmbedDir holds the embedded builder's bundle (taskiem.js, served at
+	// /embed/v1/taskiem.js; docs/embedding.md); empty serves none.
+	EmbedDir string
 	// Egress guards calls to Git hosts; nil uses a default guard.
 	Egress *egress.Guard
 	// Connectors loads tenants' own WebAssembly connectors; nil refuses
@@ -87,6 +90,7 @@ type Server struct {
 	WhatsAppPublic WhatsAppPublic
 
 	limiters limiterSet // sign-in and other unauthenticated attempts
+	hosts    hostCache  // custom domains: Host to embed app
 	defs     sync.Map   // "workflow/version" -> *wd.Definition
 	bg       sync.WaitGroup
 	bgActive atomic.Int64 // work running after its request was answered (reset emails)
@@ -98,11 +102,12 @@ func (s *Server) Handler() http.Handler {
 		s.Logger = slog.Default()
 	}
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders)
+	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
 	r.Mount("/git-hooks", s.GitHooks())
 	r.Mount("/scim/v2", s.SCIM())
+	r.Route("/embed", s.embedPages) // the embedded builder's bundle and frame page (embedframe.go)
 	if s.Ingest != nil {
 		r.Mount("/hooks", s.Ingest)
 		if s.WhatsApp != nil {

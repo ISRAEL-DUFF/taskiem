@@ -570,7 +570,25 @@ func (a *Alerter) send(ctx context.Context, tenant, alertID, channelID uuid.UUID
 // SendTest delivers a test message to one channel now.
 func (a *Alerter) SendTest(ctx context.Context, tenant, channelID uuid.UUID, kind string, cfg []byte) error {
 	m := message{ID: uuid.Must(uuid.NewV7()), Kind: "test", Title: "Test alert from Taskiem", Body: "This channel receives Taskiem alerts.", Detail: json.RawMessage(`{}`), CreatedAt: a.now().UTC()}
+	if a.WhiteLabel(ctx, tenant) {
+		m.Title, m.Body = "Test alert", "This channel receives alerts."
+	}
 	return a.SendTo(ctx, tenant, channelID, kind, cfg, m)
+}
+
+// WhiteLabel reports whether messages sent on tenant's behalf leave out
+// the platform's name (docs/embedding.md#white-label): a sub-tenant whose
+// partner holds the white_label capability and has a white-label app.
+// Errors count as no: the platform's name is the safe default.
+func (a *Alerter) WhiteLabel(ctx context.Context, tenant uuid.UUID) bool {
+	if a.Pool == nil {
+		return false
+	}
+	var wl bool
+	err := db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT taskiem_tenant_white_label($1)`, tenant).Scan(&wl)
+	})
+	return err == nil && wl
 }
 
 // SendTo delivers a message to a channel of the given kind and config.
@@ -590,7 +608,11 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 		if a.Mailer == nil || a.From == "" {
 			return errors.New("email is not configured on this deployment (TASKIEM_SMTP_URL, TASKIEM_ALERT_FROM)")
 		}
-		return a.Mailer.Send(ctx, a.From, cfg.To, BuildEmail(a.From, cfg.To, "[Taskiem] "+m.Title, text, m.ID.String()))
+		subject := "[Taskiem] " + m.Title
+		if a.WhiteLabel(ctx, tenant) {
+			subject = m.Title
+		}
+		return a.Mailer.Send(ctx, a.From, cfg.To, BuildEmail(a.From, cfg.To, subject, text, m.ID.String()))
 	case "slack":
 		hook, err := a.Secrets.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindAlertChannel, Purpose: secrets.PurposeAlertDeliver}), tenant, VaultEnv, SecretName(channelID))
 		if err != nil {

@@ -116,19 +116,9 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		req.Name = "default"
 	}
-	known := map[string]bool{}
-	for _, f := range c.Manifest.Auth.Fields {
-		known[f.Key] = true
-		if (f.Required == nil || *f.Required) && req.Credentials[f.Key] == "" {
-			s.fail(w, r, fmt.Errorf("%w: credential %q is required", errBadRequest, f.Key))
-			return
-		}
-	}
-	for k := range req.Credentials {
-		if !known[k] {
-			s.fail(w, r, fmt.Errorf("%w: %s takes no credential %q", errBadRequest, req.Connector, k))
-			return
-		}
+	if err := checkCredentials(c, req.Credentials); err != nil {
+		s.fail(w, r, err)
+		return
 	}
 	p := principalFrom(r.Context())
 	if err := s.tx(r, func(tx pgx.Tx) error { return s.checkCount(r.Context(), tx, p.TenantID, "max_connections") }); err != nil {

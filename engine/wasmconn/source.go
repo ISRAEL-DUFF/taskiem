@@ -58,32 +58,63 @@ func (s *Source) Connectors(ctx context.Context, tenant string) ([]*connector.Co
 	if err != nil {
 		return nil, err
 	}
-	type row struct{ id, version string }
+	type row struct {
+		id, version string
+		partner     uuid.UUID // set for a connector the tenant's partner shares
+	}
 	newest := map[string]row{} // by id@major
+	collect := func(rows pgx.Rows, shared bool) error {
+		defer rows.Close()
+		for rows.Next() {
+			var r row
+			var err error
+			if shared {
+				err = rows.Scan(&r.partner, &r.id, &r.version)
+			} else {
+				err = rows.Scan(&r.id, &r.version)
+			}
+			if err != nil {
+				return err
+			}
+			ref := r.id + "@" + major(r.version)
+			prev, ok := newest[ref]
+			// The partner's shared connector wins over a sub-tenant's own of
+			// the same id: end users get what the partner provides.
+			switch {
+			case !ok, shared && prev.partner == uuid.Nil, (shared == (prev.partner != uuid.Nil)) && Newer(r.version, prev.version):
+				newest[ref] = r
+			}
+		}
+		return rows.Err()
+	}
 	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tid}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT connector_id, version FROM tenant_connectors WHERE disabled_at IS NULL`)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var r row
-			if err := rows.Scan(&r.id, &r.version); err != nil {
-				return err
-			}
-			ref := r.id + "@" + major(r.version)
-			if prev, ok := newest[ref]; !ok || Newer(r.version, prev.version) {
-				newest[ref] = r
-			}
+		if err := collect(rows, false); err != nil {
+			return err
 		}
-		return rows.Err()
+		// A sub-tenant's partner's connectors shared with it (the partner
+		// connector bridge, docs/embedding.md): read-only, through a
+		// function that checks the parent; none for other tenants.
+		if rows, err = tx.Query(ctx, `SELECT partner_id, connector_id, version FROM taskiem_shared_connectors($1)`, tid); err != nil {
+			return err
+		}
+		return collect(rows, true)
 	})
 	if err != nil {
 		return nil, err
 	}
 	var list []*connector.Connector
 	for _, r := range newest {
-		c, err := s.load(ctx, tid, r.id, r.version)
+		var c *connector.Connector
+		var err error
+		if r.partner != uuid.Nil {
+			c, err = s.loadShared(ctx, tid, r.partner, r.id, r.version)
+		} else {
+			c, err = s.load(ctx, tid, r.id, r.version)
+		}
 		if err != nil {
 			// Checked when uploaded; failing now means the deployment's
 			// limits changed. The tenant's other connectors still work.
@@ -136,10 +167,54 @@ func (s *Source) load(ctx context.Context, tenant uuid.UUID, id, version string)
 	return c, nil
 }
 
+// loadShared loads a version of a connector tenant's partner shares with
+// it. The module is the partner's, cached once under the partner's key for
+// all its sub-tenants; reading it goes through the sub-tenant's scope.
+func (s *Source) loadShared(ctx context.Context, tenant, partner uuid.UUID, id, version string) (*connector.Connector, error) {
+	key := partner.String() + "/" + id + "@" + version
+	s.mu.Lock()
+	c, ok := s.loaded[key]
+	s.mu.Unlock()
+	if ok {
+		return c, nil
+	}
+	var manifest string
+	var module []byte
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT manifest, module FROM taskiem_shared_connector_module($1, $2, $3)`, tenant, id, version).Scan(&manifest, &module)
+	})
+	if err != nil {
+		return nil, err
+	}
+	c, err = s.Runtime.Load(ctx, []byte(manifest), module)
+	if err != nil {
+		return nil, err
+	}
+	if c.Manifest.ID != id || c.Manifest.Version != version {
+		return nil, fmt.Errorf("stored as %s %s but the manifest says %s %s", id, version, c.Manifest.ID, c.Manifest.Version)
+	}
+	c.Manifest.OverrideBaseURL(s.BaseURLs[id])
+	s.mu.Lock()
+	if s.loaded == nil {
+		s.loaded = map[string]*connector.Connector{}
+	}
+	s.loaded[key] = c
+	s.mu.Unlock()
+	return c, nil
+}
+
 // Forget drops a tenant's cached list, after an upload or a disable.
 func (s *Source) Forget(tenant string) {
 	s.mu.Lock()
 	delete(s.tenants, tenant)
+	s.mu.Unlock()
+}
+
+// ForgetAll drops every tenant's cached list: a partner's upload, disable
+// or share changes what its sub-tenants see.
+func (s *Source) ForgetAll() {
+	s.mu.Lock()
+	s.tenants = nil
 	s.mu.Unlock()
 }
 

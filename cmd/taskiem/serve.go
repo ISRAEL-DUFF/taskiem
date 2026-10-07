@@ -323,6 +323,8 @@ func serve(ctx context.Context, args []string) error {
 		}
 		if cfg.WebDir != "" {
 			srv.Static = api.SPA(cfg.WebDir)
+			// The embedded builder's bundle (pnpm build writes it there).
+			srv.EmbedDir = cfg.WebDir + "/embed/v1"
 		}
 		srv.WhatsApp = e.wa
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp)

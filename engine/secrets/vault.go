@@ -128,7 +128,7 @@ func actorType(actor string) string {
 	switch {
 	case actor == "system":
 		return "system"
-	case strings.HasPrefix(actor, "key:"):
+	case strings.HasPrefix(actor, "key:"), strings.HasPrefix(actor, "partner:"):
 		return "api_key"
 	}
 	return "user"

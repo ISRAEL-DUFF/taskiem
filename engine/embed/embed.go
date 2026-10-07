@@ -115,6 +115,29 @@ func WebhookURL(s string) error {
 	return nil
 }
 
+// Partner capabilities an operator grants (taskiem tenants partner
+// --capabilities): plan gates on what a partner's apps may do.
+const (
+	CapWhiteLabel    = "white_label"    // apps may leave out the platform's branding
+	CapCustomDomains = "custom_domains" // apps may be served on the partner's own domains
+)
+
+// Capabilities are every partner capability.
+var Capabilities = []string{CapWhiteLabel, CapCustomDomains}
+
+var domainRe = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$`)
+
+// Domain checks a custom domain for an embed app and returns it in lower
+// case: a fully qualified host name with at least two labels, no port,
+// scheme, path, wildcard or IP address.
+func Domain(s string) (string, error) {
+	d := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s)), ".")
+	if len(d) > 253 || !domainRe.MatchString(d) || net.ParseIP(d) != nil {
+		return "", fmt.Errorf("domain %q must be a host name like automations.example.com, without a scheme, port, path or wildcard", s)
+	}
+	return d, nil
+}
+
 func local(host string) bool {
 	if host == "localhost" {
 		return true

@@ -3,6 +3,7 @@ package embed
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,6 +69,20 @@ func TestBranding(t *testing.T) {
 	} {
 		if _, err := ParseBranding(json.RawMessage(bad)); err == nil {
 			t.Errorf("accepted %s", bad)
+		}
+	}
+}
+
+func TestDomain(t *testing.T) {
+	for in, want := range map[string]string{"Automations.Partner.com": "automations.partner.com", " a.b.co. ": "a.b.co", "x-1.y.example": "x-1.y.example"} {
+		if got, err := Domain(in); err != nil || got != want {
+			t.Errorf("Domain(%q) = %q, %v", in, got, err)
+		}
+	}
+	for _, bad := range []string{"", "partner", "https://a.partner.com", "a.partner.com:443", "a.partner.com/x", "*.partner.com", "10.1.2.3",
+		"-a.partner.com", "a_b.partner.com", "a..partner.com", "a.partner.-com", strings.Repeat("a", 64) + ".com"} {
+		if _, err := Domain(bad); err == nil {
+			t.Errorf("accepted %q", bad)
 		}
 	}
 }

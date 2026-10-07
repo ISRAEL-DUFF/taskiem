@@ -134,7 +134,7 @@ func (s *Server) uploadTenantConnector(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.Connectors.Forget(p.TenantID.String())
+	s.Connectors.ForgetAll() // its sub-tenants may see it (shared connectors)
 	writeJSON(w, http.StatusCreated, map[string]any{"id": m.ID, "version": m.Version, "ref": c.Ref(), "digest": digest, "actions": actions, "hosts": m.Hosts()})
 }
 
@@ -178,7 +178,7 @@ func (s *Server) disableTenantConnector(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if s.Connectors != nil {
-		s.Connectors.Forget(p.TenantID.String())
+		s.Connectors.ForgetAll() // its sub-tenants may see it (shared connectors)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

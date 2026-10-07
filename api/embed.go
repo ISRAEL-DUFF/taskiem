@@ -25,8 +25,9 @@ import (
 // /v1/embed/{app}/..., takes only end-user tokens, and offers exactly the
 // capabilities an embedded builder and run view need: workflows within the
 // app's connectors, publishing (when allowed), and runs. Nothing else of
-// the API accepts an end-user token. The C2 web component and iframe call
-// these same routes.
+// the API accepts an end-user token. The embedded builder (the
+// <taskiem-builder> element and the frame page, embedframe.go) calls these
+// same routes.
 
 // EndUser is an embed app's end user acting through a token: a lightweight
 // principal in one sub-tenant, with no platform login.
@@ -41,6 +42,9 @@ type EndUser struct {
 	AllowedTemplates  []string
 	Branding          json.RawMessage
 	ExpiresAt         time.Time
+	// WhiteLabel: the app leaves out the platform's branding (the app's
+	// flag, while its partner holds the white_label capability).
+	WhiteLabel bool
 }
 
 // Actor is how audit and run records name an end user.
@@ -116,7 +120,11 @@ func (s *Server) embedAuth(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "a valid end-user token for this app is required")
 			return
 		}
-		origin := r.Header.Get("Origin")
+		origin, err := s.embedOrigin(r)
+		if err != nil {
+			writeErr(w, http.StatusForbidden, err.Error())
+			return
+		}
 		switch {
 		case origin != "" && !slices.Contains(eu.allowedOrigins, origin):
 			writeErr(w, http.StatusForbidden, "this origin is not allowed for the app")
@@ -131,6 +139,29 @@ func (s *Server) embedAuth(next http.Handler) http.Handler {
 		p := &Principal{TenantID: tenant, Permissions: perms, EndUser: &eu.EndUser}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, p)))
 	})
+}
+
+// embedOrigin is the origin a request to the embed API acts for: its
+// Origin header; or, from the frame page (the platform's own origin, or
+// the app's custom domain, where only the platform's script runs), the
+// partner page that framed it, which the frame names in
+// X-Taskiem-Embed-Parent after checking the page's origin itself. A
+// same-origin GET carries no Origin header; Sec-Fetch-Site tells it apart
+// from a server's call.
+func (s *Server) embedOrigin(r *http.Request) (string, error) {
+	origin := r.Header.Get("Origin")
+	self := s.selfOrigin(r)
+	if origin == "" && r.Header.Get("Sec-Fetch-Site") == "same-origin" {
+		origin = self
+	}
+	if origin == "" || origin != self {
+		return origin, nil
+	}
+	parent := r.Header.Get(embedParentHeader)
+	if parent == "" || parent == self {
+		return "", errors.New("the frame page must name the partner page that framed it")
+	}
+	return parent, nil
 }
 
 type resolvedEndUser struct {
@@ -154,9 +185,10 @@ func (s *Server) resolveEndUser(r *http.Request) (*resolvedEndUser, map[string]b
 	var permissions, appPermissions []string
 	var origin *string
 	err = s.Store.Pool.QueryRow(r.Context(), `SELECT token_id, tenant_id, partner_id, app_id, end_user_id, external_id, permissions, origin,
-		allowed_origins, allowed_connectors, allowed_templates, app_permissions, headless, branding, expires_at FROM taskiem_auth_end_user_token($1)`, hashToken(tok)).
+		allowed_origins, allowed_connectors, allowed_templates, app_permissions, headless, branding, expires_at, white_label
+		FROM taskiem_auth_end_user_token($1)`, hashToken(tok)).
 		Scan(&eu.TokenID, &tenant, &eu.PartnerID, &eu.AppID, &eu.ID, &eu.ExternalID, &permissions, &origin,
-			&eu.allowedOrigins, &eu.AllowedConnectors, &eu.AllowedTemplates, &appPermissions, &eu.headless, &eu.Branding, &eu.ExpiresAt)
+			&eu.allowedOrigins, &eu.AllowedConnectors, &eu.AllowedTemplates, &appPermissions, &eu.headless, &eu.Branding, &eu.ExpiresAt, &eu.WhiteLabel)
 	if err != nil {
 		return nil, nil, uuid.Nil, err
 	}
@@ -195,6 +227,7 @@ func (s *Server) embedMe(w http.ResponseWriter, r *http.Request) {
 		"allowed_connectors": nonNil(eu.AllowedConnectors),
 		"allowed_templates":  nonNil(eu.AllowedTemplates),
 		"branding":           eu.Branding,
+		"white_label":        eu.WhiteLabel,
 		"expires_at":         eu.ExpiresAt,
 	})
 }

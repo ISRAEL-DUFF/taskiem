@@ -41,6 +41,7 @@ type embedAppReq struct {
 	AllowedTemplates   []string        `json:"allowed_templates,omitempty"`
 	EndUserPermissions []string        `json:"end_user_permissions,omitempty"`
 	Headless           bool            `json:"headless,omitempty"`
+	WhiteLabel         bool            `json:"white_label,omitempty"`
 	WebhookURL         string          `json:"webhook_url,omitempty"`
 	WebhookEvents      []string        `json:"webhook_events,omitempty"`
 	Status             string          `json:"status,omitempty"`
@@ -61,11 +62,16 @@ type embedApp struct {
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 	WebhookSecretSet   bool            `json:"webhook_secret_set"`
+	WhiteLabel         bool            `json:"white_label"`
+	Domains            []appDomain     `json:"domains"`
 }
 
 const embedAppColumns = `a.id, a.name, a.allowed_origins, a.branding, a.allowed_connectors, a.allowed_templates, a.end_user_permissions, a.headless,
 	a.webhook_url, a.webhook_events, a.status, a.created_at, a.updated_at,
-	EXISTS (SELECT 1 FROM secrets s WHERE s.environment = '` + embed.VaultEnv + `' AND s.name = 'app_' || a.id::text || '_webhook')`
+	EXISTS (SELECT 1 FROM secrets s WHERE s.environment = '` + embed.VaultEnv + `' AND s.name = 'app_' || a.id::text || '_webhook'),
+	a.white_label,
+	COALESCE((SELECT jsonb_agg(jsonb_build_object('domain', d.domain, 'record', '_taskiem-verify.' || d.domain, 'txt_value', d.token,
+	  'verified_at', d.verified_at) ORDER BY d.domain) FROM embed_app_domains d WHERE d.app_id = a.id), '[]')`
 
 // check validates and normalises an embed app's settings.
 func (s *Server) checkEmbedApp(r *http.Request, req *embedAppReq) error {
@@ -96,11 +102,31 @@ func (s *Server) checkEmbedApp(r *http.Request, req *embedAppReq) error {
 	}
 	req.Branding, _ = json.Marshal(b)
 	// Connectors must exist for the partner's sub-tenants: the platform's
-	// catalogue (a sub-tenant has no connectors of its own), plus the gated
-	// step types by name.
+	// catalogue, the partner's own connectors it shares with them (the
+	// connector bridge), plus the gated step types by name.
 	known := []string{"http", "code", "ai"}
 	for _, c := range s.Registry.List() {
 		known = append(known, c.Manifest.ID)
+	}
+	var caps []string
+	err = s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT connector_id FROM shared_connectors`)
+		if err != nil {
+			return err
+		}
+		shared, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		known = append(known, shared...)
+		if err != nil {
+			return err
+		}
+		caps, err = partnerCapabilities(r, tx)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if req.WhiteLabel && !slices.Contains(caps, embed.CapWhiteLabel) {
+		return fmt.Errorf("%w: white-label apps need the partner's plan to include white_label (ask the operator)", errForbidden)
 	}
 	conns := []string{}
 	for _, c := range req.AllowedConnectors {
@@ -191,17 +217,17 @@ func (s *Server) createEmbedApp(w http.ResponseWriter, r *http.Request) {
 	id := uuid.Must(uuid.NewV7())
 	err := s.tx(r, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(r.Context(), `INSERT INTO embed_apps (id, tenant_id, name, allowed_origins, branding, allowed_connectors, allowed_templates,
-			end_user_permissions, headless, webhook_url, webhook_events, status, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, ''), $11, $12, $13)`,
+			end_user_permissions, headless, webhook_url, webhook_events, status, created_by, white_label)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, ''), $11, $12, $13, $14)`,
 			id, p.TenantID, req.Name, req.AllowedOrigins, req.Branding, req.AllowedConnectors, req.AllowedTemplates,
-			req.EndUserPermissions, req.Headless, req.WebhookURL, req.WebhookEvents, req.Status, p.Actor()); err != nil {
+			req.EndUserPermissions, req.Headless, req.WebhookURL, req.WebhookEvents, req.Status, p.Actor(), req.WhiteLabel); err != nil {
 			if isUnique(err) {
 				return fmt.Errorf("%w: an app named %q exists", errConflict, req.Name)
 			}
 			return err
 		}
 		return auditTx(r, tx, "embed_app.create", id.String(), map[string]any{"name": req.Name, "allowed_origins": req.AllowedOrigins,
-			"allowed_connectors": req.AllowedConnectors, "end_user_permissions": req.EndUserPermissions, "headless": req.Headless})
+			"allowed_connectors": req.AllowedConnectors, "end_user_permissions": req.EndUserPermissions, "headless": req.Headless, "white_label": req.WhiteLabel})
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -280,9 +306,10 @@ func (s *Server) updateEmbedApp(w http.ResponseWriter, r *http.Request) {
 	var app embedApp
 	err = s.tx(r, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(r.Context(), `UPDATE embed_apps SET name = $2, allowed_origins = $3, branding = $4, allowed_connectors = $5, allowed_templates = $6,
-			end_user_permissions = $7, headless = $8, webhook_url = NULLIF($9, ''), webhook_events = $10, status = $11, updated_at = now() WHERE id = $1`,
+			end_user_permissions = $7, headless = $8, webhook_url = NULLIF($9, ''), webhook_events = $10, status = $11, white_label = $12, updated_at = now()
+			WHERE id = $1`,
 			id, req.Name, req.AllowedOrigins, req.Branding, req.AllowedConnectors, req.AllowedTemplates, req.EndUserPermissions, req.Headless,
-			req.WebhookURL, req.WebhookEvents, req.Status)
+			req.WebhookURL, req.WebhookEvents, req.Status, req.WhiteLabel)
 		if err != nil {
 			if isUnique(err) {
 				return fmt.Errorf("%w: an app named %q exists", errConflict, req.Name)
@@ -296,7 +323,8 @@ func (s *Server) updateEmbedApp(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		return auditTx(r, tx, "embed_app.update", id.String(), map[string]any{"name": req.Name, "allowed_origins": req.AllowedOrigins,
-			"allowed_connectors": req.AllowedConnectors, "end_user_permissions": req.EndUserPermissions, "headless": req.Headless, "status": req.Status})
+			"allowed_connectors": req.AllowedConnectors, "end_user_permissions": req.EndUserPermissions, "headless": req.Headless, "status": req.Status,
+			"white_label": req.WhiteLabel})
 	})
 	if err != nil {
 		s.fail(w, r, err)
