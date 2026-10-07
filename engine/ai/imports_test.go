@@ -2,6 +2,7 @@ package ai_test
 
 import (
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -22,6 +23,16 @@ var forbidden = []struct{ pkg, why string }{
 	{"github.com/israel-duff/taskiem/engine/wdcheck", "pulls in ingest and the runtime; the API injects the check"},
 	{"github.com/israel-duff/taskiem/api", "the API and its principals"},
 	{"github.com/israel-duff/taskiem/connectors/", "connector handlers that call real providers"},
+	{"github.com/israel-duff/taskiem/engine/shadow", "the shadow sandbox holds a failed run's opened recording; repair gets only its sanitised verdict"},
+	{"github.com/israel-duff/taskiem/engine/drift", "drift records are read by the repair service and passed in as plain findings"},
+}
+
+// The packages the rule must cover: a package moved out of engine/ai
+// would silently escape it.
+var covered = []string{
+	"github.com/israel-duff/taskiem/engine/ai",
+	"github.com/israel-duff/taskiem/engine/ai/builder",
+	"github.com/israel-duff/taskiem/engine/ai/repair",
 }
 
 func TestImportGraphExcludesPrivilegedCode(t *testing.T) {
@@ -36,6 +47,11 @@ func TestImportGraphExcludesPrivilegedCode(t *testing.T) {
 	deps := strings.Fields(string(out))
 	if len(deps) < 10 {
 		t.Fatalf("suspiciously few dependencies: %v", deps)
+	}
+	for _, c := range covered {
+		if !slices.Contains(deps, c) {
+			t.Errorf("%s is not under the import rule", c)
+		}
 	}
 	for _, d := range deps {
 		for _, f := range forbidden {

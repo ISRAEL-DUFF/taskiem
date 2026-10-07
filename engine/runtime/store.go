@@ -50,6 +50,10 @@ type Store struct {
 // (a buffered signal consumed by a new wait triggers another round).
 const maxInlineRounds = 16
 
+// maxForkRounds bounds the rounds of a forked run, whose replayed outcomes
+// each take one.
+const maxForkRounds = 4096
+
 // RunRef identifies a run.
 type RunRef struct {
 	ID, TenantID uuid.UUID
@@ -70,6 +74,9 @@ type StartRequest struct {
 	// run is recorded but queued, and the scheduler admits it at the
 	// tenant's rate (spec 8.3).
 	Throttled bool
+	// Fork makes the run continue a failed one (fork.go): its trigger and
+	// variables are the parent's, and what the parent completed is replayed.
+	Fork *Fork
 }
 
 // ErrNotFound is returned when a run, step, or workflow is not visible.
@@ -103,6 +110,16 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 		if err != nil {
 			return err
 		}
+		var fork *forkPlan
+		if req.Fork != nil {
+			if fork, err = s.planFork(ctx, tx, req.TenantID, req.Fork.Parent); err != nil {
+				return err
+			}
+			req.Trigger, req.Env = fork.trigger, fork.env
+			if req.Env == nil {
+				req.Env = map[string]any{}
+			}
+		}
 		if req.DedupKey != "" {
 			tag, err := tx.Exec(ctx, `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
 				req.TenantID, req.TriggerID, req.DedupKey, ref.ID)
@@ -134,6 +151,11 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 		if err := tx.QueryRow(ctx, `INSERT INTO runs (id, tenant_id, workflow_id, version, environment, started_at, started_by) VALUES ($1, $2, $3, $4, $5, now(), NULLIF($6, '')) RETURNING started_at`,
 			ref.ID, req.TenantID, req.WorkflowID, req.Version, req.Environment, req.StartedBy).Scan(&startedAt); err != nil {
 			return err
+		}
+		if fork != nil {
+			if err := recordFork(ctx, tx, req.TenantID, ref.ID, fork); err != nil {
+				return err
+			}
 		}
 		if req.Env == nil {
 			if req.Env, err = variables(ctx, tx, req.TenantID, req.Environment); err != nil {
@@ -283,12 +305,13 @@ type runRow struct {
 	version    int
 	status     string
 	env        string
+	forked     bool // continues a failed run (fork.go)
 }
 
 func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 	r := runRow{ref: RunRef{ID: id}}
-	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment FROM runs WHERE id = $1 FOR UPDATE`, id).
-		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env)
+	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment, parent_run_id IS NOT NULL FROM runs WHERE id = $1 FOR UPDATE`, id).
+		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env, &r.forked)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, fmt.Errorf("run %s: %w", id, ErrNotFound)
 	}
@@ -364,7 +387,11 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 		return err
 	}
 	scheduled := 0 // steps this decision scheduled, for max_steps_per_run
-	for round := 0; round < maxInlineRounds; round++ {
+	rounds := maxInlineRounds
+	if run.forked {
+		rounds = maxForkRounds // each replayed outcome takes a round
+	}
+	for round := 0; round < rounds; round++ {
 		if round > 0 {
 			raw, err := HistoryAfter(ctx, tx, ref.ID, st.Seq())
 			if err != nil {
@@ -426,7 +453,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			return err
 		}
 	}
-	return fmt.Errorf("run %s: decision did not settle after %d rounds", ref.ID, maxInlineRounds)
+	return fmt.Errorf("run %s: decision did not settle after %d rounds", ref.ID, rounds)
 }
 
 // countSteps records a decision's scheduled steps and fails the run when
@@ -471,6 +498,11 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		p := ev.Payload.(history.ScheduledPayload)
 		switch p.Kind {
 		case history.KindTask:
+			if run.forked {
+				if then, ok, err := s.replayTask(ctx, tx, run, ev, p); err != nil || ok {
+					return then, err
+				}
+			}
 			at, err := history.ParseTime(p.AvailableAt)
 			if err != nil {
 				return nil, err
@@ -483,8 +515,22 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			if err != nil {
 				return nil, err
 			}
+			if run.forked {
+				done, err := s.replayTimer(ctx, tx, run, ev)
+				if err != nil {
+					return nil, err
+				}
+				if done {
+					at = time.Now() // the parent already waited
+				}
+			}
 			return nil, insertTimer(ctx, tx, tenant, run.ref.ID, ev.StepID, "wait", at)
 		case history.KindSignal:
+			if run.forked {
+				if then, ok, err := s.replaySignal(ctx, tx, run, ev); err != nil || ok {
+					return then, err
+				}
+			}
 			if p.TimeoutAt != "" {
 				at, err := history.ParseTime(p.TimeoutAt)
 				if err != nil {

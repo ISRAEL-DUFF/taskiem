@@ -353,5 +353,6 @@ func (s *Server) promote(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.repairsAfterDeploy(r.Context(), p.TenantID, wf) // an accepted repair waiting for this promotion
 	writeJSON(w, http.StatusOK, map[string]any{"id": wf, "version": v, "environment": req.To})
 }

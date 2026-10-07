@@ -327,3 +327,7 @@ func similar(goal string, list []ExistingWorkflow, n int) []map[string]any {
 	}
 	return out
 }
+
+// Detail is one connector's full description (actions with their schemas,
+// classes, compensation and reconcile actions), as a prompt carries it.
+func Detail(c *connector.Connector) map[string]any { return detail(c) }

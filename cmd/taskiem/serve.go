@@ -312,6 +312,8 @@ func serve(ctx context.Context, args []string) error {
 		} else if prov != nil {
 			srv.AI = &api.AISettings{Provider: prov, Effort: cfg.AI.Effort, MaxTokens: cfg.AI.MaxTokens}
 			log.Info("AI building on", "provider", prov.Name(), "model", prov.Model())
+			// Self-repair works its queue where a model is configured (docs/ai.md).
+			tasks = append(tasks, func(ctx context.Context) error { srv.RunRepairs(ctx, 5*time.Second); return nil })
 		}
 		// Checking a Python step compiles CPython first (seconds): do it now.
 		go func() { _ = sandbox.InitPython() }()

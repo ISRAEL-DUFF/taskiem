@@ -742,6 +742,7 @@ func (s *Server) decidePublish(approve bool) http.HandlerFunc {
 			s.fail(w, r, err)
 			return
 		}
+		s.repairsAfterDeploy(r.Context(), p.TenantID, wf) // an accepted repair waiting for this decision
 		out := map[string]any{"id": wf, "version": v, "state": map[bool]string{true: "published", false: "draft"}[approve]}
 		if published {
 			if g := s.proposeToGit(r, wf, v); g != nil {

@@ -136,6 +136,16 @@ type Result struct {
 	Status   string
 	Trace    []string // events, for a failing case
 	Duration time.Duration
+	// Steps is each step instance's final state (completed, failed,
+	// skipped, cancelled, parked, running), and Inputs what each task
+	// instance sent on its last attempt: for callers that check more than
+	// the case asserts (the repair pipeline's shadow run).
+	Steps  map[string]string
+	Inputs map[string]any
+	// Errors is each failed or parked instance's failure message, and
+	// RunError the run's.
+	Errors   map[string]string
+	RunError string
 }
 
 func (r Result) Passed() bool { return len(r.Failures) == 0 }
@@ -670,6 +680,16 @@ func (r *runner) check() {
 	r.res.Failures = append(r.res.Failures, r.setup...)
 	byID, order := r.state()
 	r.res.Status = r.status(order)
+	r.res.Steps, r.res.Inputs, r.res.Errors, r.res.RunError = map[string]string{}, map[string]any{}, map[string]string{}, r.runError()
+	for _, s := range order {
+		r.res.Steps[s.id] = stepStatus(s)
+		if s.failure != nil && !s.completed {
+			r.res.Errors[s.id] = s.failure.Message
+		}
+		if s.last > 0 && s.sched[s.last].Kind == history.KindTask {
+			r.res.Inputs[s.id] = s.sched[s.last].Input
+		}
+	}
 	e := r.c.Expect
 	if e.Status != "" && e.Status != r.res.Status {
 		why := ""

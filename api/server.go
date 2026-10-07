@@ -193,6 +193,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRunRead)).Get("/runs/{run}/stream", s.streamRun)
 			r.With(s.need(PermRunCancel)).Post("/runs/{run}/cancel", s.cancelRun)
 			r.With(s.need(PermRunResolve)).Post("/runs/{run}/steps/{step}/resolve", s.resolveStep)
+			r.Group(s.repairRoutes) // self-repair proposals (repair.go)
 
 			r.Get("/approvals", s.listApprovals)
 			r.With(s.need(PermApprovalDecide)).Post("/approvals/{run}/{step}", s.decide)

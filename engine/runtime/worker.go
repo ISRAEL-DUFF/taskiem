@@ -460,7 +460,8 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{c.tenant}, func(tx pgx.Tx) error {
 		var wfID uuid.UUID
 		var version int
-		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env); err != nil {
+		var runSeed string // a fork's inherited seed (fork.go)
+		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, '') FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed); err != nil {
 			return err
 		}
 		def, err := w.Store.definition(ctx, tx, wfID, version)
@@ -543,8 +544,18 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		seed := p.sched.Seed
 		if seed == "" {
 			seed = c.run.String()
+			if runSeed != "" {
+				seed = runSeed
+			}
 		}
 		p.keyIn = effects.KeyInput{TenantID: c.tenant.String(), Seed: seed, StepID: p.sched.KeyStep}
+		if len(intents) == 0 && runSeed != "" {
+			// A step the parent attempted and failed for good starts a new
+			// attempt group: a new key, not the parent's cached failure.
+			if p.group, err = forkKeyGroup(ctx, tx, c.run, c.step); err != nil {
+				return err
+			}
+		}
 		if n := len(intents); n > 0 {
 			last, lastAttempt := intents[n-1], intentAttempts[n-1]
 			p.group = last.AttemptGroup

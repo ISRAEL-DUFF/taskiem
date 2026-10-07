@@ -3,6 +3,8 @@
 package history
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
@@ -218,3 +220,15 @@ const TimeFormat = time.RFC3339Nano
 func FormatTime(t time.Time) string { return t.UTC().Format(TimeFormat) }
 
 func ParseTime(s string) (time.Time, error) { return time.Parse(TimeFormat, s) }
+
+// InputDigest is how a resolved step input is compared across runs (a
+// fork and its parent, a shadow run and the recording): SHA-256 of its
+// JSON form, so 1, 1.0 and int64(1) agree.
+func InputDigest(v any) string {
+	raw, _ := json.Marshal(v)
+	var norm any
+	_ = json.Unmarshal(raw, &norm)
+	raw, _ = json.Marshal(norm)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}

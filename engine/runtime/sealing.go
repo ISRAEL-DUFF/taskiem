@@ -158,3 +158,20 @@ func (s *Store) OpenedHistory(ctx context.Context, ref RunRef) ([]history.Event,
 	})
 	return h, err
 }
+
+// OpenedHistoryWithTaint is OpenedHistory also returning the personal
+// values it opened, so a caller (the repair service) can make sure none of
+// them leaves in text derived from the history.
+func (s *Store) OpenedHistoryWithTaint(ctx context.Context, ref RunRef) ([]history.Event, pii.Taint, error) {
+	var h []history.Event
+	var taint pii.Taint
+	err := dbTx(ctx, s, ref.TenantID, func(tx pgx.Tx) error {
+		raw, err := History(ctx, tx, ref.ID)
+		if err != nil {
+			return err
+		}
+		h, taint, err = s.openHistory(ctx, tx, ref.TenantID, raw)
+		return err
+	})
+	return h, taint, err
+}
