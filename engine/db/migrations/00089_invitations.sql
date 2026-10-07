@@ -23,8 +23,8 @@ CREATE POLICY dispatch ON invitee_sessions TO taskiem_dispatch USING (true) WITH
 REVOKE ALL ON invitee_sessions FROM PUBLIC;
 GRANT SELECT, INSERT, UPDATE, DELETE ON invitee_sessions TO taskiem_dispatch;
 
--- Invitee sessions and invitation lists show the person's name.
-GRANT SELECT (name) ON users TO taskiem_dispatch;
+-- Names are not returned: the dispatch role never reads them (only id,
+-- email, password hash and status; TestDispatchRoleCannotReadPayloads).
 
 -- Starts an invitee session for an active person who belongs to no active
 -- tenant and is invited by at least one; false otherwise.
@@ -50,7 +50,7 @@ $$;
 CREATE FUNCTION taskiem_auth_invitee_session(p_hash bytea)
 RETURNS TABLE (user_id uuid, email text, name text, auth_method text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT s.user_id, u.email, u.name, s.auth_method FROM invitee_sessions s
+  SELECT s.user_id, u.email, ''::text, s.auth_method FROM invitee_sessions s
     JOIN users u ON u.id = s.user_id AND u.status = 'active'
    WHERE s.token_hash = p_hash AND s.revoked_at IS NULL AND s.expires_at > now()
 $$;
@@ -64,13 +64,13 @@ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 $$;
 -- +goose StatementEnd
 
--- Who a tenant in scope has invited: their email and name, which its
+-- Who a tenant in scope has invited: their email (name left empty: the dispatch role reads no names), which its
 -- admins typed to invite them, for its list of pending invitations.
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_tenant_invitees(p_tenant uuid)
 RETURNS TABLE (user_id uuid, email text, name text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT u.id, u.email, u.name FROM member_invitations i JOIN users u ON u.id = i.user_id
+  SELECT u.id, u.email, ''::text FROM member_invitations i JOIN users u ON u.id = i.user_id
    WHERE p_tenant = ANY (taskiem_tenant_scope()) AND i.tenant_id = p_tenant
 $$;
 -- +goose StatementEnd
@@ -90,4 +90,3 @@ DROP FUNCTION taskiem_auth_invitee_end(bytea);
 DROP FUNCTION taskiem_auth_invitee_session(bytea);
 DROP FUNCTION taskiem_auth_invitee_start(bytea, uuid, text, interval, text);
 DROP TABLE invitee_sessions;
-REVOKE SELECT (name) ON users FROM taskiem_dispatch;
