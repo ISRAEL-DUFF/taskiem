@@ -68,4 +68,4 @@ Registering or updating an embed app refuses an `allowed_templates` id that is n
 
 ## Web
 
-**Templates** in the navigation (every member): templates by category, a search box, and for each its description, steps in plain words, the variables to set, and a form for its parameters that creates the draft and opens it in the editor. The AI panel says when a draft started from a template, and which details the goal did not give.
+**Templates** in the navigation (every member): templates by category, a search box, and for each its description, steps in plain words, the variables to set, and a form for its parameters that creates the draft and opens it in the editor. "Set it up step by step" opens the guided first workflow instead: details, connection and variables, publish, and a test run on one page ([onboarding](onboarding.md#getting-started)). The AI panel says when a draft started from a template, and which details the goal did not give.

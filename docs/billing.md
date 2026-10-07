@@ -27,7 +27,7 @@ Taskiem sells flat-priced plans (spec 16): a monthly or annual fee per tier, nev
 | `TASKIEM_PUBLIC_URL` | — | Checkout return links and links in emails |
 
 4. In the provider's dashboard set the webhook URL to `https://<api host>/v1/billing/webhooks/paystack` (or `/flutterwave`). It is on the API, not the edge.
-5. Turn on signup if tenants should sign themselves up (`TASKIEM_ALLOW_SIGNUP=true`); each new tenant starts its trial.
+5. Turn on signup if tenants should sign themselves up (`TASKIEM_ALLOW_SIGNUP=true`, [onboarding](onboarding.md)); each new tenant starts its trial.
 
 ### The catalogue
 

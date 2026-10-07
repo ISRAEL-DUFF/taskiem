@@ -11,7 +11,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Area | Milestone | Scope | Spec | Status |
 | --- | --- | --- | --- | --- |
 | Billing | P4-1 | Plans catalogue from a config file mapped onto every plan limit, features gated at the API, subscriptions (trial, active, past due with grace, degraded, cancelled, comped), plan changes with proration and downgrade blockers, immutable gapless invoices with VAT and pass-through overage, naira payments through Paystack (checkout, webhooks, saved cards, reconciliation) and Flutterwave, dunning, usage snapshots, billing API and page, operator CLI | 16, 13.1 | **Done** (code; [what exists](#p4-1-billing)); live payments need P4-B2, prices B1 |
-| Onboarding | P4-2 | Self-serve signup (exists, off by default), guided first workflow, template gallery (the SME library exists), in-product docs; signup to first run under 15 minutes | — | Planned |
+| Onboarding | P4-2 | Self-serve signup hardened for the public (email confirmation, limits, abuse checks, trial), getting-started checklist, guided first workflow over the template gallery, in-product help, signup-to-first-run measurement | — | **Done** (code; [what exists](#p4-2-onboarding)); going public needs P4-O1–P4-O4 |
 | Cloud | P4-3 | Nigeria-region production cloud: HA Postgres with synchronous standby, PITR, fixed egress IPs; workers split by queue, dedicated pools, read replicas | 2.3, 15.4 | Planned; needs people (infrastructure, D-items) |
 | Reliability | P4-4 | 99.9% SLO with on-call, status page, incident process | 15.3 | Planned; needs people |
 | Enterprise | P4-5 | BYOK (the `byok` plan feature exists; the key path does not), dedicated single-tenant deployments, white-label tier (built in Phase 3, C2) | 13.4, 14.1 | Planned |
@@ -45,3 +45,25 @@ What is left in billing:
 - **Plan caps not yet limits**: step throughput in steps per second (spec 16.1; approximated by `worker_concurrency`), environments per tier, container minutes (to map when the container-steps work adds `max_container_minutes_monthly`), and `max_subtenants` enforced at sub-tenant creation (today it only blocks downgrades; operators still set the partner's cap).
 - **BYOK** itself (the plan feature exists).
 - PDF invoices (HTML and JSON today), refunds and credit notes (manual today), proration of annual-to-monthly mid-period (scheduled at period end).
+
+## P4-2: onboarding
+
+Done 7 October 2026. Guide: [onboarding](onboarding.md); design: [decision 0022](decisions/0022-self-serve-onboarding.md). Signup stays off by default (`TASKIEM_ALLOW_SIGNUP`).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Signup | Web page (`/signup`, linked from sign-in when on); JSON only; hidden field for bots; plain-address emails with a dotted domain; built-in throwaway-domain list plus `TASKIEM_SIGNUP_BLOCKED_DOMAINS`; names without links, domain-like words or addresses; password 12–1024 and not the email; per-address limit per day in the database (`TASKIEM_SIGNUP_PER_ADDRESS`, default 5, every replica) on top of the burst limiter; `409` race-safe on a duplicate email; owner signed in at once; trial started with billing on; outcomes counted | `api/onboarding.go`, `web/src/pages/Signup.tsx`, migration 00095 |
+| Email confirmation | Single-use 24-hour link by email (selector and SHA-256 secret, five wrong secrets lock it, replaced on resend, three then one per 20 minutes), used by the signed-in person; audited `user.email.verify`; until then a self-serve tenant cannot invite members or create API keys (`403`); nothing held back where email cannot be sent | `api/onboarding.go`, `web/src/pages/Signup.tsx` (`/verify-email`), migration 00095 |
+| Checklist | `GET /v1/onboarding`: confirm email, connect an app, create a workflow, publish, run once, invite a teammate, each derived from the tenant's data; hide (`workflow.edit`); in the navigation with progress for self-serve tenants | `api/onboarding.go`, `web/src/pages/Start.tsx`, `web/src/onboarding.tsx` |
+| Guided first workflow | Starter templates first; one page per template: details, its connection (prod, the template's connection name) and variables, create and publish, a test run with an input sampled from the inputs schema and a live status; linked from each template's page | `web/src/pages/Start.tsx`, `web/src/lib/onboarding.ts` |
+| In-product help | Help panels on Get started, Templates, Connections and Variables; links to `TASKIEM_DOCS_URL/<page>` when set | `web/src/onboarding.tsx`, `web/src/lib/onboarding.ts` |
+| Measurement (G4) | `tenant_onboarding.first_run_at` stamped once in the transaction that completes a self-serve tenant's first run, and `taskiem_onboarding_first_run_seconds` (share at or under 900 s); shown to the tenant on Get started | `engine/runtime/store.go`, `engine/telemetry`, migration 00095 |
+| Browser test fakes | A connector base URL naming a loopback IP lets that connector reach that port only (`egress.Guard.Loopback`), for fakes in browser tests | `engine/egress`, `cmd/taskiem/serve.go` |
+| Tests | Signup refusals, JSON only, per-address limit shared by two replicas, signup off; confirmation by email, gates before and after, someone else's session, wrong secret, reuse, resend replaces; the whole G4 path through the API with a fake Termii (connection, variable, template, publish, run, stamp once, checklist, dismiss permission); other tenants' runs never count; loopback egress exceptions; checklist wording, starter order, durations, sample inputs, help links; Playwright: signup → template → fake Termii → publish → run → measured under 15 minutes, invite refused before confirming | `api/onboarding_test.go`, `engine/egress/egress_test.go`, `web/src/lib/onboarding.test.ts`, `web/e2e/onboarding.spec.ts` |
+
+What is left in onboarding:
+
+- **People**: the sending domain for signup email, the abuse policy, the docs site, and timed sessions with real new users (P4-O1–P4-O4 in [what needs people](needs-people.md#phase-4)).
+- **Cleanup of unconfirmed tenants** (suspend or delete after N days) waits for the abuse policy.
+- **WhatsApp as the entry point** (go-to-market step 2): signing up from WhatsApp, rather than linking a number after a web signup, is not built.
+- A connection test before the first run (`auth.test` in manifests) is not called by the guide yet; a wrong key shows as a failed step on the test run.

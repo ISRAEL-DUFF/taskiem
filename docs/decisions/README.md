@@ -22,3 +22,4 @@ One file per decision, numbered in order: `NNNN-short-title.md`. Each entry reco
 | [0016](0016-repair-and-resume.md) | Self-repair: a background queue, rules before the model, a shadow sandbox, and resuming a failed run as a fork | Accepted |
 | [0017](0017-plans-and-billing.md) | Plans and billing: a config-file catalogue under the limits, subscriptions per top-level tenant, degraded never stranded | Accepted (prices pending B1) |
 | [0018](0018-pgdock-integration-principles.md) | PGDock integration: public contracts only, each product stands alone | Accepted |
+| [0022](0022-self-serve-onboarding.md) | Self-serve onboarding: confirm email without blocking the first run, and measure G4 where runs end | Accepted |
