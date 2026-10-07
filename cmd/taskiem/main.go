@@ -51,12 +51,21 @@ Usage:
                                      run a local engine with the web app; reload workflows and tests on change
   taskiem runs tail [--workflow ID] [RUN_ID]
                                      stream run events as they are recorded
+  taskiem connector init [--id ID | --publisher SLUG] DIR
+                                     start a WebAssembly connector from the example
   taskiem connector build [-o FILE] [DIR]
                                      compile a Go connector (sdk/connectorsdk) to WebAssembly
+  taskiem connector validate MANIFEST [MODULE]
+                                     lint a manifest strictly (classes, hosts, personal data) and check the module
+  taskiem connector test [-v] [DIR]  run its conformance cases against the module in the sandbox, offline
   taskiem connector check MANIFEST MODULE
                                      load a connector as an upload would, offline
   taskiem connector push MANIFEST MODULE
                                      upload a connector version to your tenant
+  taskiem connector keygen|package|verify|publisher|submit|submissions|publish|withdraw|revoke
+                                     sign a package and take it through the public catalogue (taskiem connector, for details)
+  taskiem catalogue reviewers|publishers|queue|show|review|revoke
+                                     review catalogue submissions, verify publishers, revoke versions (operators; audited)
   taskiem serve [--role ROLE]        run an engine role: api, edge, orchestrator, scheduler, worker, all (default)
   taskiem bootstrap --tenant NAME --email EMAIL
                                      create the first tenant and its owner (password from $TASKIEM_BOOTSTRAP_PASSWORD)
@@ -135,6 +144,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return billingCmd(context.Background(), args[1:], stdout)
 	case "connector":
 		return connectorCmd(context.Background(), args[1:], stdout)
+	case "catalogue":
+		return catalogueCmd(context.Background(), args[1:], stdout)
 	case "healthcheck":
 		return healthcheck()
 	case "help", "-h", "--help":

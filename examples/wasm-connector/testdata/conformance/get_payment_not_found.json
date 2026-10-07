@@ -1,0 +1,15 @@
+{
+  "action": "get_payment",
+  "input": {
+    "reference": "tsk_unknown"
+  },
+  "credentials": {
+    "api_key": "test-key"
+  },
+  "exchanges": [
+    "payment_not_found"
+  ],
+  "expect": {
+    "error": "not_found"
+  }
+}

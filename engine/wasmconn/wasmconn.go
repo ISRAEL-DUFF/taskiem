@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -121,12 +122,23 @@ func Digest(module []byte) string {
 // Load checks a manifest and module and returns the connector they make.
 // Compiled modules are cached by digest.
 func (r *Runtime) Load(ctx context.Context, manifest, module []byte) (*connector.Connector, error) {
+	return r.load(ctx, manifest, module, connector.TenantPrefix, "a tenant connector's")
+}
+
+// LoadPublished is Load for a version of the public catalogue, whose id is
+// in a publisher's namespace (p_<publisher>_<name>,
+// docs/connector-submissions.md).
+func (r *Runtime) LoadPublished(ctx context.Context, manifest, module []byte) (*connector.Connector, error) {
+	return r.load(ctx, manifest, module, connector.CataloguePrefix, "a catalogue connector's")
+}
+
+func (r *Runtime) load(ctx context.Context, manifest, module []byte, prefix, what string) (*connector.Connector, error) {
 	m, problems := connector.Parse(manifest)
 	if len(problems) > 0 {
 		return nil, fmt.Errorf("%w: manifest: %s", ErrInvalid, strings.Join(problems, "; "))
 	}
-	if !strings.HasPrefix(m.ID, connector.TenantPrefix) {
-		return nil, fmt.Errorf("%w: a tenant connector's id must start with %q, not %q", ErrInvalid, connector.TenantPrefix, m.ID)
+	if !strings.HasPrefix(m.ID, prefix) {
+		return nil, fmt.Errorf("%w: %s id must start with %q, not %q", ErrInvalid, what, prefix, m.ID)
 	}
 	for name, t := range m.Triggers {
 		// Anyone could deliver to an unverified trigger of a tenant's own connector.
@@ -150,6 +162,49 @@ func (r *Runtime) Load(ctx context.Context, manifest, module []byte) (*connector
 		c.Actions[name] = &action{r: r, cm: cm, start: start, manifest: m, name: name}
 	}
 	return c, nil
+}
+
+// ModuleInfo is what a module asks of the host, for review.
+type ModuleInfo struct {
+	Size    int      `json:"size"`
+	Imports []string `json:"imports"` // module.name
+	// MemoryMinPages and MemoryMaxPages are the 64 KiB pages its memory
+	// declares (max 0: none declared); LimitPages is the host's cap.
+	MemoryMinPages uint32 `json:"memory_min_pages"`
+	MemoryMaxPages uint32 `json:"memory_max_pages,omitempty"`
+	LimitPages     uint32 `json:"limit_pages"`
+}
+
+// Inspect compiles a module as Load does (the import allow-list and the
+// ABI export are checked) and reports its imports and memory.
+func (r *Runtime) Inspect(ctx context.Context, module []byte) (ModuleInfo, error) {
+	info := ModuleInfo{Size: len(module), LimitPages: r.lim.MemoryPages}
+	if len(module) > r.lim.MaxModule {
+		return info, fmt.Errorf("%w: module is %d bytes; the limit is %d", ErrInvalid, len(module), r.lim.MaxModule)
+	}
+	cm, err := r.compile(ctx, module)
+	if err != nil {
+		return info, err
+	}
+	for _, f := range cm.ImportedFunctions() {
+		mod, name, _ := f.Import()
+		info.Imports = append(info.Imports, mod+"."+name)
+	}
+	sort.Strings(info.Imports)
+	for _, m := range cm.ImportedMemories() {
+		mod, name, _ := m.Import()
+		return info, fmt.Errorf("%w: imports memory %s.%s; a module must define its own", ErrInvalid, mod, name)
+	}
+	for _, m := range cm.ExportedMemories() {
+		info.MemoryMinPages = m.Min()
+		if most, ok := m.Max(); ok {
+			info.MemoryMaxPages = most
+		}
+	}
+	if info.MemoryMinPages > r.lim.MemoryPages {
+		return info, fmt.Errorf("%w: the module's memory starts at %d pages; the limit is %d", ErrInvalid, info.MemoryMinPages, r.lim.MemoryPages)
+	}
+	return info, nil
 }
 
 func (r *Runtime) compile(ctx context.Context, module []byte) (wazero.CompiledModule, error) {

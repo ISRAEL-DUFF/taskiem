@@ -29,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/billing"
+	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embed"
@@ -438,6 +439,9 @@ func serve(ctx context.Context, args []string) error {
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
 		srv.Alerts = alerter
+		// Catalogue submissions are checked in a sandbox of their own,
+		// started per submission (docs/connector-submissions.md).
+		srv.Catalogue = &catalogue.Checker{}
 		srv.LoginBurst = cfg.LoginBurst
 		srv.SignupPerAddress, srv.SignupBlockedDomains, srv.DocsURL = cfg.SignupPerAddress, cfg.SignupBlockedDomains, cfg.DocsURL
 		if prov, err := ai.New(cfg.AI); err != nil {

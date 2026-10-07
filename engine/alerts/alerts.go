@@ -280,6 +280,31 @@ func (a *Alerter) record(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, r *ru
 	return err
 }
 
+// Notify records an alert that concerns the tenant whatever its rules say
+// (a catalogue connector it installed was revoked), once per kind and
+// dedup key, and queues it to every enabled channel. tx must have the
+// tenant in scope.
+func Notify(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, al Alert) (bool, error) {
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM alerts WHERE tenant_id = $1 AND rule_id IS NULL AND kind = $2 AND dedup_key = $3)`,
+		tenant, al.Kind, al.Dedup).Scan(&exists); err != nil || exists {
+		return false, err
+	}
+	id := uuid.Must(uuid.NewV7())
+	detail, _ := json.Marshal(nonNil(al.Detail))
+	if _, err := tx.Exec(ctx, `INSERT INTO alerts (id, tenant_id, rule_id, kind, dedup_key, title, body, link, detail) VALUES ($1, $2, NULL, $3, $4, $5, $6, NULLIF($7, ''), $8)`,
+		id, tenant, al.Kind, al.Dedup, al.Title, al.Body, al.Link, detail); err != nil {
+		return false, err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO alert_deliveries (alert_id, channel_id, tenant_id)
+		SELECT $1, c.id, $2 FROM alert_channels c WHERE c.tenant_id = $2 AND c.disabled_at IS NULL`, id, tenant)
+	return err == nil, err
+}
+
+// ConnectorRevoked is the kind of the alert a tenant gets when a catalogue
+// connector version it installed is revoked (Notify).
+const ConnectorRevoked = "connector_revoked"
+
 func nonNil(m map[string]any) map[string]any {
 	if m == nil {
 		return map[string]any{}

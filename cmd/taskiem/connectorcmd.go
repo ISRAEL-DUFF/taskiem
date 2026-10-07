@@ -23,9 +23,29 @@ import (
 // connector (docs/connector-sdk.md).
 func connectorCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: taskiem connector build|check|push")
+		return errors.New(connectorUsage)
 	}
 	switch args[0] {
+	case "init":
+		return connectorInit(args[1:], stdout)
+	case "validate":
+		return connectorValidate(ctx, args[1:], stdout)
+	case "test":
+		return connectorTest(ctx, args[1:], stdout)
+	case "keygen":
+		return connectorKeygen(args[1:], stdout)
+	case "package":
+		return connectorPackage(ctx, args[1:], stdout)
+	case "verify":
+		return connectorVerify(args[1:], stdout)
+	case "publisher":
+		return connectorPublisher(ctx, args[1:], stdout)
+	case "submit":
+		return connectorSubmit(ctx, args[1:], stdout)
+	case "submissions":
+		return connectorSubmissions(ctx, args[1:], stdout)
+	case "publish", "withdraw", "revoke":
+		return connectorMove(ctx, args[0], args[1:], stdout)
 	case "build":
 		return connectorBuild(args[1:], stdout)
 	case "check":
@@ -45,7 +65,7 @@ func connectorCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	case "push":
 		return connectorPush(ctx, args[1:], stdout)
 	}
-	return fmt.Errorf("unknown connector command %q", args[0])
+	return fmt.Errorf("unknown connector command %q\n%s", args[0], connectorUsage)
 }
 
 func connectorBuild(args []string, stdout io.Writer) error {
@@ -75,7 +95,8 @@ func connectorBuild(args []string, stdout io.Writer) error {
 	return nil
 }
 
-// checkConnector loads the pair as the platform would on upload.
+// checkConnector loads the pair as the platform would on upload: a
+// tenant's own connector (x_), or a catalogue version (p_).
 func checkConnector(ctx context.Context, manifestPath, modulePath string) (*connector.Connector, error) {
 	manifest, err := os.ReadFile(manifestPath) //nolint:gosec // a path the user named
 	if err != nil {
@@ -90,6 +111,13 @@ func checkConnector(ctx context.Context, manifestPath, modulePath string) (*conn
 		return nil, err
 	}
 	defer func() { _ = rt.Close(ctx) }()
+	return loadAny(ctx, rt, manifest, module)
+}
+
+func loadAny(ctx context.Context, rt *wasmconn.Runtime, manifest, module []byte) (*connector.Connector, error) {
+	if m, probs := connector.Parse(manifest); len(probs) == 0 && strings.HasPrefix(m.ID, connector.CataloguePrefix) {
+		return rt.LoadPublished(ctx, manifest, module)
+	}
 	return rt.Load(ctx, manifest, module)
 }
 

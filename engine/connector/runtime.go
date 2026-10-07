@@ -84,7 +84,14 @@ type Lookup interface {
 // WebAssembly).
 const TenantPrefix = "x_"
 
-// TenantSource returns a tenant's own connectors.
+// CataloguePrefix starts the id of every connector in the public
+// catalogue: p_<publisher>_<name>, in the publisher's verified namespace
+// (docs/connector-submissions.md), distinct from built-ins and from
+// tenants' own x_ connectors.
+const CataloguePrefix = "p_"
+
+// TenantSource returns a tenant's own connectors and the catalogue
+// connectors it installed.
 type TenantSource func(ctx context.Context, tenant string) ([]*Connector, error)
 
 // Registry holds the connectors compiled into this binary, and reaches
@@ -116,7 +123,7 @@ func (r *Registry) For(ctx context.Context, tenant string) (Lookup, error) {
 	}
 	v := &view{base: r, own: map[string]*Connector{}}
 	for _, c := range own {
-		if strings.HasPrefix(c.Manifest.ID, TenantPrefix) {
+		if strings.HasPrefix(c.Manifest.ID, TenantPrefix) || strings.HasPrefix(c.Manifest.ID, CataloguePrefix) {
 			v.own[c.Ref()] = c
 		}
 	}
@@ -163,6 +170,9 @@ func (r *Registry) Register(c *Connector) error {
 	}
 	if strings.HasPrefix(c.Manifest.ID, TenantPrefix) {
 		return fmt.Errorf("connector %s: ids starting %q belong to tenants' own connectors", c.Manifest.ID, TenantPrefix)
+	}
+	if strings.HasPrefix(c.Manifest.ID, CataloguePrefix) {
+		return fmt.Errorf("connector %s: ids starting %q belong to publishers in the catalogue", c.Manifest.ID, CataloguePrefix)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

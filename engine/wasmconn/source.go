@@ -63,6 +63,7 @@ func (s *Source) Connectors(ctx context.Context, tenant string) ([]*connector.Co
 		partner     uuid.UUID // set for a connector the tenant's partner shares
 	}
 	newest := map[string]row{} // by id@major
+	var installed []row
 	collect := func(rows pgx.Rows, shared bool) error {
 		defer rows.Close()
 		for rows.Next() {
@@ -101,12 +102,40 @@ func (s *Source) Connectors(ctx context.Context, tenant string) ([]*connector.Co
 		if rows, err = tx.Query(ctx, `SELECT partner_id, connector_id, version FROM taskiem_shared_connectors($1)`, tid); err != nil {
 			return err
 		}
-		return collect(rows, true)
+		if err := collect(rows, true); err != nil {
+			return err
+		}
+		// Catalogue connectors the tenant installed (p_ ids, one pinned
+		// version per major): published and from a verified publisher
+		// only, so a revoked version or a suspended publisher stops here.
+		rows, err = tx.Query(ctx, `SELECT connector_id, version FROM taskiem_catalogue_installed($1)`, tid)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id, version string
+			if err := rows.Scan(&id, &version); err != nil {
+				return err
+			}
+			installed = append(installed, row{id: id, version: version})
+		}
+		return rows.Err()
 	})
 	if err != nil {
 		return nil, err
 	}
 	var list []*connector.Connector
+	for _, r := range installed {
+		c, err := s.loadInstalled(ctx, tid, r.id, r.version)
+		if err != nil {
+			if s.Logger != nil {
+				s.Logger.Error("catalogue connector does not load", "tenant", tenant, "connector", r.id, "version", r.version, "err", err)
+			}
+			continue
+		}
+		list = append(list, c)
+	}
 	for _, r := range newest {
 		var c *connector.Connector
 		var err error
@@ -187,6 +216,46 @@ func (s *Source) loadShared(ctx context.Context, tenant, partner uuid.UUID, id, 
 		return nil, err
 	}
 	c, err = s.Runtime.Load(ctx, []byte(manifest), module)
+	if err != nil {
+		return nil, err
+	}
+	if c.Manifest.ID != id || c.Manifest.Version != version {
+		return nil, fmt.Errorf("stored as %s %s but the manifest says %s %s", id, version, c.Manifest.ID, c.Manifest.Version)
+	}
+	c.Manifest.OverrideBaseURL(s.BaseURLs[id])
+	s.mu.Lock()
+	if s.loaded == nil {
+		s.loaded = map[string]*connector.Connector{}
+	}
+	s.loaded[key] = c
+	s.mu.Unlock()
+	return c, nil
+}
+
+// loadInstalled loads a catalogue version the tenant installed. The
+// module is the catalogue's, the same bytes for every tenant, so it is
+// cached once by id and version (and digest, which never changes for a
+// version); reading it goes through the tenant's scope.
+func (s *Source) loadInstalled(ctx context.Context, tenant uuid.UUID, id, version string) (*connector.Connector, error) {
+	key := "catalogue/" + id + "@" + version
+	s.mu.Lock()
+	c, ok := s.loaded[key]
+	s.mu.Unlock()
+	if ok {
+		return c, nil
+	}
+	var manifest string
+	var module, digest []byte
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT manifest, module, module_digest FROM taskiem_catalogue_module($1, $2, $3)`, tenant, id, version).Scan(&manifest, &module, &digest)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if Digest(module) != fmt.Sprintf("%x", digest) {
+		return nil, fmt.Errorf("the module stored for %s %s does not match its digest", id, version)
+	}
+	c, err = s.Runtime.LoadPublished(ctx, []byte(manifest), module)
 	if err != nil {
 		return nil, err
 	}

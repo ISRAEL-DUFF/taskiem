@@ -25,6 +25,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/billing"
+	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -75,6 +76,10 @@ type Server struct {
 	// Connectors loads tenants' own WebAssembly connectors; nil refuses
 	// uploads.
 	Connectors *wasmconn.Source
+	// Catalogue runs the automated checks on connector packages submitted
+	// to the public catalogue; nil refuses submissions (browsing and
+	// installing still work).
+	Catalogue *catalogue.Checker
 	// PublicURL is where people reach the web app (TASKIEM_PUBLIC_URL);
 	// single sign-on callbacks are built from it.
 	PublicURL string
@@ -202,6 +207,22 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowRead)).Get("/tenant-connectors", s.listTenantConnectors)
 			r.With(s.need(PermConnectorManage)).Post("/tenant-connectors", s.uploadTenantConnector)
 			r.With(s.need(PermConnectorManage)).Post("/tenant-connectors/{id}/{version}/disable", s.disableTenantConnector)
+			// The public connector catalogue (docs/connector-submissions.md).
+			r.With(s.need(PermWorkflowRead)).Get("/catalogue", s.listCatalogue)
+			r.With(s.need(PermWorkflowRead)).Get("/catalogue/connectors/{id}/{version}", s.getCatalogueVersion)
+			r.With(s.need(PermWorkflowRead)).Get("/catalogue/installs", s.listInstalls)
+			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/installs", s.installConnector)
+			r.With(s.need(PermConnectorManage)).Get("/catalogue/installs/{id}/{major}/upgrade", s.getUpgrade)
+			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/installs/{id}/{major}/upgrade", s.upgradeInstall)
+			r.With(s.need(PermConnectorManage), s.tenantWide).Delete("/catalogue/installs/{id}/{major}", s.uninstallConnector)
+			r.With(s.need(PermConnectorManage)).Get("/catalogue/publisher", s.getPublisher)
+			r.With(s.need(PermConnectorManage), s.tenantWide).Put("/catalogue/publisher", s.putPublisher)
+			r.With(s.need(PermConnectorManage)).Get("/catalogue/submissions", s.listSubmissions)
+			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/submissions", s.submitPackage)
+			r.With(s.need(PermConnectorManage)).Get("/catalogue/submissions/{id}", s.getSubmission)
+			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/submissions/{id}/withdraw", s.moveSubmission("withdrawn"))
+			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/submissions/{id}/publish", s.moveSubmission("published"))
+			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/submissions/{id}/revoke", s.moveSubmission("revoked"))
 
 			r.With(s.need(PermWorkflowRead)).Get("/workflows", s.listWorkflows)
 			r.With(s.need(PermWorkflowEdit)).Post("/workflows", s.createWorkflow)
