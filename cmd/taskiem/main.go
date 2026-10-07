@@ -77,6 +77,8 @@ Usage:
   taskiem tenants partner TENANT_ID [--max-subtenants N] [--subtenant-runs-per-day N] [--subtenant-runs-per-month N]
                           [--capabilities white_label,custom_domains] [--disable]
                                      make a tenant a partner (embedding), set its partner-wide caps (audited)
+  taskiem tenants keys TENANT_ID [status | rotate [--wait] | rewrap | check]
+                                     show a tenant's encryption keys (BYOK), rotate, re-wrap, check (audited)
   taskiem billing plans [--file FILE] [--load]
                                      validate the plan catalogue (deploy/plans.yaml), or load it into the database
   taskiem billing grant TENANT_ID PLAN [--until YYYY-MM-DD]

@@ -277,6 +277,7 @@ func (s *Service) blockers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p P
 		{FeatureGit, `SELECT count(*) FROM git_connections WHERE tenant_id = $1`, "disconnect Git from every environment"},
 		{FeatureEmbedded, `SELECT count(*) FROM embed_apps WHERE tenant_id = $1`, "delete the embed apps"},
 		{FeatureWhiteLabel, `SELECT count(*) FROM embed_app_domains WHERE tenant_id = $1`, "remove the embed apps' custom domains"},
+		{FeatureBYOK, `SELECT count(*) FROM tenant_byok_keys WHERE tenant_id = $1 AND status <> 'retired'`, "return to the platform key (Settings > Encryption keys)"},
 	}
 	for _, f := range features {
 		if p.Has(f.feature) {

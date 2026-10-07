@@ -77,6 +77,12 @@ var (
 	Signups = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_signups_total", Help: "Self-serve signups by outcome (created, rate_limited, blocked_domain, invalid, exists, honeypot).",
 	}, []string{"outcome"})
+	// KeyChecksFailed counts key job checks where a tenant's key did not
+	// work, by whether a customer key (BYOK) is involved; which tenant is in
+	// the logs, the tenant's audit log and its key_health alerts.
+	KeyChecksFailed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_tenant_key_checks_failed_total", Help: "Key job checks where a tenant key could not be unwrapped (customer: BYOK revoked, disabled or unreachable; platform: the KMS).",
+	}, []string{"wrapped_by"})
 )
 
 // QueueCollector reports queue depth and the age of the oldest ready task,

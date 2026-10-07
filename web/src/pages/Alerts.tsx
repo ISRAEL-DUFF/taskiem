@@ -39,6 +39,7 @@ const KIND_LABELS: Record<string, string> = {
   audit_anchor: "The audit log is anchored (email the signed anchor)",
   limit: "A plan limit is reached (run quota, backlog, ingest rate)",
   repair_proposed: "A fix is proposed for a failed run (AI repair)",
+  key_health: "Your own encryption key (BYOK) is unavailable, or works again",
 };
 const THRESHOLDS: Record<string, string> = { slow_run: "1h", stuck_approval: "24h", credential_expiry: "168h" };
 

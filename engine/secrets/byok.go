@@ -77,6 +77,9 @@ type KeyStatus struct {
 
 // RewrapDue says that re-wrapping is under way.
 type RewrapDue struct {
+	// Phase is "rewrap" while keys are still under older versions, then
+	// "destroy" while retired versions wait out DestroyAfter (NotBefore).
+	Phase     string    `json:"phase"`
 	Reason    string    `json:"reason"`
 	Since     time.Time `json:"since"`
 	NotBefore time.Time `json:"not_before"`
@@ -154,10 +157,16 @@ func (v *Vault) KeyStatus(ctx context.Context, tenant uuid.UUID) (KeyStatus, err
 		err = tx.QueryRow(ctx, `SELECT reason, since, not_before, COALESCE(last_error, '') FROM key_rewrap_due WHERE tenant_id = $1`, tenant).
 			Scan(&d.Reason, &d.Since, &d.NotBefore, &d.LastError)
 		if err == nil {
+			var pseudonymDone bool
 			if err := tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM secrets WHERE tenant_id = $1 AND (kek_version <> $2 OR aad_version < 2)),
-				(SELECT count(*) FROM subject_keys WHERE tenant_id = $1 AND kek_version <> $2 AND wrapped_key IS NOT NULL)`, tenant, st.CurrentVersion).
-				Scan(&d.Secrets, &d.Subjects); err != nil {
+				(SELECT count(*) FROM subject_keys WHERE tenant_id = $1 AND kek_version <> $2 AND wrapped_key IS NOT NULL),
+				EXISTS (SELECT 1 FROM tenant_pseudonym_keys WHERE tenant_id = $1 AND kek_version = $2)`, tenant, st.CurrentVersion).
+				Scan(&d.Secrets, &d.Subjects, &pseudonymDone); err != nil {
 				return err
+			}
+			d.Phase = "rewrap"
+			if d.Secrets == 0 && d.Subjects == 0 && pseudonymDone {
+				d.Phase = "destroy"
 			}
 			st.Rewrap = &d
 		} else if !errors.Is(err, pgx.ErrNoRows) {

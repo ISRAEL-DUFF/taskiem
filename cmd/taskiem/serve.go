@@ -29,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/billing"
+	"github.com/israel-duff/taskiem/engine/byok"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -86,6 +87,51 @@ type config struct {
 	// Billing turns plans, subscriptions and payments on (TASKIEM_BILLING=on,
 	// docs/billing.md); off, every tenant is on the internal plan.
 	Billing BillingConfig
+	// Keys tunes customer keys and the key job (TASKIEM_BYOK_*,
+	// TASKIEM_KEY_*; docs/byok.md).
+	Keys KeysConfig
+}
+
+// KeysConfig is how tenant keys and customer keys (BYOK) behave.
+type KeysConfig struct {
+	// CacheTTL bounds how long a tenant key that depends on a customer key
+	// stays unwrapped in a process (TASKIEM_BYOK_CACHE_TTL, default 5m, at
+	// most 1h): revocation takes effect within it.
+	CacheTTL time.Duration
+	// CheckInterval is how often the key job checks keys, re-wraps and
+	// resumes parked steps (TASKIEM_KEY_CHECK_INTERVAL, default 1m).
+	CheckInterval time.Duration
+	// DestroyAfter is how long a retired, unused tenant key version is kept
+	// (TASKIEM_KEY_DESTROY_AFTER, default 24h).
+	DestroyAfter time.Duration
+	// AllowPrivate lets customer key services resolve to private addresses
+	// (TASKIEM_BYOK_ALLOW_PRIVATE=on): dedicated single-tenant deployments
+	// only.
+	AllowPrivate bool
+}
+
+func keysConfig() (KeysConfig, error) {
+	k := KeysConfig{CacheTTL: 5 * time.Minute, CheckInterval: time.Minute, DestroyAfter: 24 * time.Hour, AllowPrivate: envBool("TASKIEM_BYOK_ALLOW_PRIVATE", false)}
+	for _, d := range []struct {
+		name     string
+		into     *time.Duration
+		min, max time.Duration
+	}{
+		{"TASKIEM_BYOK_CACHE_TTL", &k.CacheTTL, time.Second, time.Hour},
+		{"TASKIEM_KEY_CHECK_INTERVAL", &k.CheckInterval, 10 * time.Second, time.Hour},
+		{"TASKIEM_KEY_DESTROY_AFTER", &k.DestroyAfter, time.Minute, 90 * 24 * time.Hour},
+	} {
+		v := os.Getenv(d.name)
+		if v == "" {
+			continue
+		}
+		dur, err := time.ParseDuration(v)
+		if err != nil || dur < d.min || dur > d.max {
+			return k, fmt.Errorf("%s must be a duration between %s and %s, not %q", d.name, d.min, d.max, v)
+		}
+		*d.into = dur
+	}
+	return k, nil
 }
 
 // BillingConfig is the platform's billing (operator credentials, never a
@@ -260,6 +306,9 @@ func loadConfig() (config, error) {
 	if c.Billing, err = billingConfig(); err != nil {
 		return c, err
 	}
+	if c.Keys, err = keysConfig(); err != nil {
+		return c, err
+	}
 	if c.DSN == "" {
 		return c, errors.New("TASKIEM_DATABASE_URL is required")
 	}
@@ -349,7 +398,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	src := &wasmconn.Source{Pool: srcPool, Runtime: wrt, Logger: log}
 	reg.SetTenantSource(src.Connectors)
-	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey}
+	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey,
+		BYOK:         &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate},
+		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On}}
 	if cfg.WhatsApp != nil {
@@ -519,7 +570,17 @@ func serve(ctx context.Context, args []string) error {
 		// Billing: periods, dunning, payment reconciliation, usage snapshots.
 		// Verified custom domains are re-verified (docs/embedding.md).
 		domains := &embed.DomainChecker{Pool: e.pool, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, e.remote().Run)
+		// Tenant keys: customer key health, re-wrapping after rotations,
+		// and resuming steps parked while a key was unavailable (docs/byok.md).
+		keys := &secrets.KeyJob{Vault: e.vault, Interval: cfg.Keys.CheckInterval, Resume: e.store.ResumeKeyParked, Logger: log,
+			Unavailable: func(_ uuid.UUID, h secrets.Health) {
+				by := "platform"
+				if h.Customer {
+					by = "customer"
+				}
+				telemetry.KeyChecksFailed.WithLabelValues(by).Inc()
+			}}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, e.remote().Run, keys.Run)
 		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)

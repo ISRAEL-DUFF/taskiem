@@ -52,6 +52,12 @@ const (
 	// RepairProposed: the repair pipeline proposed a fix for a failed run,
 	// or found something a person must do (docs/ai.md); once per proposal.
 	RepairProposed = "repair_proposed"
+	// KeyHealth: the tenant's customer key (BYOK) became unavailable, so
+	// steps that need secrets park, or works again (docs/byok.md); once
+	// per outage and once per recovery. Email and WhatsApp channels still
+	// deliver while it is unavailable; Slack and webhook channels need
+	// their own secret, which is then unreadable too.
+	KeyHealth = "key_health"
 )
 
 // Kinds lists rule kinds with their default thresholds (zero: none).
@@ -65,6 +71,7 @@ var Kinds = map[string]time.Duration{
 	AuditAnchor:         0,
 	LimitReached:        0,
 	RepairProposed:      0,
+	KeyHealth:           0,
 }
 
 // limitWhat says what reaching each limit did, for limit alerts.
@@ -499,10 +506,44 @@ func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([
 		err = rows.Err()
 	case RepairProposed:
 		out, err = a.findRepairs(ctx, tx, r, now)
+	case KeyHealth:
+		out, err = a.findKeyHealth(ctx, tx, r)
 	default:
 		return nil, fmt.Errorf("unknown rule kind %q", r.kind)
 	}
 	return out, err
+}
+
+// findKeyHealth reports customer keys that are unavailable now (once per
+// outage, whenever it started) and those that recovered since the rule
+// last looked.
+func (a *Alerter) findKeyHealth(ctx context.Context, tx pgx.Tx, r rule) ([]Alert, error) {
+	rows, err := tx.Query(ctx, `SELECT id, description, status, failing_since, recovered_at, COALESCE(last_error, '') FROM tenant_byok_keys
+		WHERE (status = 'unavailable' AND failing_since IS NOT NULL) OR (status = 'active' AND recovered_at > $1) ORDER BY updated_at LIMIT 50`, r.since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Alert
+	for rows.Next() {
+		var id uuid.UUID
+		var desc, status, lastErr string
+		var failing, recovered *time.Time
+		if err := rows.Scan(&id, &desc, &status, &failing, &recovered, &lastErr); err != nil {
+			return nil, err
+		}
+		if status == "unavailable" {
+			out = append(out, Alert{Kind: r.kind, Dedup: id.String() + "@" + failing.UTC().Format(time.RFC3339), Title: "Your encryption key is unavailable",
+				Body: fmt.Sprintf("Taskiem cannot use %s (failing since %s: %s). Steps that need secrets or personal data are paused, not failed, and resume by themselves when the key works again. "+
+					"Check the key is enabled and Taskiem's access to it is allowed; see Settings > Encryption keys.", desc, failing.UTC().Format(time.RFC1123), truncate(lastErr)),
+				Link: a.link("/settings/keys"), Detail: map[string]any{"byok_key_id": id, "status": status}})
+			continue
+		}
+		out = append(out, Alert{Kind: r.kind, Dedup: id.String() + "@ok@" + recovered.UTC().Format(time.RFC3339), Title: "Your encryption key works again",
+			Body: fmt.Sprintf("%s is available again since %s. Paused steps are resuming.", desc, recovered.UTC().Format(time.RFC1123)),
+			Link: a.link("/settings/keys"), Detail: map[string]any{"byok_key_id": id, "status": status}})
+	}
+	return out, rows.Err()
 }
 
 // repairClass says in words what kind of failure a proposal is about.

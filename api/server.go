@@ -167,6 +167,7 @@ func (s *Server) Handler() http.Handler {
 			r.Use(s.authenticate)
 			r.With(s.partnerPlan).Route("/partner", s.partnerRoutes) // partner admin API (partner.go)
 			r.Route("/billing", s.billingRoutes)                     // plans and subscriptions (billing.go)
+			r.Route("/keys", s.keyRoutes)                            // encryption keys and BYOK (keys.go)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
 			r.Post("/me/password", s.changePassword)
@@ -432,6 +433,11 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusNotFound, "not found")
 	case errors.Is(err, runtime.ErrTenantSuspended):
 		writeErr(w, http.StatusLocked, err.Error())
+	case errors.Is(err, secrets.ErrKeyUnavailable):
+		// The tenant's customer key is revoked, disabled or unreachable (or
+		// the KMS is down): nothing can be encrypted or decrypted for it.
+		w.Header().Set("Retry-After", "60")
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the tenant's encryption key is unavailable: " + err.Error(), "code": "key_unavailable"})
 	case errors.Is(err, errBadRequest):
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "bad request: "))
 	case errors.Is(err, errForbidden):

@@ -44,6 +44,9 @@ func tenantsCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) > 0 && args[0] == "partner" {
 		return partnerCmd(ctx, args[1:], stdout)
 	}
+	if len(args) > 0 && args[0] == "keys" {
+		return keysCmd(ctx, args[1:], stdout)
+	}
 	if len(args) < 2 || args[0] != "limits" {
 		return errors.New(tenantsUsage)
 	}

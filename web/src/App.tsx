@@ -25,6 +25,7 @@ import { Billing, BillingBanner } from "./pages/Billing";
 import { Signup, VerifyEmail } from "./pages/Signup";
 import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
+import { Keys } from "./pages/Keys";
 
 export function App() {
   return (
@@ -124,6 +125,7 @@ function SignedIn() {
     ["/reports", "Reports", can("audit.read")],
     ["/members", "Members & keys", can("member.manage")],
     ["/settings/billing", "Billing", can("billing.manage")],
+    ["/settings/keys", "Encryption keys", can("key.manage")],
   ];
   return (
     <div className="shell">
@@ -162,6 +164,7 @@ function SignedIn() {
           <Route path="/catalogue" element={<Catalogue />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/billing" element={<Billing />} />
+          <Route path="/settings/keys" element={<Keys />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/members" element={<Members />} />
