@@ -67,7 +67,7 @@ var envRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 // reach inside the platform.
 func (s *Server) gitHTTP(tenant uuid.UUID, apiURL, provider string) (*http.Client, error) {
 	if apiURL == "" {
-		apiURL = map[string]string{"github": "https://api.github.com", "gitlab": "https://gitlab.com/api/v4"}[provider]
+		apiURL = map[string]string{"github": "https://api.github.com", "gitlab": "https://gitlab.com/api/v4", "bitbucket": "https://api.bitbucket.org/2.0"}[provider]
 	}
 	u, err := url.Parse(apiURL)
 	if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") {

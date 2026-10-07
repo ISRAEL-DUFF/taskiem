@@ -91,7 +91,7 @@ Each connector is built from the provider's public documentation and tested agai
 None of the items above stops code. Work that needs no one:
 
 - **Connectors** are built: 16 African (Paystack, Dojah, Termii, iswallet, Flutterwave, Anchor, Lenco, Breet, Moniepoint, Interswitch, OPay, Remita, Mono, Prembly, Youverify, Africa's Talking), against G2's 15, and the global set (WhatsApp, Telegram, Slack, Gmail, Google Sheets, MySQL, S3, SFTP, PostgreSQL). What remains for each is its live sandbox check (P1).
-- **Bitbucket** for Git-led and platform-led modes.
+- **Bitbucket** (done): Bitbucket Cloud for Git-led and platform-led modes ([git](git.md)).
 - **Deployment** (done): image, Helm chart and Kubernetes manifests (spec 15.4), so D5 is a matter of applying them ([kubernetes](kubernetes.md)).
 - **Known gaps** carried from Phase 1: incremental decision state for long histories, plan caps and soft ingest limits, password reset, per-use `secret.read` auditing, a design for reaching private databases.
 - **Pen-test preparation**: a threat model and scope document, so X1 can start the day a firm is chosen.

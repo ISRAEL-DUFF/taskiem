@@ -179,3 +179,41 @@ func TestPlatformLedPublishOpensRequest(t *testing.T) {
 		t.Errorf("retry: %v", again)
 	}
 }
+
+func TestBitbucketPushDeploysAndPublishOpensRequest(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	bb := gitfake.Bitbucket(t, "acme/flows", "bbtok")
+	bb.Repo.User = "owner@acme.test" // an API token, sent with Basic auth
+	bb.Repo.Commit("main", map[string]string{"flows/double.wd.json": flowDoc("wf_double", "Double", "=trigger.body.n * 2"), "tests/double.test.json": flowTest})
+	conn := owner.must(200, "PUT", "/v1/git/prod", map[string]any{"provider": "bitbucket", "api_url": bb.URL + "/2.0", "repo": "acme/flows", "branch": "main",
+		"mode": "git_led", "auth": map[string]any{"type": "token", "token": "bbtok", "username": "owner@acme.test"}})
+	secret, hook := conn["webhook_secret"].(string), conn["webhook_url"].(string)
+
+	h, b := gitfake.BitbucketPush("main", "x", "forged")
+	if status, _ := deliver(t, w.base, hook, h, b); status != 401 {
+		t.Errorf("forged push: %d", status)
+	}
+	head := bb.Repo.Commit("main", map[string]string{"flows/note.txt": "x"})
+	h, b = gitfake.BitbucketPush("main", head, secret)
+	if status, body := deliver(t, w.base, hook, h, b); status != 202 || body["sync_id"] == nil {
+		t.Fatalf("push: %d %v", status, body)
+	}
+	if n, err := w.srv.GitSyncOnce(context.Background()); err != nil || n != 1 {
+		t.Fatalf("sync: %d %v", n, err)
+	}
+	if last := owner.must(200, "GET", "/v1/git/prod/syncs", nil)["syncs"].([]any)[0].(map[string]any); last["status"] != "deployed" || last["commit"] != head {
+		t.Fatalf("sync: %v", last)
+	}
+
+	// Platform-led, the stored credentials open a pull request on publish.
+	owner.must(200, "PUT", "/v1/git/prod", map[string]any{"provider": "bitbucket", "api_url": bb.URL + "/2.0", "repo": "acme/flows", "branch": "main", "mode": "platform_led"})
+	created := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Pay", "definition": json.RawMessage(flowDoc("wf_pay", "Pay", "=1"))})
+	out := owner.must(200, "POST", "/v1/workflows/"+created["id"].(string)+"/versions/1/publish", nil)
+	if url := out["git"].(map[string]any)["prod"].(map[string]any)["url"]; len(bb.Repo.Requests) != 1 || url != bb.Repo.Requests[0].URL {
+		t.Fatalf("publish: %v (%d requests)", out, len(bb.Repo.Requests))
+	}
+	if pr := bb.Repo.Requests[0]; pr.Head != "taskiem/wf_pay-v1" || pr.Files["flows/pay.wd.json"] == "" || pr.Files["flows/double.wd.json"] == "" {
+		t.Errorf("request: %+v", pr)
+	}
+}

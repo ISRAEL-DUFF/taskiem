@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -27,10 +29,16 @@ type host struct {
 func hosts(t *testing.T) []host {
 	gh := gitfake.GitHub(t, "acme/flows", "ghtok")
 	gl := gitfake.GitLab(t, "acme/flows", "gltok")
+	bb := gitfake.Bitbucket(t, "acme/flows", "bbtok")
 	return []host{
 		{"github", gh, gitprovider.Config{Provider: "github", APIURL: gh.URL, Repo: "acme/flows", Branch: "main", Auth: gitprovider.Auth{Type: "token", Token: "ghtok"}}, gitfake.GitHubPush},
 		{"gitlab", gl, gitprovider.Config{Provider: "gitlab", APIURL: gl.URL + "/api/v4", Repo: "acme/flows", Branch: "main", Auth: gitprovider.Auth{Type: "token", Token: "gltok"}}, gitfake.GitLabPush},
+		{"bitbucket", bb, bitbucketConfig(bb), gitfake.BitbucketPush},
 	}
+}
+
+func bitbucketConfig(bb *gitfake.Server) gitprovider.Config {
+	return gitprovider.Config{Provider: "bitbucket", APIURL: bb.URL + "/2.0", Repo: "acme/flows", Branch: "main", Auth: gitprovider.Auth{Type: "token", Token: "bbtok"}}
 }
 
 func TestReadProposeAndPush(t *testing.T) {
@@ -121,6 +129,146 @@ func TestGitHubAppInstallationToken(t *testing.T) {
 	}
 	if _, err := gitprovider.New(gitprovider.Config{Provider: "gitlab", Repo: "a/b", Branch: "main", Auth: gitprovider.Auth{Type: "github_app", AppID: "1", InstallationID: "2", PrivateKey: keyPEM}}); err == nil || !strings.Contains(err.Error(), "only with GitHub") {
 		t.Errorf("GitHub App on GitLab: %v", err)
+	}
+}
+
+func TestBitbucketBasicAndBearerAuth(t *testing.T) {
+	bb := gitfake.Bitbucket(t, "acme/flows", "bbtok")
+	head := bb.Repo.Commit("main", map[string]string{"flows/a.wd.json": "{}"})
+	cfg := bitbucketConfig(bb)
+	p, _ := gitprovider.New(cfg)
+	if got, err := p.Head(ctx); err != nil || got != head {
+		t.Fatalf("bearer: %q %v", got, err)
+	}
+
+	// An API token is accepted only over Basic auth with its account.
+	bb.Repo.User = "me@acme.test"
+	var he *gitprovider.HTTPError
+	if _, err := p.Head(ctx); !errors.As(err, &he) || he.Status != 401 {
+		t.Errorf("bearer for an API token: %v", err)
+	}
+	cfg.Auth.Username = "me@acme.test"
+	p, _ = gitprovider.New(cfg)
+	if got, err := p.Head(ctx); err != nil || got != head {
+		t.Errorf("basic: %q %v", got, err)
+	}
+	cfg.Auth.Username = "someone@acme.test"
+	p, _ = gitprovider.New(cfg)
+	if _, err := p.Head(ctx); !errors.As(err, &he) || he.Status != 401 {
+		t.Errorf("basic with another account: %v", err)
+	}
+
+	for _, repo := range []string{"flows", "acme/", "/flows", "acme/flows/x"} {
+		if _, err := gitprovider.New(gitprovider.Config{Provider: "bitbucket", Repo: repo, Branch: "main", Auth: gitprovider.Auth{Type: "token", Token: "t"}}); err == nil {
+			t.Errorf("repo %q should be refused", repo)
+		}
+	}
+	if _, err := gitprovider.New(gitprovider.Config{Provider: "bitbucket", Repo: "a/b", Branch: "main", Auth: gitprovider.Auth{Type: "github_app", AppID: "1", InstallationID: "2", PrivateKey: "k"}}); err == nil || !strings.Contains(err.Error(), "only with GitHub") {
+		t.Errorf("GitHub App on Bitbucket: %v", err)
+	}
+}
+
+func TestBitbucketPaginatesListings(t *testing.T) {
+	bb := gitfake.Bitbucket(t, "acme/flows", "bbtok")
+	bb.PageLen = 2
+	files := map[string]string{"README.md": "hi", "flows/deep/er/x.wd.json": `{"id":"x"}`}
+	for i := 0; i < 7; i++ {
+		files[fmt.Sprintf("flows/f%d.wd.json", i)] = fmt.Sprintf(`{"id":"f%d"}`, i)
+		files[fmt.Sprintf("flows/sub/s%d.wd.json", i)] = "{}"
+	}
+	bb.Repo.Commit("main", files)
+	p, _ := gitprovider.New(bitbucketConfig(bb))
+	snap, err := p.Read(ctx, "", []string{"flows", "missing"}, []string{".wd.json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Files) != 15 || string(snap.Files["flows/f6.wd.json"]) != `{"id":"f6"}` || snap.Files["flows/deep/er/x.wd.json"] == nil {
+		t.Errorf("snapshot: %v", keys(snap.Files))
+	}
+	// flows (9 entries), flows/sub (7), flows/deep and flows/deep/er (1 each).
+	if bb.Listings != 5+4+1+1 {
+		t.Errorf("%d listing pages", bb.Listings)
+	}
+}
+
+func TestBitbucketReproposeRemakesBranch(t *testing.T) {
+	bb := gitfake.Bitbucket(t, "acme/flows", "bbtok")
+	bb.Repo.Commit("main", map[string]string{"flows/a.wd.json": `{"id":"a"}`})
+	p, _ := gitprovider.New(bitbucketConfig(bb))
+	url, err := p.Propose(ctx, "taskiem/wf_a-v2", "Publish A v2", "body", []gitprovider.File{
+		{Path: "flows/a.wd.json", Content: []byte(`{"id":"a2"}`)}, {Path: "flows/extra.wd.json", Content: []byte("{}")},
+	})
+	if err != nil || !strings.HasPrefix(url, "https://bitbucket.example/") {
+		t.Fatal(url, err)
+	}
+	if req := bb.Repo.Requests[0]; req.Base != "main" || req.Title != "Publish A v2" || req.Body != "body" || req.Files["flows/extra.wd.json"] != "{}" {
+		t.Errorf("request: %+v", req)
+	}
+
+	// The base moves on; proposing again remakes the branch from it and
+	// finds the open pull request.
+	bb.Repo.Commit("main", map[string]string{"flows/b.wd.json": `{"id":"b"}`})
+	again, err := p.Propose(ctx, "taskiem/wf_a-v2", "Publish A v2", "body", []gitprovider.File{{Path: "flows/a.wd.json", Content: []byte(`{"id":"a3"}`)}})
+	if err != nil || again != url || len(bb.Repo.Requests) != 1 {
+		t.Fatalf("again: %s %v (%d requests)", again, err, len(bb.Repo.Requests))
+	}
+	files := bb.Repo.Files("taskiem/wf_a-v2")
+	if files["flows/a.wd.json"] != `{"id":"a3"}` || files["flows/b.wd.json"] == "" || files["flows/extra.wd.json"] != "" {
+		t.Errorf("branch: %v", files)
+	}
+	if main := bb.Repo.Files("main"); main["flows/a.wd.json"] != `{"id":"a"}` {
+		t.Errorf("the base branch changed: %v", main)
+	}
+}
+
+func TestBitbucketVerifyPush(t *testing.T) {
+	bb := gitfake.Bitbucket(t, "acme/flows", "bbtok")
+	p, _ := gitprovider.New(bitbucketConfig(bb))
+	change := func(n any) map[string]any { return map[string]any{"new": n} }
+	ref := func(typ, name, hash string) map[string]any {
+		return map[string]any{"type": typ, "name": name, "target": map[string]string{"hash": hash}}
+	}
+	delivery := func(event string, changes ...any) (http.Header, []byte) {
+		body, _ := json.Marshal(map[string]any{"push": map[string]any{"changes": changes}})
+		return gitfake.BitbucketHeader(event, body, "s3cret"), body
+	}
+
+	h, body := gitfake.BitbucketPush("main", "abc123", "s3cret")
+	if push, err := p.VerifyPush(h, body, "s3cret"); err != nil || push == nil || push.Branch != "main" || push.Commit != "abc123" {
+		t.Errorf("good: %+v %v", push, err)
+	}
+	if _, err := p.VerifyPush(h, body, "other"); !errors.Is(err, gitprovider.ErrSignature) {
+		t.Errorf("bad signature: %v", err)
+	}
+	if _, err := p.VerifyPush(h, append([]byte(" "), body...), "s3cret"); !errors.Is(err, gitprovider.ErrSignature) {
+		t.Errorf("altered body: %v", err)
+	}
+	if _, err := p.VerifyPush(http.Header{"X-Event-Key": {"repo:push"}}, body, "s3cret"); !errors.Is(err, gitprovider.ErrSignature) {
+		t.Errorf("missing header: %v", err)
+	}
+	if _, err := p.VerifyPush(gitfake.BitbucketHeader("repo:push", body, ""), body, ""); !errors.Is(err, gitprovider.ErrSignature) {
+		t.Errorf("an empty secret must be refused: %v", err)
+	}
+	h, body = delivery("pullrequest:created", change(ref("branch", "main", "abc")))
+	if push, err := p.VerifyPush(h, body, "s3cret"); err != nil || push != nil {
+		t.Errorf("other event: %+v %v", push, err)
+	}
+	h, body = delivery("repo:push", change(nil))
+	if push, err := p.VerifyPush(h, body, "s3cret"); err != nil || push != nil {
+		t.Errorf("deleted branch: %+v %v", push, err)
+	}
+	h, body = delivery("repo:push", change(ref("tag", "v1", "abc")))
+	if push, err := p.VerifyPush(h, body, "s3cret"); err != nil || push != nil {
+		t.Errorf("tag: %+v %v", push, err)
+	}
+	// One push to several branches: the connected branch's update counts.
+	h, body = delivery("repo:push", change(ref("branch", "feature", "f1")), change(ref("branch", "main", "m1")))
+	if push, err := p.VerifyPush(h, body, "s3cret"); err != nil || push == nil || push.Branch != "main" || push.Commit != "m1" {
+		t.Errorf("several branches: %+v %v", push, err)
+	}
+	h, body = delivery("repo:push", change(ref("branch", "feature", "f1")))
+	if push, err := p.VerifyPush(h, body, "s3cret"); err != nil || push == nil || push.Branch != "feature" {
+		t.Errorf("another branch: %+v %v", push, err)
 	}
 }
 

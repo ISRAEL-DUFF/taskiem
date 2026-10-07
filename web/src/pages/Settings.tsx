@@ -278,15 +278,18 @@ function Git({ env }: { env: string }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [issued, setIssued] = useState<{ secret: string; url: string }>();
   const act = useAction();
-  const v = (k: keyof GitConnection | "token", d = "") => form[k] ?? (conn && k !== "token" ? String(conn[k as keyof GitConnection] ?? "") : d);
+  // The token and Bitbucket username are credentials: never shown again.
+  const v = (k: keyof GitConnection | "token" | "username", d = "") =>
+    form[k] ?? (conn && k !== "token" && k !== "username" ? String(conn[k] ?? "") : d);
   const set = (k: string) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const bitbucket = v("provider", "github") === "bitbucket";
   const save = () =>
     act.run(async () => {
       const body: Record<string, unknown> = {
         provider: v("provider", "github"), api_url: v("api_url"), repo: v("repo"), branch: v("branch", "main"),
         path: v("path", "flows"), tests_path: v("tests_path", "tests"), mode: v("mode", "platform_led"),
       };
-      if (form.token) body.auth = { type: "token", token: form.token };
+      if (form.token) body.auth = { type: "token", token: form.token, ...(bitbucket && form.username ? { username: form.username } : {}) };
       const r = await put<{ webhook_secret?: string; webhook_url: string }>(`/v1/git/${env}`, body);
       if (r.webhook_secret) setIssued({ secret: r.webhook_secret, url: location.origin + r.webhook_url });
       setForm({});
@@ -314,9 +317,10 @@ function Git({ env }: { env: string }) {
           <select value={v("provider", "github")} onChange={set("provider")}>
             <option value="github">GitHub</option>
             <option value="gitlab">GitLab</option>
+            <option value="bitbucket">Bitbucket Cloud</option>
           </select>
         </Field>
-        <Field label="API URL" hint="Empty for github.com or gitlab.com">
+        <Field label="API URL" hint="Empty for github.com, gitlab.com or bitbucket.org">
           <input value={v("api_url")} onChange={set("api_url")} placeholder="https://github.example.com/api/v3" />
         </Field>
         <Field label="Mode">
@@ -328,7 +332,7 @@ function Git({ env }: { env: string }) {
       </div>
       <div className="row">
         <Field label="Repository">
-          <input value={v("repo")} onChange={set("repo")} placeholder="owner/name" />
+          <input value={v("repo")} onChange={set("repo")} placeholder={bitbucket ? "workspace/repo_slug" : "owner/name"} />
         </Field>
         <Field label="Branch">
           <input value={v("branch", "main")} onChange={set("branch")} />
@@ -343,6 +347,11 @@ function Git({ env }: { env: string }) {
       <Field label={conn ? "Access token (leave empty to keep the current one)" : "Access token"} hint="Needs read access to contents, and write access to contents and pull requests for platform-led mode">
         <input type="password" autoComplete="off" value={form.token ?? ""} onChange={set("token")} />
       </Field>
+      {bitbucket && (
+        <Field label="Atlassian account email" hint="Only for an API token; leave empty for a repository, project or workspace access token">
+          <input type="email" autoComplete="off" value={form.username ?? ""} onChange={set("username")} />
+        </Field>
+      )}
       <div className="row">
         <button className="primary" disabled={act.busy} onClick={() => void save()}>
           {conn ? "Save" : "Connect"}

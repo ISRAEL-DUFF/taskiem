@@ -1,5 +1,5 @@
-// Package gitfake is an in-memory Git host speaking the parts of GitHub's
-// and GitLab's REST APIs that gitprovider uses, for tests.
+// Package gitfake is an in-memory Git host speaking the parts of GitHub's,
+// GitLab's and Bitbucket Cloud's REST APIs that gitprovider uses, for tests.
 package gitfake
 
 import (
@@ -8,9 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +33,9 @@ type Repo struct {
 	Requests []Request
 	// Token is the token the host accepts.
 	Token string
+	// User, when set, makes Bitbucket accept the token only with Basic
+	// authentication as this user (an API token), not as a Bearer token.
+	User string
 }
 
 // Request is an opened pull or merge request.
@@ -44,6 +50,11 @@ type Server struct {
 	Repo *Repo
 	// InstallationTokens counts GitHub App token exchanges.
 	InstallationTokens int
+	// PageLen is the most entries Bitbucket returns in one page of a
+	// directory listing (default 100, as the real API).
+	PageLen int
+	// Listings counts the Bitbucket directory listing pages served.
+	Listings int
 }
 
 func newRepo(token string) *Repo {
@@ -343,6 +354,226 @@ func GitLab(t testing.TB, project, token string) *Server {
 func GitLabPush(branch, commit, secret string) (http.Header, []byte) {
 	body, _ := json.Marshal(map[string]any{"object_kind": "push", "ref": "refs/heads/" + branch, "after": commit, "checkout_sha": commit})
 	return http.Header{"X-Gitlab-Event": {"Push Hook"}, "X-Gitlab-Token": {secret}, "Content-Type": {"application/json"}}, body
+}
+
+var (
+	bbSource = regexp.MustCompile(`source\.branch\.name = "([^"]*)"`)
+	bbDest   = regexp.MustCompile(`destination\.branch\.name = "([^"]*)"`)
+)
+
+// Bitbucket starts a fake Bitbucket Cloud API, served under /2.0, for repo
+// workspace/repo_slug. Its main branch is "main".
+func Bitbucket(t testing.TB, repo, token string) *Server {
+	s := &Server{Repo: newRepo(token), PageLen: 100}
+	r := s.Repo
+	prefix := "/2.0/repositories/" + repo
+	fail := func(w http.ResponseWriter, status int, msg string) {
+		writeJSON(w, status, map[string]any{"type": "error", "error": map[string]string{"message": msg}})
+	}
+	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		user, pass, basic := req.BasicAuth()
+		if r.User == "" && req.Header.Get("Authorization") != "Bearer "+r.Token || r.User != "" && (!basic || user != r.User || pass != r.Token) {
+			fail(w, 401, "Unauthorized") //nolint:misspell // Bitbucket's own wording
+			return
+		}
+		if !strings.HasPrefix(req.URL.Path, prefix+"/") {
+			fail(w, 404, "Repository not found")
+			return
+		}
+		p := strings.TrimPrefix(req.URL.Path, prefix)
+		q := req.URL.Query()
+		switch {
+		case req.Method == "GET" && strings.HasPrefix(p, "/refs/branches/"):
+			name := strings.TrimPrefix(p, "/refs/branches/")
+			sha, ok := r.branches[name]
+			if !ok {
+				fail(w, 404, "Branch not found")
+				return
+			}
+			writeJSON(w, 200, map[string]any{"type": "branch", "name": name, "target": map[string]string{"type": "commit", "hash": sha}})
+		case req.Method == "DELETE" && strings.HasPrefix(p, "/refs/branches/"):
+			name := strings.TrimPrefix(p, "/refs/branches/")
+			if _, ok := r.branches[name]; !ok {
+				fail(w, 404, "Branch not found")
+				return
+			}
+			if name == "main" {
+				fail(w, 400, "The main branch cannot be deleted")
+				return
+			}
+			delete(r.branches, name)
+			w.WriteHeader(204)
+		case req.Method == "GET" && strings.HasPrefix(p, "/src/"):
+			commit, path, _ := strings.Cut(strings.TrimPrefix(p, "/src/"), "/")
+			files, ok := r.commits[commit]
+			if !ok {
+				fail(w, 404, "Commit not found")
+				return
+			}
+			if content, ok := files[path]; ok {
+				_, _ = w.Write([]byte(content))
+				return
+			}
+			// A directory: its direct entries, in order, a page at a time.
+			dir := strings.TrimSuffix(path, "/")
+			var entries []map[string]string
+			seen := map[string]bool{}
+			for _, f := range sortedKeys(files) {
+				rel := f
+				if dir != "" {
+					if !strings.HasPrefix(f, dir+"/") {
+						continue
+					}
+					rel = f[len(dir)+1:]
+				}
+				if sub, _, nested := strings.Cut(rel, "/"); nested {
+					d := strings.TrimPrefix(dir+"/"+sub, "/")
+					if !seen[d] {
+						seen[d] = true
+						entries = append(entries, map[string]string{"type": "commit_directory", "path": d})
+					}
+					continue
+				}
+				entries = append(entries, map[string]string{"type": "commit_file", "path": f})
+			}
+			if dir != "" && len(entries) == 0 {
+				fail(w, 404, "No such file or directory: "+dir)
+				return
+			}
+			s.Listings++
+			per, _ := strconv.Atoi(q.Get("pagelen"))
+			if per <= 0 {
+				per = 10
+			}
+			per = min(per, s.PageLen)
+			page, _ := strconv.Atoi(q.Get("page"))
+			page = max(page, 1)
+			lo := min((page-1)*per, len(entries))
+			hi := min(lo+per, len(entries))
+			out := map[string]any{"pagelen": per, "page": page, "size": len(entries), "values": append([]map[string]string{}, entries[lo:hi]...)}
+			if hi < len(entries) {
+				out["next"] = fmt.Sprintf("http://%s%s?pagelen=%d&page=%d", req.Host, req.URL.EscapedPath(), per, page+1)
+			}
+			writeJSON(w, 200, out)
+		case req.Method == "POST" && p == "/src":
+			// A commit from uploaded files: file fields are named by their
+			// path; message, branch and parents are plain fields.
+			if mt, _, _ := mime.ParseMediaType(req.Header.Get("Content-Type")); mt != "multipart/form-data" {
+				fail(w, 400, "expected multipart/form-data")
+				return
+			}
+			req.Body = http.MaxBytesReader(w, req.Body, 4<<20)
+			if err := req.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // bounded by MaxBytesReader above
+				fail(w, 400, err.Error())
+				return
+			}
+			field := func(k string) string {
+				if v := req.MultipartForm.Value[k]; len(v) > 0 {
+					return v[0]
+				}
+				return ""
+			}
+			files := map[string]string{}
+			for name, fhs := range req.MultipartForm.File {
+				f, err := fhs[0].Open()
+				if err != nil {
+					fail(w, 400, err.Error())
+					return
+				}
+				raw, _ := io.ReadAll(f)
+				_ = f.Close()
+				files[strings.TrimPrefix(name, "/")] = string(raw)
+			}
+			branch, parent := field("branch"), field("parents")
+			if branch == "" {
+				branch = "main"
+			}
+			if tip, ok := r.branches[branch]; ok {
+				if parent != "" && parent != tip {
+					fail(w, 409, "parents is not the tip of "+branch)
+					return
+				}
+				parent = tip
+			} else if parent == "" {
+				parent = r.branches["main"]
+			}
+			if _, ok := r.commits[parent]; !ok {
+				fail(w, 400, "unknown parent "+parent)
+				return
+			}
+			r.commit(parent, branch, files)
+			w.WriteHeader(201)
+		case req.Method == "POST" && p == "/pullrequests":
+			var body struct {
+				Title, Description  string
+				Source, Destination struct {
+					Branch struct {
+						Name string `json:"name"`
+					} `json:"branch"`
+				}
+			}
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				fail(w, 400, err.Error())
+				return
+			}
+			src, dst := body.Source.Branch.Name, body.Destination.Branch.Name
+			if dst == "" {
+				dst = "main"
+			}
+			if _, ok := r.branches[src]; !ok || body.Title == "" {
+				fail(w, 400, "source branch not found, or no title")
+				return
+			}
+			for _, pr := range r.Requests {
+				if pr.Head == src && pr.Base == dst {
+					fail(w, 400, "There is already an open pull request from "+src+" to "+dst)
+					return
+				}
+			}
+			n := len(r.Requests) + 1
+			u := fmt.Sprintf("https://bitbucket.example/%s/pull-requests/%d", repo, n)
+			r.Requests = append(r.Requests, Request{Title: body.Title, Head: src, Base: dst, Body: body.Description, URL: u, Files: r.commits[r.branches[src]]})
+			writeJSON(w, 201, map[string]any{"id": n, "state": "OPEN", "links": map[string]any{"html": map[string]string{"href": u}}})
+		case req.Method == "GET" && p == "/pullrequests":
+			// Only open requests are kept, as the default state filter.
+			filter := q.Get("q")
+			if filter != "" && !strings.Contains(filter, `state = "OPEN"`) {
+				fail(w, 400, "fake: unsupported query "+filter)
+				return
+			}
+			src, dst := bbSource.FindStringSubmatch(filter), bbDest.FindStringSubmatch(filter)
+			values := []map[string]any{}
+			for _, pr := range r.Requests {
+				if (src == nil || pr.Head == src[1]) && (dst == nil || pr.Base == dst[1]) {
+					values = append(values, map[string]any{"state": "OPEN", "links": map[string]any{"html": map[string]string{"href": pr.URL}}})
+				}
+			}
+			writeJSON(w, 200, map[string]any{"values": values, "page": 1, "size": len(values)})
+		default:
+			fail(w, 404, "fake: no route "+req.Method+" "+req.URL.Path)
+		}
+	}))
+	t.Cleanup(s.Close)
+	return s
+}
+
+// BitbucketHeader is the headers of a webhook delivery of body for event
+// (such as "repo:push"), signed with secret.
+func BitbucketHeader(event string, body []byte, secret string) http.Header {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return http.Header{"X-Event-Key": {event}, "X-Hub-Signature": {"sha256=" + hex.EncodeToString(mac.Sum(nil))}, "Content-Type": {"application/json"}}
+}
+
+// BitbucketPush is a signed push webhook delivery for branch at commit.
+func BitbucketPush(branch, commit, secret string) (http.Header, []byte) {
+	body, _ := json.Marshal(map[string]any{"push": map[string]any{"changes": []any{map[string]any{
+		"new": map[string]any{"type": "branch", "name": branch, "target": map[string]string{"type": "commit", "hash": commit}},
+		"old": nil,
+	}}}})
+	return BitbucketHeader("repo:push", body, secret), body
 }
 
 func sortedKeys(m map[string]string) []string {

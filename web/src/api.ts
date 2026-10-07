@@ -141,7 +141,7 @@ export interface GitSync {
 
 export interface GitConnection {
   environment: string;
-  provider: "github" | "gitlab";
+  provider: "github" | "gitlab" | "bitbucket";
   api_url: string;
   repo: string;
   branch: string;
