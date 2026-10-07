@@ -27,7 +27,7 @@ func get(t *testing.T, url string) (int, string, http.Header) {
 // public status page once the scheduler records them.
 func TestCanaryEndToEnd(t *testing.T) {
 	srv := startServer(t)
-	login := srv.call(t, "POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery"})
+	login := srv.call(t, "POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery", "bearer": true})
 	tok := login["token"].(string)
 
 	var out bytes.Buffer
@@ -146,7 +146,7 @@ func TestStatusAdminAPIAndCLI(t *testing.T) {
 		t.Errorf("wrong token: %d", code)
 	}
 	// A tenant's session is not an operator.
-	login := srv.call(t, "POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery"})
+	login := srv.call(t, "POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery", "bearer": true})
 	if code, _ := admin("GET", "/v1/status/admin/incidents", login["token"].(string), nil); code != http.StatusUnauthorized {
 		t.Errorf("tenant session: %d", code)
 	}
