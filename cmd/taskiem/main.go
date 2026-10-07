@@ -65,6 +65,8 @@ Usage:
                                      remove someone's passkeys when no owner can (recovery; audited)
   taskiem tenants limits TENANT_ID [--set KEY=VALUE]...
                                      show a tenant's plan limits and usage, or change them (audited)
+  taskiem tenants partner TENANT_ID [--max-subtenants N] [--subtenant-runs-per-day N] [--subtenant-runs-per-month N] [--disable]
+                                     make a tenant a partner (embedding), set its partner-wide caps (audited)
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 

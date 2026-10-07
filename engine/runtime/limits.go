@@ -51,6 +51,47 @@ type Limits struct {
 	// MaxSecrets and MaxConnections: named secrets and active connections.
 	MaxSecrets     int `json:"max_secrets"`
 	MaxConnections int `json:"max_connections"`
+
+	// A sub-tenant's partner and the partner-wide run caps it shares with
+	// its siblings (spec 13.1); zero for other tenants. Set by the store.
+	partner                  uuid.UUID
+	partnerDay, partnerMonth int64
+}
+
+// Partner is the partner of a sub-tenant whose limits these are (zero
+// otherwise).
+func (l Limits) Partner() uuid.UUID { return l.partner }
+
+// CapTo lowers every limit to at most the same limit of ceiling: where
+// the ceiling has a limit, none (0) or a higher one becomes the ceiling's.
+// It is how a sub-tenant's limits stay within its partner's (spec 13.1).
+func (l Limits) CapTo(ceiling Limits) Limits {
+	m, c := l.toMap(), ceiling.toMap()
+	for k, cv := range c {
+		cf, _ := cv.(float64)
+		if v, _ := m[k].(float64); cf > 0 && (v <= 0 || v > cf) {
+			m[k] = cf
+		}
+	}
+	raw, _ := json.Marshal(m)
+	out := l
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+// Exceeds names the limits of l above ceiling's (none, or a higher one,
+// where the ceiling has a limit), sorted.
+func (l Limits) Exceeds(ceiling Limits) []string {
+	var out []string
+	m := l.toMap()
+	for k, cv := range ceiling.toMap() {
+		cf, _ := cv.(float64)
+		if v, _ := m[k].(float64); cf > 0 && (v <= 0 || v > cf) {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // LimitKeys describes every limit, in display order.
@@ -220,7 +261,7 @@ func (s *Store) limitsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Limi
 	if err != nil {
 		return Limits{}, err
 	}
-	l, err := s.defaults().With(over)
+	l, err := s.effective(ctx, tx, tenant, over)
 	if err != nil {
 		return l, err
 	}
@@ -251,6 +292,37 @@ func overrides(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (map[string]any
 		}
 	}
 	return m, nil
+}
+
+// effective applies a tenant's own overrides to its base: the platform
+// defaults, or for a sub-tenant its partner's effective limits, which its
+// own can only lower (spec 13.1).
+func (s *Store) effective(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, over map[string]any) (Limits, error) {
+	var parent uuid.UUID
+	var parentOver []byte
+	var day, month int64
+	err := tx.QueryRow(ctx, `SELECT parent_id, overrides, runs_per_day, runs_per_month FROM taskiem_parent_limits($1)`, tenant).Scan(&parent, &parentOver, &day, &month)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return s.defaults().With(over)
+	}
+	if err != nil {
+		return Limits{}, err
+	}
+	po := map[string]any{}
+	if err := json.Unmarshal(parentOver, &po); err != nil {
+		return Limits{}, err
+	}
+	base, err := s.defaults().With(po)
+	if err != nil {
+		return base, err
+	}
+	l, err := base.With(over)
+	if err != nil {
+		return l, err
+	}
+	l = l.CapTo(base)
+	l.partner, l.partnerDay, l.partnerMonth = parent, day, month
+	return l, nil
 }
 
 // LimitsView is what a tenant (GET /v1/limits) and an operator see.
@@ -290,7 +362,7 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 			return err
 		}
 		v.Overrides = over
-		if v.Limits, err = s.defaults().With(over); err != nil {
+		if v.Limits, err = s.effective(ctx, tx, tenant, over); err != nil {
 			return err
 		}
 		u := &v.Usage
@@ -418,6 +490,9 @@ func untilNextMonth(now time.Time) time.Duration {
 
 // checkQuota refuses a start beyond the day's or month's quota.
 func checkQuota(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, l Limits) error {
+	if err := checkPartnerQuota(ctx, tx, l); err != nil {
+		return err
+	}
 	if l.RunsPerDay <= 0 && l.RunsPerMonth <= 0 {
 		return nil
 	}
@@ -435,6 +510,29 @@ func checkQuota(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, l Limits) erro
 	if l.RunsPerDay > 0 && today >= l.RunsPerDay {
 		return &LimitError{Limit: "runs_per_day", Code: "quota_exceeded", RetryAfter: untilNextDay(now),
 			Message: fmt.Sprintf("today's run quota (%d) is used up; new runs start again tomorrow (UTC) or when the plan's quota is raised", l.RunsPerDay)}
+	}
+	return nil
+}
+
+// checkPartnerQuota refuses a sub-tenant's start beyond its partner's
+// partner-wide run caps, which all the partner's sub-tenants share.
+func checkPartnerQuota(ctx context.Context, tx pgx.Tx, l Limits) error {
+	if l.partner == uuid.Nil || (l.partnerDay <= 0 && l.partnerMonth <= 0) {
+		return nil
+	}
+	var today, month int64
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(runs_today), 0)::bigint, COALESCE(sum(runs_month), 0)::bigint FROM taskiem_partner_usage($1)`, l.partner).
+		Scan(&today, &month); err != nil {
+		return err
+	}
+	now := time.Now()
+	if l.partnerMonth > 0 && month >= l.partnerMonth {
+		return &LimitError{Limit: "runs_per_month", Code: "quota_exceeded", RetryAfter: untilNextMonth(now),
+			Message: fmt.Sprintf("this month's run quota shared by the partner's customers (%d) is used up; new runs start again next month", l.partnerMonth)}
+	}
+	if l.partnerDay > 0 && today >= l.partnerDay {
+		return &LimitError{Limit: "runs_per_day", Code: "quota_exceeded", RetryAfter: untilNextDay(now),
+			Message: fmt.Sprintf("today's run quota shared by the partner's customers (%d) is used up; new runs start again tomorrow (UTC)", l.partnerDay)}
 	}
 	return nil
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/embed"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -318,7 +319,9 @@ func serve(ctx context.Context, args []string) error {
 		// Hourly digests of secret reads into each tenant's audit chain,
 		// and their retention.
 		digests := &secrets.ReadDigester{Pool: e.pool, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run)
+		// Partner webhooks: sub-tenants' run outcomes, publishes and usage.
+		hooks := &embed.Webhooks{Pool: e.pool, Secrets: e.vault, Limits: e.store.LimitsFor, Egress: &egress.Guard{Logger: log}, Logger: log}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run)
 		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)

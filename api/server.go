@@ -113,8 +113,11 @@ func (s *Server) Handler() http.Handler {
 		if s.AllowSignup {
 			r.Post("/signup", s.signup)
 		}
+		// End users of embed apps: their own tokens, CORS (embed.go).
+		r.Route("/embed/{app}", s.embedRoutes)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authenticate)
+			r.Route("/partner", s.partnerRoutes) // partner admin API (partner.go)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
 			r.Post("/me/password", s.changePassword)

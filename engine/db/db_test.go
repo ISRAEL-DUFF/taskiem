@@ -416,11 +416,106 @@ func TestAuthTenantScope(t *testing.T) {
 	if s := scope(false); len(s) != 1 || s[0] != partner.ID {
 		t.Errorf("own scope = %v", s)
 	}
-	s := scope(true)
-	want := []uuid.UUID{partner.ID, sub.ID}
-	sort.Slice(want, func(i, j int) bool { return want[i].String() < want[j].String() })
-	if len(s) != 2 || s[0] != want[0] || s[1] != want[1] {
-		t.Errorf("partner scope = %v, want %v (no suspended %v, no other %v)", s, want, suspended.ID, other.ID)
+	// A partner's users never get its sub-tenants in scope (spec 5.3):
+	// only taskiem_partner_enter reaches them.
+	var s []uuid.UUID
+	err := d.App.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, true)`, user).Scan(&s)
+	if sqlState(err) != "42501" {
+		t.Errorf("scope with sub-tenants: %v %v, want refused (sub %v, suspended %v, other %v)", s, err, sub.ID, suspended.ID, other.ID)
+	}
+}
+
+// TestPartnerEnter: the only path from a partner to a sub-tenant checks the
+// parent, writes both audit chains, and leaves exactly the sub-tenant in
+// scope.
+func TestPartnerEnter(t *testing.T) {
+	d := dbtest.New(t)
+	partner := d.SeedTenant(t, nil)
+	sub := d.SeedTenant(t, &partner.ID)
+	sibling := d.SeedTenant(t, &partner.ID)
+	stranger := d.SeedTenant(t, nil)
+	strangerSub := d.SeedTenant(t, &stranger.ID)
+	enter := func(scope []uuid.UUID, target uuid.UUID, then func(pgx.Tx) error) error {
+		return scoped(t, d, scope, func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, `SELECT taskiem_partner_enter($1, 'api_key', 'key:k', 'partner.test', '{}')`, target); err != nil {
+				return err
+			}
+			if then != nil {
+				return then(tx)
+			}
+			return nil
+		})
+	}
+	// Not a partner yet.
+	if err := enter([]uuid.UUID{partner.ID}, sub.ID, nil); sqlState(err) != "42501" {
+		t.Fatalf("enter as a non-partner: %v", err)
+	}
+	if err := scoped(t, d, []uuid.UUID{partner.ID}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT taskiem_set_partner($1, true, 0, 0, 0, 'cli:test')`, partner.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A sub-tenant cannot be made a partner.
+	if err := scoped(t, d, []uuid.UUID{sub.ID}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT taskiem_set_partner($1, true, 0, 0, 0, 'cli:test')`, sub.ID)
+		return err
+	}); sqlState(err) != "22023" {
+		t.Errorf("sub-tenant as partner: %v", err)
+	}
+
+	// Entering narrows the scope to the sub-tenant alone.
+	var seen []uuid.UUID
+	if err := enter([]uuid.UUID{partner.ID}, sub.ID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT tenant_id FROM workflows`)
+		if err != nil {
+			return err
+		}
+		seen, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 1 || seen[0] != sub.ID {
+		t.Errorf("in the sub-tenant, saw workflows of %v", seen)
+	}
+	// Both chains record it.
+	for _, tn := range []uuid.UUID{partner.ID, sub.ID} {
+		var n int
+		if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'partner.test' AND target = $2`, tn, sub.ID.String()).Scan(&n); err != nil || n != 1 {
+			t.Errorf("audit of %v: %d %v", tn, n, err)
+		}
+	}
+	var actor string
+	if err := d.Admin.QueryRow(ctx, `SELECT actor_id FROM audit_log WHERE tenant_id = $1 AND action = 'partner.test'`, sub.ID).Scan(&actor); err != nil || actor != "partner:"+partner.ID.String()+"/key:k" {
+		t.Errorf("sub-tenant's audit actor = %q %v", actor, err)
+	}
+
+	// Another partner's sub-tenant, a stranger, or from a wider scope: no.
+	for name, c := range map[string]struct {
+		scope  []uuid.UUID
+		target uuid.UUID
+		code   string
+	}{
+		"other partner's sub":   {[]uuid.UUID{partner.ID}, strangerSub.ID, "P0002"},
+		"unrelated tenant":      {[]uuid.UUID{partner.ID}, stranger.ID, "P0002"},
+		"itself":                {[]uuid.UUID{partner.ID}, partner.ID, "P0002"},
+		"from a sibling":        {[]uuid.UUID{sibling.ID}, sub.ID, "42501"},
+		"from a wider scope":    {[]uuid.UUID{partner.ID, stranger.ID}, sub.ID, "42501"},
+		"from the sub-tenant":   {[]uuid.UUID{sub.ID}, sub.ID, "42501"},
+		"stranger, not partner": {[]uuid.UUID{stranger.ID}, strangerSub.ID, "42501"},
+	} {
+		if err := enter(c.scope, c.target, nil); sqlState(err) != c.code {
+			t.Errorf("%s: %v, want %s", name, err, c.code)
+		}
+	}
+
+	// A tenant's parent never changes.
+	if err := scoped(t, d, []uuid.UUID{sub.ID}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE tenants SET parent_id = NULL WHERE id = $1`, sub.ID)
+		return err
+	}); sqlState(err) != "42501" {
+		t.Errorf("re-parenting: %v", err)
 	}
 }
 

@@ -79,12 +79,18 @@ type Principal struct {
 	// EnrolOnly marks a password session of an administrator held to
 	// passkeys: it may only enrol one.
 	EnrolOnly bool
+	// EndUser is set for an embed app's end user (embed.go): a lightweight
+	// principal in a sub-tenant, with neither UserID nor KeyID.
+	EndUser   *EndUser
 	viaCookie bool
 }
 
 func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
 
 func (p *Principal) Actor() string {
+	if p.EndUser != nil {
+		return p.EndUser.Actor()
+	}
 	if p.KeyID != uuid.Nil {
 		return "key:" + p.KeyID.String()
 	}
@@ -93,6 +99,9 @@ func (p *Principal) Actor() string {
 
 // Human is the person behind the caller: the user, or an API key's owner.
 func (p *Principal) Human() uuid.UUID {
+	if p.EndUser != nil {
+		return p.EndUser.ID
+	}
 	if p.KeyID != uuid.Nil {
 		return p.KeyOwner
 	}
@@ -100,6 +109,9 @@ func (p *Principal) Human() uuid.UUID {
 }
 
 func (p *Principal) ActorType() string {
+	if p.EndUser != nil {
+		return "end_user"
+	}
 	if p.KeyID != uuid.Nil {
 		return "api_key"
 	}

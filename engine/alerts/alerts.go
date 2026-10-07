@@ -599,16 +599,24 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 			return fmt.Errorf("reading the signing key: %w", err)
 		}
 		body, _ := json.Marshal(m)
-		ts := strconv.FormatInt(a.now().Unix(), 10)
-		mac := hmac.New(sha256.New, []byte(key))
-		mac.Write([]byte(ts + "."))
-		mac.Write(body)
 		return a.post(ctx, tenant, cfg.URL, body, http.Header{
-			"Taskiem-Signature": {"t=" + ts + ",v1=" + hex.EncodeToString(mac.Sum(nil))},
+			"Taskiem-Signature": {Sign([]byte(key), a.now(), body)},
 			"Taskiem-Alert-Id":  {m.ID.String()},
 		})
 	}
 	return fmt.Errorf("unknown channel kind %q", kind)
+}
+
+// Sign is the Taskiem-Signature header of a signed webhook body sent at
+// now: "t=<unix seconds>,v1=<hex HMAC-SHA256 of '<t>.' + body>". Alert
+// webhooks and partner webhooks are signed alike, so receivers verify both
+// the same way (and refuse old timestamps against replays).
+func Sign(key []byte, now time.Time, body []byte) string {
+	ts := strconv.FormatInt(now.Unix(), 10)
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(ts + "."))
+	mac.Write(body)
+	return "t=" + ts + ",v1=" + hex.EncodeToString(mac.Sum(nil))
 }
 
 // slackEscape escapes the three characters Slack's mrkdwn treats as markup.

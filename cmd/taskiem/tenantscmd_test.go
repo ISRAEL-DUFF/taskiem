@@ -68,3 +68,40 @@ func TestTenantsLimitsCLI(t *testing.T) {
 		}
 	}
 }
+
+// Operators make a tenant a partner and set its caps; a sub-tenant cannot
+// be one; every change is audited.
+func TestTenantsPartnerCLI(t *testing.T) {
+	d := dbtest.New(t)
+	tn := d.SeedTenant(t, nil)
+	sub := d.SeedTenant(t, &tn.ID)
+	t.Setenv("TASKIEM_DATABASE_URL", d.DSN)
+	t.Setenv("USER", "ops")
+	var out bytes.Buffer
+	if err := run([]string{"tenants", "partner", tn.ID.String(), "--max-subtenants", "50"}, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{"tenants", "partner", tn.ID.String(), "--subtenant-runs-per-day", "1000"}, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "max_subtenants 50, subtenant_runs_per_day 1000, subtenant_runs_per_month 0") {
+		t.Errorf("output:\n%s", out.String())
+	}
+	if err := run([]string{"tenants", "partner", sub.ID.String()}, &out, &out); err == nil || !strings.Contains(err.Error(), "sub-tenant cannot be a partner") {
+		t.Errorf("sub-tenant as partner: %v", err)
+	}
+	if err := run([]string{"tenants", "partner", tn.ID.String(), "--disable"}, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	var n, partners int
+	ctx := context.Background()
+	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action IN ('partner.enable', 'partner.disable') AND actor_id = 'cli:ops'`, tn.ID).Scan(&n); err != nil || n != 3 {
+		t.Errorf("audited %d changes (%v), want 3", n, err)
+	}
+	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM partners`).Scan(&partners); err != nil || partners != 0 {
+		t.Errorf("%d partners after --disable (%v)", partners, err)
+	}
+	if err := run([]string{"tenants", "partner", "nope"}, &out, &out); err == nil {
+		t.Error("a bad tenant id was accepted")
+	}
+}

@@ -51,6 +51,9 @@ func canonical(doc json.RawMessage) ([]byte, error) {
 }
 
 func (p *Principal) id() uuid.UUID {
+	if p.EndUser != nil {
+		return p.EndUser.ID
+	}
 	if p.KeyID != uuid.Nil {
 		return p.KeyID
 	}
