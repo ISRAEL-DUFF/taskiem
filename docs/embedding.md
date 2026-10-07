@@ -66,12 +66,12 @@ A sub-tenant gets a default workspace and the `dev` and `prod` environments. It 
 | `GET /v1/partner/sub-tenants` | read | Sub-tenants: id, name, region, status |
 | `POST /v1/partner/sub-tenants` | manage | Create one (above) |
 | `PUT /v1/partner/sub-tenants/{sub}/limits` | manage | Change its limits, within the partner's: `{"runs_per_day": 100, "max_workflows": null}` |
-| `POST /v1/partner/sub-tenants/{sub}/suspend`, `/resume` | manage | Suspend or resume it |
+| `POST /v1/partner/sub-tenants/{sub}/suspend`, `/resume` | manage | Suspend or resume it. Suspended, it does no new work: no sign-in or tokens, no schedules, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resumed, schedules continue from now without catching up ([suspended tenants](governance.md#suspended-tenants)) |
 | `GET /v1/partner/sub-tenants/{sub}/workflows` | read | Its workflows: names and versions, not definitions |
 | `GET /v1/partner/sub-tenants/{sub}/runs` | read | Its runs, redacted to their outcome: workflow, version, environment, status, who started them, timing, and for a failure the error's kind. Never inputs, outputs, step data or error messages. Filters: `status`, `before`, `limit` |
 | `GET /v1/partner/sub-tenants/{sub}/usage` | read | Its effective limits, usage and recent limit hits |
 
-**Suspending** a sub-tenant stops at once every end-user token and session in it, revokes its outstanding tokens (resuming does not revive them: mint new ones), and refuses new tokens with 409. The partner can still read it, and resume it. Its triggers (schedules and webhooks) keep firing in C1; holding them is a follow-up.
+**Suspending** a sub-tenant stops at once every end-user token and session in it, revokes its outstanding tokens (resuming does not revive them: mint new ones), and refuses new tokens with 409. The partner can still read it, and resume it. While suspended it does no new work: its schedules do not fire, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resuming continues its schedules from now, without catching up fires missed meanwhile ([suspended tenants](governance.md#suspended-tenants)).
 
 ## 3. Register an embed app
 
@@ -374,4 +374,4 @@ The threat model's boundary B11 covers this ([threat model](security/threat-mode
 | --- | --- |
 | C4: first embedded deployment (Payrolla) | Needs people ([needs people](needs-people.md#phase-3), EM1) |
 
-Known gaps: a suspended sub-tenant's schedules and webhook triggers keep firing; end users cannot hold `approval.decide` (decisions are recorded against platform users); deleting a sub-tenant is an operator task; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.
+Known gaps: end users cannot hold `approval.decide` (decisions are recorded against platform users); deleting a sub-tenant is an operator task; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.

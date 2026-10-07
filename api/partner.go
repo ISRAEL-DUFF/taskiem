@@ -352,8 +352,11 @@ func (s *Server) putSubTenantLimits(w http.ResponseWriter, r *http.Request) {
 
 // setSubTenantStatus suspends or resumes a sub-tenant. Suspension stops at
 // once every end-user token and session of it (authentication requires an
-// active tenant) and revokes its outstanding tokens. Its triggers are not
-// held yet (see docs/embedding.md).
+// active tenant) and revokes its outstanding tokens. While suspended it
+// does no new work: schedules are not claimed, webhook and connector
+// deliveries get 423 (counted), queued runs wait and repair jobs wait
+// (migration 00088). Resuming continues schedules from now, without
+// catching up fires missed meanwhile (docs/embedding.md).
 func (s *Server) setSubTenantStatus(status string) http.HandlerFunc {
 	action := "partner.subtenant.suspend"
 	if status == "active" {

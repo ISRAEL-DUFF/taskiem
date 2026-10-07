@@ -23,7 +23,26 @@ func (s *Server) getLimits(w http.ResponseWriter, r *http.Request) {
 	for _, k := range runtime.LimitKeys {
 		help[k.Key] = k.Help
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"limits": v.Limits, "overrides": v.Overrides, "usage": v.Usage, "recent_hits": v.Hits, "help": help})
+	// Deliveries refused while the tenant was suspended, by day (30 days).
+	type refusal struct {
+		Day  string `json:"day"`
+		Kind string `json:"kind"`
+		Hits int64  `json:"hits"`
+	}
+	var refused []refusal
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT day::text, kind, hits FROM ingest_refusals WHERE reason = 'suspended' AND day > (now() AT TIME ZONE 'UTC')::date - 30 ORDER BY day DESC, kind`)
+		if err != nil {
+			return err
+		}
+		refused, err = pgx.CollectRows(rows, pgx.RowToStructByPos[refusal])
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"limits": v.Limits, "overrides": v.Overrides, "usage": v.Usage, "recent_hits": v.Hits, "help": help,
+		"refused_while_suspended": nonNil(refused)})
 }
 
 // checkCount refuses creating one more workflow, secret or connection

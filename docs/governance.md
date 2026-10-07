@@ -78,7 +78,7 @@ An identity provider (Okta, Microsoft Entra ID, others) keeps members in step wi
 
 `POST /v1/members` grants roles by email. Someone new is created, with the password given (optional: leave it out for people who sign in by single sign-on). Someone who already has a Taskiem account belongs to themselves, not to the tenant: unless they are already a member or their email is on one of the tenant's verified SSO domains, they are **invited**. An invitation grants nothing and is not a membership; the person sees it under **Account** (`GET /v1/me/invitations`) and accepts it (`POST /v1/me/invitations/{tenant}/accept`), which grants the roles offered. The answer to `POST /v1/members` is the same whether or not the email had an account. Invitations and acceptances are audited (`member.invite`, `member.invitation.accept`).
 
-Sessions and API keys stop working while their tenant is suspended, and sessions while their user is disabled. Sign-in (`/v1/auth/login`, `/v1/auth/passkey`) takes only `application/json`, and attempts are limited per address and per account; SSO discovery and start are limited per address.
+Sessions and API keys stop working while their tenant is [suspended](#suspended-tenants), and sessions while their user is disabled. Sign-in (`/v1/auth/login`, `/v1/auth/passkey`) takes only `application/json`, and attempts are limited per address and per account; SSO discovery and start are limited per address.
 
 ## Passwords
 
@@ -110,6 +110,18 @@ An API key belongs to the person who made it (`POST /v1/api-keys`). It acts with
 A key limited to one environment (`environment` when created) works only there: secrets, variables and connections of other environments are neither listed nor changed, and actions that reach every environment are refused (`403`): publishing, creating environments or changing gates, Git connections and syncs, policies, members and roles, erasure, audit and reports. It may list its own environment's [secret reads](compliance.md#secret-use) (`GET /v1/secrets/reads`, with `audit.read`).
 
 Runs outside `dev` use the version deployed in their environment; pinning another (`version` on `POST /v1/workflows/{id}/runs`) needs `workflow.publish`.
+
+## Suspended tenants
+
+A tenant is suspended by its partner (a sub-tenant: `POST /v1/partner/sub-tenants/{sub}/suspend`) or by the operator (`tenants.status`). While suspended it does no new work:
+
+- **Sign-in, sessions, API keys and end-user tokens** stop working (sessions and tokens of a sub-tenant are also revoked).
+- **Schedules** are not claimed, so they do not fire.
+- **Webhook and connector deliveries** are answered `423 Locked` (`"code": "suspended"`), before verification and before anything is stored, and counted per day and kind (`ingest_refusals`; `refused_while_suspended` in `GET /v1/limits`). Providers that retry deliver them again after the resume. An edge replica notices the suspension within a minute; until then the engine refuses the start, with the same answer.
+- **Runs**: the engine refuses to start any (`runtime.ErrTenantSuspended`, 423 from the API), whatever the path: webhooks, schedules, WhatsApp, USSD, resumes. Runs it queued (behind its rate or a workflow's concurrency) are not admitted. Runs already running carry on to their end; waits and timers keep their place.
+- **Repair jobs** wait.
+
+Resuming (`…/resume`) re-enables all of it. Queued runs are admitted at the tenant's rate, and deliveries are taken again. **Schedules continue from the resume and do not catch up**: a fire that fell due while the tenant was suspended is skipped (logged, `taskiem_ingest_deliveries_total{kind="schedule",result="skipped_suspended"}`) and the schedule moves to its next time after now, so a long suspension never ends in a storm of missed runs. The time of each change is kept (`tenants.suspended_at`, `resumed_at`).
 
 ## Four-eyes on change
 

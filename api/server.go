@@ -383,6 +383,8 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, runtime.ErrNotFound), errors.Is(err, secrets.ErrNotFound), errors.Is(err, pgx.ErrNoRows):
 		writeErr(w, http.StatusNotFound, "not found")
+	case errors.Is(err, runtime.ErrTenantSuspended):
+		writeErr(w, http.StatusLocked, err.Error())
 	case errors.Is(err, errBadRequest):
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "bad request: "))
 	case errors.Is(err, errForbidden):

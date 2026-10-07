@@ -145,6 +145,6 @@ The embedding foundations ([embedding.md](../embedding.md), decision 0015, threa
 
 Open, carried to the next round:
 
-- A suspended sub-tenant's schedules and webhook triggers keep firing; only its tokens and sessions stop.
+- ~~A suspended sub-tenant's schedules and webhook triggers keep firing; only its tokens and sessions stop.~~ Closed: a suspended tenant does no new work ([governance](../governance.md#suspended-tenants)).
 - CORS preflights for `/v1/embed/{app}` look the app's origins up in the database without authentication (one indexed read; no per-address limit yet).
 - The partner's run counts across its sub-tenants (`taskiem_partner_usage`) are read without an audit entry: counts only, no sub-tenant data.

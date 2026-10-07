@@ -109,9 +109,11 @@ func (c *Cron) fire(ctx context.Context, tenant, id uuid.UUID) (bool, error) {
 	var version int
 	var env, expr, tz string
 	var at time.Time
+	var resumed *time.Time
 	err := db.InTenantTx(ctx, c.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT workflow_id, version, environment, cron, timezone, next_fire_at FROM triggers WHERE id = $1 AND type = 'schedule'`, id).
-			Scan(&wf, &version, &env, &expr, &tz, &at)
+		return tx.QueryRow(ctx, `SELECT t.workflow_id, t.version, t.environment, t.cron, t.timezone, t.next_fire_at, te.resumed_at
+			FROM triggers t JOIN tenants te ON te.id = t.tenant_id WHERE t.id = $1 AND t.type = 'schedule'`, id).
+			Scan(&wf, &version, &env, &expr, &tz, &at, &resumed)
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) { // replaced by a publish since it was claimed
@@ -128,7 +130,13 @@ func (c *Cron) fire(ctx context.Context, tenant, id uuid.UUID) (bool, error) {
 	}
 	fireAt := at.UTC().Format(time.RFC3339)
 	fired := true
-	if _, _, err := c.Store.StartRun(ctx, runtime.StartRequest{
+	if resumed != nil && at.Before(*resumed) {
+		// Due while the tenant was suspended: resuming does not catch up
+		// (no storm of missed fires); the schedule continues from now.
+		c.Logger.Info("schedule fire skipped: missed while the tenant was suspended", "tenant", tenant, "trigger", id, "scheduled_time", fireAt)
+		telemetry.Ingest.WithLabelValues("schedule", "skipped_suspended").Inc()
+		fired = false
+	} else if _, _, err := c.Store.StartRun(ctx, runtime.StartRequest{
 		TenantID: tenant, WorkflowID: wf, Version: version, Environment: env,
 		Trigger:   map[string]any{"type": "schedule", "scheduled_time": fireAt, "body": map[string]any{}},
 		StartedBy: "schedule", TriggerID: "schedule/" + wf.String(), DedupKey: fireAt,

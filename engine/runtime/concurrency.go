@@ -95,6 +95,10 @@ func (s *Store) tryAdmit(ctx context.Context, tx pgx.Tx, tenant, workflow, run u
 
 // promote admits the oldest queued runs of a workflow that can now start.
 func (s *Store) promote(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUID) error {
+	// A suspended tenant's queued runs wait until it is resumed.
+	if ok, err := tenantActive(ctx, tx, tenant); err != nil || !ok {
+		return err
+	}
 	rows, err := tx.Query(ctx, `SELECT id, COALESCE(concurrency_key, ''), version FROM runs
 		WHERE tenant_id = $1 AND workflow_id = $2 AND status = 'queued' AND queue_reason IS DISTINCT FROM 'tenant' ORDER BY started_at LIMIT 100`, tenant, workflow)
 	if err != nil {

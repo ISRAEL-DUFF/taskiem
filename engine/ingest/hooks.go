@@ -157,6 +157,9 @@ func (h *Handler) receive(w http.ResponseWriter, r *http.Request) (d delivery, o
 	case g.hard == nil:
 		replyErr(w, http.StatusNotFound, "not found")
 		return
+	case g.suspended:
+		h.suspended(w, r, tenant)
+		return
 	}
 	if !g.hard.Allow() {
 		h.Store.LimitHit(r.Context(), tenant, "ingest_ceiling")
@@ -183,6 +186,26 @@ func (h *Handler) receive(w http.ResponseWriter, r *http.Request) (d delivery, o
 	return d, true
 }
 
+// suspended refuses a delivery to a suspended tenant with 423 Locked, so
+// providers that retry deliver it again after the tenant is resumed, and
+// counts it per day (ingest_refusals). Nothing else of it is recorded.
+func (h *Handler) suspended(w http.ResponseWriter, r *http.Request, tenant uuid.UUID) {
+	kind := "webhook"
+	if strings.Contains(r.URL.Path, "/connectors/") {
+		kind = "connector"
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 2*time.Second)
+	defer cancel()
+	if err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO ingest_refusals (tenant_id, day, kind, reason) VALUES ($1, (now() AT TIME ZONE 'UTC')::date, $2, 'suspended')
+			ON CONFLICT (tenant_id, day, kind, reason) DO UPDATE SET hits = ingest_refusals.hits + 1, last_at = now()`, tenant, kind)
+		return err
+	}); err != nil {
+		h.Logger.Warn("ingest: recording a refused delivery", "tenant", tenant, "err", err)
+	}
+	reply(w, http.StatusLocked, map[string]string{"error": "the organisation is suspended", "code": "suspended"})
+}
+
 // limited answers a start refused by a tenant limit: 429 with a code and,
 // when waiting helps, Retry-After. Nothing was recorded for the run.
 func limited(w http.ResponseWriter, le *runtime.LimitError) {
@@ -206,8 +229,10 @@ type gateEntry struct {
 	hard    *rate.Limiter // the ceiling; nil: no such tenant
 	soft    *rate.Limiter // the soft ingest rate
 	maxBody int
-	checked time.Time
-	seen    time.Time
+	// suspended: the tenant takes no deliveries until resumed (423).
+	suspended bool
+	checked   time.Time
+	seen      time.Time
 }
 
 // rateOf turns a limit into a limiter's rate; 0 is no limit.
@@ -268,13 +293,18 @@ func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error)
 	if !allowed {
 		return gateEntry{}, errBusy
 	}
-	var exists bool
+	var status string
 	err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE id = $1)`, tenant).Scan(&exists)
+		err := tx.QueryRow(ctx, `SELECT status FROM tenants WHERE id = $1`, tenant).Scan(&status)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
 	})
 	if err != nil {
 		return gateEntry{}, err
 	}
+	exists := status != "" && status != "deleted"
 	var lim runtime.Limits
 	if exists {
 		if lim, err = h.Store.LimitsFor(ctx, tenant); err != nil {
@@ -291,6 +321,7 @@ func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error)
 		g.entries[tenant] = e
 	}
 	e.checked, e.seen = now, now
+	e.suspended = status == "suspended"
 	if !exists {
 		e.hard, e.soft = nil, nil
 	} else {
@@ -462,6 +493,10 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	})
 	if le, ok := runtime.IsLimit(err); ok {
 		limited(w, le)
+		return
+	}
+	if errors.Is(err, runtime.ErrTenantSuspended) {
+		h.suspended(w, r, tenant)
 		return
 	}
 	if err != nil {
@@ -675,6 +710,10 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 			})
 			if le, ok := runtime.IsLimit(err); ok {
 				limited(w, le)
+				return
+			}
+			if errors.Is(err, runtime.ErrTenantSuspended) {
+				h.suspended(w, r, tenant)
 				return
 			}
 			if err != nil {

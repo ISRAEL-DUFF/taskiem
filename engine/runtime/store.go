@@ -87,6 +87,19 @@ type StartRequest struct {
 // ErrNotFound is returned when a run, step, or workflow is not visible.
 var ErrNotFound = errors.New("not found")
 
+// ErrTenantSuspended: the tenant is suspended, so it starts no runs
+// (docs/governance.md#suspended-tenants).
+var ErrTenantSuspended = errors.New("the organisation is suspended")
+
+// tenantActive reports whether the tx's tenant may do new work.
+func tenantActive(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (bool, error) {
+	var status string
+	if err := tx.QueryRow(ctx, `SELECT status FROM tenants WHERE id = $1`, tenant).Scan(&status); err != nil {
+		return false, err
+	}
+	return status == "active", nil
+}
+
 // Started is the outcome of a start.
 type Started struct {
 	Ref     RunRef
@@ -111,6 +124,11 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 	out := Started{Created: true}
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{req.TenantID}, func(tx pgx.Tx) error {
 		out = Started{Created: true}
+		if ok, err := tenantActive(ctx, tx, req.TenantID); err != nil {
+			return err
+		} else if !ok {
+			return ErrTenantSuspended
+		}
 		def, err := s.definition(ctx, tx, req.WorkflowID, req.Version)
 		if err != nil {
 			return err
