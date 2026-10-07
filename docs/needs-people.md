@@ -120,7 +120,7 @@ The PGDock integration runs as a parallel plan ([PGDock integration](pgdock-inte
 
 | # | Item | Who | Code status | Unblocks |
 | --- | --- | --- | --- | --- |
-| PG1 | [ ] **Answer the plan's open questions Q1–Q21** ([section 5](pgdock-integration.md#5-open-questions)). The most urgent: Q7 (parameterised SQL), Q8 (idempotency keys), Q11 (trigger shape), Q20 (self-hosted PGDock URLs) and Q21 (which PGDock contracts are public) | Both founders, product, PGDock team | Nothing built yet | Phase 1 of the plan |
+| PG1 | [ ] **Answer the plan's open questions Q1–Q24** ([section 5](pgdock-integration.md#5-open-questions)). The most urgent: Q7 (parameterised SQL), Q8 (idempotency keys), Q11 (trigger shape), Q20 (self-hosted PGDock URLs) and Q21 (which PGDock contracts are public) | Both founders, product, PGDock team | Nothing built yet | Phase 1 of the plan |
 | PG2 | [ ] **PGDock-side work for phase 1**: P1-G1 parameterised SQL or row writes (needed for write actions), P1-G2 `Idempotency-Key`, P1-G3 a frozen webhook-management contract, P1-G4 the error code list, P1-G5 fixtures and a sandbox organisation, P1-G6 delivery-rate answer | PGDock team | Taskiem can ship the trigger and read actions without them; no write actions until P1-G1 | Write actions; CI contract tests |
 | PG3 | [ ] **PGDock-side work for later phases**: P2-G1 an OAuth-style consent flow, P3-G1 the V4 data API, P3-G2 project creation by token | PGDock team | Taskiem's generic OAuth connection flow (P2-T1) can be built against any provider first | Account linking; data tables |
 | PG4 | [ ] **Corrections C1–C11 to the joint doc** ([section 3](pgdock-integration.md#3-corrections-to-the-joint-doc)) | Joint doc author, PGDock team | — | A joint doc both teams can build from |

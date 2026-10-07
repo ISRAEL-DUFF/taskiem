@@ -161,6 +161,9 @@ The joint doc's five questions come first (Q1–Q5). The rest came up while chec
 | Q19 | Where does a customer manage a linked connection: in both products, or one canonical place with the other read-only? | Product | P2-T1, P2-T2 |
 | Q20 | Self-hosted PGDock: should the connector support any PGDock server URL, or only PGDock's cloud? | Product | P1-T2 |
 | Q21 | Which PGDock contracts count as "public" for the deprecation policy, given only the V2 docs and OpenAPI file are published (V3 and V4 are not in the repository)? | PGDock | All phases |
+| Q22 | During `rotate-secret`, is there an overlap window in which deliveries carry signatures from both the old and new secrets (two `v1=` values)? Without one, deliveries in flight during a rotation fail verification. | PGDock | P1-T3, P1-G3 |
+| Q23 | Is `primary_key` enough to refetch a truncated event's row through the rows endpoint, and could it be sent on every event, not only truncated ones? | PGDock | P1-T3, Q14 |
+| Q24 | Does an `UPDATE` event's `old_record` hold every column, or only the changed ones? The trigger's changed-columns filter depends on it. | PGDock | P1-T3 |
 
 ## 6. Updates this plan needs elsewhere
 
@@ -169,7 +172,7 @@ The joint doc's five questions come first (Q1–Q5). The rest came up while chec
 | Where | Update | Status |
 | --- | --- | --- |
 | `docs/decisions/0018-pgdock-integration-principles.md` | The principles in section 1 | Done with this plan |
-| `docs/needs-people.md` | A "PGDock integration" section pointing to Q1–Q21 and the PGDock-side items | Done with this plan |
+| `docs/needs-people.md` | A "PGDock integration" section pointing to Q1–Q24 and the PGDock-side items | Done with this plan |
 | `docs/phase-4-status.md` | A line saying the PGDock integration runs as a parallel plan, linking here | Done with this plan |
 | `docs/spec/architecture.md` | If Q6 or Q10 is yes, a new section for data tables or public forms; if Q11 is answered, a note on the `database_change` trigger | After decisions |
 | `docs/contracts/connector-v1.md` | The trigger lifecycle from P1-T1 (remote registration) | With P1-T1 |
@@ -187,7 +190,7 @@ The joint doc's five questions come first (Q1–Q5). The rest came up while chec
 
 ### In the joint doc
 
-Apply corrections C1–C11. Replace its open-questions section with a link to Q1–Q21 here, or copy them.
+Apply corrections C1–C11. Replace its open-questions section with a link to Q1–Q24 here, or copy them.
 
 ## 7. Risks
 
