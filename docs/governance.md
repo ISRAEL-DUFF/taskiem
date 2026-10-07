@@ -22,7 +22,7 @@ Approvals are a step type (spec 9.1). An approval step either names a role and a
 | --- | --- |
 | `rules` | Tried in order; the first whose `when` (CEL over the approval step's `subject`) holds applies. A rule without `when` always applies. If none applies, the approval step fails with kind `policy`: nobody can approve what the policy does not cover |
 | `levels` | Approved in order: level 2 opens when level 1 has `count` approvals (default 1). Any rejection rejects the step |
-| `step_up` | `totp`: each approver enters a fresh code from an authenticator app when voting. Passkeys arrive with passkey sign-in (Phase 2, milestone 5) |
+| `step_up` | The weakest second factor a vote under the rule needs: `passkey`; `totp` (a fresh authenticator code, or a passkey); or `whatsapp_pin` (the approver's WhatsApp PIN entered in a WhatsApp form bound to that decision, or an authenticator code, or a passkey; [WhatsApp](whatsapp.md#approval-pin)) |
 | `constraints` | `forbid_self_approval`: whoever started the run, or wrote or published the workflow version, cannot approve, nor can anyone acting for them. `distinct_approvers`: one person approves one level at most. Both default to true |
 | `timeout`, `on_timeout` | Used when the step sets none: `reject` (default), `fail`, or `escalate:<role>` (once, to a single approver with that role) |
 
