@@ -50,6 +50,7 @@ plans:
       max_retention_days: 7
       ai_monthly_tokens: 500000
       whatsapp_templates_monthly: 500
+      container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
     features: {ai: true}
 
   - id: growth
@@ -73,6 +74,7 @@ plans:
       max_retention_days: 30
       ai_monthly_tokens: 2000000
       whatsapp_templates_monthly: 2000
+      container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
     features: {ai: true, git: true}
 
   - id: business
@@ -96,6 +98,7 @@ plans:
       max_retention_days: 90
       ai_monthly_tokens: 10000000
       whatsapp_templates_monthly: 10000
+      container_minutes_monthly: 600   # PLACEHOLDER (CS3): 0 = container steps off
     features: {ai: true, git: true, sso: true, embedded: true}
     partner:
       max_subtenants: 50
@@ -117,6 +120,7 @@ plans:
       max_retention_days: 2555   # up to 7 years (spec 16.1)
       ai_monthly_tokens: 50000000
       whatsapp_templates_monthly: 100000
+      container_minutes_monthly: 3000   # PLACEHOLDER (CS3): 0 = container steps off
     features: {ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
     partner:
       max_subtenants: 0
