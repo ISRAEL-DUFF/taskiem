@@ -38,6 +38,11 @@ type Store struct {
 	// Defaults are the platform's plan limits (TASKIEM_DEFAULT_*), which
 	// tenant_limits overrides per tenant; nil uses DefaultLimits.
 	Defaults *Limits
+	// Billing bases each tenant's limits on its plan (TASKIEM_BILLING=on,
+	// spec 16): a subscription's plan limits, overlaid by tenant_limits, and
+	// new runs refused while the subscription is degraded or cancelled.
+	// Off, every tenant is on the internal plan (the defaults).
+	Billing bool
 
 	defs     sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
 	folds    decideCache
@@ -135,6 +140,12 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 		lim, err := s.limitsTx(ctx, tx, req.TenantID)
 		if err != nil {
 			return err
+		}
+		if req.Fork == nil && lim.BillingRefusesRuns() {
+			// Unpaid past the grace period, or cancelled: no new runs. Forks
+			// finish work already started, and running runs continue.
+			return &LimitError{Limit: "billing", Code: "billing_degraded",
+				Message: "this tenant's subscription is unpaid or cancelled, so new runs are refused; running runs, approvals and reconciliation continue. Pay the open invoice on the Billing page to resume"}
 		}
 		if err := checkQuota(ctx, tx, req.TenantID, lim); err != nil {
 			return err
@@ -694,6 +705,14 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	}
 	if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
 		retention = d
+	}
+	// The plan caps retention (spec 16.2).
+	lim, err := s.limitsTx(ctx, tx, r.ref.TenantID)
+	if err != nil {
+		return err
+	}
+	if c := time.Duration(lim.MaxRetentionDays) * 24 * time.Hour; c > 0 && retention > c {
+		retention = c
 	}
 	if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now(), retain_until = now() + $3::interval WHERE id = $1`,
 		run, status, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {

@@ -27,6 +27,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/audit"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embed"
@@ -68,6 +69,70 @@ type config struct {
 	WhatsApp *whatsapp.Config
 	// AI is the model provider for AI building (TASKIEM_AI_*, docs/ai.md).
 	AI ai.Config
+	// Billing turns plans, subscriptions and payments on (TASKIEM_BILLING=on,
+	// docs/billing.md); off, every tenant is on the internal plan.
+	Billing BillingConfig
+}
+
+// BillingConfig is the platform's billing (operator credentials, never a
+// tenant's connections).
+type BillingConfig struct {
+	On        bool
+	PlansFile string
+	Provider  string // default provider for checkouts
+	// Paystack and Flutterwave credentials; a provider without a key is off.
+	PaystackKey, PaystackURL                    string
+	FlutterwaveKey, FlutterwaveHash, FlutterURL string
+}
+
+func billingConfig() (BillingConfig, error) {
+	b := BillingConfig{PlansFile: env("TASKIEM_BILLING_PLANS", "deploy/plans.yaml"), Provider: env("TASKIEM_BILLING_PROVIDER", "paystack"),
+		PaystackKey: os.Getenv("TASKIEM_BILLING_PAYSTACK_SECRET_KEY"), PaystackURL: os.Getenv("TASKIEM_BILLING_PAYSTACK_URL"),
+		FlutterwaveKey: os.Getenv("TASKIEM_BILLING_FLUTTERWAVE_SECRET_KEY"), FlutterwaveHash: os.Getenv("TASKIEM_BILLING_FLUTTERWAVE_WEBHOOK_HASH"),
+		FlutterURL: os.Getenv("TASKIEM_BILLING_FLUTTERWAVE_URL")}
+	switch v := strings.ToLower(env("TASKIEM_BILLING", "off")); v {
+	case "on", "true", "1":
+		b.On = true
+	case "off", "false", "0", "":
+	default:
+		return b, fmt.Errorf("TASKIEM_BILLING must be on or off, not %q", v)
+	}
+	return b, nil
+}
+
+// billingService builds the billing service: the plan catalogue from the
+// config file (synced to the database at start), the payment providers
+// with keys, email for dunning.
+func (e *engine) billingService(ctx context.Context, alerter *alerts.Alerter) (*billing.Service, error) {
+	b := e.cfg.Billing
+	svc := &billing.Service{Pool: e.pool, Store: e.store, Enabled: b.On, Logger: e.log, PublicURL: e.cfg.PublicURL, Providers: map[string]billing.Provider{}, Default: b.Provider}
+	if alerter != nil {
+		svc.Mailer, svc.From = alerter.Mailer, alerter.From
+	}
+	if !b.On {
+		return svc, nil
+	}
+	c, err := billing.LoadConfig(b.PlansFile)
+	if err != nil {
+		return nil, fmt.Errorf("TASKIEM_BILLING_PLANS %s: %w", b.PlansFile, err)
+	}
+	if c.PlaceholderPrices {
+		e.log.Warn("billing: plan prices are placeholders pending decision B1 (docs/needs-people.md)", "file", b.PlansFile)
+	}
+	if err := billing.Store(ctx, e.pool, c, "config:"+b.PlansFile); err != nil {
+		return nil, fmt.Errorf("billing: loading plans: %w", err)
+	}
+	svc.Config = c
+	if b.PaystackKey != "" {
+		svc.Providers["paystack"] = &billing.Paystack{SecretKey: b.PaystackKey, BaseURL: b.PaystackURL}
+	}
+	if b.FlutterwaveKey != "" {
+		svc.Providers["flutterwave"] = &billing.Flutterwave{SecretKey: b.FlutterwaveKey, WebhookHash: b.FlutterwaveHash, BaseURL: b.FlutterURL}
+	}
+	if _, ok := svc.Providers[b.Provider]; !ok {
+		e.log.Warn("billing: the default payment provider has no key; checkouts will fail", "provider", b.Provider)
+	}
+	return svc, nil
 }
 
 func env(k, def string) string {
@@ -158,6 +223,9 @@ func loadConfig() (config, error) {
 		return c, err
 	}
 	if c.AI, err = ai.ConfigFromEnv(os.LookupEnv); err != nil {
+		return c, err
+	}
+	if c.Billing, err = billingConfig(); err != nil {
 		return c, err
 	}
 	if c.DSN == "" {
@@ -251,7 +319,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	reg.SetTenantSource(src.Connectors)
 	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
-		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits}}
+		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On}}
 	if cfg.WhatsApp != nil {
 		e.wa = whatsapp.New(pool, *cfg.WhatsApp, &egress.Guard{Logger: log}, log)
 		// Tenants' own numbers (credentials in their vaults) and template
@@ -302,6 +370,10 @@ func serve(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
+	bill, err := e.billingService(ctx, alerter)
+	if err != nil {
+		return fmt.Errorf("serve: %w", err)
+	}
 	var tasks []func(context.Context) error
 	if is("api") {
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
@@ -337,6 +409,7 @@ func serve(ctx context.Context, args []string) error {
 			srv.EmbedDir = cfg.WebDir + "/embed/v1"
 		}
 		srv.WhatsApp = e.wa
+		srv.Billing = bill
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD)
 	}
 	if *role == "edge" {
@@ -369,7 +442,8 @@ func serve(ctx context.Context, args []string) error {
 		digests := &secrets.ReadDigester{Pool: e.pool, Logger: log}
 		// Partner webhooks: sub-tenants' run outcomes, publishes and usage.
 		hooks := &embed.Webhooks{Pool: e.pool, Secrets: e.vault, Limits: e.store.LimitsFor, Egress: &egress.Guard{Logger: log}, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run)
+		// Billing: periods, dunning, payment reconciliation, usage snapshots.
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run)
 		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)

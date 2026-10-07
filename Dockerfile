@@ -35,9 +35,10 @@ RUN mkdir -p /out/archive /out/anchors
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/taskiem /taskiem
 COPY --from=web /src/web/dist /web
+COPY --from=build /src/deploy/plans.yaml /etc/taskiem/plans.yaml
 COPY --from=build --chown=nonroot:nonroot /out/archive /var/lib/taskiem/archive
 COPY --from=build --chown=nonroot:nonroot /out/anchors /var/lib/taskiem/anchors
-ENV TASKIEM_WEB_DIR=/web
+ENV TASKIEM_WEB_DIR=/web TASKIEM_BILLING_PLANS=/etc/taskiem/plans.yaml
 USER nonroot:nonroot
 EXPOSE 8080 8081 9090
 ENTRYPOINT ["/taskiem"]

@@ -57,6 +57,7 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 | `TASKIEM_DEFAULT_<LIMIT>` | see [plan limits](#plan-limits) | Platform default for one plan limit, for tenants without their own (for example `TASKIEM_DEFAULT_RUNS_PER_MONTH=100000`). Set the same values on every role. |
 | `ANTHROPIC_API_KEY` | — | Turns AI building on with Claude ([AI](ai.md#configuration)). Keep it in a secret; it is read from the environment only. |
 | `TASKIEM_AI_PROVIDER`, `TASKIEM_AI_MODEL`, `TASKIEM_AI_BASE_URL`, `TASKIEM_AI_API_KEY`, `TASKIEM_AI_EFFORT`, `TASKIEM_AI_MAX_TOKENS`, `TASKIEM_AI_FALLBACKS` | Claude `claude-opus-5-5` when `ANTHROPIC_API_KEY` is set; otherwise off | The model provider for AI building: `anthropic`, `selfhosted` (an OpenAI-compatible endpoint at `TASKIEM_AI_BASE_URL`) or `off`; the model; thinking effort (`high`); max tokens per answer (32000); server-side refusal fallbacks (on). Set on the `api` role. See [AI](ai.md#configuration). |
+| `TASKIEM_BILLING` | `off` | `on` turns plans, subscriptions and naira payments on ([billing](billing.md)); off, every tenant is on the internal `self_hosted` plan (the defaults below, every feature). With it: `TASKIEM_BILLING_PLANS` (`deploy/plans.yaml`), `TASKIEM_BILLING_PROVIDER` (`paystack`), `TASKIEM_BILLING_PAYSTACK_SECRET_KEY`, `TASKIEM_BILLING_FLUTTERWAVE_SECRET_KEY` and `TASKIEM_BILLING_FLUTTERWAVE_WEBHOOK_HASH` (the platform's merchant accounts, from the Secret). Set on the `api` and `scheduler` roles |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OpenTelemetry trace export (OTLP/HTTP); standard `OTEL_*` variables apply. |
 
 ## Database roles
@@ -113,6 +114,7 @@ Every tenant has plan limits (spec 8.3, 16): the platform defaults below, change
 | `max_payload_bytes` | 1 MiB | Larger deliveries get 413 (at most 10 MiB for any tenant) |
 | `max_secrets`, `max_connections` | 0 | Adding another named secret or active connection gets 429 `limit_exceeded` |
 | `ai_monthly_tokens` | 2,000,000 | Tokens AI building may use per UTC month (every token a model call processes, cache reads included). Beyond it `POST /v1/ai/build` gets 429 `ai_budget_exhausted` and people build on the canvas; runs are never affected ([AI](ai.md#budgets)) |
+| `max_retention_days` | 0 | Days an ended run's history is kept at most, whatever its workflow (`settings.retention`) or the governance default asks; then it is archived and purged as usual. Plans set it (spec 16.2) |
 | `whatsapp_templates_monthly` | 1,000 | WhatsApp template messages included per UTC month (Meta charges per template). Beyond it templates are still sent and counted as overage for pass-through billing (`GET /v1/limits` `usage.whatsapp_templates_this_month`, `taskiem tenants limits`); approvals, codes, step-up links and alerts are never held back; marketing templates are ([WhatsApp](whatsapp.md#template-costs)). A sub-tenant inherits its partner's |
 
 ```sh
@@ -121,6 +123,8 @@ taskiem tenants limits 0190f0c2-... --set runs_per_month=default   # back to the
 ```
 
 Limits reached are recorded per tenant and day (`tenant_limit_hits`), counted in `taskiem_tenant_limit_hits_total`, and delivered to tenants who add an alert rule of kind `limit` ([alerts](alerts.md)). Ingest limiters are per edge process, so with several edge replicas a tenant's rates apply to each; admission, quotas, the backlog and worker caps are enforced in the database and hold across replicas and restarts. Which tiers exist and their values are a business decision ([needs people](needs-people.md), B1).
+
+**Plans** (billing on, [billing](billing.md)): a tenant's limits are the platform defaults, then its plan's limits (`deploy/plans.yaml`), then its own overrides set here, which still win. `taskiem tenants limits` shows the result. With billing off the plan layer is absent. `taskiem billing grant TENANT PLAN [--until]` puts a tenant on a plan without payment.
 
 **Sub-tenants** (embedding) have no platform defaults of their own: a sub-tenant's limits are its partner's effective limits, lowered by whatever the partner sets for it through the partner API, and never above the partner's. Lowering a partner's limits with `taskiem tenants limits` lowers its sub-tenants' within a minute. A partner's caps across all its sub-tenants (`max_subtenants`, `subtenant_runs_per_day`, `subtenant_runs_per_month`) are set with `taskiem tenants partner`. See [embedding](embedding.md#2-create-sub-tenants).
 

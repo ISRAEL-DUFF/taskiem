@@ -1,0 +1,44 @@
+# 0017 — Plans and billing: a config-file catalogue under the limits, subscriptions per top-level tenant, degraded never stranded
+
+Date: 2026-10-07 · Status: Accepted (prices pending B1)
+
+## Context
+
+Phase 4 (build plan, "Billing"; spec 16) sells flat-priced plans. Tenants pay a monthly or annual fee per tier and never per execution; cost is held by capacity caps (concurrency, throughput, retention, compute), and pass-through costs (WhatsApp templates beyond the allowance, AI beyond the budget) are billed at cost. Before this decision every limit already existed and was enforced (`tenant_limits`, `runtime.Limits`, migrations 00034, 00041, 00063), set per tenant by operators over platform defaults (`TASKIEM_DEFAULT_*`). Sub-tenants inherit their partner's limits (spec 13.1, decision 0015). Prices and tiers are a business decision that has not been taken (needs people, B1), self-hosted deployments must keep working with no billing at all, and the existing test suites create tenants with no notion of a plan.
+
+Payments are in naira through Nigerian providers. A tenant may run workflows that move money; a billing problem must never leave one of those half done.
+
+## Decision
+
+1. **Plans are data, loaded from a config file.** `deploy/plans.yaml` holds the catalogue (id, name, tier, monthly and annual price in kobo, limits by `tenant_limits` key, features, partner caps, overage rates) and the commercial terms (VAT rate, invoice prefix, trial, grace, dunning schedule, due days, WhatsApp template costs). It is validated strictly (every limit key and value through `runtime.ParseLimit`, every feature name) and written to a `plans` table by `taskiem billing plans --load` or at start when billing is on. Plans missing from the file are retired, never deleted. Prices are marked `placeholder_prices: true` until B1; the CLI warns and the billing page says so. Changing a price is a file change, not a code change.
+
+2. **A plan's limits are the base, operator overrides stay on top.** With billing on (`runtime.Store.Billing`), a tenant's effective limits are platform defaults ← its plan's limits ← its `tenant_limits` overrides; for a sub-tenant, its partner's plan and overrides form the ceiling as before (decision 0015). The plan is found through `taskiem_tenant_plan`, a definer function that follows `parent_id`, so a sub-tenant needs no subscription of its own. Partner-wide run caps fall back to the plan's when the operator set none. One new limit, `max_retention_days`, caps how long an ended run's history is kept whatever a workflow asks (spec 16.2), applied where the run ends.
+
+3. **Billing off is the internal plan.** `TASKIEM_BILLING` defaults to `off`: the store ignores subscriptions, every feature is on, every limit is what it was. The internal plan (`self_hosted`) is built in, not configured: platform defaults and every feature. With billing on, a tenant without a subscription is enrolled in a trial (at signup, on first visit, or by the job), and an operator can put any tenant on any plan without payment (`taskiem billing grant`, status `comped`, optionally `--until`), including `self_hosted` for internal tenants. Existing tests and self-hosted installs are untouched.
+
+4. **Features gate configuration, not use.** SSO, SCIM, custom roles, white-label domains, BYOK, Git, AI and embedding are plan features. The API refuses creating or changing the matching configuration with 402 `plan_feature_required` naming the feature; reads still answer. What a tenant already set up keeps working after a downgrade only because a downgrade is refused while it is in use (point 6).
+
+5. **The subscription state machine is pure, and degraded never strands work.** `trial → active → past_due → degraded → active`, plus `cancelled` (at period end) and `comped`. `Subscription.Due(now, config)` decides the one action due (renew, cancel, dun, degrade) and `Schedule` sets `next_action_at`; both are pure and tested on a fake clock, and the billing job (scheduler role) only routes by `next_action_at` and performs the action under a row lock. Past due keeps everything working through a grace period with reminders (and card retries); degraded and cancelled refuse **new runs only**: `Store.Start` refuses with `billing_degraded` (402 in the API), while running runs, approvals, signals, timers, reconciliation, forks of failed runs and admission of runs already queued all continue. Payment restores service at once; a period already over restarts from the payment.
+
+6. **Plan changes.** Upgrades (a higher tier, a dearer plan of the tier, or monthly to annual) issue an `upgrade` invoice for a new period from now at the new price, less a proration credit for the unused part of the current period (seconds-exact, rounded down to the kobo); they take effect when paid (at once with a saved card). Downgrades take effect at period end, and are refused while the tenant uses more than the smaller plan allows, with each blocker and what to remove (counted limits: workflows, secrets, connections, sub-tenants; features in use: SSO connections, SCIM, custom roles, Git, embed apps, custom domains). During a trial, a change is just the plan tried. Credit left over carries to the next invoice.
+
+7. **Invoices are immutable and gapless.** Numbers (`TKM-2026-000001`) come from a per-year counter row updated in the issuing transaction, so a rolled-back issue leaves no gap; the application role cannot touch the counter. A trigger refuses any change to an issued invoice except its status moving forward (open → paid, void, uncollectible) and refuses deletes, even for the superuser. Lines carry the plan, WhatsApp overage per category at Meta's cost for UTC months that ended, AI overage where a plan prices it, and credits; VAT (7.5%, configurable, stored per invoice in basis points) is shown separately and rounded half up.
+
+8. **Payments are verified, never trusted.** A `Provider` interface (Paystack first, Flutterwave second) starts hosted checkouts (card and bank transfer), verifies a reference and charges saved card authorizations. Platform credentials come from the operator's environment, never a tenant's connections. Payment references embed the tenant (`tkm-<tenant>-<random>`), so a webhook reaches the right tenant's scope without a cross-tenant lookup. A webhook's signature is checked with the same verification code as the connectors' triggers (HMAC-SHA512 for Paystack, the secret hash for Flutterwave), then the payment is **re-verified with the provider's API**: the amount and currency must equal the invoice's, otherwise the payment is recorded as `mismatch`, audited, logged as an error and the invoice stays open. Receipts make a redelivered webhook a no-op; settling twice is a no-op. A reconciliation job verifies payments pending longer than two minutes (a lost webhook, a bank transfer) and abandons them after a day.
+
+9. **Usage snapshots.** The billing job writes each tenant's day (runs started, steps scheduled, workflows deployed, running and stored runs, month-to-date WhatsApp templates and overage and AI tokens, effective limits) into `usage_snapshots` hourly, finalising yesterday after midnight. A partner sees its sub-tenants only summed per day, through a definer function (counts only).
+
+## Alternatives considered
+
+- **Plans in code.** Rejected: B1 is open, and prices will be tuned with data (spec 16.3); a deploy per price change is the wrong cost.
+- **Writing a plan's limits into `tenant_limits` when a tenant subscribes.** Simple, but it erases the difference between what the plan gives and what an operator granted, makes plan edits a data migration across every tenant, and breaks on downgrade. Layering keeps overrides meaningful.
+- **Hard-stopping a degraded tenant.** Rejected: a tenant mid-disbursement whose card expired would have payments stranded between intent and outcome. Only new work stops.
+- **Trusting webhook bodies.** Rejected: the signature proves the sender, not that the amount is what was invoiced, and the re-verification costs one request.
+- **A third-party billing system.** Rejected for now: naira, VAT, Nigerian providers and the coupling to capacity limits are the hard parts, and none of the obvious products does them better; the provider interface keeps payments swappable.
+- **Gapless numbering by a sequence.** Rejected: sequences leave gaps on rollback, which tax invoices should not have.
+
+## Consequences
+
+- `tenants.plan_id` (a placeholder since 00002) is unused; the subscription names the plan.
+- A plan's features are checked per request with a database read; it is cheap but uncached.
+- Dedicated virtual accounts for bank transfer, partner `max_subtenants` from the plan, a step-throughput limit (spec 16.1 "steps/s", today approximated by `worker_concurrency`) and an environments limit are not built; container minutes will map onto plans as a limit key when the container-steps work adds it.

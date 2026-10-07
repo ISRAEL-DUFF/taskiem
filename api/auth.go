@@ -467,6 +467,11 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// With billing on, a new tenant starts its trial (docs/billing.md).
+	if err := s.Billing.Ensure(r.Context(), tenant, "user:"+user.String()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"tenant_id": tenant, "user_id": user})
 }
 

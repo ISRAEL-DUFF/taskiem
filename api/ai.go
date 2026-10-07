@@ -67,7 +67,17 @@ func (s *Server) aiBudget(ctx context.Context, tenant uuid.UUID) (limit, used in
 		used, err = runtime.AITokensThisMonth(ctx, tx, tenant)
 		return err
 	})
-	return lim.AIMonthlyTokens, used, err
+	if err != nil {
+		return 0, 0, err
+	}
+	// A plan with AI overage bills tokens beyond the budget instead of
+	// refusing them (docs/billing.md).
+	if rate, err := s.Billing.AIOverage(ctx, tenant); err != nil {
+		return 0, 0, err
+	} else if rate > 0 {
+		return 0, used, nil
+	}
+	return lim.AIMonthlyTokens, used, nil
 }
 
 func budgetExhausted(w http.ResponseWriter) {

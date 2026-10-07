@@ -70,7 +70,7 @@ func tenantsCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		return fmt.Errorf("tenants limits: %w", err)
 	}
 	defer pool.Close()
-	store := &runtime.Store{Pool: pool, Defaults: &cfg.Limits}
+	store := &runtime.Store{Pool: pool, Defaults: &cfg.Limits, Billing: cfg.Billing.On}
 	if len(sets) > 0 {
 		if err := store.SetLimits(ctx, tenant, sets, "cli:"+env("USER", "operator")); err != nil {
 			return fmt.Errorf("tenants limits: %w", err)

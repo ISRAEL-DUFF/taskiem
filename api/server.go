@@ -24,6 +24,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -90,6 +91,9 @@ type Server struct {
 	WhatsAppPublic WhatsAppPublic
 	// USSD tunes the USSD fast path (ussd.go).
 	USSD USSDSettings
+	// Billing is plans, subscriptions and payments (billing.go); nil or
+	// not enabled is billing off: the internal plan, every feature.
+	Billing *billing.Service
 
 	ussd     ussdState  // USSD channels, sessions and menus (ussd.go)
 	limiters limiterSet // sign-in and other unauthenticated attempts
@@ -133,11 +137,13 @@ func (s *Server) Handler() http.Handler {
 		if s.AllowSignup {
 			r.Post("/signup", s.signup)
 		}
+		r.Post("/billing/webhooks/{provider}", s.billingWebhook) // payment providers (billing.go)
 		// End users of embed apps: their own tokens, CORS (embed.go).
 		r.Route("/embed/{app}", s.embedRoutes)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authenticate)
-			r.Route("/partner", s.partnerRoutes) // partner admin API (partner.go)
+			r.With(s.partnerPlan).Route("/partner", s.partnerRoutes) // partner admin API (partner.go)
+			r.Route("/billing", s.billingRoutes)                     // plans and subscriptions (billing.go)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
 			r.Post("/me/password", s.changePassword)
@@ -165,11 +171,11 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/ussd/channels/{provider}", s.deleteUSSDChannel)
 			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
 			r.With(s.need(PermMemberManage)).Get("/scim", s.getSCIM)
-			r.With(s.need(PermMemberManage)).Put("/scim", s.putSCIM)
+			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSCIM, false)).Put("/scim", s.putSCIM)
 			r.With(s.need(PermMemberManage)).Get("/sso", s.listSSO)
-			r.With(s.need(PermMemberManage)).Post("/sso", s.createSSO)
-			r.With(s.need(PermMemberManage)).Put("/sso/{id}", s.updateSSO)
-			r.With(s.need(PermMemberManage)).Post("/sso/{id}/domains", s.addSSODomain)
+			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso", s.createSSO)
+			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Put("/sso/{id}", s.updateSSO)
+			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso/{id}/domains", s.addSSODomain)
 			r.With(s.need(PermMemberManage)).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
 			r.Get("/connectors", s.listConnectors)
 			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
@@ -200,7 +206,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/environments", s.createEnvironment)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/environments/{env}", s.putEnvironment)
 			r.With(s.need(PermWorkflowEdit)).Post("/validate", s.validate)
-			r.Route("/ai", s.aiRoutes)
+			r.With(s.feature(billing.FeatureAI, true)).Route("/ai", s.aiRoutes)
 			r.Get("/templates", s.listTemplates) // the SME template library (templates.go)
 			r.Get("/templates/{id}", s.getTemplate)
 			r.With(s.need(PermWorkflowEdit)).Post("/templates/{id}/instantiate", s.instantiateTemplate)
@@ -236,7 +242,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)
-			r.With(s.need(PermRoleManage), s.tenantWide).Put("/roles/{name}", s.putRole)
+			r.With(s.need(PermRoleManage), s.tenantWide, s.feature(billing.FeatureCustomRoles, false)).Put("/roles/{name}", s.putRole)
 			r.With(s.need(PermRoleManage), s.tenantWide).Delete("/roles/{name}", s.deleteRole)
 			r.With(s.need(PermMemberManage)).Get("/api-keys", s.listKeys)
 			r.With(s.need(PermMemberManage)).Post("/api-keys", s.createKey)
@@ -267,7 +273,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish)).Post("/workflows/{wf}/versions/{v}/publish/reject", s.decidePublish(false))
 
 			r.With(s.need(PermGitManage)).Get("/git", s.listGit)
-			r.With(s.need(PermGitManage), s.tenantWide).Put("/git/{env}", s.putGit)
+			r.With(s.need(PermGitManage), s.tenantWide, s.feature(billing.FeatureGit, false)).Put("/git/{env}", s.putGit)
 			r.With(s.need(PermGitManage), s.tenantWide).Delete("/git/{env}", s.deleteGit)
 			r.With(s.need(PermGitManage), s.tenantWide).Post("/git/{env}/approve", s.decideGit(true))
 			r.With(s.need(PermGitManage), s.tenantWide).Post("/git/{env}/reject", s.decideGit(false))
@@ -358,6 +364,11 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 
 // fail maps engine errors to responses without leaking internals.
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if le, ok := runtime.IsLimit(err); ok && le.Code == "billing_degraded" {
+		// Unpaid or cancelled: payment, not waiting, lifts it.
+		writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": le.Message, "code": le.Code, "limit": le.Limit})
+		return
+	}
 	if le, ok := runtime.IsLimit(err); ok {
 		// A plan limit: 429 with a code clients can act on, and Retry-After
 		// when waiting helps (a quota resets, a backlog drains).

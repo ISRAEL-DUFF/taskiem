@@ -68,6 +68,10 @@ Usage:
   taskiem tenants partner TENANT_ID [--max-subtenants N] [--subtenant-runs-per-day N] [--subtenant-runs-per-month N]
                           [--capabilities white_label,custom_domains] [--disable]
                                      make a tenant a partner (embedding), set its partner-wide caps (audited)
+  taskiem billing plans [--file FILE] [--load]
+                                     validate the plan catalogue (deploy/plans.yaml), or load it into the database
+  taskiem billing grant TENANT_ID PLAN [--until YYYY-MM-DD]
+                                     put a tenant on a plan without payment (design partners; audited)
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 
@@ -127,6 +131,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return passkeysCmd(args[1:], stdout)
 	case "tenants":
 		return tenantsCmd(context.Background(), args[1:], stdout)
+	case "billing":
+		return billingCmd(context.Background(), args[1:], stdout)
 	case "connector":
 		return connectorCmd(context.Background(), args[1:], stdout)
 	case "healthcheck":

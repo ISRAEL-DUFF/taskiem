@@ -60,6 +60,13 @@ type Limits struct {
 	// overage for pass-through billing; only marketing templates are held
 	// back (docs/whatsapp.md#template-costs).
 	WhatsAppTemplatesMonthly int64 `json:"whatsapp_templates_monthly"`
+	// MaxRetentionDays caps how long an ended run's history is kept, whatever
+	// its workflow or the tenant's governance settings ask for (spec 16.2).
+	MaxRetentionDays int `json:"max_retention_days"`
+
+	// The plan (when billing is on) and its subscription status: a
+	// sub-tenant's are its partner's. Set by the store.
+	plan, billing string
 
 	// A sub-tenant's partner and the partner-wide run caps it shares with
 	// its siblings (spec 13.1); zero for other tenants. Set by the store.
@@ -70,6 +77,15 @@ type Limits struct {
 // Partner is the partner of a sub-tenant whose limits these are (zero
 // otherwise).
 func (l Limits) Partner() uuid.UUID { return l.partner }
+
+// Plan is the plan these limits come from ("" without billing, or without
+// a subscription: the internal plan) and its subscription status.
+func (l Limits) Plan() (plan, status string) { return l.plan, l.billing }
+
+// BillingRefusesRuns reports whether the subscription is degraded (unpaid
+// past its grace period) or cancelled: new runs are refused, while what is
+// already running continues (approvals, signals, reconciliation).
+func (l Limits) BillingRefusesRuns() bool { return l.billing == "degraded" || l.billing == "cancelled" }
 
 // CapTo lowers every limit to at most the same limit of ceiling: where
 // the ceiling has a limit, none (0) or a higher one becomes the ceiling's.
@@ -121,6 +137,7 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"max_connections", "active connections (0: no limit)"},
 	{"ai_monthly_tokens", "tokens AI building may use per UTC month; beyond it, build by hand (0: no limit)"},
 	{"whatsapp_templates_monthly", "WhatsApp template messages included per UTC month; beyond it they are counted as overage, and only marketing ones are held back (0: no limit)"},
+	{"max_retention_days", "days an ended run's history is kept at most, whatever a workflow asks (0: no cap)"},
 }
 
 // DefaultWhatsAppTemplatesMonthly is the platform's default monthly
@@ -320,12 +337,22 @@ func overrides(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (map[string]any
 // defaults, or for a sub-tenant its partner's effective limits, which its
 // own can only lower (spec 13.1).
 func (s *Store) effective(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, over map[string]any) (Limits, error) {
+	plan, err := s.planOf(ctx, tx, tenant)
+	if err != nil {
+		return Limits{}, err
+	}
+	defaults, err := s.defaults().With(plan.limits)
+	if err != nil {
+		return Limits{}, err
+	}
 	var parent uuid.UUID
 	var parentOver []byte
 	var day, month int64
-	err := tx.QueryRow(ctx, `SELECT parent_id, overrides, runs_per_day, runs_per_month FROM taskiem_parent_limits($1)`, tenant).Scan(&parent, &parentOver, &day, &month)
+	err = tx.QueryRow(ctx, `SELECT parent_id, overrides, runs_per_day, runs_per_month FROM taskiem_parent_limits($1)`, tenant).Scan(&parent, &parentOver, &day, &month)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return s.defaults().With(over)
+		l, err := defaults.With(over)
+		l.plan, l.billing = plan.id, plan.status
+		return l, err
 	}
 	if err != nil {
 		return Limits{}, err
@@ -334,7 +361,7 @@ func (s *Store) effective(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, over
 	if err := json.Unmarshal(parentOver, &po); err != nil {
 		return Limits{}, err
 	}
-	base, err := s.defaults().With(po)
+	base, err := defaults.With(po)
 	if err != nil {
 		return base, err
 	}
@@ -343,8 +370,53 @@ func (s *Store) effective(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, over
 		return l, err
 	}
 	l = l.CapTo(base)
+	// Partner-wide caps an operator set win; otherwise the plan's (0: none).
+	if day <= 0 {
+		day = plan.partnerDay
+	}
+	if month <= 0 {
+		month = plan.partnerMonth
+	}
 	l.partner, l.partnerDay, l.partnerMonth = parent, day, month
+	l.plan, l.billing = plan.id, plan.status
 	return l, nil
+}
+
+// tenantPlan is the plan whose limits are a tenant's base (spec 16).
+type tenantPlan struct {
+	id, status               string
+	limits                   map[string]any
+	partnerDay, partnerMonth int64
+}
+
+// planOf reads a tenant's plan (a sub-tenant's partner's) when billing is
+// on. Without billing, or without a subscription, it is the internal plan:
+// the platform defaults, no status.
+func (s *Store) planOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (tenantPlan, error) {
+	p := tenantPlan{limits: map[string]any{}}
+	if !s.Billing {
+		return p, nil
+	}
+	var limits, partner []byte
+	err := tx.QueryRow(ctx, `SELECT plan_id, status, limits, partner FROM taskiem_tenant_plan($1)`, tenant).Scan(&p.id, &p.status, &limits, &partner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return p, nil
+	}
+	if err != nil {
+		return p, err
+	}
+	if err := json.Unmarshal(limits, &p.limits); err != nil {
+		return p, err
+	}
+	var caps struct {
+		Day   int64 `json:"subtenant_runs_per_day"`
+		Month int64 `json:"subtenant_runs_per_month"`
+	}
+	if err := json.Unmarshal(partner, &caps); err != nil {
+		return p, err
+	}
+	p.partnerDay, p.partnerMonth = caps.Day, caps.Month
+	return p, nil
 }
 
 // LimitsView is what a tenant (GET /v1/limits) and an operator see.

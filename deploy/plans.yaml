@@ -1,0 +1,124 @@
+# Taskiem plan catalogue and billing terms (spec 16; docs/billing.md).
+#
+#   taskiem billing plans --file deploy/plans.yaml          # validate
+#   taskiem billing plans --file deploy/plans.yaml --load   # write to the database
+#
+# !! PLACEHOLDER PRICES !! Every amount below is a placeholder pending
+# decision B1 (docs/needs-people.md): plan tiers and naira prices are a
+# business decision. placeholder_prices: true makes the CLI warn and the
+# billing page say so. Set real prices here (no code change) and flip it.
+#
+# Amounts are kobo (1 naira = 100 kobo). Limits use the keys of
+# `taskiem tenants limits` (0: no limit; a key left out takes the platform
+# default, TASKIEM_DEFAULT_*). Operator overrides (taskiem tenants limits
+# --set) still apply on top of a tenant's plan.
+placeholder_prices: true
+currency: NGN
+vat_percent: 7.5          # Nigerian VAT, shown separately on invoices (finance to confirm, B1)
+invoice_prefix: TKM       # invoice numbers: TKM-2026-000001, no gaps per year
+trial_days: 14
+trial_plan: growth
+grace_days: 7             # past due this long, then degraded: new runs refused
+dunning_days: [0, 3, 5]   # card retries and reminders, days after falling past due
+due_days: 7
+# Meta's charge per WhatsApp template beyond a plan's allowance, passed
+# through at cost (placeholders: set from Meta's current Nigeria rate card).
+whatsapp_template_kobo:
+  marketing: 8000
+  utility: 1100
+  authentication: 1100
+
+plans:
+  - id: starter
+    name: Starter
+    tier: starter
+    sort: 1
+    public: true
+    active: true
+    monthly_kobo: 1500000      # PLACEHOLDER (B1): ₦15,000
+    annual_kobo: 15000000      # PLACEHOLDER (B1): ₦150,000
+    limits:
+      max_running_runs: 5
+      worker_concurrency: 5
+      ingest_rate: 5
+      ingest_burst: 25
+      ingest_ceiling: 20
+      ingest_ceiling_burst: 100
+      max_queued_runs: 1000
+      max_workflows: 20
+      max_steps_per_run: 10000
+      max_retention_days: 7
+      ai_monthly_tokens: 500000
+      whatsapp_templates_monthly: 500
+    features: {ai: true}
+
+  - id: growth
+    name: Growth
+    tier: growth
+    sort: 2
+    public: true
+    active: true
+    monthly_kobo: 6000000      # PLACEHOLDER (B1): ₦60,000
+    annual_kobo: 60000000      # PLACEHOLDER (B1): ₦600,000
+    limits:
+      max_running_runs: 25
+      worker_concurrency: 25
+      ingest_rate: 25
+      ingest_burst: 125
+      ingest_ceiling: 75
+      ingest_ceiling_burst: 300
+      max_queued_runs: 5000
+      max_workflows: 100
+      max_steps_per_run: 50000
+      max_retention_days: 30
+      ai_monthly_tokens: 2000000
+      whatsapp_templates_monthly: 2000
+    features: {ai: true, git: true}
+
+  - id: business
+    name: Business
+    tier: business
+    sort: 3
+    public: true
+    active: true
+    monthly_kobo: 25000000     # PLACEHOLDER (B1): ₦250,000
+    annual_kobo: 250000000     # PLACEHOLDER (B1): ₦2,500,000
+    limits:
+      max_running_runs: 100
+      worker_concurrency: 100
+      ingest_rate: 100
+      ingest_burst: 500
+      ingest_ceiling: 250
+      ingest_ceiling_burst: 1000
+      max_queued_runs: 20000
+      max_workflows: 0
+      max_steps_per_run: 100000
+      max_retention_days: 90
+      ai_monthly_tokens: 10000000
+      whatsapp_templates_monthly: 10000
+    features: {ai: true, git: true, sso: true, embedded: true}
+    partner:
+      max_subtenants: 50
+      subtenant_runs_per_month: 200000
+
+  - id: enterprise
+    name: Enterprise
+    tier: enterprise
+    sort: 4
+    public: false              # sales-led: operators grant it (taskiem billing grant)
+    active: true
+    monthly_kobo: 100000000    # PLACEHOLDER (B1): ₦1,000,000; usually a custom contract
+    annual_kobo: 1000000000    # PLACEHOLDER (B1)
+    limits:
+      max_running_runs: 0
+      worker_concurrency: 0
+      max_queued_runs: 100000
+      max_workflows: 0
+      max_retention_days: 2555   # up to 7 years (spec 16.1)
+      ai_monthly_tokens: 50000000
+      whatsapp_templates_monthly: 100000
+    features: {ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
+    partner:
+      max_subtenants: 0
+    overage:
+      ai_kobo_per_million_tokens: 1500000   # PLACEHOLDER (B1): AI beyond the budget, per million tokens
