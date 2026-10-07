@@ -133,3 +133,18 @@ These are known residuals, carried to the next round:
 - **Signals.** Signals are matched by environment, not by connection. Signal steps do not name a connection in wd/v1.
 - **SAML sign-in** now needs HTTPS or localhost. The browser-binding cookie must be `SameSite=None`, and browsers accept that only on a `Secure` cookie.
 - **PostgreSQL connections.** Connections with no `sslmode` now verify the server certificate. A server whose certificate chains to a private CA needs `sslmode` set explicitly.
+
+## Addendum 2026-10-07: embedding (Phase 3, C1)
+
+The embedding foundations ([embedding.md](../embedding.md), decision 0015, threat-model boundary B10) were reviewed against the same four areas before they were committed. Two findings were fixed before commit, each with a regression test in `api/embed_test.go`:
+
+| # | Area | Finding | Status |
+| --- | --- | --- | --- |
+| E1 | Authorization | An end-user token kept the permissions it was minted with until it expired (up to an hour), even after the partner narrowed the app's end-user permissions | Fixed: permissions are intersected with the app's current list on every request |
+| E2 | Untrusted input | A definition that was JSON but not an object skipped the allowed-connector check at save (it could not be read for connectors) | Fixed: refused with 400 |
+
+Open, carried to the next round:
+
+- A suspended sub-tenant's schedules and webhook triggers keep firing; only its tokens and sessions stop.
+- CORS preflights for `/v1/embed/{app}` look the app's origins up in the database without authentication (one indexed read; no per-address limit yet).
+- The partner's run counts across its sub-tenants (`taskiem_partner_usage`) are read without an audit entry: counts only, no sub-tenant data.

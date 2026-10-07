@@ -10,6 +10,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `taskiem bootstrap --tenant NAME --email EMAIL [--name NAME]` | Creates the first tenant, its owner, a Default workspace, and the `dev` and `prod` environments. Password from `TASKIEM_BOOTSTRAP_PASSWORD` (12+ characters). |
 | `taskiem serve [--role ROLE]` | Runs `api`, `edge`, `orchestrator`, `scheduler`, `worker`, or `all` (default; also `TASKIEM_ROLE`). |
 | `taskiem tenants limits TENANT_ID [--set KEY=VALUE]...` | Shows a tenant's plan limits, usage and recent limit hits; `--set` changes a limit (`default` returns it to the platform default). Audited as `limits.set`. See [plan limits](#plan-limits). |
+| `taskiem tenants partner TENANT_ID [--max-subtenants N] [--subtenant-runs-per-day N] [--subtenant-runs-per-month N] [--disable]` | Makes a tenant a partner, which may create sub-tenants and embed apps through the partner admin API, and sets its partner-wide caps (0: no cap; flags left out keep their value). `--disable` stops it being one: its sub-tenants are kept, unreachable, and their end-user tokens stop. Audited as `partner.enable` and `partner.disable`. See [embedding](embedding.md). |
 | `taskiem audit verify FILE` | Recomputes every hash and link of an audit export (`GET /v1/audit/export`) without the database. Exits non-zero on a broken chain. |
 | `taskiem validate FILE...` | Validates `*.wd.json` definitions and connector manifests. |
 | `taskiem healthcheck` | Probes the local API's `/readyz` (for images without a shell). |
@@ -21,7 +22,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `api` | REST API (`/v1`), web app (`TASKIEM_WEB_DIR`); with `all`, webhooks too (`/hooks`) | `TASKIEM_LISTEN` (`:8080`) |
 | `edge` | Webhook and connector-event ingest only | `TASKIEM_EDGE_LISTEN` (`:8081`) |
 | `orchestrator` | Decides runs left with undecided events (most decisions are inline) | — |
-| `scheduler` | Timers, lease recovery, the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
+| `scheduler` | Timers, lease recovery, the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, partner webhooks ([embedding](embedding.md#6-partner-webhooks)), and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
 | `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`); drains in-flight steps for up to 30 s on shutdown | — |
 
 Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/healthz`) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
@@ -110,6 +111,8 @@ taskiem tenants limits 0190f0c2-... --set runs_per_month=default   # back to the
 ```
 
 Limits reached are recorded per tenant and day (`tenant_limit_hits`), counted in `taskiem_tenant_limit_hits_total`, and delivered to tenants who add an alert rule of kind `limit` ([alerts](alerts.md)). Ingest limiters are per edge process, so with several edge replicas a tenant's rates apply to each; admission, quotas, the backlog and worker caps are enforced in the database and hold across replicas and restarts. Which tiers exist and their values are a business decision ([needs people](needs-people.md), B1).
+
+**Sub-tenants** (embedding) have no platform defaults of their own: a sub-tenant's limits are its partner's effective limits, lowered by whatever the partner sets for it through the partner API, and never above the partner's. Lowering a partner's limits with `taskiem tenants limits` lowers its sub-tenants' within a minute. A partner's caps across all its sub-tenants (`max_subtenants`, `subtenant_runs_per_day`, `subtenant_runs_per_month`) are set with `taskiem tenants partner`. See [embedding](embedding.md#2-create-sub-tenants).
 
 ## Docker Compose
 
