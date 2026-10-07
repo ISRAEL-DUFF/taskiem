@@ -21,7 +21,7 @@ test("encryption keys: rotate the tenant key, and a customer key is checked befo
   await expect(byok.getByRole("button", { name: "Verify and use this key" })).toBeDisabled();
   await byok.getByLabel("Address").fill("http://bao.example.com:8200");
   await byok.getByLabel("Key name").fill("taskiem");
-  await byok.getByLabel("Token").fill("s.not-a-real-token");
+  await byok.getByRole("textbox", { name: /^Token/ }).fill("s.not-a-real-token");
   await byok.getByRole("button", { name: "Verify and use this key" }).click();
   await expect(byok.getByRole("alert")).toContainText("https");
   await expect(page.getByTestId("keys-summary")).toContainText("wrapped by Taskiem's key");
