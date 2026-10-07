@@ -20,3 +20,6 @@ connector.wasm
 /taskiem
 /taskiem-shim
 /cmd/taskiem/_conntest*/
+
+# Built docs site (make docs)
+/site/

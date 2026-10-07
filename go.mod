@@ -20,6 +20,7 @@ require (
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/tetratelabs/wazero v1.9.0
+	github.com/yuin/goldmark v1.8.6
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0

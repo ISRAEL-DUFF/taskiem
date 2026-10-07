@@ -67,7 +67,7 @@ The guided first workflow (`/start/guide?template=<id>`) takes one [template](te
 
 ## In-product help
 
-Get started, Templates, Connections and the Variables section of Settings have a help panel: a few plain sentences on what the page is for. With `TASKIEM_DOCS_URL` set, each panel also links to its page on the docs site.
+Get started, Templates, Connections and the Variables section of Settings have a help panel: a few plain sentences on what the page is for. With `TASKIEM_DOCS_URL` set, each panel also links to its page on the docs site: `/onboarding`, `/templates`, `/connector-sdk` and `/environments`. `make docs` builds that site, with the same URLs ([decision 0025](decisions/0025-public-docs-and-api-reference.md)).
 
 ## Measuring gate G4
 

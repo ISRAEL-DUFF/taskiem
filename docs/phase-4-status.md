@@ -16,7 +16,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Reliability | P4-4 | 99.9% SLO with on-call, status page, incident process | 15.3 | **Done** (code; [what exists](#p4-4-reliability)); on-call, paging, the status domain and the G4 measurement owner need people (P4-R1 to P4-R4) |
 | Enterprise | P4-5 | BYOK (tenant keys wrapped by the customer's own KMS key: OpenBao/Vault transit, AWS KMS, Google Cloud KMS, Azure Key Vault), background re-wrapping (S23) and secrets bound to environment and name (S33), fail closed with parked steps that resume, dedicated single-tenant deployments (Helm, documented), white-label tier (built in Phase 3, C2) | 13.4, 14.1 | **Done** (code; [what exists](#p4-5-enterprise)); a real customer KMS test and the revocation wording need people (P4-K1, P4-K2) |
 | Ecosystem | P4-6 | Public connector SDK and a submission review process for third-party connectors | 6 | **Done** (code; [what exists](#p4-6-connector-sdk-and-catalogue)); publisher agreement, reviewers and review SLA need people (P4-E1 to P4-E3) |
-| Docs | P4-7 | Public docs site, API reference, connector SDK guide | — | Planned |
+| Docs | P4-7 | Public docs site, API reference, connector SDK guide | — | **Done** (code; [what exists](#p4-7-docs)); domain, hosting and review owner need P4-D1–P4-D3 |
 | Trust | P4-8 | Bug bounty, security page, ISO 27001 and SOC 2 Type II preparation | 14.4 | Needs people |
 | Security | Self-review | The self-review's open findings before the pen test: step-up for key changes (K5); step-up bound to its operation, no session token in a browser sign-in's body, HSTS (S35); tenant code in the API process bounded and caches bounded (S34); personal data masked in error text (S22); embed preflights paced | 14.4 | **Done** (code; [what exists](#security-self-review-round)) |
 | Legal | P4-9 | Counsel IP review, trademark registration, terms of service, DPA under the NDPA | — | Needs people |
@@ -187,3 +187,26 @@ What is left in the ecosystem:
 - **A publisher web page**: publishers use the API and CLI; the web app has the installer's side.
 - **Hardening**: running submission checks in a separate worker rather than the API process; re-checking published versions when the lint tightens; Taskiem countersignatures for packages distributed outside the platform.
 - Paid connectors, ratings and usage statistics for publishers.
+
+## P4-7: docs
+
+Done 7 October 2026. Design: [decision 0025](decisions/0025-public-docs-and-api-reference.md); how to change docs and the API document: [contributing](../CONTRIBUTING.md#docs-and-the-api-reference). Nothing is published yet: the domain, hosting and a review owner are P4-D1–P4-D3.
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| OpenAPI document | OpenAPI 3.1, written by hand: all 236 public operations under `/v1` (the member API, the partner API and the embed API), each with a summary, tag, guide page, path and query parameters, security, the permission (`x-taskiem-permission`), plan features (`x-taskiem-plan-feature`) and whether environment-limited keys are refused (`x-taskiem-all-environments`); five security schemes (session cookie with the `X-Taskiem-Request` header, session token, API key, end-user token); the error format with its codes; full schemas for workflows, versions, validation, publishing, runs, sign-in, signup, `/me`, API keys, connectors and onboarding (73 operations), a JSON object pointing at the guide for the rest | `api/openapi/openapi.yaml`, `api/openapi/openapi.go` |
+| Route and source checks | The chi router is walked with every optional route on: a public route missing from the document, or a documented one the router does not serve, fails; the routes left out are listed with reasons (probes, edge webhooks and channel callbacks, Git hooks, SCIM 2.0, the embed script and frames, payment webhooks, static files). The router's source is parsed (`r.Use`, `r.With`, `r.Route`, `r.Group`) so each operation's permission, plan features, environment rule and authentication must match the middleware it really has | `api/openapi_test.go`, `api/routes_ast_test.go` |
+| Response checks | Every answer the API tests receive (the whole `api` suite, through `newWorld`) is validated against the document: its status must be declared (or be an error matching the error schema), its media type declared, and a JSON body must match the schema | `api/openapi_test.go`, `api/openapi/validate.go` |
+| Docs site | `make docs` (`go run ./tools/docsite`): the public pages of `docs/` as HTML (goldmark, MIT), GitHub heading ids, navigation by section, a contents page, light and dark themes, phone layout; the API reference from the document (an overview with authentication and errors, a page per group, shared schemas) and `api/openapi.yaml` to download; a static search index (`search.json`, pages and sections) searched in the browser; written to `site/` (gitignored). `-base` serves it under a path; `-source` links files the site does not publish to the repository, otherwise they become plain text | `tools/docsite`, `Makefile` |
+| Public and internal docs | Public: the guides, contracts and integration guides (56 pages). Internal: phase status, needs-people, the PGDock plan, the clean-room policy, `spec/`, `security/`, `decisions/`, partner correspondence (iswallet answers, the Payrolla guide). A doc in neither list fails a test | `tools/docsite/pages.go` |
+| Stable URLs | A doc's path without `.md`: `/templates`, `/integrations/slack`, `/contracts`; the help links in the web app (`TASKIEM_DOCS_URL/<page>`) are checked to be public pages | `tools/docsite/main_test.go` |
+| Link checker | Every relative link in `docs/`, README.md and CONTRIBUTING.md reaches a file inside the repository and every anchor a heading; runs before every build, as a test and in CI. Two broken anchors fixed (needs-people to embedding) | `tools/docsite/links.go` |
+| CI | The Go job builds the site (which checks links first); the route, source and response checks run with the tests | `.github/workflows/ci.yml` |
+| Tests | Heading ids (duplicates, code, punctuation, Unicode); the link checker on a fixture repository (missing files and anchors, tables, code ignored, leaving the repository); classification; help links; the built site's own links and anchors under two bases, internal pages absent, the search index; the output directory guard; the validator against good and bad answers | `tools/docsite/main_test.go`, `api/openapi/validate_test.go` |
+
+What is left in docs:
+
+- **People** (P4-D1–P4-D3): the domain and host, publishing from CI, who reviews docs, and confirming the public/internal split.
+- **Detailed schemas** for the operations that answer a plain JSON object today (163), added as each is touched; the response check then holds them to the code.
+- **Request schemas** for most writes are a JSON object; unknown fields are refused by the API, so a client finds mistakes at once, but the reference does not list the fields.
+- A changelog for the API and versioned docs (one version, `v1`, today).
