@@ -342,7 +342,7 @@ func serve(ctx context.Context, args []string) error {
 	if *role == "edge" {
 		mux := http.NewServeMux()
 		mux.Handle("/hooks/", http.StripPrefix("/hooks", e.hooks()))
-		git := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL}
+		git := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL, TrustProxy: cfg.TrustProxy}
 		mux.Handle("/git-hooks/", http.StripPrefix("/git-hooks", git.GitHooks()))
 		if e.wa != nil {
 			// The platform number's webhook (docs/whatsapp.md), apart from

@@ -35,6 +35,21 @@ Rules 1–5, 9, and 10 are enforced by `engine/wd.Validate`. Rules 6–8 are run
 - **Outputs.** `transform` runs inside decide; `wait` outputs `{fired_at}`; `signal` outputs the signal's payload; `approval` outputs `{decision, decided_by}` (`rejected` with `reason: timeout` by default on timeout); `branch` outputs `{path, steps}`; `foreach` outputs a list, one object per iteration keyed by body step id.
 - **Not yet executable.** `subflow` and `ai` validate but fail at run time with kind `unsupported` until Phase 3.
 
+## USSD menus
+
+A `ussd` trigger requires `config`, a menu (`$defs/ussdMenu`): `service_code` (`*384*123#`), `screens` (1 to 50), optional `start` (default: the first screen), `max_chars` (60 to 182, default 182) and `notify` (`{sms, connection?, completed?, failed?}`). A screen has `id`, `type` (`menu`, `input`, `confirm`, `end`) and `text`. A `menu` screen requires `options` (1 to 9: `label`, `next`, optional `value` and `when`) and may set `input`. An `input` screen requires `input` and `next`, and may set `validate` (`type`, `pattern`, `min`, `max`, `min_length`, `max_length`, `when`) and `error`. A `confirm` screen may set `confirm_label`, `cancel_label` and `done`. `engine/wd.Validate` adds these rules (paths under `/trigger/config`):
+
+- **U1. Size.** Each screen, measured at its worst case (error line, placeholders at their longest, options or confirm lines, `0. Back`), and each `done` text fit `max_chars`. Texts and labels are printable ASCII; SMS texts are at most 160 characters.
+- **U2. Links.** Every `next` names a screen; every screen is reachable from the start; at least one `confirm` screen exists; ids are unique.
+- **U3. Fields per type.** A screen carries only its type's fields (no `options` on an input screen, no `next` on a confirm screen, and so on).
+- **U4. Validation.** Patterns compile (RE2, matched against the whole input); `min` ≤ `max` and only with `type` `number` or `integer`; `min_length` ≤ `max_length`.
+- **U5. Conditions.** `when` (on options and in `validate`) is an expression over `trigger.body` only (the inputs collected so far, with the new value in place for `validate.when`). Other roots, `secrets` among them, are refused.
+- **U6. Texts.** Texts are fixed, never expressions. `{{name}}` names an input some screen collects, and `{{reference}}` appears only in `done` and the `notify` texts.
+- **U7. Inputs schema.** When the inputs schema is an object with `properties` (directly or through `#/types/...`), every collected name is a property of a compatible type, and every `required` property is collected by some screen.
+- **U8. One code per environment.** At publish, a service code already served by another workflow in the environment is refused.
+
+The run started by a confirmation has `trigger.body` (the inputs), `trigger.caller.phone_number` (sealed) and `trigger.ussd` (`reference`, `service_code`, `provider`, `network`). See [USSD](../ussd.md).
+
 ## Durations
 
 `<n><unit>` repeated, units `ms`, `s`, `m`, `h`, `d`; for example `90s`, `1h30m`, `7d`.

@@ -15,3 +15,6 @@ connector.wasm
 
 # Agent worktrees (local only)
 .claude/worktrees/
+
+# Built binary (go build ./cmd/taskiem)
+/taskiem

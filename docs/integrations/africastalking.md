@@ -50,6 +50,12 @@ Add `&connection=<name>` when the tenant has more than one Africa's Talking conn
 
 **Callbacks are authenticated by a URL token.** Africa's Talking documents no signature on its callbacks, so each trigger uses the `query_secret` scheme: a delivery whose `token` parameter does not match the connection's `callback_token` is refused with 401, and the token is stripped before the event reaches a workflow. The token is only as secret as the URL: keep callback URLs out of logs and tickets, and rotate the token (edit the connection, then the dashboard URLs) if one leaks. Before acting on anything that moves money, still confirm it with a read: `get_airtime_status` for airtime.
 
+## USSD
+
+USSD is not a connector action or trigger. It is the edge's fast path ([USSD](../ussd.md)): a workflow with a `ussd` trigger carries its menu, and Africa's Talking's USSD callbacks go to `/channels/ussd/<tenant>/africastalking?token=<channel token>`. The callback format is in `connectors/africastalking/ussd.go` (`USSDAdapter`). Each step of a session is a form POST with `sessionId`, `serviceCode`, `phoneNumber`, `networkCode` and `text` (everything typed so far, joined with `*`). The answer is plain text starting `CON ` (continue) or `END ` (finish). USSD callbacks are not signed either, so the channel has its own token (made by `PUT /v1/ussd/channels/africastalking`, shown once) and an optional address allow-list. This connector's `send_sms` sends the outcome SMS through the tenant's connection in the channel's environment, and `send_airtime` is what the example workflow `flows/examples/ussd-airtime-topup` calls.
+
+Read 7 October 2026: developers.africastalking.com/docs/ussd/overview and /docs/ussd/handle_sessions (through search-engine extracts, as above), and the help centre's articles on USSD session durations (Kenya, Nigeria), menu character limits (Kenya), and going live with USSD. Links are in [USSD](../ussd.md#sources).
+
 ## To confirm before go-live
 
 1. **Callback authentication.** Ask Africa's Talking whether callbacks can carry a secret or come from fixed IP addresses. Taskiem would need a new verification scheme (for example a secret query parameter) to use either.
@@ -59,3 +65,4 @@ Add `&connection=<name>` when the tenant has more than one Africa's Talking conn
 5. `fetch_messages` response field names beyond those the incoming-SMS callback documents (`id`, `from`, `to`, `text`, `date`, `linkId`).
 6. Airtime: what a repeat with the same `Idempotency-Key` returns; the exact response of `query/transaction/find` (the connector reads `status`); whether its sandbox host is `api.sandbox.africastalking.com`; and whether airtime callbacks are form or JSON (both work).
 7. Voice calls are not included. The Make Call reference could not be read, Africa's Talking's help centre says the voice sandbox is not operational, and answering a call needs XML responses to Africa's Talking's callback, which Taskiem's ingest does not produce.
+8. **USSD.** Whether USSD callbacks come from fixed addresses (for `allowed_cidrs`); how a dialled extension (`*384*123*1#` on a shared code) arrives, in `serviceCode` or as the start of `text`; and the exact menu limits on Nigerian networks (the help centre gives 160 characters).
