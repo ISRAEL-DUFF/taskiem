@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { post } from "../api";
 import { useAuth } from "../auth";
@@ -52,12 +52,11 @@ export function ForgotPassword() {
 /** Reads the link's token from the fragment (never sent to a server) and
  * sets the new password. It does not sign in. */
 export function ResetPassword() {
-  const [token] = useState(() => {
-    const t = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
-    // Keep the token out of the address bar and history from here on.
+  const [token] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "");
+  // Keep the token out of the address bar and history from here on.
+  useEffect(() => {
     if (window.location.hash) window.history.replaceState(null, "", window.location.pathname);
-    return t;
-  });
+  }, []);
   const [password, setPassword] = useState("");
   const [again, setAgain] = useState("");
   const [done, setDone] = useState<string | null>(null);
@@ -87,7 +86,7 @@ export function ResetPassword() {
             void act.run(async () => setDone((await post<{ status: string }>("/v1/auth/password/reset", { token, password })).status));
           }}
         >
-          <Field label="New password" hint={`At least ${minLength} characters.`}>
+          <Field label="New password">
             <input type="password" autoComplete="new-password" minLength={minLength} value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
           </Field>
           <Field label="New password again">
@@ -98,7 +97,7 @@ export function ResetPassword() {
           <button className="primary" type="submit" disabled={act.busy || !!problem || password !== again} style={{ width: "100%" }}>
             {act.busy ? "Saving…" : "Set password"}
           </button>
-          <p className="hint">Every session of yours is signed out. Administrators still sign in with their passkey.</p>
+          <p className="hint">At least {minLength} characters. Every session of yours is signed out; administrators still sign in with their passkey.</p>
         </form>
       )}
     </div>

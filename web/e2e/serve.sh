@@ -17,6 +17,8 @@ TASKIEM_BOOTSTRAP_PASSWORD='correct horse battery' bin/taskiem bootstrap --tenan
 export TASKIEM_LISTEN=127.0.0.1:18080 TASKIEM_METRICS_LISTEN=127.0.0.1:19090 TASKIEM_WEB_DIR="$root/web/dist" TASKIEM_SECURE_COOKIES=false
 # Passkeys need a host name: the passkey test browses http://localhost:18080.
 export TASKIEM_PUBLIC_URL=http://localhost:18080 TASKIEM_REQUIRE_ADMIN_PASSKEYS=false
+# Email goes to the SMTP sink password.spec.ts listens on.
+export TASKIEM_SMTP_URL=smtp://127.0.0.1:12525 TASKIEM_ALERT_FROM=taskiem@e2e.test
 # Every spec signs in from the same address.
 export TASKIEM_LOGIN_BURST=100
 exec bin/taskiem serve --role all
