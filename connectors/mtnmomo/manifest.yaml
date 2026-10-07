@@ -1,0 +1,221 @@
+# MTN MoMo (Mobile Money Open API): Collection request to pay and its
+# status, Disbursement and Remittance transfers and their status, account
+# balance, account holder validation and basic user info, with callbacks.
+# Built from MTN's public developer documentation at momodeveloper.mtn.com
+# (API Documentation pages and the API reference the portal publishes for
+# the Collection, Disbursement and Remittance products), read 7 October 2026
+# (docs/integrations/mtnmomo.md).
+manifest: connector/v1
+id: mtnmomo
+version: 1.0.0
+name: MTN MoMo
+description: MTN Mobile Money Open API — request to pay, transfers (disbursement and remittance) with status, balance, account holder checks and callbacks, per country.
+category: payments
+regions: [UG, GH, CI, ZM, CM, BJ, CG, SZ, GN, ZA, LR, SS, NG, RW]
+auth:
+  type: api_key
+  fields:
+    - { key: api_user, label: "API user (a UUID, from the Partner portal; sandbox: the provisioning API)", secret: true }
+    - { key: api_key, label: API key, secret: true }
+    - { key: collection_subscription_key, label: Collection product subscription key (Ocp-Apim-Subscription-Key), secret: true, required: false }
+    - { key: disbursement_subscription_key, label: Disbursement product subscription key, secret: true, required: false }
+    - { key: remittance_subscription_key, label: Remittance product subscription key, secret: true, required: false }
+    - { key: collection_api_user, label: "API user for Collection, if not api_user", secret: true, required: false }
+    - { key: collection_api_key, label: Its API key, secret: true, required: false }
+    - { key: disbursement_api_user, label: "API user for Disbursement, if not api_user", secret: true, required: false }
+    - { key: disbursement_api_key, label: Its API key, secret: true, required: false }
+    - { key: remittance_api_user, label: "API user for Remittance, if not api_user", secret: true, required: false }
+    - { key: remittance_api_key, label: Its API key, secret: true, required: false }
+    - { key: environment, label: "Environment: production (default) or sandbox", secret: false, required: false }
+    - { key: target_environment, label: "X-Target-Environment: mtnuganda, mtnghana, mtnivorycoast… (sandbox: sandbox)", secret: false, required: false }
+    - { key: currency, label: "Default currency (ISO 4217) of the target environment (sandbox: EUR)", secret: false, required: false }
+    - { key: hooks_url, label: "Taskiem trigger base URL: https://<host>/hooks/<tenant>/connectors/mtnmomo@1 (its host must be the API user's callback host)", secret: false, required: false }
+    - { key: hooks_env, label: "Taskiem environment of the callbacks (default prod)", secret: false, required: false }
+    - { key: hooks_connection, label: "This connection's name (callback URLs carry it in the path)", secret: false, required: false }
+    - { key: callback_token, label: "Callback token: a long random value; the last segment of every callback URL", secret: true, required: false }
+  test: { action: get_balance }
+base_url: https://proxy.momoapi.mtn.com
+egress_hosts: [proxy.momoapi.mtn.com, sandbox.momodeveloper.mtn.com]
+actions:
+  get_balance:
+    title: Get the account balance
+    description: The balance of the default account of a product's API user.
+    class: read
+    input:
+      type: object
+      properties:
+        product: { type: string, enum: [collection, disbursement, remittance], description: Defaults to the first product the connection has a subscription key for }
+    output:
+      type: object
+      properties:
+        product:           { type: string }
+        available_balance: { type: integer, description: Minor units of currency }
+        currency:          { type: string }
+  validate_account_holder:
+    title: Check that a customer is active
+    description: Whether an MSISDN is registered and active, able to receive funds (not that a given amount can be received).
+    class: read
+    input:
+      type: object
+      required: [msisdn]
+      properties:
+        msisdn:  { type: string, description: "Number with country code, no + (E.164 digits)" }
+        product: { type: string, enum: [collection, disbursement, remittance] }
+    output:
+      type: object
+      properties:
+        msisdn: { type: string }
+        active: { type: boolean }
+    pii:
+      - { field: msisdn, category: phone }
+      - { field: output.msisdn, category: phone }
+  get_account_holder_name:
+    title: Get an account holder's name
+    description: Basic user info (names) of an MSISDN, without the holder's consent, as MTN allows. Use it to confirm a payee before paying.
+    class: read
+    input:
+      type: object
+      required: [msisdn]
+      properties:
+        msisdn:  { type: string }
+        product: { type: string, enum: [collection, disbursement, remittance], default: collection }
+    output:
+      type: object
+      properties:
+        given_name:  { type: string }
+        family_name: { type: string }
+        status:      { type: string }
+    pii:
+      - { field: msisdn, category: phone }
+      - { field: output.given_name, category: name }
+      - { field: output.family_name, category: name }
+  request_to_pay:
+    title: Request a payment (request to pay)
+    description: >-
+      Asks the payer to approve a payment on their phone. MTN accepts it as
+      PENDING; the outcome arrives on payment_callback (correlation:
+      reference_id, sent as externalId) or from get_payment. The engine's
+      key is the X-Reference-Id (a UUID); MTN refuses a repeated one, after
+      which the connector reports the request already made. Amounts are
+      minor units of currency.
+    class: idempotent_write
+    idempotency:
+      field: reference_id
+      encoding: hex_lower
+      length: 32
+      limits: { max_length: 36, charset: "0-9a-f-" }
+    reconcile: get_payment
+    compensate: null
+    input:
+      type: object
+      required: [amount, msisdn]
+      properties:
+        amount:        { type: integer, minimum: 1, description: Minor units of currency }
+        currency:      { type: string, description: "ISO 4217; must be the target environment's (sandbox: EUR). Defaults to the connection's" }
+        msisdn:        { type: string, description: "Payer, with country code, no +" }
+        payer_message: { type: string, maxLength: 160, description: Written in the payer's history }
+        payee_note:    { type: string, maxLength: 160, description: Written in your history }
+        reference_id:  { type: string }
+    output: { $ref: '#/actions/get_payment/output' }
+    pii:
+      - { field: msisdn, category: phone }
+      - { field: output.msisdn, category: phone }
+  get_payment:
+    title: Get a request to pay's status
+    class: read
+    input:
+      type: object
+      required: [reference_id]
+      properties:
+        reference_id: { type: string, description: The X-Reference-Id (UUID) or the engine's key }
+    output:
+      type: object
+      properties:
+        reference_id:             { type: string, description: The X-Reference-Id (UUID) }
+        external_id:              { type: string }
+        status:                   { type: string, enum: [PENDING, SUCCESSFUL, FAILED] }
+        amount:                   { type: integer, description: Minor units }
+        currency:                 { type: string }
+        financial_transaction_id: { type: string }
+        msisdn:                   { type: string }
+        reason_code:              { type: string }
+        reason_message:           { type: string }
+    pii:
+      - { field: output.msisdn, category: phone }
+  transfer:
+    title: Send money to a customer (transfer)
+    description: >-
+      Transfers from the API user's account to a payee, through the
+      Disbursement product (default) or Remittance. MTN accepts it as
+      PENDING; the outcome arrives on transfer_callback (correlation:
+      reference_id) or from get_transfer. A repeated X-Reference-Id is
+      refused by MTN, so resending never pays twice; a transfer MTN reports
+      FAILED fails the step with MTN's reason.
+    class: idempotent_write
+    idempotency:
+      field: reference_id
+      encoding: hex_lower
+      length: 32
+      limits: { max_length: 36, charset: "0-9a-f-" }
+    reconcile: get_transfer
+    compensate: null
+    input:
+      type: object
+      required: [amount, msisdn]
+      properties:
+        amount:        { type: integer, minimum: 1, description: Minor units of currency }
+        currency:      { type: string }
+        msisdn:        { type: string, description: "Payee, with country code, no +" }
+        product:       { type: string, enum: [disbursement, remittance], default: disbursement }
+        payer_message: { type: string, maxLength: 160 }
+        payee_note:    { type: string, maxLength: 160 }
+        reference_id:  { type: string }
+    output: { $ref: '#/actions/get_transfer/output' }
+    pii:
+      - { field: msisdn, category: phone }
+      - { field: output.msisdn, category: phone }
+  get_transfer:
+    title: Get a transfer's status
+    class: read
+    input:
+      type: object
+      required: [reference_id]
+      properties:
+        reference_id: { type: string }
+        product:      { type: string, enum: [disbursement, remittance], default: disbursement }
+    output:
+      type: object
+      properties:
+        reference_id:             { type: string }
+        external_id:              { type: string }
+        status:                   { type: string, enum: [PENDING, SUCCESSFUL, FAILED] }
+        amount:                   { type: integer, description: Minor units }
+        currency:                 { type: string }
+        financial_transaction_id: { type: string }
+        msisdn:                   { type: string }
+        reason_code:              { type: string }
+        reason_message:           { type: string }
+    pii:
+      - { field: output.msisdn, category: phone }
+triggers:
+  # MTN calls the X-Callback-Url once, with PUT or POST, when a request
+  # reaches a final state, and signs nothing. Its URLs may not carry a query
+  # string, so the token is the last path segment (path_secret):
+  # <hooks_url>/<trigger>/<env>/<connection>/<callback_token>. Callbacks are
+  # reports and are never retried: confirm with get_payment / get_transfer.
+  payment_callback:
+    type: webhook
+    verify: { scheme: path_secret, secret_field: callback_token }
+    ack: { status: 200 }
+    events: [requesttopay.SUCCESSFUL, requesttopay.FAILED]
+    event_type: '="requesttopay." + body.status'
+    dedup: '=string(body.externalId) + ":" + body.status'
+    correlation: =string(body.externalId)
+  transfer_callback:
+    type: webhook
+    verify: { scheme: path_secret, secret_field: callback_token }
+    ack: { status: 200 }
+    events: [transfer.SUCCESSFUL, transfer.FAILED]
+    event_type: '="transfer." + body.status'
+    dedup: '=string(body.externalId) + ":" + body.status'
+    correlation: =string(body.externalId)
