@@ -1,0 +1,35 @@
+{
+  "id": "payment-thank-you-sms",
+  "title": "Thank-you SMS when a customer pays",
+  "summary": "When Paystack confirms a payment, text the customer a thank-you with the amount.",
+  "description": "Whenever Paystack reports a successful payment, sends the customer an SMS thanking them, with the amount received and the payment reference, in your business's name. Payments without a phone number on the customer are skipped.",
+  "category": "customers",
+  "tags": ["payments", "thank you", "receipt", "sms", "paystack", "customers"],
+  "keywords": ["paid", "pays", "payment", "received", "thank", "thanks", "receipt", "customer", "confirmation", "charge"],
+  "connectors": ["paystack@1", "termii@1"],
+  "params": [
+    {"name": "business_name", "type": "string", "title": "Business name", "description": "Signs the thank-you message.", "required": true, "example": "Tunde's Kitchen", "max_length": 60},
+    {"name": "closing_line", "type": "string", "title": "Closing line", "description": "A short line at the end of the message.", "required": false, "default": "We appreciate your business.", "example": "See you again soon!", "max_length": 120},
+    {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack connection whose webhooks start this workflow.", "required": false, "default": "main", "example": "main"},
+    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_paymentThankYouSms",
+    "version": 1,
+    "name": "Thank-you SMS when a customer pays",
+    "trigger": {"type": "connector_event", "config": {"connector": "paystack@1", "trigger": "charge_event", "events": ["charge.success"], "connection": "{{paystack_connection}}"}},
+    "inputs": {"schema": {"type": "object", "properties": {"data": {"type": "object", "properties": {
+      "reference": {"type": "string"}, "amount": {"type": "integer", "description": "Kobo"},
+      "customer": {"type": "object", "properties": {"first_name": {"type": "string"}, "phone": {"type": "string"}}}}}}}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your business name and closing line",
+       "config": {"output": {"business_name": "{{business_name}}", "closing_line": "{{closing_line}}"}}},
+      {"id": "thank_customer", "type": "connector", "name": "Text the customer a thank-you", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}", "needs": ["settings"],
+       "when": "=has(trigger.body.data.customer.phone) && trigger.body.data.customer.phone != null && trigger.body.data.customer.phone != ''",
+       "input": {"to": "=trigger.body.data.customer.phone",
+         "sms": "='Thank you' + (has(trigger.body.data.customer.first_name) && trigger.body.data.customer.first_name != null ? ', ' + trigger.body.data.customer.first_name : '') + '! ' + steps.settings.output.business_name + ' received NGN ' + string(double(trigger.body.data.amount) / 100.0) + ' (ref ' + trigger.body.data.reference + '). ' + steps.settings.output.closing_line"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

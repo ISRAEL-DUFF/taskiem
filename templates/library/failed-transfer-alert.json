@@ -1,0 +1,41 @@
+{
+  "id": "failed-transfer-alert",
+  "title": "Alert when a transfer fails or is reversed",
+  "summary": "When a Paystack transfer fails or is reversed, text the owner and email the accountant at once.",
+  "description": "Whenever Paystack reports that a transfer you sent failed or was reversed, texts the owner and emails the accountant the reference, amount and reason, at the same time, so someone can retry or contact the recipient. Phone and email are the tenant variables owner_phone and accountant_email.",
+  "category": "alerts",
+  "tags": ["alerts", "payments", "transfers", "failures", "paystack", "sms", "email"],
+  "keywords": ["failed", "fails", "failure", "reversed", "reversal", "transfer", "payout", "alert", "notify", "bounce"],
+  "connectors": ["paystack@1", "termii@1", "gmail@1"],
+  "variables": [
+    {"name": "owner_phone", "why": "The owner's phone number in international format without +."},
+    {"name": "accountant_email", "why": "The accountant's email address."}
+  ],
+  "params": [
+    {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack connection whose webhooks start this workflow.", "required": false, "default": "main", "example": "main"},
+    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "gmail_connection", "type": "connection", "connector": "gmail", "title": "Gmail connection", "description": "The mailbox the email is sent from.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_failedTransferAlert",
+    "version": 1,
+    "name": "Alert when a transfer fails or is reversed",
+    "trigger": {"type": "connector_event", "config": {"connector": "paystack@1", "trigger": "transfer_event", "events": ["transfer.failed", "transfer.reversed"], "connection": "{{paystack_connection}}"}},
+    "inputs": {"schema": {"type": "object", "properties": {"event": {"type": "string"}, "data": {"type": "object", "properties": {
+      "reference": {"type": "string"}, "amount": {"type": "integer"}, "reason": {"type": "string"}}}}}},
+    "steps": [
+      {"id": "message", "type": "transform", "name": "Write the alert",
+       "config": {"output": {"text": "='Paystack transfer ' + trigger.body.data.reference + ' ' + (trigger.event == 'transfer.reversed' ? 'was REVERSED' : 'FAILED') + ': NGN ' + string(double(trigger.body.data.amount) / 100.0) + (has(trigger.body.data.reason) && trigger.body.data.reason != '' ? ' (' + trigger.body.data.reason + ')' : '')"}}},
+      {"id": "notify", "type": "parallel", "name": "Tell the owner and the accountant", "needs": ["message"], "config": {"branches": [
+        {"name": "owner_sms", "steps": [
+          {"id": "text_owner", "type": "connector", "name": "Text the owner", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}",
+           "input": {"to": "=env.owner_phone", "sms": "=steps.message.output.text"}}]},
+        {"name": "accountant_email", "steps": [
+          {"id": "email_accountant", "type": "connector", "name": "Email the accountant", "connector": "gmail@1", "action": "send_message", "connection": "{{gmail_connection}}",
+           "input": {"to": ["=env.accountant_email"], "subject": "Transfer failed or reversed", "text": "=steps.message.output.text"}}]}
+      ]}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

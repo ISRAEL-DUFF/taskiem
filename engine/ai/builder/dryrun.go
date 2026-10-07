@@ -3,6 +3,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -63,6 +64,16 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 		}
 	}
 	c.Trigger = trig
+	// Tenant variables the definition reads get a placeholder value: the
+	// dry run checks the workflow's shape, not the tenant's settings.
+	if raw, err := json.Marshal(def.Steps); err == nil {
+		for _, m := range envRef.FindAllStringSubmatch(string(raw), -1) {
+			if c.Env == nil {
+				c.Env = map[string]any{}
+			}
+			c.Env[m[1]] = "sample-" + m[1]
+		}
+	}
 	var walk func(steps []*wd.Step)
 	walk = func(steps []*wd.Step) {
 		for _, st := range steps {
@@ -94,6 +105,8 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 	walk(def.Steps)
 	return c
 }
+
+var envRef = regexp.MustCompile(`\benv\.([A-Za-z_][A-Za-z0-9_]*)`)
 
 func rawAny(raw json.RawMessage) any {
 	var v any
@@ -200,6 +213,18 @@ func sample(s any, types map[string]any, m *connector.Manifest, depth int) any {
 		s := "sample"
 		if n, ok := sm["minLength"].(float64); ok && int(n) > len(s) {
 			s += strings.Repeat("x", int(n)-len(s))
+		}
+		// A pattern the plain sample misses: try the shapes patterns most
+		// often ask for (digits of common lengths: phone numbers, BVNs,
+		// account numbers).
+		if p, ok := sm["pattern"].(string); ok {
+			if re, err := regexp.Compile(p); err == nil && !re.MatchString(s) {
+				for _, c := range []string{"00000000000", "0000000000", "2348000000000", "000000", "0000", "sample_1", "Sample1"} {
+					if re.MatchString(c) {
+						return c
+					}
+				}
+			}
 		}
 		return s
 	case "null":

@@ -1,0 +1,35 @@
+{
+  "id": "weekly-balance-email",
+  "title": "Weekly balances email to the owner",
+  "summary": "Every week, check your Paystack and Moniepoint balances and email the owner both.",
+  "description": "Once a week at the day and time you choose, checks your Paystack and Moniepoint (Monnify) balances at the same time and emails the owner a short summary of both, so cash on hand is never a surprise. The email address is the tenant variable owner_email.",
+  "category": "reporting",
+  "tags": ["reporting", "balance", "cash flow", "email", "weekly", "paystack", "moniepoint"],
+  "keywords": ["balance", "balances", "cash", "cashflow", "flow", "weekly", "email", "summary", "report", "monday", "accounts", "money"],
+  "connectors": ["paystack@1", "moniepoint@1", "gmail@1"],
+  "variables": [{"name": "owner_email", "why": "The owner's email address."}],
+  "params": [
+    {"name": "business_name", "type": "string", "title": "Business name", "description": "Named in the email's subject.", "required": true, "example": "Kemi's Bakery", "max_length": 60},
+    {"name": "day", "type": "weekday", "title": "Day", "description": "The day of the week the email goes out.", "required": true, "default": "monday", "example": "monday"},
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When the email goes out, Lagos time.", "required": false, "default": "08:00", "example": "08:00"},
+    {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The name of your Paystack connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "moniepoint_connection", "type": "connection", "connector": "moniepoint", "title": "Moniepoint connection", "description": "The name of your Moniepoint (Monnify) connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "gmail_connection", "type": "connection", "connector": "gmail", "title": "Gmail connection", "description": "The mailbox the email is sent from.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_weeklyBalanceEmail",
+    "version": 1,
+    "name": "Weekly balances email",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * {{day:cron}}", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your business name", "config": {"output": {"business_name": "{{business_name}}"}}},
+      {"id": "paystack_balance", "type": "connector", "name": "Check the Paystack balance", "connector": "paystack@1", "action": "check_balance", "connection": "{{paystack_connection}}", "input": {}},
+      {"id": "moniepoint_balance", "type": "connector", "name": "Check the Moniepoint balance", "connector": "moniepoint@1", "action": "get_balance", "connection": "{{moniepoint_connection}}", "input": {}},
+      {"id": "email_owner", "type": "connector", "name": "Email the owner both balances", "connector": "gmail@1", "action": "send_message", "connection": "{{gmail_connection}}", "needs": ["settings", "paystack_balance", "moniepoint_balance"],
+       "input": {"to": ["=env.owner_email"], "subject": "=steps.settings.output.business_name + ': balances this week'",
+         "text": "='Paystack (NGN): ' + string(has(steps.paystack_balance.output.balances) && steps.paystack_balance.output.balances.exists(b, b.currency == 'NGN') ? double(steps.paystack_balance.output.balances.filter(b, b.currency == 'NGN')[0].balance) / 100.0 : 0.0) + '\\nMoniepoint available (NGN): ' + string(has(steps.moniepoint_balance.output.available_balance) ? double(steps.moniepoint_balance.output.available_balance) / 100.0 : 0.0)"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

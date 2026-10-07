@@ -1,0 +1,45 @@
+{
+  "id": "debtor-reminder-whatsapp",
+  "title": "Weekly WhatsApp reminders to customers who owe you",
+  "summary": "Every week, send each customer on your debtors sheet an approved WhatsApp reminder.",
+  "description": "Once a week, reads your debtors list from a Google Sheet (columns: name, whatsapp, amount_owed) and sends each customer who still owes money your approved WhatsApp reminder template, filled with their name, the amount and your business name. WhatsApp only allows approved templates for messages a customer did not start, so create the template in WhatsApp Manager first. At most five messages go out at a time.",
+  "category": "collections",
+  "tags": ["collections", "debtors", "reminders", "whatsapp", "schedule", "google sheets"],
+  "keywords": ["owe", "owing", "debt", "debtor", "remind", "reminder", "customer", "outstanding", "unpaid", "weekly", "whatsapp"],
+  "connectors": ["googlesheets@1", "whatsapp@1"],
+  "params": [
+    {"name": "business_name", "type": "string", "title": "Business name", "description": "Filled into the template's third variable.", "required": true, "example": "Bisi's Fabrics", "max_length": 60},
+    {"name": "spreadsheet_id", "type": "string", "title": "Debtors spreadsheet", "description": "The spreadsheet's id, from its link.", "required": true, "example": "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
+    {"name": "sheet_range", "type": "string", "title": "Sheet and columns", "description": "Where the list is, with a header row of name, whatsapp and amount_owed.", "required": false, "default": "Debtors!A:C", "example": "Debtors!A:C"},
+    {"name": "template_name", "type": "string", "title": "WhatsApp template", "description": "The name of your approved reminder template, with body variables for name, amount and business.", "required": true, "default": "payment_reminder", "example": "payment_reminder", "pattern": "^[a-z0-9_]{1,512}$"},
+    {"name": "language", "type": "string", "title": "Template language", "description": "The template's language code.", "required": false, "default": "en", "example": "en", "pattern": "^[a-z]{2}(_[A-Z]{2})?$"},
+    {"name": "day", "type": "weekday", "title": "Day", "description": "The day of the week the reminders go out.", "required": true, "default": "friday", "example": "friday"},
+    {"name": "send_time", "type": "time", "title": "Time", "description": "The time the reminders go out, Lagos time.", "required": true, "default": "10:00", "example": "10:00"},
+    {"name": "whatsapp_connection", "type": "connection", "connector": "whatsapp", "title": "WhatsApp connection", "description": "The name of your WhatsApp Business connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_debtorReminderWhatsApp",
+    "version": 1,
+    "name": "Weekly WhatsApp reminders to customers who owe",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * {{day:cron}}", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your business name and template",
+       "config": {"output": {"business_name": "{{business_name}}", "template": "{{template_name}}", "language": "{{language}}"}}},
+      {"id": "read_debtors", "type": "connector", "name": "Read the debtors sheet", "connector": "googlesheets@1", "action": "get_values", "connection": "{{sheets_connection}}",
+       "input": {"spreadsheet_id": "{{spreadsheet_id}}", "range": "{{sheet_range}}", "value_render_option": "UNFORMATTED_VALUE", "header_row": true}},
+      {"id": "remind_each", "type": "foreach", "name": "For each customer on the sheet", "needs": ["settings", "read_debtors"],
+       "config": {"items": "=has(steps.read_debtors.output.objects) ? steps.read_debtors.output.objects : []", "max_concurrency": 5, "max_items": 1000, "steps": [
+         {"id": "send_reminder", "type": "connector", "name": "Send the customer the WhatsApp reminder", "connector": "whatsapp@1", "action": "send_template", "connection": "{{whatsapp_connection}}",
+          "when": "=has(item.whatsapp) && item.whatsapp != null && has(item.amount_owed) && item.amount_owed != null && double(item.amount_owed) > 0.0",
+          "input": {"to": "=string(item.whatsapp)", "name": "=steps.settings.output.template", "language": "=steps.settings.output.language",
+            "components": [{"type": "body", "parameters": [
+              {"type": "text", "text": "=has(item.name) && item.name != null ? string(item.name) : 'Customer'"},
+              {"type": "text", "text": "=string(item.amount_owed)"},
+              {"type": "text", "text": "=steps.settings.output.business_name"}]}]}}
+       ]}}
+    ],
+    "settings": {"timeout": "2h"}
+  }
+}

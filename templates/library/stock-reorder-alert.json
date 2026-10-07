@@ -1,0 +1,35 @@
+{
+  "id": "stock-reorder-alert",
+  "title": "Low stock alert from your inventory sheet",
+  "summary": "Every morning, find items at or below their reorder level in your inventory sheet and text the owner the list.",
+  "description": "Every day at the time you choose, reads your inventory sheet (columns: item, quantity, reorder_level), picks the items at or below their reorder level, and, if there are any, texts the owner the list so stock can be reordered in time. The owner's phone number is the tenant variable owner_phone.",
+  "category": "operations",
+  "tags": ["inventory", "stock", "alerts", "reorder", "google sheets", "sms", "daily"],
+  "keywords": ["stock", "inventory", "reorder", "restock", "running", "low", "items", "goods", "shop", "supplies", "out"],
+  "connectors": ["googlesheets@1", "termii@1"],
+  "variables": [{"name": "owner_phone", "why": "The owner's phone number in international format without +."}],
+  "params": [
+    {"name": "spreadsheet_id", "type": "string", "title": "Inventory spreadsheet", "description": "The spreadsheet's id, from its link.", "required": true, "example": "1InVeNtOrYsHeEtId0123456789abcdefgh", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
+    {"name": "sheet_range", "type": "string", "title": "Sheet and columns", "description": "Header row: item, quantity, reorder_level.", "required": false, "default": "Inventory!A:C", "example": "Inventory!A:C"},
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When the check runs, Lagos time.", "required": false, "default": "07:30", "example": "07:30"},
+    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_stockReorderAlert",
+    "version": 1,
+    "name": "Low stock alert",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * *", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "read_stock", "type": "connector", "name": "Read the inventory sheet", "connector": "googlesheets@1", "action": "get_values", "connection": "{{sheets_connection}}",
+       "input": {"spreadsheet_id": "{{spreadsheet_id}}", "range": "{{sheet_range}}", "value_render_option": "UNFORMATTED_VALUE", "header_row": true}},
+      {"id": "low", "type": "transform", "name": "Pick the items at or below their reorder level", "needs": ["read_stock"],
+       "config": {"output": {"items": "=(has(steps.read_stock.output.objects) ? steps.read_stock.output.objects : []).filter(r, has(r.item) && r.item != null && has(r.quantity) && r.quantity != null && has(r.reorder_level) && r.reorder_level != null && double(r.quantity) <= double(r.reorder_level)).map(r, string(r.item))"}}},
+      {"id": "text_owner", "type": "connector", "name": "Text the owner what to reorder", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}", "needs": ["low"],
+       "when": "=size(steps.low.output.items) > 0",
+       "input": {"to": "=env.owner_phone", "sms": "='Low stock, reorder soon: ' + steps.low.output.items.join(', ')"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

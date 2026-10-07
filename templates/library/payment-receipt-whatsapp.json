@@ -1,0 +1,37 @@
+{
+  "id": "payment-receipt-whatsapp",
+  "title": "WhatsApp receipt when a customer pays",
+  "summary": "When Paystack confirms a payment, send the customer your approved WhatsApp receipt template.",
+  "description": "Whenever Paystack reports a successful payment from a customer with a phone number, sends them your approved WhatsApp receipt template with their name, the amount and the payment reference. Create and get the template approved in WhatsApp Manager first.",
+  "category": "customers",
+  "tags": ["payments", "receipt", "whatsapp", "paystack", "customers", "thank you"],
+  "keywords": ["paid", "pays", "payment", "received", "receipt", "whatsapp", "customer", "confirmation", "charge"],
+  "connectors": ["paystack@1", "whatsapp@1"],
+  "params": [
+    {"name": "template_name", "type": "string", "title": "WhatsApp template", "description": "Your approved receipt template, with body variables for name, amount and reference.", "required": true, "default": "payment_receipt", "example": "payment_receipt", "pattern": "^[a-z0-9_]{1,512}$"},
+    {"name": "language", "type": "string", "title": "Template language", "description": "The template's language code.", "required": false, "default": "en", "example": "en", "pattern": "^[a-z]{2}(_[A-Z]{2})?$"},
+    {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack connection whose webhooks start this workflow.", "required": false, "default": "main", "example": "main"},
+    {"name": "whatsapp_connection", "type": "connection", "connector": "whatsapp", "title": "WhatsApp connection", "description": "The name of your WhatsApp Business connection.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_paymentReceiptWhatsApp",
+    "version": 1,
+    "name": "WhatsApp receipt when a customer pays",
+    "trigger": {"type": "connector_event", "config": {"connector": "paystack@1", "trigger": "charge_event", "events": ["charge.success"], "connection": "{{paystack_connection}}"}},
+    "inputs": {"schema": {"type": "object", "properties": {"data": {"type": "object", "properties": {
+      "reference": {"type": "string"}, "amount": {"type": "integer", "description": "Kobo"},
+      "customer": {"type": "object", "properties": {"first_name": {"type": "string"}, "phone": {"type": "string"}}}}}}}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your receipt template", "config": {"output": {"template": "{{template_name}}", "language": "{{language}}"}}},
+      {"id": "send_receipt", "type": "connector", "name": "Send the customer a WhatsApp receipt", "connector": "whatsapp@1", "action": "send_template", "connection": "{{whatsapp_connection}}", "needs": ["settings"],
+       "when": "=has(trigger.body.data.customer.phone) && trigger.body.data.customer.phone != null && trigger.body.data.customer.phone != ''",
+       "input": {"to": "=trigger.body.data.customer.phone", "name": "=steps.settings.output.template", "language": "=steps.settings.output.language",
+         "components": [{"type": "body", "parameters": [
+           {"type": "text", "text": "=has(trigger.body.data.customer.first_name) && trigger.body.data.customer.first_name != null ? trigger.body.data.customer.first_name : 'Customer'"},
+           {"type": "text", "text": "=string(double(trigger.body.data.amount) / 100.0)"},
+           {"type": "text", "text": "=trigger.body.data.reference"}]}]}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

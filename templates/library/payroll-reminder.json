@@ -1,0 +1,43 @@
+{
+  "id": "payroll-reminder",
+  "title": "Salary day reminder",
+  "summary": "A few days before salaries are due each month, remind the owner by SMS and the accountant by email.",
+  "description": "On the day of the month you choose, texts the owner and emails the accountant that salaries are due soon, so the account can be funded and the payroll checked in time. Phone number and email address are the tenant variables owner_phone and accountant_email.",
+  "category": "payroll",
+  "tags": ["payroll", "salaries", "reminders", "monthly", "sms", "email"],
+  "keywords": ["salary", "salaries", "payroll", "staff", "wages", "due", "remind", "reminder", "monthly", "month", "pay", "day"],
+  "connectors": ["termii@1", "gmail@1"],
+  "variables": [
+    {"name": "owner_phone", "why": "The owner's phone number in international format without +."},
+    {"name": "accountant_email", "why": "The accountant's email address."}
+  ],
+  "params": [
+    {"name": "business_name", "type": "string", "title": "Business name", "description": "Named in the reminders.", "required": true, "example": "Adaeze Logistics", "max_length": 60},
+    {"name": "day_of_month", "type": "integer", "title": "Reminder day", "description": "The day of the month the reminder goes out (1 to 28).", "required": true, "default": 22, "example": 22, "minimum": 1, "maximum": 28},
+    {"name": "payday", "type": "string", "title": "Payday", "description": "When salaries are paid, as you would say it.", "required": true, "default": "the 25th", "example": "the 25th", "max_length": 40},
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When the reminder goes out, Lagos time.", "required": false, "default": "09:00", "example": "09:00"},
+    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "gmail_connection", "type": "connection", "connector": "gmail", "title": "Gmail connection", "description": "The mailbox the email is sent from.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payrollReminder",
+    "version": 1,
+    "name": "Salary day reminder",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} {{day_of_month}} * *", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Prepare the reminder",
+       "config": {"output": {"business_name": "{{business_name}}", "payday": "{{payday}}"}}},
+      {"id": "remind", "type": "parallel", "name": "Remind the owner and the accountant", "needs": ["settings"], "config": {"branches": [
+        {"name": "owner_by_sms", "steps": [
+          {"id": "text_owner", "type": "connector", "name": "Text the owner", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}",
+           "input": {"to": "=env.owner_phone", "sms": "=steps.settings.output.business_name + ': salaries are due on ' + steps.settings.output.payday + '. Please fund the salary account and confirm the payroll.'"}}]},
+        {"name": "accountant_by_email", "steps": [
+          {"id": "email_accountant", "type": "connector", "name": "Email the accountant", "connector": "gmail@1", "action": "send_message", "connection": "{{gmail_connection}}",
+           "input": {"to": ["=env.accountant_email"], "subject": "=steps.settings.output.business_name + ': payroll due ' + steps.settings.output.payday",
+             "text": "='Hello,\\n\\nSalaries at ' + steps.settings.output.business_name + ' are due on ' + steps.settings.output.payday + '. Please prepare the payroll and confirm the totals with the owner.\\n\\nThank you.'"}}]}
+      ]}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}
