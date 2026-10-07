@@ -38,6 +38,7 @@ const KIND_LABELS: Record<string, string> = {
   credential_expiry: "A credential or API key expires within",
   audit_anchor: "The audit log is anchored (email the signed anchor)",
   limit: "A plan limit is reached (run quota, backlog, ingest rate)",
+  repair_proposed: "A fix is proposed for a failed run (AI repair)",
 };
 const THRESHOLDS: Record<string, string> = { slow_run: "1h", stuck_approval: "24h", credential_expiry: "168h" };
 
@@ -243,7 +244,7 @@ function AddRule({ channels, onAdded }: { channels: Channel[]; onAdded: () => vo
             <input value={threshold} onChange={(e) => setThreshold(e.target.value)} placeholder={THRESHOLDS[kind]} />
           </Field>
         )}
-        {["run_failed", "slow_run", "stuck_approval", "needs_reconciliation"].includes(kind) && (
+        {["run_failed", "slow_run", "stuck_approval", "needs_reconciliation", "repair_proposed"].includes(kind) && (
           <Field label="Environment">
             <select value={env} onChange={(e) => setEnv(e.target.value)}>
               <option value="">any</option>

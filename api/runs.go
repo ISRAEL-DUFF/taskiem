@@ -279,7 +279,15 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal})
+	// What this run resumed (a fork from a failed run's step) and the runs
+	// that resumed it (docs/ai.md#repairing-failed-runs).
+	forks, err := s.Store.Forks(r.Context(), ref)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	forks.Children = nonNil(forks.Children)
+	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal, "forks": forks})
 }
 
 func (s *Server) cancelRun(w http.ResponseWriter, r *http.Request) {

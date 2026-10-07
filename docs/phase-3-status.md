@@ -157,7 +157,7 @@ Self-repair of failed runs, 2026-10-07 ([AI: repairing failed runs](ai.md#repair
 | Web | `web/src/pages/RepairPanel.tsx` | "Proposed fix" on a run's page: class, explanation, diff, shadow evidence and tests, Accept (publish and resume) / Retry / Dismiss, reconnect link, reconcile answer, waiting states |
 | Tests | `engine/ai/repair/repair_test.go`, `engine/shadow/shadow_test.go`, `engine/runtime/fork_test.go`, `api/repair_test.go` | Classification table; model never asked for certain actions; redaction; three attempts; budget; shadow pass, fail, mismatch and schema checks; fork replays without re-sending, parks changed writes, refuses uncertain runs; API end to end per class (data with publish and resume counting provider executions, four-eyes, transient retry, credential, unknown outcome with reconcile, schema drift from a drift trigger with dedup), a bad patch withheld, budget exhaustion, permissions, tenant isolation and the off switch |
 
-Left for later: alerts when a proposal appears (it shows on the run's page); an evaluation suite for repairs alongside B3's; resuming runs that compensated (a person starts a new run today); patches for workflows managed in a repository go through the repository (accept refuses them, as manual edits are refused).
+Left for later: an evaluation suite for repairs alongside B3's; resuming runs that compensated (a person starts a new run today); patches for workflows managed in a repository go through the repository (accept refuses them, as manual edits are refused).
 
 Migrations 00050–00052 were numbered for B2 while C2 (00055–00059) and A2 (00060–00064) land in parallel; see the note under C1's known gaps.
 
@@ -260,3 +260,4 @@ Gaps the milestones above left, closed on 7 October 2026 after A3, B2 and C1–C
 | Gap | What closed it | Where |
 | --- | --- | --- |
 | USSD channels had no Settings page (A3) | **Settings > USSD channels**: connect an aggregator with its environment and address allow-list, the callback URL and token shown once, rotate the token, change or turn off, disconnect; the service codes each environment serves. Browser test end to end against the edge callback | `web/src/pages/USSDChannels.tsx`, `web/e2e/ussd.spec.ts` |
+| No alert when a repair proposal appeared; no link between a failed run and the run that resumed it (B2) | Alert rule kind `repair_proposed` (migration 00085) on every channel kind, masked, once per proposal; `GET /v1/runs/{run}` returns `forks` (`Store.Forks`) and the run page shows "Resumed from" and "Resumed as" | `engine/alerts`, `api/runs.go`, `web/src/pages/Run.tsx`, `api/repair_alerts_test.go` |

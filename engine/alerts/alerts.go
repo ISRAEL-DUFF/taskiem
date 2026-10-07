@@ -49,6 +49,9 @@ const (
 	// LimitReached: the tenant reached a plan limit (a quota, the backlog,
 	// the ingest rate...); once per limit per UTC day.
 	LimitReached = "limit"
+	// RepairProposed: the repair pipeline proposed a fix for a failed run,
+	// or found something a person must do (docs/ai.md); once per proposal.
+	RepairProposed = "repair_proposed"
 )
 
 // Kinds lists rule kinds with their default thresholds (zero: none).
@@ -61,6 +64,7 @@ var Kinds = map[string]time.Duration{
 	CredentialExpiry:    7 * 24 * time.Hour,
 	AuditAnchor:         0,
 	LimitReached:        0,
+	RepairProposed:      0,
 }
 
 // limitWhat says what reaching each limit did, for limit alerts.
@@ -464,10 +468,57 @@ func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([
 				Link: a.link("/settings"), Detail: map[string]any{"limit": limit, "day": day}})
 		}
 		err = rows.Err()
+	case RepairProposed:
+		out, err = a.findRepairs(ctx, tx, r, now)
 	default:
 		return nil, fmt.Errorf("unknown rule kind %q", r.kind)
 	}
 	return out, err
+}
+
+// repairClass says in words what kind of failure a proposal is about.
+var repairClass = map[string]string{ //nolint:gosec // repair classes and their descriptions, not credentials
+	"transient":       "a temporary failure: retrying from the failed step is proposed",
+	"credential":      "a credential problem: reconnect, then retry",
+	"data":            "bad or unexpected data: a change to the workflow is proposed",
+	"schema_drift":    "a provider changed its responses: a change to the workflow is proposed",
+	"logic":           "a mistake in the workflow: a change is proposed",
+	"unknown_outcome": "a call whose outcome is unknown: check with the provider",
+}
+
+// findRepairs finds proposals that became ready for a person since the
+// rule last looked. The message is masked: the workflow, environment,
+// class and a link only, never the explanation, diff or evidence (which
+// may quote run data); people read those on the run's page.
+func (a *Alerter) findRepairs(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([]Alert, error) {
+	where, args := filters(r.cfg, "p", []any{r.since, now})
+	rows, err := tx.Query(ctx, `SELECT p.id, p.run_id, w.name, p.environment, COALESCE(p.class, ''), p.status FROM repair_proposals p
+		JOIN workflows w ON w.id = p.workflow_id
+		WHERE p.status IN ('proposed', 'action') AND p.finished_at > $1 AND p.finished_at <= $2`+where+` ORDER BY p.finished_at LIMIT 200`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Alert
+	for rows.Next() {
+		var id, run uuid.UUID
+		var wf, env, class, status string
+		if err := rows.Scan(&id, &run, &wf, &env, &class, &status); err != nil {
+			return nil, err
+		}
+		what := repairClass[class]
+		if what == "" {
+			what = "a failure"
+		}
+		title := fmt.Sprintf("Fix proposed for %s in %s", wf, env)
+		if status == "action" {
+			title = fmt.Sprintf("%s in %s needs a person to act", wf, env)
+		}
+		body := fmt.Sprintf("Run %s of %s failed with %s. Review it on the run's page: nothing changes until someone allowed to accepts it.", run, wf, what)
+		out = append(out, Alert{Kind: r.kind, Dedup: id.String(), Title: title, Body: body, Link: a.link("/runs/" + run.String()),
+			Detail: map[string]any{"run_id": run, "proposal_id": id, "workflow": wf, "environment": env, "class": class, "status": status}})
+	}
+	return out, rows.Err()
 }
 
 // --- delivery ---

@@ -11,6 +11,8 @@ interface RunDoc {
   run: RunSummary;
   events: RunEvent[];
   revealed: boolean;
+  /** The run this one resumed from a failed step, and the runs that resumed it. */
+  forks?: { parent_run_id: string | null; resumed_step: string | null; resumed_by: string[] };
 }
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
@@ -119,6 +121,29 @@ export function RunPage() {
           </dd>
           <dt>Ended</dt>
           <dd>{r.ended_at ? `${fmtTime(r.ended_at)} (${duration(r.started_at, r.ended_at)})` : "—"}</dd>
+          {data.forks?.parent_run_id && (
+            <>
+              <dt>Resumed from</dt>
+              <dd data-testid="resumed-from">
+                <Link to={`/runs/${data.forks.parent_run_id}`}>
+                  <code>{data.forks.parent_run_id}</code>
+                </Link>
+                {data.forks.resumed_step && <span className="hint"> at step {data.forks.resumed_step}</span>}
+              </dd>
+            </>
+          )}
+          {(data.forks?.resumed_by.length ?? 0) > 0 && (
+            <>
+              <dt>Resumed as</dt>
+              <dd data-testid="resumed-as">
+                {data.forks?.resumed_by.map((c) => (
+                  <Link key={c} to={`/runs/${c}`} style={{ marginRight: 10 }}>
+                    <code>{c}</code>
+                  </Link>
+                ))}
+              </dd>
+            </>
+          )}
         </dl>
         {r.status === "needs_reconciliation" && (
           <div className="notice">

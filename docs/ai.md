@@ -118,6 +118,10 @@ A patch that never passes is **withheld**: kept for audit with its evidence, nev
 
 **Dismiss** (`run.resolve`) closes a proposal.
 
+**Alerts.** An alert rule of kind `repair_proposed` ([alerts](alerts.md#rules)) tells people when a proposal is ready (`proposed`) or needs them to act (`action`: reconnect, check an unknown outcome), on any channel: email, Slack, WhatsApp or a signed webhook. The message is masked: the workflow, environment, class, run id and a link to the run's page, never the explanation, diff, evidence or run data. Withheld and failed analyses raise no alert; the run's own `run_failed` alert already did.
+
+**Resumed from, resumed as.** `GET /v1/runs/{run}` carries `forks`: `parent_run_id` and `resumed_step` for a run that resumed another, and `resumed_by`, the runs that resumed this one. The run page shows both as links.
+
 | Route | Permission | What it does |
 | --- | --- | --- |
 | `GET /v1/runs/{run}/repairs` | `run.read` | A run's proposals |
@@ -198,6 +202,5 @@ go run ./tools/aieval -baseline-out evals/builder/baseline.json         # accept
 ## What is not built yet
 
 - The suites reviewed by people and the real-model gate result (AI1, AI2); a calibrated judge.
-- Notifying owners when a proposal appears (it shows on the run's page; alerts are a follow-up).
 - Cost budgets in currency (tokens only for now), and per-plan amounts (AI3).
 - An `ai` step type that calls a model at run time: it validates but fails with kind `unsupported`.
