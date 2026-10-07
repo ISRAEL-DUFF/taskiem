@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -135,7 +136,18 @@ func (x *Anchorer) Tick(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	n := 0
+	var bad error
 	for _, d := range list {
+		// Sign only a head the chain itself reproduces: a head row moved by
+		// hand would otherwise be signed into the record.
+		err := db.InTenantTx(ctx, x.Pool, []uuid.UUID{d.tenant}, func(tx pgx.Tx) error { return checkHead(ctx, tx, d.tenant, d.seq, d.hash) })
+		if err != nil {
+			if x.Logger != nil {
+				x.Logger.Error("audit chain head not anchored", "tenant", d.tenant, "seq", d.seq, "err", err)
+			}
+			bad = errors.Join(bad, fmt.Errorf("anchor tenant %s: %w", d.tenant, err))
+			continue
+		}
 		a := Anchor{TenantID: d.tenant.String(), Seq: d.seq, Hash: hex.EncodeToString(d.hash), At: time.Now().UTC().Format(time.RFC3339)}
 		x.Signer.Sign(&a)
 		// Outside first: an anchor recorded only in the database would prove
@@ -145,7 +157,7 @@ func (x *Anchorer) Tick(ctx context.Context) (int, error) {
 		}
 		sig, _ := base64.StdEncoding.DecodeString(a.Signature)
 		at, _ := time.Parse(time.RFC3339, a.At)
-		err := db.InTenantTx(ctx, x.Pool, []uuid.UUID{d.tenant}, func(tx pgx.Tx) error {
+		err = db.InTenantTx(ctx, x.Pool, []uuid.UUID{d.tenant}, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, `INSERT INTO audit_anchors (tenant_id, chain_seq, head_hash, anchored_at, key_id, signature) VALUES ($1, $2, $3, $4, $5, $6)
 				ON CONFLICT DO NOTHING`, d.tenant, d.seq, d.hash, at, a.KeyID, sig)
 			return err
@@ -155,7 +167,62 @@ func (x *Anchorer) Tick(ctx context.Context) (int, error) {
 		}
 		n++
 	}
-	return n, nil
+	return n, bad
+}
+
+// ErrHeadMismatch means a chain head does not match the entries below it.
+var ErrHeadMismatch = errors.New("audit: chain head does not match the log")
+
+// checkHead recomputes the chain from the last anchored entry (or the
+// start) up to the head, and requires it to end at the head's hash.
+func checkHead(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, seq int64, head []byte) error {
+	from, prev := int64(1), make([]byte, sha256.Size)
+	var anchored []byte
+	var last int64
+	err := tx.QueryRow(ctx, `SELECT chain_seq, head_hash FROM audit_anchors WHERE tenant_id = $1 AND chain_seq <= $2 ORDER BY chain_seq DESC LIMIT 1`, tenant, seq).Scan(&last, &anchored)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		return err
+	default:
+		from = last
+	}
+	rows, err := tx.Query(ctx, `SELECT chain_seq, prev_hash, hash,
+		hash = sha256(prev_hash || taskiem_audit_canonical(tenant_id, chain_seq, actor_type, actor_id, action, target, detail, at))
+		FROM audit_log WHERE tenant_id = $1 AND chain_seq >= $2 AND chain_seq <= $3 ORDER BY chain_seq`, tenant, from, seq)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	want := from
+	for rows.Next() {
+		var n int64
+		var p, h []byte
+		var ok bool
+		if err := rows.Scan(&n, &p, &h, &ok); err != nil {
+			return err
+		}
+		switch {
+		case n != want:
+			return fmt.Errorf("%w: entry %d is missing", ErrHeadMismatch, want)
+		case !ok:
+			return fmt.Errorf("%w: entry %d does not hash to its recorded hash", ErrHeadMismatch, n)
+		case n == from && anchored != nil && !bytes.Equal(h, anchored):
+			return fmt.Errorf("%w: entry %d differs from its anchor", ErrHeadMismatch, n)
+		case n > from || anchored == nil:
+			if !bytes.Equal(p, prev) {
+				return fmt.Errorf("%w: entry %d does not link to entry %d", ErrHeadMismatch, n, n-1)
+			}
+		}
+		prev, want = h, n+1
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if want != seq+1 || !bytes.Equal(prev, head) {
+		return fmt.Errorf("%w: the head (entry %d) is not the last entry's hash", ErrHeadMismatch, seq)
+	}
+	return nil
 }
 
 func (x *Anchorer) deliver(a Anchor) error {

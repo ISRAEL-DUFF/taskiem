@@ -252,10 +252,10 @@ func TestTriggerExpressions(t *testing.T) {
 		event, dedup, correlation string
 	}{
 		{`{"status":true,"response_code":"00","data":{"widget_info":{"user_ref":"5846498649586495"}},"verification":{"status":"VERIFIED"}}`,
-			map[string]any{"token": "tok_1"}, "VERIFIED", "tok_1", "5846498649586495"},
+			map[string]any{"token": "tok_1"}, "VERIFIED", "", "5846498649586495"}, // no reference: the engine hashes the signed body
 		{`{"status":true,"response_code":"00","data":{"firstName":"A"},"verification":{"status":"NOT-VERIFIED","reference":"9a7c"}}`,
-			map[string]any{}, "NOT-VERIFIED", "9a7c", "9a7c"},
-		{`{"status":true,"response_code":"00","confidence":100}`, map[string]any{"token": "tok_2"}, "UNSPECIFIED", "tok_2", ""},
+			map[string]any{"token": "replayed"}, "NOT-VERIFIED", "9a7c:NOT-VERIFIED", "9a7c"}, // the unsigned header plays no part
+		{`{"status":true,"response_code":"00","confidence":100}`, map[string]any{"token": "tok_2"}, "UNSPECIFIED", "", ""},
 	} {
 		body, err := expr.DecodeJSON([]byte(c.body))
 		if err != nil {

@@ -75,7 +75,7 @@ func TestTriggerExpressions(t *testing.T) {
 		{"mono@1", "event", `{"event":"mono.events.account_connected","event_id":"jU4i","data":{"id":"6979","customer":"6961"}}`, "mono.events.account_connected", "jU4i", "6979"},
 		{"mono@1", "event", `{"event":"direct_debit.payment_successful","event_id":"Psm1","data":{"object":{"id":"txd_1","reference":"ref123"}}}`, "direct_debit.payment_successful", "Psm1", "ref123"},
 		{"mono@1", "event", `{"event":"events.mandates.debit.successful","event_id":"d1","data":{"mandate":"mmc_1","reference_number":"dref"}}`, "events.mandates.debit.successful", "d1", "dref"},
-		{"prembly@1", "verification", `{"status":true,"response_code":"00","data":{"firstName":"A"},"verification":{"status":"NOT-VERIFIED","reference":"9a7c"}}`, "NOT-VERIFIED", "9a7c", "9a7c"},
+		{"prembly@1", "verification", `{"status":true,"response_code":"00","data":{"firstName":"A"},"verification":{"status":"NOT-VERIFIED","reference":"9a7c"}}`, "NOT-VERIFIED", "9a7c:NOT-VERIFIED", "9a7c"},
 		{"youverify@1", "event", `{"event":"identity.verification.completed","apiVersion":"v2","data":{"id":"646b","status":"found","createdAt":"2024-03-27T08:30:03.367Z"}}`, "identity.verification.completed", "identity.verification.completed:646b:found::2024-03-27T08:30:03.367Z", "646b"},
 	} {
 		conn, ok := reg.Get(c.ref)

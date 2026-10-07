@@ -81,7 +81,7 @@ Each connector is built from the provider's public documentation and tested agai
 
 | # | Decision | Who | Today |
 | --- | --- | --- | --- |
-| E1 | [ ] MySQL: should `sslmode=require` (the default) verify the server certificate? Without verification, MySQL 8's default login can send the password in clear to whoever answers if the network is intercepted | Security / leadership | `require` encrypts but does not verify unless `ssl_ca` is set (as PostgreSQL's does); the guide recommends `verify-full` |
+| E1 | [ ] MySQL: should `sslmode=require` (the default) verify the server certificate? Without verification, MySQL 8's default login can send the password in clear to whoever answers if the network is intercepted | Security / leadership | `require` encrypts but does not verify unless `ssl_ca` is set; the guide recommends `verify-full`. (PostgreSQL now defaults to `verify-full`: [postgres.md](integrations/postgres.md)) |
 | E2 | [ ] MySQL: send `KILL QUERY` when an `execute` times out? `max_execution_time` only covers SELECT, so a slow write can keep running after the step parks | Engineering lead | Not sent; the step parks as an unknown outcome |
 | E3 | [ ] SFTP: on servers without OpenSSH's atomic rename, refuse to overwrite instead of delete-then-rename? | Engineering lead | Overwrites, and reports `atomic: false` |
 | E4 | [ ] A decision-log entry recording the clean-room MySQL protocol client (written from Oracle's docs because the common driver is MPL-2.0) | Founder | Noted in the connector's guide and package docs |

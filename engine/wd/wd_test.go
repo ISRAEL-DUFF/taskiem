@@ -142,6 +142,12 @@ func TestInvalid(t *testing.T) {
 		"bad duration": {
 			`{"id":"a","type":"wait","config":{"duration":"5 minutes"}}`,
 			`schema:`},
+		"code memory above the ceiling": {
+			`{"id":"a","type":"code","config":{"language":"javascript","source":"export default () => 1","limits":{"memory_mb":4096}}}`,
+			`memory_mb 4096 is above the maximum of 256`},
+		"code cpu above the ceiling": {
+			`{"id":"a","type":"code","config":{"language":"javascript","source":"export default () => 1","limits":{"cpu":"10m"}}}`,
+			`cpu 10m is above the maximum of 1m0s`},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

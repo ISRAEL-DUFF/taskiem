@@ -464,8 +464,10 @@ triggers:
     verify: { scheme: hmac_sha256, header: x-prembly-signature, encoding: base64, secret_field: public_key }
     events: [VERIFIED, NOT-VERIFIED, PENDING, UNSPECIFIED]
     event_type: '=body.?verification.?status.orValue("UNSPECIFIED")'
-    # token is Prembly's unique id for the delivery.
-    dedup: '=headers.?token.orValue(body.?verification.?reference.orValue(""))'
+    # From the signed body only (a header is not signed, so a replay could
+    # change it): the verification's reference and status. Without a
+    # reference, the engine falls back to a hash of the body.
+    dedup: '=body.?verification.?reference.orValue("") == "" ? "" : string(body.verification.reference) + ":" + string(body.?verification.?status.orValue(""))'
     # SDK sessions: the user_ref you gave the widget. API checks: the
     # reference the lookup returned.
     correlation: '=body.?data.?widget_info.?user_ref.orValue(body.?verification.?reference.orValue(""))'

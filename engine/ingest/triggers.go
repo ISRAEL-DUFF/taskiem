@@ -101,6 +101,10 @@ func parseSchedule(c map[string]any) (scheduleConfig, error) {
 	if s.sched, err = cron.ParseStandard(s.cron); err != nil {
 		return s, fmt.Errorf("cron %q: %w", s.cron, err)
 	}
+	// "0 0 30 2 *" parses but never comes round: Next is the zero time.
+	if s.Next(time.Now()).IsZero() {
+		return s, fmt.Errorf("cron %q never fires", s.cron)
+	}
 	return s, nil
 }
 

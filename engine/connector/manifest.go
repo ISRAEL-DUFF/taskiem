@@ -6,6 +6,7 @@ package connector
 import (
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/url"
 	"sort"
 	"strings"
@@ -137,6 +138,19 @@ func (m *Manifest) check() []string {
 				}
 			} else if !schemaHasPath(a.Input, InputPIIPath(f.Field)) {
 				add("%s/pii: %q is not in the input schema", p, f.Field)
+			}
+		}
+	}
+	tnames := make([]string, 0, len(m.Triggers))
+	for n := range m.Triggers {
+		tnames = append(tnames, n)
+	}
+	sort.Strings(tnames)
+	for _, name := range tnames {
+		// An ack is served from the hooks origin: never as a page.
+		if a := m.Triggers[name].Ack; a != nil && a.ContentType != "" {
+			if mt, _, err := mime.ParseMediaType(a.ContentType); err != nil || (mt != "text/plain" && mt != "application/json") {
+				add("/triggers/%s/ack/content_type: must be text/plain or application/json, not %q", name, a.ContentType)
 			}
 		}
 	}

@@ -41,7 +41,7 @@ Every action is a read: Prembly bills each check, but none has an effect.
 
 ## Webhooks
 
-Prembly posts SDK (widget) results, and results of checks that were `PENDING`, to the webhook URL in its dashboard; the payload is the same as the API response. One trigger, `verification`, at `/hooks/{tenant}/connectors/prembly@1/verification?env=prod&connection=<name>`. Deliveries are verified as Prembly documents: `x-prembly-signature` is base64 HMAC-SHA256 of the body keyed with the public key. Repeats are dropped on the `token` header, Prembly's unique id for a delivery.
+Prembly posts SDK (widget) results, and results of checks that were `PENDING`, to the webhook URL in its dashboard; the payload is the same as the API response. One trigger, `verification`, at `/hooks/{tenant}/connectors/prembly@1/verification?env=prod&connection=<name>`. Deliveries are verified as Prembly documents: `x-prembly-signature` is base64 HMAC-SHA256 of the body keyed with the public key. Repeats are dropped on what the signature covers: the verification's `reference` and `status`, or, without a reference, a hash of the body. The `token` header is not used, because the signature does not cover it and a replayed delivery could carry a new one.
 
 | Event (`verification.status`) | Correlation |
 | --- | --- |
@@ -53,5 +53,5 @@ Prembly posts SDK (widget) results, and results of checks that were `PENDING`, t
 2. The wallet balance response (documented as `{}`); the connector returns it as given.
 3. Whether an `app-id` header is still needed (Prembly 2.0 documents only `x-api-key`).
 4. `nin_w_face` documents `number_nin` as an integer; the connector sends it as a JSON number.
-5. Whether `token` is present on every webhook, and whether the signature covers the raw body (the connector verifies the raw body).
+5. Whether the signature covers the raw body (the connector verifies the raw body), and whether a retried delivery repeats the body byte for byte.
 6. Whether the webhook carries the same `verification.reference` the API call returned.

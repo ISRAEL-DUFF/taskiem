@@ -581,9 +581,11 @@ func (a *Alerter) post(ctx context.Context, tenant uuid.UUID, dest string, body 
 	if a.Rewrite != nil {
 		dest = a.Rewrite(dest)
 	}
+	// The destination may itself be a secret (a Slack webhook URL): errors,
+	// which are stored and shown, name only its host.
 	u, err := url.Parse(dest)
-	if err != nil {
-		return fmt.Errorf("bad destination: %w", err)
+	if err != nil || u.Host == "" {
+		return errors.New("bad destination URL")
 	}
 	client := a.Client
 	if client == nil {
@@ -595,7 +597,7 @@ func (a *Alerter) post(ctx context.Context, tenant uuid.UUID, dest string, body 
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
 	if err != nil {
-		return err
+		return fmt.Errorf("posting to %s: bad request", u.Hostname())
 	}
 	for k, v := range hdr {
 		req.Header[k] = v
@@ -604,7 +606,11 @@ func (a *Alerter) post(ctx context.Context, tenant uuid.UUID, dest string, body 
 	req.Header.Set("User-Agent", "Taskiem-Alerts/1")
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		return fmt.Errorf("posting to %s: %w", u.Hostname(), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))

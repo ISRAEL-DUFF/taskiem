@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -89,5 +90,26 @@ func TestBadSQLIsFatalAndEgressIsEnforced(t *testing.T) {
 	req.Input = map[string]any{"sql": `SELECT 1`}
 	if _, err := New().Actions["query"].Execute(context.Background(), req); effects.Classify(err) != effects.KindFatal {
 		t.Errorf("loopback database must be refused by the default egress guard: %v", err)
+	}
+}
+
+func TestDefaultSSLModeVerifiesTheServer(t *testing.T) {
+	creds := map[string]string{"host": "db.example.test", "database": "app", "user": "taskiem", "password": "pw"}
+	cfg, err := config(creds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TLSConfig == nil || cfg.TLSConfig.InsecureSkipVerify || cfg.TLSConfig.ServerName != "db.example.test" || len(cfg.Fallbacks) != 0 {
+		t.Errorf("default TLS does not verify the server: %+v, %d fallbacks", cfg.TLSConfig, len(cfg.Fallbacks))
+	}
+	// An explicit mode is kept: require encrypts without verifying.
+	creds["sslmode"] = "require"
+	if cfg, err = config(creds); err != nil || cfg.TLSConfig == nil || !cfg.TLSConfig.InsecureSkipVerify {
+		t.Errorf("require: %v %+v", err, cfg)
+	}
+	// A bad setting never echoes the password.
+	creds["sslmode"], creds["password"] = "sometimes", "pw-not-to-be-seen"
+	if _, err := config(creds); err == nil || strings.Contains(err.Error(), "pw-not-to-be-seen") {
+		t.Errorf("bad sslmode: %v", err)
 	}
 }

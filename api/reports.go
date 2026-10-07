@@ -362,19 +362,50 @@ func chainReport(ctx context.Context, tx pgx.Tx, s *Server, tenant uuid.UUID, fr
 	if err != nil {
 		return nil, err
 	}
-	rep := &report{Columns: []string{"anchored_at", "seq", "hash", "key_id", "signature_valid"}}
+	// Each anchor must still match the entry it signed, as VerifyWithAnchors
+	// checks offline: a chain rewritten after an anchor verifies on its own.
+	seqs := make([]int64, len(anchors))
+	for i, a := range anchors {
+		seqs[i] = a.Seq
+	}
+	logged := map[int64]string{}
+	rows, err := tx.Query(ctx, `SELECT chain_seq, encode(hash, 'hex') FROM audit_log WHERE tenant_id = $1 AND chain_seq = ANY ($2)`, tenant, seqs)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var seq int64
+		var h string
+		if err := rows.Scan(&seq, &h); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		logged[seq] = h
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	mismatched := 0
+	for _, a := range anchors {
+		if logged[a.Seq] != a.Hash {
+			mismatched++
+		}
+	}
+	rep := &report{Columns: []string{"anchored_at", "seq", "hash", "key_id", "signature_valid", "matches_chain"}}
 	for _, a := range anchors {
 		at, _ := time.Parse(time.RFC3339, a.At)
 		if at.Before(from) || !at.Before(to) {
 			continue
 		}
-		row := map[string]any{"anchored_at": at, "seq": a.Seq, "hash": a.Hash, "key_id": a.KeyID}
+		row := map[string]any{"anchored_at": at, "seq": a.Seq, "hash": a.Hash, "key_id": a.KeyID, "matches_chain": logged[a.Seq] == a.Hash}
 		if s.AnchorKey != nil {
 			row["signature_valid"] = a.VerifySignature(s.AnchorKey)
 		}
 		rep.Rows = append(rep.Rows, row)
 	}
-	summary := map[string]any{"verified_at": time.Now().UTC(), "entries": entries, "intact": broken == nil, "anchors_in_period": len(rep.Rows), "anchors_total": len(anchors)}
+	summary := map[string]any{"verified_at": time.Now().UTC(), "entries": entries, "intact": broken == nil && mismatched == 0,
+		"anchors_in_period": len(rep.Rows), "anchors_total": len(anchors), "anchors_mismatched": mismatched}
 	if broken != nil {
 		summary["first_broken"] = *broken
 	}

@@ -1,11 +1,16 @@
 package connector
 
 import (
+	"errors"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/effects"
 )
 
 func TestShippedManifestsAreValid(t *testing.T) {
@@ -95,6 +100,40 @@ func TestInvalid(t *testing.T) {
 			}
 			t.Errorf("want a problem containing %q, got %v", c.want, probs)
 		})
+	}
+}
+
+func TestAckIsNeverAPage(t *testing.T) {
+	trigger := func(ct string) string {
+		return head + "  get: { title: Get, class: read, input: { type: object } }\ntriggers:\n  ev:\n    type: webhook\n" +
+			"    verify: { scheme: header_secret, header: X-Secret, secret_field: s }\n    ack: { body: ok, content_type: '" + ct + "' }\n"
+	}
+	for ct, ok := range map[string]bool{"text/plain": true, "application/json; charset=utf-8": true, "text/html": false, "image/svg+xml": false, "text/plain;;": false} {
+		_, probs := Parse([]byte(trigger(ct)))
+		if got := len(probs) == 0; got != ok {
+			t.Errorf("ack content_type %q: accepted=%v, want %v (%v)", ct, got, ok, probs)
+		}
+	}
+}
+
+func TestRedactURLError(t *testing.T) {
+	resp, err := (&http.Client{Transport: &http.Transport{}}).Get("http://127.0.0.1:1/v1/balance?api_key=sk_live_secret#frag")
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	err = ClassifyTransport(err)
+	if err == nil || strings.Contains(err.Error(), "sk_live_secret") || strings.Contains(err.Error(), "?") || !strings.Contains(err.Error(), "http://127.0.0.1:1/v1/balance") {
+		t.Fatalf("redacted: %v", err)
+	}
+	if !errors.Is(err, effects.ErrNotSent) {
+		t.Errorf("classification lost: %v", err)
+	}
+	var ue *url.Error
+	if !errors.As(err, &ue) {
+		t.Error("url.Error lost")
+	}
+	if got := RedactURL("https://user:pw@api.test/x?y=1"); got != "https://api.test/x" {
+		t.Errorf("RedactURL: %q", got)
 	}
 }
 

@@ -1,10 +1,13 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/totp"
 )
@@ -153,6 +156,21 @@ func TestPolicyLevelsStepUpAndDelegation(t *testing.T) {
 	chain := owner.must(200, "GET", "/v1/reports/chain", nil)["summary"].(map[string]any)
 	if chain["intact"] != true || chain["entries"].(float64) < 10 {
 		t.Errorf("chain: %v", chain)
+	}
+	// An anchor whose hash is not the chain's at that entry: the chain was
+	// rewritten after it, though it verifies on its own.
+	var tenant uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT id FROM tenants WHERE name = 'Acme'`).Scan(&tenant); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `INSERT INTO audit_anchors (tenant_id, chain_seq, head_hash, anchored_at, key_id, signature) VALUES ($1, 3, $2, now(), 'k1', '\x01')`,
+		tenant, make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+	rep = owner.must(200, "GET", "/v1/reports/chain", nil)
+	chain = rep["summary"].(map[string]any)
+	if chain["intact"] != false || chain["anchors_mismatched"] != float64(1) || rep["rows"].([]any)[0].(map[string]any)["matches_chain"] != false {
+		t.Errorf("rewritten chain: %v %v", chain, rep["rows"])
 	}
 	owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
 	if pii := owner.must(200, "GET", "/v1/reports/pii?format=json", nil)["rows"].([]any); len(pii) != 1 || pii[0].(map[string]any)["action"] != "pii.reveal" {

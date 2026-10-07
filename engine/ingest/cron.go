@@ -55,9 +55,20 @@ func (c *Cron) Run(ctx context.Context) error {
 	}
 }
 
-// Tick fires every schedule due now and returns how many fired.
+// claimBatch and claimPerTenant bound one Tick: no tenant takes more than
+// claimPerTenant of a batch, so one tenant's backlog cannot starve others.
+const (
+	claimBatch     = 100
+	claimPerTenant = 10
+)
+
+// Tick fires every schedule due now and returns how many fired. A schedule
+// that fails is logged and left to its lease; the rest of the batch fires.
 func (c *Cron) Tick(ctx context.Context) (int, error) {
-	rows, err := c.Store.Pool.Query(ctx, `SELECT trigger_id, tenant_id FROM taskiem_claim_due_schedules(100)`)
+	if c.Logger == nil {
+		c.Logger = slog.Default()
+	}
+	rows, err := c.Store.Pool.Query(ctx, `SELECT trigger_id, tenant_id FROM taskiem_claim_due_schedules($1, $2)`, claimBatch, claimPerTenant)
 	if err != nil {
 		return 0, err
 	}
@@ -79,7 +90,11 @@ func (c *Cron) Tick(ctx context.Context) (int, error) {
 	for _, d := range list {
 		fired, err := c.fire(ctx, d.tenant, d.id)
 		if err != nil {
-			return n, err
+			if ctx.Err() != nil {
+				return n, err
+			}
+			c.Logger.Error("schedule failed to fire", "tenant", d.tenant, "trigger", d.id, "err", err)
+			continue
 		}
 		if fired {
 			n++
@@ -105,8 +120,11 @@ func (c *Cron) fire(ctx context.Context, tenant, id uuid.UUID) (bool, error) {
 		return false, err
 	}
 	sched, err := parseSchedule(map[string]any{"cron": expr, "timezone": tz})
-	if err != nil {
-		return false, err
+	if err != nil || at.IsZero() {
+		// It can never fire (registered before such schedules were refused
+		// at publish): stop claiming it instead of refiring it forever.
+		c.Logger.Warn("schedule disabled: it never fires", "tenant", tenant, "trigger", id, "cron", expr, "err", err)
+		return false, c.disable(ctx, tenant, id)
 	}
 	fireAt := at.UTC().Format(time.RFC3339)
 	if _, _, err := c.Store.StartRun(ctx, runtime.StartRequest{
@@ -120,9 +138,22 @@ func (c *Cron) fire(ctx context.Context, tenant, id uuid.UUID) (bool, error) {
 	if at.After(from) {
 		from = at
 	}
+	next := sched.Next(from)
+	if next.IsZero() {
+		return true, c.disable(ctx, tenant, id)
+	}
 	err = db.InTenantTx(ctx, c.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE triggers SET next_fire_at = $3, lease_until = NULL WHERE id = $1 AND next_fire_at = $2`, id, at, sched.Next(from))
+		_, err := tx.Exec(ctx, `UPDATE triggers SET next_fire_at = $3, lease_until = NULL WHERE id = $1 AND next_fire_at = $2`, id, at, next)
 		return err
 	})
 	return true, err
+}
+
+// disable parks a schedule that has no next fire time: next_fire_at
+// 'infinity' is never due. A publish replaces it.
+func (c *Cron) disable(ctx context.Context, tenant, id uuid.UUID) error {
+	return db.InTenantTx(ctx, c.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE triggers SET next_fire_at = 'infinity', lease_until = NULL WHERE id = $1`, id)
+		return err
+	})
 }

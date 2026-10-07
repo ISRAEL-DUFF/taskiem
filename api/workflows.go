@@ -587,7 +587,7 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var out []triggerInfo
 	err = s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, next_fire_at
+		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, NULLIF(next_fire_at, 'infinity')
 			FROM triggers WHERE workflow_id = $1 ORDER BY environment`, wf)
 		if err != nil {
 			return err

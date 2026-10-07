@@ -174,15 +174,17 @@ func TestLoadRefusesBadConnectors(t *testing.T) {
 	example(t)
 	rt, ctx := shared, context.Background()
 	builtinID := strings.Replace(string(exampleManifest), "id: x_example_ledger", "id: example_ledger", 1)
+	unverified := strings.TrimRight(string(exampleManifest), "\n") + "\ntriggers:\n  paid:\n    type: webhook\n    verify: { scheme: none }\n"
 	for name, tc := range map[string]struct {
 		manifest, module []byte
 		want             string
 	}{
-		"built-in id":    {[]byte(builtinID), exampleWasm, "must start with"},
-		"not wasm":       {exampleManifest, []byte("hello"), "does not compile"},
-		"no export":      {exampleManifest, emptyModule, "must export taskiem_execute_v1"},
-		"bad manifest":   {[]byte("manifest: connector/v1\nid: x_a\n"), exampleWasm, "manifest"},
-		"foreign import": {exampleManifest, importsEnv, "does not provide"},
+		"built-in id":        {[]byte(builtinID), exampleWasm, "must start with"},
+		"unverified trigger": {[]byte(unverified), exampleWasm, `trigger "paid" must verify`},
+		"not wasm":           {exampleManifest, []byte("hello"), "does not compile"},
+		"no export":          {exampleManifest, emptyModule, "must export taskiem_execute_v1"},
+		"bad manifest":       {[]byte("manifest: connector/v1\nid: x_a\n"), exampleWasm, "manifest"},
+		"foreign import":     {exampleManifest, importsEnv, "does not provide"},
 	} {
 		if _, err := rt.Load(ctx, tc.manifest, tc.module); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v", name, err)

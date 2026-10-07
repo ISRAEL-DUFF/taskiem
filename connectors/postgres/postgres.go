@@ -33,13 +33,14 @@ func New() *connector.Connector {
 	}}
 }
 
-func connect(ctx context.Context, req connector.Request) (*pgx.Conn, error) {
-	c := req.Credentials
+// DefaultSSLMode applies when a connection names none: encrypted, with the
+// server's certificate and host name checked against the system roots.
+const DefaultSSLMode = "verify-full"
+
+// config builds the connection's settings from its credentials.
+func config(c map[string]string) (*pgx.ConnConfig, error) {
 	if c["host"] == "" || c["database"] == "" || c["user"] == "" {
 		return nil, fmt.Errorf("connection needs host, database and user: %w", effects.ErrFatal)
-	}
-	if req.Dial == nil {
-		return nil, fmt.Errorf("no egress dialer: %w", effects.ErrFatal)
 	}
 	port := c["port"]
 	if port == "" {
@@ -47,13 +48,25 @@ func connect(ctx context.Context, req connector.Request) (*pgx.Conn, error) {
 	}
 	ssl := c["sslmode"]
 	if ssl == "" {
-		ssl = "require"
+		ssl = DefaultSSLMode
 	}
 	u := url.URL{Scheme: "postgres", User: url.UserPassword(c["user"], c["password"]), Host: net.JoinHostPort(c["host"], port), Path: "/" + c["database"]}
 	u.RawQuery = url.Values{"sslmode": {ssl}, "connect_timeout": {"10"}}.Encode()
 	cfg, err := pgx.ParseConfig(u.String())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", err, effects.ErrFatal)
+		// The parse error repeats the URL, password included.
+		return nil, fmt.Errorf("invalid connection settings (sslmode %q): %w", ssl, effects.ErrFatal)
+	}
+	return cfg, nil
+}
+
+func connect(ctx context.Context, req connector.Request) (*pgx.Conn, error) {
+	if req.Dial == nil {
+		return nil, fmt.Errorf("no egress dialer: %w", effects.ErrFatal)
+	}
+	cfg, err := config(req.Credentials)
+	if err != nil {
+		return nil, err
 	}
 	// Hand the host name to the egress guard unresolved, so it resolves,
 	// vets, and pins the address itself.

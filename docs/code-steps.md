@@ -31,9 +31,12 @@ A `code` step runs a short function on the step's input and returns its output. 
 
 | | Default | Per step |
 | --- | --- | --- |
-| Time | 10 s wall clock | `limits.cpu` |
-| Memory | 64 MB (JavaScript); 256 MB for Python, a cap shared by every Python instance in the worker | `limits.memory_mb` (JavaScript only) |
+| Time | 10 s wall clock | `limits.cpu`, at most 60 s |
+| Memory | 64 MB (JavaScript); 256 MB for Python, a cap shared by every Python instance in the worker | `limits.memory_mb` (JavaScript only), at most 256 |
 | Output | 256 KB of JSON | — |
+| `host.fetch` calls | 50 per step | — |
+
+A definition that asks for more than a maximum is refused when it is validated.
 
 A step that throws, times out, runs out of memory or returns too much fails without retrying: the same code on the same input would fail the same way. Errors give the exception and the line (`KeyError: 'rate' (line 4)`).
 

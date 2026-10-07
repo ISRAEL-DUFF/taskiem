@@ -12,7 +12,7 @@ auth:
     - { key: database, label: Database }
     - { key: user, label: User }
     - { key: password, label: Password, secret: true, required: false }
-    - { key: sslmode, label: "SSL mode (require, verify-full, disable)", required: false }
+    - { key: sslmode, label: "SSL mode (verify-full by default; verify-ca, require, disable)", required: false }
   test: { action: query }
 egress_hosts: ["${connection.host}"]
 actions:

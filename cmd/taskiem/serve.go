@@ -27,6 +27,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -297,7 +298,7 @@ func serve(ctx context.Context, args []string) error {
 		git := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log}
 		mux.Handle("/git-hooks/", http.StripPrefix("/git-hooks", git.GitHooks()))
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-		tasks = append(tasks, httpTask("edge", cfg.EdgeListen, mux, log))
+		tasks = append(tasks, httpTask("edge", cfg.EdgeListen, httpsec.Headers(mux), log))
 	}
 	if is("scheduler") {
 		s := &runtime.Scheduler{Store: e.store, Logger: log}

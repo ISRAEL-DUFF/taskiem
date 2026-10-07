@@ -212,7 +212,7 @@ func TestSignalsBufferedAndLive(t *testing.T) {
 
 	// Live: the run waits first.
 	live := e.Start(t, wf, map[string]any{"ref": "R1"})
-	woke, err := e.Store.DeliverSignal(ctx, e.Tenant, "fakepay@1:transfer", "R1", map[string]any{"status": "success"})
+	woke, err := e.Store.DeliverSignal(ctx, e.Tenant, "prod", "fakepay@1:transfer", "R1", map[string]any{"status": "success"})
 	if err != nil || len(woke) != 1 {
 		t.Fatalf("deliver: %v %v", woke, err)
 	}
@@ -221,7 +221,7 @@ func TestSignalsBufferedAndLive(t *testing.T) {
 	}
 
 	// Buffered: the signal arrives before the run exists.
-	if woke, err := e.Store.DeliverSignal(ctx, e.Tenant, "fakepay@1:transfer", "R2", map[string]any{"status": "reversed"}); err != nil || len(woke) != 0 {
+	if woke, err := e.Store.DeliverSignal(ctx, e.Tenant, "prod", "fakepay@1:transfer", "R2", map[string]any{"status": "reversed"}); err != nil || len(woke) != 0 {
 		t.Fatalf("buffer: %v %v", woke, err)
 	}
 	early := e.Start(t, wf, map[string]any{"ref": "R2"})

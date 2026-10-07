@@ -123,6 +123,12 @@ func TestRetentionArchivesThenPurges(t *testing.T) {
 	if e.Status(t, long) != "completed" {
 		t.Error("run within retention was purged")
 	}
+	var purges int
+	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'run.purge' AND target = $2 AND actor_type = 'system'`,
+		e.Tenant, short.ID.String()).Scan(&purges)
+	if purges != 1 {
+		t.Errorf("%d run.purge audit entries, want 1", purges)
+	}
 	var left int
 	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM run_events WHERE run_id = $1`, short.ID).Scan(&left)
 	f, err := os.Open(filepath.Join(dir, e.Tenant.String(), short.ID.String()+".jsonl.gz"))

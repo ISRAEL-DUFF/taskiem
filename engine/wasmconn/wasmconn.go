@@ -128,6 +128,12 @@ func (r *Runtime) Load(ctx context.Context, manifest, module []byte) (*connector
 	if !strings.HasPrefix(m.ID, connector.TenantPrefix) {
 		return nil, fmt.Errorf("%w: a tenant connector's id must start with %q, not %q", ErrInvalid, connector.TenantPrefix, m.ID)
 	}
+	for name, t := range m.Triggers {
+		// Anyone could deliver to an unverified trigger of a tenant's own connector.
+		if t.Verify == nil || t.Verify.Scheme == "none" {
+			return nil, fmt.Errorf("%w: trigger %q must verify its deliveries with a signature or secret scheme", ErrInvalid, name)
+		}
+	}
 	if len(module) > r.lim.MaxModule {
 		return nil, fmt.Errorf("%w: module is %d bytes; the limit is %d", ErrInvalid, len(module), r.lim.MaxModule)
 	}

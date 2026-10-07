@@ -86,10 +86,14 @@ func (s *Scheduler) PurgeExpired(ctx context.Context, limit int) (int, error) {
 			if err := tx.QueryRow(ctx, `SELECT taskiem_purge_run($1)`, r.ID).Scan(&ok); err != nil {
 				return err
 			}
-			if ok {
-				purged++
+			if !ok {
+				return nil
 			}
-			return nil
+			purged++
+			// In the purge's transaction: no run leaves without a record.
+			_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'retention', 'run.purge', $2, jsonb_build_object('events', $3::int, 'archived', true))`,
+				r.TenantID, r.ID.String(), len(hist))
+			return err
 		})
 		if err != nil {
 			return purged, err

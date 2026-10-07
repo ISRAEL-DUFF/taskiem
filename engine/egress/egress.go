@@ -92,6 +92,9 @@ var blockedPrefixes = func() []netip.Prefix {
 		"203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "255.255.255.255/32",
 		"::/128", "::1/128", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001:db8::/32", "fc00::/7", "fe80::/10", "ff00::/8",
 		"fd00:ec2::254/128", // AWS IMDS over IPv6
+		// IPv6 forms that carry an IPv4 address a relay or stack may route
+		// to: 6to4, Teredo, IPv4-compatible; and deprecated site-local.
+		"2002::/16", "2001::/32", "::/96", "fec0::/10",
 	} {
 		out = append(out, netip.MustParsePrefix(s))
 	}

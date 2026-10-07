@@ -353,7 +353,7 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 					return nil, err
 				}
 			}
-			return s.registerWait(ctx, tx, run.ref, ev.StepID, p.Event, p.Correlation)
+			return s.registerWait(ctx, tx, run.ref, run.env, ev.StepID, p.Event, p.Correlation)
 		}
 	case history.ApprovalRequested:
 		p := ev.Payload.(history.ApprovalRequestedPayload)
@@ -531,29 +531,30 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	return s.promote(ctx, tx, r.ref.TenantID, r.workflowID)
 }
 
-// signalLock serialises waiting and delivery for one (tenant, event,
-// correlation), so a signal can never slip between the two.
-func signalLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, event, correlation string) error {
+// signalLock serialises waiting and delivery for one (tenant, environment,
+// event, correlation), so a signal can never slip between the two.
+func signalLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, event, correlation string) error {
 	h := fnv.New64a()
-	_, _ = h.Write([]byte(tenant.String() + "\x00" + event + "\x00" + correlation))
+	_, _ = h.Write([]byte(tenant.String() + "\x00" + env + "\x00" + event + "\x00" + correlation))
 	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(h.Sum64())) //nolint:gosec // bit-for-bit reinterpretation as a lock key
 	return err
 }
 
 // registerWait records that a step waits for a signal, or delivers a
-// buffered one immediately.
-func (s *Store) registerWait(ctx context.Context, tx pgx.Tx, ref RunRef, step, event, correlation string) (func() error, error) {
-	if err := signalLock(ctx, tx, ref.TenantID, event, correlation); err != nil {
+// buffered one immediately. Only signals delivered to the run's own
+// environment match.
+func (s *Store) registerWait(ctx context.Context, tx pgx.Tx, ref RunRef, env, step, event, correlation string) (func() error, error) {
+	if err := signalLock(ctx, tx, ref.TenantID, env, event, correlation); err != nil {
 		return nil, err
 	}
 	var id uuid.UUID
 	var payload []byte
 	err := tx.QueryRow(ctx, `DELETE FROM signals WHERE id = (
-		SELECT id FROM signals WHERE tenant_id = $1 AND event = $2 AND correlation = $3 AND expires_at > now()
-		 ORDER BY received_at LIMIT 1) RETURNING id, payload`, ref.TenantID, event, correlation).Scan(&id, &payload)
+		SELECT id FROM signals WHERE tenant_id = $1 AND environment = $2 AND event = $3 AND correlation = $4 AND expires_at > now()
+		 ORDER BY received_at LIMIT 1) RETURNING id, payload`, ref.TenantID, env, event, correlation).Scan(&id, &payload)
 	if errors.Is(err, pgx.ErrNoRows) {
-		_, err := tx.Exec(ctx, `INSERT INTO signal_waits (tenant_id, run_id, step_id, event, correlation) VALUES ($1, $2, $3, $4, $5)`,
-			ref.TenantID, ref.ID, step, event, correlation)
+		_, err := tx.Exec(ctx, `INSERT INTO signal_waits (tenant_id, run_id, step_id, environment, event, correlation) VALUES ($1, $2, $3, $4, $5, $6)`,
+			ref.TenantID, ref.ID, step, env, event, correlation)
 		return nil, err
 	}
 	if err != nil {
@@ -576,21 +577,25 @@ func signalPayload(event string, payload []byte) map[string]any {
 // SignalTTL is how long an unmatched signal stays buffered.
 const SignalTTL = 7 * 24 * time.Hour
 
-// DeliverSignal hands an external event to every run waiting for it, or
-// buffers it. It returns the runs it woke.
-func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, event, correlation string, payload any) ([]uuid.UUID, error) {
-	woke, _, err := s.deliverSignal(ctx, tenant, event, correlation, "", payload)
+// DeliverSignal hands an external event to every run in the environment
+// waiting for it, or buffers it there. It returns the runs it woke.
+func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation string, payload any) ([]uuid.UUID, error) {
+	woke, _, err := s.deliverSignal(ctx, tenant, env, event, correlation, "", payload)
 	return woke, err
 }
 
 // DeliverSignalOnce is DeliverSignal for provider deliveries that may
-// repeat: a dedupKey already received for this event is ignored, in the
-// same transaction that delivers it. It reports whether it was new.
-func (s *Store) DeliverSignalOnce(ctx context.Context, tenant uuid.UUID, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
-	return s.deliverSignal(ctx, tenant, event, correlation, dedupKey, payload)
+// repeat: a dedupKey already received for this event in this environment
+// is ignored, in the same transaction that delivers it. It reports whether
+// it was new.
+func (s *Store) DeliverSignalOnce(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+	return s.deliverSignal(ctx, tenant, env, event, correlation, dedupKey, payload)
 }
 
-func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+	if env == "" {
+		return nil, false, errors.New("signal: no environment")
+	}
 	fresh := true
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -602,7 +607,7 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, corr
 		if dedupKey != "" {
 			// The receipt marks the delivery as seen; no run is started (uuid.Nil).
 			tag, err := tx.Exec(ctx, `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-				tenant, "signal/"+event, dedupKey, uuid.Nil)
+				tenant, "signal/"+env+"/"+event, dedupKey, uuid.Nil)
 			if err != nil {
 				return err
 			}
@@ -611,11 +616,11 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, corr
 				return nil
 			}
 		}
-		if err := signalLock(ctx, tx, tenant, event, correlation); err != nil {
+		if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND event = $2 AND correlation = $3 RETURNING run_id, step_id`,
-			tenant, event, correlation)
+		rows, err := tx.Query(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND environment = $2 AND event = $3 AND correlation = $4 RETURNING run_id, step_id`,
+			tenant, env, event, correlation)
 		if err != nil {
 			return err
 		}
@@ -635,8 +640,8 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, corr
 			return err
 		}
 		if len(waits) == 0 {
-			_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, now() + $6::interval)`,
-				uuid.Must(uuid.NewV7()), tenant, event, correlation, raw, SignalTTL.String())
+			_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
+				uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
 			return err
 		}
 		for _, w := range waits {

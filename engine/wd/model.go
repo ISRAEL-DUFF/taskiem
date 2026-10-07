@@ -124,6 +124,13 @@ type CodeLimits struct {
 	CPU      string `json:"cpu,omitempty"`
 }
 
+// The platform's ceilings on a code step's own limits: a definition may ask
+// for less, never more.
+const (
+	MaxCodeMemoryMB = 256
+	MaxCodeCPU      = 60 * time.Second
+)
+
 type BranchPath struct {
 	Name  string  `json:"name"`
 	When  string  `json:"when"`

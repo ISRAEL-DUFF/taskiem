@@ -29,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/expr"
+	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -61,11 +62,11 @@ type Handler struct {
 	Rate  rate.Limit
 	Burst int
 
-	once     sync.Once
-	router   http.Handler
-	limiters sync.Map
-	exprs    *expr.Engine // connector manifest expressions: body, headers, query
-	wdExprs  *expr.Engine // WD expressions: trigger
+	once    sync.Once
+	router  http.Handler
+	tenants tenantGate
+	exprs   *expr.Engine // connector manifest expressions: body, headers, query
+	wdExprs *expr.Engine // WD expressions: trigger
 }
 
 const (
@@ -96,6 +97,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, span := telemetry.Tracer().Start(r.Context(), "ingest "+kind)
 	defer span.End()
+	// Answers come from the hooks origin; some carry text a manifest chose.
+	httpsec.Set(w.Header())
 	ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 	h.router.ServeHTTP(ww, r.WithContext(ctx))
 	span.SetAttributes(attribute.Int("http.status_code", ww.Status()))
@@ -126,8 +129,20 @@ func (h *Handler) receive(w http.ResponseWriter, r *http.Request) (tenant uuid.U
 		replyErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	l, _ := h.limiters.LoadOrStore(tenant, rate.NewLimiter(h.Rate, h.Burst))
-	if !l.(*rate.Limiter).Allow() {
+	l, err := h.limiter(r.Context(), tenant)
+	switch {
+	case errors.Is(err, errBusy):
+		w.Header().Set("Retry-After", "1")
+		replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
+		return
+	case err != nil:
+		h.unavailable(w, r, err)
+		return
+	case l == nil:
+		replyErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if !l.Allow() {
 		w.Header().Set("Retry-After", "1")
 		replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
 		return
@@ -142,6 +157,100 @@ func (h *Handler) receive(w http.ResponseWriter, r *http.Request) (tenant uuid.U
 		env = "prod"
 	}
 	return tenant, env, body, true
+}
+
+// tenantGate holds the ingest limiter of each tenant that exists. It is
+// bounded, and forgets idle tenants, so deliveries to made-up tenant ids
+// cost a rate-limited lookup and no memory that lasts.
+type tenantGate struct {
+	mu      sync.Mutex
+	entries map[uuid.UUID]*gateEntry
+	lookups *rate.Limiter // database checks for tenants not cached
+}
+
+type gateEntry struct {
+	lim     *rate.Limiter // nil: no such tenant
+	checked time.Time
+	seen    time.Time
+}
+
+const (
+	gateMax    = 10000            // tenants remembered at once
+	gateTTL    = time.Minute      // how long whether a tenant exists is trusted
+	gateIdle   = 10 * time.Minute // a tenant not seen for this long may be forgotten
+	gateLookup = 100              // tenant checks per second, across all tenants
+)
+
+// errBusy: too many unknown tenants are being looked up; retry shortly.
+var errBusy = errors.New("ingest: too many tenant lookups")
+
+// limiter returns the tenant's limiter, or nil if there is no such tenant.
+func (h *Handler) limiter(ctx context.Context, tenant uuid.UUID) (*rate.Limiter, error) {
+	g := &h.tenants
+	now := time.Now()
+	g.mu.Lock()
+	if g.entries == nil {
+		g.entries = map[uuid.UUID]*gateEntry{}
+		g.lookups = rate.NewLimiter(gateLookup, gateLookup)
+	}
+	e := g.entries[tenant]
+	if e != nil && now.Sub(e.checked) < gateTTL {
+		e.seen = now
+		g.mu.Unlock()
+		return e.lim, nil
+	}
+	allowed := g.lookups.Allow()
+	g.mu.Unlock()
+	if !allowed {
+		return nil, errBusy
+	}
+	var exists bool
+	err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE id = $1)`, tenant).Scan(&exists)
+	})
+	if err != nil {
+		return nil, err
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if e = g.entries[tenant]; e == nil {
+		if len(g.entries) >= gateMax {
+			g.evict(now)
+		}
+		e = &gateEntry{}
+		g.entries[tenant] = e
+	}
+	e.checked, e.seen = now, now
+	switch {
+	case !exists:
+		e.lim = nil
+	case e.lim == nil:
+		e.lim = rate.NewLimiter(h.Rate, h.Burst)
+	}
+	return e.lim, nil
+}
+
+// evict makes room: idle tenants first, then unknown ones, then any.
+func (g *tenantGate) evict(now time.Time) {
+	for id, e := range g.entries {
+		if now.Sub(e.seen) > gateIdle {
+			delete(g.entries, id)
+		}
+	}
+	for id, e := range g.entries {
+		if len(g.entries) < gateMax {
+			return
+		}
+		if e.lim == nil {
+			delete(g.entries, id)
+		}
+	}
+	for id := range g.entries {
+		if len(g.entries) < gateMax {
+			return
+		}
+		delete(g.entries, id)
+	}
 }
 
 // parsed is a delivery as expressions and the run's trigger root see it.
@@ -410,9 +519,12 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		if spec.Split != "" {
 			ia = map[string]any{"body": act["body"], "headers": act["headers"], "query": act["query"], "item": item}
 		}
-		event, dedup, correlation := name, bodyHash(body), ""
+		// The default dedup key hashes the verified body, so a replayed
+		// delivery is recognised even when the manifest's key comes out empty.
+		event, dedup, correlation := name, "", ""
+		fallback := bodyHash(body)
 		if spec.Split != "" {
-			dedup += ":" + strconv.Itoa(i)
+			fallback += ":" + strconv.Itoa(i)
 		}
 		bad := false
 		for _, f := range []struct {
@@ -430,6 +542,9 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 			replyErr(w, http.StatusBadRequest, "unexpected payload for "+ref+" "+name)
 			return
 		}
+		if dedup == "" {
+			dedup = fallback
+		}
 		if len(spec.Events) > 0 && !slices.Contains(spec.Events, event) {
 			results = append(results, map[string]any{"ignored": event})
 			continue
@@ -441,7 +556,7 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 			payload["item"], trig["item"] = item, item
 		}
 		if correlation != "" {
-			woke, fresh, err := h.Store.DeliverSignalOnce(ctx, tenant, ref+":"+name, correlation, dedup, payload)
+			woke, fresh, err := h.Store.DeliverSignalOnce(ctx, tenant, env, ref+":"+name, correlation, dedup, payload)
 			if err != nil {
 				h.unavailable(w, r, err)
 				return

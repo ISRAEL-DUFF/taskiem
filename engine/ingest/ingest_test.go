@@ -283,6 +283,7 @@ func TestCheckRejectsUnavailableTriggers(t *testing.T) {
 		`{"type":"webhook","config":{"path":"/a","auth":"mtls"}}`:                                                               false,
 		`{"type":"webhook","config":{"path":"/connectors/x","auth":"none"}}`:                                                    false,
 		`{"type":"schedule","config":{"cron":"not a cron"}}`:                                                                    false,
+		`{"type":"schedule","config":{"cron":"0 0 30 2 *"}}`:                                                                    false,
 		`{"type":"schedule","config":{"cron":"0 9 * * 1-5","timezone":"Mars/Olympus"}}`:                                         false,
 		`{"type":"connector_event","config":{"connector":"paystack@1","trigger":"nope"}}`:                                       false,
 		`{"type":"connector_event","config":{"connector":"paystack@1","trigger":"transfer_event","events":["charge.success"]}}`: false,

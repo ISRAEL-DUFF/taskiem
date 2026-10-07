@@ -329,6 +329,7 @@ type plan struct {
 	step     *wd.Step
 	taint    pii.Taint       // personal values in this run; outputs repeating them are sealed
 	drift    []drift.Finding // how a successful output departed from its schema
+	scrub    []string        // secret values used by this attempt; never written to history
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -733,6 +734,15 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		if result == nil {
 			return nil
 		}
+		if len(p.scrub) > 0 {
+			// A provider error or a script may repeat a secret (an API key in
+			// a URL, a token echoed back): it is replaced before it is written.
+			raw, err := scrubSecrets(result.Payload, p.scrub)
+			if err != nil {
+				return err
+			}
+			result.Payload = raw
+		}
 		if len(p.drift) > 0 && result.Type == history.StepCompleted {
 			if err := w.recordDrift(ctx, tx, p); err != nil {
 				return err
@@ -837,6 +847,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		return failed(p.c, "fatal", err.Error(), "fail")
 	}
 	if p.stepType == "code" {
+		w.scrubCodeSecrets(ctx, p)
 		// The sandbox enforces the step's own time limit.
 		res, err := w.runCode(ctx, p, in)
 		if err != nil {
@@ -916,6 +927,7 @@ func (w *Worker) resolveSecrets(ctx context.Context, p *plan) (any, error) {
 			return nil, err
 		}
 		vals[n] = v
+		p.scrub = append(p.scrub, v)
 	}
 	return exprEngine.Resolve(p.sched.Input, map[string]any{"secrets": vals}, false)
 }
@@ -954,9 +966,16 @@ func (w *Worker) credentials(ctx context.Context, p *plan) (map[string]string, e
 	if err != nil {
 		return nil, err
 	}
+	declared := map[string]bool{}
 	for _, f := range p.conn.Manifest.Auth.Fields {
 		if creds[f.Key] == "" && (f.Required == nil || *f.Required) {
 			return nil, fmt.Errorf("connection is missing %q", f.Key)
+		}
+		declared[f.Key] = !f.Secret
+	}
+	for k, v := range creds {
+		if public, ok := declared[k]; !ok || !public {
+			p.scrub = append(p.scrub, v) // secret fields, and tokens the manifest does not list
 		}
 	}
 	return creds, nil

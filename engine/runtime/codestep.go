@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/sandbox"
@@ -38,6 +40,9 @@ func compileStep(c *wd.CodeConfig) (string, error) {
 // maxFetchBody bounds a host.fetch response handed to a script.
 const maxFetchBody = 1 << 20
 
+// maxFetches bounds host.fetch calls in one step.
+const maxFetches = 50
+
 // runCode executes a code step in the sandbox.
 func (w *Worker) runCode(ctx context.Context, p *plan, input any) (sandbox.Result, error) {
 	if p.step == nil || p.step.Code == nil {
@@ -59,14 +64,20 @@ func (w *Worker) runCode(ctx context.Context, p *plan, input any) (sandbox.Resul
 	now, _ := history.ParseTime(p.sched.AvailableAt)
 	lim := sandbox.DefaultLimits
 	if cfg.Limits != nil {
+		// Validation refuses more than the ceilings; definitions published
+		// before it are held to them here.
 		if cfg.Limits.MemoryMB > 0 {
-			lim.Memory = cfg.Limits.MemoryMB << 20
+			lim.Memory = min(cfg.Limits.MemoryMB, wd.MaxCodeMemoryMB) << 20
 		}
 		if d, err := wd.ParseDuration(cfg.Limits.CPU); err == nil && d > 0 {
-			lim.Timeout = d
+			lim.Timeout = min(d, wd.MaxCodeCPU)
 		}
 	}
+	var fetches atomic.Int32
 	host := sandbox.Host{Secrets: secrets, Now: now, Fetch: func(ctx context.Context, r sandbox.FetchRequest) (sandbox.FetchResponse, error) {
+		if fetches.Add(1) > maxFetches {
+			return sandbox.FetchResponse{}, fmt.Errorf("more than %d fetches in one step", maxFetches)
+		}
 		hc, err := w.client(ctx, p, lim.Timeout)
 		if err != nil {
 			return sandbox.FetchResponse{}, err
@@ -77,14 +88,14 @@ func (w *Worker) runCode(ctx context.Context, p *plan, input any) (sandbox.Resul
 		}
 		req, err := http.NewRequestWithContext(ctx, method, r.URL, strings.NewReader(r.Body))
 		if err != nil {
-			return sandbox.FetchResponse{}, err
+			return sandbox.FetchResponse{}, connector.RedactURLError(err)
 		}
 		for k, v := range r.Headers {
 			req.Header.Set(k, v)
 		}
 		resp, err := hc.Do(req)
 		if err != nil {
-			return sandbox.FetchResponse{}, err
+			return sandbox.FetchResponse{}, connector.RedactURLError(err)
 		}
 		defer func() { _ = resp.Body.Close() }()
 		body, err := io.ReadAll(io.LimitReader(resp.Body, maxFetchBody))
