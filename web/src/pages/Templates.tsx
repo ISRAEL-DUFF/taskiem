@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
+import { Help } from "../onboarding";
 import { byCategory, initialValues, inputKind, lineLabel, toParams, WEEKDAYS, type Template, type TemplateParam } from "../lib/templates";
 import { Badge, ErrorBox, Field, useAction, useLoad } from "../ui";
 
@@ -48,6 +49,7 @@ export function Templates() {
         </form>
       </div>
       <p className="hint">Ready workflows for small businesses. Pick one, fill in the details, and it becomes a draft you can review and publish.</p>
+      <Help topic="templates" />
       <ErrorBox error={error} />
       {data && data.templates.length === 0 && <div className="empty card">No template matches. Try other words, or build it with AI from the Workflows page.</div>}
       {current ? (
@@ -104,6 +106,7 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
         <h2 className="grow" style={{ margin: 0 }}>
           {t.title}
         </h2>
+        {canCreate && t.available && <Link to={`/start/guide?template=${t.id}`}>Set it up step by step</Link>}
         <button onClick={onBack}>All templates</button>
       </div>
       <p>{t.description}</p>
@@ -162,7 +165,7 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
   );
 }
 
-function ParamField({ param: p, value, error, onChange }: { param: TemplateParam; value: string; error?: string; onChange: (v: string) => void }) {
+export function ParamField({ param: p, value, error, onChange }: { param: TemplateParam; value: string; error?: string; onChange: (v: string) => void }) {
   const kind = inputKind(p);
   const label = p.required ? p.title : `${p.title} (optional)`;
   const hint = (

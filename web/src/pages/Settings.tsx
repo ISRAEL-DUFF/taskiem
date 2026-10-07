@@ -5,6 +5,7 @@ import { EnvSelect, useEnvironments } from "../environments";
 import { ErrorBox, Field, JsonInput, fmtTime, useAction, useLoad } from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
 import { USSDChannels } from "./USSDChannels";
+import { Help } from "../onboarding";
 
 interface Secret {
   environment: string;
@@ -282,6 +283,7 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Variables</h2>
       <p className="hint">Expressions read these as env.&lt;name&gt;. Each run keeps the values it started with.</p>
+      <Help topic="variables" />
       <ErrorBox error={error ?? act.error} />
       {rows.length > 0 && (
         <table style={{ marginBottom: 10 }}>

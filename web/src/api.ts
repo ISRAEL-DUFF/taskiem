@@ -100,7 +100,7 @@ export interface Me {
   invitations_only?: boolean;
   roles: string[];
   permissions: string[];
-  user?: { id: string; email: string; name: string };
+  user?: { id: string; email: string; name: string; email_verified?: boolean };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
   /** How this session signed in. */

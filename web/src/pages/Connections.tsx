@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { get, post, upload, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
 import { useAuth } from "../auth";
+import { Help } from "../onboarding";
 import { Badge, ErrorBox, Field, Modal, fmtTime, useAction, useLoad } from "../ui";
 
 interface Conn {
@@ -30,6 +31,7 @@ export function Connections() {
         </button>
       </div>
       <p className="hint">Credentials are encrypted when saved and never shown again.</p>
+      <Help topic="connections" />
       <ErrorBox error={list.error} />
       {list.data && list.data.connections.length === 0 && <div className="empty card">No connections yet.</div>}
       {list.data && list.data.connections.length > 0 && (

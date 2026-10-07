@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, post } from "../api";
+import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
 import { passkeysSupported } from "../passkeys";
 import { ErrorBox, Field, useAction } from "../ui";
@@ -13,6 +13,14 @@ export function Login() {
   const [sso, setSSO] = useState<{ start: string; required: boolean } | null>(null);
   const [breakGlass, setBreakGlass] = useState(false); // owners are exempt from enforced SSO
   const ssoError = new URLSearchParams(window.location.search).get("sso_error");
+  // Offer signup when this deployment takes self-serve signups.
+  const [signup, setSignup] = useState(false);
+  useEffect(() => {
+    get<{ enabled: boolean }>("/v1/signup").then(
+      (r) => setSignup(r.enabled),
+      () => setSignup(false),
+    );
+  }, []);
   // Offer single sign-on when the email's domain uses it.
   useEffect(() => {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -82,6 +90,11 @@ export function Login() {
         </>
       )}
       {act.error instanceof ApiError && act.error.body.passkey_required ? <p className="hint">Administrators sign in with their passkey.</p> : null}
+      {signup && (
+        <p className="hint" style={{ textAlign: "center" }}>
+          New to Taskiem? <Link to="/signup">Create an account</Link>
+        </p>
+      )}
     </div>
   );
 }

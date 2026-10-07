@@ -21,6 +21,9 @@ import { ForgotPassword, ResetPassword } from "./pages/Password";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
 import { Billing, BillingBanner } from "./pages/Billing";
+import { Signup, VerifyEmail } from "./pages/Signup";
+import { Guide, Start } from "./pages/Start";
+import { OnboardingProvider, useOnboarding } from "./onboarding";
 
 export function App() {
   return (
@@ -77,19 +80,35 @@ function InviteeHome() {
 }
 
 function Shell() {
-  const { me, can, logout } = useAuth();
+  const { me } = useAuth();
   const loc = useLocation();
   // Password recovery works signed in or out.
   if (loc.pathname === "/forgot-password") return <ForgotPassword />;
   if (loc.pathname === "/reset-password") return <ResetPassword />;
   if (me === undefined) return <div className="empty">Loading…</div>;
   if (me === null) {
+    if (loc.pathname === "/signup") return <Signup />;
     return loc.pathname === "/login" ? <Login /> : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`} replace />;
   }
   if (me.invitations_only) return <InviteeHome />;
   if (me.enrol_passkey) return <EnrolPasskey />;
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || "/workflows"} replace />;
+  if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
+  return (
+    <OnboardingProvider>
+      <SignedIn />
+    </OnboardingProvider>
+  );
+}
+
+function SignedIn() {
+  const { me, can, logout } = useAuth();
+  const onboarding = useOnboarding().data;
+  if (!me) return null;
   const links: [string, string, boolean][] = [
+    // For organisations that signed themselves up, until the checklist is
+    // done or hidden (it stays at /start).
+    ["/start", `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`, !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed],
     ["/dashboard", "Dashboard", can("run.read")],
     ["/workflows", "Workflows", can("workflow.read")],
     ["/templates", "Templates", true],
@@ -130,6 +149,9 @@ function Shell() {
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/workflows/:id" element={<Editor />} />
           <Route path="/templates" element={<Templates />} />
+          <Route path="/start" element={<Start />} />
+          <Route path="/start/guide" element={<Guide />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/runs" element={<Runs />} />
           <Route path="/runs/:id" element={<RunPage />} />

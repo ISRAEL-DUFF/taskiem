@@ -219,3 +219,14 @@ button.link {
 .plan-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .plan-card.current { border-color: var(--info); }
 .plan-card .price { font-size: 18px; font-weight: 600; }
+/* Getting started (pages/Start.tsx, pages/Signup.tsx). */
+.checklist { list-style: none; padding: 0; margin: 12px 0 24px; }
+.checklist li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+.checklist li.done strong { color: var(--muted); text-decoration: line-through; }
+.checklist .check { width: 20px; text-align: center; font-weight: 600; }
+.checklist li.done .check { color: var(--ok); }
+.guide > li { margin-bottom: 20px; }
+.guide form.card { margin: 8px 0; }
+.help { margin-top: 16px; }
+.help summary { cursor: pointer; font-weight: 600; }
+.honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }

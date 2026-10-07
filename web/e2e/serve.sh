@@ -29,4 +29,7 @@ export TASKIEM_WHATSAPP_PHONE_NUMBER_ID=106540352242922 TASKIEM_WHATSAPP_ACCESS_
   TASKIEM_WHATSAPP_GRAPH_URL=http://127.0.0.1:12626/v25.0 TASKIEM_WHATSAPP_DISPLAY_NUMBER="+1 555 000 1111"
 # Every spec signs in from the same address.
 export TASKIEM_LOGIN_BURST=100
+# Self-serve signup, and Termii pointed at the fake onboarding.spec.ts runs
+# (loopback is allowed only because the URL names it).
+export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
 exec bin/taskiem serve --role all
