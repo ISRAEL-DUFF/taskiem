@@ -21,7 +21,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `api` | REST API (`/v1`), web app (`TASKIEM_WEB_DIR`); with `all`, webhooks too (`/hooks`) | `TASKIEM_LISTEN` (`:8080`) |
 | `edge` | Webhook and connector-event ingest only | `TASKIEM_EDGE_LISTEN` (`:8081`) |
 | `orchestrator` | Decides runs left with undecided events (most decisions are inline) | — |
-| `scheduler` | Timers, lease recovery, the orchestrator sweep, cron triggers, retention purge, partitions | — |
+| `scheduler` | Timers, lease recovery, the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
 | `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`); drains in-flight steps for up to 30 s on shutdown | — |
 
 Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/healthz`) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
