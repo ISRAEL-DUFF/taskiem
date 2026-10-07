@@ -30,6 +30,7 @@ var notInSpec = []struct{ route, why string }{
 	{"/scim/v2/", "the standard SCIM 2.0 protocol (RFC 7644) for identity providers, not Taskiem's own API (docs/governance.md)"},
 	{"/embed/", "the embedded builder's script and frame pages, not JSON (docs/embedding.md)"},
 	{"POST /v1/billing/webhooks/{provider}", "payment providers' callbacks, signed by them (docs/billing.md)"},
+	{"/v1/status/admin/", "the status page's operator API, with operator tokens rather than tenant credentials (docs/reliability.md#status-page)"},
 	{"/*", "the web app's static files"},
 }
 

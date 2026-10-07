@@ -701,8 +701,8 @@ paths:
       tags:
       - Authentication
       summary: Sign in with a password
-      description: Takes only `application/json`. Sets the session cookie and returns the session token. Limited
-        per address and per account.
+      description: 'Takes only `application/json`. A browser gets the session cookie only; a client that sends
+        `"bearer": true` gets the session token in the body and no cookie. Limited per address and per account.'
       security: []
       requestBody:
         required: true
@@ -7159,14 +7159,17 @@ components:
           type: string
           format: uuid
           description: Which organisation to sign in to, for someone in several.
+        bearer:
+          type: boolean
+          description: 'Return the session token in the body instead of setting the cookie: for API clients and
+            scripts. Browsers leave it out.'
     Session:
       type: object
-      required:
-      - token
       properties:
         token:
           type: string
-          description: The session token; also set as the `taskiem_session` cookie.
+          description: 'The session token, only when the request asked with `"bearer": true`; otherwise the
+            session is the `taskiem_session` cookie.'
         tenant_id:
           type:
           - string
@@ -7259,6 +7262,10 @@ components:
         website:
           type: string
           description: The form's hidden field. Leave it out; anything in it is refused.
+        bearer:
+          type: boolean
+          description: 'Return the session token in the body instead of setting the cookie: for API clients and
+            scripts. Browsers leave it out.'
     SignupResult:
       type: object
       required:
