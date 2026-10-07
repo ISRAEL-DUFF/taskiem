@@ -73,7 +73,8 @@ func newWorld(t *testing.T) *world {
 	e := rt.New(t)
 	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress, Logger: slog.New(slog.DiscardHandler),
 		SignupPerAddress: -1} // many tenants sign up from 127.0.0.1 here; onboarding_test.go tests the limit
-	ts := httptest.NewServer(srv.Handler())
+	// Every answer is checked against the OpenAPI document (openapi_test.go).
+	ts := httptest.NewServer(specCheck(t, srv.Handler()))
 	t.Cleanup(ts.Close)
 	return &world{env: e, base: ts.URL, srv: srv}
 }
