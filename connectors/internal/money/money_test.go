@@ -64,3 +64,14 @@ func TestFloorAndDecimal(t *testing.T) {
 		t.Error("decimal")
 	}
 }
+
+func TestScale(t *testing.T) {
+	for cur, want := range map[string]int{"KES": 2, "ugx": 0, " XAF ": 0, "GHS": 2, "EUR": 2, "RWF": 0, "ZMW": 2} {
+		if got, ok := Scale(cur); !ok || got != want {
+			t.Errorf("%q: %d %v, want %d", cur, got, ok, want)
+		}
+	}
+	if _, ok := Scale("XYZ"); ok {
+		t.Error("unknown currency scaled")
+	}
+}

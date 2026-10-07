@@ -1,0 +1,274 @@
+# M-Pesa (Safaricom Daraja, Kenya): M-Pesa Express (STK push) and its
+# query, C2B URL registration and payment notifications, B2C payments,
+# transaction status, account balance and reversals. Built from Safaricom's
+# public Daraja documentation at developer.safaricom.co.ke (the APIs pages
+# Authorization, M-Pesa Express Simulate and Query, Customer To Business,
+# Business To Customer, Transaction Status, Account Balance and Reversals),
+# read 7 October 2026 (docs/integrations/mpesa.md).
+manifest: connector/v1
+id: mpesa
+version: 1.0.0
+name: M-Pesa (Daraja)
+description: Safaricom M-Pesa through Daraja — STK push and query, C2B notifications, B2C payments, transaction status, account balance and reversals, with results as callbacks.
+category: payments
+regions: [KE]
+auth:
+  type: api_key
+  fields:
+    - { key: consumer_key, label: Daraja app consumer key, secret: true }
+    - { key: consumer_secret, label: Daraja app consumer secret, secret: true }
+    - { key: environment, label: "Environment: production (default) or sandbox", secret: false, required: false }
+    - { key: shortcode, label: "Business short code (pay bill, or the store/HO number for a till)", secret: false, required: false }
+    - { key: passkey, label: "Lipa na M-Pesa Online passkey (STK push)", secret: true, required: false }
+    - { key: b2c_shortcode, label: "B2C short code (PartyA for payments, balance and status; defaults to shortcode)", secret: false, required: false }
+    - { key: initiator_name, label: API operator (initiator) username, secret: false, required: false }
+    - { key: security_credential, label: "Security credential: the initiator password already encrypted with Safaricom's certificate (base64)", secret: true, required: false }
+    - { key: initiator_password, label: "Initiator password, if Taskiem should encrypt it (with certificate)", secret: true, required: false }
+    - { key: certificate, label: "Safaricom's public key certificate (PEM) for the environment, to encrypt initiator_password", secret: false, required: false }
+    - { key: hooks_url, label: "Taskiem trigger base URL: https://<host>/hooks/<tenant>/connectors/mpesa@1 (add ?env=&connection= if needed)", secret: false, required: false }
+    - { key: callback_token, label: "Callback token: a long random value; added to every callback URL as ?token=", secret: true, required: false }
+  test: { action: check_credentials }
+base_url: https://api.safaricom.co.ke
+egress_hosts: [api.safaricom.co.ke, sandbox.safaricom.co.ke]
+actions:
+  check_credentials:
+    title: Check the Daraja app's keys
+    description: Fetches an access token. Nothing else is called.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        ok:          { type: boolean }
+        environment: { type: string }
+  stk_push:
+    title: Request a payment by STK push (M-Pesa Express)
+    description: >-
+      Prompts the customer's phone to approve a pay bill or till payment.
+      The answer only says Safaricom accepted the request; the outcome
+      arrives on the stk_callback trigger (correlation: checkout_request_id)
+      or from stk_query. Amounts are cents of KES and must be whole
+      shillings. Safaricom takes no reference it deduplicates by, so a
+      request whose answer is lost parks for a person instead of prompting
+      twice.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [amount, phone, account_reference]
+      properties:
+        amount:            { type: integer, minimum: 100, description: "KES cents; whole shillings only (100 = KES 1)" }
+        phone:             { type: string, description: "Customer's M-Pesa number, 2547XXXXXXXX (PartyA and PhoneNumber)" }
+        account_reference: { type: string, maxLength: 12, description: Shown to the customer in the prompt (12 characters at most) }
+        description:       { type: string, maxLength: 13, description: "TransactionDesc (13 characters at most)" }
+        transaction_type:  { type: string, enum: [CustomerPayBillOnline, CustomerBuyGoodsOnline], default: CustomerPayBillOnline }
+        party_b:           { type: string, description: "Receiving short code; the till number for CustomerBuyGoodsOnline. Defaults to shortcode" }
+        callback_url:      { type: string, description: Overrides the stk_callback URL built from hooks_url }
+    output:
+      type: object
+      properties:
+        merchant_request_id:  { type: string }
+        checkout_request_id:  { type: string }
+        response_code:        { type: string }
+        response_description: { type: string }
+        customer_message:     { type: string }
+    pii:
+      - { field: phone, category: phone }
+  stk_query:
+    title: Get an STK push's outcome
+    class: read
+    input:
+      type: object
+      required: [checkout_request_id]
+      properties:
+        checkout_request_id: { type: string }
+    output:
+      type: object
+      properties:
+        checkout_request_id: { type: string }
+        merchant_request_id: { type: string }
+        status:              { type: string, enum: [completed, cancelled, failed, pending] }
+        result_code:         { type: string }
+        result_desc:         { type: string }
+  register_c2b_urls:
+    title: Register C2B confirmation and validation URLs
+    description: >-
+      Points the short code's payment notifications at this connection's
+      c2b_confirmation and c2b_validation triggers. In production Safaricom
+      registers URLs once; "already registered" is reported, not an error.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      properties:
+        response_type:    { type: string, enum: [Completed, Cancelled], default: Completed, description: What M-Pesa does when the validation URL cannot be reached }
+        shortcode:        { type: string, description: Defaults to the connection's }
+        confirmation_url: { type: string, description: Overrides the URL built from hooks_url }
+        validation_url:   { type: string, description: Overrides the URL built from hooks_url }
+    output:
+      type: object
+      properties:
+        registered:                 { type: boolean }
+        already_registered:         { type: boolean }
+        originator_conversation_id: { type: string }
+        response_description:       { type: string }
+  b2c_payment:
+    title: Pay a customer (B2C)
+    description: >-
+      Sends money from the B2C short code to an M-Pesa number. Safaricom
+      refuses a repeated OriginatorConversationID, so resending after a lost
+      answer never pays twice. The answer only says the request was
+      accepted; the outcome arrives on b2c_result (correlation:
+      originator_conversation_id), or ask with transaction_status. Amounts
+      are KES cents and must be whole shillings.
+    class: idempotent_write
+    idempotency:
+      field: originator_conversation_id
+      encoding: hex_lower
+      length: 32
+      limits: { max_length: 40, charset: "0-9a-f" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, phone, remarks]
+      properties:
+        amount:                     { type: integer, minimum: 100, description: "KES cents; whole shillings only" }
+        phone:                      { type: string, description: "Recipient, 2547XXXXXXXX (PartyB)" }
+        command_id:                 { type: string, enum: [BusinessPayment, SalaryPayment, PromotionPayment], default: BusinessPayment }
+        remarks:                    { type: string, minLength: 2, maxLength: 100 }
+        occasion:                   { type: string, maxLength: 100 }
+        originator_conversation_id: { type: string }
+    output:
+      type: object
+      properties:
+        originator_conversation_id: { type: string }
+        conversation_id:            { type: string, description: "Safaricom's; empty when the request was a repeat" }
+        response_code:              { type: string }
+        response_description:       { type: string }
+        status:                     { type: string, enum: [accepted], description: The outcome arrives on b2c_result }
+        duplicate:                  { type: boolean, description: Safaricom had already accepted a request under this id }
+    pii:
+      - { field: phone, category: phone }
+  transaction_status:
+    title: Ask for a transaction's status
+    description: >-
+      Asks M-Pesa for the status of a transaction by its receipt number
+      (transaction_id) or the OriginatorConversationID of the request. The
+      answer arrives on the status_result trigger (correlation: the
+      transaction_id or original_conversation_id given). Use it before
+      trusting a callback, or when one did not come.
+    class: read
+    input:
+      type: object
+      properties:
+        transaction_id:           { type: string, description: M-Pesa receipt number }
+        original_conversation_id: { type: string, description: The OriginatorConversationID of the request }
+        party_a:                  { type: string, description: "Short code (or MSISDN) the transaction belongs to; defaults to the B2C short code" }
+        identifier_type:          { type: string, default: "4", description: "4: organisation short code" }
+        remarks:                  { type: string }
+        occasion:                 { type: string }
+    output: { $ref: '#/actions/account_balance/output' }
+  account_balance:
+    title: Ask for the account balance
+    description: The balances arrive on the balance_result trigger.
+    class: read
+    input:
+      type: object
+      properties:
+        party_a:         { type: string, description: Defaults to the B2C short code }
+        identifier_type: { type: string, default: "4" }
+        remarks:         { type: string }
+    output:
+      type: object
+      properties:
+        originator_conversation_id: { type: string }
+        conversation_id:            { type: string }
+        response_code:              { type: string }
+        response_description:       { type: string }
+        correlation:                { type: string, description: What the result trigger correlates on }
+  reversal:
+    title: Reverse a transaction
+    description: >-
+      Asks M-Pesa to reverse a C2B transaction by its receipt number. The
+      outcome arrives on reversal_result (correlation: transaction_id).
+      Safaricom takes no reference it deduplicates by, so a lost answer
+      parks the step for a person.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [transaction_id, amount]
+      properties:
+        transaction_id: { type: string, description: Receipt number of the transaction to reverse }
+        amount:         { type: integer, minimum: 100, description: "KES cents; whole shillings only" }
+        receiver_party: { type: string, description: Defaults to the connection's shortcode }
+        remarks:        { type: string }
+        occasion:       { type: string }
+    output: { $ref: '#/actions/account_balance/output' }
+triggers:
+  # Daraja signs nothing. Every callback URL the connector sends carries the
+  # connection's callback_token as ?token= (query_secret): a delivery
+  # without it is refused. Async results also carry ?ref= (what they
+  # correlate on) and ?kind=. Callbacks are reports: confirm money results
+  # with stk_query or transaction_status before releasing value.
+  stk_callback:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    events: [stk.completed, stk.failed]
+    event_type: '=string(body.Body.stkCallback.ResultCode) == "0" ? "stk.completed" : "stk.failed"'
+    dedup: =body.Body.stkCallback.CheckoutRequestID
+    correlation: =body.Body.stkCallback.CheckoutRequestID
+  b2c_result:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    events: [b2c.completed, b2c.failed, b2c.duplicate]
+    event_type: '=string(body.Result.ResultCode) == "0" ? "b2c.completed" : (string(body.Result.ResultCode) == "15" ? "b2c.duplicate" : "b2c.failed")'
+    dedup: '=body.Result.ConversationID + ":" + string(body.Result.ResultCode)'
+    correlation: =query.?ref.orValue(body.Result.OriginatorConversationID)
+  status_result:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    events: [status.completed, status.failed]
+    event_type: '=string(body.Result.ResultCode) == "0" ? "status.completed" : "status.failed"'
+    dedup: '=body.Result.ConversationID + ":" + string(body.Result.ResultCode)'
+    correlation: =query.?ref.orValue(body.Result.OriginatorConversationID)
+  balance_result:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    events: [balance.completed, balance.failed]
+    event_type: '=string(body.Result.ResultCode) == "0" ? "balance.completed" : "balance.failed"'
+    dedup: '=body.Result.ConversationID + ":" + string(body.Result.ResultCode)'
+    correlation: =query.?ref.orValue(body.Result.OriginatorConversationID)
+  reversal_result:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    events: [reversal.completed, reversal.failed]
+    event_type: '=string(body.Result.ResultCode) == "0" ? "reversal.completed" : "reversal.failed"'
+    dedup: '=body.Result.ConversationID + ":" + string(body.Result.ResultCode)'
+    correlation: =query.?ref.orValue(body.Result.OriginatorConversationID)
+  # QueueTimeOutURL: Safaricom does not document this body; the event names
+  # the request kind and correlates on ?ref=, and is deduplicated by body.
+  queue_timeout:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    event_type: '="timeout." + query.?kind.orValue("unknown")'
+    correlation: '=query.?ref.orValue("")'
+  # C2B notifications to the short code (register_c2b_urls), answered as
+  # Safaricom documents. Taskiem cannot reject a validation request: the
+  # answer is always "Accepted" (see the guide).
+  c2b_confirmation:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    ack: { status: 200, body: '{"ResultCode":"0","ResultDesc":"Accepted"}', content_type: application/json }
+    events: [c2b.confirmation]
+    event_type: '="c2b.confirmation"'
+    dedup: =body.TransID
+    correlation: '=body.?BillRefNumber.orValue("") != "" ? body.BillRefNumber : body.TransID'
+  c2b_validation:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    ack: { status: 200, body: '{"ResultCode":"0","ResultDesc":"Accepted"}', content_type: application/json }
+    events: [c2b.validation]
+    event_type: '="c2b.validation"'
+    dedup: '="validation:" + body.TransID'
+    correlation: '=body.?BillRefNumber.orValue("") != "" ? body.BillRefNumber : body.TransID'
