@@ -1,6 +1,6 @@
 # Phase 2 status
 
-Phase 2 (build plan) is about 12 weeks: it makes the platform fit for the first external design partners. Started 2026-10-06, while Phase 1's go-live and soak (milestones 4 and 5) wait on people and production; see [Carried over from Phase 1](#carried-over-from-phase-1). Last updated 2026-10-06.
+Phase 2 (build plan) is about 12 weeks: it makes the platform fit for the first external design partners. Started 2026-10-06, while Phase 1's go-live and soak (milestones 4 and 5) wait on people and production; see [Carried over from Phase 1](#carried-over-from-phase-1). Last updated 2026-10-07.
 
 > Everything here that needs people (signatures, owners' confirmations, credentials, hardware, reviews, partners) is tracked in one place: [What needs people](needs-people.md).
 
@@ -139,6 +139,7 @@ Engine features they needed, all in the connector/v1 contract: `slack_v0`, `quer
 | Round trip (G2 criterion 4) | Every definition in the repository and randomly generated ones (every step type, trigger, option and value shape) print as code and compile back in the binary to the same definition, with stable formatting. It found and fixed four losses: bundling rewrote number literals (`100000` → `1e5` compiled as a CEL double), so numbers in code are now typed by value; a `__proto__` key vanished; an action named like an `Object` method (`constructor`) or missing from its helper broke the code; and definitions holding numbers JavaScript cannot carry (`2.0`, integers past 2^53) are now refused with the path rather than changed | `engine/flowcode/roundtrip_test.go`, `sdk/src/expr.ts`, `sdk/src/codegen.ts`, [SDK](sdk.md#code-and-canvas) |
 | Security | Threat model, external pen-test scope, and an internal self-review whose 31 critical-to-low findings (one critical: SSO domains across tenants) are fixed with regression tests; residuals and open items listed | [docs/security](security/threat-model.md) |
 | Long runs | Decisions fold only new events into a per-run cached state (dropped on erasure, gaps or version change), instead of re-reading the whole history | `engine/decide/state.go`, `engine/runtime/decidecache.go` |
+| Password reset (carried gap from Phase 1) | "Forgot password?" emails a single-use, 30-minute link (fragment token, stored hashed, locked after five wrong secrets) to people with a password who can use one; the same answer for every email; the reset ends every session, is audited in each tenant, emails the person and signs nobody in, so the passkey rule and SSO enforcement hold. Password change under Account | `api/password.go`, migration 00032, `web/src/pages/Password.tsx`, [governance](governance.md#passwords) |
 | Deployment | Distroless non-root image (built and run read-only); Helm chart with split or single-process modes, migration hook, archive volume, PDBs, worker autoscaling, network policies, ServiceMonitor; plain manifests rendered from it and checked in CI | `Dockerfile`, `deploy/helm/taskiem`, `deploy/kubernetes`, [kubernetes](kubernetes.md) |
 
 ## Carried over from Phase 1

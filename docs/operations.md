@@ -36,13 +36,13 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 | `TASKIEM_ARCHIVE_DIR` | — | Where runs past retention are archived (gzipped JSON lines) before purging. Unset: nothing is purged. |
 | `TASKIEM_ANCHOR_KEY` | — | Ed25519 seed (32 bytes, base64: `openssl rand -base64 32`) that signs the daily audit-chain anchors. Keep it like a KMS key; its public half is served at `GET /v1/audit/anchors`. Unset: no anchoring. |
 | `TASKIEM_ANCHOR_DIR` | — | Where the scheduler role appends each tenant's anchors (`<tenant>.jsonl`). Point it at write-once storage (an object-lock bucket, an append-only volume): anchors are only worth as much as their copy outside the database. |
-| `TASKIEM_SMTP_URL` | — | Mail server for alert emails: `smtp://user:pass@host:587` (STARTTLS, required when a password is given) or `smtps://user:pass@host:465`. Without it, email alert deliveries fail with a reason ([alerts](alerts.md)) |
-| `TASKIEM_ALERT_FROM` | — | Sender address of alert emails; required with `TASKIEM_SMTP_URL` |
+| `TASKIEM_SMTP_URL` | — | Mail server for alert emails and password-reset links: `smtp://user:pass@host:587` (STARTTLS, required when a password is given) or `smtps://user:pass@host:465`. Without it, email alert deliveries fail with a reason ([alerts](alerts.md)), and "Forgot password?" sends nothing (it still answers, and logs a warning; [passwords](governance.md#passwords)) |
+| `TASKIEM_ALERT_FROM` | — | Sender address of alert and password emails; required with `TASKIEM_SMTP_URL` |
 | `TASKIEM_WASM_CACHE` | the user cache directory | Where workers keep compiled WebAssembly (the Python interpreter takes seconds to compile the first time). Point it at a writable directory that survives restarts |
 | `TASKIEM_LOGIN_BURST` | 10 | Sign-in attempts one address may make at once, then one every six seconds |
 | `TASKIEM_WEB_DIR` | — | Built web app to serve (`/web` in the image). |
 | `TASKIEM_SECURE_COOKIES` | `true` | Set `false` only for plain-HTTP local use. |
-| `TASKIEM_PUBLIC_URL` | — | Where people reach the web app (`https://…`, or `http://localhost:…`). Turns on passkeys, which are bound to it |
+| `TASKIEM_PUBLIC_URL` | — | Where people reach the web app (`https://…`, or `http://localhost:…`). Turns on passkeys, which are bound to it; password-reset links point at it (none are sent without it) |
 | `TASKIEM_PASSKEY_RP_ID` | the URL's host | The passkey domain, if passkeys should work across subdomains (a parent of the URL's host) |
 | `TASKIEM_REQUIRE_ADMIN_PASSKEYS` | `true` with a public URL | Hold administrators to passkeys ([governance](governance.md#passkeys)) |
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |

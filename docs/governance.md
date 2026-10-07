@@ -80,6 +80,21 @@ An identity provider (Okta, Microsoft Entra ID, others) keeps members in step wi
 
 Sessions and API keys stop working while their tenant is suspended, and sessions while their user is disabled. Sign-in (`/v1/auth/login`, `/v1/auth/passkey`) takes only `application/json`, and attempts are limited per address and per account; SSO discovery and start are limited per address.
 
+## Passwords
+
+Passwords are Argon2id hashes of at least 12 characters. A password belongs to the person, not to a tenant: changing or resetting it applies wherever they belong.
+
+**Forgot password.** The sign-in page links to **Forgot password?** (`POST /v1/auth/password/forgot {"email"}`). The answer is always `202` with the same body, whoever the email belongs to, and the work happens after answering, so neither the answer nor its timing tells whether an account exists. A link goes only to someone who:
+
+- has an active account **with a password**. People who sign in only with passkeys or single sign-on are not given a password this way;
+- could use a password somewhere: they belong to at least one active tenant that does not hold them to single sign-on. SSO enforcement exempts owners (the break-glass), so an owner's password can always be recovered, and a member held to SSO in every tenant gets nothing.
+
+The link is `<TASKIEM_PUBLIC_URL>/reset-password#token=…`. The token is in the fragment, which browsers send to no server, so it stays out of access logs and `Referer` headers; the page drops it from the address bar once read. The token is a 128-bit selector and a 256-bit secret; only the secret's SHA-256 is stored. A link works **once**, for **30 minutes**; asking again replaces any unused link; **five wrong secrets** for a link lock it. Requests are limited per address (refused with `429`) and per email (five links, then one every ten minutes; past that the answer is the same `202` and nothing is sent). Without `TASKIEM_SMTP_URL`, `TASKIEM_ALERT_FROM` and `TASKIEM_PUBLIC_URL`, the endpoint still answers `202`, sends nothing, and logs a warning (never the token).
+
+**Reset.** `POST /v1/auth/password/reset {"token", "password"}` (JSON only, limited per address and per link) sets the new password, uses the link, ends **every session** of the person in every tenant, records `auth.password.reset` in the audit log of each tenant they belong to, and emails them that their password changed. It **does not sign in**: the person signs in as usual, so nothing about a reset gets round a second factor. An administrator held to passkeys who has one still cannot sign in with the new password; one who has none gets only the enrol-a-passkey session; SSO enforcement applies as at any sign-in. Passkeys, authenticators and API keys are left as they are (an API key can be revoked under Members & keys).
+
+**Change.** Under **Account**, `POST /v1/me/password {"current_password", "new_password"}` changes the password and ends the person's other sessions (`auth.password.change`, audited in each tenant; the person is emailed). Someone without a password who has a passkey or authenticator can set a first one, proving themselves with a `passkey` assertion or `totp` code as when changing factors. Someone who signs in by single sign-on only has nothing to prove themselves with and gets no password this way (`403`). An administrator's enrol-only session cannot change the password: they add a passkey first. API keys are refused.
+
 ## Custom roles
 
 Besides the built-in roles, owners and admins define roles as named sets of permissions (Members → Roles, `PUT /v1/roles/{name}`). No one can create, widen, grant or take away a role carrying a permission they do not hold; this also applies to built-in roles. A role someone holds cannot be deleted. Narrowing a role takes effect on its members' next request.
