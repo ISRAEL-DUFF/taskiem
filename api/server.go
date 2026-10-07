@@ -543,6 +543,13 @@ func (s *Server) tx(r *http.Request, fn func(pgx.Tx) error) error {
 	return db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, fn)
 }
 
+// readTx runs fn read-only for the caller's tenant on the read replica
+// when there is one keeping up (decision 0024): only for views that may be
+// seconds stale, never before a write. fn may run twice.
+func (s *Server) readTx(r *http.Request, fn func(pgx.Tx) error) error {
+	return s.Store.ReadTx(r.Context(), principalFrom(r.Context()).TenantID, fn)
+}
+
 // auditTx appends an audit entry for the caller.
 func auditTx(r *http.Request, tx pgx.Tx, action, target string, detail map[string]any) error {
 	p := principalFrom(r.Context())

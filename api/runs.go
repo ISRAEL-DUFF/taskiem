@@ -213,7 +213,7 @@ func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
 		wf = &id
 	}
 	var out []runSummary
-	err = s.tx(r, func(tx pgx.Tx) error {
+	err = s.readTx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT `+runColumns+` FROM runs r JOIN workflows w ON w.id = r.workflow_id
 			WHERE r.started_at < $1 AND ($2::uuid IS NULL OR r.workflow_id = $2) AND ($3 = '' OR r.status = $3) AND ($4 = '' OR r.environment = $4)
 			ORDER BY r.started_at DESC LIMIT $5`, before, wf, q.Get("status"), env, limit)

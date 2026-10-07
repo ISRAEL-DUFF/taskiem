@@ -116,6 +116,10 @@ type Worker struct {
 	Connections Connections
 	ID          string
 	Queue       string
+	// Pool is the worker pool this worker serves (TASKIEM_WORKER_POOL,
+	// decision 0024): it claims only tasks of tenants routed there.
+	// Default "shared".
+	Pool        string
 	Concurrency int
 	Lease       time.Duration
 	// CallTimeout bounds every provider call, measured for writes from when
@@ -145,6 +149,9 @@ type Worker struct {
 func (w *Worker) defaults() {
 	if w.Queue == "" {
 		w.Queue = "connector"
+	}
+	if w.Pool == "" {
+		w.Pool = SharedPool
 	}
 	if w.Concurrency <= 0 {
 		w.Concurrency = 16
@@ -200,6 +207,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		return err
 	}
 	defer stop()
+	go w.reportLive(ctx)
 	if sw, ok := w.Containers.(container.Sweeper); ok && w.Queue == "container" {
 		go w.sweep(ctx, sw)
 	}
@@ -302,8 +310,8 @@ func (w *Worker) claim(ctx context.Context, n int) ([]claim, error) {
 	if w.Queue == "container" {
 		tenantCap = w.Store.defaults().ContainerConcurrency
 	}
-	rows, err := w.Store.Pool.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch FROM taskiem_claim_tasks($1, $2, $3, $4::interval, $5)`,
-		w.Queue, w.ID, n, w.Lease.String(), tenantCap)
+	rows, err := w.Store.Pool.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch FROM taskiem_claim_tasks($1, $2, $3, $4::interval, $5, $6)`,
+		w.Queue, w.ID, n, w.Lease.String(), tenantCap, w.Pool)
 	if err != nil {
 		return nil, err
 	}
@@ -317,6 +325,23 @@ func (w *Worker) claim(ctx context.Context, n int) ([]claim, error) {
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// reportLive records every 30 seconds that this worker serves its pool
+// and queue, so operators never route work to a pool nobody serves.
+func (w *Worker) reportLive(ctx context.Context) {
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		if _, err := w.Store.Pool.Exec(ctx, `SELECT taskiem_worker_seen($1, $2, $3)`, w.ID, w.Queue, w.Pool); err != nil && ctx.Err() == nil {
+			w.Logger.Debug("worker report failed", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // errFenced means this worker no longer holds the task's lease.
@@ -782,7 +807,8 @@ func (w *Worker) recordDrift(ctx context.Context, tx pgx.Tx, p *plan) error {
 // postpone releases the task back to the queue, available at a later time,
 // without recording an outcome.
 func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
-	return db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+	// Fenced: repeating it after an unknown COMMIT changes nothing.
+	return db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, true, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE tasks SET lease_owner = NULL, lease_until = NULL, available_at = $4
 			WHERE id = $1 AND lease_owner = $2 AND lease_epoch = $3`, p.c.task, w.ID, p.c.epoch, at)
 		return err
@@ -790,8 +816,13 @@ func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
 }
 
 // finish releases the task and records the outcome, if any, under the fence.
+//
+// It rides out a database failover (decision 0024): the outcome of a call
+// already made is kept and recorded once the new primary answers, as long
+// as the lease still holds. Repeating it after an unknown COMMIT is safe:
+// a committed finish released the task, so the repeat is fenced out.
 func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) error {
-	return db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+	return db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, true, func(tx pgx.Tx) error {
 		ok, err := w.finishTask(ctx, tx, p.c)
 		if err != nil {
 			return err
@@ -905,7 +936,9 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 		if p.key, err = p.spec.Key(p.keyIn); err != nil {
 			return history.Event{}, err
 		}
-		if err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error { return w.recordIntent(ctx, tx, p) }); err != nil {
+		// Retried only when it certainly did not commit: a second
+		// EffectIntent must never be appended.
+		if err := db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, false, func(tx pgx.Tx) error { return w.recordIntent(ctx, tx, p) }); err != nil {
 			return history.Event{}, err
 		}
 		if w.Hooks != nil && w.Hooks.AfterIntent != nil {

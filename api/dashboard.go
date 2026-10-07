@@ -73,7 +73,8 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	args := []any{since, env, wf}
 
 	out := map[string]any{"days": days, "environment": env, "time_zone": tz}
-	err := s.tx(r, func(tx pgx.Tx) error {
+	// Seconds-stale figures are fine here: the replica when there is one.
+	err := s.readTx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		var total, completed, failed, cancelled, active int
 		var p50, p95 *float64

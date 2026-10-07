@@ -32,6 +32,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/byok"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embed"
 	"github.com/israel-duff/taskiem/engine/httpsec"
@@ -68,6 +69,7 @@ type config struct {
 	// SMTPURL and AlertFrom let alerts go out by email.
 	SMTPURL, AlertFrom string
 	Queues             []string
+	Cloud              cloudConfig
 	Connectors         builtin.Options
 	PoolSize           int32
 	LoginBurst         int
@@ -309,6 +311,9 @@ func loadConfig() (config, error) {
 	if c.Keys, err = keysConfig(); err != nil {
 		return c, err
 	}
+	if c.Cloud, err = cloudConfigFromEnv(); err != nil {
+		return c, err
+	}
 	if c.DSN == "" {
 		return c, errors.New("TASKIEM_DATABASE_URL is required")
 	}
@@ -338,13 +343,7 @@ func openPool(ctx context.Context, c config) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 	pc.MaxConns = c.PoolSize
-	if c.DBRole != "" {
-		role := pgx.Identifier{c.DBRole}.Sanitize() //nolint:misspell // pgx API
-		pc.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-			_, err := conn.Exec(ctx, "SET ROLE "+role)
-			return err
-		}
-	}
+	pc.AfterConnect = afterConnect(c.DBRole)
 	pool, err := pgxpool.NewWithConfig(ctx, pc)
 	if err != nil {
 		return nil, err
@@ -354,6 +353,19 @@ func openPool(ctx context.Context, c config) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("database: %w", err)
 	}
 	return pool, nil
+}
+
+// afterConnect switches each new connection to the application role, so
+// row-level security applies to everything it runs.
+func afterConnect(dbRole string) func(context.Context, *pgx.Conn) error {
+	if dbRole == "" {
+		return nil
+	}
+	role := pgx.Identifier{dbRole}.Sanitize() //nolint:misspell // pgx API
+	return func(ctx context.Context, conn *pgx.Conn) error {
+		_, err := conn.Exec(ctx, "SET ROLE "+role)
+		return err
+	}
 }
 
 // engine is everything the roles share.
@@ -484,6 +496,10 @@ func serve(ctx context.Context, args []string) error {
 	}
 	defer e.pool.Close()
 	defer e.connectors.Pool.Close()
+	for _, w := range dsnWarnings("TASKIEM_DATABASE_URL", cfg.DSN) {
+		log.Warn(w)
+	}
+	db.RetryWindow = cfg.Cloud.RetryWindow
 
 	is := func(r string) bool { return *role == r || *role == "all" }
 	alerter, err := cfg.alerter(e, log)
@@ -495,6 +511,17 @@ func serve(ctx context.Context, args []string) error {
 		return fmt.Errorf("serve: %w", err)
 	}
 	var tasks []func(context.Context) error
+	if is("api") && cfg.Cloud.ReadDSN != "" {
+		// Run lists and dashboards read from the replica while it keeps
+		// up (decision 0024).
+		replica, err := openReplica(ctx, cfg, e.pool, log)
+		if err != nil {
+			return fmt.Errorf("serve: %w", err)
+		}
+		defer replica.Pool.Close()
+		e.store.Read = replica
+		tasks = append(tasks, replica.Run)
+	}
 	if is("api") {
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
 			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy}
@@ -595,9 +622,14 @@ func serve(ctx context.Context, args []string) error {
 	if is("worker") {
 		host, _ := os.Hostname()
 		loopback := connectorLoopback(e.registry, log)
+		prefix := host + "/"
+		if cfg.Cloud.WorkerPool != runtime.SharedPool {
+			prefix += cfg.Cloud.WorkerPool + "/"
+		}
 		for _, q := range cfg.Queues {
 			w := &runtime.Worker{Store: e.store, Registry: e.registry, Secrets: e.vault, Connections: e.vault,
-				Egress: &egress.Guard{Logger: log, Loopback: loopback}, ID: host + "/" + q + "/" + strconv.Itoa(os.Getpid()), Queue: strings.TrimSpace(q), Logger: log}
+				Egress: &egress.Guard{Logger: log, Loopback: loopback}, ID: prefix + strings.TrimSpace(q) + "/" + strconv.Itoa(os.Getpid()),
+				Queue: strings.TrimSpace(q), Pool: cfg.Cloud.WorkerPool, Logger: log}
 			if w.Queue == "container" {
 				// Container steps (spec 7.5): the sandbox runner and egress proxy.
 				more, err := containerSetup(ctx, w, log)
@@ -610,6 +642,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 	}
 	_ = prometheus.Register(telemetry.QueueCollector{Pool: e.pool}) // already registered when serve runs twice in one process (tests)
+	_ = prometheus.Register(telemetry.PoolCollector{Pool: e.pool})
 	// Every role serves metrics and a liveness check (/healthz) here, so
 	// roles without the API can be probed too.
 	metrics := http.NewServeMux()

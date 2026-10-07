@@ -43,6 +43,9 @@ type Store struct {
 	// new runs refused while the subscription is degraded or cancelled.
 	// Off, every tenant is on the internal plan (the defaults).
 	Billing bool
+	// Read is the optional read replica for staleness-tolerant reads
+	// (ReadTx); nil reads from Pool (decision 0024).
+	Read *db.Replica
 
 	defs     sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
 	folds    decideCache
