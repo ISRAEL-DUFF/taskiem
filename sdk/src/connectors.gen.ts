@@ -1220,6 +1220,34 @@ export const paystack = {
   verify_transfer: (input: PaystackVerifyTransferInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "verify_transfer", input, extra),
 };
 
+// PGDock (pgdock@1)
+export interface PgdockGetRowInput {
+  /** Primary key columns and values, e.g. {id: 7} */
+  key: Value;
+  schema?: Val<string>;
+  table: Val<string>;
+}
+export interface PgdockQueryRowsInput {
+  /** The previous page's next */
+  after?: Val<string>;
+  filters?: Value;
+  limit?: Val<number>;
+  order?: Value;
+  schema?: Val<string>;
+  table: Val<string>;
+}
+export interface PgdockTestConnectionInput {
+  [key: string]: Value;
+}
+export const pgdock = {
+  /** Get a row by its key (read) */
+  get_row: (input: PgdockGetRowInput, extra?: ConnectorExtra): StepSpec => connector("pgdock@1", "get_row", input, extra),
+  /** Query rows (read) */
+  query_rows: (input: PgdockQueryRowsInput, extra?: ConnectorExtra): StepSpec => connector("pgdock@1", "query_rows", input, extra),
+  /** Check the connection (read) */
+  test_connection: (input?: PgdockTestConnectionInput, extra?: ConnectorExtra): StepSpec => connector("pgdock@1", "test_connection", input, extra),
+};
+
 // PostgreSQL (postgres@1)
 export interface PostgresExecuteInput {
   params?: Value;
@@ -2052,6 +2080,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "mysql@1": "mysql",
   "opay@1": "opay",
   "paystack@1": "paystack",
+  "pgdock@1": "pgdock",
   "postgres@1": "postgres",
   "prembly@1": "prembly",
   "remita@1": "remita",
@@ -2083,6 +2112,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "mysql@1": ["execute", "query"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "paystack@1": ["check_balance", "transfer", "verify_charge", "verify_transfer"],
+  "pgdock@1": ["get_row", "query_rows", "test_connection"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],

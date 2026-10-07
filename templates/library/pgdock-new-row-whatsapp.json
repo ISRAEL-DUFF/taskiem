@@ -1,0 +1,39 @@
+{
+  "id": "pgdock-new-row-whatsapp",
+  "title": "WhatsApp message when a row is added in PGDock",
+  "summary": "When a new row is added to a table in your PGDock database (an order, a booking, a sign-up), send the phone number in it your approved WhatsApp template.",
+  "description": "Taskiem asks PGDock for the table's changes itself when you publish, and stops them if you take the workflow down. Each committed insert into the table sends your approved WhatsApp template to the number in the phone column, with the value of the name column as its first body variable. A rolled-back insert sends nothing, and PGDock delivering the same insert twice sends one message. Create and get the template approved in WhatsApp Manager first.",
+  "category": "customers",
+  "tags": ["pgdock"],
+  "keywords": ["pgdock"],
+  "connectors": ["pgdock@1", "whatsapp@1"],
+  "params": [
+    {"name": "table", "type": "string", "title": "Table", "description": "The table to watch, as schema.table or table (in public).", "required": true, "default": "orders", "example": "orders", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$"},
+    {"name": "phone_column", "type": "string", "title": "Phone column", "description": "The column holding the number to message, with + and country code.", "required": true, "default": "phone", "example": "phone", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"},
+    {"name": "name_column", "type": "string", "title": "Name column", "description": "The column whose value fills the template's first body variable.", "required": false, "default": "customer", "example": "customer", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"},
+    {"name": "template_name", "type": "string", "title": "WhatsApp template", "description": "Your approved template, with one body variable for the name.", "required": true, "default": "new_order", "example": "new_order", "pattern": "^[a-z0-9_]{1,512}$"},
+    {"name": "language", "type": "string", "title": "Template language", "description": "The template's language code.", "required": false, "default": "en", "example": "en", "pattern": "^[a-z]{2}(_[A-Z]{2})?$"},
+    {"name": "pgdock_connection", "type": "connection", "connector": "pgdock", "title": "PGDock connection", "description": "The PGDock connection (an API token restricted to the project) whose table is watched.", "required": false, "default": "main", "example": "main"},
+    {"name": "whatsapp_connection", "type": "connection", "connector": "whatsapp", "title": "WhatsApp connection", "description": "The name of your WhatsApp Business connection.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_pgdockNewRowWhatsApp",
+    "version": 1,
+    "name": "WhatsApp message when a row is added in PGDock",
+    "trigger": {"type": "connector_event", "config": {"connector": "pgdock@1", "trigger": "row_changed", "events": ["INSERT"], "connection": "{{pgdock_connection}}",
+      "options": {"tables": ["{{table}}"]}}},
+    "inputs": {"schema": {"type": "object", "properties": {
+      "id": {"type": "string"}, "table": {"type": "string"}, "type": {"type": "string"},
+      "record": {"type": "object"}}}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your template and columns", "config": {"output": {"template": "{{template_name}}", "language": "{{language}}", "phone": "{{phone_column}}", "name": "{{name_column}}"}}},
+      {"id": "send_message", "type": "connector", "name": "Send the WhatsApp template to the number in the new row", "connector": "whatsapp@1", "action": "send_template", "connection": "{{whatsapp_connection}}", "needs": ["settings"],
+       "when": "=has(trigger.body.record) && trigger.body.record != null && steps.settings.output.phone in trigger.body.record && trigger.body.record[steps.settings.output.phone] != null && string(trigger.body.record[steps.settings.output.phone]) != ''",
+       "input": {"to": "=string(trigger.body.record[steps.settings.output.phone])", "name": "=steps.settings.output.template", "language": "=steps.settings.output.language",
+         "components": [{"type": "body", "parameters": [
+           {"type": "text", "text": "=steps.settings.output.name in trigger.body.record && trigger.body.record[steps.settings.output.name] != null ? string(trigger.body.record[steps.settings.output.name]) : 'there'"}]}]}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

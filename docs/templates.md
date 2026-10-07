@@ -24,6 +24,7 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | `salary-payout-approval` | On payday, pay each person on the staff sheet by Paystack transfer after the owner approves, and text them | Google Sheets, Paystack, Termii |
 | `supplier-payment-approval` | Pay a supplier invoice by Paystack transfer after approval and text the owner the outcome | Paystack, Termii |
 | `kyc-bvn-check` | Check an applicant's BVN with Dojah; welcome them if the name matches, flag it otherwise | Dojah, Termii, Gmail |
+| `pgdock-new-row-whatsapp` | When a row is inserted into a PGDock table, send the number in it an approved WhatsApp template (Taskiem creates and removes the PGDock webhook itself) | PGDock, WhatsApp |
 
 Every template that moves money does so after an approval step and with an idempotency key, so a retry never pays twice. Every one is a valid wd/v1 definition: `templates_test.go` fills each with its example values and checks that it passes the publishing checks, uses exactly the connectors it declares, has no policy finding, runs its generated dry-run happy path, reads aloud as plain steps without an expression, and round-trips through flow code (spec 10.2) unchanged.
 
