@@ -6,12 +6,14 @@ Taskiem can draft a workflow from a plain-language goal (spec 12.1) and propose 
 
 From the workflow list (**Build with AI**) or the editor (**Change with AI**), a person with `workflow.edit` describes what the workflow should do. The server then runs the builder pipeline (`engine/ai/builder`):
 
-1. **Context.** It ranks every connector available to the tenant against the goal by keyword overlap (names, categories, actions, triggers, with a small synonym table; no vector database) and takes the full schemas of the top six, plus a one-line catalogue of all of them. It adds the tenant's connections by name and connector, variables by name, active approval policies by name and a summary of who approves, and the structure of up to three similar workflows (step ids, types and connector actions, never their inputs). When the goal changes an existing workflow, that workflow's latest definition is included.
+1. **Context.** It offers up to two starting templates from the [SME template library](templates.md) whose keywords match the goal (templates first, then free drafting): the model may answer with a template's id and the parameter values the goal states, which the builder instantiates, listing the required parameters the goal did not state (the draft holds the template's examples for them, with a warning); or write the workflow itself, from a template or from scratch. It ranks every connector available to the tenant against the goal by keyword overlap (names, categories, actions, triggers, with a small synonym table; no vector database) and takes the full schemas of the top six, plus a one-line catalogue of all of them. It adds the tenant's connections by name and connector, variables by name, active approval policies by name and a summary of who approves, and the structure of up to three similar workflows (step ids, types and connector actions, never their inputs). When the goal changes an existing workflow, that workflow's latest definition is included.
 2. **Draft.** The model answers with structured output (see [the schema choice](#structured-output)): a summary, assumptions to confirm, the definition, and up to three test cases.
 3. **Validate.** The definition goes through exactly the checks publishing runs (`wdcheck`: the wd/v1 schema and semantic rules, connector and action existence, code compilation, trigger checks), plus the builder's policy rule: a write action of a `payments` connector that no approval step precedes is flagged (`payment_write_without_approval`).
 4. **Self-correct.** Problems and policy findings are sent back to the model, up to three times. Whatever remains is shown: problems as "would not publish yet", policy findings as warnings.
 5. **Dry run.** The draft runs in `engine/wdtest` (the real orchestrator on a virtual clock, every connector, HTTP and code step mocked): a generated happy path, with every step's output sampled from its action's output schema and every approval approved, and the cases the model proposed.
-6. **Review.** The panel shows the proposal on a read-only canvas with the summary, assumptions, problems, warnings, dry-run results, rounds and tokens. **Save as draft** creates a new workflow, or a new version of the one being changed, in state `draft`.
+6. **Review.** The panel shows the proposal on a read-only canvas with the template it started from (if any), the summary, assumptions, problems, warnings, dry-run results, rounds and tokens. **Save as draft** creates a new workflow, or a new version of the one being changed, in state `draft`.
+
+The same pipeline answers [`build` on WhatsApp](whatsapp.md#build), shown back as plain steps and saved only as a draft after an explicit yes.
 
 Builds run in the background (`POST /v1/ai/build` answers 202 with an id; `GET /v1/ai/builds/{id}` reports the stage and, at the end, the proposal), because drafting and three corrections can take minutes.
 
@@ -142,19 +144,60 @@ The budget is checked before each model call. A tenant over budget gets 429 `ai_
 
 ## Evaluation
 
-`tools/aieval` runs the builder over a suite of requests (spec 12.4) and reports the rates gate G3 measures:
+Spec 12.4: the builder is measured on at least 200 real-world requests (valid on the first try, test pass rate, policy violations), and a model or prompt change ships only if it does not regress. `tools/aieval` runs the suites through the real pipelines (the same `builder.Builder` and `repair.Repairer` the API runs, with the platform's publishing checks and the connectors compiled into the binary; dry runs mock every connector, so nothing reaches a provider).
+
+### The suites
+
+- **Builder** (`evals/builder/*.jsonl`, 223 requests): payouts, collections, reconciliation, KYC, notifications, approvals, schedules and sheets/email reporting, WhatsApp/SMS/chat, multi-step workflows with branches, loops, parallel work, waits and signals, and small-business phrasing ("Every Friday, text my customers who owe me", Pidgin included). Each case has tags (the first is its group), a difficulty, the connectors and step types a good answer must use, the trigger when the request says, and required properties. Format and rules: [evals/builder/README.md](../evals/builder/README.md).
+- **Repair** (`evals/repair/failures.jsonl`, 22 recorded failures of dogfood and small workflows): the class a person expects (transient, credential, data, schema drift, logic, unknown outcome), whether the rules should decide alone, and for data failures a wd-test case reproducing the failure that a patch must pass. Format: [evals/repair/README.md](../evals/repair/README.md).
+
+**These are synthetic seeds pending review by people.** Engineering wrote them from the dogfood flows, the connector catalogue and common operations; every file says so in its first line, and every case carries `source: synthetic` (or `dogfood`). [Needs-people AI2](needs-people.md#phase-3) replaces and extends them with real requests from dogfooding and design partners, reviewed by the people who make them; the G3 number is taken on that reviewed suite.
+
+**No leakage.** No request may reach a prompt: `TestNoEvalRequestInPrompts` (`engine/ai/builder`) builds the real system prompt and every template's prompt context and fails if any request, or any run of eight of its words, appears in them. Templates are written for small businesses in general, never from a suite request.
+
+### The grader
+
+Deterministic checks first, per attempt:
+
+| Measure | How |
+| --- | --- |
+| Valid on the first try | The first draft passes `wdcheck` (the publishing checks) |
+| Valid after corrections | The final draft passes, after up to three corrections |
+| Tests pass | Every dry-run case (the generated happy path and the model's own cases) passes |
+| Gate (G3) | Valid on the first try **and** tests pass |
+| Requirements | Every expected connector, step type and trigger is there, and every required property holds |
+| Properties | Small rules over the definition (`tools/aieval/rules.go`): `approval_before_payment` (a payment write exists and an approval precedes each), `idempotency` (payment writes carry an idempotency seed), `webhook_auth`, `dedup`, `bounded_concurrency` (every foreach sets `max_concurrency`), `approval_timeout`, `error_handling` (an `on_error` path or compensation), `reads_before_paying` (a read of the provider before the payment), `inputs_declared`, `no_hardcoded_contacts`; `no_inline_secrets` is checked on every case |
+| Policy violations | The builder's policy findings on the final draft |
+| Strict | Gate, requirements, and no policy violation |
+| Tokens and cost | From the provider's usage and the model that answered, at Anthropic's published prices (cache writes 1.25× input, reads as listed); `-price model=in,out[,cache_read]` for another rate card. An unknown price is reported as unknown, never zero |
+
+Errors, timeouts (a wall-clock ceiling per attempt, `-case-timeout`), answers cut off at the token limit, and answers from a model other than the one asked for are counted apart and left out of every rate: plumbing is not a model failure. Refusals are scored (as failures) and counted. With `-reps N` each case runs N times; the report gives a noise floor (about 1/√n of scored attempts) so a difference smaller than it is not read as a change.
+
+**Model-graded rubric (optional, off by default).** `-judge` adds "does it do what was asked" as a second model call per draft: the judge (`-judge-model`, default `claude-sonnet-5-5`; never the model under test, which the runner refuses) reads the request, the draft as plain numbered steps and its definition, all marked as data, and answers four checkable claims under a structured-output schema: the trigger matches, every requested action is there, nothing unrequested moves money, sends or writes, and stated conditions, amounts and approvals are enforced. It passes only when all four hold; a draft with nothing to judge fails without a call. The judge's model, usage and cost are recorded separately. Calibrate it against people's grades on the reviewed suite (AI2) before trusting its numbers.
+
+The repair suite measures class accuracy (final and rules alone), whether the rules were sure exactly when expected, model calls, and for classes that patch, patches that pass the publishing checks, change the definition and pass the recorded failing case.
+
+### Reports
+
+A table on the terminal (`-v` for every case), and with `-out` a JSON report (summary, per-tag, per-difficulty and per-property breakdowns, every attempt) and with `-markdown` the same for people (pull request summaries).
 
 ```sh
-go run ./tools/aieval                                   # offline, with a keyword heuristic as the "model"
-go run ./tools/aieval -provider anthropic -out r.json   # Claude, with ANTHROPIC_API_KEY
-go run ./tools/aieval -tags payments -min-first-try 0.7 # fail below 70% valid and test-passing on the first try
+go run ./tools/aieval                                                   # offline heuristic, the whole builder suite
+go run ./tools/aieval -compare evals/builder/baseline.json -tolerance 0 # what CI runs
+go run ./tools/aieval -mode repair -compare evals/repair/baseline.json
+go run ./tools/aieval -provider anthropic -parallel 4 -min-gate 0.7 -out r.json -markdown r.md
+go run ./tools/aieval -provider anthropic -judge -tags sme,payouts -reps 3
+go run ./tools/aieval -baseline-out evals/builder/baseline.json         # accept a change on purpose
 ```
 
-Suites are JSON lines in `evals/builder/*.jsonl`: `{"id", "request", "expect": {"connectors": [...], "steps": [...]}, "tags": [...]}`. The report gives, per case and overall: valid on the first try, valid after correction, dry-run tests passing, policy violations, rounds, tokens, and recall of the expected connectors and step types. The 25 seed requests come from the dogfood flows and the connector catalogue; the 200+ real requests B3 needs come from people (AI2). The offline heuristic exercises the pipeline and sets a floor; it is not a measure of any model.
+### The gate
+
+- **Every pull request touching `engine/ai/**`, `evals/**`, `templates/**` or `tools/aieval/**`** runs both suites with the offline heuristic provider and compares them with the committed baselines (`evals/builder/baseline.json`, `evals/repair/baseline.json`) at zero tolerance (the `ai-eval` job in `.github/workflows/ci.yml`; `TestBaselinesHold` runs the same comparison in `go test`). The heuristic is not a model: it reads the prompt's context, takes a strongly matching template or wires the best-matching actions of up to two retrieved connectors, behind an approval when money moves. This catches regressions of the pipeline itself (retrieval, templates, prompt plumbing, validation, the dry run, the grader) cheaply and deterministically. `-compare` compares only the cases both runs share and also lists cases that passed the gate in the baseline and fail now. A change that should move the numbers regenerates the baseline with `-baseline-out` in the same pull request, with the reason; so does a change to the connector catalogue that shifts retrieval.
+- **The real model** runs nightly and on demand (`.github/workflows/ai-eval.yml`) when `ANTHROPIC_API_KEY` is configured as a repository secret; without it the job succeeds without running (`-skip-without-key`). It enforces the G3 bar, **≥ 70% valid and test-passing on the first try**, once AI1 provides the account and AI2 the reviewed suite. A model or prompt change is run there on its branch (workflow_dispatch, with the model as input) and ships only if it does not regress against the last accepted real-model report, kept as `evals/builder/real-baseline.json` (compared with a 5% tolerance, above the noise floor of a single run).
 
 ## What is not built yet
 
-- The 200-request suite and its gate in CI (B3), an evaluation suite for repairs, and building from WhatsApp (B4).
+- The suites reviewed by people and the real-model gate result (AI1, AI2); a calibrated judge.
 - Notifying owners when a proposal appears (it shows on the run's page; alerts are a follow-up).
 - Cost budgets in currency (tokens only for now), and per-plan amounts (AI3).
 - An `ai` step type that calls a model at run time: it validates but fails with kind `unsupported`.

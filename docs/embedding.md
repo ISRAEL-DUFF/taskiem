@@ -85,7 +85,7 @@ POST /v1/partner/embed-apps
   "branding": {"colours": {"primary": "#0a7d5a", "background": "#ffffff"}, "font_family": "Inter, sans-serif",
                "logo_url": "https://cdn.payrolla.com/logo.svg", "radius": "8px", "mode": "auto"},
   "allowed_connectors": ["paystack", "termii", "http"],
-  "allowed_templates": ["salary-reminder"],
+  "allowed_templates": ["payroll-reminder"],
   "end_user_permissions": ["workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"],
   "headless": false,
   "webhook_url": "https://api.payrolla.com/taskiem/webhooks",
@@ -99,7 +99,7 @@ POST /v1/partner/embed-apps
 | `allowed_origins` | Exact origins, `https://host[:port]` (http only for `localhost`), no paths or wildcards; at most 20. Required unless `headless` |
 | `branding` | Theming tokens for the embedded builder (C2): `colours` (`primary`, `on_primary`, `background`, `surface`, `text`, `muted`, `border`, `accent`, `danger`, `success`; `#rgb`, `#rrggbb` or `#rrggbbaa`), `font_family` (letters, digits, spaces, commas, hyphens), `font_url` and `logo_url` (https), `radius` (`8px`), `mode` (`light`, `dark`, `auto`). Anything else is refused, so a token can never carry markup or a style injection |
 | `allowed_connectors` | Connector ids from the platform catalogue (`GET /v1/connectors`), plus `http`, `code` and `ai` to allow those step types, which reach the network or run code without a connector's declared actions. Empty: only control-flow and `transform` steps |
-| `allowed_templates` | Template ids end users may start from (the template library arrives with B4; C1 checks the id) |
+| `allowed_templates` | Ids from the [template library](templates.md) end users may start from (`GET /v1/templates` lists them; an unknown id is refused) |
 | `end_user_permissions` | What the app's end users may be given, a subset of `workflow.read`, `workflow.edit`, `workflow.publish`, `run.read`, `run.start`, `run.cancel`. Default: `workflow.read`, `workflow.edit`, `run.read`, `run.start` |
 | `headless` | Tokens may be used without an `Origin` (from the partner's servers) |
 | `white_label` | Leave out the platform's branding ([white-label](#11-white-label)); needs the `white_label` capability |
@@ -143,6 +143,8 @@ End users call `/v1/embed/{app}/...` with `Authorization: Bearer <token>`. The t
 | `GET /connectors` | — | The connectors the app allows, with their actions and schemas, and the allowed gated step types |
 | `GET /workflows`, `GET /workflows/{wf}`, `GET /workflows/{wf}/versions/{v}` | `workflow.read` | As `/v1/workflows` |
 | `POST /workflows` | `workflow.edit` | `{"name", "definition", "template"?}`; drafts may be incomplete and come back with `problems` |
+| `GET /templates` | — | The app's allowed templates, `available` when the app also allows their connectors |
+| `POST /templates/{id}/instantiate` | `workflow.edit` | `{"params", "name"?}`; a draft from one of the app's templates ([templates](templates.md)) |
 | `POST /workflows/{wf}/versions` | `workflow.edit` | Save a version (three-way merge with `parent_digest`, as `/v1`) |
 | `PUT /workflows/{wf}/versions/{v}/layout` | `workflow.edit` | Canvas layout |
 | `POST /validate` | `workflow.edit` | Validate a definition |

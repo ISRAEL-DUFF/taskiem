@@ -55,6 +55,7 @@ Outbound messages go to `graph.facebook.com` through the egress guard. Sends are
 | `status`, `what failed today?` | Runs in the last 24 hours by status, the latest failures, and approvals waiting for you (needs `run.read`) |
 | `run <workflow>` | Matches the name of a workflow deployed in `prod` (or its id); sends a form for its required inputs (or, where forms are not set up or the inputs do not fit one, asks each in turn), checked against the workflow's input schema; then shows exactly what will run and waits for **yes**. Needs `run.start`; plan limits apply. You hear how the run ended |
 | `approvals` | Requests waiting for you, sent again with fresh buttons (three at most) |
+| `build <what to automate>`, or just the goal ("every Friday text my customers who owe me") | Drafts a workflow with AI, shows it as plain steps, asks for any missing details, and saves it as a draft after your **yes** ([below](#build)). Needs `workflow.edit` |
 | `switch <organisation>` | Work in another organisation you belong to; `switch` alone lists them |
 | `cancel` | Drops what is in progress |
 
@@ -72,6 +73,18 @@ The decision is then recorded, and Taskiem confirms it in the chat.
 **Your approval PIN.** Under Account > WhatsApp, once your number is linked and you have a passkey or authenticator, set a six-digit PIN (not one digit repeated or a run like 123456), confirming with your passkey or authenticator code. Five wrong PINs in 15 minutes lock it for 15 minutes; meanwhile approvals send the web link. Remove it on the same page; unlinking your number removes it too.
 
 **What messages never show.** Secrets, and personal data unmasked: account and card numbers show their last four digits, phone numbers their country code and last four, BVN and NIN not at all, names their first letter, and anything under a field named like a credential is hidden. The full details stay in the web app, behind its permissions.
+
+## Build
+
+Spec 11.1 (Build, SME tier): describe an automation in a message and get a draft workflow back.
+
+1. Send `build` and what you want, or write it as you would say it, starting with when it happens: "every Friday text my customers who owe me", "when a customer pays on Paystack send them a thank you", "remind me before salaries are due every month" (four words or more starting with *every*, *each*, *when*, *whenever*, *daily*, *weekly*, *monthly*, *remind me*, *text my*, *let me know*, *tell me when* and similar). Taskiem answers at once that it is working on it.
+2. In the background, the [AI builder](ai.md) drafts the workflow under your permissions, starting from the [template library](templates.md) when a template fits, and checks it as if it were being published, then dry-runs it with every step mocked. This takes up to a couple of minutes; anything you send meanwhile gets "still drafting", and `cancel` drops it (the draft is then never sent).
+3. Taskiem sends the workflow back **as plain numbered steps** ("1. Every Friday at 10:00 (Africa/Lagos time) 2. Read the debtors sheet (Google Sheets) 3. For each customer on the sheet: 3a. Text the customer a reminder of what they owe (Termii), only when its condition holds"), never JSON or expressions, with any warning (a payment without an approval, a failing dry run) and the variables to set (such as `owner_phone`).
+4. If it started from a template and your message did not give every detail the template needs (the spreadsheet, how customers should pay), it asks for them **one at a time**, checks each answer (a time like 9am, a day like Friday, a number), and shows the steps again with your details.
+5. It ends with **"Save this as a draft workflow? Reply yes or no."** (with buttons). Only **yes** saves, and only a **draft**: a new workflow in your name with the AI as co-author, audited as `ai.save` with `channel: whatsapp`, with a link to open it. It does not run until someone publishes it in the web app, with the usual checks, four-eyes rules and approvals. **no** saves nothing.
+
+If the draft cannot pass Taskiem's checks, Taskiem says so and suggests describing it differently or building in the web app. Building needs `workflow.edit` (checked when you ask, when you answer and when you save), AI configured on the deployment, and this month's AI budget: over budget, Taskiem says so before any model call. Builds are limited per number (three, then one every 20 seconds) and share the organisation's limit with the web app (five, then one every 20 seconds). Your message is redacted before it reaches the model and stored redacted, like every AI build ([data handling](ai.md#data-handling)); details you type for a template are not personal data by design (phone numbers and emails are tenant variables) and wait in the conversation's state, under the organisation's row-level security, for 30 minutes at most.
 
 ## Templates
 
@@ -176,7 +189,7 @@ An alert channel of kind **WhatsApp** names members by email (Alerts > Channels)
 | A button forwarded or tapped by someone else | The tapping number must be bound to the approver the token names; refusals are audited (`approval.token.refused`) |
 | Approving what you should not | The decision is `runtime.Store.VoteApproval`, the web app's path: role or delegation, makers cannot approve, distinct approvers, levels; a refusal is audited (`approval.decide.refused`) |
 | Step-up | Never satisfied by chat text. Under a `whatsapp_pin` policy, by the person's PIN in a form bound to that one decision (Argon2id, five wrong in 15 minutes lock it; never enough for `totp` or `passkey` policies). Otherwise the hand-off link carries a separate 10-minute, single-use token in the URL fragment (kept out of logs and `Referer`); the page needs a signed-in session as the same person in the same organisation, then a passkey assertion or TOTP code for that exact decision |
-| A compromised phone | Per-number limits: 20 messages then one every 3 seconds (one warning a minute), three run starts then one every 20 seconds, and every start needs an explicit **yes** after a summary of exactly what will run. Unlinking the number in the web app ends it |
+| A compromised phone | Per-number limits: 20 messages then one every 3 seconds (one warning a minute), three run starts then one every 20 seconds, and every start needs an explicit **yes** after a summary of exactly what will run. Builds: three then one every 20 seconds, within the AI budget, and a build only ever saves a draft after an explicit **yes**; nothing built over WhatsApp can publish or run. Unlinking the number in the web app ends it |
 | Personal data in messages | Masked as above; free text passed through the PII redactor; inputs typed in chat are sealed (`x-pii` fields) while they wait for confirmation |
 | Tenant isolation | Bindings, codes, the window and message ids are a person's, not a tenant's: no tenant reads them; functions do one narrow thing each. Conversation state, tokens, flows, notices, run watches, own numbers, public sessions and template usage are tenant data under forced row-level security, read only with the conversation's current organisation (or the token's) in scope. The PIN is a person's, like the binding |
 | Own numbers' credentials | In the organisation's vault, never in tables, responses or logs; connecting needs `secret.manage` and a token the Graph API accepts for that number |
@@ -190,4 +203,5 @@ Limits are per `edge` replica (in memory), like the sign-in limiter.
 - Delivery receipts: templates are counted when Meta accepts them, not from the `pricing` object of status webhooks.
 - Run outcomes for public-menu runs (the person gets a reference only), and menus on the shared number.
 - Flows for inputs beyond ten flat fields (nested objects, lists), date pickers.
-- Languages beyond English, voice notes (A4), building workflows by chat (B4).
+- Languages beyond English, voice notes (A4).
+- Building: changing an existing workflow by chat (`build` creates new drafts only), and naming the draft in the chat (it takes the template's or the model's name).

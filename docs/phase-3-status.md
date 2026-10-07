@@ -18,8 +18,8 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 | A | A4 | Pidgin, Yoruba, Hausa and Igbo intents and replies; voice-note transcription (beta, tested by native speakers) | 11.6 | Planned |
 | B | B1 | Provider-agnostic model layer (Claude by default), redaction before prompts, per-tenant budgets, prompt and response audit; builder pipeline (retrieval → schema-constrained draft → validate → self-correct ×3 → dry run → generated tests → review as a draft version with the AI as co-author); the AI can never publish, approve, read secrets or write to a provider | 12.1, 12.3 | Done ([what exists](#b1-what-exists)) |
 | B | B2 | Repair pipeline: failure classification, shadow-sandbox fork with recorded inputs and mocked writes, diff and evidence, one-click publish and resume through the normal approval policy | 12.2 | Done ([what exists](#b2-what-exists)) |
-| B | B3 | Evaluation suite (200+ requests) with a runner that measures valid-on-first-try, test pass rate and policy violations, gating prompt and model changes | 12.4 | Planned |
-| B | B4 | SME template library; chat-based building on WhatsApp (needs A1) | 11.1 | Planned |
+| B | B3 | Evaluation suite (200+ requests) with a runner that measures valid-on-first-try, test pass rate and policy violations, gating prompt and model changes | 12.4 | Done (engineering; [what exists](#b3-what-exists)); the real-model gate needs AI1, the reviewed suite AI2 |
+| B | B4 | SME template library; chat-based building on WhatsApp (needs A1) | 11.1 | Done ([what exists](#b4-what-exists)); production WhatsApp needs W1, W2, a real model AI1 |
 | C | C1 | Sub-tenants (`parent_id`), `embed_apps`, end-user token minting, partner admin API with webhooks and a dual audit trail, headless mode | 13.1, 13.4, 5.3 | **Done** ([below](#c1-what-exists)) |
 | C | C2 | Embedded builder web component and iframe, theming tokens, custom domains, white-label | 13.4 | **Done** ([below](#c2-what-exists)); TLS for partners' hosts needs EM2 |
 | C | C3 | Partner connector bridge (the partner's API as a pre-authenticated connector) | 13.4 | **Done** ([below](#c3-what-exists)) |
@@ -119,7 +119,7 @@ The model layer and the AI workflow builder ([AI](ai.md), [decision 0014](decisi
 | Storage and audit | migration 00040 | `ai_builds`, insert-only `ai_interactions` (redacted prompt and answer, model, usage, outcome), `workflow_versions.ai_build_id`, all under forced RLS; `ai.propose` and `ai.save` in the audit chain |
 | Budgets | migration 00041, `engine/runtime/limits.go` | `ai_monthly_tokens` plan limit (default 2,000,000; `TASKIEM_DEFAULT_AI_MONTHLY_TOKENS`; `taskiem tenants limits --set ai_monthly_tokens=N`); use shown in `GET /v1/limits`; only AI building stops at the cap |
 | Web | `web/src/pages/AIBuild.tsx` | **Build with AI** (workflow list) and **Change with AI** (editor): goal, progress, canvas preview, summary, warnings, dry run, Save as draft |
-| Evaluation | `tools/aieval`, `evals/builder/seed.jsonl` | 25 seed requests from the dogfood flows and the catalogue; valid-on-first-try, test pass, policy violations, connector and step recall; `--provider anthropic`; `--min-first-try` gate |
+| Evaluation | `tools/aieval`, `evals/builder/seed.jsonl` | 25 seed requests from the dogfood flows and the catalogue; valid-on-first-try, test pass, policy violations, connector and step recall; `--provider anthropic`; `--min-first-try` gate (grown by [B3](#b3-what-exists)) |
 
 Left for later milestones: B2 (now done, [below](#b2-what-exists)) built the repair pipeline on the same layer; B3 grows the suite to 200+ reviewed requests (AI2) and runs the gate in CI on prompt or model changes; B4 adds the SME template library and building over WhatsApp.
 ## B2: what exists
@@ -144,6 +144,41 @@ Self-repair of failed runs, 2026-10-07 ([AI: repairing failed runs](ai.md#repair
 Left for later: alerts when a proposal appears (it shows on the run's page); an evaluation suite for repairs alongside B3's; resuming runs that compensated (a person starts a new run today); patches for workflows managed in a repository go through the repository (accept refuses them, as manual edits are refused).
 
 Migrations 00050–00052 were numbered for B2 while C2 (00055–00059) and A2 (00060–00064) land in parallel; see the note under C1's known gaps.
+
+## B3: what exists
+
+The evaluation suite and its gate, 2026-10-07 ([AI: evaluation](ai.md#evaluation)). Engineering is done; the gate against the real model waits for an API account (AI1) and for people to review the suite and extend it with real requests (AI2).
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Builder suite | `evals/builder/*.jsonl` | 223 requests: payouts 22, collections 20, reconciliation 18, KYC 18, notifications 20, approvals 18, schedules and reporting 22, messaging 18, multi-step 20, small-business phrasing 22 (Pidgin included), and the 25 seeds (now with difficulty, trigger and properties); 37 easy, 99 medium, 87 hard; each with tags, required connectors (existing ones only), step types, trigger and properties. **Synthetic seeds pending review by people**, marked in every file's first line and in `source` |
+| Repair suite | `evals/repair/failures.jsonl` | 22 recorded failures over the dogfood flows and small workflows, every class at least twice, with the expected class and rule certainty, and regression cases for data failures |
+| No leakage | `engine/ai/builder/templates_test.go` | `TestNoEvalRequestInPrompts`: no request, nor any eight of its words, in the system prompt, the worked example or any template's prompt context |
+| Grader | `tools/aieval` (`grade.go`, `rules.go`, `judge.go`) | Valid on first try and after corrections, dry-run tests, gate, requirements (connectors, steps, trigger, properties), 11 property rules, policy violations, strict; errors, timeouts, truncations and other models not scored; refusals scored and counted; reps, parallelism, per-attempt ceiling, served-model check; token cost at Anthropic's prices (`-price` for others); optional model-graded rubric (`-judge`: four checkable claims, structured output, judge model and cost recorded, never the model under test) |
+| Reports | `tools/aieval/report.go` | Terminal, JSON (`-out`) and Markdown (`-markdown`): summary with noise floor, per tag, difficulty and property, failing cases |
+| Baselines and compare | `evals/builder/baseline.json`, `evals/repair/baseline.json` | Produced with the offline heuristic; `-compare` (over shared cases) fails when any rate drops more than `-tolerance`, policy violations or unscored attempts grow, and lists cases that stopped passing |
+| Gate | `.github/workflows/ci.yml` (`ai-eval`), `.github/workflows/ai-eval.yml` | Every PR touching `engine/ai`, `evals`, `templates` or `tools/aieval`: both suites against the baselines at zero tolerance. Nightly and on demand with the real model when `ANTHROPIC_API_KEY` is a repository secret (skipped cleanly otherwise): `-min-gate 0.7`, optional judge, compared with `evals/builder/real-baseline.json` when present |
+| Tests | `tools/aieval/main_test.go` | Suite size, schema, spread and marker; each rule on hand-written good and bad definitions; oracle and null answers through the grader; errors and model mismatches unscored; the baselines hold; compare detects regressions (gate, policy) and passes within tolerance; reports and the gate; the judge's wiring and its refusal to judge the model under test; repair fixtures (a real fix passes the regression case, a do-nothing patch fails it); costs; skipping without a key |
+
+Offline baseline (the heuristic, not a model): builder valid and passing on the first try 100% (the heuristic writes small, valid drafts), requirements 6.7%, properties 66.6%, no policy violations; repair class accuracy 100% (rules alone), patches valid 100% and passing 77.8% (the do-nothing patch fails both regression cases).
+
+## B4: what exists
+
+The SME template library and building over WhatsApp, 2026-10-07 ([templates](templates.md), [WhatsApp: build](whatsapp.md#build)).
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Library | `templates/` (`library/*.json`) | 17 templates: debtor reminders by SMS and WhatsApp, invoice follow-up, transfers received, daily sales summary, ledger, weekly balances, thank-you and receipts, welcome, new orders, low balance, failed transfers, stock, salary reminder, approved payroll, supplier payment with approval, BVN check. Named, typed, described parameters (string, text, integer, number, boolean, time, weekday, connection); substitution by place (typed values, CEL literals inside expressions, text); values starting with `=` refused; personal data in tenant variables |
+| Checks | `templates/templates_test.go` | Every template filled with its examples passes the publishing checks, uses exactly its connectors, has no policy finding, dry-runs, reads as plain steps, and round-trips through flow code; parameter refusals; CEL quoting; retrieval |
+| Plain steps | `engine/wdtext` | A definition read aloud as numbered steps (schedules in words, connector action titles, approvals, loops, branches, parallel work, waits, on-error), never expressions |
+| Builder retrieval | `engine/ai/builder` | Up to two matching templates in the prompt (keyword match weighted by rarity, a distinctive keyword required); the model may answer with a template id and parameter values, which the builder instantiates, listing what the goal did not say; `template` and `templates_offered` in the proposal |
+| API | `api/templates.go`, migration 00070 | `GET /v1/templates` (any member; search, category, plain steps, availability), `GET /v1/templates/{id}`, `POST /v1/templates/{id}/instantiate` (`workflow.edit`; draft only; `workflow_versions.template_id`); AI builds record `template_id` and `channel` |
+| Embedding (C1) | `api/embed.go`, `api/embedapps.go` | `allowed_templates` must name library templates; `GET /v1/embed/{app}/templates` and `POST …/templates/{id}/instantiate` within the app's templates and connectors |
+| WhatsApp build (11.1) | `api/whatsapp_build.go` | `build <goal>` or a goal in plain words; `workflow.edit`, AI budget and rate limits checked first; background build, templates first; plain numbered steps back; missing template parameters asked one by one; explicit **yes**/**no**; a draft only (AI co-author, `ai.save` with `channel: whatsapp`), with a link; cancel at any point |
+| Web | `web/src/pages/Templates.tsx`, `web/src/pages/AIBuild.tsx` | Templates gallery (browse, search, plain steps, variables, a parameter form creating a draft); the AI panel shows the template a draft started from and what is missing |
+| Tests | `api/templates_test.go`, `api/whatsapp_build_test.go`, `web/src/lib/templates.test.ts` | List, search, availability, permissions, parameters refused by name, instantiate with provenance and audit; embed apps' templates; WhatsApp build end to end with the fake model and fake Graph API (plain steps without JSON, parameter collection with a bad value, nothing saved before **yes**, a draft only with provenance and audit, **no** saves nothing, cancel while drafting, refusal without `workflow.edit`, budget exhausted before any model call, AI not configured) |
+
+Migration 00070 is in the range set aside for B3/B4 (00070–00074) while A3 (00065–00069) and the mobile money connectors (00075–00079) land in parallel. Left: changing an existing workflow by chat; template parameters for nested data; templates for the mobile money connectors once they land; more templates from design partners.
 
 ## C1: what exists
 
