@@ -104,6 +104,87 @@ export function Passkeys({ onAdded }: { onAdded?: () => void }) {
   );
 }
 
+interface WhatsAppBinding {
+  enabled: boolean;
+  platform_number?: string;
+  number: string | null;
+  verified_at: string | null;
+  pending?: { number: string; expires_at: string };
+}
+
+/** The member's WhatsApp number: linked by a code sent to it, it lets them
+ * approve, check status and start runs from WhatsApp. */
+function WhatsApp() {
+  const { me } = useAuth();
+  const b = useLoad(() => get<WhatsAppBinding>("/v1/me/whatsapp"), []);
+  const [number, setNumber] = useState("");
+  const [code, setCode] = useState("");
+  const [typed, setTyped] = useState("");
+  const [sent, setSent] = useState(false);
+  const act = useAction();
+  if (!b.data?.enabled) return b.error ? <ErrorBox error={b.error} /> : null;
+  const pending = b.data.pending;
+  return (
+    <section className="card" data-testid="whatsapp">
+      <h2 style={{ marginTop: 0 }}>WhatsApp</h2>
+      <p className="hint">
+        Link your WhatsApp number to approve requests, check what ran and start workflows by chat
+        {b.data.platform_number && (
+          <>
+            {" "}
+            with Taskiem's number <strong>{b.data.platform_number}</strong>
+          </>
+        )}
+        . Your roles and approval policies apply exactly as here; some approvals still ask for your passkey or authenticator code.
+      </p>
+      <ErrorBox error={act.error} />
+      {b.data.number && (
+        <div className="row">
+          <p className="grow">
+            Linked: <strong data-testid="whatsapp-number">{b.data.number}</strong> {b.data.verified_at && <span className="hint">since {fmtTime(b.data.verified_at)}</span>}
+          </p>
+          <button className="danger" disabled={act.busy} onClick={() => confirm("Unlink this number?") && void act.run(async () => (await del("/v1/me/whatsapp"), b.reload()))}>
+            Unlink
+          </button>
+        </div>
+      )}
+      <form
+        className="row"
+        style={{ alignItems: "flex-end" }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act.run(async () => (await post("/v1/me/whatsapp", { number, ...(await proof(me?.factors, typed)) }), setTyped(""), setSent(true), b.reload()));
+        }}
+      >
+        <Field label={b.data.number ? "Link another number instead" : "Your WhatsApp number"} hint="With the country code, e.g. +2348012345678">
+          <input type="tel" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="+234…" required />
+        </Field>
+        <ProofField to="link a number" value={typed} onChange={setTyped} />
+        <button type="submit" disabled={act.busy}>
+          Send a code
+        </button>
+      </form>
+      {(pending || sent) && (
+        <form
+          className="row"
+          style={{ alignItems: "flex-end" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act.run(async () => (await post("/v1/me/whatsapp/verify", { code }), setCode(""), setNumber(""), setSent(false), b.reload()));
+          }}
+        >
+          <Field label={`Code sent to ${pending?.number ?? "your number"}`} hint="Or send the code back to Taskiem in WhatsApp. It works for 10 minutes.">
+            <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+          </Field>
+          <button className="primary" type="submit" disabled={act.busy || code.length !== 6}>
+            Link
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
+
 /** Organisations that invited the member: they join when they accept. */
 function Invitations() {
   const list = useLoad(() => get<{ invitations: Invitation[] }>("/v1/me/invitations"), []);
@@ -148,6 +229,7 @@ export function Account() {
       <Invitations />
       <ChangePassword />
       <Passkeys />
+      <WhatsApp />
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Authenticator app</h2>
         <p className="hint">

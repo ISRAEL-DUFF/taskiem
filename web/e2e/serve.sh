@@ -19,6 +19,11 @@ export TASKIEM_LISTEN=127.0.0.1:18080 TASKIEM_METRICS_LISTEN=127.0.0.1:19090 TAS
 export TASKIEM_PUBLIC_URL=http://localhost:18080 TASKIEM_REQUIRE_ADMIN_PASSKEYS=false
 # Email goes to the SMTP sink password.spec.ts listens on.
 export TASKIEM_SMTP_URL=smtp://127.0.0.1:12525 TASKIEM_ALERT_FROM=taskiem@e2e.test
+# The platform WhatsApp number talks to the fake Graph API whatsapp.spec.ts
+# runs (loopback is allowed only because the URL names it).
+export TASKIEM_WHATSAPP_PHONE_NUMBER_ID=106540352242922 TASKIEM_WHATSAPP_ACCESS_TOKEN=EAAe2e TASKIEM_WHATSAPP_APP_SECRET=e2e-app-secret \
+  TASKIEM_WHATSAPP_VERIFY_TOKEN=e2e-verify TASKIEM_WHATSAPP_TOKEN_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= \
+  TASKIEM_WHATSAPP_GRAPH_URL=http://127.0.0.1:12626/v25.0 TASKIEM_WHATSAPP_DISPLAY_NUMBER="+1 555 000 1111"
 # Every spec signs in from the same address.
 export TASKIEM_LOGIN_BURST=100
 exec bin/taskiem serve --role all

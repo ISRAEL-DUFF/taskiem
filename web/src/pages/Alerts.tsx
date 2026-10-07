@@ -5,9 +5,9 @@ import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
 
 interface Channel {
   id: string;
-  kind: "email" | "slack" | "webhook";
+  kind: "email" | "slack" | "webhook" | "whatsapp";
   name: string;
-  config: { to?: string[]; url?: string };
+  config: { to?: string[]; url?: string; emails?: string[] };
   created_at: string;
 }
 interface Rule {
@@ -75,7 +75,13 @@ export function Alerts() {
               <tr key={c.id}>
                 <td>{c.name}</td>
                 <td>{c.kind}</td>
-                <td className="hint">{c.kind === "email" ? c.config.to?.join(", ") : c.kind === "webhook" ? c.config.url : "Slack incoming webhook"}</td>
+                <td className="hint">{c.kind === "email"
+                    ? c.config.to?.join(", ")
+                    : c.kind === "webhook"
+                      ? c.config.url
+                      : c.kind === "whatsapp"
+                        ? `WhatsApp: ${c.config.emails?.join(", ") ?? ""}`
+                        : "Slack incoming webhook"}</td>
                 <td>
                   <button onClick={() => void act.run(async () => (await post(`/v1/alerts/channels/${c.id}/test`), setNotice(`A test message reached ${c.name}.`)))}>Send test</button>{" "}
                   <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/channels/${c.id}`), channels.reload(), rules.reload()))}>
@@ -153,7 +159,7 @@ export function Alerts() {
 }
 
 function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
-  const [kind, setKind] = useState<"email" | "slack" | "webhook">("email");
+  const [kind, setKind] = useState<"email" | "slack" | "webhook" | "whatsapp">("email");
   const [name, setName] = useState("");
   const [dest, setDest] = useState("");
   const act = useAction();
@@ -164,7 +170,7 @@ function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         void act.run(async () => {
-          const body = kind === "email" ? { kind, name, to: dest.split(/[,\s]+/).filter(Boolean) } : { kind, name, url: dest };
+          const body = kind === "email" || kind === "whatsapp" ? { kind, name, to: dest.split(/[,\s]+/).filter(Boolean) } : { kind, name, url: dest };
           const r = await post<{ signing_key?: string }>("/v1/alerts/channels", body);
           setName("");
           setDest("");
@@ -177,13 +183,19 @@ function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
           <option value="email">Email</option>
           <option value="slack">Slack</option>
           <option value="webhook">Webhook</option>
+          <option value="whatsapp">WhatsApp (members' linked numbers)</option>
         </select>
       </Field>
       <Field label="Channel name">
         <input value={name} onChange={(e) => setName(e.target.value)} required />
       </Field>
-      <Field label={kind === "email" ? "Recipients" : kind === "slack" ? "Incoming webhook URL" : "HTTPS URL"}>
-        <input value={dest} onChange={(e) => setDest(e.target.value)} placeholder={kind === "email" ? "ops@bank.com, oncall@bank.com" : kind === "slack" ? "https://hooks.slack.com/services/…" : "https://"} required />
+      <Field label={kind === "email" ? "Recipients" : kind === "whatsapp" ? "Members' emails" : kind === "slack" ? "Incoming webhook URL" : "HTTPS URL"}>
+        <input
+          value={dest}
+          onChange={(e) => setDest(e.target.value)}
+          placeholder={kind === "email" || kind === "whatsapp" ? "ops@bank.com, oncall@bank.com" : kind === "slack" ? "https://hooks.slack.com/services/…" : "https://"}
+          required
+        />
       </Field>
       <button type="submit" disabled={act.busy}>
         Add channel

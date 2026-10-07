@@ -18,6 +18,7 @@ import { useState } from "react";
 import { ErrorBox, useAction } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
+import { Handoff } from "./pages/Handoff";
 
 export function App() {
   return (
@@ -65,7 +66,7 @@ function Shell() {
   if (loc.pathname === "/reset-password") return <ResetPassword />;
   if (me === undefined) return <div className="empty">Loading…</div>;
   if (me === null) {
-    return loc.pathname === "/login" ? <Login /> : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
+    return loc.pathname === "/login" ? <Login /> : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`} replace />;
   }
   if (me.enrol_passkey) return <EnrolPasskey />;
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || "/workflows"} replace />;
@@ -117,6 +118,7 @@ function Shell() {
           <Route path="/members" element={<Members />} />
           <Route path="/policies" element={<Policies />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/handoff" element={<Handoff />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<div className="empty">Not found</div>} />
         </Routes>

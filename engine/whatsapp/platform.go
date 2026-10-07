@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 
@@ -93,6 +95,17 @@ func New(pool *pgxpool.Pool, cfg Config, guard *egress.Guard, log *slog.Logger) 
 	}
 	if cfg.DefaultCountry == "" {
 		cfg.DefaultCountry = "234"
+	}
+	// An operator pointing the platform at a fake Graph API on this machine
+	// (browser tests) reaches loopback, and nothing else private.
+	if u, err := url.Parse(cfg.GraphURL); err == nil && cfg.GraphURL != "" {
+		if ip, err := netip.ParseAddr(u.Hostname()); err == nil && ip.IsLoopback() {
+			var log *slog.Logger
+			if guard != nil {
+				log = guard.Logger
+			}
+			guard = &egress.Guard{Logger: log, Blocked: func(a netip.Addr) bool { return !a.IsLoopback() && egress.BlockedAddr(a) }}
+		}
 	}
 	return &Platform{Pool: pool, Config: cfg, Logger: log, Signer: Signer{Key: cfg.TokenKey},
 		Client: &Client{BaseURL: cfg.GraphURL, PhoneNumberID: cfg.PhoneNumberID, Token: cfg.AccessToken, Egress: guard}}
