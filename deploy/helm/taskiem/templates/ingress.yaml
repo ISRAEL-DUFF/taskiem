@@ -42,4 +42,43 @@ spec:
                 name: {{ $api }}
                 port:
                   name: http
+{{- if .Values.ingress.embedHosts }}
+---
+# Partners' custom domains (docs/embedding.md#custom-domains): the embed
+# surface only, each host with its own certificate.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}-embed
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+  {{- with (merge (deepCopy .Values.ingress.embedAnnotations) .Values.ingress.annotations) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    {{- range .Values.ingress.embedHosts }}
+    - hosts: [{{ .host | quote }}]
+      secretName: {{ .secretName | default (printf "%s-tls" (.host | replace "." "-")) }}
+    {{- end }}
+  rules:
+    {{- range .Values.ingress.embedHosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range $path := list "/embed/" "/v1/embed/" }}
+          - path: {{ $path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $api }}
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}
 {{- end }}

@@ -115,6 +115,17 @@ ingress:
   tls:
     enabled: true
     secretName: taskiem-tls
+  # Partners' custom domains for embed apps (docs/embedding.md#custom-domains).
+  # Each host gets a rule sending only /embed/ and /v1/embed/ to the API (which
+  # serves nothing else on a verified custom domain) and its own TLS secret:
+  # with cert-manager, set embedAnnotations to your issuer (for example
+  # cert-manager.io/cluster-issuer: letsencrypt) and it issues one certificate
+  # per host. A partner points its host at the ingress (CNAME) and verifies it
+  # through the partner API; the application never issues certificates.
+  embedHosts: []
+  #  - host: automations.partner.example
+  #    secretName: automations-partner-example-tls   # default: <host with dashes>-tls
+  embedAnnotations: {}
 
 podDisruptionBudget:
   enabled: true

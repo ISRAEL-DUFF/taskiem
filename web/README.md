@@ -6,7 +6,7 @@ The API serves the built app from `TASKIEM_WEB_DIR` (`/web` in the image).
 
 ```sh
 pnpm --filter @taskiem/web dev     # Vite on :5173, proxying /v1 and /hooks to taskiem serve on :8080
-pnpm --filter @taskiem/web build   # dist/
+pnpm --filter @taskiem/web build   # dist/, and the embeddable bundle dist/embed/v1/taskiem.js (docs/embedding.md)
 pnpm --filter @taskiem/web test    # unit tests (graph, timeline, schema fields)
 make e2e                           # Playwright against the real binary and a fresh database
 ```

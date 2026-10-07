@@ -21,8 +21,8 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 | B | B3 | Evaluation suite (200+ requests) with a runner that measures valid-on-first-try, test pass rate and policy violations, gating prompt and model changes | 12.4 | Planned |
 | B | B4 | SME template library; chat-based building on WhatsApp (needs A1) | 11.1 | Planned |
 | C | C1 | Sub-tenants (`parent_id`), `embed_apps`, end-user token minting, partner admin API with webhooks and a dual audit trail, headless mode | 13.1, 13.4, 5.3 | **Done** ([below](#c1-what-exists)) |
-| C | C2 | Embedded builder web component and iframe, theming tokens, custom domains, white-label | 13.4 | Planned |
-| C | C3 | Partner connector bridge (the partner's API as a pre-authenticated connector) | 13.4 | Planned |
+| C | C2 | Embedded builder web component and iframe, theming tokens, custom domains, white-label | 13.4 | **Done** ([below](#c2-what-exists)); TLS for partners' hosts needs EM2 |
+| C | C3 | Partner connector bridge (the partner's API as a pre-authenticated connector) | 13.4 | **Done** ([below](#c3-what-exists)) |
 | C | C4 | First embedded deployment inside a holdco product (Payrolla customer automations) | — | Needs people |
 | — | X | Container steps (gVisor or Firecracker); mobile money (M-Pesa, MTN MoMo, Airtel Money); tax and statutory connectors | 7.5 | Planned |
 
@@ -115,15 +115,42 @@ Embedding foundations, 2026-10-07. Partner guide: [embedding.md](embedding.md). 
 | Partner webhooks | `run.completed`, `run.failed`, `workflow.published` (queued by triggers in the causing transaction), `usage.threshold` (80% and 100%, once per period); signed like alert webhooks, retried with backoff, logged; sent by the scheduler role | Migration 00047, `engine/embed/webhooks.go`, `alerts.Sign` |
 | Tests | RLS and the partner path (`TestPartnerEnter`, `TestAuthTenantScope`); isolation and dual audit (`TestSubTenantIsolation`); tokens: expiry, audience, origin binding, revocation, permission subsets, forged and altered tokens, live narrowing (`TestEndUserTokens`); CORS (`TestEmbedCORS`); headless flow end to end and allowed connectors and templates (`TestHeadlessFlow`); limit inheritance and partner caps (`TestSubTenantLimits`); suspension (`TestSubTenantSuspension`); signed, retried webhooks (`TestPartnerWebhooks`); the operator CLI (`TestTenantsPartnerCLI`); definitions, origins and branding (`engine/embed`) | `api/embed_test.go`, `engine/db/db_test.go`, `engine/embed/embed_test.go`, `cmd/taskiem/tenantscmd_test.go` |
 
-### Hooks left for C2–C4
+### Hooks left for C4
 
-- **C2 (web component, iframe, theming, custom domains, white-label).** The embed API is the component's whole backend. `GET /v1/embed/{app}/me` returns the app's branding tokens, validated so they can be applied as CSS custom properties. An iframe needs per-app `frame-ancestors` on its own pages (every page sends `frame-ancestors 'none'` today). `EventSource` cannot send the token header, so the component streams runs with `fetch`. Custom domains will add origins and a host-to-app mapping.
-- **C3 (partner connector bridge).** `allowed_connectors` already gates what end users may use. Partner-provisioned, per-sub-tenant connections need a partner API route that writes into the sub-tenant's vault (its own KEK) through `partnerTx`.
-- **C4 (Payrolla).** Needs people: [needs-people](needs-people.md#phase-3).
+- **C4 (Payrolla).** Needs people: [needs-people](needs-people.md#phase-3) (EM1). Everything it needs is built: C2 and C3 below.
 
 ### Known gaps
 
 - A suspended sub-tenant's schedules and webhook triggers keep firing; only its tokens and sessions stop.
-- End users cannot hold `approval.decide` (decisions are recorded against platform users) or manage connections; with four-eyes publishing on, they cannot publish.
+- End users cannot hold `approval.decide` (decisions are recorded against platform users) or manage connections (the partner provisions them, C3); with four-eyes publishing on, they cannot publish.
 - Deleting a sub-tenant is an operator task; there is no API for it.
 - Migrations 00045–00047 were numbered for C1 while A1 (00035–00039) and B1 (00040–00044) land in parallel; goose applies them in order on a fresh database, and an existing one migrated before A1 and B1 must apply those with goose's allow-missing option, or be migrated after all three merge.
+
+## C2: what exists
+
+The embedded builder, 2026-10-07. Partner guide: [embedding.md](embedding.md) sections 7–11. Threat model: B11 (framing and `postMessage`, custom domain takeover, branding).
+
+| Area | Deliverable | Where |
+| --- | --- | --- |
+| Bundle | A separate Vite build (`web/vite.embed.config.ts`, run by `pnpm build`) of one classic script with its styles inlined, `dist/embed/v1/taskiem.js` (about 145 kB gzipped), served at `/embed/v1/taskiem.js` with a five-minute public cache, `Access-Control-Allow-Origin: *` and `Cross-Origin-Resource-Policy: cross-origin` | `web/src/embed/index.tsx`, `api/embedframe.go` (`Server.EmbedDir`, set from `TASKIEM_WEB_DIR`) |
+| Elements | `<taskiem-builder>` (list, create, the console's canvas and step panel, validate, save, publish, run and watch live) and `<taskiem-runs>` (runs, live on the run canvas), each in a shadow root; only `/v1/embed/{app}` with the token in `Authorization`; runs streamed with `fetch` and resumed with `Last-Event-ID`; `taskiem-token-expiring` 60 s before expiry and `setToken()`; events for loaded, published, run started and ended | `web/src/embed/EmbedApp.tsx`, `client.ts`; reuses `canvas/StepNode`, `StepPanel`, `RunCanvas` (now taking a `load` prop), `lib/graph`, `lib/timeline`, `ui` |
+| Iframe mode | `/embed/{app}/frame` (`?view=runs`): the only frameable page, `frame-ancestors` = the app's allowed origins (not its own), no `X-Frame-Options`; a 404 with `frame-ancestors 'none'` for unknown or disabled apps. The token arrives by `postMessage` (`taskiem:ready` → `taskiem:token`), checked for source, allowed origin and, after the first, the same origin; the frame posts only to that origin. The API takes the frame's `X-Taskiem-Embed-Parent` only from its own origin and checks it as an `Origin` | `api/embedframe.go`, `api/embed.go` (`embedOrigin`), `engine/httpsec` (`FrameCSP`, `SetFrame`), `web/src/embed/frame.ts` |
+| Theming | Branding tokens re-checked in the browser and applied only as a fixed list of CSS custom properties on the builder's root (`--accent`, `--accent-text`, `--bg`, `--panel`, `--text`, `--muted`, `--border`, `--info`, `--danger`, `--ok`, `--tk-font`, `--tk-radius`), light or dark palettes for a fixed mode, the logo as an `<img>`, the font's https stylesheet in the document head | `web/src/embed/theme.ts`, `embed.css` |
+| Partner capabilities | `partners.capabilities` (`white_label`, `custom_domains`), set by `taskiem tenants partner --capabilities`, audited | Migration 00055, `cmd/taskiem/partnercmd.go` |
+| White-label | `embed_apps.white_label`, refused (403) without the capability; effective only while the partner holds it (`taskiem_auth_end_user_token`); `GET /me` `white_label` hides "Powered by Taskiem"; alert emails for a white-label partner's sub-tenants lose the `[Taskiem]` subject prefix (`taskiem_tenant_white_label`, `Alerter.WhiteLabel`). WhatsApp templates are unchanged: partner templates need Meta's approval (EM3) | Migration 00055, `api/embedapps.go`, `engine/alerts` |
+| Custom domains | `embed_app_domains`: claimed per partner and app (up to 10), verified with `_taskiem-verify.<domain>` TXT (the SSO pattern), exclusive once verified, never the platform's host or its subdomains; `taskiem_embed_host_app` maps a verified host while the capability, app and partner are active; such a host serves only the bundle, the app's frame (`/embed/frame`) and the app's embed API, everything else 404; its `https://` origin joins the app's origins. Host lookups cached 30 s per replica, cleared on verify and remove | Migration 00055, `api/embeddomains.go`, `api/embedframe.go` (`customDomains`) |
+| Ingress | Helm `ingress.embedHosts` and `ingress.embedAnnotations`: a `<release>-embed` Ingress routing `/embed/` and `/v1/embed/` per host, a TLS secret per host for cert-manager; no ACME in the application (EM2) | `deploy/helm/taskiem/templates/ingress.yaml`, [kubernetes](kubernetes.md) |
+| Tests | Bundle headers and caching, frame-ancestors only on frame pages and only for the app's origins, every other page `'none'` (`TestEmbedBundleAndFrame`); the frame's parent header and bound tokens (`TestEmbedFrameOrigin`); claim, verify, exclusivity, host mapping only after verification, surface restriction, capability and removal (`TestCustomDomains`); white-label gating in `/me` and emails (`TestWhiteLabel`); `--capabilities` (`TestTenantsPartnerCLI`); domain and CSP helpers (`engine/embed`, `engine/httpsec`); client token header, expiry warning, streaming and reconnection, theming and frame message checks (`web/src/embed/embed.test.ts`); a partner page on a second origin embedding the element and the iframe, minting through the partner API, building, publishing and running a workflow, with theming checked (`web/e2e/embed.spec.ts`) | `api/embedc2_test.go`, `cmd/taskiem/tenantscmd_test.go`, `web/src/embed/embed.test.ts`, `web/e2e/embed.spec.ts` |
+
+## C3: what exists
+
+The partner connector bridge, 2026-10-07. Partner guide: [embedding.md](embedding.md#12-the-partner-connector-bridge).
+
+| Area | Deliverable | Where |
+| --- | --- | --- |
+| Shared connectors | A partner shares its own WebAssembly connectors (`x_…`, uploaded to its tenant) with all its sub-tenants: `PUT`/`DELETE /v1/partner/connectors/{id}/share`, `GET /v1/partner/connectors`. Sub-tenants load every enabled version through `taskiem_shared_connectors` and `taskiem_shared_connector_module` (they never see the partner's rows); a shared id wins over a sub-tenant's own; apps may list shared ids in `allowed_connectors` | Migration 00056, `api/partnerconnectors.go`, `engine/wasmconn/source.go` |
+| Provisioned credentials | `POST /v1/partner/sub-tenants/{sub}/connections`, `PUT …/{id}/credentials` (rotate), `DELETE …/{id}`, `GET` (names and status only): written through `partnerTx` into the sub-tenant's vault under its own KEK (`Vault.CreateConnectionTx`, `ReplaceCredentialsTx`), audited in both chains (`partner.connection.*`) and as `connection.create` in the sub-tenant; `connections.provisioned_by` records the partner's key; the connector must be available to the sub-tenant and allowed by one of the partner's active apps; within the sub-tenant's `max_connections` | `api/partnerconnectors.go`, `engine/secrets/connections.go` |
+| Never readable | No route returns credential values; end users have no connection routes; runs decrypt them only in the sub-tenant that holds them | — |
+| Tests | Sharing gates apps and provisioning; credentials stored in the sub-tenant's vault, dual audit, invisible to the partner (write, not read) and to other sub-tenants; sub-tenant A's end user runs the partner's connector pre-authenticated, B's run cannot use A's credential; rotation reaches the next run; removal; another partner reaches none of it; unsharing withdraws it (`TestConnectorBridge`) | `api/embedc2_test.go` |
+
+C2 and C3 migrations are 00055–00056 (00050–00054 are B2's, 00060–00064 A2's); goose applies them in order on a fresh database.

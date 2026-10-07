@@ -84,6 +84,8 @@ Alongside the Deployments the chart creates:
 
 With the plain manifests the steps are the same, except that you run `taskiem migrate` yourself first. The Job's hook annotations mean nothing to `kubectl apply`, so the Job runs as soon as it is applied, and Kubernetes will not update the finished Job in place. Delete it before applying a new version.
 
+**Partners' custom domains.** A partner can serve the embedded builder on its own host name once it has verified the domain through the partner API ([embedding](embedding.md#10-custom-domains)). Each such host needs a certificate at the ingress: list it under `ingress.embedHosts` (with `ingress.embedAnnotations` naming your cert-manager issuer, or a `secretName` holding a certificate you manage). The chart adds a `<release>-embed` Ingress that sends only `/embed/` and `/v1/embed/` on those hosts to the API; the application issues no certificates.
+
 ## Security defaults
 
 - **Pods:**
