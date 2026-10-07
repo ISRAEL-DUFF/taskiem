@@ -17,19 +17,19 @@
     "valid_after_corrections_rate": 1,
     "test_pass_rate": 1,
     "valid_first_try_and_tests_pass_rate": 1,
-    "requirements_rate": 0.0673,
-    "property_pass_rate": 0.6659,
-    "strict_rate": 0.0673,
+    "requirements_rate": 0.0717,
+    "property_pass_rate": 0.6727,
+    "strict_rate": 0.0717,
     "policy_violations": 0,
     "attempts_with_policy_violations": 0,
     "policy_violation_rate": 0,
-    "connector_recall": 0.6348,
-    "step_recall": 0.7022,
+    "connector_recall": 0.6266,
+    "step_recall": 0.7089,
     "trigger_accuracy": 0.4036,
     "template_starts": 70,
     "usage": {
-      "input_tokens": 5297204,
-      "output_tokens": 28523,
+      "input_tokens": 5484369,
+      "output_tokens": 28715,
       "cache_creation_tokens": 0,
       "cache_read_tokens": 0
     },
@@ -89,8 +89,8 @@
     "approvals": {
       "cases": 18,
       "valid_first_try_and_tests_pass_rate": 1,
-      "requirements_rate": 0,
-      "strict_rate": 0,
+      "requirements_rate": 0.0556,
+      "strict_rate": 0.0556,
       "policy_violations": 0
     },
     "banking": {
@@ -236,8 +236,8 @@
     "escalation": {
       "cases": 2,
       "valid_first_try_and_tests_pass_rate": 1,
-      "requirements_rate": 0,
-      "strict_rate": 0,
+      "requirements_rate": 0.5,
+      "strict_rate": 0.5,
       "policy_violations": 0
     },
     "escrow": {
@@ -672,8 +672,8 @@
     "medium": {
       "cases": 99,
       "valid_first_try_and_tests_pass_rate": 1,
-      "requirements_rate": 0.0909,
-      "strict_rate": 0.0909,
+      "requirements_rate": 0.101,
+      "strict_rate": 0.101,
       "policy_violations": 0
     }
   },
@@ -681,14 +681,14 @@
     "approval_before_payment": {
       "cases": 35,
       "valid_first_try_and_tests_pass_rate": 0,
-      "requirements_rate": 0.6571,
+      "requirements_rate": 0.6857,
       "strict_rate": 0,
       "policy_violations": 0
     },
     "approval_timeout": {
       "cases": 18,
       "valid_first_try_and_tests_pass_rate": 0,
-      "requirements_rate": 0.1111,
+      "requirements_rate": 0.2222,
       "strict_rate": 0,
       "policy_violations": 0
     },
@@ -791,7 +791,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19704,
+        "input_tokens": 20830,
         "output_tokens": 124,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -828,7 +828,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 8475,
+        "input_tokens": 9286,
         "output_tokens": 95,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -866,8 +866,8 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 13324,
-        "output_tokens": 142,
+        "input_tokens": 16961,
+        "output_tokens": 149,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -905,8 +905,8 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30058,
-        "output_tokens": 217,
+        "input_tokens": 30121,
+        "output_tokens": 208,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -942,7 +942,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25626,
+        "input_tokens": 26073,
         "output_tokens": 158,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -983,7 +983,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21220,
+        "input_tokens": 23537,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1020,7 +1020,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27960,
+        "input_tokens": 29037,
         "output_tokens": 221,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1061,7 +1061,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30573,
+        "input_tokens": 30409,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1103,7 +1103,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30180,
+        "input_tokens": 30192,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1143,7 +1143,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18154,
+        "input_tokens": 18217,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1181,8 +1181,8 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30140,
-        "output_tokens": 184,
+        "input_tokens": 29933,
+        "output_tokens": 185,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -1217,7 +1217,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27414,
+        "input_tokens": 28225,
         "output_tokens": 276,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1260,7 +1260,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28481,
+        "input_tokens": 29681,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1298,7 +1298,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28447,
+        "input_tokens": 29258,
         "output_tokens": 141,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1336,7 +1336,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20835,
+        "input_tokens": 21826,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1359,24 +1359,22 @@
       "rounds": 1,
       "gate": true,
       "connector_recall": 1,
-      "step_recall": 0.5,
+      "step_recall": 1,
       "trigger_ok": true,
       "properties": {
-        "approval_before_payment": false,
+        "approval_before_payment": true,
         "idempotency": false,
         "no_inline_secrets": true
       },
       "requirements": false,
       "strict": false,
       "missing": [
-        "approval",
-        "approval_before_payment: no step moves money",
-        "idempotency: no write that needs an idempotency key"
+        "idempotency: step step2 moves money without effect.idempotency_seed"
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19350,
-        "output_tokens": 146,
+        "input_tokens": 21246,
+        "output_tokens": 220,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -1412,7 +1410,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23351,
+        "input_tokens": 23363,
         "output_tokens": 151,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1434,22 +1432,18 @@
       "rounds": 1,
       "gate": true,
       "connector_recall": 1,
-      "step_recall": 0.5,
+      "step_recall": 1,
       "trigger_ok": true,
       "properties": {
-        "approval_timeout": false,
+        "approval_timeout": true,
         "no_inline_secrets": true
       },
-      "requirements": false,
-      "strict": false,
-      "missing": [
-        "approval",
-        "approval_timeout: no approval step"
-      ],
+      "requirements": true,
+      "strict": true,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21927,
-        "output_tokens": 157,
+        "input_tokens": 27636,
+        "output_tokens": 198,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -1489,7 +1483,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22583,
+        "input_tokens": 23200,
         "output_tokens": 177,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1528,7 +1522,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27511,
+        "input_tokens": 28322,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1566,7 +1560,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21310,
+        "input_tokens": 22121,
         "output_tokens": 289,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1603,7 +1597,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19481,
+        "input_tokens": 20292,
         "output_tokens": 134,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1643,7 +1637,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 16697,
+        "input_tokens": 17508,
         "output_tokens": 155,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1681,7 +1675,7 @@
       "template": "new-order-alert-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28593,
+        "input_tokens": 29841,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1720,7 +1714,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27731,
+        "input_tokens": 28542,
         "output_tokens": 139,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1756,7 +1750,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28657,
+        "input_tokens": 29468,
         "output_tokens": 216,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1794,7 +1788,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27420,
+        "input_tokens": 27434,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1833,7 +1827,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28965,
+        "input_tokens": 28494,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1872,7 +1866,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19587,
+        "input_tokens": 20398,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1908,7 +1902,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19375,
+        "input_tokens": 19193,
         "output_tokens": 142,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1946,7 +1940,7 @@
       "template": "debtor-reminder-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21603,
+        "input_tokens": 22414,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1985,7 +1979,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29424,
+        "input_tokens": 30624,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2020,7 +2014,7 @@
       "template": "debtor-reminder-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21770,
+        "input_tokens": 22581,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2056,7 +2050,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26701,
+        "input_tokens": 26713,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2099,7 +2093,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26003,
+        "input_tokens": 28288,
         "output_tokens": 141,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2138,7 +2132,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30337,
+        "input_tokens": 24527,
         "output_tokens": 139,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2175,7 +2169,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20705,
+        "input_tokens": 21197,
         "output_tokens": 129,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2212,7 +2206,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27483,
+        "input_tokens": 28294,
         "output_tokens": 147,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2251,7 +2245,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29957,
+        "input_tokens": 25234,
         "output_tokens": 148,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2291,7 +2285,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21212,
+        "input_tokens": 22023,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2331,7 +2325,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24065,
+        "input_tokens": 24077,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2368,7 +2362,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28496,
+        "input_tokens": 30821,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2410,7 +2404,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28503,
+        "input_tokens": 29314,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2448,7 +2442,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26893,
+        "input_tokens": 28773,
         "output_tokens": 169,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2486,7 +2480,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31023,
+        "input_tokens": 31834,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2522,7 +2516,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31240,
+        "input_tokens": 31429,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2559,7 +2553,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 17988,
+        "input_tokens": 21218,
         "output_tokens": 123,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2598,7 +2592,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26895,
+        "input_tokens": 28021,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2636,7 +2630,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28635,
+        "input_tokens": 29625,
         "output_tokens": 152,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2658,7 +2652,7 @@
       "policy_violations": 0,
       "rounds": 1,
       "gate": true,
-      "connector_recall": 0.6666666666666666,
+      "connector_recall": 0.3333333333333333,
       "step_recall": 1,
       "trigger_ok": false,
       "properties": {
@@ -2668,12 +2662,13 @@
       "strict": false,
       "missing": [
         "postgres@1",
+        "slack@1",
         "trigger connector_event"
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24933,
-        "output_tokens": 153,
+        "input_tokens": 24945,
+        "output_tokens": 209,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -2713,8 +2708,8 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28908,
-        "output_tokens": 242,
+        "input_tokens": 29457,
+        "output_tokens": 159,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -2751,7 +2746,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22764,
+        "input_tokens": 23575,
         "output_tokens": 220,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2786,7 +2781,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29263,
+        "input_tokens": 30389,
         "output_tokens": 140,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2822,7 +2817,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23841,
+        "input_tokens": 24652,
         "output_tokens": 176,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2857,7 +2852,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23032,
+        "input_tokens": 23843,
         "output_tokens": 145,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2894,7 +2889,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30117,
+        "input_tokens": 29981,
         "output_tokens": 148,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2930,7 +2925,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23004,
+        "input_tokens": 23815,
         "output_tokens": 120,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2966,7 +2961,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27699,
+        "input_tokens": 28510,
         "output_tokens": 183,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3003,7 +2998,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22326,
+        "input_tokens": 23137,
         "output_tokens": 175,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3038,7 +3033,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27456,
+        "input_tokens": 28267,
         "output_tokens": 225,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3075,7 +3070,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25178,
+        "input_tokens": 28301,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3112,7 +3107,7 @@
       "template": "payment-receipt-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23280,
+        "input_tokens": 23292,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3148,7 +3143,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20451,
+        "input_tokens": 21262,
         "output_tokens": 173,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3183,7 +3178,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20650,
+        "input_tokens": 21461,
         "output_tokens": 188,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3218,7 +3213,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21758,
+        "input_tokens": 22569,
         "output_tokens": 227,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3255,7 +3250,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18584,
+        "input_tokens": 19784,
         "output_tokens": 213,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3294,7 +3289,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18164,
+        "input_tokens": 18975,
         "output_tokens": 165,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3331,7 +3326,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24018,
+        "input_tokens": 29727,
         "output_tokens": 211,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3366,7 +3361,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 17993,
+        "input_tokens": 18804,
         "output_tokens": 192,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3398,7 +3393,7 @@
       "strict": true,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23758,
+        "input_tokens": 24569,
         "output_tokens": 212,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3436,7 +3431,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26213,
+        "input_tokens": 19304,
         "output_tokens": 163,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3471,7 +3466,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21471,
+        "input_tokens": 22282,
         "output_tokens": 134,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3506,7 +3501,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21909,
+        "input_tokens": 22720,
         "output_tokens": 192,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3541,8 +3536,8 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20896,
-        "output_tokens": 224,
+        "input_tokens": 26195,
+        "output_tokens": 143,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -3586,7 +3581,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28387,
+        "input_tokens": 29198,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3625,7 +3620,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31359,
+        "input_tokens": 32170,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3668,7 +3663,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20301,
+        "input_tokens": 22777,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3710,7 +3705,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22938,
+        "input_tokens": 23001,
         "output_tokens": 251,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3750,7 +3745,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18775,
+        "input_tokens": 19541,
         "output_tokens": 134,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3793,8 +3788,8 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26722,
-        "output_tokens": 154,
+        "input_tokens": 28619,
+        "output_tokens": 179,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -3834,7 +3829,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29884,
+        "input_tokens": 30695,
         "output_tokens": 248,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3873,7 +3868,7 @@
       "template": "invoice-follow-up",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30033,
+        "input_tokens": 30844,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3914,7 +3909,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28532,
+        "input_tokens": 29343,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3955,7 +3950,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26088,
+        "input_tokens": 26277,
         "output_tokens": 143,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3996,7 +3991,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26112,
+        "input_tokens": 29339,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4036,7 +4031,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30467,
+        "input_tokens": 31278,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4075,7 +4070,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26081,
+        "input_tokens": 28214,
         "output_tokens": 123,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4115,7 +4110,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18569,
+        "input_tokens": 19061,
         "output_tokens": 142,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4161,7 +4156,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27087,
+        "input_tokens": 27100,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4199,7 +4194,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20208,
+        "input_tokens": 22653,
         "output_tokens": 130,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4235,7 +4230,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25112,
+        "input_tokens": 27585,
         "output_tokens": 225,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4275,7 +4270,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23884,
+        "input_tokens": 23896,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4320,7 +4315,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26588,
+        "input_tokens": 27399,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4359,7 +4354,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28036,
+        "input_tokens": 28847,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4393,7 +4388,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26776,
+        "input_tokens": 27587,
         "output_tokens": 131,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4429,7 +4424,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23353,
+        "input_tokens": 24164,
         "output_tokens": 128,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4465,7 +4460,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25896,
+        "input_tokens": 26839,
         "output_tokens": 130,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4503,7 +4498,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 17664,
+        "input_tokens": 19299,
         "output_tokens": 148,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4540,7 +4535,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23669,
+        "input_tokens": 24480,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4576,7 +4571,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21144,
+        "input_tokens": 21955,
         "output_tokens": 187,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4611,7 +4606,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19214,
+        "input_tokens": 20025,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4648,7 +4643,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29028,
+        "input_tokens": 29839,
         "output_tokens": 170,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4683,7 +4678,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24414,
+        "input_tokens": 25225,
         "output_tokens": 181,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4720,7 +4715,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18111,
+        "input_tokens": 19311,
         "output_tokens": 146,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4757,7 +4752,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27008,
+        "input_tokens": 27819,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4792,7 +4787,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20682,
+        "input_tokens": 20694,
         "output_tokens": 130,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4827,7 +4822,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26092,
+        "input_tokens": 26903,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4865,7 +4860,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18807,
+        "input_tokens": 19618,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4901,7 +4896,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28563,
+        "input_tokens": 28398,
         "output_tokens": 211,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4940,7 +4935,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 16844,
+        "input_tokens": 17655,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4976,7 +4971,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 17301,
+        "input_tokens": 18112,
         "output_tokens": 125,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5013,7 +5008,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28986,
+        "input_tokens": 29480,
         "output_tokens": 244,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5050,7 +5045,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23489,
+        "input_tokens": 24300,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5085,7 +5080,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26385,
+        "input_tokens": 27529,
         "output_tokens": 267,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5129,7 +5124,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29559,
+        "input_tokens": 30370,
         "output_tokens": 217,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5174,7 +5169,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23122,
+        "input_tokens": 22958,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5214,7 +5209,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28931,
+        "input_tokens": 29742,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5258,7 +5253,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27696,
+        "input_tokens": 28896,
         "output_tokens": 143,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5298,7 +5293,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29131,
+        "input_tokens": 29802,
         "output_tokens": 133,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5338,7 +5333,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18309,
+        "input_tokens": 18321,
         "output_tokens": 257,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5378,7 +5373,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22544,
+        "input_tokens": 22512,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5419,7 +5414,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29564,
+        "input_tokens": 29399,
         "output_tokens": 207,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5461,7 +5456,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18203,
+        "input_tokens": 19014,
         "output_tokens": 147,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5502,7 +5497,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25343,
+        "input_tokens": 26590,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5544,7 +5539,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 15591,
+        "input_tokens": 16838,
         "output_tokens": 123,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5581,7 +5576,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19704,
+        "input_tokens": 20515,
         "output_tokens": 235,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5619,7 +5614,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19128,
+        "input_tokens": 19140,
         "output_tokens": 345,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5663,7 +5658,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19107,
+        "input_tokens": 19119,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5704,7 +5699,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31746,
+        "input_tokens": 32557,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5744,7 +5739,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29205,
+        "input_tokens": 30016,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5789,7 +5784,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24955,
+        "input_tokens": 25144,
         "output_tokens": 164,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5812,7 +5807,7 @@
       "policy_violations": 0,
       "rounds": 1,
       "gate": true,
-      "connector_recall": 1,
+      "connector_recall": 0.5,
       "step_recall": 0.3333333333333333,
       "trigger_ok": false,
       "properties": {
@@ -5823,6 +5818,7 @@
       "requirements": false,
       "strict": false,
       "missing": [
+        "postgres@1",
         "branch",
         "approval",
         "trigger webhook",
@@ -5831,8 +5827,8 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20634,
-        "output_tokens": 134,
+        "input_tokens": 20646,
+        "output_tokens": 138,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -5868,7 +5864,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20555,
+        "input_tokens": 21755,
         "output_tokens": 127,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5907,7 +5903,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27773,
+        "input_tokens": 28584,
         "output_tokens": 177,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5951,7 +5947,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27378,
+        "input_tokens": 28189,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5993,7 +5989,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19665,
+        "input_tokens": 22111,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6034,7 +6030,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20960,
+        "input_tokens": 21771,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6074,7 +6070,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19766,
+        "input_tokens": 22211,
         "output_tokens": 139,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6112,7 +6108,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27696,
+        "input_tokens": 28507,
         "output_tokens": 152,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6151,7 +6147,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28939,
+        "input_tokens": 29750,
         "output_tokens": 201,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6191,7 +6187,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18704,
+        "input_tokens": 19515,
         "output_tokens": 131,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6229,7 +6225,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20925,
+        "input_tokens": 21916,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6268,7 +6264,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21816,
+        "input_tokens": 22958,
         "output_tokens": 131,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6303,7 +6299,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20300,
+        "input_tokens": 21111,
         "output_tokens": 127,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6338,7 +6334,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20067,
+        "input_tokens": 21266,
         "output_tokens": 156,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6376,7 +6372,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 16509,
+        "input_tokens": 17320,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6417,7 +6413,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18778,
+        "input_tokens": 19589,
         "output_tokens": 136,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6453,7 +6449,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28480,
+        "input_tokens": 28494,
         "output_tokens": 232,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6489,8 +6485,8 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27742,
-        "output_tokens": 184,
+        "input_tokens": 27578,
+        "output_tokens": 252,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -6528,7 +6524,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25251,
+        "input_tokens": 26062,
         "output_tokens": 130,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6567,7 +6563,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19765,
+        "input_tokens": 21719,
         "output_tokens": 253,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6605,7 +6601,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24750,
+        "input_tokens": 25561,
         "output_tokens": 221,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6642,7 +6638,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21700,
+        "input_tokens": 22511,
         "output_tokens": 151,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6681,7 +6677,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27376,
+        "input_tokens": 27390,
         "output_tokens": 177,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6717,7 +6713,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26837,
+        "input_tokens": 28668,
         "output_tokens": 156,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6753,7 +6749,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19051,
+        "input_tokens": 19862,
         "output_tokens": 220,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6792,7 +6788,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27844,
+        "input_tokens": 28655,
         "output_tokens": 187,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6831,7 +6827,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 14831,
+        "input_tokens": 15642,
         "output_tokens": 156,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6867,7 +6863,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26864,
+        "input_tokens": 27675,
         "output_tokens": 151,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6905,7 +6901,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26071,
+        "input_tokens": 26882,
         "output_tokens": 221,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6940,7 +6936,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28898,
+        "input_tokens": 29709,
         "output_tokens": 266,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6977,7 +6973,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29956,
+        "input_tokens": 30767,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7014,7 +7010,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20798,
+        "input_tokens": 21609,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7049,7 +7045,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20362,
+        "input_tokens": 21179,
         "output_tokens": 186,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7087,7 +7083,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 12298,
+        "input_tokens": 13109,
         "output_tokens": 185,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7125,7 +7121,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26569,
+        "input_tokens": 27380,
         "output_tokens": 167,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7165,7 +7161,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25049,
+        "input_tokens": 25860,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7201,7 +7197,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28060,
+        "input_tokens": 29940,
         "output_tokens": 237,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7237,7 +7233,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26882,
+        "input_tokens": 27693,
         "output_tokens": 177,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7277,7 +7273,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24059,
+        "input_tokens": 24551,
         "output_tokens": 143,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7312,7 +7308,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20635,
+        "input_tokens": 21446,
         "output_tokens": 221,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7348,7 +7344,7 @@
       "template": "payroll-reminder",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 10310,
+        "input_tokens": 11121,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7384,7 +7380,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21809,
+        "input_tokens": 22620,
         "output_tokens": 146,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7420,7 +7416,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18831,
+        "input_tokens": 18942,
         "output_tokens": 220,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7455,7 +7451,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21790,
+        "input_tokens": 22601,
         "output_tokens": 144,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7495,7 +7491,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 17710,
+        "input_tokens": 18521,
         "output_tokens": 123,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7539,7 +7535,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29138,
+        "input_tokens": 28973,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7576,7 +7572,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25826,
+        "input_tokens": 27026,
         "output_tokens": 149,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7612,7 +7608,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 16293,
+        "input_tokens": 17493,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7650,7 +7646,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24881,
+        "input_tokens": 25692,
         "output_tokens": 125,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7692,7 +7688,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29606,
+        "input_tokens": 31975,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7733,7 +7729,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20732,
+        "input_tokens": 21874,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7768,7 +7764,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23110,
+        "input_tokens": 23921,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7804,7 +7800,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22130,
+        "input_tokens": 22941,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7839,7 +7835,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23924,
+        "input_tokens": 25668,
         "output_tokens": 144,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7877,7 +7873,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25705,
+        "input_tokens": 26831,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7915,7 +7911,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19940,
+        "input_tokens": 20931,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7946,7 +7942,7 @@
       "strict": true,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20037,
+        "input_tokens": 22511,
         "output_tokens": 175,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7983,7 +7979,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29879,
+        "input_tokens": 30690,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8023,7 +8019,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18293,
+        "input_tokens": 19104,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8059,7 +8055,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26389,
+        "input_tokens": 27200,
         "output_tokens": 211,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8091,7 +8087,7 @@
       "template": "payment-receipt-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19102,
+        "input_tokens": 19165,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8126,7 +8122,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21889,
+        "input_tokens": 22700,
         "output_tokens": 129,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8163,7 +8159,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26284,
+        "input_tokens": 28760,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8203,7 +8199,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22123,
+        "input_tokens": 23249,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8224,27 +8220,26 @@
       "policy_violations": 0,
       "rounds": 1,
       "gate": true,
-      "connector_recall": 0.5,
-      "step_recall": 0.5,
+      "connector_recall": 0,
+      "step_recall": 1,
       "trigger_ok": false,
       "properties": {
-        "approval_timeout": false,
+        "approval_timeout": true,
         "no_inline_secrets": true,
         "webhook_auth": false
       },
       "requirements": false,
       "strict": false,
       "missing": [
+        "paystack@1",
         "gmail@1",
-        "approval",
         "trigger webhook",
-        "webhook_auth: the trigger is not a webhook",
-        "approval_timeout: no approval step"
+        "webhook_auth: the trigger is not a webhook"
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29071,
-        "output_tokens": 165,
+        "input_tokens": 29563,
+        "output_tokens": 240,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -8264,7 +8259,7 @@
       "policy_violations": 0,
       "rounds": 1,
       "gate": true,
-      "connector_recall": 1,
+      "connector_recall": 0.5,
       "step_recall": 1,
       "trigger_ok": true,
       "properties": {
@@ -8274,12 +8269,13 @@
       "requirements": false,
       "strict": false,
       "missing": [
+        "termii@1",
         "idempotency: no write that needs an idempotency key"
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19225,
-        "output_tokens": 136,
+        "input_tokens": 19016,
+        "output_tokens": 150,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
@@ -8312,7 +8308,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21003,
+        "input_tokens": 21814,
         "output_tokens": 156,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8347,7 +8343,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24487,
+        "input_tokens": 25298,
         "output_tokens": 133,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8386,7 +8382,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31253,
+        "input_tokens": 33587,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8420,7 +8416,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 16366,
+        "input_tokens": 17177,
         "output_tokens": 211,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8460,7 +8456,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 14742,
+        "input_tokens": 15553,
         "output_tokens": 158,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8499,7 +8495,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26283,
+        "input_tokens": 27094,
         "output_tokens": 181,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8533,7 +8529,7 @@
       "template": "daily-sales-summary",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21087,
+        "input_tokens": 21898,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8568,7 +8564,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21333,
+        "input_tokens": 22144,
         "output_tokens": 212,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8602,7 +8598,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26308,
+        "input_tokens": 26143,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8635,7 +8631,7 @@
       "template": "payroll-reminder",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20802,
+        "input_tokens": 21792,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8670,7 +8666,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20771,
+        "input_tokens": 22019,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8705,7 +8701,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27980,
+        "input_tokens": 30100,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8744,7 +8740,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27265,
+        "input_tokens": 28076,
         "output_tokens": 158,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8780,7 +8776,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22103,
+        "input_tokens": 23303,
         "output_tokens": 155,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8814,7 +8810,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20795,
+        "input_tokens": 20637,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8847,7 +8843,7 @@
       "template": "weekly-balance-email",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21848,
+        "input_tokens": 22659,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8880,7 +8876,7 @@
       "template": "stock-reorder-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22598,
+        "input_tokens": 24967,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8912,7 +8908,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28839,
+        "input_tokens": 28675,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8946,7 +8942,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 20374,
+        "input_tokens": 21185,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8982,7 +8978,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28864,
+        "input_tokens": 23054,
         "output_tokens": 131,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9019,7 +9015,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18548,
+        "input_tokens": 20668,
         "output_tokens": 193,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9058,7 +9054,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21617,
+        "input_tokens": 24090,
         "output_tokens": 212,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9096,7 +9092,7 @@
       "template": "daily-sales-summary",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22536,
+        "input_tokens": 23347,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9136,7 +9132,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22703,
+        "input_tokens": 23514,
         "output_tokens": 175,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9174,7 +9170,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 19937,
+        "input_tokens": 20748,
         "output_tokens": 237,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9210,7 +9206,7 @@
       "template": "salary-payout-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 21987,
+        "input_tokens": 23129,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
