@@ -129,6 +129,8 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .login { max-width: 360px; margin: 12vh auto; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); display: grid; place-items: center; z-index: 50; }
 .modal { background: var(--panel); border-radius: 10px; padding: 18px; width: min(560px, 92vw); max-height: 86vh; overflow: auto; }
+.modal:has(.ai-builder) { width: min(880px, 94vw); }
+.ai-preview { height: 300px; margin-bottom: 12px; }
 .secret-once { word-break: break-all; font-weight: 600; }
 
 @media (max-width: 860px) {

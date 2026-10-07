@@ -4,6 +4,7 @@ import type { WorkflowDefinition } from "@sdk/wd";
 import { get, post, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
 import { Badge, ErrorBox, Field, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { AIBuilder } from "./AIBuild";
 
 /** A new workflow's first draft: a manual trigger and one step. */
 export function starter(name: string): WorkflowDefinition {
@@ -23,6 +24,7 @@ export function Workflows() {
   const nav = useNavigate();
   const { data, error } = useLoad(() => get<{ workflows: WorkflowSummary[] }>("/v1/workflows"), []);
   const [creating, setCreating] = useState(false);
+  const [ai, setAI] = useState(false);
   const [name, setName] = useState("");
   const act = useAction();
   return (
@@ -32,9 +34,12 @@ export function Workflows() {
           Workflows
         </h1>
         {can("workflow.edit") && (
-          <button className="primary" onClick={() => setCreating(true)}>
-            New workflow
-          </button>
+          <>
+            <button onClick={() => setAI(true)}>Build with AI</button>
+            <button className="primary" onClick={() => setCreating(true)}>
+              New workflow
+            </button>
+          </>
         )}
       </div>
       <ErrorBox error={error} />
@@ -65,6 +70,7 @@ export function Workflows() {
           </tbody>
         </table>
       )}
+      {ai && <AIBuilder onClose={() => setAI(false)} onSaved={(id, v) => nav(`/workflows/${id}?v=${v}`)} />}
       {creating && (
         <Modal title="New workflow" onClose={() => setCreating(false)}>
           <form

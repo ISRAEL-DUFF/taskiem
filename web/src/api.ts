@@ -139,6 +139,8 @@ export interface VersionInfo {
   published_at: string | null;
   git_commit: string | null;
   git_request: string | null;
+  /** The AI build this version was saved from (the AI co-authored it). */
+  ai_build?: string | null;
 }
 
 export interface GitSync {

@@ -10,6 +10,7 @@ import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph,
 import { merge } from "../lib/schema";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
 import { Badge, ErrorBox, Field, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { AIBuilder } from "./AIBuild";
 
 const nodeTypes = { step: StepNode };
 const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "signal", "wait", "branch", "parallel", "foreach"];
@@ -58,6 +59,7 @@ export function Editor() {
   const [notice, setNotice] = useState("");
   const [starting, setStarting] = useState(false);
   const [merge, setMerge] = useState<{ conflicts: MergeConflict[]; latest: number }>();
+  const [ai, setAI] = useState(false);
   const act = useAction();
 
   useEffect(() => {
@@ -233,6 +235,9 @@ export function Editor() {
             <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
               Save draft
             </button>
+            <button onClick={() => setAI(true)} disabled={act.busy || dirty} title={dirty ? "Save your changes first" : undefined}>
+              Change with AI
+            </button>
           </>
         )}
         {can("workflow.publish") && !managed && (
@@ -358,6 +363,7 @@ export function Editor() {
         <p className="hint">
           v{current.version} created {fmtTime(current.created_at)}
           {current.published_at && `, published ${fmtTime(current.published_at)}`} · digest <code>{current.digest.slice(0, 12)}</code>
+          {current.ai_build && " · drafted with AI"}
           {current.git_commit && (
             <>
               {" "}
@@ -376,6 +382,18 @@ export function Editor() {
         </p>
       )}
       {starting && <StartRun workflow={id} onClose={() => setStarting(false)} onStarted={(run) => nav(`/runs/${run}`)} />}
+      {ai && (
+        <AIBuilder
+          workflow={id}
+          onClose={() => setAI(false)}
+          onSaved={(_, v) => {
+            setAI(false);
+            setNotice(`Saved the AI's proposal as draft version ${v}. Review it here, then publish as usual.`);
+            setParams({ v: String(v) });
+            wf.reload();
+          }}
+        />
+      )}
       {merge && (
         <MergeDialog
           conflicts={merge.conflicts}
