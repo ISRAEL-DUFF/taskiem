@@ -147,6 +147,9 @@ func (s *Server) checkEmbedApp(r *http.Request, req *embedAppReq) error {
 			tpls = append(tpls, t)
 		}
 	}
+	if err := checkTemplateIDs(tpls); err != nil {
+		return err
+	}
 	req.AllowedTemplates = tpls
 	if req.EndUserPermissions == nil {
 		req.EndUserPermissions = embed.DefaultEndUserPermissions

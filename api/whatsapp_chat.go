@@ -190,6 +190,9 @@ type chatData struct {
 	// Flow is the hex SHA-256 of the flow token of the inputs Flow sent,
 	// while the inputs are collected by a WhatsApp form.
 	Flow string `json:"flow,omitempty"`
+	// Build is an AI build being shown, completed or confirmed
+	// (whatsapp_build.go).
+	Build *waBuild `json:"build,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -373,6 +376,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		return c.say(ctx, s, "Cancelled.")
 	}
+	if c.data.Build != nil && c.state != stateIdle {
+		return s.waBuildReply(ctx, c, text, cmd)
+	}
 	switch c.state {
 	case stateCollecting:
 		return s.waCollect(ctx, c, text)
@@ -401,6 +407,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	case (verb == "run" || verb == "start") && arg != "":
 		return s.waTrigger(ctx, c, arg)
 	}
+	if goal, ok := waBuildGoal(text, cmd); ok && c.state == stateIdle {
+		return s.waStartBuild(ctx, c, goal)
+	}
 	if c.state == stateStepUp {
 		return c.say(ctx, s, "Your decision on "+c.data.Step+" is waiting for you to confirm it in Taskiem with the link sent to you. Send *cancel* to drop it.")
 	}
@@ -414,6 +423,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermApprovalDecide) {
 		lines = append(lines, "• *approvals*: requests waiting for you")
+	}
+	if c.p.Can(PermWorkflowEdit) && s.AI != nil {
+		lines = append(lines, "• *build* and what to automate, e.g. *build every Friday text my customers who owe me* (saved as a draft after you confirm)")
 	}
 	if len(c.tenants) > 1 {
 		lines = append(lines, "• *switch* and an organisation's name: work in another one")

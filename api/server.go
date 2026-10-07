@@ -201,6 +201,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/environments/{env}", s.putEnvironment)
 			r.With(s.need(PermWorkflowEdit)).Post("/validate", s.validate)
 			r.Route("/ai", s.aiRoutes)
+			r.Get("/templates", s.listTemplates) // the SME template library (templates.go)
+			r.Get("/templates/{id}", s.getTemplate)
+			r.With(s.need(PermWorkflowEdit)).Post("/templates/{id}/instantiate", s.instantiateTemplate)
 			r.With(s.need(PermWorkflowRead)).Post("/code/generate", s.generateCode)
 			r.With(s.need(PermWorkflowEdit)).Post("/code/compile", s.compileCode)
 

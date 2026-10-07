@@ -65,6 +65,8 @@ func (s *Server) embedRoutes(r chi.Router) {
 		r.With(s.need(PermWorkflowEdit)).Put("/workflows/{wf}/versions/{v}/layout", s.putLayout)
 		r.With(s.need(PermWorkflowPublish), s.embedGuardVersion).Post("/workflows/{wf}/versions/{v}/publish", s.publish)
 		r.With(s.need(PermWorkflowEdit), s.embedGuardBody).Post("/validate", s.validate)
+		r.Get("/templates", s.embedTemplates)
+		r.With(s.need(PermWorkflowEdit)).Post("/templates/{id}/instantiate", s.embedInstantiate)
 		r.With(s.need(PermRunStart), s.embedGuardRun).Post("/workflows/{wf}/runs", s.startRun)
 		r.With(s.need(PermRunRead)).Get("/runs", s.listRuns)
 		r.With(s.need(PermRunRead)).Get("/runs/{run}", s.getRun)

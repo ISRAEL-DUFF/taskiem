@@ -19,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // AI workflow building (spec 12.1, docs/ai.md).
@@ -126,9 +127,23 @@ func (s *Server) aiBuild(w http.ResponseWriter, r *http.Request) {
 		budgetExhausted(w)
 		return
 	}
+	who := aiActor{tenant: p.TenantID, actor: p.Actor(), actorType: p.ActorType(), ip: clientIP(r)}
+	id, err := s.startAIBuild(ctx, who, req, "web", nil)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"id": id, "status": "running"})
+}
+
+// startAIBuild records a build and runs it in the background; after, when
+// set, is called with its outcome once it is stored (the WhatsApp build
+// command answers from it). The caller has checked the permission, the
+// rate limit and the budget.
+func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, channel string, after func(uuid.UUID, *builder.Proposal, error)) (uuid.UUID, error) {
 	breq := builder.Request{Goal: req.Goal, Environment: req.Environment}
 	id := uuid.Must(uuid.NewV7())
-	err = s.tx(r, func(tx pgx.Tx) error {
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{who.tenant}, func(tx pgx.Tx) error {
 		if req.Workflow != nil {
 			if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC LIMIT 1`, *req.Workflow).Scan(&breq.Base); err != nil {
 				return err
@@ -138,22 +153,23 @@ func (s *Server) aiBuild(w http.ResponseWriter, r *http.Request) {
 		if breq.Context, err = aiContext(ctx, tx, req.Environment, req.Workflow); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, workflow_id, environment, provider, model)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, id, p.TenantID, p.Actor(), pii.Redact(req.Goal), req.Workflow, req.Environment,
-			s.AI.Provider.Name(), s.AI.Provider.Model())
+		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, workflow_id, environment, provider, model, channel)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, who.tenant, who.actor, pii.Redact(req.Goal), req.Workflow, req.Environment,
+			s.AI.Provider.Name(), s.AI.Provider.Model(), channel)
 		return err
 	})
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return uuid.Nil, err
 	}
-	who := aiActor{tenant: p.TenantID, actor: p.Actor(), actorType: p.ActorType(), ip: clientIP(r)}
 	s.bg.Add(1)
 	go func() {
 		defer s.bg.Done()
-		s.runBuild(id, who, breq)
+		prop, err := s.runBuild(id, who, breq)
+		if after != nil {
+			after(id, prop, err)
+		}
 	}()
-	writeJSON(w, http.StatusAccepted, map[string]any{"id": id, "status": "running"})
+	return id, nil
 }
 
 // aiActor is who asked for a build, carried into the background.
@@ -166,7 +182,7 @@ type aiActor struct {
 // aiBuildTimeout bounds a build: drafting and up to three corrections.
 const aiBuildTimeout = 15 * time.Minute
 
-func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) {
+func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) (*builder.Proposal, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), aiBuildTimeout)
 	defer cancel()
 	if s.Done != nil {
@@ -184,7 +200,7 @@ func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) {
 	reg, err := s.Registry.For(ctx, who.tenant.String())
 	if err != nil {
 		s.finishBuild(ctx, id, who, nil, err)
-		return
+		return nil, err
 	}
 	b := &builder.Builder{
 		Provider:   s.AI.Provider,
@@ -196,6 +212,7 @@ func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) {
 			}
 			return out
 		},
+		Templates: templates.Default(),
 		Meter:     aiMeter{s: s, tenant: who.tenant},
 		Recorder:  aiRecorder{s: s, build: id, who: who, provider: s.AI.Provider.Name()},
 		Effort:    s.AI.Effort,
@@ -209,6 +226,7 @@ func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) {
 	}
 	prop, err := b.Build(ctx, req)
 	s.finishBuild(ctx, id, who, prop, err)
+	return prop, err
 }
 
 // finishBuild stores the outcome and audits the proposal.
@@ -229,6 +247,7 @@ func (s *Server) finishBuild(ctx context.Context, id uuid.UUID, who aiActor, pro
 	detail := map[string]any{"build": id.String(), "status": status, "ip": who.ip, "provider": s.AI.Provider.Name()}
 	rounds, total := 0, int64(0)
 	var valid *bool
+	var templateID *string
 	if prop != nil {
 		raw, _ = json.Marshal(prop)
 		rounds, total = prop.Rounds, prop.Usage.Total()
@@ -243,12 +262,16 @@ func (s *Server) finishBuild(ctx context.Context, id uuid.UUID, who aiActor, pro
 		detail["policy_violations"] = prop.PolicyViolations()
 		detail["tests_passed"] = prop.TestsPassed()
 		detail["connectors"] = prop.Connectors
+		if prop.Template != nil {
+			templateID = &prop.Template.ID
+			detail["template"] = prop.Template.ID
+		}
 	}
 	audit, _ := json.Marshal(detail)
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{who.tenant}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `UPDATE ai_builds SET status = $2, stage = 'done', error = NULLIF($3, ''), proposal = $4, rounds = $5, valid = $6,
-			total_tokens = $7, model = COALESCE(NULLIF($8, ''), model), finished_at = now() WHERE id = $1`,
-			id, status, msg, raw, rounds, valid, total, modelOf(prop)); err != nil {
+			total_tokens = $7, model = COALESCE(NULLIF($8, ''), model), template_id = $9, finished_at = now() WHERE id = $1`,
+			id, status, msg, raw, rounds, valid, total, modelOf(prop), templateID); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, $2, $3, $4, $5, $6)`, who.tenant, who.actorType, who.actor, "ai.propose", id.String(), audit)
@@ -417,6 +440,8 @@ type aiBuildView struct {
 	FinishedAt      *time.Time      `json:"finished_at"`
 	SavedWorkflowID *uuid.UUID      `json:"saved_workflow_id"`
 	SavedVersion    *int            `json:"saved_version"`
+	TemplateID      *string         `json:"template_id"`
+	Channel         string          `json:"channel"`
 }
 
 func (s *Server) aiGetBuild(w http.ResponseWriter, r *http.Request) {
@@ -429,9 +454,9 @@ func (s *Server) aiGetBuild(w http.ResponseWriter, r *http.Request) {
 	var prop []byte
 	err = s.tx(r, func(tx pgx.Tx) error {
 		return tx.QueryRow(r.Context(), `SELECT id, status, stage, error, goal, workflow_id, environment, provider, model, proposal, actor, created_at,
-			finished_at, saved_workflow_id, saved_version FROM ai_builds WHERE id = $1`, id).
+			finished_at, saved_workflow_id, saved_version, template_id, channel FROM ai_builds WHERE id = $1`, id).
 			Scan(&v.ID, &v.Status, &v.Stage, &v.Error, &v.Goal, &v.Workflow, &v.Environment, &v.Provider, &v.Model, &prop, &v.CreatedBy,
-				&v.CreatedAt, &v.FinishedAt, &v.SavedWorkflowID, &v.SavedVersion)
+				&v.CreatedAt, &v.FinishedAt, &v.SavedWorkflowID, &v.SavedVersion, &v.TemplateID, &v.Channel)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -517,72 +542,11 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 	var version int
 	var doc []byte
 	err = s.tx(r, func(tx pgx.Tx) error {
-		ctx := r.Context()
-		var status, model string
-		var target *uuid.UUID
-		var prop []byte
-		if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model FROM ai_builds WHERE id = $1 FOR UPDATE`, id).Scan(&status, &target, &prop, &model); err != nil {
-			return err
-		}
-		if status != "proposed" {
-			return fmt.Errorf("%w: build is %s, not a proposal to save", errConflict, status)
-		}
-		var pr struct {
-			Definition json.RawMessage `json:"definition"`
-		}
-		if err := json.Unmarshal(prop, &pr); err != nil || len(pr.Definition) == 0 {
-			return fmt.Errorf("%w: the proposal has no definition to save", errConflict)
-		}
 		var err error
-		if doc, err = canonical(pr.Definition); err != nil {
-			return err
-		}
-		if target != nil {
-			wf = *target
-			if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
-				return err
-			}
-			if err := s.refuseGitManaged(ctx, tx, wf); err != nil {
-				return err
-			}
-			if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM workflow_versions WHERE workflow_id = $1`, wf).Scan(&version); err != nil {
-				return err
-			}
-		} else {
-			name := strings.TrimSpace(req.Name)
-			if name == "" {
-				var d struct {
-					Name string `json:"name"`
-				}
-				_ = json.Unmarshal(doc, &d)
-				name = d.Name
-			}
-			if name == "" {
-				return fmt.Errorf("%w: name is required", errBadRequest)
-			}
-			if err := s.checkCount(ctx, tx, p.TenantID, "max_workflows"); err != nil {
-				return err
-			}
-			wf, version = uuid.Must(uuid.NewV7()), 1
-			if _, err := tx.Exec(ctx, `INSERT INTO workflows (id, tenant_id, name, created_by, workspace_id)
-				VALUES ($1, $2, $3, $4, (SELECT id FROM workspaces WHERE tenant_id = $2 ORDER BY created_at LIMIT 1))`, wf, p.TenantID, name, p.id()); err != nil {
-				return err
-			}
-			if err := auditTx(r, tx, "workflow.create", wf.String(), map[string]any{"name": name, "ai_build": id.String()}); err != nil {
-				return err
-			}
-		}
-		if err := insertVersionTx(ctx, tx, p.TenantID, wf, version, doc, nil, p.Actor(), ""); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET ai_build_id = $3 WHERE workflow_id = $1 AND version = $2`, wf, version, id); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE ai_builds SET status = 'saved', saved_workflow_id = $2, saved_version = $3, saved_at = now() WHERE id = $1`, id, wf, version); err != nil {
-			return err
-		}
-		return auditTx(r, tx, "ai.save", fmt.Sprintf("%s/%d", wf, version), map[string]any{"build": id.String(), "ai_assisted": true,
-			"co_author": "ai:" + model, "state": "draft"})
+		wf, version, doc, err = s.saveAIBuildTx(r.Context(), tx, p, id, req.Name, func(action, target string, detail map[string]any) error {
+			return auditTx(r, tx, action, target, detail)
+		})
+		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -590,4 +554,92 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": version, "state": "draft", "ai_assisted": true,
 		"problems": nonNil(s.checkFor(r, doc))})
+}
+
+// saveAIBuildTx saves build id's proposal as a draft version by p: a new
+// workflow (named name, or the definition's name), or the next version of
+// the workflow the build modified. It never publishes. audit records in
+// the caller's channel (the web app or WhatsApp).
+func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id uuid.UUID, name string,
+	audit func(action, target string, detail map[string]any) error) (uuid.UUID, int, []byte, error) {
+	var wf uuid.UUID
+	var version int
+	var status, model string
+	var target *uuid.UUID
+	var templateID *string
+	var prop []byte
+	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, template_id FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
+		Scan(&status, &target, &prop, &model, &templateID); err != nil {
+		return wf, 0, nil, err
+	}
+	if status != "proposed" {
+		return wf, 0, nil, fmt.Errorf("%w: build is %s, not a proposal to save", errConflict, status)
+	}
+	var pr struct {
+		Definition json.RawMessage `json:"definition"`
+	}
+	if err := json.Unmarshal(prop, &pr); err != nil || len(pr.Definition) == 0 {
+		return wf, 0, nil, fmt.Errorf("%w: the proposal has no definition to save", errConflict)
+	}
+	doc, err := canonical(pr.Definition)
+	if err != nil {
+		return wf, 0, nil, err
+	}
+	if target != nil {
+		wf = *target
+		if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
+			return wf, 0, nil, err
+		}
+		if err := s.refuseGitManaged(ctx, tx, wf); err != nil {
+			return wf, 0, nil, err
+		}
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM workflow_versions WHERE workflow_id = $1`, wf).Scan(&version); err != nil {
+			return wf, 0, nil, err
+		}
+	} else {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			var d struct {
+				Name string `json:"name"`
+			}
+			_ = json.Unmarshal(doc, &d)
+			name = d.Name
+		}
+		if name == "" {
+			return wf, 0, nil, fmt.Errorf("%w: name is required", errBadRequest)
+		}
+		if wf, err = s.createWorkflowTx(ctx, tx, p, name); err != nil {
+			return wf, 0, nil, err
+		}
+		version = 1
+		if err := audit("workflow.create", wf.String(), map[string]any{"name": name, "ai_build": id.String()}); err != nil {
+			return wf, 0, nil, err
+		}
+	}
+	if err := insertVersionTx(ctx, tx, p.TenantID, wf, version, doc, nil, p.Actor(), ""); err != nil {
+		return wf, 0, nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET ai_build_id = $3, template_id = $4 WHERE workflow_id = $1 AND version = $2`, wf, version, id, templateID); err != nil {
+		return wf, 0, nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE ai_builds SET status = 'saved', saved_workflow_id = $2, saved_version = $3, saved_at = now() WHERE id = $1`, id, wf, version); err != nil {
+		return wf, 0, nil, err
+	}
+	detail := map[string]any{"build": id.String(), "ai_assisted": true, "co_author": "ai:" + model, "state": "draft"}
+	if templateID != nil {
+		detail["template"] = *templateID
+	}
+	return wf, version, doc, audit("ai.save", fmt.Sprintf("%s/%d", wf, version), detail)
+}
+
+// createWorkflowTx creates an empty workflow named name in p's tenant,
+// within the plan's workflow limit.
+func (s *Server) createWorkflowTx(ctx context.Context, tx pgx.Tx, p *Principal, name string) (uuid.UUID, error) {
+	if err := s.checkCount(ctx, tx, p.TenantID, "max_workflows"); err != nil {
+		return uuid.Nil, err
+	}
+	wf := uuid.Must(uuid.NewV7())
+	_, err := tx.Exec(ctx, `INSERT INTO workflows (id, tenant_id, name, created_by, workspace_id)
+		VALUES ($1, $2, $3, $4, (SELECT id FROM workspaces WHERE tenant_id = $2 ORDER BY created_at LIMIT 1))`, wf, p.TenantID, name, p.id())
+	return wf, err
 }
