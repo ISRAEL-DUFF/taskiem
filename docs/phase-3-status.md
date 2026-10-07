@@ -17,7 +17,7 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 | A | A3 | USSD fast path (menu steps inline at the edge, writes handed to the engine) and an aggregator connector | 8.4 | Planned |
 | A | A4 | Pidgin, Yoruba, Hausa and Igbo intents and replies; voice-note transcription (beta, tested by native speakers) | 11.6 | Planned |
 | B | B1 | Provider-agnostic model layer (Claude by default), redaction before prompts, per-tenant budgets, prompt and response audit; builder pipeline (retrieval → schema-constrained draft → validate → self-correct ×3 → dry run → generated tests → review as a draft version with the AI as co-author); the AI can never publish, approve, read secrets or write to a provider | 12.1, 12.3 | Done ([what exists](#b1-what-exists)) |
-| B | B2 | Repair pipeline: failure classification, shadow-sandbox fork with recorded inputs and mocked writes, diff and evidence, one-click publish and resume through the normal approval policy | 12.2 | Planned |
+| B | B2 | Repair pipeline: failure classification, shadow-sandbox fork with recorded inputs and mocked writes, diff and evidence, one-click publish and resume through the normal approval policy | 12.2 | Done ([what exists](#b2-what-exists)) |
 | B | B3 | Evaluation suite (200+ requests) with a runner that measures valid-on-first-try, test pass rate and policy violations, gating prompt and model changes | 12.4 | Planned |
 | B | B4 | SME template library; chat-based building on WhatsApp (needs A1) | 11.1 | Planned |
 | C | C1 | Sub-tenants (`parent_id`), `embed_apps`, end-user token minting, partner admin API with webhooks and a dual audit trail, headless mode | 13.1, 13.4, 5.3 | **Done** ([below](#c1-what-exists)) |
@@ -52,7 +52,7 @@ Left for A2: WhatsApp Flows forms (inputs) and a Flows PIN for step-up; tenants'
 | --- | --- | --- |
 | 50 real approvals through WhatsApp by design-partner users | A1–A2 | Meta business verification, templates approved, design partners using it |
 | AI builder valid and test-passing on the first attempt for ≥ 70% of the evaluation suite | B1, B3 | Requests from dogfooding and design partners; a model API account |
-| A failed production run repaired through the shadow sandbox and resumed | B2 | A real failure in a partner's production |
+| A failed production run repaired through the shadow sandbox and resumed | B2 (done: the whole path runs against a fake model in `TestRepairDataPatchPublishAndResume` and `TestRepairFourEyes`) | A real failure in a partner's production, repaired with a real model (AI1) |
 | One holdco product running embedded automations for its own customers | C1–C3 | C4 |
 | No AI action able to publish, approve or read secrets, confirmed by a security review | B1–B2 (enforced in code and tested) | Independent review |
 
@@ -74,7 +74,30 @@ The model layer and the AI workflow builder ([AI](ai.md), [decision 0014](decisi
 | Web | `web/src/pages/AIBuild.tsx` | **Build with AI** (workflow list) and **Change with AI** (editor): goal, progress, canvas preview, summary, warnings, dry run, Save as draft |
 | Evaluation | `tools/aieval`, `evals/builder/seed.jsonl` | 25 seed requests from the dogfood flows and the catalogue; valid-on-first-try, test pass, policy violations, connector and step recall; `--provider anthropic`; `--min-first-try` gate |
 
-Left for later milestones: B2 builds the repair pipeline on the same layer (failure classification, shadow sandbox, diff and evidence); B3 grows the suite to 200+ reviewed requests (AI2) and runs the gate in CI on prompt or model changes; B4 adds the SME template library and building over WhatsApp.
+Left for later milestones: B2 (now done, [below](#b2-what-exists)) built the repair pipeline on the same layer; B3 grows the suite to 200+ reviewed requests (AI2) and runs the gate in CI on prompt or model changes; B4 adds the SME template library and building over WhatsApp.
+## B2: what exists
+
+Self-repair of failed runs, 2026-10-07 ([AI: repairing failed runs](ai.md#repairing-failed-runs), [decision 0016](decisions/0016-repair-and-resume.md), threat model B12). Everything runs against a fake model in tests.
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Triggering | migration 00050 | Triggers queue `repair_jobs` (one per run and reason: `run_failed`, `needs_reconciliation`, `drift`) in the causing transaction; `Server.RunRepairs` works the queue in the API role where a model is configured (claims with `SKIP LOCKED`, stale jobs retried); per-tenant switch `ai_repair_settings` (on by default); jobs needing the model skipped when `ai_monthly_tokens` is spent; a drift job waits for its run to settle |
+| Classification | `engine/ai/repair/classify.go` | Rules over error kinds, HTTP status, connector error classes, `MaybeApplied`, drift findings and whether the failing step reads the trigger; the model classifies only when the rules are unsure (in the same call as the patch) |
+| Proposals per class | `engine/ai/repair`, `api/repair.go` | transient: retry from the failed step; credential: reconnect link, then retry; data, schema_drift, logic: a model patch (up to 3 attempts, failures fed back); unknown_outcome: the connector's read-only reconcile action run and its masked answer shown (`Worker.CheckReconcile`), resolved by a person |
+| Shadow sandbox | `engine/shadow` | Fork of the failed run's opened recording into a wd-test case: recorded trigger, completed steps replayed from recorded outputs, everything else mocked from output schemas (all writes mocked), recorded approvals and signals; must complete with schema-valid connector inputs; flags completed writes the patch would change (publish-only); `wdtest.Result` now reports steps, inputs and errors |
+| Tests for a patch | `api/repair.go`, migration 00052 | Regression test for the failing case from the redacted recording (must pass; notes whether it fails on the old version), the model's own test, and every stored `workflow_tests` case of the workflow; accepted repairs add their tests |
+| Proposal | migration 00050 | `repair_proposals` (forced RLS): class, who classified, explanation, action, patched definition, `wddiff` diff, evidence, tests, attempts, tokens, status (`analysing`, `proposed`, `action`, `withheld`, `failed`, `awaiting_publish`, `awaiting_promotion`, `published`, `resumed`, `dismissed`); `ai_interactions.repair_id`; `workflow_versions.repair_id`; audit `ai.repair.propose` (actor type `ai`), `ai.repair.accept`, `ai.repair.dismiss`, `run.resume` |
+| API | `api/repair.go` | List per run (`run.read`) and workflow (`workflow.read`), get, interactions (`audit.read`), accept (`run.resolve`, plus `workflow.publish` for a patch), dismiss (`run.resolve`), settings (`policy.manage` to change) |
+| Publish and resume | `api/repair.go`, `api/governance.go`, `api/environments.go` | Accept creates the next version (`created_by` `system:ai-repair`), publishes through the normal path in the person's name (four-eyes: a publish request someone else approves; promotion gates: resume once deployed in the run's environment); resumes after a publish, a publish decision or a promotion; a rejected request dismisses the proposal |
+| Resume (fork from step) | `engine/runtime/fork.go`, migration 00051 | `StartRequest.Fork`: a new run linked by `parent_run_id`, with the parent's trigger, variables and idempotency seed; completed tasks replayed from `run_replays` when the resolved input matches (writes with another input parked, never sent); signals redelivered, waits fired, approvals asked again; refused for uncertain writes or compensated runs; failed-for-good steps start a new attempt group |
+| Safety | `engine/ai/imports_test.go`, `TestRepairRoutes` | The import rule now covers `engine/ai/repair` and also excludes `engine/shadow` and `engine/drift`; the model sees sealed history with placeholders; shadow feedback scrubbed of every opened personal value; routes pinned |
+| Web | `web/src/pages/RepairPanel.tsx` | "Proposed fix" on a run's page: class, explanation, diff, shadow evidence and tests, Accept (publish and resume) / Retry / Dismiss, reconnect link, reconcile answer, waiting states |
+| Tests | `engine/ai/repair/repair_test.go`, `engine/shadow/shadow_test.go`, `engine/runtime/fork_test.go`, `api/repair_test.go` | Classification table; model never asked for certain actions; redaction; three attempts; budget; shadow pass, fail, mismatch and schema checks; fork replays without re-sending, parks changed writes, refuses uncertain runs; API end to end per class (data with publish and resume counting provider executions, four-eyes, transient retry, credential, unknown outcome with reconcile, schema drift from a drift trigger with dedup), a bad patch withheld, budget exhaustion, permissions, tenant isolation and the off switch |
+
+Left for later: alerts when a proposal appears (it shows on the run's page); an evaluation suite for repairs alongside B3's; resuming runs that compensated (a person starts a new run today); patches for workflows managed in a repository go through the repository (accept refuses them, as manual edits are refused).
+
+Migrations 00050–00052 were numbered for B2 while C2 (00055–00059) and A2 (00060–00064) land in parallel; see the note under C1's known gaps.
+
 ## C1: what exists
 
 Embedding foundations, 2026-10-07. Partner guide: [embedding.md](embedding.md). Design: [decision 0015](decisions/0015-embedding-tenancy.md). Threat model: boundary B11.

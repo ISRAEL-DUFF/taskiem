@@ -3,10 +3,13 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/api"
@@ -477,5 +480,36 @@ func TestRepairPermissionsAndIsolation(t *testing.T) {
 	run2 := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-8"}, "failed")
 	if len(rw.repairs(t, run2)) != 0 || len(rw.fake.Requests()) != calls {
 		t.Errorf("repair ran while off")
+	}
+}
+
+// TestRepairRoutes pins the repair API: reading proposals, the tenant's
+// switch, and the two decisions a person makes. Nothing here lets the
+// repair system itself publish, approve or resume.
+func TestRepairRoutes(t *testing.T) {
+	rw := newRepairWorld(t, nil)
+	var got []string
+	err := chi.Walk(rw.srv.Handler().(chi.Routes), func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		if strings.Contains(route, "repair") {
+			got = append(got, method+" "+route)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(got)
+	want := []string{
+		"GET /v1/repairs/settings",
+		"GET /v1/repairs/{id}",
+		"GET /v1/repairs/{id}/interactions",
+		"GET /v1/runs/{run}/repairs",
+		"GET /v1/workflows/{wf}/repairs",
+		"POST /v1/repairs/{id}/accept",
+		"POST /v1/repairs/{id}/dismiss",
+		"PUT /v1/repairs/settings",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("repair routes changed; every new one needs a safety review (docs/ai.md):\n%s", strings.Join(got, "\n"))
 	}
 }
