@@ -91,7 +91,7 @@ The run is started by `ussd:<reference>` in the environment the channel serves, 
 ## Setting up
 
 1. **Aggregator.** Get a USSD service code from Africa's Talking: a dedicated code, or a channel on a shared one ([needs people](needs-people.md#phase-3), W4). Its sandbox simulator works with the sandbox app.
-2. **Channel.** An admin (`secret.manage`) connects the aggregator. Settings has no page for this yet, so use the API:
+2. **Channel.** An admin (`secret.manage`) connects the aggregator under **Settings > USSD channels**: pick the aggregator and the channel's environment, and optionally list the addresses callbacks must come from. The page shows the callback URL, with its token, **once**; copy it before dismissing it. The same page rotates the token (the old URL stops working at once), changes the environment or the allow-list, turns the channel off (callbacks get 404) or disconnects it, and lists the service codes each environment serves. The API does the same:
 
    ```
    PUT /v1/ussd/channels/africastalking
@@ -138,7 +138,6 @@ type Adapter interface {
 
 ## Limitations and follow-ups
 
-- No Settings page for channels yet; channels are managed with the API.
 - Input containing `*` cannot be typed: Africa's Talking uses it as the separator.
 - When a caller dials a code with an extension (`*384*123*1#`), whether the extension arrives in `serviceCode` or in `text` is not confirmed (W4). Menus route by the exact service code.
 - Africa's Talking's end-of-session notifications (Events URL) are not used.

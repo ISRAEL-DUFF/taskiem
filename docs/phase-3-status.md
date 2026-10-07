@@ -79,7 +79,7 @@ Done 7 October 2026. Guide and security model: [USSD](ussd.md); contract rules U
 | Example | Airtime top-up: menu, own or other number, amount, confirm, `send_airtime` to the caller, outcome SMS | `flows/examples/ussd-airtime-topup.wd.json` and `.flow.ts` |
 | Tests | Menu checks (size, lower limits, placeholder widths, unreachable, dangling, bad regex, secrets and env in conditions, expressions as text, non-ASCII, schema fit), walk (options, conditions, invalid input, back and home, cancel, depth), callback format; through the API: end to end with a fake Africa's Talking (tokens, every screen, retry, sealing in history, session row and logs, SMS once, audit), two replicas racing ten confirmations (one run) and a version published mid-session (pinned), a slow engine and a locked session row (answers within the budget), rate limits, plan limit with the refusal SMS, a failed run's SMS, allow-list, disabled channel, token rotation, permissions, an incremental adapter, publish checks and service-code conflicts; the round trip of generated USSD menus through code and back | `engine/ussd/ussd_test.go`, `engine/wd/ussd_test.go`, `connectors/africastalking/ussd_test.go`, `api/ussd_test.go`, `engine/flowcode/roundtrip_test.go`, `sdk/src/roundtrip.test.ts` |
 
-Left after A3: a Settings page for channels (the API works today); a real aggregator account and service code (W4), with Africa's Talking's answers on source addresses and on how dialled extensions arrive; result screens within the session for fast runs; Africa's Talking's end-of-session events; languages (A4). Migration 00065 is numbered for A3 while other Phase 3 work (00070–00079) lands in parallel.
+Left after A3: a real aggregator account and service code (W4), with Africa's Talking's answers on source addresses and on how dialled extensions arrive; result screens within the session for fast runs; Africa's Talking's end-of-session events; languages (A4). Migration 00065 is numbered for A3 while other Phase 3 work (00070–00079) lands in parallel.
 
 ## X: mobile money
 
@@ -252,3 +252,11 @@ The partner connector bridge, 2026-10-07. Partner guide: [embedding.md](embeddin
 | Tests | Sharing gates apps and provisioning; credentials stored in the sub-tenant's vault, dual audit, invisible to the partner (write, not read) and to other sub-tenants; sub-tenant A's end user runs the partner's connector pre-authenticated, B's run cannot use A's credential; rotation reaches the next run; removal; another partner reaches none of it; unsharing withdraws it (`TestConnectorBridge`) | `api/embedc2_test.go` |
 
 C2 and C3 migrations are 00055–00056 (00050–00054 are B2's, 00060–00064 A2's); goose applies them in order on a fresh database.
+
+## Follow-ups
+
+Gaps the milestones above left, closed on 7 October 2026 after A3, B2 and C1–C3 landed.
+
+| Gap | What closed it | Where |
+| --- | --- | --- |
+| USSD channels had no Settings page (A3) | **Settings > USSD channels**: connect an aggregator with its environment and address allow-list, the callback URL and token shown once, rotate the token, change or turn off, disconnect; the service codes each environment serves. Browser test end to end against the edge callback | `web/src/pages/USSDChannels.tsx`, `web/e2e/ussd.spec.ts` |

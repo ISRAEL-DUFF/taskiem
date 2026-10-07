@@ -4,6 +4,7 @@ import { useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
 import { ErrorBox, Field, JsonInput, fmtTime, useAction, useLoad } from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
+import { USSDChannels } from "./USSDChannels";
 
 interface Secret {
   environment: string;
@@ -36,6 +37,7 @@ export function Settings() {
       {can("secret.manage") && <Egress env={env} />}
       {can("git.manage") && <Git env={env} />}
       {can("secret.manage") && <WhatsAppNumber />}
+      {can("secret.manage") && <USSDChannels />}
       <Governance />
       <PlanLimits />
     </>
