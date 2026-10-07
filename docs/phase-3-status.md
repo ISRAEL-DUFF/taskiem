@@ -24,7 +24,7 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 | C | C2 | Embedded builder web component and iframe, theming tokens, custom domains, white-label | 13.4 | **Done** ([below](#c2-what-exists)); TLS for partners' hosts needs EM2 |
 | C | C3 | Partner connector bridge (the partner's API as a pre-authenticated connector) | 13.4 | **Done** ([below](#c3-what-exists)) |
 | C | C4 | First embedded deployment inside a holdco product (Payrolla customer automations) | — | Needs people |
-| — | X | Container steps (gVisor or Firecracker); mobile money (M-Pesa, MTN MoMo, Airtel Money); tax and statutory connectors | 7.5 | Planned |
+| — | X | Container steps (gVisor or Firecracker); mobile money (M-Pesa, MTN MoMo, Airtel Money); tax and statutory connectors | 7.5 | Mobile money: M-Pesa and MTN MoMo done (code; [what exists](#x-mobile-money)), Airtel Money needs MM3; container steps and tax/statutory connectors planned |
 
 ## A1: WhatsApp as a client of the platform
 
@@ -61,6 +61,18 @@ Done 7 October 2026. Guide and security model: [WhatsApp](whatsapp.md#flows). Bu
 | Tests | Flow crypto round trip (encrypted as Meta does with a test key pair, decrypted, answered, the answer decrypted), other key, altered ciphertext and garbage refused, key parsing (PKCS#1/#8, small, passphrase-protected); schema → form and back; flow tokens; Flow JSON matches the docs; step-up ordering; through the API: inputs form end to end (432, 421, 427, ping, field errors, spent token, sealed inputs, fallback to chat, another person's completion), PIN set/verify/lockout/unlink, PIN satisfies only `whatsapp_pin` policies, own-number routing with two tenants' numbers and the shared one (signatures per app, handshakes, sends and alerts from the right number, disconnect), template counting, overage and held-back marketing, public menu end to end, isolation and flood limits. The fake Graph API knows several numbers, Flow messages, number reads and key uploads | `engine/whatsapp/flows_test.go`, `engine/runtime/stepup_test.go`, `api/whatsapp_a2_test.go`, `engine/whatsapp/whatsapptest` |
 
 Left after A2: embedded signup (W3); counting from delivery receipts (status webhooks' `pricing`) rather than accepted sends; outcomes for public-menu runs; forms for nested inputs and dates; a browser test of the PIN and own-number pages. Migrations 00060–00063 are numbered after B2 (00050–00054) and C2/C3 (00055–00059), built in parallel.
+
+## X: mobile money
+
+Done 7 October 2026 for M-Pesa and MTN MoMo, each built clean-room from the provider's public developer documentation (URLs in each guide) and tested against a fake server written from the same pages, since no sandbox credentials exist yet (MM1, MM2). Airtel Money's documentation is behind a portal sign-in, so its connector waits for access (MM3). Container steps and tax and statutory connectors are still planned.
+
+| Connector | Covers | Classes and duplicates | Callbacks | Guide |
+| --- | --- | --- | --- | --- |
+| `mpesa@1` | Safaricom Daraja (Kenya): STK push and query, C2B URL registration and notifications, B2C, transaction status, account balance, reversals; cached OAuth token renewed when another process replaces it; STK password; security credential given encrypted or encrypted from Safaricom's certificate (RSA PKCS #1 v1.5) | B2C idempotent by `OriginatorConversationID` (Daraja refuses repeats); STK push and reversal unsafe (no reference to deduplicate or look up); reads for the asynchronous status and balance | URL token (`query_secret`; Daraja signs nothing), result correlated by a `ref` in the URL, documented C2B replies; confirm money results with `stk_query` / `transaction_status` | [mpesa.md](integrations/mpesa.md) |
+| `mtnmomo@1` | MTN MoMo Open API (14 countries): request to pay and status, transfers through Disbursement or Remittance and status, balance, account holder active check and basic info; a token per product | Both writes idempotent by `X-Reference-Id` (the engine key as a version-4 UUID; 409 read back), with read-only reconcile actions; amounts scaled per ISO 4217 | Path token (`path_secret`: MTN forbids query strings on callback URLs), PUT or POST, 200 reply, correlated by `externalId` | [mtnmomo.md](integrations/mtnmomo.md) |
+| `airtelmoney@1` | Not built: documentation requires a portal account | — | — | [airtelmoney.md](integrations/airtelmoney.md) |
+
+Engine features they needed: the `path_secret` verify scheme with the path form `/hooks/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}`, and connector events accepted as PUT (`engine/ingest/hooks.go`, [connector/v1](contracts/connector-v1.md)); ISO 4217 minor-unit scales in `connectors/internal/money`. Base URLs are overridable with `TASKIEM_MPESA_URL` and `TASKIEM_MTNMOMO_URL`. No new dependencies and no migrations.
 
 ## Exit gate G3
 
