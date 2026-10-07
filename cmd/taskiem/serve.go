@@ -558,6 +558,7 @@ func serve(ctx context.Context, args []string) error {
 	// delay so load balancers stop routing to it, and only then does runCtx
 	// end, stopping servers and letting workers drain.
 	var draining atomic.Bool
+	telemetry.Draining.Set(0)
 	runCtx, stopRun := context.WithCancel(context.WithoutCancel(ctx))
 	defer stopRun()
 	go func() {

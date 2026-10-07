@@ -330,6 +330,7 @@ func Incidents(ctx context.Context, pool *pgxpool.Pool, since time.Time, withAct
 		FROM status_incidents i JOIN status_updates u ON u.incident_id = i.id
 		WHERE i.id IN (SELECT x.id FROM status_incidents x
 			WHERE x.created_at >= $1 OR x.scheduled_end >= $1
+			   OR EXISTS (SELECT 1 FROM status_updates c WHERE c.incident_id = x.id AND c.at >= $1)
 			   OR NOT EXISTS (SELECT 1 FROM status_updates c WHERE c.incident_id = x.id AND c.status IN ('resolved', 'completed'))
 			ORDER BY x.created_at DESC LIMIT 200)
 		ORDER BY i.created_at DESC, i.id, u.id DESC`, since)
