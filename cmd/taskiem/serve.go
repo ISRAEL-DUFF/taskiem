@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -63,6 +64,13 @@ type config struct {
 	Connectors         builtin.Options
 	PoolSize           int32
 	LoginBurst         int
+	// Signup settings (docs/onboarding.md): signups per address a day
+	// (TASKIEM_SIGNUP_PER_ADDRESS), extra blocked email domains
+	// (TASKIEM_SIGNUP_BLOCKED_DOMAINS) and the help links' docs site
+	// (TASKIEM_DOCS_URL).
+	SignupPerAddress     int
+	SignupBlockedDomains []string
+	DocsURL              string
 	// Limits are the platform's default plan limits (TASKIEM_DEFAULT_*).
 	Limits runtime.Limits
 	// WhatsApp is the platform number (TASKIEM_WHATSAPP_*); nil: off.
@@ -211,6 +219,19 @@ func loadConfig() (config, error) {
 	if n, err := strconv.Atoi(os.Getenv("TASKIEM_LOGIN_BURST")); err == nil && n > 0 {
 		c.LoginBurst = n
 	}
+	if v := os.Getenv("TASKIEM_SIGNUP_PER_ADDRESS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return c, fmt.Errorf("TASKIEM_SIGNUP_PER_ADDRESS: %q is not a number (negative: no limit)", v)
+		}
+		c.SignupPerAddress = n
+	}
+	for _, d := range strings.Split(os.Getenv("TASKIEM_SIGNUP_BLOCKED_DOMAINS"), ",") {
+		if d = strings.ToLower(strings.TrimSpace(d)); d != "" {
+			c.SignupBlockedDomains = append(c.SignupBlockedDomains, d)
+		}
+	}
+	c.DocsURL = strings.TrimRight(os.Getenv("TASKIEM_DOCS_URL"), "/")
 	if n, err := strconv.Atoi(os.Getenv("TASKIEM_DATABASE_POOL")); err == nil && n > 0 {
 		c.PoolSize = int32(n) //nolint:gosec // small operator-set value
 	}
@@ -333,6 +354,35 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	return e, nil
 }
 
+// connectorLoopback lets a connector the operator pointed at a loopback
+// address (TASKIEM_TERMII_URL=http://127.0.0.1:12727, a fake provider for
+// browser tests) reach that address and port, and nothing else private.
+// Only an IP literal counts: a name resolving to loopback is refused as
+// ever.
+func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]string {
+	var out map[string]string
+	for _, c := range reg.List() {
+		u, err := url.Parse(c.Manifest.BaseURL)
+		if err != nil {
+			continue
+		}
+		ip, err := netip.ParseAddr(u.Hostname())
+		if err != nil || !ip.IsLoopback() {
+			continue
+		}
+		port := u.Port()
+		if port == "" {
+			port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		out["connector:"+c.Manifest.ID] = port
+		log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", c.Manifest.BaseURL)
+	}
+	return out
+}
+
 func (e *engine) hooks() *ingest.Handler {
 	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log}
 }
@@ -389,6 +439,7 @@ func serve(ctx context.Context, args []string) error {
 		srv.PublicURL = cfg.PublicURL
 		srv.Alerts = alerter
 		srv.LoginBurst = cfg.LoginBurst
+		srv.SignupPerAddress, srv.SignupBlockedDomains, srv.DocsURL = cfg.SignupPerAddress, cfg.SignupBlockedDomains, cfg.DocsURL
 		if prov, err := ai.New(cfg.AI); err != nil {
 			return err
 		} else if prov != nil {
@@ -459,9 +510,10 @@ func serve(ctx context.Context, args []string) error {
 	}
 	if is("worker") {
 		host, _ := os.Hostname()
+		loopback := connectorLoopback(e.registry, log)
 		for _, q := range cfg.Queues {
 			w := &runtime.Worker{Store: e.store, Registry: e.registry, Secrets: e.vault, Connections: e.vault,
-				Egress: &egress.Guard{Logger: log}, ID: host + "/" + q + "/" + strconv.Itoa(os.Getpid()), Queue: strings.TrimSpace(q), Logger: log}
+				Egress: &egress.Guard{Logger: log, Loopback: loopback}, ID: host + "/" + q + "/" + strconv.Itoa(os.Getpid()), Queue: strings.TrimSpace(q), Logger: log}
 			if w.Queue == "container" {
 				// Container steps (spec 7.5): the sandbox runner and egress proxy.
 				more, err := containerSetup(ctx, w, log)

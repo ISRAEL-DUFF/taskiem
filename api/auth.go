@@ -449,10 +449,11 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms, "auth_method": p.AuthMethod, "enrol_passkey": p.EnrolOnly}
 	if p.UserID != uuid.Nil {
 		var email, name string
+		var verified bool
 		_ = s.tx(r, func(tx pgx.Tx) error {
-			return tx.QueryRow(r.Context(), `SELECT email, name FROM users WHERE id = $1`, p.UserID).Scan(&email, &name)
+			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified)
 		})
-		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name}
+		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified}
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
 			return nil
@@ -465,41 +466,15 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-type signupReq struct {
-	Tenant   string `json:"tenant"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
-}
-
-// signup creates a tenant with its owner, a default workspace, and the dev
-// and prod environments.
-func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
-	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
-		writeErr(w, http.StatusTooManyRequests, "too many attempts")
-		return
-	}
-	var req signupReq
-	if err := decodeBody(r, &req); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	tenant, user, err := CreateTenant(r.Context(), s.Store.Pool, req.Tenant, req.Email, req.Name, req.Password)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	// With billing on, a new tenant starts its trial (docs/billing.md).
-	if err := s.Billing.Ensure(r.Context(), tenant, "user:"+user.String()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"tenant_id": tenant, "user_id": user})
-}
-
 // CreateTenant creates a tenant with its owner, a default workspace, and
 // the dev and prod environments (signup, and `taskiem bootstrap`).
 func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string) (tenant, user uuid.UUID, err error) {
+	return createTenant(ctx, pool, name, email, userName, password, nil)
+}
+
+// createTenant is CreateTenant; then, when given, runs in the same
+// transaction (signup records its onboarding and verification link).
+func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string, then func(tx pgx.Tx, tenant, user uuid.UUID) error) (tenant, user uuid.UUID, err error) {
 	if name == "" || !strings.Contains(email, "@") || len(password) < 12 {
 		return uuid.Nil, uuid.Nil, fmt.Errorf("%w: tenant, a valid email, and a password of at least 12 characters are required", errBadRequest)
 	}
@@ -527,9 +502,18 @@ func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName
 				return err
 			}
 		}
-		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'tenant.create', $3, '{}')`, tenant, user.String(), tenant.String())
-		return err
+		if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'tenant.create', $3, '{}')`, tenant, user.String(), tenant.String()); err != nil {
+			return err
+		}
+		if then != nil {
+			return then(tx, tenant, user)
+		}
+		return nil
 	})
+	var pgErr interface{ SQLState() string }
+	if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
+		err = fmt.Errorf("%w: email already registered", errConflict) // the same email signing up twice at once
+	}
 	return tenant, user, err
 }
 
@@ -577,6 +561,10 @@ func (s *Server) listMembers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 	var req memberReq
 	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.needVerified(r); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -760,6 +748,10 @@ type keyReq struct {
 func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 	var req keyReq
 	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.needVerified(r); err != nil {
 		s.fail(w, r, err)
 		return
 	}

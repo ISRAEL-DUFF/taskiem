@@ -127,3 +127,31 @@ func portOf(t *testing.T, raw string) string {
 	}
 	return u.Port()
 }
+
+// TestLoopbackForOnePurpose: an operator's fake provider on loopback is
+// reachable by that connector on that port only.
+func TestLoopbackForOnePurpose(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") }))
+	defer srv.Close()
+	host, port := hostOf(t, srv.URL), portOf(t, srv.URL)
+	g := &Guard{Loopback: map[string]string{"connector:termii": port}}
+	p := Policy{Hosts: []string{host}, Purpose: "connector:termii"}
+	conn, err := g.DialContext(context.Background(), p, "tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		t.Fatalf("termii to its fake: %v", err)
+	}
+	_ = conn.Close()
+	for name, tc := range map[string]struct {
+		p    Policy
+		addr string
+	}{
+		"other purpose":         {Policy{Hosts: []string{host}, Purpose: "http_step"}, net.JoinHostPort(host, port)},
+		"other port":            {p, net.JoinHostPort(host, "5432")},
+		"not allowed":           {Policy{Hosts: []string{"api.ng.termii.com"}, Purpose: "connector:termii"}, net.JoinHostPort(host, port)},
+		"private, not loopback": {Policy{Hosts: []string{"10.0.0.5"}, Purpose: "connector:termii"}, net.JoinHostPort("10.0.0.5", port)},
+	} {
+		if _, err := g.DialContext(context.Background(), tc.p, "tcp", tc.addr); !errors.Is(err, ErrDenied) {
+			t.Errorf("%s: want denial, got %v", name, err)
+		}
+	}
+}

@@ -736,6 +736,11 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 		run, status, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {
 		return err
 	}
+	if status == "completed" {
+		if err := recordFirstRun(ctx, tx, r.ref.TenantID, run); err != nil {
+			return err
+		}
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM concurrency_slots WHERE run_id = $1`, run); err != nil {
 		return err
 	}
@@ -753,6 +758,25 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 		return err
 	}
 	return s.promote(ctx, tx, r.ref.TenantID, r.workflowID)
+}
+
+// recordFirstRun stamps a self-serve tenant's first successful run (gate
+// G4: signup to first successful run in under 15 minutes) and observes the
+// time it took. Tenants that did not sign themselves up have no row, and
+// later runs find the stamp set: either way nothing is written.
+func recordFirstRun(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID) error {
+	var secs float64
+	err := tx.QueryRow(ctx, `UPDATE tenant_onboarding SET first_run_at = now(), first_run_id = $2
+		WHERE tenant_id = $1 AND first_run_at IS NULL AND source = 'signup'
+		RETURNING extract(epoch FROM first_run_at - signed_up_at)::float8`, tenant, run).Scan(&secs)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	telemetry.FirstRunSeconds.Observe(max(secs, 0))
+	return nil
 }
 
 // signalLock serialises waiting and delivery for one (tenant, environment,

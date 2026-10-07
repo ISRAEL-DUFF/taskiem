@@ -60,7 +60,19 @@ type Guard struct {
 	// Blocked decides whether an address is off limits. Defaults to
 	// BlockedAddr; tests can loosen it to reach httptest servers.
 	Blocked func(netip.Addr) bool
-	Timeout time.Duration
+	// Loopback lets one purpose reach loopback on one port: an operator
+	// pointing a connector at a fake provider on the same machine (browser
+	// tests; "connector:termii" -> "12727"). The policy's host allow-list
+	// still applies, and nothing else private becomes reachable.
+	Loopback map[string]string
+	Timeout  time.Duration
+}
+
+// loopbackOK reports whether a is loopback and the purpose may reach it on
+// port.
+func (g *Guard) loopbackOK(p Policy, a netip.Addr, port string) bool {
+	want, ok := g.Loopback[p.Purpose]
+	return ok && want != "" && want == port && a.Unmap().IsLoopback()
 }
 
 func (g *Guard) resolver() Resolver {
@@ -145,7 +157,7 @@ func (g *Guard) DialContext(ctx context.Context, p Policy, network, addr string)
 		return nil, fmt.Errorf("resolve %s: no addresses: %w", host, effects.ErrNotSent)
 	}
 	for _, a := range addrs {
-		if g.blocked(a) {
+		if g.blocked(a) && !g.loopbackOK(p, a, port) {
 			return deny("resolves to non-public address " + a.String())
 		}
 	}

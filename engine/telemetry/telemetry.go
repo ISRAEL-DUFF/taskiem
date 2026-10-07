@@ -67,6 +67,16 @@ var (
 	RunsAdmitted = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_runs_admitted_total", Help: "Runs held back by their tenant's limits and admitted later by the scheduler.",
 	})
+	// FirstRunSeconds is gate G4's measure: the share of observations at
+	// or under 900 seconds is the share of signups that reached a first
+	// successful run within 15 minutes of signing up.
+	FirstRunSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "taskiem_onboarding_first_run_seconds", Help: "Time from a self-serve signup to the tenant's first successful run, observed once per tenant.",
+		Buckets: []float64{60, 120, 300, 600, 900, 1800, 3600, 4 * 3600, 24 * 3600, 7 * 24 * 3600},
+	})
+	Signups = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_signups_total", Help: "Self-serve signups by outcome (created, rate_limited, blocked_domain, invalid, exists, honeypot).",
+	}, []string{"outcome"})
 )
 
 // QueueCollector reports queue depth and the age of the oldest ready task,

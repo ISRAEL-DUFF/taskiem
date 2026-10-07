@@ -46,6 +46,17 @@ type Server struct {
 	// AllowSignup enables POST /v1/signup (self-serve tenants; off by default
 	// until Phase 4).
 	AllowSignup bool
+	// SignupPerAddress is how many signups one client address may make a
+	// day, across every replica (TASKIEM_SIGNUP_PER_ADDRESS); 0 is the
+	// default (5), negative is no limit.
+	SignupPerAddress int
+	// SignupBlockedDomains are email domains (and their subdomains) that
+	// may not sign up, besides the built-in throwaway services
+	// (TASKIEM_SIGNUP_BLOCKED_DOMAINS).
+	SignupBlockedDomains []string
+	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
+	// empty shows the in-product help only.
+	DocsURL string
 	// SecureCookies sets the Secure flag on session cookies (production).
 	SecureCookies bool
 	// Ingest receives inbound webhooks (role "edge"); nil omits /hooks.
@@ -134,8 +145,9 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
+		r.Get("/signup", s.signupOptions)
 		if s.AllowSignup {
-			r.Post("/signup", s.signup)
+			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}
 		r.Post("/billing/webhooks/{provider}", s.billingWebhook) // payment providers (billing.go)
 		// End users of embed apps: their own tokens, CORS (embed.go).
@@ -147,6 +159,10 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
 			r.Post("/me/password", s.changePassword)
+			r.Post("/me/email/verify", s.verifyEmail)
+			r.Post("/me/email/verify/resend", s.resendVerification)
+			r.Get("/onboarding", s.getOnboarding) // the getting-started checklist (onboarding.go)
+			r.With(s.need(PermWorkflowEdit)).Post("/onboarding/dismiss", s.dismissOnboarding)
 			r.Get("/me/invitations", s.myInvitations)
 			r.Post("/me/invitations/{tenant}/accept", s.acceptInvitation)
 			r.Post("/me/invitations/{tenant}/decline", s.declineInvitation)

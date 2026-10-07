@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -70,16 +71,29 @@ type world struct {
 
 func newWorld(t *testing.T) *world {
 	e := rt.New(t)
-	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress, Logger: slog.New(slog.DiscardHandler)}
+	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress, Logger: slog.New(slog.DiscardHandler),
+		SignupPerAddress: -1} // many tenants sign up from 127.0.0.1 here; onboarding_test.go tests the limit
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return &world{env: e, base: ts.URL, srv: srv}
 }
 
-// tenant signs up a new tenant and returns its owner's client.
+// tenant signs up a new tenant and returns its owner's client. The
+// owner's email counts as confirmed (onboarding_test.go tests confirming
+// it), so worlds that send email can invite people at once.
 func (w *world) tenant(t *testing.T, name, email string) *client {
 	anon := &client{t: t, base: w.base}
 	anon.must(201, "POST", "/v1/signup", map[string]any{"tenant": name, "email": email, "name": "Owner", "password": "correct horse battery"})
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE users SET email_verified_at = now() WHERE lower(email) = lower($1)`, email); err != nil {
+		t.Fatal(err)
+	}
+	// Nor does its confirmation email count among the emails tests expect.
+	if w.srv.Alerts != nil {
+		if m, ok := w.srv.Alerts.Mailer.(*fakeMail); ok {
+			w.srv.WaitBackground()
+			m.drop("Subject: Confirm your email for Taskiem")
+		}
+	}
 	return w.login(t, email, "correct horse battery")
 }
 
