@@ -93,12 +93,40 @@ With the plain manifests the steps are the same, except that you run `taskiem mi
   - use a read-only root filesystem;
   - drop every capability;
   - use the `RuntimeDefault` seccomp profile;
-  - mount no service-account token (Taskiem never calls the Kubernetes API).
+  - mount no service-account token (Taskiem never calls the Kubernetes API, except the container worker pool when container steps are enabled; see below).
 - **Writable storage** is limited to two `emptyDir` volumes, `/tmp` and `/cache`. `/cache` holds compiled WebAssembly for the Python interpreter and connectors, and is rebuilt on start.
 - **`TASKIEM_TRUST_PROXY` defaults to true** because traffic arrives through the ingress controller. Turn it off if pods are reachable any other way, since otherwise clients could forge `X-Forwarded-For`.
 - **`networkPolicy.enabled`:**
   - Inbound traffic is limited to the API and edge ports, plus metrics from `networkPolicy.monitoringNamespace`.
   - Outbound traffic is not restricted, because connectors call many providers. The worker's egress guard already blocks private and metadata addresses; add your own egress policy if you need an allow-list.
+
+## Container steps
+
+Container steps ([container-steps.md](container-steps.md), spec 7.5) are off by default. They need a node pool running gVisor (`runsc`) with a RuntimeClass for it, a registry (or registry path) for the images tenants may use, and a CNI that enforces NetworkPolicy. Then:
+
+```yaml
+containerSteps:
+  enabled: true
+  registries: [registry.example.com/steps]
+  # runtimeClassName: gvisor                 # GKE Sandbox provides "gvisor"
+  # runtimeClass: {create: true, handler: runsc, nodeSelector: {pool: gvisor}, tolerations: [...]}
+  # imagePullSecrets: [steps-registry]       # Secrets in the sandbox namespace
+```
+
+This adds:
+
+| Object | Where | What |
+| --- | --- | --- |
+| Namespace `taskiem-sandbox` (`containerSteps.namespace`) | cluster | Pod Security `restricted` enforced; only sandbox Pods run here (`createNamespace: false` to bring your own) |
+| NetworkPolicy `taskiem-sandbox` | sandbox namespace | no ingress; egress only to the container workers' proxy port (3128). The worker refuses to start without it |
+| ResourceQuota `taskiem-sandbox` | sandbox namespace | `containerSteps.quota`: Pods, CPU and memory for the namespace as a whole |
+| ServiceAccount `taskiem-container-worker` | release namespace | the only account that mounts a token |
+| Role and RoleBinding | sandbox namespace | create, get, list and delete Pods; read Pod logs; create and delete Secrets; read NetworkPolicies. Nothing else, nowhere else |
+| Deployment `taskiem-container-worker` | release namespace | `serve --role worker` with `TASKIEM_WORKER_QUEUES=container` and the Kubernetes runner settings; the egress proxy on 3128, advertised to sandboxes as the Pod's IP |
+| NetworkPolicy `taskiem-container-worker` | release namespace | with `networkPolicy.enabled`: the proxy port only from the sandbox namespace, metrics from monitoring |
+| RuntimeClass | cluster | only with `containerSteps.runtimeClass.create` |
+
+The main worker Deployment does not serve the `container` queue; container steps wait for the container pool. Each container step is a Pod (`tsk-…`) that lives for the attempt; `kubectl -n taskiem-sandbox get pods -l taskiem.dev/sandbox=true` shows those running. Give tenants minutes with `taskiem tenants limits <tenant> --set container_minutes_monthly=<n>`.
 
 ## Storage
 

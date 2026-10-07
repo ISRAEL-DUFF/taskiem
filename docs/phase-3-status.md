@@ -24,7 +24,7 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 | C | C2 | Embedded builder web component and iframe, theming tokens, custom domains, white-label | 13.4 | **Done** ([below](#c2-what-exists)); TLS for partners' hosts needs EM2 |
 | C | C3 | Partner connector bridge (the partner's API as a pre-authenticated connector) | 13.4 | **Done** ([below](#c3-what-exists)) |
 | C | C4 | First embedded deployment inside a holdco product (Payrolla customer automations) | — | Needs people |
-| — | X | Container steps (gVisor or Firecracker); mobile money (M-Pesa, MTN MoMo, Airtel Money); tax and statutory connectors | 7.5 | Mobile money: M-Pesa and MTN MoMo done (code; [what exists](#x-mobile-money)), Airtel Money needs MM3; container steps and tax/statutory connectors planned |
+| — | X | Container steps (gVisor or Firecracker); mobile money (M-Pesa, MTN MoMo, Airtel Money); tax and statutory connectors | 7.5 | Container steps done (code; [what exists](#x-container-steps)), production needs CS1, CS2; mobile money: M-Pesa and MTN MoMo done (code; [what exists](#x-mobile-money)), Airtel Money needs MM3; tax/statutory connectors planned |
 
 ## A1: WhatsApp as a client of the platform
 
@@ -83,7 +83,7 @@ Left after A3: a Settings page for channels (the API works today); a real aggreg
 
 ## X: mobile money
 
-Done 7 October 2026 for M-Pesa and MTN MoMo, each built clean-room from the provider's public developer documentation (URLs in each guide) and tested against a fake server written from the same pages, since no sandbox credentials exist yet (MM1, MM2). Airtel Money's documentation is behind a portal sign-in, so its connector waits for access (MM3). Container steps and tax and statutory connectors are still planned.
+Done 7 October 2026 for M-Pesa and MTN MoMo, each built clean-room from the provider's public developer documentation (URLs in each guide) and tested against a fake server written from the same pages, since no sandbox credentials exist yet (MM1, MM2). Airtel Money's documentation is behind a portal sign-in, so its connector waits for access (MM3). Tax and statutory connectors are still planned; container steps are [below](#x-container-steps).
 
 | Connector | Covers | Classes and duplicates | Callbacks | Guide |
 | --- | --- | --- | --- | --- |
@@ -92,6 +92,22 @@ Done 7 October 2026 for M-Pesa and MTN MoMo, each built clean-room from the prov
 | `airtelmoney@1` | Not built: documentation requires a portal account | — | — | [airtelmoney.md](integrations/airtelmoney.md) |
 
 Engine features they needed: the `path_secret` verify scheme with the path form `/hooks/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}`, and connector events accepted as PUT (`engine/ingest/hooks.go`, [connector/v1](contracts/connector-v1.md)); ISO 4217 minor-unit scales in `connectors/internal/money`. Base URLs are overridable with `TASKIEM_MPESA_URL` and `TASKIEM_MTNMOMO_URL`. No new dependencies and no migrations.
+
+## X: container steps
+
+Done 7 October 2026 (code): heavy workloads in a pinned image, in a sandbox per attempt (spec 7.5, [container steps](container-steps.md)). Production needs a gVisor node pool and RuntimeClass (CS1) and a registry (CS2); which plans include minutes is CS3.
+
+| Part | What exists | Code |
+| --- | --- | --- |
+| Step type | `container` in wd/v1: `image` pinned by digest with its registry (tags refused), `command`/`args`, input on stdin or in a file, JSON output on stdout or in a file (capped), declared `secrets` as env or files, `class` (`unsafe_write` by default), `network` `none` or `egress` with `hosts`, `limits` (cpu, memory, timeout, output) refused above the maxima and clamped at run time; SDK helper `container()`, codegen and both round trips | `schemas/wd-v1.schema.json`, `engine/wd/container.go`, `sdk/src`, [wd/v1 rule 12](contracts/wd-v1.md) |
+| Runners | `engine/container.Runner`: **Kubernetes** (a Pod per attempt over the API server's REST API with the pool's service account, no client library: gVisor RuntimeClass, non-root, read-only, capabilities dropped, seccomp, no token, no DNS, guaranteed resources, `activeDeadlineSeconds`, registry allow-list, NetworkPolicy checked at start, input and secrets in a Secret owned by the Pod, Pod deleted after every attempt, sweep of leftovers); **Local** (development only, refuses to start without `TASKIEM_CONTAINER_RUNNER=local` and `TASKIEM_CONTAINER_LOCAL_DEV=1`; not a security boundary); **Fake** for tests; `taskiem-shim` supervises the program inside the sandbox | `engine/container`, `cmd/taskiem-shim` |
+| Egress proxy | CONNECT and forward proxy in the container worker: a token per attempt for hosts on both the step's list and the environment's allow-list, through the egress guard (private and metadata addresses refused), ports 443 and 80, closed when the step ends | `engine/egress/proxy.go` |
+| Worker | `container` queue and pool; effect classes and idempotency keys as for writes; heartbeats keep the lease for up to 30 minutes; cancelling the run or step deletes the Pod; secret reads audited (`step.container`); outputs, logs and errors scrubbed of secret values and the proxy token | `engine/runtime/containerstep.go` |
+| Plan limits | `container_minutes_monthly` (0, the default, turns container steps off) counted in `container_usage` from the sandbox's own timestamps; `container_concurrency` enforced when tasks are claimed; both inherited by sub-tenants, which can only be lowered | migration 00080, `engine/runtime/limits.go` |
+| Deployment | Helm `containerSteps`: sandbox namespace (Pod Security `restricted`), NetworkPolicy, ResourceQuota, a Role limited to the sandbox namespace, the container worker Deployment, optional RuntimeClass | `deploy/helm/taskiem/templates/containersteps.yaml`, [Kubernetes](kubernetes.md#container-steps) |
+| Threat model | Boundary B14 | [threat model](security/threat-model.md) |
+
+Tests: schema and validation (digest, registry, clamping), the Kubernetes runner against a fake API server (the Pod specification, failures, cancellation, cleanup), the local runner (timeouts, output caps, files, environment), the egress proxy (allow, deny, private addresses, revocation), and the worker end to end with the fake runner (secrets scrubbed and audited, effect classes, cancellation, plan minutes, concurrency, egress through the proxy).
 
 ## Exit gate G3
 

@@ -2,6 +2,8 @@
 
 A `code` step runs a short function on the step's input and returns its output. JavaScript and TypeScript run in QuickJS, Python in CPython; both are compiled to WebAssembly and run in a fresh instance for every execution, so nothing is shared between runs or tenants (spec 7).
 
+For work that needs native libraries, more memory or more time (PDF rendering, image processing, machine learning), use a [container step](container-steps.md) instead.
+
 ```json
 {"id": "fees", "type": "code", "input": {"items": "=trigger.body.items"},
  "config": {"language": "python", "secrets": ["fx_key"], "source": "def main(input, host):\n    ..."}}

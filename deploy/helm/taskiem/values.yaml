@@ -130,6 +130,47 @@ ingress:
 podDisruptionBudget:
   enabled: true
 
+# Container steps (spec 7.5, docs/container-steps.md): a separate worker
+# pool (the "container" queue) runs each attempt as a Pod in a sandbox
+# namespace, under a gVisor RuntimeClass, with no network but this pool's
+# egress proxy. Needs a node pool with gVisor (runsc) installed and a
+# RuntimeClass for it; tenants also need container_minutes_monthly set on
+# their plan (taskiem tenants limits).
+containerSteps:
+  enabled: false
+  # Where sandbox Pods run; nothing else should run there.
+  namespace: taskiem-sandbox
+  createNamespace: true
+  # The RuntimeClass sandbox Pods use. Create it here only if your cluster
+  # does not already provide one (GKE Sandbox provides "gvisor").
+  runtimeClassName: gvisor
+  runtimeClass:
+    create: false
+    handler: runsc
+    # Schedules sandbox Pods onto the gVisor nodes (RuntimeClass scheduling).
+    nodeSelector: {}
+    tolerations: []
+  # Image prefixes steps may use (required), e.g. registry.example.com/steps.
+  # Anything else is refused before a Pod is created.
+  registries: []
+  # Secrets in the sandbox namespace for pulling from a private registry.
+  imagePullSecrets: []
+  # Extra node selector for sandbox Pods.
+  nodeSelector: {}
+  # A cap on the sandbox namespace as a whole (ResourceQuota hard limits).
+  quota:
+    pods: "50"
+    limits.cpu: "100"
+    limits.memory: 200Gi
+  # The egress proxy sandboxes reach for network "egress".
+  proxyPort: 3128
+  worker:
+    replicas: 2
+    databasePool: 10
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { memory: 512Mi }
+
 # Restrict traffic: ingress only to the API and edge ports (and metrics from
 # the monitoring namespace); egress is left to the egress guard and to your
 # own policies, since connectors call many providers.

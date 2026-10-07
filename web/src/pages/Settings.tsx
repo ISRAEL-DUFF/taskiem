@@ -54,6 +54,7 @@ interface LimitsView {
     secrets: number;
     connections: number;
     whatsapp_templates_this_month?: { sent: number; by_category: Record<string, number>; overage: number; blocked: number };
+    container_seconds_this_month?: number;
   };
   recent_hits: { limit: string; day: string; hits: number }[];
   help: Record<string, string>;
@@ -72,6 +73,7 @@ function PlanLimits() {
     max_secrets: data.usage.secrets,
     max_connections: data.usage.connections,
     whatsapp_templates_monthly: data.usage.whatsapp_templates_this_month?.sent ?? 0,
+    container_minutes_monthly: Math.ceil((data.usage.container_seconds_this_month ?? 0) / 60),
   };
   const wt = data.usage.whatsapp_templates_this_month;
   return (

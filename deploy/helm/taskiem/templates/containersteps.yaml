@@ -1,0 +1,272 @@
+{{- /* Container steps (docs/container-steps.md): the container worker pool,
+its access to the sandbox namespace, and that namespace's guard rails. */ -}}
+{{- if .Values.containerSteps.enabled }}
+{{- $c := .Values.containerSteps }}
+{{- if not $c.registries }}
+{{- fail "containerSteps.registries must list the image prefixes steps may use" }}
+{{- end }}
+{{- $name := printf "%s-container-worker" (include "taskiem.fullname" .) }}
+{{- if $c.createNamespace }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $c.namespace }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    # Sandbox Pods meet the restricted Pod Security Standard; admission
+    # refuses anything less, whoever creates it.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+{{- end }}
+{{- if $c.runtimeClass.create }}
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: {{ $c.runtimeClassName }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+handler: {{ $c.runtimeClass.handler }}
+{{- if or $c.runtimeClass.nodeSelector $c.runtimeClass.tolerations }}
+scheduling:
+  {{- with $c.runtimeClass.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $c.runtimeClass.tolerations }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+---
+# Only the container worker pool talks to the Kubernetes API, with this account.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: container-worker
+automountServiceAccountToken: false
+---
+# Namespaced to the sandbox: Pods (and their logs) for attempts, Secrets
+# for their input and declared secrets (owned by the Pod), and reading the
+# NetworkPolicy the runner checks for before it starts. Nothing cluster-wide,
+# nothing in the release namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $c.namespace }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, get, list, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $c.namespace }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+---
+# Sandbox Pods get no traffic in and none out but the container workers'
+# egress proxy. The runner refuses to start without this policy; your CNI
+# must enforce NetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: taskiem-sandbox
+  namespace: {{ $c.namespace }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              {{- include "taskiem.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: container-worker
+      ports:
+        - { protocol: TCP, port: {{ $c.proxyPort }} }
+{{- with $c.quota }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: taskiem-sandbox
+  namespace: {{ $c.namespace }}
+  labels:
+    {{- include "taskiem.labels" $ | nindent 4 }}
+spec:
+  hard:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: container-worker
+spec:
+  replicas: {{ $c.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: container-worker
+  template:
+    metadata:
+      labels:
+        {{- include "taskiem.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: container-worker
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print .Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ $name }}
+      # The runner reads this token to create sandbox Pods.
+      automountServiceAccountToken: true
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "taskiem.podSecurityContext" . | nindent 8 }}
+      # Steps run up to 30 minutes; a draining worker finishes what it holds.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: taskiem
+          image: {{ include "taskiem.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: [serve, --role, worker]
+          securityContext:
+            {{- include "taskiem.containerSecurityContext" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "taskiem.fullname" . }}
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          env:
+            - name: TASKIEM_DATABASE_POOL
+              value: {{ $c.worker.databasePool | quote }}
+            - name: TASKIEM_WORKER_QUEUES
+              value: container
+            - name: TASKIEM_CONTAINER_RUNNER
+              value: kubernetes
+            - name: TASKIEM_CONTAINER_NAMESPACE
+              value: {{ $c.namespace | quote }}
+            - name: TASKIEM_CONTAINER_RUNTIME_CLASS
+              value: {{ $c.runtimeClassName | quote }}
+            - name: TASKIEM_CONTAINER_REGISTRIES
+              value: {{ join "," $c.registries | quote }}
+            - name: TASKIEM_CONTAINER_SHIM_IMAGE
+              value: {{ include "taskiem.image" . | quote }}
+            {{- with $c.imagePullSecrets }}
+            - name: TASKIEM_CONTAINER_IMAGE_PULL_SECRETS
+              value: {{ join "," . | quote }}
+            {{- end }}
+            {{- with $c.nodeSelector }}
+            - name: TASKIEM_CONTAINER_NODE_SELECTOR
+              value: {{ $sel := list }}{{ range $k, $v := . }}{{ $sel = append $sel (printf "%s=%s" $k $v) }}{{ end }}{{ join "," $sel | quote }}
+            {{- end }}
+            - name: TASKIEM_CONTAINER_NETWORK_POLICY
+              value: taskiem-sandbox
+            - name: POD_IP
+              valueFrom:
+                fieldRef: { fieldPath: status.podIP }
+            - name: TASKIEM_CONTAINER_PROXY_LISTEN
+              value: ":{{ $c.proxyPort }}"
+            - name: TASKIEM_CONTAINER_PROXY_ADDR
+              value: "$(POD_IP):{{ $c.proxyPort }}"
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: proxy
+              containerPort: {{ $c.proxyPort }}
+            - name: metrics
+              containerPort: 9090
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            {{- toYaml $c.worker.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: container-worker
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: container-worker
+  policyTypes: [Ingress]
+  ingress:
+    # Sandbox Pods reach the egress proxy, and nothing else here.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $c.namespace }}
+      ports: [{ port: {{ $c.proxyPort }} }]
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+      ports: [{ port: 9090 }]
+{{- end }}
+{{- end }}

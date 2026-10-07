@@ -23,7 +23,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `edge` | Webhook and connector-event ingest, Git push hooks, the platform WhatsApp number's webhook (`/channels/whatsapp`, [WhatsApp](whatsapp.md)), and USSD aggregators' callbacks (`/channels/ussd`, [USSD](ussd.md)) | `TASKIEM_EDGE_LISTEN` (`:8081`) |
 | `orchestrator` | Decides runs left with undecided events (most decisions are inline) | — |
 | `scheduler` | Timers, lease recovery, the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, partner webhooks ([embedding](embedding.md#6-partner-webhooks)), and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
-| `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`); drains in-flight steps for up to 30 s on shutdown | — |
+| `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`; `container` for container steps, on their own pool with `TASKIEM_CONTAINER_*`, see [container steps](container-steps.md#operator-setup)); drains in-flight steps for up to 30 s on shutdown | — |
 
 Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/healthz`) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
 
@@ -116,6 +116,8 @@ Every tenant has plan limits (spec 8.3, 16): the platform defaults below, change
 | `ai_monthly_tokens` | 2,000,000 | Tokens AI building may use per UTC month (every token a model call processes, cache reads included). Beyond it `POST /v1/ai/build` gets 429 `ai_budget_exhausted` and people build on the canvas; runs are never affected ([AI](ai.md#budgets)) |
 | `max_retention_days` | 0 | Days an ended run's history is kept at most, whatever its workflow (`settings.retention`) or the governance default asks; then it is archived and purged as usual. Plans set it (spec 16.2) |
 | `whatsapp_templates_monthly` | 1,000 | WhatsApp template messages included per UTC month (Meta charges per template). Beyond it templates are still sent and counted as overage for pass-through billing (`GET /v1/limits` `usage.whatsapp_templates_this_month`, `taskiem tenants limits`); approvals, codes, step-up links and alerts are never held back; marketing templates are ([WhatsApp](whatsapp.md#template-costs)). A sub-tenant inherits its partner's |
+| `container_minutes_monthly` | 0 (**off**) | Container-step time per UTC month, from the sandbox's start and finish times. Unlike other limits, 0 turns container steps off: they fail with a clear message. Beyond the minutes, container steps fail until next month (`usage.container_seconds_this_month`). A partner's 0 turns them off for its sub-tenants ([container steps](container-steps.md#limits)) |
+| `container_concurrency` | 2 | A tenant's container steps running at once, enforced when the `container` queue's tasks are claimed (the lower of a sub-tenant's and its partner's; 0 is the platform default) |
 
 ```sh
 taskiem tenants limits 0190f0c2-... --set runs_per_month=100000 --set max_running_runs=25
