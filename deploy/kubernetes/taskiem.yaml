@@ -279,7 +279,8 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      # Runs finish their current step on SIGTERM; give them time.
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
       terminationGracePeriodSeconds: 60
       containers:
         - name: taskiem
@@ -299,6 +300,10 @@ spec:
           env:
             - name: TASKIEM_DATABASE_POOL
               value: "20"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
           ports:
             - name: http
               containerPort: 8080
@@ -364,7 +369,8 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      # Runs finish their current step on SIGTERM; give them time.
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
       terminationGracePeriodSeconds: 60
       containers:
         - name: taskiem
@@ -384,13 +390,17 @@ spec:
           env:
             - name: TASKIEM_DATABASE_POOL
               value: "10"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
           ports:
             - name: edge
               containerPort: 8081
             - name: metrics
               containerPort: 9090
           readinessProbe:
-            httpGet: { path: /healthz, port: edge }
+            httpGet: { path: /readyz, port: edge }
             periodSeconds: 5
           livenessProbe:
             httpGet: { path: /healthz, port: edge }
@@ -449,7 +459,8 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      # Runs finish their current step on SIGTERM; give them time.
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
       terminationGracePeriodSeconds: 60
       containers:
         - name: taskiem
@@ -469,6 +480,10 @@ spec:
           env:
             - name: TASKIEM_DATABASE_POOL
               value: "20"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
           ports:
             - name: metrics
               containerPort: 9090
@@ -532,7 +547,8 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      # Runs finish their current step on SIGTERM; give them time.
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
       terminationGracePeriodSeconds: 60
       containers:
         - name: taskiem
@@ -552,6 +568,10 @@ spec:
           env:
             - name: TASKIEM_DATABASE_POOL
               value: "10"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
             - name: TASKIEM_ARCHIVE_DIR
               value: /var/lib/taskiem/archive
             - name: TASKIEM_ANCHOR_DIR
@@ -620,7 +640,8 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      # Runs finish their current step on SIGTERM; give them time.
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
       terminationGracePeriodSeconds: 60
       containers:
         - name: taskiem
@@ -640,6 +661,10 @@ spec:
           env:
             - name: TASKIEM_DATABASE_POOL
               value: "20"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
             - name: TASKIEM_WORKER_QUEUES
               value: "connector,sandbox"
           ports:

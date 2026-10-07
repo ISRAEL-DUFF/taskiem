@@ -211,6 +211,32 @@ serviceMonitor:
   enabled: false
   interval: 30s
 
+# Taskiem's SLO recording rules and burn-rate alerts (docs/reliability.md),
+# generated from engine/slo. Needs the Prometheus Operator CRDs.
+prometheusRule:
+  enabled: false
+  labels: {}
+  # Where alerts' runbook links point: your copy of docs/reliability.md.
+  runbookBaseURL: ""
+
+# The SLO and error budget dashboard, as a ConfigMap for Grafana's dashboard
+# sidecar (which picks up ConfigMaps with these labels).
+grafanaDashboard:
+  enabled: false
+  labels:
+    grafana_dashboard: "1"
+  namespace: ""   # default: the release namespace
+
+# Graceful shutdown (docs/reliability.md#graceful-shutdown). On SIGTERM a pod
+# is not ready at once, keeps serving for delaySeconds while load balancers
+# take it out, then stops taking work; workers finish in-flight steps for up
+# to workerDrainSeconds and release the rest. gracePeriodSeconds must be at
+# least delaySeconds + workerDrainSeconds + 10.
+shutdown:
+  delaySeconds: 10
+  workerDrainSeconds: 30
+  gracePeriodSeconds: 60
+
 serviceAccount:
   create: true
   name: ""

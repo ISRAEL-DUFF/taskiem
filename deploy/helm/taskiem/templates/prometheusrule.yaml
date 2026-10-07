@@ -1,0 +1,17 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "taskiem.fullname" . }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- $rules := .Files.Get "files/prometheus-rules.yaml" }}
+  {{- with .Values.prometheusRule.runbookBaseURL }}
+  {{- $rules = replace "https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md" . $rules }}
+  {{- end }}
+  {{- $rules | nindent 2 }}
+{{- end }}

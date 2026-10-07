@@ -14,7 +14,7 @@ Both need Kubernetes 1.27 or later, a Postgres 16 database, and (in production) 
 | Role | Default replicas | Serves | Probes |
 |---|---|---|---|
 | `api` | 2 | Web app and HTTP API on 8080 | `/readyz` (readiness) and `/healthz` (liveness) on 8080 |
-| `edge` | 2 | Webhooks (`/hooks/`), Git push hooks (`/git-hooks/`) and the platform WhatsApp number (`/channels/whatsapp`) on 8081 | `/healthz` on 8081 |
+| `edge` | 2 | Webhooks (`/hooks/`), Git push hooks (`/git-hooks/`) and the platform WhatsApp number (`/channels/whatsapp`) on 8081 | `/readyz` (readiness) and `/healthz` (liveness) on 8081 |
 | `orchestrator` | 2 | Nothing; advances runs | `/healthz` on 9090 |
 | `scheduler` | 1 | Nothing; runs schedules, timers, retention archiving, audit anchoring and alerts | `/healthz` on 9090 |
 | `worker` | 2, or autoscaled | Nothing; runs connector and sandbox steps for the shared pool | `/healthz` on 9090 |
@@ -29,7 +29,7 @@ Alongside the Deployments the chart creates:
 - a migration Job (a Helm pre-install and pre-upgrade hook);
 - a PersistentVolumeClaim for the scheduler;
 - PodDisruptionBudgets;
-- optionally: a worker HorizontalPodAutoscaler, NetworkPolicies and a Prometheus Operator ServiceMonitor.
+- optionally: a worker HorizontalPodAutoscaler, NetworkPolicies, a Prometheus Operator ServiceMonitor, a PrometheusRule with the SLO recording rules and burn-rate alerts (`prometheusRule.enabled`; point `prometheusRule.runbookBaseURL` at your copy of [reliability.md](reliability.md)) and the SLO dashboard as a ConfigMap for Grafana's sidecar (`grafanaDashboard.enabled`).
 
 ## Install
 
@@ -174,6 +174,10 @@ An enterprise customer can have a deployment of its own: the same chart, install
 - **Network.** The chart's NetworkPolicies do not restrict egress. If you add an egress allow-list, include the customer's KMS address.
 
 Infrastructure for dedicated deployments (where they run, who operates them, backups) is outside this chart. See [needs people](needs-people.md#phase-4).
+
+## Shutdown and readiness
+
+On SIGTERM a pod answers `/readyz` with 503 at once and keeps serving for `shutdown.delaySeconds` (10), so the Service and the ingress stop sending it requests before it stops listening. Then servers finish open requests and workers finish in-flight steps for up to `shutdown.workerDrainSeconds` (30), and release the leases of any they had to cut off, so other pods pick those steps up at once. `shutdown.gracePeriodSeconds` (60) becomes the pods' `terminationGracePeriodSeconds`; the chart refuses values that do not leave 10 seconds after the delay and the drain. Details: [reliability](reliability.md#graceful-shutdown).
 
 ## Sizing
 

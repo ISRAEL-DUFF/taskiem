@@ -169,7 +169,7 @@ spec:
       securityContext:
         {{- include "taskiem.podSecurityContext" . | nindent 8 }}
       # Steps run up to 30 minutes; a draining worker finishes what it holds.
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: {{ include "taskiem.gracePeriod" . }}
       containers:
         - name: taskiem
           image: {{ include "taskiem.image" . }}
@@ -185,6 +185,7 @@ spec:
           env:
             - name: TASKIEM_DATABASE_POOL
               value: {{ $c.worker.databasePool | quote }}
+            {{- include "taskiem.shutdownEnv" . | nindent 12 }}
             - name: TASKIEM_WORKER_QUEUES
               value: container
             - name: TASKIEM_CONTAINER_RUNNER

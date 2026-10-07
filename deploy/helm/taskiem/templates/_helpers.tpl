@@ -68,3 +68,25 @@ readOnlyRootFilesystem: true
 capabilities:
   drop: [ALL]
 {{- end -}}
+
+{{/*
+Graceful shutdown (docs/reliability.md#graceful-shutdown): readiness flips on
+SIGTERM, the pod keeps serving for delaySeconds while load balancers drop it,
+then workers drain for up to workerDrainSeconds and release what they hold.
+All of it must fit in the grace period, with room to release leases.
+*/}}
+{{- define "taskiem.gracePeriod" -}}
+{{- $s := .Values.shutdown -}}
+{{- $need := add $s.delaySeconds $s.workerDrainSeconds 10 -}}
+{{- if gt (int $need) (int $s.gracePeriodSeconds) -}}
+{{- fail (printf "shutdown.gracePeriodSeconds (%v) must be at least delaySeconds + workerDrainSeconds + 10 (%v)" $s.gracePeriodSeconds $need) -}}
+{{- end -}}
+{{- $s.gracePeriodSeconds -}}
+{{- end -}}
+
+{{- define "taskiem.shutdownEnv" -}}
+- name: TASKIEM_SHUTDOWN_DELAY
+  value: {{ printf "%vs" .Values.shutdown.delaySeconds | quote }}
+- name: TASKIEM_WORKER_DRAIN
+  value: {{ printf "%vs" .Values.shutdown.workerDrainSeconds | quote }}
+{{- end -}}
