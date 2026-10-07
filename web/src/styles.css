@@ -200,3 +200,12 @@ button.link {
 @keyframes step-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--info) 25%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .step-node.status-running, .step-node.status-retrying, .step-node.status-scheduled { animation: none; } }
 .live-dot::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 4px; animation: step-pulse 1.2s ease-in-out infinite; }
+
+/* Template gallery (pages/Templates.tsx) */
+.template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.template-card { display: flex; flex-direction: column; gap: 6px; text-align: left; cursor: pointer; font: inherit; color: inherit; margin: 0; }
+.template-card:hover, .template-card:focus-visible { border-color: var(--accent, var(--info)); }
+.plain-steps { list-style: none; padding-left: 0; }
+.plain-steps li { margin: 4px 0; }
+.capitalize { text-transform: capitalize; }
+.error-text { color: var(--danger, #b42318); }

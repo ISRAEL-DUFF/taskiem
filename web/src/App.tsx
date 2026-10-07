@@ -19,6 +19,7 @@ import { ErrorBox, useAction } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
 import { Handoff } from "./pages/Handoff";
+import { Templates } from "./pages/Templates";
 
 export function App() {
   return (
@@ -73,6 +74,7 @@ function Shell() {
   const links: [string, string, boolean][] = [
     ["/dashboard", "Dashboard", can("run.read")],
     ["/workflows", "Workflows", can("workflow.read")],
+    ["/templates", "Templates", true],
     ["/runs", "Runs", can("run.read")],
     ["/approvals", "Approvals", can("approval.decide") || can("workflow.publish")],
     ["/policies", "Approval policies", can("workflow.read")],
@@ -107,6 +109,7 @@ function Shell() {
           <Route path="/" element={<Navigate to="/workflows" replace />} />
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/workflows/:id" element={<Editor />} />
+          <Route path="/templates" element={<Templates />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/runs" element={<Runs />} />
           <Route path="/runs/:id" element={<RunPage />} />

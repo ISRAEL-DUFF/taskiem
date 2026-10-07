@@ -42,6 +42,9 @@ interface Proposal {
   rounds: number;
   valid_first_try: boolean;
   connectors: string[];
+  /** Starting templates the prompt offered, and the one the draft started from. */
+  templates_offered?: string[];
+  template?: { id: string; title: string; instantiated: boolean; params: Record<string, unknown>; missing: string[] };
   usage: { input_tokens: number; output_tokens: number; cache_creation_tokens: number; cache_read_tokens: number };
   model: string;
 }
@@ -207,6 +210,22 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
           >
             <Background />
           </ReactFlow>
+        </div>
+      )}
+      {p.template && (
+        <div className="notice" aria-label="Template">
+          Started from the template{" "}
+          <a href={`/templates?id=${encodeURIComponent(p.template.id)}`} target="_blank" rel="noreferrer">
+            {p.template.title}
+          </a>
+          {p.template.instantiated ? ", filled in from your goal." : ", adapted to your goal."}
+          {p.template.missing.length > 0 && (
+            <>
+              {" "}
+              Your goal did not say <strong>{p.template.missing.join(", ")}</strong>: the draft holds example values for them. Set them before
+              publishing, or create the workflow from the template with the details filled in.
+            </>
+          )}
         </div>
       )}
       {p.summary && <p>{p.summary}</p>}
