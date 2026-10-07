@@ -34,6 +34,7 @@ CREATE FUNCTION taskiem_auth_api_key(p_hash bytea)
 RETURNS TABLE (key_id uuid, tenant_id uuid, permissions text[], environment text, owner_id uuid)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT k.id, k.tenant_id, k.permissions, k.environment, k.owner_id FROM api_keys k
+    JOIN tenants t ON t.id = k.tenant_id AND t.status = 'active'
    WHERE k.key_hash = p_hash AND k.revoked_at IS NULL AND k.expires_at > now()
 $$;
 -- +goose StatementEnd
@@ -121,6 +122,7 @@ CREATE FUNCTION taskiem_auth_api_key(p_hash bytea)
 RETURNS TABLE (key_id uuid, tenant_id uuid, permissions text[], environment text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT k.id, k.tenant_id, k.permissions, k.environment FROM api_keys k
+    JOIN tenants t ON t.id = k.tenant_id AND t.status = 'active'
    WHERE k.key_hash = p_hash AND k.revoked_at IS NULL AND k.expires_at > now()
 $$;
 -- +goose StatementEnd
