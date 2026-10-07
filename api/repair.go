@@ -761,36 +761,36 @@ func (rec repairRecorder) Record(ctx context.Context, it builder.Interaction) er
 // --- the API ---
 
 type repairView struct {
-	ID            uuid.UUID       `json:"id"`
-	RunID         uuid.UUID       `json:"run_id"`
-	WorkflowID    uuid.UUID       `json:"workflow_id"`
-	Version       int             `json:"version"`
-	Environment   string          `json:"environment"`
-	Reason        string          `json:"reason"`
-	Class         *string         `json:"class"`
-	ClassifiedBy  *string         `json:"classified_by"`
-	Step          *string         `json:"step"`
-	Status        string          `json:"status"`
-	Explanation   string          `json:"explanation"`
-	Action        json.RawMessage `json:"action"`
-	Definition    json.RawMessage `json:"definition"`
-	Diff          json.RawMessage `json:"diff"`
-	Evidence      json.RawMessage `json:"evidence"`
-	Test          json.RawMessage `json:"test"`
-	Attempts      int             `json:"attempts"`
-	Provider      *string         `json:"provider"`
-	Model         *string         `json:"model"`
-	TotalTokens   int64           `json:"total_tokens"`
-	Error         *string         `json:"error"`
-	CreatedBy     string          `json:"created_by"`
-	CreatedAt     time.Time       `json:"created_at"`
-	FinishedAt    *time.Time      `json:"finished_at"`
-	DraftVersion  *int            `json:"draft_version"`
-	AcceptedBy    *string         `json:"accepted_by"`
-	AcceptedAt    *time.Time      `json:"accepted_at"`
-	DismissedBy   *string         `json:"dismissed_by"`
-	DismissedAt   *time.Time      `json:"dismissed_at"`
-	ResumedRunID  *uuid.UUID      `json:"resumed_run_id"`
+	ID           uuid.UUID       `json:"id"`
+	RunID        uuid.UUID       `json:"run_id"`
+	WorkflowID   uuid.UUID       `json:"workflow_id"`
+	Version      int             `json:"version"`
+	Environment  string          `json:"environment"`
+	Reason       string          `json:"reason"`
+	Class        *string         `json:"class"`
+	ClassifiedBy *string         `json:"classified_by"`
+	Step         *string         `json:"step"`
+	Status       string          `json:"status"`
+	Explanation  string          `json:"explanation"`
+	Action       json.RawMessage `json:"action"`
+	Definition   json.RawMessage `json:"definition"`
+	Diff         json.RawMessage `json:"diff"`
+	Evidence     json.RawMessage `json:"evidence"`
+	Test         json.RawMessage `json:"test"`
+	Attempts     int             `json:"attempts"`
+	Provider     *string         `json:"provider"`
+	Model        *string         `json:"model"`
+	TotalTokens  int64           `json:"total_tokens"`
+	Error        *string         `json:"error"`
+	CreatedBy    string          `json:"created_by"`
+	CreatedAt    time.Time       `json:"created_at"`
+	FinishedAt   *time.Time      `json:"finished_at"`
+	DraftVersion *int            `json:"draft_version"`
+	AcceptedBy   *string         `json:"accepted_by"`
+	AcceptedAt   *time.Time      `json:"accepted_at"`
+	DismissedBy  *string         `json:"dismissed_by"`
+	DismissedAt  *time.Time      `json:"dismissed_at"`
+	ResumedRunID *uuid.UUID      `json:"resumed_run_id"`
 }
 
 const repairColumns = `id, run_id, workflow_id, version, environment, reason, class, classified_by, step_id, status, explanation, action, definition, diff,

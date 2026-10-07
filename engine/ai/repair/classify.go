@@ -87,7 +87,7 @@ var (
 		`invalid_grant|invalid_client|authentication failed|no active \S+ connection|connection is missing|credentials? (are |is )?(invalid|expired|missing)`)
 	reTransient = regexp.MustCompile(`(?i)service unavailable|temporarily unavailable|timed? ?out|timeout|connection (refused|reset)|too many requests|rate limit|` +
 		`bad gateway|gateway timeout|try again`)
-	reMissing = regexp.MustCompile(`(?i)no such key|no such attribute|missing|required|null|undefined|not found in|unsupported (type|overload)|no matching overload`)
+	reMissing = regexp.MustCompile(`(?i)no such key|no such attribute|missing|required|null|undefined|not found in|unsupported (type|overload)|no (matching|such) overload`)
 )
 
 // Classify classifies a failure by rules: error kinds, HTTP classes,
@@ -116,10 +116,10 @@ func Classify(f Failure, def *wd.Definition) Classification {
 		return Classification{Credential, true, "the provider refused the credentials, or the connection is missing"}
 	case f.Reason == "drift" || (len(f.Drift) > 0 && (kind == "expression" || kind == "fatal" || kind == "policy")):
 		return Classification{SchemaDrift, true, "a connector's output no longer matches its declared schema"}
-	case kind == "retryable" || kind == "not_sent" || status == 429 || status >= 500 || (kind != "expression" && reTransient.MatchString(msg)):
-		return Classification{Transient, true, "the provider failed temporarily; retries ran out"}
 	case kind == "timeout":
 		return Classification{Transient, false, "the run exceeded its timeout"}
+	case kind == "retryable" || kind == "not_sent" || status == 429 || status >= 500 || (kind != "expression" && reTransient.MatchString(msg)):
+		return Classification{Transient, true, "the provider failed temporarily; retries ran out"}
 	case kind == "expression":
 		if reMissing.MatchString(msg) && readsTrigger(def, f.Step) {
 			return Classification{Data, true, "an expression over the trigger's data failed: a field is missing or of another type"}
