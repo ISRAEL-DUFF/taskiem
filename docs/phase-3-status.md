@@ -58,7 +58,7 @@ Left for A2: WhatsApp Flows forms (inputs) and a Flows PIN for step-up; tenants'
 
 ## C1: what exists
 
-Embedding foundations, 2026-10-07. Partner guide: [embedding.md](embedding.md). Design: [decision 0015](decisions/0015-embedding-tenancy.md). Threat model: boundary B10.
+Embedding foundations, 2026-10-07. Partner guide: [embedding.md](embedding.md). Design: [decision 0015](decisions/0015-embedding-tenancy.md). Threat model: boundary B11.
 
 | Area | Deliverable | Where |
 | --- | --- | --- |

@@ -182,7 +182,7 @@ Deliveries are retried with backoff (30 s, 2 min, 8 min, 32 min, about 2 h, then
 - **CORS** only on embed routes, only for the app's exact origins, never with credentials.
 - **Redaction.** The partner sees outcomes, not data: run statuses and error kinds, never inputs, outputs or messages, in the API and in webhooks.
 
-The threat model's boundary B10 covers this ([threat model](security/threat-model.md)).
+The threat model's boundary B11 covers this ([threat model](security/threat-model.md)).
 
 ## What comes next
 

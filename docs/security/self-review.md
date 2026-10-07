@@ -136,7 +136,7 @@ These are known residuals, carried to the next round:
 
 ## Addendum 2026-10-07: embedding (Phase 3, C1)
 
-The embedding foundations ([embedding.md](../embedding.md), decision 0015, threat-model boundary B10) were reviewed against the same four areas before they were committed. Two findings were fixed before commit, each with a regression test in `api/embed_test.go`:
+The embedding foundations ([embedding.md](../embedding.md), decision 0015, threat-model boundary B11) were reviewed against the same four areas before they were committed. Two findings were fixed before commit, each with a regression test in `api/embed_test.go`:
 
 | # | Area | Finding | Status |
 | --- | --- | --- | --- |
