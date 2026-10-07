@@ -16,7 +16,7 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 | A | A2 | WhatsApp Flows forms for inputs and PIN step-up; shared platform number vs own number (embedded signup); template cost accounting | 11.1, 11.4, 16 | Planned |
 | A | A3 | USSD fast path (menu steps inline at the edge, writes handed to the engine) and an aggregator connector | 8.4 | Planned |
 | A | A4 | Pidgin, Yoruba, Hausa and Igbo intents and replies; voice-note transcription (beta, tested by native speakers) | 11.6 | Planned |
-| B | B1 | Provider-agnostic model layer (Claude by default), redaction before prompts, per-tenant budgets, prompt and response audit; builder pipeline (retrieval → schema-constrained draft → validate → self-correct ×3 → dry run → generated tests → review as a draft version with the AI as co-author); the AI can never publish, approve, read secrets or write to a provider | 12.1, 12.3 | In progress |
+| B | B1 | Provider-agnostic model layer (Claude by default), redaction before prompts, per-tenant budgets, prompt and response audit; builder pipeline (retrieval → schema-constrained draft → validate → self-correct ×3 → dry run → generated tests → review as a draft version with the AI as co-author); the AI can never publish, approve, read secrets or write to a provider | 12.1, 12.3 | Done ([what exists](#b1-what-exists)) |
 | B | B2 | Repair pipeline: failure classification, shadow-sandbox fork with recorded inputs and mocked writes, diff and evidence, one-click publish and resume through the normal approval policy | 12.2 | Planned |
 | B | B3 | Evaluation suite (200+ requests) with a runner that measures valid-on-first-try, test pass rate and policy violations, gating prompt and model changes | 12.4 | Planned |
 | B | B4 | SME template library; chat-based building on WhatsApp (needs A1) | 11.1 | Planned |
@@ -56,6 +56,25 @@ Left for A2: WhatsApp Flows forms (inputs) and a Flows PIN for step-up; tenants'
 | One holdco product running embedded automations for its own customers | C1–C3 | C4 |
 | No AI action able to publish, approve or read secrets, confirmed by a security review | B1–B2 (enforced in code and tested) | Independent review |
 
+## B1: what exists
+
+The model layer and the AI workflow builder ([AI](ai.md), [decision 0014](decisions/0014-ai-model-layer.md)). Everything runs against a fake model in tests; a real model needs an API account (AI1).
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Provider interface | `engine/ai` | System blocks with cache breakpoints, messages, JSON Schema output, max tokens, effort; returns text, JSON, usage, stop reason, model. `ai.Redacted` puts every prompt through `pii.Redact` |
+| Claude provider | `engine/ai/anthropic.go` | Official Go SDK; `claude-opus-5-5` by default (`TASKIEM_AI_MODEL`); effort `high`; structured output envelope; cached system prompt and catalogue; streaming above 16k tokens; `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`); refusals checked before content. Request shape tested against an httptest server |
+| Self-hosted provider | `engine/ai/selfhosted.go` | OpenAI-compatible chat completions with `response_format: json_schema` (vLLM, llama.cpp, Ollama, TGI); which model to offer is AI1 |
+| Fake provider | `engine/ai` (`Fake`) | Scripted or computed answers, records what it was sent |
+| Builder pipeline | `engine/ai/builder` | Keyword retrieval over manifests, tenant context by name, similar workflows by structure; draft; publishing checks (`wdcheck`, injected) plus the `payment_write_without_approval` policy rule; up to 3 corrections; dry run in `wdtest` (generated happy path and model-proposed cases); proposal with summary, assumptions, problems, warnings, results, rounds, usage |
+| Safety boundary | `engine/ai/imports_test.go`, `builder.ManifestOnly`, `api/ai_test.go` | Import graph excludes the vault, runtime, database, audit, ingest, sandboxes, API and connector handlers; the builder sees manifests only; `/v1/ai` routes pinned; no secret, credential or variable value reaches a prompt (seeded and checked) |
+| API | `api/ai.go` | `GET /v1/ai/status`, `POST /v1/ai/build` (async, rate-limited, 503 when off, 429 over budget), `GET /v1/ai/builds/{id}`, `POST /v1/ai/builds/{id}/save` (draft only, `created_by` the person, `ai_build_id` the AI co-author), `GET /v1/ai/builds/{id}/interactions` |
+| Storage and audit | migration 00040 | `ai_builds`, insert-only `ai_interactions` (redacted prompt and answer, model, usage, outcome), `workflow_versions.ai_build_id`, all under forced RLS; `ai.propose` and `ai.save` in the audit chain |
+| Budgets | migration 00041, `engine/runtime/limits.go` | `ai_monthly_tokens` plan limit (default 2,000,000; `TASKIEM_DEFAULT_AI_MONTHLY_TOKENS`; `taskiem tenants limits --set ai_monthly_tokens=N`); use shown in `GET /v1/limits`; only AI building stops at the cap |
+| Web | `web/src/pages/AIBuild.tsx` | **Build with AI** (workflow list) and **Change with AI** (editor): goal, progress, canvas preview, summary, warnings, dry run, Save as draft |
+| Evaluation | `tools/aieval`, `evals/builder/seed.jsonl` | 25 seed requests from the dogfood flows and the catalogue; valid-on-first-try, test pass, policy violations, connector and step recall; `--provider anthropic`; `--min-first-try` gate |
+
+Left for later milestones: B2 builds the repair pipeline on the same layer (failure classification, shadow sandbox, diff and evidence); B3 grows the suite to 200+ reviewed requests (AI2) and runs the gate in CI on prompt or model changes; B4 adds the SME template library and building over WhatsApp.
 ## C1: what exists
 
 Embedding foundations, 2026-10-07. Partner guide: [embedding.md](embedding.md). Design: [decision 0015](decisions/0015-embedding-tenancy.md). Threat model: boundary B11.

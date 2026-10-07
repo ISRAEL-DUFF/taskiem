@@ -292,6 +292,7 @@ type aiRecorder struct {
 }
 
 func (rec aiRecorder) Record(ctx context.Context, it builder.Interaction) error {
+	ctx = context.WithoutCancel(ctx) // a cancelled build still records what it sent
 	msgs, err := json.Marshal(it.Request.Messages)
 	if err != nil {
 		return err
@@ -306,7 +307,7 @@ func (rec aiRecorder) Record(ctx context.Context, it builder.Interaction) error 
 	if model == "" {
 		model = rec.s.AI.Provider.Model()
 	}
-	return db.InTenantTx(context.WithoutCancel(ctx), rec.s.Store.Pool, []uuid.UUID{rec.who.tenant}, func(tx pgx.Tx) error {
+	return db.InTenantTx(ctx, rec.s.Store.Pool, []uuid.UUID{rec.who.tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, build_id, round, kind, actor, provider, model, system_digest, messages,
 			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, ''), $13, NULLIF($14, ''), $15, $16, $17, $18, $19)`,
@@ -435,6 +436,12 @@ func (s *Server) aiGetBuild(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if v.Status == "running" && time.Since(v.CreatedAt) > aiBuildTimeout+time.Minute {
+		// The process running it stopped (a deploy, a crash) before it
+		// finished: report it rather than leave the person waiting.
+		msg := "the build was interrupted; start it again"
+		v.Status, v.Error = "failed", &msg
 	}
 	if prop != nil {
 		v.Proposal = prop

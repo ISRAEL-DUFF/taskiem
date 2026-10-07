@@ -17,4 +17,5 @@ One file per decision, numbered in order: `NNNN-short-title.md`. Each entry reco
 | [0011](0011-sandbox-quickjs-fork.md) | Code steps in QuickJS on wazero, via a vendored fork | Accepted |
 | [0012](0012-trigger-registration.md) | Trigger registration, environments, and webhook secrets | Accepted |
 | [0013](0013-private-network-access.md) | Private databases through an SSH tunnel first, a relay later, private ranges only single-tenant | Proposed |
+| [0014](0014-ai-model-layer.md) | A provider-agnostic AI model layer; the builder's safety boundary is its import graph | Accepted |
 | [0015](0015-embedding-tenancy.md) | Embedding: sub-tenants entered through one audited function, opaque end-user tokens, a separate embed API | Accepted |

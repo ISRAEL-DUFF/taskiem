@@ -54,6 +54,8 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 | `TASKIEM_WHATSAPP_DISPLAY_NUMBER`, `TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE`, `TASKIEM_WHATSAPP_DEFAULT_COUNTRY` | —, `en`, `234` | The number as shown on the Account page; the language the templates were approved in; the calling code for numbers typed with a leading 0 |
 | `TASKIEM_WHATSAPP_GRAPH_URL` | `https://graph.facebook.com/v25.0` | Tests only: a fake Graph API (a loopback address here is allowed through the egress guard for the platform number only) |
 | `TASKIEM_DEFAULT_<LIMIT>` | see [plan limits](#plan-limits) | Platform default for one plan limit, for tenants without their own (for example `TASKIEM_DEFAULT_RUNS_PER_MONTH=100000`). Set the same values on every role. |
+| `ANTHROPIC_API_KEY` | — | Turns AI building on with Claude ([AI](ai.md#configuration)). Keep it in a secret; it is read from the environment only. |
+| `TASKIEM_AI_PROVIDER`, `TASKIEM_AI_MODEL`, `TASKIEM_AI_BASE_URL`, `TASKIEM_AI_API_KEY`, `TASKIEM_AI_EFFORT`, `TASKIEM_AI_MAX_TOKENS`, `TASKIEM_AI_FALLBACKS` | Claude `claude-opus-5-5` when `ANTHROPIC_API_KEY` is set; otherwise off | The model provider for AI building: `anthropic`, `selfhosted` (an OpenAI-compatible endpoint at `TASKIEM_AI_BASE_URL`) or `off`; the model; thinking effort (`high`); max tokens per answer (32000); server-side refusal fallbacks (on). Set on the `api` role. See [AI](ai.md#configuration). |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OpenTelemetry trace export (OTLP/HTTP); standard `OTEL_*` variables apply. |
 
 ## Database roles
@@ -108,6 +110,7 @@ Every tenant has plan limits (spec 8.3, 16): the platform defaults below, change
 | `worker_concurrency` | 32 | A tenant's tasks executing at once per queue (`connector`, `sandbox`). Workers claim round-robin across tenants and skip a tenant at its cap, so one tenant's backlog cannot hold every worker slot. A single-tenant install with more worker slots than this should raise it |
 | `max_payload_bytes` | 1 MiB | Larger deliveries get 413 (at most 10 MiB for any tenant) |
 | `max_secrets`, `max_connections` | 0 | Adding another named secret or active connection gets 429 `limit_exceeded` |
+| `ai_monthly_tokens` | 2,000,000 | Tokens AI building may use per UTC month (every token a model call processes, cache reads included). Beyond it `POST /v1/ai/build` gets 429 `ai_budget_exhausted` and people build on the canvas; runs are never affected ([AI](ai.md#budgets)) |
 
 ```sh
 taskiem tenants limits 0190f0c2-... --set runs_per_month=100000 --set max_running_runs=25
