@@ -337,7 +337,7 @@ func serve(ctx context.Context, args []string) error {
 			srv.EmbedDir = cfg.WebDir + "/embed/v1"
 		}
 		srv.WhatsApp = e.wa
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp)
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD)
 	}
 	if *role == "edge" {
 		mux := http.NewServeMux()
@@ -351,6 +351,8 @@ func serve(ctx context.Context, args []string) error {
 			mux.Handle("/channels/whatsapp", wa)
 			mux.Handle("/channels/whatsapp/", wa)
 		}
+		// USSD aggregators' callbacks: the fast path (docs/ussd.md).
+		mux.Handle("/channels/ussd/", http.StripPrefix("/channels/ussd", git.USSDHooks()))
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 		tasks = append(tasks, httpTask("edge", cfg.EdgeListen, httpsec.Headers(mux), log))
 	}

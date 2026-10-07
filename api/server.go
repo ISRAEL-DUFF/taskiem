@@ -88,7 +88,10 @@ type Server struct {
 	WhatsApp *whatsapp.Platform
 	// WhatsAppPublic answers numbers bound to no one; nil sends how to link.
 	WhatsAppPublic WhatsAppPublic
+	// USSD tunes the USSD fast path (ussd.go).
+	USSD USSDSettings
 
+	ussd     ussdState  // USSD channels, sessions and menus (ussd.go)
 	limiters limiterSet // sign-in and other unauthenticated attempts
 	hosts    hostCache  // custom domains: Host to embed app
 	defs     sync.Map   // "workflow/version" -> *wd.Definition
@@ -113,6 +116,7 @@ func (s *Server) Handler() http.Handler {
 		if s.WhatsApp != nil {
 			r.Mount("/channels/whatsapp", s.WhatsAppHooks())
 		}
+		r.Mount("/channels/ussd", s.USSDHooks())
 	}
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(middleware.SetHeader("Cache-Control", "no-store"))
@@ -156,6 +160,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
 			r.With(s.need(PermApprovalDecide)).Get("/whatsapp/handoff/{token}", s.getHandoff)
 			r.With(s.need(PermApprovalDecide)).Post("/whatsapp/handoff/{token}", s.completeHandoff)
+			r.With(s.need(PermSecretManage)).Get("/ussd", s.getUSSD)
+			r.With(s.need(PermSecretManage), s.tenantWide).Put("/ussd/channels/{provider}", s.putUSSDChannel)
+			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/ussd/channels/{provider}", s.deleteUSSDChannel)
 			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
 			r.With(s.need(PermMemberManage)).Get("/scim", s.getSCIM)
 			r.With(s.need(PermMemberManage)).Put("/scim", s.putSCIM)

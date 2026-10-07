@@ -5,6 +5,7 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -18,6 +19,10 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
+
+// ErrTriggerTaken means another workflow already holds a trigger's
+// address in the environment (a USSD service code).
+var ErrTriggerTaken = errors.New("trigger taken")
 
 // DefaultTimezone is where schedules run unless they name another (spec 8.1).
 const DefaultTimezone = "Africa/Lagos"
@@ -126,6 +131,12 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 	case "schedule":
 		_, err := parseSchedule(c)
 		return err
+	case "ussd":
+		// The menu itself is checked by wd.Validate (docs/ussd.md).
+		if sc := str(c, "service_code"); sc == "" {
+			return fmt.Errorf("a ussd trigger needs a service_code")
+		}
+		return nil
 	}
 	return fmt.Errorf("%s triggers are not available yet", def.Trigger.Type)
 }
@@ -176,6 +187,21 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			s, _ := parseSchedule(c)
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, cron, timezone, next_fire_at)
 				VALUES ($1, $2, $3, $4, $5, 'schedule', $6, $7, $8)`, id, tenant, wf, version, env, s.cron, s.tz.String(), s.Next(now))
+		case "ussd":
+			// One workflow per service code in an environment: the edge
+			// routes a USSD session by the code the caller dialled.
+			code := str(c, "service_code")
+			var other string
+			e := tx.QueryRow(ctx, `SELECT w.name FROM triggers t JOIN workflows w ON w.id = t.workflow_id
+				WHERE t.type = 'ussd' AND t.environment = $1 AND t.service_code = $2 AND t.workflow_id <> $3`, env, code, wf).Scan(&other)
+			if e == nil {
+				return fmt.Errorf("%w: USSD service code %s is already used by workflow %q in %s", ErrTriggerTaken, code, other, env)
+			}
+			if !errors.Is(e, pgx.ErrNoRows) {
+				return e
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, service_code)
+				VALUES ($1, $2, $3, $4, $5, 'ussd', $6)`, id, tenant, wf, version, env, code)
 		}
 		if err != nil {
 			return err

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -50,6 +51,9 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 		var pgErr interface{ SQLState() string }
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
 			return fmt.Errorf("%w: another workflow already uses this webhook path in %s", errConflict, env)
+		}
+		if errors.Is(err, ingest.ErrTriggerTaken) {
+			return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), ingest.ErrTriggerTaken.Error()+": "))
 		}
 		return err
 	}

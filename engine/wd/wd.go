@@ -50,7 +50,7 @@ func Validate(doc []byte) []Problem {
 	if err != nil {
 		return []Problem{{Path: "/", Message: err.Error()}}
 	}
-	return checkExpressions(d)
+	return append(checkExpressions(d), checkUSSD(d)...)
 }
 
 type validator struct {

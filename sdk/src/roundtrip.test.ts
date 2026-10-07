@@ -116,3 +116,30 @@ describe("round trip edge cases", () => {
     }
   });
 });
+
+describe("ussd menus", () => {
+  it("lower arrow-function conditions to CEL and print them back", () => {
+    const wf = sdk
+      .workflow({
+        id: "wf_ussd",
+        name: "ussd",
+        trigger: sdk.ussd({
+          service_code: "*384*1#",
+          screens: [
+            { id: "amount", type: "input", text: "Amount", input: "amount", validate: { type: "integer", min: 1, when: ({ trigger }) => trigger.body.amount < 5000 }, next: "pick" },
+            { id: "pick", type: "menu", text: "Speed", input: "speed", options: [{ label: "Fast", next: "ok", value: "fast", when: ({ trigger }) => trigger.body.amount > 100 }] },
+            { id: "ok", type: "confirm", text: "Pay {{amount}}?" },
+          ],
+        }),
+      })
+      .step("t", sdk.transform({ amount: ({ trigger }) => trigger.body.amount }));
+    const def = wf.build();
+    const cfg = def.trigger.config as unknown as sdk.UssdMenu;
+    expect(cfg.screens[0]?.validate?.when).toBe("=trigger.body.amount < 5000");
+    expect(cfg.screens[1]?.options?.[0]?.when).toBe("=trigger.body.amount > 100");
+    const code = sdk.generate(def);
+    expect(code).toContain("trigger: ussd({");
+    expect(code).toContain("when: ({ trigger }) => trigger.body.amount < 5000");
+    expect(evaluate(code)).toEqual(def);
+  });
+});

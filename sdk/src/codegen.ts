@@ -75,7 +75,7 @@ class Gen {
   }
 
   trigger(t: WorkflowDefinition["trigger"], indent: string): string {
-    const helper = { webhook: "webhook", schedule: "schedule", connector_event: "connectorEvent", manual: "manual" }[t.type as string];
+    const helper = { webhook: "webhook", schedule: "schedule", connector_event: "connectorEvent", manual: "manual", ussd: "ussd" }[t.type as string];
     if (helper !== undefined && (t.config !== undefined || helper === "manual")) {
       this.use(helper);
       return `${helper}(${t.config === undefined ? "" : this.value(t.config, indent)})`;

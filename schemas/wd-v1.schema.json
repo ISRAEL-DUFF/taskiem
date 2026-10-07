@@ -1249,8 +1249,250 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "ussd"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "$ref": "#/$defs/ussdMenu"
+              }
+            }
+          }
         }
       ]
+    },
+    "ussdMenu": {
+      "description": "A USSD menu walked at the edge (docs/ussd.md). Screen sizes, reachability, patterns, conditions and placeholders are checked by engine/wd.Validate.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service_code",
+        "screens"
+      ],
+      "properties": {
+        "service_code": {
+          "type": "string",
+          "pattern": "^\\*[0-9]{1,6}(\\*[0-9]{1,6}){0,4}#$"
+        },
+        "start": {
+          "$ref": "#/$defs/ussdScreenId"
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 182
+        },
+        "screens": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/ussdScreen"
+          }
+        },
+        "notify": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sms"
+          ],
+          "properties": {
+            "sms": {
+              "type": "boolean"
+            },
+            "connection": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "completed": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "failed": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          }
+        }
+      }
+    },
+    "ussdScreenId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}$"
+    },
+    "ussdScreen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ussdScreenId"
+        },
+        "type": {
+          "enum": [
+            "menu",
+            "input",
+            "confirm",
+            "end"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 9,
+          "items": {
+            "$ref": "#/$defs/ussdOption"
+          }
+        },
+        "input": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+        },
+        "next": {
+          "$ref": "#/$defs/ussdScreenId"
+        },
+        "validate": {
+          "$ref": "#/$defs/ussdValidate"
+        },
+        "error": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "confirm_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "cancel_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "done": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "menu"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "options"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "input"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "input",
+              "next"
+            ]
+          }
+        }
+      ]
+    },
+    "ussdOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "next"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "next": {
+          "$ref": "#/$defs/ussdScreenId"
+        },
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "when": {
+          "$ref": "#/$defs/expr"
+        }
+      }
+    },
+    "ussdValidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "text",
+            "number",
+            "integer"
+          ]
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "min_length": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 182
+        },
+        "max_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 182
+        },
+        "when": {
+          "$ref": "#/$defs/expr"
+        }
+      }
     }
   }
 }

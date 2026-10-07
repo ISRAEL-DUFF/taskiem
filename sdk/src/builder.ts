@@ -10,7 +10,7 @@
 // functions over the expression context, compiled to CEL by build().
 
 import { compileFunction, ExpressionError } from "./expr.js";
-import type { ActionClass, Duration, Retry, Step, Trigger, WorkflowDefinition } from "./wd.js";
+import type { ActionClass, Duration, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
 
 /** What an expression can read (wd/v1 rule 10). Values are untyped. */
 export interface Context {
@@ -77,6 +77,20 @@ export function connectorEvent(config: { connector: string; trigger: string; eve
 }
 export function manual(config?: Values): Trigger {
   return config === undefined ? { type: "manual" } : { type: "manual", config };
+}
+/** A USSD menu as code: conditions may be arrow functions over the context (only trigger.body is in scope). */
+export type UssdMenuSpec = Omit<UssdMenu, "screens"> & {
+  screens: Array<
+    Omit<UssdScreen, "options" | "validate"> & {
+      options?: Array<Omit<UssdOption, "when"> & { when?: Expr<boolean> }>;
+      validate?: Omit<UssdValidate, "when"> & { when?: Expr<boolean> };
+    }
+  >;
+};
+
+/** A USSD menu walked at the edge; confirming starts the workflow with the inputs collected (docs/ussd.md). */
+export function ussd(config: UssdMenuSpec): Trigger {
+  return { type: "ussd", config: config as unknown as Record<string, unknown> };
 }
 /** Any trigger type, for those without a helper. */
 export function trigger(type: Trigger["type"], config?: Values): Trigger {

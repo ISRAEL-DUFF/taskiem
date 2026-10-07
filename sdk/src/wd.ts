@@ -126,6 +126,57 @@ export interface Trigger {
   config?: Record<string, unknown>;
 }
 
+/** A screen id in a USSD menu. */
+export type UssdScreenId = string;
+
+/** A numbered choice on a USSD menu screen. */
+export interface UssdOption {
+  label: string;
+  next: UssdScreenId;
+  /** Stored under the screen's input when chosen (the label when absent). */
+  value?: string | number | boolean;
+  /** Shown only when true; CEL over trigger.body (the inputs so far). */
+  when?: Expression;
+}
+
+/** What a USSD input screen accepts. */
+export interface UssdValidate {
+  type?: "text" | "number" | "integer";
+  /** RE2, matched against the whole input. */
+  pattern?: string;
+  min?: number;
+  max?: number;
+  min_length?: number;
+  max_length?: number;
+  /** Must be true for the input to be accepted; CEL over trigger.body with the new value in place. */
+  when?: Expression;
+}
+
+/** One USSD screen (docs/ussd.md). Texts take {{input}} placeholders. */
+export interface UssdScreen {
+  id: UssdScreenId;
+  type: "menu" | "input" | "confirm" | "end";
+  text: string;
+  options?: UssdOption[];
+  input?: string;
+  next?: UssdScreenId;
+  validate?: UssdValidate;
+  error?: string;
+  confirm_label?: string;
+  cancel_label?: string;
+  /** The final message after confirmation; takes {{reference}}. */
+  done?: string;
+}
+
+/** A ussd trigger's config: the menu the edge walks. */
+export interface UssdMenu {
+  service_code: string;
+  start?: UssdScreenId;
+  max_chars?: number;
+  screens: UssdScreen[];
+  notify?: { sms: boolean; connection?: string; completed?: string; failed?: string };
+}
+
 export interface WorkflowDefinition {
   schema: "wd/v1";
   id: `wf_${string}`;

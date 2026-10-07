@@ -58,7 +58,7 @@ func TestRoundTripGeneratedDefinitions(t *testing.T) {
 		n = 20
 	}
 	r := rand.New(rand.NewPCG(seed, 1))
-	valid, arrows, fallbacks := 0, 0, 0
+	valid, arrows, fallbacks, menus := 0, 0, 0, 0
 	for i := 0; valid < n; i++ {
 		if i > n*20 {
 			t.Fatalf("only %d of %d generated definitions were valid", valid, i)
@@ -76,6 +76,9 @@ func TestRoundTripGeneratedDefinitions(t *testing.T) {
 			continue
 		}
 		valid++
+		if strings.Contains(string(doc), `"type":"ussd","config"`) {
+			menus++
+		}
 		t.Run(fmt.Sprintf("seed%d_%03d", seed, valid), func(t *testing.T) {
 			code := roundTrip(t, doc)
 			arrows += strings.Count(code, ") => ")
@@ -84,7 +87,10 @@ func TestRoundTripGeneratedDefinitions(t *testing.T) {
 	}
 	// Both ways of printing an expression are exercised: as an arrow
 	// function, and kept as CEL text where code cannot say it exactly.
-	t.Logf("expressions printed as functions: %d, kept as CEL: %d", arrows, fallbacks)
+	t.Logf("expressions printed as functions: %d, kept as CEL: %d; USSD menus: %d", arrows, fallbacks, menus)
+	if menus < n/40 {
+		t.Errorf("only %d USSD menus in the corpus", menus)
+	}
 	if arrows < n || fallbacks < n/4 {
 		t.Errorf("the corpus is too narrow: %d functions, %d CEL strings", arrows, fallbacks)
 	}
@@ -280,7 +286,9 @@ func (g *gen) definition() obj {
 }
 
 func (g *gen) trigger() obj {
-	switch g.r.IntN(7) {
+	switch g.r.IntN(8) {
+	case 7:
+		return obj{{"type", "ussd"}, {"config", g.ussd()}}
 	case 0:
 		c := obj{{"path", "/" + g.word(6) + "/v1.events"}, {"auth", pick(g, "hmac", "bearer", "mtls", "none")}}
 		if g.chance(0.5) {
@@ -313,7 +321,7 @@ func (g *gen) trigger() obj {
 		}
 		return obj{{"type", "manual"}}
 	case 5:
-		return obj{{"type", pick(g, "subflow", "email", "ussd", "whatsapp", "database_change")}}
+		return obj{{"type", pick(g, "subflow", "email", "whatsapp", "database_change")}}
 	}
 	return obj{{"type", "subflow"}, {"config", obj{{"anything", g.value(scope{}, 2)}}}}
 }
@@ -587,6 +595,69 @@ func (g *gen) value(sc scope, depth int) any {
 		return xs
 	}
 	return g.values(sc, depth-1)
+}
+
+// ussd is a USSD menu (docs/ussd.md) that fits any generated inputs
+// schema: it collects amount (an integer) and sometimes note (text).
+func (g *gen) ussd() obj {
+	c := obj{{"service_code", pick(g, "*384*123#", "*1#", "*920*7*1#")}}
+	if g.chance(0.3) {
+		c.set("start", "main")
+	}
+	if g.chance(0.3) {
+		c.set("max_chars", pick(g, 160, 182))
+	}
+	note, help := g.chance(0.5), g.chance(0.5)
+	opts := []any{obj{{"label", "Pay"}, {"next", "amount"}}}
+	if note {
+		o := obj{{"label", "Pay with a note"}, {"next", "note"}}
+		if g.chance(0.5) {
+			o.set("value", pick[any](g, "noted", 2, true, 1.5))
+		}
+		if g.chance(0.5) {
+			o.set("when", pick(g, "=size(trigger.body) == 0", "=!has(trigger.body.amount)"))
+		}
+		opts = append(opts, o)
+	}
+	if help {
+		opts = append(opts, obj{{"label", "Help"}, {"next", "help"}})
+	}
+	screens := []any{obj{{"id", "main"}, {"type", "menu"}, {"text", pick(g, "Welcome", "Line one\nline two", "Quote \" and back\\slash")}, {"options", opts}}}
+	v := obj{{"type", "integer"}, {"min", 1}, {"max", pick(g, 5000, 100000)}}
+	if g.chance(0.5) {
+		v.set("when", pick(g, "=trigger.body.amount % 2 == 0", "=trigger.body.amount > 10 && trigger.body.amount < 90000"))
+	}
+	amount := obj{{"id", "amount"}, {"type", "input"}, {"text", "Amount"}, {"input", "amount"}, {"validate", v}, {"next", "ok"}}
+	if g.chance(0.5) {
+		amount.set("error", "Whole naira, please.")
+	}
+	screens = append(screens, amount)
+	if note {
+		screens = append(screens, obj{{"id", "note"}, {"type", "input"}, {"text", "Note"}, {"input", "note"},
+			{"validate", obj{{"pattern", "[A-Za-z ]{1,20}"}, {"min_length", 1}, {"max_length", 20}}}, {"next", "amount"}})
+	}
+	confirm := obj{{"id", "ok"}, {"type", "confirm"}, {"text", pick(g, "Pay {{amount}}?", "Pay {{ amount }} now?")}}
+	if g.chance(0.5) {
+		confirm.set("confirm_label", "Pay")
+		confirm.set("cancel_label", "No")
+	}
+	if g.chance(0.5) {
+		confirm.set("done", "Done. Ref {{reference}}")
+	}
+	screens = append(screens, confirm)
+	if help {
+		screens = append(screens, obj{{"id", "help"}, {"type", "end"}, {"text", "Call us."}})
+	}
+	c.set("screens", screens)
+	if g.chance(0.5) {
+		n := obj{{"sms", true}}
+		if g.chance(0.5) {
+			n.set("connection", "at_"+g.word(3))
+			n.set("completed", "Paid {{amount}}. Ref {{reference}}")
+		}
+		c.set("notify", n)
+	}
+	return c
 }
 
 func (g *gen) text() string {
