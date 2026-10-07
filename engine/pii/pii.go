@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -102,6 +103,50 @@ func (t Taint) Add(v any, category string) {
 	if k, ok := scalarKey(v); ok {
 		t[k] = category
 	}
+}
+
+// MinRedact is the shortest personal value RedactText looks for: shorter
+// strings ("Ada", a two-digit number) would mask unrelated text.
+const MinRedact = 5
+
+// RedactText replaces, in free text such as a provider's error message,
+// every exact occurrence of a personal value known in the run with its
+// category ("[name]", "[bvn]"). It matches whole values only, never parts
+// or look-alikes, so it never masks text that is not a known value; values
+// shorter than MinRedact are left to the pattern masks in Redact
+// (self-review S22).
+func (t Taint) RedactText(s string) string {
+	if len(t) == 0 || s == "" {
+		return s
+	}
+	type hit struct{ val, cat string }
+	var hits []hit
+	for k, cat := range t {
+		v := k[2:] // "s:" or "n:" and the canonical value
+		if len(v) < MinRedact || !strings.Contains(s, v) {
+			continue
+		}
+		hits = append(hits, hit{v, cat})
+	}
+	if len(hits) == 0 {
+		return s
+	}
+	// Longest first, so a value that contains another is masked whole.
+	sort.Slice(hits, func(i, j int) bool {
+		if len(hits[i].val) != len(hits[j].val) {
+			return len(hits[i].val) > len(hits[j].val)
+		}
+		return hits[i].val < hits[j].val
+	})
+	pairs := make([]string, 0, 2*len(hits))
+	for _, h := range hits {
+		cat := h.cat
+		if cat == "" {
+			cat = "personal data"
+		}
+		pairs = append(pairs, h.val, "["+cat+"]")
+	}
+	return strings.NewReplacer(pairs...).Replace(s)
 }
 
 // Seal replaces values at the declared paths, and anywhere a tainted value

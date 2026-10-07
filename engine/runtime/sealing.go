@@ -45,21 +45,24 @@ func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, pa
 }
 
 // redactText masks personal data in the free text of a worker result:
-// a failure's message and a code step's log lines.
-func redactText(v any) {
+// a failure's message and a code step's log lines. Values the run already
+// holds as personal data (its sealed inputs and earlier outputs, in taint)
+// are masked where they appear exactly (S22); then the pattern masks catch
+// what looks like an email, phone number, BVN, NIN or card.
+func redactText(v any, taint pii.Taint) {
 	m, ok := v.(map[string]any)
 	if !ok {
 		return
 	}
 	if e, ok := m["error"].(map[string]any); ok {
 		if msg, ok := e["message"].(string); ok {
-			e["message"] = pii.Redact(msg)
+			e["message"] = pii.Redact(taint.RedactText(msg))
 		}
 	}
 	if logs, ok := m["logs"].([]any); ok {
 		for i, l := range logs {
 			if s, ok := l.(string); ok {
-				logs[i] = pii.Redact(s)
+				logs[i] = pii.Redact(taint.RedactText(s))
 			}
 		}
 	}

@@ -856,7 +856,7 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 			if err != nil {
 				return err
 			}
-			redactText(v)
+			redactText(v, p.taint)
 			var paths []pii.Path
 			if result.Type == history.StepCompleted {
 				paths = outputPIIPaths(p.conn, p.action) // what the manifest declares personal

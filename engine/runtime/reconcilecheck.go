@@ -58,7 +58,8 @@ func (w *Worker) CheckReconcile(ctx context.Context, ref RunRef, step string) (*
 		if err != nil {
 			return err
 		}
-		hist, _, err := w.Store.openHistory(ctx, tx, ref.TenantID, raw)
+		hist, taint, err := w.Store.openHistory(ctx, tx, ref.TenantID, raw)
+		p.taint = taint // the run's personal values, masked in error text (S22)
 		if err != nil {
 			return err
 		}
@@ -118,7 +119,7 @@ func (w *Worker) CheckReconcile(ctx context.Context, ref RunRef, step string) (*
 	rep := &ReconcileReport{Step: step, Connector: conn.Ref(), Action: p.sched.Action, Reconcile: spec.Reconcile}
 	creds, err := w.credentials(ctx, p)
 	if err != nil {
-		rep.Error = pii.Redact(err.Error())
+		rep.Error = pii.Redact(p.taint.RedactText(err.Error()))
 		return rep, nil
 	}
 	hc, err := w.client(ctx, p, w.CallTimeout)
@@ -135,7 +136,7 @@ func (w *Worker) CheckReconcile(ctx context.Context, ref RunRef, step string) (*
 	case errors.Is(err, connector.ErrNotFound):
 		rep.Found = false
 	default:
-		rep.Error = pii.Redact(scrubText(err.Error(), p.scrub))
+		rep.Error = pii.Redact(p.taint.RedactText(scrubText(err.Error(), p.scrub)))
 	}
 	return rep, nil
 }

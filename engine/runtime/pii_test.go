@@ -290,3 +290,34 @@ actions:
 		t.Errorf("the connector should get the plaintext input: %v", got)
 	}
 }
+
+const nameFlow = `{"schema":"wd/v1","id":"wf_lookup","version":1,"name":"lookup","trigger":{"type":"manual"},
+  "inputs":{"schema":{"type":"object","properties":{"full_name":{"type":"string","x-pii":"name"}}}},
+  "steps":[{"id":"find","type":"code","retry":{"max":0},"input":{"who":"=trigger.body.full_name"},
+    "config":{"language":"javascript","source":"export default (input) => { throw new Error('no customer named ' + input.who + ' at this bank') }"}}]}`
+
+// A personal value the run holds (here a declared input) is masked where a
+// failure's message repeats it, though no pattern recognises
+// a name (S22).
+func TestKnownPIIIsMaskedInErrorText(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, nameFlow)
+	const name = "Adaeze Okonkwo"
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"full_name": name}})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "failed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	var failed string
+	for _, ev := range events(t, e, ref) {
+		if strings.Contains(string(ev.Payload), name) {
+			t.Errorf("plaintext name in stored %s(%s): %s", ev.Type, ev.StepID, ev.Payload)
+		}
+		if ev.Type == history.StepFailed {
+			failed = string(ev.Payload)
+		}
+	}
+	if !strings.Contains(failed, "no customer named [name] at this bank") {
+		t.Errorf("the failure should keep its text with the name masked: %s", failed)
+	}
+}
