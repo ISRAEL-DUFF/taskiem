@@ -191,6 +191,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.tenantWide).Post("/members", s.addMember)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/members/{user}/roles/{role}", s.revokeRole)
 			r.Get("/permissions", s.listPermissions)
+			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)
 			r.With(s.need(PermRoleManage), s.tenantWide).Put("/roles/{name}", s.putRole)
 			r.With(s.need(PermRoleManage), s.tenantWide).Delete("/roles/{name}", s.deleteRole)
@@ -314,6 +315,15 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 
 // fail maps engine errors to responses without leaking internals.
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if le, ok := runtime.IsLimit(err); ok {
+		// A plan limit: 429 with a code clients can act on, and Retry-After
+		// when waiting helps (a quota resets, a backlog drains).
+		if le.RetryAfter > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(int(le.RetryAfter.Round(time.Second).Seconds())))
+		}
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": le.Message, "code": le.Code, "limit": le.Limit})
+		return
+	}
 	switch {
 	case errors.Is(err, runtime.ErrNotFound), errors.Is(err, secrets.ErrNotFound), errors.Is(err, pgx.ErrNoRows):
 		writeErr(w, http.StatusNotFound, "not found")

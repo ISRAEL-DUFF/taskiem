@@ -35,7 +35,72 @@ export function Settings() {
       {can("secret.manage") && <Egress env={env} />}
       {can("git.manage") && <Git env={env} />}
       <Governance />
+      <PlanLimits />
     </>
+  );
+}
+
+interface LimitsView {
+  limits: Record<string, number>;
+  overrides: Record<string, number>;
+  usage: { runs_today: number; runs_this_month: number; running_runs: number; queued_runs: number; workflows: number; secrets: number; connections: number };
+  recent_hits: { limit: string; day: string; hits: number }[];
+  help: Record<string, string>;
+}
+
+/** The plan's limits and what the tenant uses of them (read-only: operators set them). */
+function PlanLimits() {
+  const { data, error } = useLoad(() => get<LimitsView>("/v1/limits"), []);
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  const used: Record<string, number> = {
+    runs_per_day: data.usage.runs_today,
+    runs_per_month: data.usage.runs_this_month,
+    max_running_runs: data.usage.running_runs,
+    max_queued_runs: data.usage.queued_runs,
+    max_workflows: data.usage.workflows,
+    max_secrets: data.usage.secrets,
+    max_connections: data.usage.connections,
+  };
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Plan limits</h2>
+      <p className="hint">Set by your operator; 0 means no limit. Above the ingest rate deliveries are still accepted and their runs queued.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Limit</th>
+            <th>Value</th>
+            <th>In use</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.keys(data.help).sort().map((k) => (
+            <tr key={k}>
+              <td className="mono">{k}</td>
+              <td>
+                {data.limits[k]}
+                {k in data.overrides ? "" : " (default)"}
+              </td>
+              <td>{used[k] ?? ""}</td>
+              <td className="hint">{data.help[k]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.recent_hits.length > 0 && (
+        <>
+          <h2>Reached lately</h2>
+          <ul>
+            {data.recent_hits.map((h) => (
+              <li key={h.limit + h.day}>
+                {h.day}: <span className="mono">{h.limit}</span> ({h.hits}×)
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }
 

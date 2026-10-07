@@ -131,6 +131,10 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error { return s.checkCount(r.Context(), tx, p.TenantID, "max_connections") }); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	id, err := s.Vault.CreateConnection(r.Context(), p.TenantID, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, req.Credentials, p.Actor())
 	if err != nil {
 		var pgErr interface{ SQLState() string }
@@ -192,6 +196,16 @@ func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var exists bool
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM secrets WHERE environment = $1 AND name = $2)`, env, name).Scan(&exists); err != nil || exists {
+			return err
+		}
+		return s.checkCount(r.Context(), tx, p.TenantID, "max_secrets")
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if _, err := s.Vault.Put(r.Context(), p.TenantID, env, name, []byte(req.Value), p.Actor()); err != nil {
 		s.fail(w, r, err)
 		return

@@ -127,12 +127,22 @@ func (c *Cron) fire(ctx context.Context, tenant, id uuid.UUID) (bool, error) {
 		return false, c.disable(ctx, tenant, id)
 	}
 	fireAt := at.UTC().Format(time.RFC3339)
+	fired := true
 	if _, _, err := c.Store.StartRun(ctx, runtime.StartRequest{
 		TenantID: tenant, WorkflowID: wf, Version: version, Environment: env,
 		Trigger:   map[string]any{"type": "schedule", "scheduled_time": fireAt, "body": map[string]any{}},
 		StartedBy: "schedule", TriggerID: "schedule/" + wf.String(), DedupKey: fireAt,
 	}); err != nil {
-		return false, err
+		le, ok := runtime.IsLimit(err)
+		if !ok {
+			return false, err
+		}
+		// Beyond a quota or a full backlog this fire is skipped (logged,
+		// counted, and seen by "limit" alert rules) and the schedule moves
+		// on, rather than retrying every lease until the limit lifts.
+		c.Logger.Warn("schedule fire skipped: tenant limit", "tenant", tenant, "trigger", id, "scheduled_time", fireAt, "limit", le.Limit, "err", le.Message)
+		telemetry.Ingest.WithLabelValues("schedule", "refused").Inc()
+		fired = false
 	}
 	from := c.now()
 	if at.After(from) {
@@ -140,13 +150,13 @@ func (c *Cron) fire(ctx context.Context, tenant, id uuid.UUID) (bool, error) {
 	}
 	next := sched.Next(from)
 	if next.IsZero() {
-		return true, c.disable(ctx, tenant, id)
+		return fired, c.disable(ctx, tenant, id)
 	}
 	err = db.InTenantTx(ctx, c.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE triggers SET next_fire_at = $3, lease_until = NULL WHERE id = $1 AND next_fire_at = $2`, id, at, next)
 		return err
 	})
-	return true, err
+	return fired, err
 }
 
 // disable parks a schedule that has no next fire time: next_fire_at

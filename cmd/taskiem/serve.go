@@ -58,6 +58,8 @@ type config struct {
 	Connectors         builtin.Options
 	PoolSize           int32
 	LoginBurst         int
+	// Limits are the platform's default plan limits (TASKIEM_DEFAULT_*).
+	Limits runtime.Limits
 }
 
 func env(k, def string) string {
@@ -137,6 +139,11 @@ func loadConfig() (config, error) {
 	if n, err := strconv.Atoi(os.Getenv("TASKIEM_DATABASE_POOL")); err == nil && n > 0 {
 		c.PoolSize = int32(n) //nolint:gosec // small operator-set value
 	}
+	limits, err := runtime.LimitsFromEnv(os.LookupEnv)
+	if err != nil {
+		return c, err
+	}
+	c.Limits = limits
 	if c.DSN == "" {
 		return c, errors.New("TASKIEM_DATABASE_URL is required")
 	}
@@ -226,7 +233,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	reg.SetTenantSource(src.Connectors)
 	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey}
 	return &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
-		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault}}, nil
+		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits}}, nil
 }
 
 func (e *engine) hooks() *ingest.Handler {

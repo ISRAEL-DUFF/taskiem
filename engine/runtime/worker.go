@@ -282,8 +282,8 @@ func (w *Worker) RunOnce(ctx context.Context) (int, error) {
 }
 
 func (w *Worker) claim(ctx context.Context, n int) ([]claim, error) {
-	rows, err := w.Store.Pool.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch FROM taskiem_claim_tasks($1, $2, $3, $4::interval)`,
-		w.Queue, w.ID, n, w.Lease.String())
+	rows, err := w.Store.Pool.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch FROM taskiem_claim_tasks($1, $2, $3, $4::interval, $5)`,
+		w.Queue, w.ID, n, w.Lease.String(), w.Store.defaults().WorkerConcurrency)
 	if err != nil {
 		return nil, err
 	}

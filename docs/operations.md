@@ -9,6 +9,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `taskiem migrate` | Applies database migrations as the schema owner. Forward-only. |
 | `taskiem bootstrap --tenant NAME --email EMAIL [--name NAME]` | Creates the first tenant, its owner, a Default workspace, and the `dev` and `prod` environments. Password from `TASKIEM_BOOTSTRAP_PASSWORD` (12+ characters). |
 | `taskiem serve [--role ROLE]` | Runs `api`, `edge`, `orchestrator`, `scheduler`, `worker`, or `all` (default; also `TASKIEM_ROLE`). |
+| `taskiem tenants limits TENANT_ID [--set KEY=VALUE]...` | Shows a tenant's plan limits, usage and recent limit hits; `--set` changes a limit (`default` returns it to the platform default). Audited as `limits.set`. See [plan limits](#plan-limits). |
 | `taskiem audit verify FILE` | Recomputes every hash and link of an audit export (`GET /v1/audit/export`) without the database. Exits non-zero on a broken chain. |
 | `taskiem validate FILE...` | Validates `*.wd.json` definitions and connector manifests. |
 | `taskiem healthcheck` | Probes the local API's `/readyz` (for images without a shell). |
@@ -48,6 +49,7 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |
 | `TASKIEM_ALLOW_SIGNUP` | `false` | Self-serve `POST /v1/signup`. |
 | `TASKIEM_ISWALLET_URL`, `TASKIEM_PAYSTACK_URL`, `TASKIEM_TERMII_URL`, `TASKIEM_DOJAH_URL`, `TASKIEM_FLUTTERWAVE_URL`, `TASKIEM_GETANCHOR_URL`, `TASKIEM_LENCO_URL`, `TASKIEM_BREET_URL` | provider defaults | Point connectors at another environment; the egress allow-list follows. iswallet defaults to its **sandbox**; set its production URL at go-live. Anchor and Lenco connections choose their provider's sandbox themselves (`environment: sandbox`), Breet's with the same field, Flutterwave's by the key. |
+| `TASKIEM_DEFAULT_<LIMIT>` | see [plan limits](#plan-limits) | Platform default for one plan limit, for tenants without their own (for example `TASKIEM_DEFAULT_RUNS_PER_MONTH=100000`). Set the same values on every role. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OpenTelemetry trace export (OTLP/HTTP); standard `OTEL_*` variables apply. |
 
 ## Database roles
@@ -65,7 +67,7 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
 
 - Webhook triggers: `POST /hooks/{tenant}/{path}?env=prod`. `hmac` expects `X-Taskiem-Signature: sha256=<hex HMAC-SHA256 of the body>`; `bearer` expects `Authorization: Bearer <token>`. The key is the environment secret `webhook_<WD id>`; workflows cannot read it (nor `git_credentials` or `git_webhook_secret`): an expression or code step naming one fails.
 - Connector events: `POST /hooks/{tenant}/connectors/{connector}/{trigger}?env=prod`, verified with the connection's credentials. `GET /v1/workflows/{id}/triggers` lists the exact URLs.
-- Replies: 202 with the run id (a duplicate returns the original), 401 on a bad signature, 422 when the body does not match the inputs schema, 429 with `Retry-After` above the tenant's ingest ceiling, 503 with `Retry-After` when nothing was recorded.
+- Replies: 202 with the run id (a duplicate returns the original; `"queued": true` when the tenant is above its soft ingest rate and the run waits for admission), 401 on a bad signature, 413 above the tenant's payload limit, 422 when the body does not match the inputs schema, 429 with `Retry-After` and a `code` above the tenant's ingest ceiling (`rate_limited`), with a full backlog (`backlog_full`) or past a run quota (`quota_exceeded`), 503 with `Retry-After` when nothing was recorded. Nothing is recorded with a 429, so the provider's retry is not lost.
 
 ## Metrics
 
@@ -77,10 +79,37 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
 | `taskiem_queue_ready`, `taskiem_queue_leased`, `taskiem_queue_oldest_ready_seconds` | queue |
 | `taskiem_timers_fired_total`, `taskiem_lease_expiries_total`, `taskiem_runs_swept_total` | — |
 | `taskiem_connector_drift_total` | connector, action, kind (`type`, `enum`, `missing`) |
+| `taskiem_tenant_limit_hits_total` | limit (no tenant label: which tenant is in `GET /v1/limits`, the CLI and `limit` alerts) |
+| `taskiem_queued_runs`, `taskiem_queued_tenants`, `taskiem_queued_runs_max_tenant` | reason (`tenant`: held by plan limits; `workflow`: concurrency settings). Totals, the number of tenants with a backlog and the largest single backlog, so series stay few however many tenants there are |
+| `taskiem_runs_admitted_total` | — |
 
 **Contract drift.** After every successful connector call the worker compares the output with the action's declared output schema (`engine/drift`). A departure (a field of another type, a value outside an enum, a required field missing) is recorded per tenant (`connector_drift`; tenants see it under Connections), counted in `taskiem_connector_drift_total`, and logged at warning level the first time. The step still completes. Alert on any increase for built-in connectors: it means a provider changed its API and the connector needs updating.
 
 Traces span API requests, ingest, and worker steps, with `tenant_id`, `run_id`, and `step_id` attributes.
+
+## Plan limits
+
+Every tenant has plan limits (spec 8.3, 16): the platform defaults below, changed for all tenants with `TASKIEM_DEFAULT_<LIMIT>` and for one tenant with `taskiem tenants limits`. Zero means no limit. Tenants see theirs, with their usage and the limits they reached lately, at `GET /v1/limits` (any member) and in Settings; nothing in the API changes them, and the application's database role cannot write `tenant_limits` (the CLI goes through an audited function). A change reaches running processes within a minute.
+
+| Limit | Default | What happens at the limit |
+| --- | --- | --- |
+| `ingest_rate`, `ingest_burst` | 20/s, 100 | Soft limit. Deliveries above it are still verified, deduplicated, recorded and answered 202 (`"queued": true`); the runs they start wait as `queued` and the scheduler admits them, oldest first, at this rate. While a tenant has runs waiting, its new runs (also manual and scheduled ones) queue behind them. Signals to waiting runs are delivered at once |
+| `ingest_ceiling`, `ingest_ceiling_burst` | 50/s, 200 | Hard limit: 429 `rate_limited` with `Retry-After` |
+| `max_running_runs` | 0 | Runs in status running at once, including those waiting on a signal, approval or timer. More are accepted and queued, and admitted as runs end |
+| `max_queued_runs` | 10,000 | The backlog. A start that would queue beyond it gets 429 `backlog_full` with `Retry-After` |
+| `runs_per_day`, `runs_per_month` | 0 | Run quotas (UTC), counting every accepted run. Beyond them starts get 429 `quota_exceeded` with `Retry-After` until the period ends (webhooks, connector events and `POST /v1/workflows/{id}/runs` alike); a schedule fire is skipped, logged and counted, and the schedule moves on. Off by default: spec 16 prices plans flat |
+| `max_workflows` | 0 | Creating another workflow (API or Git sync) gets 429 `limit_exceeded` |
+| `max_steps_per_run` | 100,000 | Steps one run may schedule (foreach items and retries count). A run going over fails (`RunFailed`, kind `limit`) in the transaction that scheduled the extra steps, so none of them runs |
+| `worker_concurrency` | 32 | A tenant's tasks executing at once per queue (`connector`, `sandbox`). Workers claim round-robin across tenants and skip a tenant at its cap, so one tenant's backlog cannot hold every worker slot. A single-tenant install with more worker slots than this should raise it |
+| `max_payload_bytes` | 1 MiB | Larger deliveries get 413 (at most 10 MiB for any tenant) |
+| `max_secrets`, `max_connections` | 0 | Adding another named secret or active connection gets 429 `limit_exceeded` |
+
+```sh
+taskiem tenants limits 0190f0c2-... --set runs_per_month=100000 --set max_running_runs=25
+taskiem tenants limits 0190f0c2-... --set runs_per_month=default   # back to the platform default
+```
+
+Limits reached are recorded per tenant and day (`tenant_limit_hits`), counted in `taskiem_tenant_limit_hits_total`, and delivered to tenants who add an alert rule of kind `limit` ([alerts](alerts.md)). Ingest limiters are per edge process, so with several edge replicas a tenant's rates apply to each; admission, quotas, the backlog and worker caps are enforced in the database and hold across replicas and restarts. Which tiers exist and their values are a business decision ([needs people](needs-people.md), B1).
 
 ## Docker Compose
 

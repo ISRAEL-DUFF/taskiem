@@ -46,6 +46,9 @@ const (
 	ConnectorDrift      = "connector_drift"
 	CredentialExpiry    = "credential_expiry" //nolint:gosec // a rule kind, not a credential
 	AuditAnchor         = "audit_anchor"
+	// LimitReached: the tenant reached a plan limit (a quota, the backlog,
+	// the ingest rate...); once per limit per UTC day.
+	LimitReached = "limit"
 )
 
 // Kinds lists rule kinds with their default thresholds (zero: none).
@@ -57,6 +60,22 @@ var Kinds = map[string]time.Duration{
 	ConnectorDrift:      0,
 	CredentialExpiry:    7 * 24 * time.Hour,
 	AuditAnchor:         0,
+	LimitReached:        0,
+}
+
+// limitWhat says what reaching each limit did, for limit alerts.
+var limitWhat = map[string]string{ //nolint:gosec // limit names and explanations, not credentials
+	"runs_per_month":    "New runs are refused until next month (UTC) or until the plan's quota is raised. Deliveries get 429 so providers retry; schedules skip their fires.",
+	"runs_per_day":      "New runs are refused until tomorrow (UTC) or until the plan's quota is raised. Deliveries get 429 so providers retry; schedules skip their fires.",
+	"max_queued_runs":   "The backlog of queued runs is full: new starts are refused with 429 until queued runs start.",
+	"ingest_ceiling":    "Deliveries arrived faster than the plan's ceiling and some were refused with 429 (providers retry).",
+	"ingest_rate":       "Deliveries arrived faster than the plan's ingest rate: their runs were accepted and queued, and start at the plan's rate.",
+	"max_running_runs":  "As many runs as the plan allows are running: new runs are accepted and queued until some finish.",
+	"max_steps_per_run": "A run scheduled more steps than the plan allows one run, and was failed.",
+	"max_payload_bytes": "A delivery was larger than the plan allows and was refused.",
+	"max_workflows":     "Creating a workflow was refused: the plan's workflow limit is reached.",
+	"max_secrets":       "Creating a secret was refused: the plan's secret limit is reached.",
+	"max_connections":   "Creating a connection was refused: the plan's connection limit is reached.",
 }
 
 // RuleConfig narrows a rule.
@@ -415,6 +434,25 @@ func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([
 				Body: "Keep this message: it is a signed record of your audit log as it stood, held outside Taskiem. " +
 					"To check the log later, save the line below in a file and run `taskiem audit verify --anchors FILE` on an export.\n\n" + string(line),
 				Link: a.link("/audit"), Detail: map[string]any{"anchor": json.RawMessage(line)}})
+		}
+		err = rows.Err()
+	case LimitReached:
+		rows, qerr := tx.Query(ctx, `SELECT limit_name, day::text, hits, last_at FROM tenant_limit_hits WHERE last_at > $1 ORDER BY last_at LIMIT 200`, r.since)
+		if qerr != nil {
+			return nil, qerr
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var limit, day string
+			var hits int64
+			var at time.Time
+			if err := rows.Scan(&limit, &day, &hits, &at); err != nil {
+				return nil, err
+			}
+			out = append(out, Alert{Kind: r.kind, Dedup: limit + "@" + day, Title: fmt.Sprintf("Plan limit reached: %s", limit),
+				Body: strings.TrimSpace(fmt.Sprintf("On %s (UTC) the %s limit was reached, most recently at %s. %s See Settings for your limits and usage; ask your operator to raise them.",
+					day, limit, at.UTC().Format(time.RFC1123), limitWhat[limit])),
+				Link: a.link("/settings"), Detail: map[string]any{"limit": limit, "day": day}})
 		}
 		err = rows.Err()
 	default:

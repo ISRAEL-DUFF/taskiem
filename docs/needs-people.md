@@ -1,6 +1,6 @@
 # What needs people
 
-Every open item that engineering cannot finish alone, across all phases, in one place. None of them blocks writing code: each lists what the code already does and what the item will unblock once it is done. When an item is done, tick it here and in the status page it came from. Last updated 2026-10-06 (connectors).
+Every open item that engineering cannot finish alone, across all phases, in one place. None of them blocks writing code: each lists what the code already does and what the item will unblock once it is done. When an item is done, tick it here and in the status page it came from. Last updated 2026-10-07 (plan limits).
 
 Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](phase-2-status.md), the [build plan](spec/build-plan.md) gates, the [integration guides](integrations/), and the [dogfood workflows](../flows/dogfood/README.md).
 
@@ -85,6 +85,7 @@ Each connector is built from the provider's public documentation and tested agai
 | E2 | [ ] MySQL: send `KILL QUERY` when an `execute` times out? `max_execution_time` only covers SELECT, so a slow write can keep running after the step parks | Engineering lead | Not sent; the step parks as an unknown outcome |
 | E3 | [ ] SFTP: on servers without OpenSSH's atomic rename, refuse to overwrite instead of delete-then-rename? | Engineering lead | Overwrites, and reports `atomic: false` |
 | E4 | [ ] A decision-log entry recording the clean-room MySQL protocol client (written from Oracle's docs because the common driver is MPL-2.0) | Founder | Noted in the connector's guide and package docs |
+| B1 | [ ] **Plan tiers and prices**: which tiers exist, the value of each limit in each (concurrent runs, ingest rate, backlog, workers, retention...), whether any tier has run quotas at all (spec 16 promises flat pricing with no per-execution counts), and the naira prices (spec 18) | Founder, with sales | Every limit is enforceable per tenant and set by operators (`taskiem tenants limits`, [operations](operations.md#plan-limits)); platform defaults are generous and quotas are off. Applying a tier is a list of `--set` values until billing (Phase 4) does it | Phase 4 billing; partner contracts |
 
 ## Engineering carries on meanwhile
 
@@ -93,6 +94,6 @@ None of the items above stops code. Work that needs no one:
 - **Connectors** are built: 16 African (Paystack, Dojah, Termii, iswallet, Flutterwave, Anchor, Lenco, Breet, Moniepoint, Interswitch, OPay, Remita, Mono, Prembly, Youverify, Africa's Talking), against G2's 15, and the global set (WhatsApp, Telegram, Slack, Gmail, Google Sheets, MySQL, S3, SFTP, PostgreSQL). What remains for each is its live sandbox check (P1).
 - **Bitbucket** (done): Bitbucket Cloud for Git-led and platform-led modes ([git](git.md)).
 - **Deployment** (done): image, Helm chart and Kubernetes manifests (spec 15.4), so D5 is a matter of applying them ([kubernetes](kubernetes.md)).
-- **Known gaps** carried from Phase 1: plan caps and soft ingest limits. Done: incremental decision state for long histories, password reset ([passwords](governance.md#passwords)), per-use `secret.read` auditing ([compliance](compliance.md#secret-use)), and a design for reaching private databases ([decision 0013](decisions/0013-private-network-access.md)).
+- **Known gaps** carried from Phase 1: all done. Incremental decision state for long histories; plan caps and soft ingest limits ([operations](operations.md#plan-limits); the tiers and prices themselves are B1); password reset ([passwords](governance.md#passwords)); per-use `secret.read` auditing ([compliance](compliance.md#secret-use)); and a design for reaching private databases ([decision 0013](decisions/0013-private-network-access.md)).
 - **Pen-test preparation**: a threat model and scope document, so X1 can start the day a firm is chosen.
 - **Phase 3** deliverables, once G2's engineering criteria are met.

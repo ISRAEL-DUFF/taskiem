@@ -63,6 +63,8 @@ Usage:
   taskiem audit verify FILE          verify an audit export (GET /v1/audit/export) offline
   taskiem passkeys reset --email EMAIL
                                      remove someone's passkeys when no owner can (recovery; audited)
+  taskiem tenants limits TENANT_ID [--set KEY=VALUE]...
+                                     show a tenant's plan limits and usage, or change them (audited)
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 
@@ -120,6 +122,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return auditCmd(args[1:], stdout)
 	case "passkeys":
 		return passkeysCmd(args[1:], stdout)
+	case "tenants":
+		return tenantsCmd(context.Background(), args[1:], stdout)
 	case "connector":
 		return connectorCmd(context.Background(), args[1:], stdout)
 	case "healthcheck":

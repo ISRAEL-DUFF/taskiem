@@ -37,6 +37,7 @@ const KIND_LABELS: Record<string, string> = {
   connector_drift: "A provider changes its responses",
   credential_expiry: "A credential or API key expires within",
   audit_anchor: "The audit log is anchored (email the signed anchor)",
+  limit: "A plan limit is reached (run quota, backlog, ingest rate)",
 };
 const THRESHOLDS: Record<string, string> = { slow_run: "1h", stuck_approval: "24h", credential_expiry: "168h" };
 

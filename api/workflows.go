@@ -134,6 +134,9 @@ func (s *Server) createWorkflow(w http.ResponseWriter, r *http.Request) {
 	id := uuid.Must(uuid.NewV7())
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
+		if err := s.checkCount(ctx, tx, p.TenantID, "max_workflows"); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO workflows (id, tenant_id, name, created_by, workspace_id)
 			VALUES ($1, $2, $3, $4, (SELECT id FROM workspaces WHERE tenant_id = $2 ORDER BY created_at LIMIT 1))`, id, p.TenantID, req.Name, p.id()); err != nil {
 			return err

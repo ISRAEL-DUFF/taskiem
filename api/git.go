@@ -933,6 +933,9 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 					name = d.key
 				}
 				wf = uuid.Must(uuid.NewV7())
+				if err := s.checkCount(ctx, tx, tenant, "max_workflows"); err != nil {
+					return fmt.Errorf("%s: %w", d.path, err)
+				}
 				if _, err := tx.Exec(ctx, `INSERT INTO workflows (id, tenant_id, name, created_by, git_path, workspace_id)
 					VALUES ($1, $2, $3, $4, $5, (SELECT id FROM workspaces WHERE tenant_id = $2 ORDER BY created_at LIMIT 1))`, wf, tenant, name, uuid.Nil, d.path); err != nil {
 					return err

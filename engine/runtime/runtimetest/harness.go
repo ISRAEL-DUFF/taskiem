@@ -69,18 +69,39 @@ func New(t testing.TB) *Env {
 // Publish stores a published workflow version and returns its workflow id.
 func (e *Env) Publish(t testing.TB, wdJSON string) uuid.UUID {
 	t.Helper()
+	return e.PublishIn(t, e.Tenant, wdJSON)
+}
+
+// AddTenant creates another tenant (no workflows).
+func (e *Env) AddTenant(t testing.TB) uuid.UUID {
+	t.Helper()
+	id := uuid.Must(uuid.NewV7())
+	ctx := context.Background()
+	err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{id}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO tenants (id, name, plan_id) VALUES ($1, 'other', $1)`, id)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// PublishIn is Publish in another tenant.
+func (e *Env) PublishIn(t testing.TB, tenant uuid.UUID, wdJSON string) uuid.UUID {
+	t.Helper()
 	if _, err := wd.Load([]byte(wdJSON)); err != nil {
 		t.Fatal(err)
 	}
 	id := uuid.Must(uuid.NewV7())
 	sum := sha256.Sum256([]byte(wdJSON))
 	ctx := context.Background()
-	err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO workflows (id, tenant_id, name, created_by, active_version) VALUES ($1, $2, 'wf', $2, 1)`, id, e.Tenant); err != nil {
+	err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO workflows (id, tenant_id, name, created_by, active_version) VALUES ($1, $2, 'wf', $2, 1)`, id, tenant); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, digest, state) VALUES ($1, 1, $2, $3, $4, 'published')`,
-			id, e.Tenant, wdJSON, sum[:])
+			id, tenant, wdJSON, sum[:])
 		return err
 	})
 	if err != nil {
@@ -139,7 +160,7 @@ func (e *Env) Drain(t testing.TB) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if n == 0 && st.TimersFired == 0 && st.RunsSwept == 0 && st.LeasesRecovered == 0 {
+		if n == 0 && st.TimersFired == 0 && st.RunsSwept == 0 && st.LeasesRecovered == 0 && st.RunsAdmitted == 0 {
 			return
 		}
 	}

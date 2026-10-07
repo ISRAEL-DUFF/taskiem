@@ -45,8 +45,9 @@ func concurrencyKey(def *wd.Definition, started history.RunStartedPayload) (stri
 
 // admit decides whether a new run may start now (spec 4.8): it needs its
 // concurrency_key slot, and the workflow must be under max_concurrency.
-// A run that may not start is recorded as queued; it is never rejected.
-func (s *Store) admit(ctx context.Context, tx pgx.Tx, ref RunRef, workflow uuid.UUID, def *wd.Definition, started history.RunStartedPayload) (bool, error) {
+// A run that may not start is recorded as queued; it is refused only when
+// the tenant's backlog is full (a *LimitError).
+func (s *Store) admit(ctx context.Context, tx pgx.Tx, ref RunRef, workflow uuid.UUID, def *wd.Definition, started history.RunStartedPayload, lim Limits) (bool, error) {
 	if def.Settings.ConcurrencyKey == "" && def.Settings.MaxConcurrency <= 0 {
 		return true, nil
 	}
@@ -61,7 +62,10 @@ func (s *Store) admit(ctx context.Context, tx pgx.Tx, ref RunRef, workflow uuid.
 	if err != nil || ok {
 		return ok, err
 	}
-	_, err = tx.Exec(ctx, `UPDATE runs SET status = 'queued' WHERE id = $1`, ref.ID)
+	if err := checkBacklog(ctx, tx, ref.TenantID, lim); err != nil {
+		return false, err
+	}
+	_, err = tx.Exec(ctx, `UPDATE runs SET status = 'queued', queue_reason = 'workflow' WHERE id = $1`, ref.ID)
 	return false, err
 }
 
@@ -92,7 +96,7 @@ func (s *Store) tryAdmit(ctx context.Context, tx pgx.Tx, tenant, workflow, run u
 // promote admits the oldest queued runs of a workflow that can now start.
 func (s *Store) promote(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUID) error {
 	rows, err := tx.Query(ctx, `SELECT id, COALESCE(concurrency_key, ''), version FROM runs
-		WHERE tenant_id = $1 AND workflow_id = $2 AND status = 'queued' ORDER BY started_at LIMIT 100`, tenant, workflow)
+		WHERE tenant_id = $1 AND workflow_id = $2 AND status = 'queued' AND queue_reason IS DISTINCT FROM 'tenant' ORDER BY started_at LIMIT 100`, tenant, workflow)
 	if err != nil {
 		return err
 	}
@@ -123,21 +127,26 @@ func (s *Store) promote(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UU
 		if !ok {
 			continue
 		}
-		if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'running' WHERE id = $1`, q.id); err != nil {
-			return err
-		}
-		if _, err := appendEvent(ctx, tx, q.id, history.RunAdmitted, "", 0, map[string]any{}, history.OriginIngest); err != nil {
-			return err
-		}
-		var now time.Time
-		if err := tx.QueryRow(ctx, `SELECT now()`).Scan(&now); err != nil {
-			return err
-		}
-		if err := s.start(ctx, tx, RunRef{ID: q.id, TenantID: tenant}, def, now); err != nil {
+		if err := s.startQueued(ctx, tx, RunRef{ID: q.id, TenantID: tenant}, def); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// startQueued starts a queued run that got its place.
+func (s *Store) startQueued(ctx context.Context, tx pgx.Tx, ref RunRef, def *wd.Definition) error {
+	if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'running', queue_reason = NULL WHERE id = $1`, ref.ID); err != nil {
+		return err
+	}
+	if _, err := appendEvent(ctx, tx, ref.ID, history.RunAdmitted, "", 0, map[string]any{}, history.OriginIngest); err != nil {
+		return err
+	}
+	var now time.Time
+	if err := tx.QueryRow(ctx, `SELECT now()`).Scan(&now); err != nil {
+		return err
+	}
+	return s.start(ctx, tx, ref, def, now)
 }
 
 // jsonRoundTrip converts a struct to JSON-compatible values (int64 numbers).

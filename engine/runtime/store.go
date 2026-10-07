@@ -11,6 +11,7 @@ import (
 	"hash/fnv"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -33,9 +35,15 @@ type Store struct {
 	// PII seals declared personal data before it is written (spec 4.9);
 	// nil stores it in plaintext (development without a vault).
 	PII pii.Cipher
+	// Defaults are the platform's plan limits (TASKIEM_DEFAULT_*), which
+	// tenant_limits overrides per tenant; nil uses DefaultLimits.
+	Defaults *Limits
 
-	defs  sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
-	folds decideCache
+	defs     sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
+	folds    decideCache
+	limits   sync.Map // tenant -> cachedLimits
+	hits     sync.Map // "tenant/limit" -> time recorded
+	hitCount atomic.Int64
 }
 
 // maxInlineRounds bounds decide -> effects -> decide loops in one transaction
@@ -58,17 +66,39 @@ type StartRequest struct {
 	StartedBy   string         // user, API key, or trigger that started the run (separation of duties)
 	TriggerID   string         // with DedupKey, makes starting idempotent (spec 8.2)
 	DedupKey    string
+	// Throttled marks a delivery above its tenant's soft ingest rate: the
+	// run is recorded but queued, and the scheduler admits it at the
+	// tenant's rate (spec 8.3).
+	Throttled bool
 }
 
 // ErrNotFound is returned when a run, step, or workflow is not visible.
 var ErrNotFound = errors.New("not found")
 
+// Started is the outcome of a start.
+type Started struct {
+	Ref     RunRef
+	Created bool // false: a repeated (TriggerID, DedupKey) returned the original run
+	Queued  bool // the new run waits for admission
+	// HeldBy names the tenant limit that queued it, if one did.
+	HeldBy string
+}
+
 // StartRun records RunStarted and the first decision in one transaction.
 // A repeated (TriggerID, DedupKey) returns the original run.
 func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, error) {
+	st, err := s.Start(ctx, req)
+	return st.Ref, st.Created, err
+}
+
+// Start is StartRun reporting whether the run was queued. A start beyond
+// the tenant's quota or backlog fails with a *LimitError and records
+// nothing; a duplicate is recognised before any limit applies.
+func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 	ref := RunRef{ID: uuid.Must(uuid.NewV7()), TenantID: req.TenantID}
-	created := true
+	out := Started{Created: true}
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{req.TenantID}, func(tx pgx.Tx) error {
+		out = Started{Created: true}
 		def, err := s.definition(ctx, tx, req.WorkflowID, req.Version)
 		if err != nil {
 			return err
@@ -80,9 +110,24 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 				return err
 			}
 			if tag.RowsAffected() == 0 {
-				created = false
+				out.Created = false
 				return tx.QueryRow(ctx, `SELECT run_id FROM trigger_receipts WHERE tenant_id = $1 AND trigger_id = $2 AND dedup_key = $3`,
 					req.TenantID, req.TriggerID, req.DedupKey).Scan(&ref.ID)
+			}
+		}
+		lim, err := s.limitsTx(ctx, tx, req.TenantID)
+		if err != nil {
+			return err
+		}
+		if err := checkQuota(ctx, tx, req.TenantID, lim); err != nil {
+			return err
+		}
+		if out.HeldBy, err = tenantHold(ctx, tx, req, lim); err != nil {
+			return err
+		}
+		if out.HeldBy != "" {
+			if err := checkBacklog(ctx, tx, req.TenantID, lim); err != nil {
+				return err
 			}
 		}
 		var startedAt time.Time
@@ -119,13 +164,70 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 		if _, err := appendEvent(ctx, tx, ref.ID, history.RunStarted, "", 0, sealed, history.OriginIngest); err != nil {
 			return err
 		}
-		admitted, err := s.admit(ctx, tx, ref, req.WorkflowID, def, payload)
-		if err != nil || !admitted {
+		if out.HeldBy != "" {
+			// Waits for the scheduler to admit it at the tenant's rate; its
+			// workflow's concurrency is checked then.
+			key, err := concurrencyKey(def, payload)
+			if err != nil {
+				return err
+			}
+			out.Queued = true
+			if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'queued', queue_reason = 'tenant', concurrency_key = NULLIF($2, '') WHERE id = $1`, ref.ID, key); err != nil {
+				return err
+			}
+			return countStart(ctx, tx, req.TenantID)
+		}
+		admitted, err := s.admit(ctx, tx, ref, req.WorkflowID, def, payload, lim)
+		if err != nil {
 			return err
 		}
-		return s.start(ctx, tx, ref, def, startedAt)
+		if admitted {
+			if err := s.start(ctx, tx, ref, def, startedAt); err != nil {
+				return err
+			}
+		}
+		out.Queued = !admitted
+		return countStart(ctx, tx, req.TenantID)
 	})
-	return ref, created, err
+	out.Ref = ref
+	if le, ok := IsLimit(err); ok {
+		s.LimitHit(ctx, req.TenantID, le.Limit)
+	} else if err == nil && out.HeldBy != "" && out.HeldBy != "backlog" {
+		s.LimitHit(ctx, req.TenantID, out.HeldBy)
+	}
+	return out, err
+}
+
+// countStart counts an accepted run toward the tenant's quotas. It is the
+// transaction's last write, so the usage row stays locked only briefly.
+func countStart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	_, err := tx.Exec(ctx, `INSERT INTO tenant_usage (tenant_id, day, runs_started) VALUES ($1, (now() AT TIME ZONE 'UTC')::date, 1)
+		ON CONFLICT (tenant_id, day) DO UPDATE SET runs_started = tenant_usage.runs_started + 1`, tenant)
+	return err
+}
+
+// tenantHold says which tenant limit, if any, holds a new run back: the
+// soft ingest rate, runs already waiting (they keep their order), or the
+// cap on running runs.
+func tenantHold(ctx context.Context, tx pgx.Tx, req StartRequest, l Limits) (string, error) {
+	if req.Throttled {
+		return "ingest_rate", nil
+	}
+	var waiting bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM runs WHERE tenant_id = $1 AND status = 'queued' AND queue_reason = 'tenant')`, req.TenantID).Scan(&waiting); err != nil {
+		return "", err
+	}
+	if waiting {
+		return "backlog", nil
+	}
+	n, err := countUpTo(ctx, tx, `runs WHERE tenant_id = $1 AND status = 'running'`, l.MaxRunningRuns, req.TenantID)
+	if err != nil {
+		return "", err
+	}
+	if l.MaxRunningRuns > 0 && n >= l.MaxRunningRuns {
+		return "max_running_runs", nil
+	}
+	return "", nil
 }
 
 // Definition returns a stored workflow version's parsed definition.
@@ -261,6 +363,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 	if err != nil {
 		return err
 	}
+	scheduled := 0 // steps this decision scheduled, for max_steps_per_run
 	for round := 0; round < maxInlineRounds; round++ {
 		if round > 0 {
 			raw, err := HistoryAfter(ctx, tx, ref.ID, st.Seq())
@@ -286,6 +389,9 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 		// contiguous and replayable.
 		var deferred []func() error
 		for _, ev := range evs {
+			if ev.Type == history.StepScheduled {
+				scheduled++
+			}
 			var paths []pii.Path
 			if p, ok := ev.Payload.(history.ScheduledPayload); ok {
 				if paths, err = s.connectorPIIPaths(ctx, ref.TenantID, p); err != nil {
@@ -313,11 +419,46 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			}
 		}
 		if len(deferred) == 0 {
+			if scheduled > 0 {
+				return s.countSteps(ctx, tx, run, def, scheduled)
+			}
 			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL WHERE id = $1`, ref.ID)
 			return err
 		}
 	}
 	return fmt.Errorf("run %s: decision did not settle after %d rounds", ref.ID, maxInlineRounds)
+}
+
+// countSteps records a decision's scheduled steps and fails the run when
+// they take it past its tenant's max_steps_per_run (a runaway foreach or
+// retry loop). The failure is appended after decide's batch, as a
+// cancellation is, and ends the run in the same transaction, so no step
+// beyond the cap ever reaches a worker.
+func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int) error {
+	var total int
+	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2
+		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, scheduled).Scan(&total); err != nil {
+		return err
+	}
+	lim, err := s.limitsTx(ctx, tx, run.ref.TenantID)
+	if err != nil || lim.MaxStepsPerRun <= 0 || total <= lim.MaxStepsPerRun {
+		return err
+	}
+	s.folds.drop(run.ref.ID)
+	msg := fmt.Sprintf("the run scheduled %d steps, more than its plan allows one run (max_steps_per_run %d)", total, lim.MaxStepsPerRun)
+	if _, err := appendEvent(ctx, tx, run.ref.ID, history.RunFailed, "", 0,
+		history.RunFailedPayload{Error: history.Error{Kind: "limit", Message: msg, Next: "fail"}}, history.OriginScheduler); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq WHERE id = $1`, run.ref.ID); err != nil {
+		return err
+	}
+	telemetry.LimitHits.WithLabelValues("max_steps_per_run").Inc()
+	if _, err := tx.Exec(ctx, `INSERT INTO tenant_limit_hits (tenant_id, limit_name, day) VALUES ($1, 'max_steps_per_run', (now() AT TIME ZONE 'UTC')::date)
+		ON CONFLICT (tenant_id, limit_name, day) DO UPDATE SET hits = tenant_limit_hits.hits + 1, last_at = now()`, run.ref.TenantID); err != nil {
+		return err
+	}
+	return s.endRun(ctx, tx, run, def, "failed")
 }
 
 // applyEffects performs the side effects an event implies: tasks, timers,

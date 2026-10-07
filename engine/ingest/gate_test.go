@@ -13,9 +13,9 @@ func TestTenantGateEvicts(t *testing.T) {
 	g := &tenantGate{entries: map[uuid.UUID]*gateEntry{}}
 	now := time.Now()
 	known := uuid.New()
-	g.entries[known] = &gateEntry{lim: rate.NewLimiter(1, 1), checked: now, seen: now}
+	g.entries[known] = &gateEntry{hard: rate.NewLimiter(1, 1), checked: now, seen: now}
 	idle := uuid.New()
-	g.entries[idle] = &gateEntry{lim: rate.NewLimiter(1, 1), checked: now, seen: now.Add(-time.Hour)}
+	g.entries[idle] = &gateEntry{hard: rate.NewLimiter(1, 1), checked: now, seen: now.Add(-time.Hour)}
 	for len(g.entries) < gateMax {
 		g.entries[uuid.New()] = &gateEntry{checked: now, seen: now} // made-up ids
 	}

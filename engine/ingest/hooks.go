@@ -57,8 +57,10 @@ type Handler struct {
 	Connections Connections
 	Registry    *connector.Registry
 	Logger      *slog.Logger
-	// Rate and Burst are each tenant's hard ingest ceiling; beyond it
-	// deliveries get 429 with Retry-After (spec 8.3).
+	// Rate and Burst, when set, replace every tenant's hard ingest ceiling
+	// (tests). Otherwise each tenant's limits apply (spec 8.3, 16): above
+	// its soft rate deliveries are accepted and their runs queued; above
+	// its ceiling they get 429 with Retry-After.
 	Rate  rate.Limit
 	Burst int
 
@@ -70,7 +72,6 @@ type Handler struct {
 }
 
 const (
-	maxBody         = 1 << 20
 	budget          = 5 * time.Second // spec 8.2
 	signatureHeader = "X-Taskiem-Signature"
 )
@@ -79,9 +80,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.once.Do(func() {
 		if h.Logger == nil {
 			h.Logger = slog.Default()
-		}
-		if h.Rate == 0 {
-			h.Rate, h.Burst = 50, 200
 		}
 		h.exprs = expr.MustNewTriggerEngine("body", "headers", "query", "item")
 		h.wdExprs = expr.MustNew()
@@ -122,14 +120,25 @@ func (h *Handler) unavailable(w http.ResponseWriter, r *http.Request, err error)
 	replyErr(w, http.StatusServiceUnavailable, "not recorded; retry")
 }
 
-// receive does the checks shared by both routes: tenant, ceiling, body.
-func (h *Handler) receive(w http.ResponseWriter, r *http.Request) (tenant uuid.UUID, env string, body []byte, ok bool) {
+// delivery is what receive learned about a request.
+type delivery struct {
+	tenant uuid.UUID
+	env    string
+	body   []byte
+	// throttled: the tenant is above its soft ingest rate, so runs this
+	// delivery starts wait as queued (spec 8.3). Signals are not held back.
+	throttled bool
+}
+
+// receive does the checks shared by both routes: tenant, ceiling, soft
+// limit, body size.
+func (h *Handler) receive(w http.ResponseWriter, r *http.Request) (d delivery, ok bool) {
 	tenant, err := uuid.Parse(chi.URLParam(r, "tenant"))
 	if err != nil {
 		replyErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	l, err := h.limiter(r.Context(), tenant)
+	g, err := h.gate(r.Context(), tenant)
 	switch {
 	case errors.Is(err, errBusy):
 		w.Header().Set("Retry-After", "1")
@@ -138,30 +147,45 @@ func (h *Handler) receive(w http.ResponseWriter, r *http.Request) (tenant uuid.U
 	case err != nil:
 		h.unavailable(w, r, err)
 		return
-	case l == nil:
+	case g.hard == nil:
 		replyErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !l.Allow() {
+	if !g.hard.Allow() {
+		h.Store.LimitHit(r.Context(), tenant, "ingest_ceiling")
 		w.Header().Set("Retry-After", "1")
-		replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
+		reply(w, http.StatusTooManyRequests, map[string]string{"error": "ingest rate exceeded", "code": "rate_limited"})
 		return
 	}
-	body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+	d.throttled = !g.soft.Allow()
+	max := int64(g.maxBody)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, max))
 	if err != nil {
+		h.Store.LimitHit(r.Context(), tenant, "max_payload_bytes")
 		replyErr(w, http.StatusRequestEntityTooLarge, "body too large")
 		return
 	}
-	env = r.URL.Query().Get("env")
-	if env == "" {
-		env = "prod"
+	d.tenant, d.body = tenant, body
+	d.env = r.URL.Query().Get("env")
+	if d.env == "" {
+		d.env = "prod"
 	}
-	return tenant, env, body, true
+	return d, true
 }
 
-// tenantGate holds the ingest limiter of each tenant that exists. It is
+// limited answers a start refused by a tenant limit: 429 with a code and,
+// when waiting helps, Retry-After. Nothing was recorded for the run.
+func limited(w http.ResponseWriter, le *runtime.LimitError) {
+	if le.RetryAfter > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(le.RetryAfter.Round(time.Second).Seconds())))
+	}
+	reply(w, http.StatusTooManyRequests, map[string]string{"error": le.Message, "code": le.Code, "limit": le.Limit})
+}
+
+// tenantGate holds the ingest limiters of each tenant that exists. It is
 // bounded, and forgets idle tenants, so deliveries to made-up tenant ids
-// cost a rate-limited lookup and no memory that lasts.
+// cost a rate-limited lookup and no memory that lasts. Limiters are per
+// process: with several edge replicas a tenant's rates apply to each.
 type tenantGate struct {
 	mu      sync.Mutex
 	entries map[uuid.UUID]*gateEntry
@@ -169,9 +193,38 @@ type tenantGate struct {
 }
 
 type gateEntry struct {
-	lim     *rate.Limiter // nil: no such tenant
+	hard    *rate.Limiter // the ceiling; nil: no such tenant
+	soft    *rate.Limiter // the soft ingest rate
+	maxBody int
 	checked time.Time
 	seen    time.Time
+}
+
+// rateOf turns a limit into a limiter's rate; 0 is no limit.
+func rateOf(perSecond float64, burst int) (rate.Limit, int) {
+	if perSecond <= 0 {
+		return rate.Inf, 0
+	}
+	return rate.Limit(perSecond), max(burst, 1)
+}
+
+func (e *gateEntry) apply(l runtime.Limits, hardRate rate.Limit, hardBurst int) {
+	if hardRate == 0 {
+		hardRate, hardBurst = rateOf(l.IngestCeiling, l.IngestCeilingBurst)
+	}
+	softRate, softBurst := rateOf(l.IngestRate, l.IngestBurst)
+	if e.hard == nil {
+		e.hard, e.soft = rate.NewLimiter(hardRate, hardBurst), rate.NewLimiter(softRate, softBurst)
+	} else {
+		e.hard.SetLimit(hardRate)
+		e.hard.SetBurst(hardBurst)
+		e.soft.SetLimit(softRate)
+		e.soft.SetBurst(softBurst)
+	}
+	e.maxBody = l.MaxPayloadBytes
+	if e.maxBody <= 0 || e.maxBody > runtime.MaxPayload {
+		e.maxBody = runtime.MaxPayload
+	}
 }
 
 const (
@@ -184,8 +237,9 @@ const (
 // errBusy: too many unknown tenants are being looked up; retry shortly.
 var errBusy = errors.New("ingest: too many tenant lookups")
 
-// limiter returns the tenant's limiter, or nil if there is no such tenant.
-func (h *Handler) limiter(ctx context.Context, tenant uuid.UUID) (*rate.Limiter, error) {
+// gate returns the tenant's limiters (a copy; hard is nil if there is no
+// such tenant). Its limits are re-read every gateTTL.
+func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error) {
 	g := &h.tenants
 	now := time.Now()
 	g.mu.Lock()
@@ -197,19 +251,25 @@ func (h *Handler) limiter(ctx context.Context, tenant uuid.UUID) (*rate.Limiter,
 	if e != nil && now.Sub(e.checked) < gateTTL {
 		e.seen = now
 		g.mu.Unlock()
-		return e.lim, nil
+		return *e, nil
 	}
 	allowed := g.lookups.Allow()
 	g.mu.Unlock()
 	if !allowed {
-		return nil, errBusy
+		return gateEntry{}, errBusy
 	}
 	var exists bool
 	err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE id = $1)`, tenant).Scan(&exists)
 	})
 	if err != nil {
-		return nil, err
+		return gateEntry{}, err
+	}
+	var lim runtime.Limits
+	if exists {
+		if lim, err = h.Store.LimitsFor(ctx, tenant); err != nil {
+			return gateEntry{}, err
+		}
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -221,13 +281,12 @@ func (h *Handler) limiter(ctx context.Context, tenant uuid.UUID) (*rate.Limiter,
 		g.entries[tenant] = e
 	}
 	e.checked, e.seen = now, now
-	switch {
-	case !exists:
-		e.lim = nil
-	case e.lim == nil:
-		e.lim = rate.NewLimiter(h.Rate, h.Burst)
+	if !exists {
+		e.hard, e.soft = nil, nil
+	} else {
+		e.apply(lim, h.Rate, h.Burst)
 	}
-	return e.lim, nil
+	return *e, nil
 }
 
 // evict makes room: idle tenants first, then unknown ones, then any.
@@ -241,7 +300,7 @@ func (g *tenantGate) evict(now time.Time) {
 		if len(g.entries) < gateMax {
 			return
 		}
-		if e.lim == nil {
+		if e.hard == nil {
 			delete(g.entries, id)
 		}
 	}
@@ -330,10 +389,11 @@ type webhookTrigger struct {
 func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
-	tenant, env, body, ok := h.receive(w, r)
+	d, ok := h.receive(w, r)
 	if !ok {
 		return
 	}
+	tenant, env, body := d.tenant, d.env, d.body
 	path := "/" + chi.URLParam(r, "*")
 	var t webhookTrigger
 	err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -384,16 +444,25 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	ref, created, err := h.Store.StartRun(ctx, runtime.StartRequest{
+	st, err := h.Store.Start(ctx, runtime.StartRequest{
 		TenantID: tenant, WorkflowID: t.workflow, Version: t.version, Environment: env,
 		Trigger:   trigger,
 		StartedBy: "webhook:" + path, TriggerID: "webhook/" + t.workflow.String() + "/" + env, DedupKey: dedup,
+		Throttled: d.throttled,
 	})
+	if le, ok := runtime.IsLimit(err); ok {
+		limited(w, le)
+		return
+	}
 	if err != nil {
 		h.unavailable(w, r, err)
 		return
 	}
-	reply(w, http.StatusAccepted, map[string]any{"run_id": ref.ID, "duplicate": !created})
+	out := map[string]any{"run_id": st.Ref.ID, "duplicate": !st.Created}
+	if st.Queued {
+		out["queued"] = true
+	}
+	reply(w, http.StatusAccepted, out)
 }
 
 // connectorEvent handles a provider webhook declared in a connector
@@ -403,10 +472,11 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
-	tenant, env, body, ok := h.receive(w, r)
+	d, ok := h.receive(w, r)
 	if !ok {
 		return
 	}
+	tenant, env, body := d.tenant, d.env, d.body
 	ref, name := chi.URLParam(r, "connector"), chi.URLParam(r, "trigger")
 	reg, err := h.Registry.For(ctx, tenant.String())
 	if err != nil {
@@ -573,10 +643,18 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 			if s.connection != nil && *s.connection != connection {
 				continue
 			}
+			// Signals above were delivered whatever the tenant's limits; a
+			// refused start fails the delivery so the provider retries, and
+			// the retry's signal is recognised as a duplicate.
 			run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
 				TenantID: tenant, WorkflowID: s.workflow, Version: s.version, Environment: env,
 				Trigger: trig, StartedBy: "connector:" + ref, TriggerID: "event/" + s.workflow.String() + "/" + env, DedupKey: dedup,
+				Throttled: d.throttled,
 			})
+			if le, ok := runtime.IsLimit(err); ok {
+				limited(w, le)
+				return
+			}
 			if err != nil {
 				h.unavailable(w, r, err)
 				return
@@ -612,10 +690,11 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) connectorHandshake(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
-	tenant, env, _, ok := h.receive(w, r)
+	d, ok := h.receive(w, r)
 	if !ok {
 		return
 	}
+	tenant, env := d.tenant, d.env
 	ref, name := chi.URLParam(r, "connector"), chi.URLParam(r, "trigger")
 	reg, err := h.Registry.For(ctx, tenant.String())
 	if err != nil {

@@ -36,6 +36,8 @@ type Scheduler struct {
 // TickStats reports one tick's work.
 type TickStats struct {
 	TimersFired, LeasesRecovered, RunsSwept int
+	// RunsAdmitted counts runs held back by tenant limits and let through.
+	RunsAdmitted int
 }
 
 func (s *Scheduler) defaults() {
@@ -86,6 +88,9 @@ func (s *Scheduler) Tick(ctx context.Context) (TickStats, error) {
 	}
 	n, err = s.sweep(ctx)
 	st.RunsSwept = n
+	errs = append(errs, err)
+	n, err = s.Store.AdmitQueued(ctx)
+	st.RunsAdmitted = n
 	errs = append(errs, err)
 	if time.Since(s.lastPurge) > 10*time.Minute {
 		if _, err := s.PurgeExpired(ctx, 500); err != nil {

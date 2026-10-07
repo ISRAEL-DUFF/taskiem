@@ -59,6 +59,14 @@ var (
 	RunsSwept = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_runs_swept_total", Help: "Runs decided by the orchestrator sweep rather than inline.",
 	})
+	// LimitHits has no tenant label, so its series stay few; which tenant
+	// hit a limit is in tenant_limit_hits and the tenant's alerts.
+	LimitHits = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_tenant_limit_hits_total", Help: "Times a tenant reached a plan limit, by limit (ingest_rate and max_running_runs hold runs back; others refuse).",
+	}, []string{"limit"})
+	RunsAdmitted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_runs_admitted_total", Help: "Runs held back by their tenant's limits and admitted later by the scheduler.",
+	})
 )
 
 // QueueCollector reports queue depth and the age of the oldest ready task,
@@ -71,10 +79,19 @@ var (
 	queueAge    = prometheus.NewDesc("taskiem_queue_oldest_ready_seconds", "Age of the oldest ready task.", []string{"queue"}, nil)
 )
 
+var (
+	backlogRuns    = prometheus.NewDesc("taskiem_queued_runs", "Queued runs, by why they wait (tenant: plan limits; workflow: concurrency settings).", []string{"reason"}, nil)
+	backlogTenants = prometheus.NewDesc("taskiem_queued_tenants", "Tenants with queued runs, by reason.", []string{"reason"}, nil)
+	backlogMax     = prometheus.NewDesc("taskiem_queued_runs_max_tenant", "The largest one tenant's queued runs, by reason.", []string{"reason"}, nil)
+)
+
 func (c QueueCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- queueReady
 	ch <- queueLeased
 	ch <- queueAge
+	ch <- backlogRuns
+	ch <- backlogTenants
+	ch <- backlogMax
 }
 
 func (c QueueCollector) Collect(ch chan<- prometheus.Metric) {
@@ -93,6 +110,33 @@ func (c QueueCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(queueReady, prometheus.GaugeValue, float64(ready), q)
 		ch <- prometheus.MustNewConstMetric(queueLeased, prometheus.GaugeValue, float64(leased), q)
 		ch <- prometheus.MustNewConstMetric(queueAge, prometheus.GaugeValue, age, q)
+	}
+	rows.Close()
+	// One series per tenant would grow with the tenants; the total, how
+	// many tenants have a backlog and the largest one stay bounded.
+	brows, err := c.Pool.Query(context.Background(), `SELECT reason, runs, tenants, max_per_tenant FROM taskiem_backlog_stats()`)
+	if err != nil {
+		return
+	}
+	defer brows.Close()
+	seen := map[string]bool{}
+	for brows.Next() {
+		var reason string
+		var runs, tenants, most int64
+		if brows.Scan(&reason, &runs, &tenants, &most) != nil {
+			return
+		}
+		seen[reason] = true
+		ch <- prometheus.MustNewConstMetric(backlogRuns, prometheus.GaugeValue, float64(runs), reason)
+		ch <- prometheus.MustNewConstMetric(backlogTenants, prometheus.GaugeValue, float64(tenants), reason)
+		ch <- prometheus.MustNewConstMetric(backlogMax, prometheus.GaugeValue, float64(most), reason)
+	}
+	for _, reason := range []string{"tenant", "workflow"} {
+		if !seen[reason] {
+			ch <- prometheus.MustNewConstMetric(backlogRuns, prometheus.GaugeValue, 0, reason)
+			ch <- prometheus.MustNewConstMetric(backlogTenants, prometheus.GaugeValue, 0, reason)
+			ch <- prometheus.MustNewConstMetric(backlogMax, prometheus.GaugeValue, 0, reason)
+		}
 	}
 }
 

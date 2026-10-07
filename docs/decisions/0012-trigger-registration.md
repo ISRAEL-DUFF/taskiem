@@ -19,4 +19,17 @@ Date: 2026-10-05 · Status: Accepted
 
 ## Not yet
 
-Soft ingest limits that queue runs (spec 8.3) — Phase 1 enforces the hard per-tenant ceiling (429 with `Retry-After`) only. Polling, database-change, email, WhatsApp, and USSD triggers are later phases.
+~~Soft ingest limits that queue runs (spec 8.3) — Phase 1 enforces the hard per-tenant ceiling (429 with `Retry-After`) only.~~ Done 2026-10-07, see the amendment below. Polling, database-change, email, WhatsApp, and USSD triggers are later phases.
+
+## Amendment 2026-10-07: soft ingest limits and plan caps
+
+Spec 8.3 and 16 are now enforced per tenant (migration 00034, [operations](../operations.md#plan-limits)).
+
+1. **Two rates.** Each tenant has a soft ingest rate and a hard ceiling (platform defaults 20/s burst 100 and 50/s burst 200, `TASKIEM_DEFAULT_*`; operators override per tenant). Above the ceiling a delivery gets 429 with `Retry-After`, as before. Between the two it is verified, deduplicated and recorded like any other and answered 202 with `"queued": true`: the run it starts is stored `queued` (`queue_reason = 'tenant'`) with its `RunStarted`, and nothing is decided until it is admitted. The rate limiters live in each edge process; admission does not.
+2. **Admission is in the database.** Each scheduler tick lists the tenants with held runs (a `SECURITY DEFINER` routing function), and for each one claims its token bucket row (`tenant_admission`, `FOR UPDATE SKIP LOCKED`), refills it at the tenant's soft rate and starts its oldest held runs (`RunAdmitted`, then the first decision), up to its running-runs cap. A held run that then finds its workflow's concurrency taken waits on as an ordinary queued run. Tenants have separate buckets and every tick visits every tenant with a backlog, so one tenant's flood does not delay another's admissions; a restart loses nothing.
+3. **Order.** While a tenant has held runs, its new starts (manual and scheduled too) queue behind them, so the backlog drains first in, first out.
+4. **Signals are never held.** A connector event above the soft rate still delivers its signal to waiting runs at once; only the runs it starts are queued.
+5. **Deduplication first.** The receipt is checked before any limit, so a provider's retry of a queued delivery returns the original run and is not counted again; a start refused by a limit records nothing (no receipt), so the retry after the limit lifts starts it. An accepted delivery is never dropped.
+6. **Refusals.** A full backlog (`max_queued_runs`, default 10,000) answers 429 `backlog_full` with `Retry-After`. Run quotas (`runs_per_day`, `runs_per_month`, UTC, off by default because spec 16 prices plans flat) answer 429 `quota_exceeded` with `Retry-After` until the period ends, for webhooks, connector events and API starts alike; a schedule fire beyond a quota is skipped, logged and counted, and the schedule moves on. Every limit reached is recorded per tenant and day and can alert the tenant (alert rule kind `limit`).
+7. **Why 429 for an exhausted quota, not 402.** Webhook providers retry a 429 (honouring `Retry-After`) and disable endpoints that keep answering other 4xx codes; a 402 would risk losing the endpoint while the tenant sorts out its plan. The `code` field (`quota_exceeded`, `backlog_full`, `rate_limited`, `limit_exceeded`) tells clients which limit it was.
+8. **Workers.** Spec 16.2's per-tenant throughput is enforced where tasks are claimed: `taskiem_claim_tasks` takes tasks round-robin across tenants and never gives a tenant more than its `worker_concurrency` in flight on a queue (default 32), so one tenant's backlog cannot hold every worker slot.
