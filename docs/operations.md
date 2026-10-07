@@ -15,6 +15,8 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `taskiem pools [assign POOL \| unassign] [--tenant TENANT_ID \| --plan PLAN] [--force]` | Lists live workers by pool and queue, queue depth by pool, and every routing; `assign` routes a tenant (with its sub-tenants) or a plan's tenants to a dedicated worker pool, refused while no live worker serves it unless `--force`; `unassign` removes the routing. Audited in the tenant's log as `platform_admin`; every change kept in `worker_pool_changes`. See [cloud](cloud.md#dedicated-worker-pools). |
 | `taskiem audit verify FILE` | Recomputes every hash and link of an audit export (`GET /v1/audit/export`) without the database. Exits non-zero on a broken chain. |
 | `taskiem validate FILE...` | Validates `*.wd.json` definitions and connector manifests. |
+| `taskiem status show\|list\|open\|maintenance\|update\|resolve\|token` | Declares incidents and maintenance on the public status page, recorded with the operator's name; `token NAME` makes an operator token for the admin API. See [reliability](reliability.md#status-page). |
+| `taskiem canary setup\|probe\|run` | Sets up the synthetic end-to-end probe in an internal tenant, runs probes now, or probes forever from outside the cluster. See [reliability](reliability.md#synthetic-canary). |
 | `taskiem healthcheck` | Probes the local API's `/readyz` (for images without a shell). |
 
 ## Roles
@@ -24,10 +26,10 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `api` | REST API (`/v1`), web app (`TASKIEM_WEB_DIR`), the WhatsApp notifier (approval requests, how chat-started runs ended), the USSD notifier (hand-off backstop, outcome SMS, session purge; [USSD](ussd.md)); with `all`, webhooks too (`/hooks`, `/channels/whatsapp`, `/channels/ussd`) | `TASKIEM_LISTEN` (`:8080`) |
 | `edge` | Webhook and connector-event ingest, Git push hooks, the platform WhatsApp number's webhook (`/channels/whatsapp`, [WhatsApp](whatsapp.md)), and USSD aggregators' callbacks (`/channels/ussd`, [USSD](ussd.md)) | `TASKIEM_EDGE_LISTEN` (`:8081`) |
 | `orchestrator` | Decides runs left with undecided events (most decisions are inline) | — |
-| `scheduler` | Timers, lease recovery, the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, partner webhooks ([embedding](embedding.md#6-partner-webhooks)), and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
-| `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`; `container` for container steps, on their own pool with `TASKIEM_CONTAINER_*`, see [container steps](container-steps.md#operator-setup)), for the tenants of its worker pool (`TASKIEM_WORKER_POOL`, [cloud](cloud.md#dedicated-worker-pools)); drains in-flight steps for up to 30 s on shutdown | — |
+| `scheduler` | Timers, lease recovery, the synthetic canary when configured ([reliability](reliability.md#synthetic-canary)), the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, partner webhooks ([embedding](embedding.md#6-partner-webhooks)), and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
+| `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`; `container` for container steps, on their own pool with `TASKIEM_CONTAINER_*`, see [container steps](container-steps.md#operator-setup)), for the tenants of its worker pool (`TASKIEM_WORKER_POOL`, [cloud](cloud.md#dedicated-worker-pools)); drains in-flight steps for up to `TASKIEM_WORKER_DRAIN` (30 s) on shutdown, then releases what it still holds | — |
 
-Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/healthz`) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
+Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`) and a readiness check (`/readyz`, 503 while shutting down) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. On SIGTERM readiness flips first and the process keeps serving for `TASKIEM_SHUTDOWN_DELAY` before it stops ([graceful shutdown](reliability.md#graceful-shutdown)). Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
 
 ## Configuration
 
@@ -74,6 +76,9 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 | `TASKIEM_BYOK_CACHE_TTL` | `5m` | How long a tenant key that depends on a tenant's own key (BYOK) stays unwrapped in memory: the bound on how long revoking it takes. Set on every role ([BYOK](byok.md#operators)) |
 | `TASKIEM_KEY_CHECK_INTERVAL`, `TASKIEM_KEY_DESTROY_AFTER` | `1m`, `24h` | How often the scheduler's key job checks tenants' own keys, re-wraps after rotations and resumes parked steps; how long a retired, unused tenant key version is kept before its material is destroyed |
 | `TASKIEM_BYOK_ALLOW_PRIVATE` | off | Let tenants' own KMS addresses resolve to private ranges. Dedicated single-tenant deployments only |
+| `TASKIEM_SHUTDOWN_DELAY`, `TASKIEM_WORKER_DRAIN` | `0`, `30s` | On SIGTERM: how long to keep serving after readiness flips (set it above your load balancer's deregistration time; the chart sets 10s), and how long workers let in-flight steps finish before releasing them ([graceful shutdown](reliability.md#graceful-shutdown)) |
+| `TASKIEM_STATUS_PAGE`, `TASKIEM_STATUS_CANARY`, `TASKIEM_STATUS_TOKENS` | on, on, — | The public status page on the `api` role; whether it shows the canary's results; operators' admin tokens as `name:sha256hex,...` ([status page](reliability.md#status-page)) |
+| `TASKIEM_CANARY_HOOK_URL`, `TASKIEM_CANARY_SECRET`, `TASKIEM_CANARY_API_URL`, `TASKIEM_CANARY_API_KEY`, `TASKIEM_CANARY_INTERVAL`, `TASKIEM_CANARY_TIMEOUT` | —, —, `TASKIEM_PUBLIC_URL`, —, `1m`, `1m` | The synthetic canary, run by the `scheduler` role when the hook URL is set; `taskiem canary setup` prints the first four. Keep the secret and key in the Secret ([canary](reliability.md#synthetic-canary)) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OpenTelemetry trace export (OTLP/HTTP); standard `OTEL_*` variables apply. |
 
 ## Database roles
@@ -113,7 +118,15 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
 | `taskiem_runs_admitted_total` | — |
 | `taskiem_signups_total` | outcome (`created`, `rate_limited`, `blocked_domain`, `invalid`, `exists`, `honeypot`) |
 | `taskiem_onboarding_first_run_seconds` | — (a histogram: signup to a self-serve tenant's first successful run, once per tenant; gate G4 is the share at or under 900 s, [onboarding](onboarding.md#measuring-gate-g4)) |
+| `taskiem_step_dispatch_delay_seconds` | queue (a histogram: ready to claimed, database clock; SLO `step_dispatch`) |
+| `taskiem_run_start_seconds` | — (a histogram: trigger accepted to first worker step claimed; SLO `run_start`) |
+| `taskiem_scheduler_lateness_seconds` | kind (`timer`, `schedule`; SLO `scheduler_timeliness`) |
+| `taskiem_scheduler_last_tick_timestamp_seconds` | mode (`scheduler`, `sweep`) |
+| `taskiem_draining`, `taskiem_leases_released_total` | — (shutdown: 1 while draining; leases handed back instead of left to expire) |
+| `taskiem_canary_probes_total`, `taskiem_canary_duration_seconds`, `taskiem_canary_last_success_timestamp_seconds` | result (`ok`, `accept`, `complete`, `output`); phase (`accept`, `complete`) |
 | `taskiem_tenant_key_checks_failed_total` | wrapped_by (`customer`: a tenant's own key, BYOK; `platform`: Taskiem's KMS). Which tenant is in the logs and the tenant's audit log ([BYOK](byok.md#when-the-key-is-unavailable)) |
+
+**SLOs.** The recording rules, burn-rate alerts and dashboard built on these metrics are in `deploy/prometheus` and `deploy/grafana` (or the chart's `prometheusRule` and `grafanaDashboard`), generated from `engine/slo`; definitions, alerts and runbooks are in [reliability](reliability.md).
 
 **Contract drift.** After every successful connector call the worker compares the output with the action's declared output schema (`engine/drift`). A departure (a field of another type, a value outside an enum, a required field missing) is recorded per tenant (`connector_drift`; tenants see it under Connections), counted in `taskiem_connector_drift_total`, and logged at warning level the first time. The step still completes. Alert on any increase for built-in connectors: it means a provider changed its API and the connector needs updating.
 
