@@ -50,12 +50,18 @@ var ErrKeyUnavailable = errors.New("tenant key unavailable")
 // destroyed (nothing should still reference it).
 var ErrKeyDestroyed = errors.New("tenant key version destroyed")
 
+// cachedKey is an unwrapped key with the stored material it came from. A
+// cache hit needs the row to hold the same material, so an entry made in a
+// transaction that rolled back (or a row changed since) is never used.
 type cachedKey struct {
-	key []byte
-	exp time.Time // zero: until the process ends
+	key     []byte
+	wrapped string
+	exp     time.Time // zero: until the process ends
 }
 
-func (c cachedKey) valid(now time.Time) bool { return c.exp.IsZero() || now.Before(c.exp) }
+func (c cachedKey) valid(now time.Time, wrapped string) bool {
+	return c.wrapped == wrapped && (c.exp.IsZero() || now.Before(c.exp))
+}
 
 type cachedProvider struct {
 	credentials string // the sealed credentials it was built from
@@ -147,11 +153,13 @@ func (v *Vault) newKEK(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, version
 		tenant, version, wrapped, v.RootKey, byokID); err != nil {
 		return 0, nil, err
 	}
-	v.keks.Store(v.kekCacheKey(tenant, version), cachedKey{key: kek, exp: exp})
+	v.keks.Store(v.kekCacheKey(tenant, version), cachedKey{key: kek, wrapped: wrapped, exp: exp})
 	return version, kek, nil
 }
 
-// kek returns tenant key version, from the cache or unwrapped.
+// kek returns tenant key version, from the cache or unwrapped. The row is
+// read either way (one indexed query), so a destroyed or changed version is
+// never served from memory.
 func (v *Vault) kek(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, version int) ([]byte, error) {
 	c, err := v.kekEntry(ctx, tx, tenant, version)
 	return c.key, err
@@ -159,9 +167,6 @@ func (v *Vault) kek(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, version in
 
 func (v *Vault) kekEntry(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, version int) (cachedKey, error) {
 	now := v.now()
-	if k, ok := v.keks.Load(v.kekCacheKey(tenant, version)); ok && k.(cachedKey).valid(now) {
-		return k.(cachedKey), nil
-	}
 	var wrapped, kmsKey string
 	var byokID *uuid.UUID
 	var destroyed *time.Time
@@ -172,10 +177,13 @@ func (v *Vault) kekEntry(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, versi
 	if destroyed != nil {
 		return cachedKey{}, fmt.Errorf("version %d: %w", version, ErrKeyDestroyed)
 	}
+	if k, ok := v.keks.Load(v.kekCacheKey(tenant, version)); ok && k.(cachedKey).valid(now, wrapped) {
+		return k.(cachedKey), nil
+	}
 	if until, ok := v.failing.Load(tenant); ok && now.Before(until.(time.Time)) {
 		return cachedKey{}, fmt.Errorf("%w: unwrapping failed moments ago; retrying shortly", ErrKeyUnavailable)
 	}
-	c := cachedKey{}
+	c := cachedKey{wrapped: wrapped}
 	if byokID != nil {
 		p, err := v.provider(ctx, tx, tenant, *byokID)
 		if err != nil {
@@ -185,7 +193,8 @@ func (v *Vault) kekEntry(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, versi
 		if err != nil {
 			return cachedKey{}, v.unavailable(tenant, err)
 		}
-		wrapped, c.exp = string(inner), now.Add(v.ttl())
+		c.exp = now.Add(v.ttl())
+		wrapped = string(inner)
 	}
 	kek, err := v.KMS.Decrypt(ctx, kmsKey, wrapped)
 	if err != nil {
@@ -336,12 +345,13 @@ func pseudonymAAD(tenant uuid.UUID) []byte {
 // material, which is what subject ids were keyed with before migration
 // 00100, and seals it under the current tenant key.
 func (v *Vault) pseudonymKey(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]byte, error) {
-	if c, ok := v.pseudo.Load(tenant); ok && c.(cachedKey).valid(v.now()) {
-		return c.(cachedKey).key, nil
-	}
 	var wrapped []byte
 	var ver int
 	err := tx.QueryRow(ctx, `SELECT wrapped_key, kek_version FROM tenant_pseudonym_keys WHERE tenant_id = $1`, tenant).Scan(&wrapped, &ver)
+	stored := fmt.Sprintf("%d:%x", ver, wrapped)
+	if c, ok := v.pseudo.Load(tenant); ok && err == nil && c.(cachedKey).valid(v.now(), stored) {
+		return c.(cachedKey).key, nil
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		cur, kek, err := v.currentKEK(ctx, tx, tenant) // creates version 1 for a new tenant
 		if err != nil {
@@ -371,7 +381,7 @@ func (v *Vault) pseudonymKey(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (
 	if err != nil {
 		return nil, fmt.Errorf("unwrap pseudonym key: %w", err)
 	}
-	v.pseudo.Store(tenant, cachedKey{key: key, exp: c.exp})
+	v.pseudo.Store(tenant, cachedKey{key: key, wrapped: stored, exp: c.exp})
 	return key, nil
 }
 
