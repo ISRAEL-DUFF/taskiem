@@ -1909,3 +1909,32 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "whatsapp@1": "whatsapp",
   "youverify@1": "youverify",
 };
+
+/** The actions each helper has: any other action is generated as connector(...). */
+export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
+  "africastalking@1": ["fetch_messages", "get_airtime_status", "get_balance", "send_airtime", "send_sms"],
+  "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
+  "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
+  "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
+  "flutterwave@1": ["get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "resolve_account", "transfer", "verify_payment"],
+  "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
+  "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
+  "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
+  "iswallet@1": ["get_balance", "get_payout", "list_banks", "name_enquiry", "payout", "transfer"],
+  "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
+  "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
+  "mono@1": ["cancel_mandate", "check_mandate_balance", "create_customer", "create_mandate", "debit_mandate", "exchange_token", "get_account", "get_balance", "get_debit", "get_identity", "get_income_records", "get_mandate", "get_statement", "get_statement_pdf", "initiate_account_linking", "initiate_mandate", "initiate_payment", "initiate_reauthorisation", "list_banks", "list_transactions", "pause_mandate", "reinstate_mandate", "request_creditworthiness", "request_income", "unlink_account", "verify_payment"],
+  "mysql@1": ["execute", "query"],
+  "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
+  "paystack@1": ["check_balance", "transfer", "verify_charge", "verify_transfer"],
+  "postgres@1": ["execute", "query"],
+  "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
+  "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
+  "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
+  "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
+  "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
+  "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
+  "termii@1": ["check_balance", "send_sms"],
+  "whatsapp@1": ["get_phone_number", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
+  "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
+};

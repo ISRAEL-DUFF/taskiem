@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"path"
 	"path/filepath"
 	"strings"
@@ -201,13 +202,16 @@ func Indent(doc []byte) ([]byte, error) {
 }
 
 const generateEntry = `import { generate } from "@taskiem/sdk";
-import { CONNECTOR_HELPERS } from "@taskiem/connectors";
-export default (def) => generate(def, { connectors: CONNECTOR_HELPERS });`
+import { CONNECTOR_ACTIONS, CONNECTOR_HELPERS } from "@taskiem/connectors";
+export default (def) => generate(def, { connectors: CONNECTOR_HELPERS, actions: CONNECTOR_ACTIONS });`
 
 // Generate prints a definition as flow code.
 func Generate(ctx context.Context, doc []byte) (string, error) {
 	if !json.Valid(doc) {
 		return "", fmt.Errorf("%w: definition is not JSON", ErrCompile)
+	}
+	if err := exactNumbers(doc); err != nil {
+		return "", err
 	}
 	def := json.RawMessage(doc) // key order matters to the generated code
 	script, err := bundle(generateEntry, "", false)
@@ -223,4 +227,46 @@ func Generate(ctx context.Context, doc []byte) (string, error) {
 		return "", fmt.Errorf("%w: generation returned %T", ErrCompile, out)
 	}
 	return code, nil
+}
+
+// exactNumbers refuses a definition holding a number that code cannot carry
+// back unchanged. JavaScript has one number type: an integer beyond 2^53 loses
+// digits, and an integral number written as a double (2.0, 1e5) comes back as
+// an int, which the engine treats differently.
+func exactNumbers(doc []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(doc))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return fmt.Errorf("%w: %w", ErrCompile, err)
+	}
+	var walk func(path string, v any) error
+	walk = func(path string, v any) error {
+		switch t := v.(type) {
+		case map[string]any:
+			for k, c := range t {
+				if err := walk(path+"/"+k, c); err != nil {
+					return err
+				}
+			}
+		case []any:
+			for i, c := range t {
+				if err := walk(fmt.Sprintf("%s/%d", path, i), c); err != nil {
+					return err
+				}
+			}
+		case json.Number:
+			if i, err := t.Int64(); err == nil {
+				if i > 1<<53 || i < -(1<<53) {
+					return fmt.Errorf("%w: %s at %s is too large for flow code to carry exactly; write it as a string", ErrCompile, t, path)
+				}
+				return nil
+			}
+			if f, err := t.Float64(); err == nil && f == math.Trunc(f) && math.Abs(f) < 1e21 {
+				return fmt.Errorf("%w: %s at %s would come back from flow code as an integer; write it without a fraction or exponent, or as a non-integral value", ErrCompile, t, path)
+			}
+		}
+		return nil
+	}
+	return walk("", v)
 }

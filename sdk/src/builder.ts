@@ -333,7 +333,8 @@ export function lowerAt(v: unknown, path: string): unknown {
   if (v !== null && typeof v === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, x] of Object.entries(v)) {
-      if (x !== undefined) out[k] = lowerAt(x, `${path}.${k}`);
+      // defineProperty, so a key named __proto__ stays a plain property.
+      if (x !== undefined) Object.defineProperty(out, k, { value: lowerAt(x, `${path}.${k}`), enumerable: true, writable: true, configurable: true });
     }
     return out;
   }

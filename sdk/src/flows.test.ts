@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CONNECTOR_HELPERS } from "./connectors.gen.js";
+import { CONNECTOR_ACTIONS, CONNECTOR_HELPERS } from "./connectors.gen.js";
 import { generate, type Workflow } from "./index.js";
 
 function definitions(dir: string): string[] {
@@ -24,7 +24,7 @@ describe("flows/ code and definitions agree", () => {
     const name = wdPath.split("/flows/")[1];
     it(name ?? wdPath, async () => {
       const def = JSON.parse(readFileSync(wdPath, "utf8"));
-      const code = generate(def, { connectors: CONNECTOR_HELPERS });
+      const code = generate(def, { connectors: CONNECTOR_HELPERS, actions: CONNECTOR_ACTIONS });
       if (process.env.TASKIEM_UPDATE_FLOWS === "1" || !existsSync(codePath)) writeFileSync(codePath, code);
       expect(readFileSync(codePath, "utf8"), `${codePath} is stale: run TASKIEM_UPDATE_FLOWS=1 pnpm --filter @taskiem/sdk test`).toBe(code);
       const mod = (await import(codePath)) as { default: Workflow };

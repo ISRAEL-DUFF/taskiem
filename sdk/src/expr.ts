@@ -516,6 +516,20 @@ export function compileFunction(source: string): string {
   return printCel(lower(fn.body, scope));
 }
 
+/**
+ * A number in code, typed by its value: integral is a CEL int, anything else
+ * a double. Its source text is not used, since bundling rewrites it (100000
+ * becomes 1e5, 2.0 becomes 2), and a JavaScript number has no int or double.
+ */
+function number(v: number): Node {
+  if (!Number.isFinite(v)) throw new ExpressionError("non-finite numbers are not supported");
+  if (Number.isInteger(v)) {
+    if (!Number.isSafeInteger(v)) throw new ExpressionError(`${v} is too large to be exact in code; write the expression as a CEL string`);
+    return { k: "lit", v, raw: String(v) };
+  }
+  return { k: "lit", v, double: true, raw: String(v) };
+}
+
 class Scope {
   vars = new Set<string>();
   constructor(readonly param: Param) {}
@@ -529,7 +543,7 @@ class Scope {
 function lower(n: Node, s: Scope): Node {
   switch (n.k) {
     case "lit":
-      return n;
+      return typeof n.v === "number" ? number(n.v) : n;
     case "paren":
       return lower(n.x, s);
     case "ident": {

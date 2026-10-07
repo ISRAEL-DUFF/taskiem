@@ -11,6 +11,8 @@ import type { Step, WorkflowDefinition } from "./wd.js";
 export interface CodegenOptions {
   /** Connector refs with generated helpers, such as { "iswallet@1": "iswallet" }. */
   connectors?: Record<string, string>;
+  /** The actions each helper has (CONNECTOR_ACTIONS). Without it, any action named like an identifier is assumed to exist. */
+  actions?: Record<string, readonly string[]>;
   /** Module the SDK is imported from (default "@taskiem/sdk"). */
   sdkModule?: string;
   /** Module connector helpers are imported from (default "@taskiem/connectors"). */
@@ -21,7 +23,7 @@ const WIDTH = 100;
 const IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 export function generate(def: WorkflowDefinition, opts: CodegenOptions = {}): string {
-  const g = new Gen(opts.connectors ?? {});
+  const g = new Gen(opts.connectors ?? {}, opts.actions);
   const header: Record<string, unknown> = { id: def.id };
   if (def.version !== 1) header.version = def.version;
   header.name = def.name;
@@ -56,7 +58,17 @@ class Raw {
 class Gen {
   sdk = new Set<string>();
   conns = new Set<string>();
-  constructor(readonly connectors: Record<string, string>) {}
+  constructor(
+    readonly connectors: Record<string, string>,
+    readonly actions?: Record<string, readonly string[]>,
+  ) {}
+
+  /** Whether helper.action(...) exists and builds this connector step. */
+  hasHelper(ref: string, action: string): boolean {
+    if (!Object.hasOwn(this.connectors, ref) || !IDENT.test(action)) return false;
+    if (this.actions !== undefined) return Object.hasOwn(this.actions, ref) && (this.actions[ref] ?? []).includes(action);
+    return !(action in Object.prototype);
+  }
 
   use(name: string) {
     this.sdk.add(name);
@@ -131,7 +143,7 @@ class Gen {
         const action = s.action as string;
         const helper = this.connectors[ref];
         const extraArg = Object.keys(extra).length > 0 ? extra : undefined;
-        if (helper !== undefined && IDENT.test(action)) {
+        if (helper !== undefined && this.hasHelper(ref, action)) {
           this.conns.add(helper);
           return call(`${helper}.${action}`, optional(s.input), extraArg);
         }
@@ -218,7 +230,9 @@ class Gen {
       if (fits(flat, indent)) return flat;
       return `[\n${items.map((x) => inner + x).join(",\n")},\n${indent}]`;
     }
-    const entries = Object.entries(v as Record<string, unknown>).map(([k, x]) => `${IDENT.test(k) ? k : JSON.stringify(k)}: ${this.value(x, inner)}`);
+    // "__proto__": x would set the object's prototype; a computed key is a plain property.
+    const key = (k: string) => (k === "__proto__" ? `["__proto__"]` : IDENT.test(k) ? k : JSON.stringify(k));
+    const entries = Object.entries(v as Record<string, unknown>).map(([k, x]) => `${key(k)}: ${this.value(x, inner)}`);
     if (entries.length === 0) return "{}";
     const flat = `{ ${entries.join(", ")} }`;
     if (fits(flat, indent)) return flat;

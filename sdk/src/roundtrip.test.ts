@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as sdk from "./index.js";
 import * as connectors from "./connectors.gen.js";
-import { CONNECTOR_HELPERS } from "./connectors.gen.js";
+import { CONNECTOR_ACTIONS, CONNECTOR_HELPERS } from "./connectors.gen.js";
 import type { WorkflowDefinition } from "./wd.js";
 
 /** Runs generated flow code (plain JavaScript) and builds its workflow. */
@@ -32,10 +32,10 @@ describe("code round trip", () => {
   for (const f of files) {
     it(`${f.split("/flows/")[1]} builds back to the same definition`, () => {
       const def = JSON.parse(readFileSync(f, "utf8")) as WorkflowDefinition;
-      const code = sdk.generate(def, { connectors: CONNECTOR_HELPERS });
+      const code = sdk.generate(def, { connectors: CONNECTOR_HELPERS, actions: CONNECTOR_ACTIONS });
       expect(evaluate(code)).toEqual(def);
       // Generation is deterministic and stable under a second pass.
-      expect(sdk.generate(evaluate(code), { connectors: CONNECTOR_HELPERS })).toBe(code);
+      expect(sdk.generate(evaluate(code), { connectors: CONNECTOR_HELPERS, actions: CONNECTOR_ACTIONS })).toBe(code);
     });
   }
 });
@@ -76,6 +76,43 @@ describe("builder", () => {
     expect(json.steps[1].config.default.steps[0].id).toBe("small_one");
     expect(json.steps[2].config.branches.map((b: { name: string }) => b.name)).toEqual(["a", "b"]);
     expect(json.steps[2].on_error.steps[0].id).toBe("recover");
-    expect(evaluate(sdk.generate(def, { connectors: CONNECTOR_HELPERS }))).toEqual(def);
+    expect(evaluate(sdk.generate(def, { connectors: CONNECTOR_HELPERS, actions: CONNECTOR_ACTIONS }))).toEqual(def);
+  });
+});
+
+describe("round trip edge cases", () => {
+  const opts = { connectors: CONNECTOR_HELPERS, actions: CONNECTOR_ACTIONS };
+  const base = (steps: unknown[]) => ({ schema: "wd/v1", id: "wf_e", version: 1, name: "e", trigger: { type: "manual" }, steps, settings: {} }) as unknown as WorkflowDefinition;
+
+  it("keeps a key named __proto__ as a plain field", () => {
+    const def = JSON.parse(`{"schema":"wd/v1","id":"wf_e","version":1,"name":"e","trigger":{"type":"manual"},"steps":[{"id":"t","type":"transform","config":{"output":{"__proto__":{"a":1},"b":"=run.id"}}}],"settings":{}}`);
+    const code = sdk.generate(def, opts);
+    expect(code).toContain(`["__proto__"]: { a: 1 }`);
+    expect(evaluate(code)).toEqual(def);
+    expect(Object.keys((evaluate(code).steps[0] as { config: { output: object } }).config.output)).toEqual(["__proto__", "b"]);
+  });
+
+  it("uses connector(...) for an action the helper does not have", () => {
+    for (const action of ["constructor", "toString", "not_in_the_helper"]) {
+      const def = base([{ id: "p", type: "connector", connector: "paystack@1", action, input: { a: 1 } }]);
+      const code = sdk.generate(def, opts);
+      expect(code).toContain(`connector("paystack@1", "${action}"`);
+      expect(evaluate(code)).toEqual(def);
+    }
+    expect(sdk.generate(base([{ id: "p", type: "connector", connector: "paystack@1", action: "transfer", input: {} }]), opts)).toContain("paystack.transfer({})");
+  });
+
+  it("types numbers in code by value, so bundling cannot change them", () => {
+    // What esbuild prints for 100000 and 2.0.
+    expect(sdk.compileFunction("({ trigger }) => trigger.body.amount > 1e5")).toBe("trigger.body.amount > 100000");
+    expect(sdk.compileFunction("({ trigger }) => trigger.body.rate * 2")).toBe("trigger.body.rate * 2");
+    expect(sdk.compileFunction("({ trigger }) => trigger.body.rate * 1.5")).toBe("trigger.body.rate * 1.5");
+    // A CEL double with an integral value, or text code would print otherwise, stays a CEL string.
+    for (const cel of ["=trigger.body.rate * 2.0", "=trigger.body.rate * 1e5", "=trigger.body.rate * 1.50", "=trigger.body.n == 0x10"]) {
+      const def = base([{ id: "t", type: "transform", config: { output: cel } }]);
+      const code = sdk.generate(def, opts);
+      expect(code).toContain(JSON.stringify(cel));
+      expect(evaluate(code)).toEqual(def);
+    }
   });
 });

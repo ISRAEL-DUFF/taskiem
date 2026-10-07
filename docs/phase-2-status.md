@@ -136,6 +136,7 @@ Engine features they needed, all in the connector/v1 contract: `slack_v0`, `quer
 
 | Area | Deliverable | Where |
 | --- | --- | --- |
+| Round trip (G2 criterion 4) | Every definition in the repository and randomly generated ones (every step type, trigger, option and value shape) print as code and compile back in the binary to the same definition, with stable formatting. It found and fixed four losses: bundling rewrote number literals (`100000` → `1e5` compiled as a CEL double), so numbers in code are now typed by value; a `__proto__` key vanished; an action named like an `Object` method (`constructor`) or missing from its helper broke the code; and definitions holding numbers JavaScript cannot carry (`2.0`, integers past 2^53) are now refused with the path rather than changed | `engine/flowcode/roundtrip_test.go`, `sdk/src/expr.ts`, `sdk/src/codegen.ts`, [SDK](sdk.md#code-and-canvas) |
 | Deployment | Distroless non-root image (built and run read-only); Helm chart with split or single-process modes, migration hook, archive volume, PDBs, worker autoscaling, network policies, ServiceMonitor; plain manifests rendered from it and checked in CI | `Dockerfile`, `deploy/helm/taskiem`, `deploy/kubernetes`, [kubernetes](kubernetes.md) |
 
 ## Carried over from Phase 1
