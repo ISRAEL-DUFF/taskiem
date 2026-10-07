@@ -113,7 +113,11 @@ func piiCategory(c string) string {
 // openHistory decrypts sealed values for decide and the worker, inside the
 // transaction, and returns the personal values seen.
 func (s *Store) openHistory(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, hist []history.Event) ([]history.Event, pii.Taint, error) {
-	taint := pii.Taint{}
+	return s.openHistoryInto(ctx, tx, tenant, hist, pii.Taint{})
+}
+
+// openHistoryInto is openHistory adding what it opens to taint.
+func (s *Store) openHistoryInto(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, hist []history.Event, taint pii.Taint) ([]history.Event, pii.Taint, error) {
 	if s.PII == nil {
 		return hist, taint, nil
 	}

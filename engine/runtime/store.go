@@ -34,7 +34,8 @@ type Store struct {
 	// nil stores it in plaintext (development without a vault).
 	PII pii.Cipher
 
-	defs sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
+	defs  sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
+	folds decideCache
 }
 
 // maxInlineRounds bounds decide -> effects -> decide loops in one transaction
@@ -194,8 +195,12 @@ func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 
 // History loads a run's events in order.
 func History(ctx context.Context, tx pgx.Tx, runID uuid.UUID) ([]history.Event, error) {
-	rows, err := tx.Query(ctx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
+	return queryHistory(ctx, tx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
 		FROM run_events WHERE run_id = $1 ORDER BY seq`, runID)
+}
+
+func queryHistory(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]history.Event, error) {
+	rows, err := tx.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -250,17 +255,30 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 		_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL WHERE id = $1`, ref.ID)
 		return err
 	}
+	// The history folded so far: from the cache, then only what each round
+	// appends is read and folded in.
+	st, taint, err := s.foldRun(ctx, tx, run)
+	if err != nil {
+		return err
+	}
 	for round := 0; round < maxInlineRounds; round++ {
-		raw, err := History(ctx, tx, ref.ID)
-		if err != nil {
-			return err
+		if round > 0 {
+			raw, err := HistoryAfter(ctx, tx, ref.ID, st.Seq())
+			if err != nil {
+				return err
+			}
+			hist, _, err := s.openHistoryInto(ctx, tx, ref.TenantID, raw, taint)
+			if err != nil {
+				return err
+			}
+			if err := st.Extend(hist); err != nil {
+				s.folds.drop(ref.ID)
+				return err
+			}
 		}
-		hist, taint, err := s.openHistory(ctx, tx, ref.TenantID, raw)
+		evs, err := st.Decide()
 		if err != nil {
-			return err
-		}
-		evs, err := decide.Decide(def, hist)
-		if err != nil {
+			s.folds.drop(ref.ID)
 			return err
 		}
 		// Events that effects cause (a buffered signal delivered to a new

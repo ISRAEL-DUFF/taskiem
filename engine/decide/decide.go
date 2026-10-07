@@ -39,24 +39,11 @@ const MaxPasses = 10_000
 // Decide returns the events that follow from the history. A run that has
 // ended yields nothing.
 func Decide(def *wd.Definition, h []history.Event) ([]NewEvent, error) {
-	if len(h) == 0 || h[0].Type != history.RunStarted {
-		return nil, fmt.Errorf("decide: history must start with RunStarted")
-	}
-	d := &decider{def: def, facts: map[string]*facts{}}
-	if err := d.load(h); err != nil {
+	st, err := Fold(def, h)
+	if err != nil {
 		return nil, err
 	}
-	if d.terminal {
-		return nil, nil
-	}
-	for pass := 0; pass < MaxPasses; pass++ {
-		before := len(d.out)
-		d.run()
-		if len(d.out) == before || d.terminal {
-			return d.out, nil
-		}
-	}
-	return nil, fmt.Errorf("decide: no fixpoint after %d passes", MaxPasses)
+	return st.Decide()
 }
 
 // facts are what the history says about one step instance.
@@ -119,7 +106,6 @@ func (d *decider) f(inst string) *facts {
 }
 
 func (d *decider) load(h []history.Event) error {
-	d.complSeq = map[string]int64{}
 	for _, e := range h {
 		if err := d.apply(e.Type, e.StepID, e.Attempt, e.Payload, e.Seq); err != nil {
 			return fmt.Errorf("decide: event %d (%s): %w", e.Seq, e.Type, err)

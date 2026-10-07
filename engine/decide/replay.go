@@ -15,6 +15,8 @@ import (
 // events before it (build plan: determinism suite). Payloads are compared
 // in canonical JSON, byte for byte.
 func Verify(def *wd.Definition, h []history.Event) error {
+	var st *State
+	folded := 0 // events in st
 	for k := 1; k < len(h); k++ {
 		if h[k].Origin != history.OriginDecide || h[k-1].Origin == history.OriginDecide {
 			continue
@@ -23,7 +25,19 @@ func Verify(def *wd.Definition, h []history.Event) error {
 		for end < len(h) && h[end].Origin == history.OriginDecide {
 			end++
 		}
-		want, err := Decide(def, h[:k])
+		// Fold incrementally: also checks that a State extended event by
+		// event decides as a fresh fold would.
+		var err error
+		if st == nil {
+			st, err = Fold(def, h[:k])
+		} else {
+			err = st.Extend(h[folded:k])
+		}
+		if err != nil {
+			return fmt.Errorf("replay before seq %d: %w", h[k].Seq, err)
+		}
+		folded = k
+		want, err := st.Decide()
 		if err != nil {
 			return fmt.Errorf("replay before seq %d: %w", h[k].Seq, err)
 		}

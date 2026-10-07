@@ -21,6 +21,7 @@ type sim struct {
 	def *wd.Definition
 	h   []history.Event
 	now time.Time
+	st  *State // folded incrementally, as the store's cache does
 }
 
 func newSim(t *testing.T, wdJSON string, trigger any) *sim {
@@ -61,6 +62,18 @@ func (s *sim) decide() []NewEvent {
 	again, err := Decide(s.def, s.h)
 	if err != nil || !reflect.DeepEqual(out, again) {
 		s.t.Fatalf("decide is not deterministic:\n%v\n%v", out, again)
+	}
+	// So must a State folded event by event across the run's life.
+	if s.st == nil {
+		s.st, err = Fold(s.def, s.h)
+	} else {
+		err = s.st.Extend(s.h[s.st.Seq():])
+	}
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	if inc, err := s.st.Decide(); err != nil || !reflect.DeepEqual(out, inc) {
+		s.t.Fatalf("incremental decide differs:\n%v\n%v (%v)", out, inc, err)
 	}
 	for _, e := range out {
 		s.append(e.Type, e.StepID, e.Attempt, e.Payload, history.OriginDecide)

@@ -207,3 +207,37 @@ func TestDeclaredOutputPIIIsSealed(t *testing.T) {
 		t.Error("revealed history lacks the lookup's result")
 	}
 }
+
+// Orchestrators keep a run's folded history between decisions; an erasure
+// in between must not let the erased value reach new events from memory.
+func TestErasureReachesCachedDecisions(t *testing.T) {
+	e := rt.New(t)
+	// The tag derives from the BVN without equalling it, so only a fresh
+	// read of the history (not sealing) can keep the erased value out.
+	flow := strings.Replace(piiFlow, `"input":{"reference":"=steps.copy.output.who"}`, `"input":{"reference":"='ref-' + trigger.body.bvn"}`, 1)
+	wf := e.Publish(t, flow)
+	const bvn = "22298765432"
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"bvn": bvn, "amount": 1, "contacts": []any{map[string]any{"phone": "2348000000000"}}}})
+	subject, err := e.Vault.SubjectFor(ctx, e.Tenant, "bvn", bvn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Vault.Erase(ctx, e.Tenant, subject, "dpo"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Store.DecideApproval(ctx, ref, "ok", "approved", "checker", "web"); err != nil {
+		t.Fatal(err)
+	}
+	var scheduled bool
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.StepScheduled && ev.StepID == "check" {
+			scheduled = true
+			if strings.Contains(string(ev.Payload), bvn) {
+				t.Errorf("the step after erasure was given the erased BVN: %s", ev.Payload)
+			}
+		}
+	}
+	if !scheduled {
+		t.Error("check was not scheduled")
+	}
+}
