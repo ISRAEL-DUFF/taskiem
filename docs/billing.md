@@ -84,7 +84,7 @@ A payment whose verified amount or currency differs from its invoice is recorded
 
 **Changing plans.** An upgrade starts a new period at the new price now, less a credit for the unused part of the current one, and takes effect when paid (at once with a saved card). A downgrade takes effect at the end of the period; it is refused while you use more than the smaller plan allows, with a list of what to remove first (workflows over its count, SSO connections, custom roles, Git connections, embed apps...). Changing plans during the trial just changes the plan you try. Cancelling takes effect at period end and can be undone until then.
 
-**Features** a plan lacks are refused when you set them up (402 `plan_feature_required`): single sign-on and SCIM, custom roles, Git, AI building, embedding (the partner API) and white-label custom domains.
+**Features** a plan lacks are refused when you set them up (402 `plan_feature_required`): single sign-on and SCIM, custom roles, Git, AI building, embedding (the partner API), white-label custom domains and bringing your own key ([BYOK](byok.md); returning to Taskiem's key, rotating and checking need no feature).
 
 ## API
 

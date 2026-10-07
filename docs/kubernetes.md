@@ -145,6 +145,18 @@ If `storage.enabled` is false:
 - audit heads are not anchored outside the database;
 - the scheduler logs a warning about both.
 
+## Dedicated single-tenant deployments
+
+An enterprise customer can have a deployment of its own: the same chart, installed once per customer, with its own namespace (or cluster), database and Secret. Nothing in the chart is specific to this. These settings make it single-tenant and put the customer in control of its keys:
+
+- **One tenant.** Leave `TASKIEM_ALLOW_SIGNUP` off (the default), and create the customer's tenant with `taskiem bootstrap` (step 4 above).
+- **The customer's KMS as the platform key.** Point `TASKIEM_KMS=openbao` and `TASKIEM_OPENBAO_ADDR` at the customer's OpenBao or Vault. Put a token scoped to the transit key `TASKIEM_KMS_KEY` in the Secret as `TASKIEM_OPENBAO_TOKEN`. Every tenant key in the deployment is then wrapped by the customer's key, and revoking that token or disabling the key stops the whole deployment from reading secrets. Rotating it, and what happens when it is unavailable, work as described in [BYOK](byok.md). Per-tenant BYOK still works on top.
+- **A KMS on the customer's private network.** For per-tenant BYOK with a key service that has only a private address, set `config.TASKIEM_BYOK_ALLOW_PRIVATE: "on"`. The platform KMS (`TASKIEM_OPENBAO_ADDR`) is called directly, not through the egress guard, so it does not need this. Never set it on a multi-tenant deployment: it lets tenants' key addresses reach private ranges.
+- **Revocation bound.** `config.TASKIEM_BYOK_CACHE_TTL` (default `5m`) bounds how long a revoked key keeps working in running pods. Set it on every role, which `config` does.
+- **Network.** The chart's NetworkPolicies do not restrict egress. If you add an egress allow-list, include the customer's KMS address.
+
+Infrastructure for dedicated deployments (where they run, who operates them, backups) is outside this chart. See [needs people](needs-people.md#phase-4).
+
 ## Sizing
 
 The defaults are per-role `databasePool` and `resources`. Each pod opens up to `databasePool` connections, plus 2 for loading tenant connectors. Size Postgres `max_connections` to cover (pool + 2) × replicas, summed across roles, with headroom for the migration Job. The defaults need about 170.

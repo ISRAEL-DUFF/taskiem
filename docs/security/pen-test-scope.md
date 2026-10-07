@@ -41,6 +41,7 @@ In order of priority:
 | SSO and provisioning | OIDC and SAML sign-in against a test IdP that the testers control, and SCIM 2.0 at `/scim/v2` |
 | Sandboxes | `code` steps in all three languages, tenant WASM connectors (upload and run), and flow-code compile at `/v1/code/compile` |
 | Egress | HTTP steps, connectors, and alert webhooks, tested as SSRF from a tenant's point of view |
+| Customer keys (BYOK, B17) | `/v1/keys`: a tenant-supplied KMS address as SSRF, recovering or moving another tenant's key credentials, keeping access after a customer revokes its key (beyond the documented cache bound), and making a revocation lose data or send a payment twice ([BYOK](../byok.md)). Use the testers' own OpenBao or cloud KMS |
 | Deployment | The Helm chart's defaults (`deploy/helm/taskiem`): pod security, network policy, the metrics port, the migration job. White-box review of the chart is welcome. |
 | Source code | The full repository, for white-box testing. Testers get read access. |
 

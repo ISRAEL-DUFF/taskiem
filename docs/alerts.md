@@ -28,6 +28,7 @@ Under **Alerts** (`alert.manage`), a tenant chooses where alerts go (channels) a
 | The audit log is anchored | — | anchor |
 | A plan limit is reached (run quota, full backlog, ingest rate, running runs, steps per run...) | — | limit and day; at most one alert per limit per day ([plan limits](operations.md#plan-limits)) |
 | A fix is proposed for a failed run (`repair_proposed`, [AI repair](ai.md#repairing-failed-runs)), or a person must act on one | — | proposal; masked: workflow, environment, class and a link, never the explanation or diff |
+| Your own encryption key is unavailable, or works again (`key_health`, [BYOK](byok.md#when-the-key-is-unavailable)) | — | outage and recovery. Use an email or WhatsApp channel: Slack and webhook channels need their own secret, which is unreadable while the key is |
 
 Run, approval and repair rules can be limited to one environment or workflow. A rule watches from when it was created (or switched back on), so it does not replay history. Thresholds are durations such as `30m`, `4h` or `72h`.
 

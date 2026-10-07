@@ -52,7 +52,7 @@ It does not replace people-task I3 (an independent internal review, [needs-peopl
 | S20 | Ingest | A tenant connector could answer webhooks with HTML on the platform's origin. The edge sent no security headers. | Fixed |
 | S21 | Audit | The application's database role could insert audit rows and move the chain head directly | Fixed |
 | S22 | Privacy | Personal data inside free text (provider error messages) is not sealed | Open: needs a design for redacting tainted substrings without false positives |
-| S23 | Secrets | Key rotation does not re-wrap personal-data subject keys. The pseudonymisation key is tied to tenant key v1. | Open: planned with BYOK (spec 14.1) |
+| S23 | Secrets | Key rotation does not re-wrap personal-data subject keys. The pseudonymisation key is tied to tenant key v1. | Fixed (P4-5, [addendum](#addendum-2026-10-07-bring-your-own-key-phase-4-p4-5)) |
 
 ### Low and informational
 
@@ -67,7 +67,7 @@ It does not replace people-task I3 (an independent internal review, [needs-peopl
 | S30 | Retention purges were not audited | Fixed |
 | S31 | Egress blocklist missed 6to4, Teredo and IPv4-compatible IPv6 ranges | Fixed |
 | S32 | The PostgreSQL connector did not verify server certificates by default | Fixed |
-| S33 | The encryption context binds a secret to its id but not to its environment and name | Open, low: needs database write access to exploit |
+| S33 | The encryption context binds a secret to its id but not to its environment and name | Fixed (P4-5, [addendum](#addendum-2026-10-07-bring-your-own-key-phase-4-p4-5)) |
 | S34 | Tenant code (flow compile, Python checks) runs in the API process with no concurrency limit. Several in-memory caches never evict. | Open, low |
 | S35 | Passkey step-up is not bound to the specific approval. The session token is also returned in the sign-in body. No HSTS header. | Open, informational |
 
@@ -112,7 +112,7 @@ These hold today. Testers should still try them.
   - CEL has a cost limit and uses RE2 for regular expressions.
 - **Encryption.**
   - AES-256-GCM with a fresh data key per value.
-  - Ciphertext is bound to its id and tenant.
+  - Ciphertext is bound to its tenant, environment, name and id (since P4-5; see the addendum).
   - Tenant keys are stored only wrapped by the KMS key.
   - Shredding a subject's key is one-way.
 - **Audit.**
@@ -151,3 +151,25 @@ Open, carried to the next round:
 - With four-eyes publishing on in a sub-tenant, an end user's publish is now a request that the partner (as its key's owner) or a sub-tenant member decides ([embedding](../embedding.md#end-users-and-four-eyes)). The partner mints its end users' tokens, so one partner person could both ask (as an end user) and approve (with the key): four-eyes in a sub-tenant separates the partner's people from its end users, not two partner people from each other.
 - CORS preflights for `/v1/embed/{app}` look the app's origins up in the database without authentication (one indexed read; no per-address limit yet).
 - The partner's run counts across its sub-tenants (`taskiem_partner_usage`) are read without an audit entry: counts only, no sub-tenant data.
+
+## Addendum 2026-10-07: bring your own key (Phase 4, P4-5)
+
+Bring your own key ([BYOK](../byok.md), [decision 0019](../decisions/0019-bring-your-own-key.md), new boundary B17) changes the secrets boundary (B8). The work closed two open findings, each with a regression test:
+
+| # | Status | How | Test |
+| --- | --- | --- | --- |
+| S23 | Fixed | Rotation queues a background re-wrap of every data key, subject key and the pseudonymisation key. The pseudonymisation key is now a key of its own (`tenant_pseudonym_keys`), started from version 1's material so subject ids do not change. Old versions are retired once unused and destroyed after a grace period | `TestBYOKLifecycle` (subject id unchanged and envelopes readable after version 1 is destroyed), `TestTenantsKeysCLI` |
+| S33 | Fixed | Associated data is the tenant, environment, name (or `connection:<id>`) and id (`aad_version` 2). The re-wrap job re-seals older rows in place | `TestBYOKLifecycle` (a renamed row and a row moved to another environment no longer decrypt) |
+
+The BYOK code was reviewed against the same four areas before commit:
+
+| # | Area | Finding | Status |
+| --- | --- | --- | --- |
+| K1 | Secrets | A code step (no retries by default) resumed after a key outage through a plain retry would have failed at once, its retry budget spent by the outage | Fixed before commit: resumptions (`key_restored`, `key_restored_reconcile`) are exempt from the budget and backoff in `decide` (`TestKeyUnavailableParksAndResumes`) |
+| K2 | Secrets | Marking a completed write whose result could not be sealed as "parked, nothing sent" would make the resume send it again | Avoided by design: only failures before the call park as `key_unavailable` (secrets, credentials, client); a result that cannot be sealed takes the crash path (reconcile, or park for a person) |
+| K3 | Egress | A tenant-supplied KMS address is an SSRF vector | Fixed before commit: egress guard, HTTPS only, no redirects, private ranges only with `TASKIEM_BYOK_ALLOW_PRIVATE` (`TestVaultTransit`) |
+| K4 | Secrets | Customer key credentials copied between tenants' rows by someone with database write access | Fixed before commit: tenant and row id are inside the plaintext the platform KMS authenticates (`TestBYOKLifecycle`) |
+| K5 | Authorization | Key operations need only an owner's session: no step-up (passkey or TOTP) | Open, medium. Owners only, every operation audited, leaving still needs the customer's key |
+| K6 | Secrets | Rows sealed under the first encryption context can still be renamed by someone with database write access until the re-wrap job reaches them | Open, low: the job starts at once after migration 00100, in batches of 500 per tenant per pass |
+| K7 | Secrets | Unwrapped tenant keys stay in process memory until the cache entry expires and the garbage collector reuses it (Go does not zero memory) | Accepted, informational: the same as every key in a running process |
+| K8 | Availability | A short KMS blip parks steps until the next key job pass (at most `TASKIEM_KEY_CHECK_INTERVAL`, a minute by default) | Accepted: parking is safe, and **Check now** resumes at once |

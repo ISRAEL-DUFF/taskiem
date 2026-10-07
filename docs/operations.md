@@ -11,6 +11,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `taskiem serve [--role ROLE]` | Runs `api`, `edge`, `orchestrator`, `scheduler`, `worker`, or `all` (default; also `TASKIEM_ROLE`). |
 | `taskiem tenants limits TENANT_ID [--set KEY=VALUE]...` | Shows a tenant's plan limits, usage and recent limit hits; `--set` changes a limit (`default` returns it to the platform default). Audited as `limits.set`. See [plan limits](#plan-limits). |
 | `taskiem tenants partner TENANT_ID [--max-subtenants N] [--subtenant-runs-per-day N] [--subtenant-runs-per-month N] [--disable]` | Makes a tenant a partner, which may create sub-tenants and embed apps through the partner admin API, and sets its partner-wide caps (0: no cap; flags left out keep their value). `--disable` stops it being one: its sub-tenants are kept, unreachable, and their end-user tokens stop. Audited as `partner.enable` and `partner.disable`. See [embedding](embedding.md). |
+| `taskiem tenants keys TENANT_ID [status \| rotate [--wait] \| rewrap \| check]` | Shows a tenant's encryption keys: tenant key versions and what wraps them, its own key's health (BYOK), re-wrapping progress and parked steps. `rotate` adds a tenant key version (`--wait` re-wraps at once), `rewrap` re-wraps now, `check` checks the keys and resumes steps parked while they were unavailable. Audited in the tenant's log as `platform_admin`. See [BYOK](byok.md#operators). |
 | `taskiem audit verify FILE` | Recomputes every hash and link of an audit export (`GET /v1/audit/export`) without the database. Exits non-zero on a broken chain. |
 | `taskiem validate FILE...` | Validates `*.wd.json` definitions and connector manifests. |
 | `taskiem healthcheck` | Probes the local API's `/readyz` (for images without a shell). |
@@ -63,6 +64,9 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 | `ANTHROPIC_API_KEY` | — | Turns AI building on with Claude ([AI](ai.md#configuration)). Keep it in a secret; it is read from the environment only. |
 | `TASKIEM_AI_PROVIDER`, `TASKIEM_AI_MODEL`, `TASKIEM_AI_BASE_URL`, `TASKIEM_AI_API_KEY`, `TASKIEM_AI_EFFORT`, `TASKIEM_AI_MAX_TOKENS`, `TASKIEM_AI_FALLBACKS` | Claude `claude-opus-5-5` when `ANTHROPIC_API_KEY` is set; otherwise off | The model provider for AI building: `anthropic`, `selfhosted` (an OpenAI-compatible endpoint at `TASKIEM_AI_BASE_URL`) or `off`; the model; thinking effort (`high`); max tokens per answer (32000); server-side refusal fallbacks (on). Set on the `api` role. See [AI](ai.md#configuration). |
 | `TASKIEM_BILLING` | `off` | `on` turns plans, subscriptions and naira payments on ([billing](billing.md)); off, every tenant is on the internal `self_hosted` plan (the defaults below, every feature). With it: `TASKIEM_BILLING_PLANS` (`deploy/plans.yaml`), `TASKIEM_BILLING_PROVIDER` (`paystack`), `TASKIEM_BILLING_PAYSTACK_SECRET_KEY`, `TASKIEM_BILLING_FLUTTERWAVE_SECRET_KEY` and `TASKIEM_BILLING_FLUTTERWAVE_WEBHOOK_HASH` (the platform's merchant accounts, from the Secret). Set on the `api` and `scheduler` roles |
+| `TASKIEM_BYOK_CACHE_TTL` | `5m` | How long a tenant key that depends on a tenant's own key (BYOK) stays unwrapped in memory: the bound on how long revoking it takes. Set on every role ([BYOK](byok.md#operators)) |
+| `TASKIEM_KEY_CHECK_INTERVAL`, `TASKIEM_KEY_DESTROY_AFTER` | `1m`, `24h` | How often the scheduler's key job checks tenants' own keys, re-wraps after rotations and resumes parked steps; how long a retired, unused tenant key version is kept before its material is destroyed |
+| `TASKIEM_BYOK_ALLOW_PRIVATE` | off | Let tenants' own KMS addresses resolve to private ranges. Dedicated single-tenant deployments only |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OpenTelemetry trace export (OTLP/HTTP); standard `OTEL_*` variables apply. |
 
 ## Database roles
@@ -99,6 +103,7 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
 | `taskiem_runs_admitted_total` | — |
 | `taskiem_signups_total` | outcome (`created`, `rate_limited`, `blocked_domain`, `invalid`, `exists`, `honeypot`) |
 | `taskiem_onboarding_first_run_seconds` | — (a histogram: signup to a self-serve tenant's first successful run, once per tenant; gate G4 is the share at or under 900 s, [onboarding](onboarding.md#measuring-gate-g4)) |
+| `taskiem_tenant_key_checks_failed_total` | wrapped_by (`customer`: a tenant's own key, BYOK; `platform`: Taskiem's KMS). Which tenant is in the logs and the tenant's audit log ([BYOK](byok.md#when-the-key-is-unavailable)) |
 
 **Contract drift.** After every successful connector call the worker compares the output with the action's declared output schema (`engine/drift`). A departure (a field of another type, a value outside an enum, a required field missing) is recorded per tenant (`connector_drift`; tenants see it under Connections), counted in `taskiem_connector_drift_total`, and logged at warning level the first time. The step still completes. Alert on any increase for built-in connectors: it means a provider changed its API and the connector needs updating.
 

@@ -14,7 +14,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Onboarding | P4-2 | Self-serve signup hardened for the public (email confirmation, limits, abuse checks, trial), getting-started checklist, guided first workflow over the template gallery, in-product help, signup-to-first-run measurement | — | **Done** (code; [what exists](#p4-2-onboarding)); going public needs P4-O1–P4-O4 |
 | Cloud | P4-3 | Nigeria-region production cloud: HA Postgres with synchronous standby, PITR, fixed egress IPs; workers split by queue, dedicated pools, read replicas | 2.3, 15.4 | Planned; needs people (infrastructure, D-items) |
 | Reliability | P4-4 | 99.9% SLO with on-call, status page, incident process | 15.3 | Planned; needs people |
-| Enterprise | P4-5 | BYOK (the `byok` plan feature exists; the key path does not), dedicated single-tenant deployments, white-label tier (built in Phase 3, C2) | 13.4, 14.1 | Planned |
+| Enterprise | P4-5 | BYOK (tenant keys wrapped by the customer's own KMS key: OpenBao/Vault transit, AWS KMS, Google Cloud KMS, Azure Key Vault), background re-wrapping (S23) and secrets bound to environment and name (S33), fail closed with parked steps that resume, dedicated single-tenant deployments (Helm, documented), white-label tier (built in Phase 3, C2) | 13.4, 14.1 | **Done** (code; [what exists](#p4-5-enterprise)); a real customer KMS test and the revocation wording need people (P4-K1, P4-K2) |
 | Ecosystem | P4-6 | Public connector SDK and a submission review process for third-party connectors | 6 | **Done** (code; [what exists](#p4-6-connector-sdk-and-catalogue)); publisher agreement, reviewers and review SLA need people (P4-E1 to P4-E3) |
 | Docs | P4-7 | Public docs site, API reference, connector SDK guide | — | Planned |
 | Trust | P4-8 | Bug bounty, security page, ISO 27001 and SOC 2 Type II preparation | 14.4 | Needs people |
@@ -43,7 +43,7 @@ What is left in billing:
 - **Prices and tiers** (B1) and the real merchant accounts (P4-B2); VAT registration and finance sign-off on invoice content (P4-B3); terms of service (P4-B4).
 - **Bank transfer by dedicated virtual accounts** (Paystack DVA): today bank transfers go through the hosted checkout's transfer channel, verified by webhook or reconciliation.
 - **Plan caps not yet limits**: step throughput in steps per second (spec 16.1; approximated by `worker_concurrency`), environments per tier, container minutes (to map when the container-steps work adds `max_container_minutes_monthly`), and `max_subtenants` enforced at sub-tenant creation (today it only blocks downgrades; operators still set the partner's cap).
-- **BYOK** itself (the plan feature exists).
+- ~~**BYOK** itself (the plan feature exists).~~ Done in P4-5 ([below](#p4-5-enterprise)).
 - PDF invoices (HTML and JSON today), refunds and credit notes (manual today), proration of annual-to-monthly mid-period (scheduled at period end).
 
 ## P4-2: onboarding
@@ -67,6 +67,34 @@ What is left in onboarding:
 - **Cleanup of unconfirmed tenants** (suspend or delete after N days) waits for the abuse policy.
 - **WhatsApp as the entry point** (go-to-market step 2): signing up from WhatsApp, rather than linking a number after a web signup, is not built.
 - A connection test before the first run (`auth.test` in manifests) is not called by the guide yet; a wrong key shows as a failed step on the test run.
+
+## P4-5: enterprise
+
+Done 7 October 2026. Tenant and operator guide: [bring your own key](byok.md); design: [decision 0019](decisions/0019-bring-your-own-key.md); threat model: B8 amended, new boundary [B17](security/threat-model.md); [self-review addendum](security/self-review.md#addendum-2026-10-07-bring-your-own-key-phase-4-p4-5) (S23 and S33 fixed). Migrations 00100 and 00101.
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Key hierarchy | Data key ← tenant key ← platform KMS key ← (with BYOK) the customer's key, stored as `customer.Wrap(platformKMS.Encrypt(root, kek))`, so neither side alone unwraps it and the customer's KMS never sees the tenant key | `engine/secrets/keys.go`, migration 00100 |
+| Providers | `byok.Provider` (`Wrap`, `Unwrap`). Clean-room clients from public API docs, standard library only: OpenBao/Vault transit (token or AppRole, namespaces, private CA added to the roots), AWS KMS (SigV4, encryption context with the tenant), Google Cloud KMS (service-account JWT bearer, AAD with the tenant), Azure Key Vault (`wrapkey`/`unwrapkey` RSA-OAEP-256, client credentials, pinned key version). All calls through the egress guard; private ranges only with `TASKIEM_BYOK_ALLOW_PRIVATE` | `engine/byok` |
+| Onboarding | Validated configuration (400 `invalid_key_config`), a wrap/unwrap round trip of a random canary before anything is stored (422 `key_verification_failed`), credentials sealed by the platform KMS key bound to tenant and row, a new tenant key version under the customer's key, re-wrapping queued; replacing a key in use retires the old one once nothing depends on it | `engine/secrets/byok.go` |
+| Rotation and re-wrapping (S23) | Rotation adds a version and queues the tenant; the key job re-wraps data keys, subject keys and the pseudonymisation key in batches of 500 (one re-wrapper per tenant), retires old versions, destroys unused retired versions after `TASKIEM_KEY_DESTROY_AFTER` (24h) and forgets retired customer keys' credentials. Subject ids keyed by a pseudonymisation key of its own, started from version 1's material, so ids do not change | `engine/secrets/rewrap.go`, `engine/secrets/subjects.go` |
+| Encryption context (S33) | Secrets bound to tenant, environment, name (or owning connection) and id; older rows re-sealed in place by the re-wrap job (`aad_version`) | `engine/secrets/keys.go`, `engine/secrets/rewrap.go` |
+| Credentials | Replaced only by a set that unwraps the onboarding canary; never returned (fingerprint only); outside the tenant vault, unreachable by workflows | `engine/secrets/byok.go`, `api/keys.go` |
+| Fail closed | Unwrapped keys under a customer key cached for `TASKIEM_BYOK_CACHE_TTL` (5m, at most 1h); failed unwraps fail fast for 15 s; the API answers 503 `key_unavailable`; webhooks 503 so providers retry | `engine/secrets/keys.go`, `api/server.go` |
+| Parking and resuming | A step that cannot read its secrets or credentials parks (`key_unavailable`, `key_parked_steps`); once a check succeeds it resumes: retried when nothing was sent, reconciled first otherwise, without spending its retry budget; a result that cannot be sealed takes the crash path | `engine/runtime/worker.go`, `engine/runtime/keyresume.go`, `engine/decide/decide.go`, migration 00101 |
+| Health and alerts | Key job (scheduler, every `TASKIEM_KEY_CHECK_INTERVAL`): canary check, unavailable after two failures, recovered on success, both audited; `key_health` alert rule (once per outage and recovery); `taskiem_tenant_key_checks_failed_total` | `engine/secrets/keyjob.go`, `engine/alerts/alerts.go`, `engine/telemetry` |
+| API and web | `GET /v1/keys`, `POST /v1/keys/rotate`, `PUT /v1/keys/byok` (402 without the `byok` feature), `PUT /v1/keys/byok/credentials`, `POST /v1/keys/byok/check` (resumes parked steps), `DELETE /v1/keys/byok` (always allowed); `key.manage` (owners); downgrade blocked while a customer key is in use; Settings > Encryption keys | `api/keys.go`, `engine/billing/change.go`, `web/src/pages/Keys.tsx`, `web/src/lib/keys.ts` |
+| Operator CLI | `taskiem tenants keys TENANT_ID [status \| rotate [--wait] \| rewrap \| check]`, audited as `platform_admin` | `cmd/taskiem/keyscmd.go` |
+| Audit | `key.byok_enabled`, `key.byok_credentials_replaced`, `key.byok_checked`, `key.byok_unavailable`, `key.byok_recovered`, `key.byok_disabled`, `key.byok_forgotten`, `secret.rotate_key`, `key.rewrap`, `key.rewrap_completed`, `key.versions_destroyed`, `key.steps_resumed` | `engine/secrets`, `engine/runtime/keyresume.go` |
+| Dedicated deployments | Nothing new: one Helm install per customer, with the platform KMS pointed at the customer's own OpenBao; documented | [kubernetes.md](kubernetes.md#dedicated-single-tenant-deployments) |
+| Tests | Each provider against an in-process TLS fake built from its public API (round trip, disabled, denied, sealed, AppRole re-login, wrong key, tenant-bound context, AWS signatures checked by the S3 connector's independently tested signer, untrusted CA refused, loopback refused); validation; the lifecycle from platform key to customer key and back (legacy secrets upgraded, subject ids unchanged, version 1 destroyed, renamed and moved rows refused, credentials bound to their row, revocation within the TTL, health transitions audited once, recovery, rotation, credential replacement, offboarding and forgetting); the key job; steps parked by a revoked key (an unsafe write and a code step with no retries) resuming to completion with the write sent once; the key_health alert; the API (permissions, 400/422/402/404/503, no credentials returned, downgrade blocker); the CLI; web helpers and an end-to-end spec | `engine/byok/byok_test.go`, `engine/secrets/byok_test.go`, `engine/runtime/byok_test.go`, `engine/alerts/keyhealth_test.go`, `api/keys_test.go`, `cmd/taskiem/keyscmd_test.go`, `web/src/lib/keys.test.ts`, `web/e2e/keys.spec.ts` |
+
+What is left in P4-5:
+
+- **People:** a real test against each customer KMS (P4-K1), the legal wording for revocation (P4-K2), the backup retention statement (P4-K3), published egress IPs (P4-K4), and the dedicated-deployment offering (P4-K5) ([needs people](needs-people.md#phase-4)).
+- **Step-up before key operations** (self-review K5): owners only and audited today.
+- **More ways to sign in to a customer's cloud:** AWS STS role assumption (cross-account), Google workload identity federation, Azure managed identities. Today they use long-lived credentials, which Taskiem seals.
+- **External key managers** (Google Cloud EKM, AWS XKS), keys per environment, Vault transit `rewrap` to move ciphertext onto the newest customer key version without a tenant key rotation, and sovereign Azure clouds.
 
 ## P4-6: connector SDK and catalogue
 
