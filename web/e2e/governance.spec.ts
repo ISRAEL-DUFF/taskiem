@@ -54,6 +54,7 @@ test("a policy routes an approval that needs an authenticator code", async ({ pa
   const ann = await ctx.newPage();
   await signIn(ann, "ann@e2e.test");
   await ann.getByRole("link", { name: "ann@e2e.test" }).click();
+  await ann.getByLabel("Your password, to set up an authenticator").fill("correct horse battery");
   await ann.getByRole("button", { name: "Set up an authenticator" }).click();
   const secret = ((await ann.getByTestId("totp-secret").textContent()) ?? "").trim();
   await ann.getByLabel("Code from the app").fill(totp(secret));

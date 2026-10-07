@@ -12,6 +12,9 @@ import (
 
 const rpID, origin = "taskiem.test", "https://app.taskiem.test"
 
+// testPassword is every test member's password.
+const testPassword = "correct horse battery"
+
 func passkeyWorld(t *testing.T) *world {
 	w := newWorld(t)
 	w.srv.WebAuthn = webauthn.Config{RPID: rpID, RPName: "Taskiem", Origins: []string{origin}}
@@ -33,7 +36,7 @@ func challengeFrom(t *testing.T, opts map[string]any) []byte {
 func addPasskey(t *testing.T, c *client, name string) *webauthntest.Authenticator {
 	t.Helper()
 	a := webauthntest.New(rpID, origin)
-	opts := c.must(200, "POST", "/v1/me/passkeys/options", nil)
+	opts := c.must(200, "POST", "/v1/me/passkeys/options", map[string]any{"password": testPassword})
 	user := opts["publicKey"].(map[string]any)["user"].(map[string]any)
 	a.UserHandle, _ = base64.RawURLEncoding.DecodeString(user["id"].(string))
 	c.must(201, "POST", "/v1/me/passkeys", map[string]any{"name": name, "credential": a.Register(challengeFrom(t, opts)).JSON()})

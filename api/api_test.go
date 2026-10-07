@@ -29,6 +29,9 @@ func (c *client) do(method, path string, body any, hdr ...string) (int, map[stri
 		rd = bytes.NewReader(raw)
 	}
 	req, _ := http.NewRequest(method, c.base+path, rd)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}

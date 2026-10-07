@@ -20,6 +20,7 @@ test("add a passkey and sign in with it", async ({ page }) => {
 
   await page.goto(`${base}/account`);
   await page.getByLabel("Name for this passkey").fill("Virtual key");
+  await page.getByLabel("Your password, to add or remove a passkey").fill("correct horse battery");
   await page.getByRole("button", { name: "Add a passkey" }).click();
   await expect(page.getByRole("cell", { name: "Virtual key" })).toBeVisible();
 

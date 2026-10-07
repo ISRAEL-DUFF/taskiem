@@ -92,6 +92,7 @@ func (s server) call(t *testing.T, method, path, token string, body any) map[str
 	t.Helper()
 	raw, _ := json.Marshal(body)
 	req, _ := http.NewRequest(method, s.base+path, bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}

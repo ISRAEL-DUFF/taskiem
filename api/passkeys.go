@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -41,7 +42,7 @@ func isAdmin(perms map[string]bool) bool {
 // enrolOnly are the requests a password session held to the passkey rule
 // may make.
 var enrolOnly = map[string]bool{
-	"GET /v1/me": true, "GET /v1/me/passkeys": true, "POST /v1/me/passkeys/options": true, "POST /v1/me/passkeys": true, "POST /v1/auth/logout": true,
+	"GET /v1/me": true, "GET /v1/me/passkeys": true, "POST /v1/me/passkeys/options": true, "POST /v1/me/passkeys": true, "POST /v1/me/step-up/options": true, "POST /v1/auth/logout": true,
 }
 
 const challengeTTL = 5 * time.Minute
@@ -151,10 +152,10 @@ func (s *Server) passkeyLoginOptions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) passkeyLogin(w http.ResponseWriter, r *http.Request) {
-	if !s.passkeysOn(w) {
+	if !s.passkeysOn(w) || !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter(clientIP(r)).Allow() {
+	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
@@ -241,6 +242,16 @@ func (s *Server) passkeyRegisterOptions(w http.ResponseWriter, r *http.Request) 
 	p := principalFrom(r.Context())
 	if p.UserID == uuid.Nil {
 		writeErr(w, http.StatusForbidden, "passkeys belong to people, not API keys")
+		return
+	}
+	// The registration challenge is issued only with proof, so registering
+	// needs it too.
+	var proof factorProof
+	if err := decodeOptional(r, &proof); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.proveFactor(w, r, proof) {
 		return
 	}
 	var email, name string
@@ -384,8 +395,16 @@ func (s *Server) listPasskeys(w http.ResponseWriter, r *http.Request) {
 func (s *Server) removePasskey(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	id, err := b64.DecodeString(chi.URLParam(r, "id"))
-	if err != nil {
+	if err != nil || p.UserID == uuid.Nil {
 		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var proof factorProof
+	if err := decodeOptional(r, &proof); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.proveFactor(w, r, proof) {
 		return
 	}
 	err = s.tx(r, func(tx pgx.Tx) error {
@@ -406,7 +425,10 @@ func (s *Server) removePasskey(w http.ResponseWriter, r *http.Request) {
 }
 
 // resetPasskeys removes every passkey of a member who lost theirs. The
-// caller needs the standing to grant all of the member's roles.
+// caller needs the standing to grant all of the member's roles. Passkeys
+// are the person's, in every tenant, so a tenant resets only those of
+// people who belong to it alone; others go to an operator (taskiem
+// passkeys reset).
 func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 	user, err := uuid.Parse(chi.URLParam(r, "user"))
 	if err != nil {
@@ -428,6 +450,13 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := canGrant(r.Context(), tx, p, roles); err != nil {
 			return err
+		}
+		var elsewhere bool
+		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_auth_member_elsewhere($1, $2)`, user, p.TenantID).Scan(&elsewhere); err != nil {
+			return err
+		}
+		if elsewhere {
+			return fmt.Errorf("%w: this person also belongs to another organisation, so their passkeys are not this one's to remove; they can remove their own, or a Taskiem operator can reset them (taskiem passkeys reset)", errForbidden)
 		}
 		tag, err := tx.Exec(r.Context(), `DELETE FROM webauthn_credentials WHERE user_id = $1`, user)
 		if err != nil {
@@ -480,6 +509,107 @@ func (s *Server) stepUpOptions(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"publicKey": map[string]any{
 		"challenge": b64.EncodeToString(ch), "rpId": s.WebAuthn.RPID, "allowCredentials": allow, "userVerification": "required", "timeout": 60000}})
+}
+
+// --- proof before changing factors ---
+
+// factorProof is what a member gives, besides their session, to add or
+// remove a passkey or authenticator: otherwise whoever steals a session
+// could enrol their own and pass step-up as the member.
+type factorProof struct {
+	Password string          `json:"password,omitempty"`
+	TOTP     string          `json:"totp,omitempty"`
+	Passkey  *credentialJSON `json:"passkey,omitempty"` // for a challenge from POST /v1/me/step-up/options
+}
+
+type factorSet struct {
+	Passkey  bool `json:"passkey"`
+	TOTP     bool `json:"totp"`
+	Password bool `json:"password"`
+}
+
+// factorsOf is what a member can prove themselves with in a tenant.
+// Passkeys are the person's, in every tenant; an authenticator is per
+// tenant.
+func (s *Server) factorsOf(ctx context.Context, tenant, user uuid.UUID) (factorSet, string, error) {
+	var f factorSet
+	var hash *string
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, user).Scan(&f.Passkey); err != nil {
+		return f, "", err
+	}
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		f.TOTP = s.totpEnrolled(ctx, tx, user)
+		return tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, user).Scan(&hash)
+	})
+	if hash == nil {
+		return f, "", err
+	}
+	f.Password = true
+	return f, *hash, err
+}
+
+// proveFactor checks the proof and answers the request when it falls
+// short. A member with a passkey or authenticator proves themselves with a
+// fresh assertion or code; one with neither, with their password; one with
+// none of these (signed in by SSO only) has nothing more to give.
+func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof factorProof) bool {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	f, hash, err := s.factorsOf(ctx, p.TenantID, p.UserID)
+	if err != nil {
+		s.fail(w, r, err)
+		return false
+	}
+	need := func(msg string, methods ...string) bool {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": msg, "reauth": methods})
+		return false
+	}
+	switch {
+	case f.Passkey || f.TOTP:
+		var methods []string
+		if f.Passkey {
+			methods = append(methods, "passkey")
+		}
+		if f.TOTP {
+			methods = append(methods, "totp")
+		}
+		switch {
+		case proof.Passkey != nil && f.Passkey:
+			if _, err := s.verifyPasskey(ctx, *proof.Passkey, "step_up", &p.UserID); err != nil {
+				if errors.Is(err, errPasskey) || errors.Is(err, webauthn.ErrInvalid) || errors.Is(err, webauthn.ErrCloned) {
+					return need("that passkey response is not valid; try again", methods...)
+				}
+				s.fail(w, r, err)
+				return false
+			}
+			return true
+		case proof.TOTP != "" && f.TOTP:
+			ok, err := s.verifyTOTP(ctx, p.TenantID, p.UserID, proof.TOTP)
+			if err != nil || !ok {
+				s.totpRefused(w, r, err, map[string]any{"error": "that authenticator code is not right, or was already used", "reauth": methods})
+				return false
+			}
+			return true
+		}
+		return need("confirm it is you with your passkey or authenticator code first", methods...)
+	case f.Password:
+		if !s.loginLimiter("reauth:" + p.UserID.String()).Allow() {
+			writeErr(w, http.StatusTooManyRequests, "too many attempts")
+			return false
+		}
+		if proof.Password == "" || !checkPassword(hash, proof.Password) {
+			return need("enter your password to confirm it is you", "password")
+		}
+	}
+	return true
+}
+
+// decodeOptional reads a JSON body that may be absent.
+func decodeOptional(r *http.Request, v any) error {
+	if err := decodeBody(r, v); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
 }
 
 // --- sessions shared by password, passkey and SSO sign-in ---

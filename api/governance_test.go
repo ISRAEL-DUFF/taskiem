@@ -23,7 +23,7 @@ const policyFlow = `{"schema":"wd/v1","id":"wf_disburse","version":1,"name":"dis
 // enrol enrols a member's authenticator and returns the secret.
 func enrol(t *testing.T, c *client) string {
 	t.Helper()
-	secret := c.must(200, "POST", "/v1/me/totp", nil)["secret"].(string)
+	secret := c.must(200, "POST", "/v1/me/totp", map[string]any{"password": testPassword})["secret"].(string)
 	code, _ := totp.Code(secret, totp.Step(time.Now()))
 	c.must(204, "POST", "/v1/me/totp/confirm", map[string]any{"code": code})
 	return secret

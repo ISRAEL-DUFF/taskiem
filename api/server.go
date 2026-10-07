@@ -77,8 +77,8 @@ type Server struct {
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
 
-	limiters sync.Map // ip -> *rate.Limiter, for login attempts
-	defs     sync.Map // "workflow/version" -> *wd.Definition
+	limiters limiterSet // sign-in and other unauthenticated attempts
+	defs     sync.Map   // "workflow/version" -> *wd.Definition
 }
 
 // Handler builds the router.
@@ -112,6 +112,8 @@ func (s *Server) Handler() http.Handler {
 			r.Use(s.authenticate)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
+			r.Get("/me/invitations", s.myInvitations)
+			r.Post("/me/invitations/{tenant}/accept", s.acceptInvitation)
 			r.Get("/me/passkeys", s.listPasskeys)
 			r.Post("/me/passkeys/options", s.passkeyRegisterOptions)
 			r.Post("/me/passkeys", s.passkeyRegister)
@@ -343,18 +345,68 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-func (s *Server) loginLimiter(ip string) *rate.Limiter {
+// loginLimiter paces sign-in attempts by key: "login:" and an address, or
+// "login-email:" and an email.
+func (s *Server) loginLimiter(key string) *rate.Limiter {
 	burst := s.LoginBurst
 	if burst <= 0 {
 		burst = 10
 	}
-	return s.limiter(ip, 6*time.Second, burst)
+	return s.limiter(key, 6*time.Second, burst)
 }
+
+// limiterSet holds token buckets by key while they matter: a bucket idle
+// long enough to have refilled is dropped (a new one is the same), and
+// once maxLimiters are in use, new keys of a kind share one bucket, so a
+// flood of keys can neither exhaust memory nor refill anyone's bucket.
+type limiterSet struct {
+	mu     sync.Mutex
+	m      map[string]*limiterEntry
+	swept  time.Time
+	shared map[string]*rate.Limiter // kind (the key up to ':') -> overflow bucket
+}
+
+type limiterEntry struct {
+	l    *rate.Limiter
+	last time.Time
+	full time.Duration // how long an empty bucket takes to refill
+}
+
+const maxLimiters = 100_000
 
 // limiter is a token bucket per key: one token every interval, up to burst.
 func (s *Server) limiter(key string, every time.Duration, burst int) *rate.Limiter {
-	l, _ := s.limiters.LoadOrStore(key, rate.NewLimiter(rate.Every(every), burst))
-	return l.(*rate.Limiter)
+	ls := &s.limiters
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	now := time.Now()
+	if e, ok := ls.m[key]; ok {
+		e.last = now
+		return e.l
+	}
+	if ls.m == nil {
+		ls.m, ls.shared = map[string]*limiterEntry{}, map[string]*rate.Limiter{}
+	}
+	if len(ls.m) >= maxLimiters || now.Sub(ls.swept) > time.Minute {
+		for k, e := range ls.m {
+			if now.Sub(e.last) > e.full {
+				delete(ls.m, k)
+			}
+		}
+		ls.swept = now
+	}
+	if len(ls.m) >= maxLimiters {
+		kind, _, _ := strings.Cut(key, ":")
+		l, ok := ls.shared[kind]
+		if !ok {
+			l = rate.NewLimiter(rate.Every(every), burst)
+			ls.shared[kind] = l
+		}
+		return l
+	}
+	e := &limiterEntry{l: rate.NewLimiter(rate.Every(every), burst), last: now, full: max(every*time.Duration(burst), time.Minute)}
+	ls.m[key] = e
+	return e.l
 }
 
 // tx runs fn in a transaction scoped to the caller's tenant.

@@ -104,6 +104,18 @@ export interface Me {
   auth_method?: "password" | "passkey" | "sso";
   /** An administrator who must add a passkey before anything else. */
   enrol_passkey?: boolean;
+  /** What the member proves themselves with to add or remove a passkey or
+   * authenticator: a passkey or authenticator if they have one, else their
+   * password. */
+  factors?: { passkey: boolean; totp: boolean; password: boolean };
+}
+
+/** A tenant inviting the signed-in person (GET /v1/me/invitations). */
+export interface Invitation {
+  tenant_id: string;
+  tenant: string;
+  roles: string[];
+  invited_at: string;
 }
 
 export interface WorkflowSummary {

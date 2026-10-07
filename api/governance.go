@@ -442,11 +442,25 @@ func totpName(user uuid.UUID, pending bool) string {
 }
 
 // beginTOTP issues a new secret to enrol an authenticator app; it is used
-// only once confirmed with a code from the app.
+// only once confirmed with a code from the app. It needs proof beyond the
+// session (proveFactor), and does not replace an enrolled authenticator:
+// that is removed first, with a current code.
 func (s *Server) beginTOTP(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	if p.UserID == uuid.Nil {
 		writeErr(w, http.StatusForbidden, "only people enrol")
+		return
+	}
+	var proof factorProof
+	if err := decodeOptional(r, &proof); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if s.hasTOTP(r) {
+		s.fail(w, r, errTOTPEnrolled)
+		return
+	}
+	if !s.proveFactor(w, r, proof) {
 		return
 	}
 	secret, err := totp.NewSecret()
@@ -475,6 +489,12 @@ func (s *Server) confirmTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	// An enrolled authenticator is never replaced here: only removed, with
+	// a current code from it.
+	if s.hasTOTP(r) {
+		s.fail(w, r, errTOTPEnrolled)
+		return
+	}
 	secret, err := s.Vault.Get(ctx, p.TenantID, identityEnv, totpName(p.UserID, true))
 	if err != nil {
 		s.fail(w, r, fmt.Errorf("%w: start enrolment first", errConflict))
@@ -504,8 +524,19 @@ func (s *Server) confirmTOTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// TOTP guessing: after totpMaxFailures wrong codes within totpWindow, codes
+// are refused for totpWindow. Six digits are a million codes, and three are
+// valid at any moment, so without a limit they fall to patience.
+const (
+	totpMaxFailures = 5
+	totpWindow      = 15 * time.Minute
+)
+
+var errTOTPLocked = errors.New("too many wrong authenticator codes; try again in 15 minutes")
+
 // verifyTOTP checks a member's code, once: the time step is recorded so the
-// same code cannot be replayed.
+// same code cannot be replayed. Wrong codes are counted and audited; past
+// the limit it returns errTOTPLocked without looking at the code.
 func (s *Server) verifyTOTP(ctx context.Context, tenant, user uuid.UUID, code string) (bool, error) {
 	secret, err := s.Vault.Get(ctx, tenant, identityEnv, totpName(user, false))
 	if errors.Is(err, secrets.ErrNotFound) {
@@ -514,25 +545,62 @@ func (s *Server) verifyTOTP(ctx context.Context, tenant, user uuid.UUID, code st
 	if err != nil {
 		return false, err
 	}
-	ok := false
+	ok, locked := false, false
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var last int64
-		err := tx.QueryRow(ctx, `SELECT totp_last_step FROM member_mfa WHERE user_id = $1 AND totp_confirmed_at IS NOT NULL FOR UPDATE`, user).Scan(&last)
+		err := tx.QueryRow(ctx, `SELECT totp_last_step, (totp_locked_until > now()) IS TRUE FROM member_mfa
+			WHERE user_id = $1 AND totp_confirmed_at IS NOT NULL FOR UPDATE`, user).Scan(&last, &locked)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
-		if err != nil {
+		if err != nil || locked {
 			return err
 		}
 		step, good := totp.Verify(secret, code, time.Now(), last)
-		if !good {
+		if good {
+			ok = true
+			_, err = tx.Exec(ctx, `UPDATE member_mfa SET totp_last_step = $2, totp_failures = 0, totp_failed_since = NULL WHERE user_id = $1`, user, step)
+			return err
+		}
+		// Count the failure in the current window, and lock at the limit.
+		var failures int
+		if err := tx.QueryRow(ctx, `UPDATE member_mfa SET
+			totp_failures = CASE WHEN totp_failed_since > now() - $2::interval THEN totp_failures + 1 ELSE 1 END,
+			totp_failed_since = CASE WHEN totp_failed_since > now() - $2::interval THEN totp_failed_since ELSE now() END
+			WHERE user_id = $1 RETURNING totp_failures`, user, totpWindow.String()).Scan(&failures); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'mfa.totp.fail', $2, jsonb_build_object('failures', $3::int))`,
+			tenant, user.String(), failures); err != nil {
+			return err
+		}
+		if failures < totpMaxFailures {
 			return nil
 		}
-		ok = true
-		_, err = tx.Exec(ctx, `UPDATE member_mfa SET totp_last_step = $2 WHERE user_id = $1`, user, step)
+		if _, err := tx.Exec(ctx, `UPDATE member_mfa SET totp_locked_until = now() + $2::interval, totp_failures = 0, totp_failed_since = NULL WHERE user_id = $1`,
+			user, totpWindow.String()); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'mfa.totp.locked', $2, jsonb_build_object('minutes', $3::int))`,
+			tenant, user.String(), int(totpWindow.Minutes()))
 		return err
 	})
+	if err == nil && locked {
+		err = errTOTPLocked
+	}
 	return ok, err
+}
+
+// totpRefused answers a refused code: locked out, or simply wrong.
+func (s *Server) totpRefused(w http.ResponseWriter, r *http.Request, err error, wrong map[string]any) {
+	switch {
+	case errors.Is(err, errTOTPLocked):
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": err.Error(), "step_up": "totp"})
+	case err != nil:
+		s.fail(w, r, err)
+	default:
+		writeJSON(w, http.StatusForbidden, wrong)
+	}
 }
 
 func (s *Server) removeTOTP(w http.ResponseWriter, r *http.Request) {
@@ -545,12 +613,8 @@ func (s *Server) removeTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok, err := s.verifyTOTP(r.Context(), p.TenantID, p.UserID, req.Code)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !ok {
-		writeErr(w, http.StatusForbidden, "a current code is needed to remove the authenticator")
+	if err != nil || !ok {
+		s.totpRefused(w, r, err, map[string]any{"error": "a current code is needed to remove the authenticator"})
 		return
 	}
 	_ = s.Vault.Delete(r.Context(), p.TenantID, identityEnv, totpName(p.UserID, false), p.Actor())
@@ -565,6 +629,19 @@ func (s *Server) removeTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+var errTOTPEnrolled = fmt.Errorf("%w: an authenticator is already enrolled; remove it with a current code first", errConflict)
+
+// hasTOTP reports whether the caller has an authenticator enrolled.
+func (s *Server) hasTOTP(r *http.Request) bool {
+	p := principalFrom(r.Context())
+	var ok bool
+	_ = s.tx(r, func(tx pgx.Tx) error {
+		ok = s.totpEnrolled(r.Context(), tx, p.UserID)
+		return nil
+	})
+	return ok
 }
 
 func (s *Server) totpEnrolled(ctx context.Context, tx pgx.Tx, user uuid.UUID) bool {

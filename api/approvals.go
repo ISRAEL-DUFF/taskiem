@@ -148,12 +148,8 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		vote.StepUp = "passkey"
 	} else if req.TOTP != "" {
 		ok, err := s.verifyTOTP(r.Context(), p.TenantID, p.UserID, req.TOTP)
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !ok {
-			writeJSON(w, http.StatusForbidden, map[string]any{"error": "that authenticator code is not right, or was already used", "step_up": "totp"})
+		if err != nil || !ok {
+			s.totpRefused(w, r, err, map[string]any{"error": "that authenticator code is not right, or was already used", "step_up": "totp"})
 			return
 		}
 		vote.StepUp = "totp"

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -366,12 +367,21 @@ func (s *Server) addSSODomain(w http.ResponseWriter, r *http.Request) {
 	token := "taskiem-verify=" + newToken()[:32]
 	p := principalFrom(r.Context())
 	err = s.tx(r, func(tx pgx.Tx) error {
+		// The connection must be the tenant's own: a foreign key does not see
+		// row-level security.
+		var ours bool
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM sso_connections WHERE id = $1 AND tenant_id = $2)`, id, p.TenantID).Scan(&ours); err != nil {
+			return err
+		}
+		if !ours {
+			return pgx.ErrNoRows
+		}
 		if _, err := tx.Exec(r.Context(), `INSERT INTO sso_domains (domain, connection_id, tenant_id, token) VALUES ($1, $2, $3, $4)`, domain, id, p.TenantID, token); err != nil {
 			var pgErr interface{ SQLState() string }
 			if errors.As(err, &pgErr) {
 				switch pgErr.SQLState() {
 				case "23505":
-					return fmt.Errorf("%w: %s is already claimed", errConflict, domain)
+					return fmt.Errorf("%w: %s is already claimed here", errConflict, domain)
 				case "23514":
 					return fmt.Errorf("%w: %q is not a domain", errBadRequest, domain)
 				case "23503":
@@ -411,6 +421,11 @@ func (s *Server) verifySSODomain(w http.ResponseWriter, r *http.Request) {
 	}
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(r.Context(), `UPDATE sso_domains SET verified_at = now() WHERE domain = $1`, domain); err != nil {
+			// Unverified claims coexist; a verified one is exclusive.
+			var pgErr interface{ SQLState() string }
+			if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
+				return fmt.Errorf("%w: another organisation has verified %s", errConflict, domain)
+			}
 			return err
 		}
 		return auditTx(r, tx, "sso.domain_verify", domain, nil)
@@ -426,6 +441,9 @@ func (s *Server) verifySSODomain(w http.ResponseWriter, r *http.Request) {
 
 // ssoDiscover tells the sign-in page whether an email signs in with SSO.
 func (s *Server) ssoDiscover(w http.ResponseWriter, r *http.Request) {
+	if !s.ssoLimit(w, r) {
+		return
+	}
 	var req struct {
 		Email string `json:"email"`
 	}
@@ -494,16 +512,38 @@ func (s *Server) samlSP(c ssoConn) (saml.SP, samlConfig, error) {
 	return sp, cfg, nil
 }
 
-// safeReturn keeps the post-sign-in redirect on our own pages.
+// safeReturn keeps the post-sign-in redirect on our own pages: a path that
+// starts with a single slash, with no scheme or host, and no backslash or
+// control character anywhere, encoded or not (browsers read "/\evil.com"
+// and "/\t/evil.com" as another host).
 func safeReturn(v string) string {
-	if !strings.HasPrefix(v, "/") || strings.HasPrefix(v, "//") || strings.Contains(v, "\\\\") {
+	bad := func(s string) bool {
+		return strings.ContainsFunc(s, func(c rune) bool { return c == '\\' || c < 0x20 || c == 0x7f })
+	}
+	if !strings.HasPrefix(v, "/") || strings.HasPrefix(v, "//") || bad(v) {
+		return "/"
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || u.Opaque != "" ||
+		!strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") || bad(u.Path) {
 		return "/"
 	}
 	return v
 }
 
+// ssoLimit holds an address to a pace no person signing in needs: both
+// discovery and starting a sign-in reach the database before anyone is
+// known.
+func (s *Server) ssoLimit(w http.ResponseWriter, r *http.Request) bool {
+	if !s.limiter("sso:"+clientIP(r), 2*time.Second, 30).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many requests")
+		return false
+	}
+	return true
+}
+
 func (s *Server) ssoStart(w http.ResponseWriter, r *http.Request) {
-	if !s.ssoOn(w) {
+	if !s.ssoOn(w) || !s.ssoLimit(w, r) {
 		return
 	}
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -549,11 +589,33 @@ func (s *Server) ssoStart(w http.ResponseWriter, r *http.Request) {
 		}
 		nonce, verifier = "-", reqID
 	}
-	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_sso_begin($1, $2, $3, $4, $5, $6)`, state, c.id, c.tenant, nonce, verifier, ret); err != nil {
+	bind := newToken()
+	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_sso_begin($1, $2, $3, $4, $5, $6, $7)`, state, c.id, c.tenant, nonce, verifier, ret, hashToken(bind)); err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	http.SetCookie(w, s.ssoBindingCookie(c.protocol, bind, int(ssoRequestTTL.Seconds())))
 	http.Redirect(w, r, target, http.StatusFound) //nolint:gosec // the tenant's own identity provider, from its saved configuration
+}
+
+const (
+	ssoCookie     = "taskiem_sso"
+	ssoRequestTTL = 10 * time.Minute // as taskiem_auth_sso_begin
+)
+
+// ssoBindingCookie ties a sign-in to the browser that started it, so no one
+// can finish their own sign-in in someone else's browser (login CSRF): the
+// request keeps the cookie's hash and the callback must present it. OIDC
+// returns with a top-level GET, which carries a Lax cookie. SAML returns
+// with a cross-site form POST, which carries no Lax cookie, so its cookie
+// is SameSite=None, and so always Secure (browsers refuse None without it;
+// they treat http://localhost as secure).
+func (s *Server) ssoBindingCookie(protocol, value string, maxAge int) *http.Cookie {
+	c := &http.Cookie{Name: ssoCookie, Value: value, Path: "/v1/auth/sso/", MaxAge: maxAge, HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode}
+	if protocol == "saml" {
+		c.Secure, c.SameSite = true, http.SameSiteNoneMode
+	}
+	return c
 }
 
 func randomState() []byte {
@@ -570,25 +632,39 @@ type ssoRequest struct {
 	returnTo string
 }
 
-func (s *Server) takeSSO(ctx context.Context, state string) (ssoRequest, error) {
+// takeSSO consumes the sign-in a callback answers. It must come back to the
+// browser that started it.
+func (s *Server) takeSSO(w http.ResponseWriter, r *http.Request, state string) (ssoRequest, error) {
 	raw, err := b64.DecodeString(state)
 	if err != nil || len(raw) != 32 {
 		return ssoRequest{}, errSSOFailed
 	}
 	var q ssoRequest
-	err = s.Store.Pool.QueryRow(ctx, `SELECT connection_id, tenant_id, nonce, verifier, return_to FROM taskiem_auth_sso_take($1)`, raw).
-		Scan(&q.conn, &q.tenant, &q.nonce, &q.verifier, &q.returnTo)
+	var binding []byte
+	err = s.Store.Pool.QueryRow(r.Context(), `SELECT connection_id, tenant_id, nonce, verifier, return_to, binding FROM taskiem_auth_sso_take($1)`, raw).
+		Scan(&q.conn, &q.tenant, &q.nonce, &q.verifier, &q.returnTo, &binding)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ssoRequest{}, errSSOFailed
 	}
-	return q, err
+	if err != nil {
+		return ssoRequest{}, err
+	}
+	http.SetCookie(w, s.ssoBindingCookie("", "", -1)) // spent
+	c, err := r.Cookie(ssoCookie)
+	if err != nil || len(binding) == 0 || subtle.ConstantTimeCompare(hashToken(c.Value), binding) != 1 {
+		return ssoRequest{}, errSSOBrowser
+	}
+	return q, nil
 }
 
-var errSSOFailed = errors.New("single sign-on did not complete; start again")
+var (
+	errSSOFailed  = errors.New("single sign-on did not complete; start again")
+	errSSOBrowser = errors.New("single sign-on came back to a browser that did not start it")
+)
 
 func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	req, err := s.takeSSO(r.Context(), q.Get("state"))
+	req, err := s.takeSSO(w, r, q.Get("state"))
 	if err != nil {
 		s.ssoFail(w, r, err)
 		return
@@ -629,7 +705,7 @@ func (s *Server) samlACSHandler(w http.ResponseWriter, r *http.Request) {
 		s.ssoFail(w, r, err)
 		return
 	}
-	req, err := s.takeSSO(r.Context(), r.PostForm.Get("RelayState"))
+	req, err := s.takeSSO(w, r, r.PostForm.Get("RelayState"))
 	if err != nil {
 		s.ssoFail(w, r, err)
 		return

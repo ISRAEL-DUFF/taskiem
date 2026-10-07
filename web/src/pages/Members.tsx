@@ -257,7 +257,10 @@ function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClo
         <Field label="Name">
           <input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label="Initial password" hint="Needed for new users (12+ characters); ignored for existing ones">
+        <Field
+          label="Initial password"
+          hint="For someone new (12+ characters; leave empty if they sign in with single sign-on). Someone who already has a Taskiem account is invited instead, and appears here once they accept (unless their email is on a domain you verified for single sign-on)."
+        >
           <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         <Field label="Roles">

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"slices"
 	"strings"
@@ -312,14 +313,35 @@ type loginReq struct {
 	TenantID uuid.UUID `json:"tenant_id,omitempty"`
 }
 
+// jsonOnly refuses a body that is not JSON. A cross-site page can POST a
+// form or text/plain without asking first, but not JSON, so a sign-in
+// endpoint that takes only JSON cannot be driven from another site to sign
+// the browser in to someone else's account.
+func jsonOnly(w http.ResponseWriter, r *http.Request) bool {
+	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+		writeErr(w, http.StatusUnsupportedMediaType, "send the body as application/json")
+		return false
+	}
+	return true
+}
+
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	if !s.loginLimiter(clientIP(r)).Allow() {
+	if !jsonOnly(w, r) {
+		return
+	}
+	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
 	var req loginReq
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	// Per account too, so guesses spread over many addresses still meet a
+	// limit.
+	if !s.loginLimiter("login-email:" + strings.ToLower(strings.TrimSpace(req.Email))).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
 	ctx := r.Context()
@@ -337,7 +359,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.RequireAdminPasskeys {
-		// An administrator with a passkey signs in with it.
+		// An administrator with a passkey signs in with it, whichever tenant
+		// they ask for: the person and their passkeys are the same in all.
 		var has bool
 		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, userID).Scan(&has); err != nil {
 			s.fail(w, r, err)
@@ -345,13 +368,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		}
 		if has {
 			var tenants []uuid.UUID
-			_ = s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, userID).Scan(&tenants)
+			if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, userID).Scan(&tenants); err != nil {
+				s.fail(w, r, err)
+				return
+			}
 			for _, t := range tenants {
-				if req.TenantID != uuid.Nil && t != req.TenantID {
-					continue
-				}
 				p := Principal{TenantID: t, UserID: userID, Permissions: map[string]bool{}}
-				if err := s.loadRoles(ctx, &p); err == nil && isAdmin(p.Permissions) {
+				if err := s.loadRoles(ctx, &p); err != nil {
+					s.fail(w, r, err)
+					return
+				}
+				if isAdmin(p.Permissions) {
 					writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "administrators sign in with their passkey", "passkey_required": true})
 					return
 				}
@@ -396,6 +423,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
 			return nil
 		})
+		// What the member proves themselves with to change their factors.
+		if f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID); err == nil {
+			out["factors"] = f
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -410,7 +441,7 @@ type signupReq struct {
 // signup creates a tenant with its owner, a default workspace, and the dev
 // and prod environments.
 func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
-	if !s.loginLimiter(clientIP(r)).Allow() {
+	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}
@@ -496,8 +527,14 @@ func (s *Server) listMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"members": out})
 }
 
-// addMember creates (or finds) a user and grants roles. Only an owner may
-// grant owner.
+// addMember grants roles to a person by email. Someone new is created, with
+// the password given (or none, to sign in by SSO or not until they have
+// one). Someone who already has an account is a person, not the tenant's to
+// claim: unless they are already a member, or their email is on one of the
+// tenant's verified SSO domains (the tenant speaks for those addresses, as
+// with SSO and SCIM), they are invited, and the roles apply when they
+// accept. The answer is the same either way, so it does not tell whether an
+// email has an account. Only an owner may grant owner.
 func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 	var req memberReq
 	if err := decodeBody(r, &req); err != nil {
@@ -517,20 +554,36 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: email and at least one role are required", errBadRequest))
 		return
 	}
+	if req.Password != "" && len(req.Password) < 12 {
+		s.fail(w, r, fmt.Errorf("%w: a password needs at least 12 characters", errBadRequest))
+		return
+	}
+	// Hashed whether or not it is used, so timing does not tell either.
+	var hash *string
+	if req.Password != "" {
+		h := hashPassword(req.Password)
+		hash = &h
+	}
 	var user uuid.UUID
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, req.Email).Scan(&user)
 		if errors.Is(err, pgx.ErrNoRows) {
-			if len(req.Password) < 12 {
-				return fmt.Errorf("%w: new users need a password of at least 12 characters", errBadRequest)
-			}
 			user = uuid.Must(uuid.NewV7())
-			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, user, req.Email, req.Name, hashPassword(req.Password)); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, user, req.Email, req.Name, hash); err != nil {
 				return err
 			}
 		} else if err != nil {
 			return err
+		} else if direct, err := joinsDirectly(ctx, tx, user, req.Email); err != nil {
+			return err
+		} else if !direct {
+			if _, err := tx.Exec(ctx, `INSERT INTO member_invitations (tenant_id, user_id, roles, invited_by) VALUES ($1, $2, $3, $4)
+				ON CONFLICT (tenant_id, user_id) DO UPDATE SET roles = ARRAY(SELECT DISTINCT unnest(member_invitations.roles || EXCLUDED.roles) ORDER BY 1),
+				invited_by = EXCLUDED.invited_by`, p.TenantID, user, req.Roles, p.Actor()); err != nil {
+				return err
+			}
+			return auditTx(r, tx, "member.invite", user.String(), map[string]any{"roles": req.Roles})
 		}
 		for _, role := range req.Roles {
 			if _, err := tx.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, p.TenantID, user, role); err != nil {
@@ -544,6 +597,104 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"user_id": user})
+}
+
+// joinsDirectly reports whether an existing person can be given roles in
+// the tx's tenant without accepting: they are already a member, or their
+// email is on one of its verified SSO domains.
+func joinsDirectly(ctx context.Context, tx pgx.Tx, user uuid.UUID, email string) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1)
+		OR EXISTS (SELECT 1 FROM sso_domains WHERE domain = lower(split_part($2, '@', 2)) AND verified_at IS NOT NULL)`, user, email).Scan(&ok)
+	return ok, err
+}
+
+type invitation struct {
+	TenantID  uuid.UUID `json:"tenant_id"`
+	Tenant    string    `json:"tenant"`
+	Roles     []string  `json:"roles"`
+	InvitedAt time.Time `json:"invited_at"`
+}
+
+// myInvitations lists the tenants that invite the signed-in person.
+func (s *Server) myInvitations(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	if p.UserID == uuid.Nil {
+		writeErr(w, http.StatusForbidden, "invitations are for people, not API keys")
+		return
+	}
+	var tenants []uuid.UUID
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_invited_tenants($1)`, p.UserID).Scan(&tenants); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	out := []invitation{}
+	if len(tenants) > 0 {
+		err := db.InTenantTx(ctx, s.Store.Pool, tenants, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `SELECT i.tenant_id, t.name, i.roles, i.created_at FROM member_invitations i JOIN tenants t ON t.id = i.tenant_id
+				WHERE i.user_id = $1 ORDER BY i.created_at`, p.UserID)
+			if err != nil {
+				return err
+			}
+			out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[invitation])
+			return err
+		})
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invitations": out})
+}
+
+// acceptInvitation makes the signed-in person a member of the tenant that
+// invited them, with the roles it offered (or, from SCIM, the roles its
+// provisioning gives).
+func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	tenant, err := uuid.Parse(chi.URLParam(r, "tenant"))
+	if err != nil || p.UserID == uuid.Nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var tenants []uuid.UUID
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_invited_tenants($1)`, p.UserID).Scan(&tenants); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !slices.Contains(tenants, tenant) {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var roles []string
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var source string
+		if err := tx.QueryRow(ctx, `DELETE FROM member_invitations WHERE user_id = $1 RETURNING roles, source`, p.UserID).Scan(&roles, &source); err != nil {
+			return err
+		}
+		for _, role := range roles {
+			if _, err := tx.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, tenant, p.UserID, role); err != nil {
+				return err
+			}
+		}
+		if source == "scim" {
+			ch, err := s.scimSync(ctx, tx, tenant, p.UserID)
+			if err != nil {
+				return err
+			}
+			roles = append(roles, ch.granted...)
+		}
+		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'member.invitation.accept', $2, jsonb_build_object('roles', $3::jsonb, 'ip', $4::text))`,
+			tenant, p.UserID.String(), toJSONB(roles), clientIP(r))
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tenant_id": tenant, "roles": nonNil(roles)})
 }
 
 type keyReq struct {

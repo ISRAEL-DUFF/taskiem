@@ -431,6 +431,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 			return scimErr(http.StatusConflict, "uniqueness", "a user with this userName or email already exists")
 		}
 		var user uuid.UUID
+		invited := false
 		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, email).Scan(&user)
 		if errors.Is(err, pgx.ErrNoRows) {
 			user = uuid.Must(uuid.NewV7())
@@ -439,6 +440,16 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if err != nil {
 			return err
+		} else if direct, err := joinsDirectly(ctx, tx, user, email); err != nil {
+			return err
+		} else if !direct {
+			// Someone with an account of their own, off the tenant's verified
+			// domains: provisioned, but holding nothing until they accept.
+			invited = true
+			if _, err := tx.Exec(ctx, `INSERT INTO member_invitations (tenant_id, user_id, source, invited_by) VALUES ($1, $2, 'scim', $3)
+				ON CONFLICT (tenant_id, user_id) DO UPDATE SET source = 'scim'`, p.TenantID, user, p.Actor()); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO scim_users (tenant_id, user_id, user_name, email, external_id, display_name, given_name, family_name, active)
 			VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9)`,
@@ -449,7 +460,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := auditTx(r, tx, "scim.user.create", user.String(), map[string]any{"user_name": in.UserName, "active": active, "granted": ch.granted}); err != nil {
+		if err := auditTx(r, tx, "scim.user.create", user.String(), map[string]any{"user_name": in.UserName, "active": active, "granted": ch.granted, "invited": invited}); err != nil {
 			return err
 		}
 		u, err = s.loadSCIMUser(ctx, tx, user)
@@ -661,6 +672,9 @@ func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(ctx, `DELETE FROM scim_users WHERE user_id = $1`, id); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, `DELETE FROM member_invitations WHERE user_id = $1 AND source = 'scim'`, id); err != nil {
+			return err
+		}
 		return auditTx(r, tx, "scim.user.delete", id.String(), map[string]any{"revoked": ch.revoked, "owner_kept": ch.ownerKept})
 	})
 	if err != nil {
@@ -719,6 +733,15 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 	err = tx.QueryRow(ctx, `SELECT active FROM scim_users WHERE user_id = $1`, user).Scan(&active)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return ch, err
+	}
+	// Someone invited, not yet accepted, holds nothing whatever SCIM says;
+	// accepting syncs them.
+	var pending bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM member_invitations WHERE user_id = $1 AND source = 'scim')`, user).Scan(&pending); err != nil {
+		return ch, err
+	}
+	if pending {
+		return ch, nil
 	}
 	var want []string
 	if active {

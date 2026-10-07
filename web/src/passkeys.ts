@@ -1,7 +1,7 @@
 // Passkeys in the browser: turn the server's options (base64url) into what
 // navigator.credentials expects, and the credential back into JSON.
 
-import { post } from "./api";
+import { post, type Me } from "./api";
 
 const fromB64 = (s: string): ArrayBuffer => {
   const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "="));
@@ -59,9 +59,25 @@ function credentialJSON(c: PublicKeyCredential) {
   };
 }
 
+/** Proof, besides the session, for adding or removing a factor. */
+export interface Proof {
+  password?: string;
+  totp?: string;
+  passkey?: ReturnType<typeof credentialJSON>;
+}
+
+/** Builds the proof the server asks for: an existing passkey, else the
+ * authenticator code or password the member typed. */
+export async function proof(factors: Me["factors"], typed: string): Promise<Proof> {
+  if (factors?.passkey) return { passkey: await assert("/v1/me/step-up/options") };
+  if (factors?.totp) return { totp: typed };
+  if (factors?.password) return { password: typed };
+  return {};
+}
+
 /** Creates a passkey for the signed-in member. */
-export async function addPasskey(name: string) {
-  const { publicKey: o } = await post<{ publicKey: CreationJSON }>("/v1/me/passkeys/options");
+export async function addPasskey(name: string, p: Proof) {
+  const { publicKey: o } = await post<{ publicKey: CreationJSON }>("/v1/me/passkeys/options", p);
   const cred = (await navigator.credentials.create({
     publicKey: {
       ...o,
