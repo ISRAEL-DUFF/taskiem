@@ -47,7 +47,8 @@ func (s *Server) listAlertChannels(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"channels": nonNil(out), "email_configured": s.Alerts != nil && s.Alerts.Mailer != nil})
+	writeJSON(w, http.StatusOK, map[string]any{"channels": nonNil(out), "email_configured": s.Alerts != nil && s.Alerts.Mailer != nil,
+		"whatsapp_configured": s.WhatsApp != nil})
 }
 
 // createAlertChannel adds a channel. A Slack webhook URL is a credential
@@ -88,6 +89,12 @@ func (s *Server) createAlertChannel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		secret = req.URL
+	case "whatsapp":
+		// Members, by email: each alert goes to those with a bound number.
+		if len(req.To) == 0 || len(req.To) > 20 {
+			s.fail(w, r, fmt.Errorf("%w: give 1 to 20 members' emails", errBadRequest))
+			return
+		}
 	case "webhook":
 		u, err := url.Parse(req.URL)
 		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
@@ -97,10 +104,37 @@ func (s *Server) createAlertChannel(w http.ResponseWriter, r *http.Request) {
 		cfg["url"] = u.String()
 		secret = "whsec_" + newToken()
 	default:
-		s.fail(w, r, fmt.Errorf("%w: kind is email, slack or webhook", errBadRequest))
+		s.fail(w, r, fmt.Errorf("%w: kind is email, slack, whatsapp or webhook", errBadRequest))
 		return
 	}
 	p := principalFrom(r.Context())
+	if req.Kind == "whatsapp" {
+		err := s.tx(r, func(tx pgx.Tx) error {
+			var ids []uuid.UUID
+			var emails []string
+			for _, to := range req.To {
+				var id uuid.UUID
+				var email string
+				err := tx.QueryRow(r.Context(), `SELECT u.id, u.email FROM users u WHERE lower(u.email) = lower($1)
+					AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.tenant_id = $2)`, strings.TrimSpace(to), p.TenantID).Scan(&id, &email)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return fmt.Errorf("%w: %q is not a member", errBadRequest, to)
+				}
+				if err != nil {
+					return err
+				}
+				if !slices.Contains(ids, id) {
+					ids, emails = append(ids, id), append(emails, email)
+				}
+			}
+			cfg["members"], cfg["emails"] = ids, emails
+			return nil
+		})
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	id := uuid.Must(uuid.NewV7())
 	if secret != "" {
 		if _, err := s.Vault.Put(r.Context(), p.TenantID, alerts.VaultEnv, alerts.SecretName(id), []byte(secret), p.Actor()); err != nil {

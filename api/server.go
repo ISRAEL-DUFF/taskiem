@@ -33,6 +33,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
 	"github.com/israel-duff/taskiem/engine/webauthn"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Server serves the API.
@@ -77,6 +78,10 @@ type Server struct {
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
+	// WhatsApp is the platform number (spec 11); nil turns the channel off.
+	WhatsApp *whatsapp.Platform
+	// WhatsAppPublic answers numbers bound to no one; nil sends how to link.
+	WhatsAppPublic WhatsAppPublic
 
 	limiters limiterSet // sign-in and other unauthenticated attempts
 	defs     sync.Map   // "workflow/version" -> *wd.Definition
@@ -97,6 +102,9 @@ func (s *Server) Handler() http.Handler {
 	r.Mount("/scim/v2", s.SCIM())
 	if s.Ingest != nil {
 		r.Mount("/hooks", s.Ingest)
+		if s.WhatsApp != nil {
+			r.Mount("/channels/whatsapp", s.WhatsAppHooks())
+		}
 	}
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(middleware.SetHeader("Cache-Control", "no-store"))
@@ -128,6 +136,12 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/passkeys", s.passkeyRegister)
 			r.Delete("/me/passkeys/{id}", s.removePasskey)
 			r.Post("/me/step-up/options", s.stepUpOptions)
+			r.Get("/me/whatsapp", s.getWhatsApp)
+			r.Post("/me/whatsapp", s.startWhatsAppBinding)
+			r.Post("/me/whatsapp/verify", s.verifyWhatsAppBinding)
+			r.Delete("/me/whatsapp", s.unbindWhatsApp)
+			r.With(s.need(PermApprovalDecide)).Get("/whatsapp/handoff/{token}", s.getHandoff)
+			r.With(s.need(PermApprovalDecide)).Post("/whatsapp/handoff/{token}", s.completeHandoff)
 			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
 			r.With(s.need(PermMemberManage)).Get("/scim", s.getSCIM)
 			r.With(s.need(PermMemberManage)).Put("/scim", s.putSCIM)

@@ -37,6 +37,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
 	"github.com/israel-duff/taskiem/engine/webauthn"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 var roles = map[string]bool{"api": true, "edge": true, "orchestrator": true, "scheduler": true, "worker": true, "all": true}
@@ -61,6 +62,8 @@ type config struct {
 	LoginBurst         int
 	// Limits are the platform's default plan limits (TASKIEM_DEFAULT_*).
 	Limits runtime.Limits
+	// WhatsApp is the platform number (TASKIEM_WHATSAPP_*); nil: off.
+	WhatsApp *whatsapp.Config
 }
 
 func env(k, def string) string {
@@ -145,6 +148,9 @@ func loadConfig() (config, error) {
 		return c, err
 	}
 	c.Limits = limits
+	if c.WhatsApp, err = whatsapp.ConfigFromEnv(os.LookupEnv); err != nil {
+		return c, err
+	}
 	if c.DSN == "" {
 		return c, errors.New("TASKIEM_DATABASE_URL is required")
 	}
@@ -202,6 +208,8 @@ type engine struct {
 	registry *connector.Registry
 	// connectors loads tenants' own WebAssembly connectors.
 	connectors *wasmconn.Source
+	// wa is the platform WhatsApp number, when configured.
+	wa *whatsapp.Platform
 }
 
 func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, error) {
@@ -233,8 +241,12 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	src := &wasmconn.Source{Pool: srcPool, Runtime: wrt, Logger: log}
 	reg.SetTenantSource(src.Connectors)
 	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey}
-	return &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
-		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits}}, nil
+	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
+		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits}}
+	if cfg.WhatsApp != nil {
+		e.wa = whatsapp.New(pool, *cfg.WhatsApp, &egress.Guard{Logger: log}, log)
+	}
+	return e, nil
 }
 
 func (e *engine) hooks() *ingest.Handler {
@@ -298,13 +310,21 @@ func serve(ctx context.Context, args []string) error {
 		if cfg.WebDir != "" {
 			srv.Static = api.SPA(cfg.WebDir)
 		}
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs)
+		srv.WhatsApp = e.wa
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp)
 	}
 	if *role == "edge" {
 		mux := http.NewServeMux()
 		mux.Handle("/hooks/", http.StripPrefix("/hooks", e.hooks()))
-		git := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log}
+		git := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL}
 		mux.Handle("/git-hooks/", http.StripPrefix("/git-hooks", git.GitHooks()))
+		if e.wa != nil {
+			// The platform number's webhook (docs/whatsapp.md), apart from
+			// tenants' connector triggers under /hooks.
+			wa := http.StripPrefix("/channels/whatsapp", git.WhatsAppHooks())
+			mux.Handle("/channels/whatsapp", wa)
+			mux.Handle("/channels/whatsapp/", wa)
+		}
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 		tasks = append(tasks, httpTask("edge", cfg.EdgeListen, httpsec.Headers(mux), log))
 	}
@@ -420,6 +440,9 @@ func redactAttr(_ []string, a slog.Attr) slog.Attr {
 // TASKIEM_ALERT_FROM.
 func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
 	a := &alerts.Alerter{Pool: e.pool, Secrets: e.vault, Egress: &egress.Guard{Logger: log}, PublicURL: c.PublicURL, From: c.AlertFrom, Logger: log}
+	if e.wa != nil {
+		a.WhatsApp = e.wa
+	}
 	if c.SMTPURL != "" {
 		m, err := alerts.NewSMTPMailer(c.SMTPURL)
 		if err != nil {

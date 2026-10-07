@@ -1,6 +1,6 @@
 // Package alerts watches each tenant's runs, approvals, connectors,
 // credentials and audit anchors (spec 15.1), records what its rules find
-// once, and delivers it to email, Slack or a signed webhook, retrying with
+// once, and delivers it to email, Slack, WhatsApp or a signed webhook, retrying with
 // backoff until delivered or out of attempts.
 package alerts
 
@@ -107,6 +107,12 @@ type Secrets interface {
 	Get(ctx context.Context, tenant uuid.UUID, env, name string) (string, error)
 }
 
+// WhatsApp sends an alert to members' bound WhatsApp numbers: a template
+// outside their 24-hour window (whatsapp.Platform).
+type WhatsApp interface {
+	Notify(ctx context.Context, tenant uuid.UUID, members []uuid.UUID, kind, title, body, link string, detail map[string]any) error
+}
+
 // Alerter evaluates rules and delivers alerts.
 type Alerter struct {
 	Pool    *pgxpool.Pool
@@ -115,6 +121,9 @@ type Alerter struct {
 	// Mailer sends email; nil leaves email deliveries failing with a reason.
 	Mailer Mailer
 	From   string // sender address for email
+	// WhatsApp delivers to whatsapp channels; nil leaves them failing with
+	// a reason.
+	WhatsApp WhatsApp
 	// PublicURL builds links back into the web app.
 	PublicURL string
 	Interval  time.Duration // default 30s
@@ -589,6 +598,23 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 		}
 		body, _ := json.Marshal(map[string]any{"text": "*" + slackEscape(m.Title) + "*\n" + slackEscape(text)})
 		return a.post(ctx, tenant, hook, body, nil)
+	case "whatsapp":
+		var cfg struct {
+			Members []uuid.UUID `json:"members"`
+		}
+		if err := json.Unmarshal(cfgRaw, &cfg); err != nil || len(cfg.Members) == 0 {
+			return errors.New("the channel names no members")
+		}
+		if a.WhatsApp == nil {
+			return errors.New("WhatsApp is not configured on this deployment (TASKIEM_WHATSAPP_*)")
+		}
+		var detail map[string]any
+		_ = json.Unmarshal(m.Detail, &detail)
+		link := ""
+		if m.Link != nil {
+			link = *m.Link
+		}
+		return a.WhatsApp.Notify(ctx, tenant, cfg.Members, m.Kind, m.Title, m.Body, link, detail)
 	case "webhook":
 		var cfg struct {
 			URL string `json:"url"`
