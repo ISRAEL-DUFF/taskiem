@@ -582,6 +582,7 @@ type triggerInfo struct {
 	Cron        *string    `json:"cron,omitempty"`
 	Timezone    *string    `json:"timezone,omitempty"`
 	NextFireAt  *time.Time `json:"next_fire_at,omitempty"`
+	ServiceCode *string    `json:"service_code,omitempty"` // ussd: the code the edge routes by
 	URL         string     `json:"url,omitempty"`
 }
 
@@ -596,14 +597,14 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var out []triggerInfo
 	err = s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, NULLIF(next_fire_at, 'infinity')
+		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, NULLIF(next_fire_at, 'infinity'), service_code
 			FROM triggers WHERE workflow_id = $1 ORDER BY environment`, wf)
 		if err != nil {
 			return err
 		}
 		out, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (triggerInfo, error) {
 			var t triggerInfo
-			err := row.Scan(&t.ID, &t.Environment, &t.Type, &t.Version, &t.Path, &t.Auth, &t.SecretName, &t.Connector, &t.Trigger, &t.Cron, &t.Timezone, &t.NextFireAt)
+			err := row.Scan(&t.ID, &t.Environment, &t.Type, &t.Version, &t.Path, &t.Auth, &t.SecretName, &t.Connector, &t.Trigger, &t.Cron, &t.Timezone, &t.NextFireAt, &t.ServiceCode)
 			return t, err
 		})
 		return err

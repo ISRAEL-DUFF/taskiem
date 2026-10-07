@@ -234,7 +234,10 @@ func publishUSSD(t *testing.T, c *client, name, doc string) string {
 
 func TestUSSDEndToEnd(t *testing.T) {
 	r := newUSSDRig(t, 1)
-	publishUSSD(t, r.owner, "bill", ussdBillFlow)
+	wf := publishUSSD(t, r.owner, "bill", ussdBillFlow)
+	if trig := toJSON(r.owner.must(200, "GET", "/v1/workflows/"+wf+"/triggers", nil)); !strings.Contains(trig, `"service_code":"*384*123#"`) || !strings.Contains(trig, `"type":"ussd"`) {
+		t.Fatalf("triggers: %s", trig)
+	}
 	ref := ussd.Reference(r.tenant.String(), "africastalking", "ATUid_1")
 
 	// The token is required, and checked before anything else.
