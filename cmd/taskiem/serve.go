@@ -36,6 +36,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
@@ -59,6 +60,10 @@ type config struct {
 	// PublicURL is where people reach the web app; passkeys are bound to it.
 	PublicURL, PasskeyRPID string
 	RequireAdminPasskeys   bool
+	// HooksURL is where providers reach /hooks, for the subscriptions
+	// Taskiem registers with them (TASKIEM_HOOKS_URL; default PublicURL +
+	// "/hooks", where an all-in-one install serves them).
+	HooksURL string
 	// SMTPURL and AlertFrom let alerts go out by email.
 	SMTPURL, AlertFrom string
 	Queues             []string
@@ -175,6 +180,7 @@ func loadConfig() (config, error) {
 		ArchiveDir:    os.Getenv("TASKIEM_ARCHIVE_DIR"),
 		PublicURL:     strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
 		PasskeyRPID:   os.Getenv("TASKIEM_PASSKEY_RP_ID"),
+		HooksURL:      strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
 		AnchorKey:     os.Getenv("TASKIEM_ANCHOR_KEY"),
 		AnchorDir:     os.Getenv("TASKIEM_ANCHOR_DIR"),
 		SMTPURL:       os.Getenv("TASKIEM_SMTP_URL"),
@@ -212,10 +218,14 @@ func loadConfig() (config, error) {
 			YouverifyURL:      os.Getenv("TASKIEM_YOUVERIFY_URL"),
 			MpesaURL:          os.Getenv("TASKIEM_MPESA_URL"),
 			MTNMoMoURL:        os.Getenv("TASKIEM_MTNMOMO_URL"),
+			PGDockURL:         os.Getenv("TASKIEM_PGDOCK_URL"),
 		},
 		PoolSize: 20,
 	}
 	// Administrators are held to passkeys wherever passkeys can work.
+	if c.HooksURL == "" && c.PublicURL != "" {
+		c.HooksURL = c.PublicURL + "/hooks"
+	}
 	c.RequireAdminPasskeys = envBool("TASKIEM_REQUIRE_ADMIN_PASSKEYS", c.PublicURL != "")
 	if n, err := strconv.Atoi(os.Getenv("TASKIEM_LOGIN_BURST")); err == nil && n > 0 {
 		c.LoginBurst = n
@@ -385,7 +395,15 @@ func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]str
 }
 
 func (e *engine) hooks() *ingest.Handler {
-	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log}
+	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log,
+		Egress: &egress.Guard{Logger: e.log}}
+}
+
+// remote keeps providers' subscriptions for remotely registered triggers
+// in step with deployments (decision 0021).
+func (e *engine) remote() *remote.Reconciler {
+	return &remote.Reconciler{Pool: e.pool, Vault: e.vault, Registry: e.registry, Egress: &egress.Guard{Logger: e.log},
+		HooksURL: e.cfg.HooksURL, Logger: e.log}
 }
 
 // serve runs one role, or all of them in one process, until ctx ends.
@@ -438,6 +456,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
+		srv.Remote = e.remote()
 		srv.Alerts = alerter
 		// Catalogue submissions are checked in a sandbox of their own,
 		// started per submission (docs/connector-submissions.md).
@@ -500,7 +519,7 @@ func serve(ctx context.Context, args []string) error {
 		// Billing: periods, dunning, payment reconciliation, usage snapshots.
 		// Verified custom domains are re-verified (docs/embedding.md).
 		domains := &embed.DomainChecker{Pool: e.pool, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run)
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, e.remote().Run)
 		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)

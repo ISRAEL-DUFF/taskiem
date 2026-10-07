@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"mime"
 	"net/http"
 	"net/url"
@@ -28,8 +29,10 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/httpsec"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -67,6 +70,9 @@ type Handler struct {
 	// its ceiling they get 429 with Retry-After.
 	Rate  rate.Limit
 	Burst int
+	// Egress guards calls a connector's enricher makes to its provider
+	// before a run starts (a truncated event's row); nil refuses them.
+	Egress *egress.Guard
 
 	once    sync.Once
 	router  http.Handler
@@ -547,19 +553,55 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		connection = chi.URLParam(r, "connection")
 	}
-	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: secrets.PurposeIngestVerify})
-	creds, err := h.Connections.Credentials(use, tenant, env, conn.Manifest.ID, connection)
-	if errors.Is(err, secrets.ErrAmbiguous) {
-		replyErr(w, http.StatusUnauthorized, "several connections match; name one with ?connection=")
-		return
-	}
-	if err != nil && !errors.Is(err, secrets.ErrNotFound) {
-		h.unavailable(w, r, err)
-		return
-	}
+	// A remotely registered trigger (decision 0021) is delivered to the
+	// subscription Taskiem created, named in the URL it registered; it is
+	// verified with the secret the provider returned for it, and starts
+	// only the workflow that owns it.
+	var sub *remote.Subscription
 	secret := ""
-	if spec.Verify != nil {
-		secret = creds[spec.Verify.SecretField]
+	if spec.Remote() {
+		id, err := uuid.Parse(r.URL.Query().Get("subscription"))
+		if err == nil {
+			err = db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+				var err error
+				sub, err = remote.Lookup(ctx, tx, id)
+				return err
+			})
+			if err != nil {
+				h.unavailable(w, r, err)
+				return
+			}
+		}
+		if sub == nil || sub.Connector != ref || sub.Trigger != name || sub.Environment != env {
+			replyErr(w, http.StatusNotFound, "no such subscription")
+			return
+		}
+		if !sub.Present {
+			// Being deleted at the provider: refuse for good, not for retry.
+			replyErr(w, http.StatusGone, "this subscription was removed")
+			return
+		}
+		connection = sub.Connection
+		use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindWebhook, Purpose: secrets.PurposeIngestVerify})
+		secret, err = h.Secrets.Get(use, tenant, remote.SecretEnv, remote.SecretName(sub.ID))
+		if err != nil && !errors.Is(err, secrets.ErrNotFound) {
+			h.unavailable(w, r, err)
+			return
+		}
+	} else {
+		use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: secrets.PurposeIngestVerify})
+		creds, err := h.Connections.Credentials(use, tenant, env, conn.Manifest.ID, connection)
+		if errors.Is(err, secrets.ErrAmbiguous) {
+			replyErr(w, http.StatusUnauthorized, "several connections match; name one with ?connection=")
+			return
+		}
+		if err != nil && !errors.Is(err, secrets.ErrNotFound) {
+			h.unavailable(w, r, err)
+			return
+		}
+		if spec.Verify != nil {
+			secret = creds[spec.Verify.SecretField]
+		}
 	}
 	verify := func() error { return connector.VerifyWebhook(spec.Verify, secret, r.Header, body) }
 	if spec.Verify != nil && spec.Verify.Scheme == "query_secret" {
@@ -603,24 +645,47 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// A provider's test of the endpoint: verified and acknowledged, and
+	// started only by workflows that subscribe to its event by name.
+	test := false
+	if spec.TestEvent != "" {
+		v, err := h.exprs.Eval(spec.TestEvent, act)
+		b, _ := v.(bool)
+		test = b && err == nil
+	}
 	// Subscribed workflows, loaded once for every event in the delivery.
-	type sub struct {
+	type subscriber struct {
 		workflow   uuid.UUID
 		version    int
 		events     []string
 		connection *string
+		options    map[string]any
 	}
-	var subs []sub
+	var subs []subscriber
 	err = db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT workflow_id, version, COALESCE(events, '{}'), connection FROM triggers
-			WHERE type = 'connector_event' AND environment = $1 AND connector = $2 AND trigger_name = $3`, env, ref, name)
+		if sub != nil && test {
+			if err := remote.TestReceived(ctx, tx, sub.ID); err != nil {
+				return err
+			}
+		}
+		owner := uuid.Nil
+		if sub != nil {
+			owner = sub.WorkflowID
+		}
+		rows, err := tx.Query(ctx, `SELECT workflow_id, version, COALESCE(events, '{}'), connection, options FROM triggers
+			WHERE type = 'connector_event' AND environment = $1 AND connector = $2 AND trigger_name = $3 AND ($4::uuid IS NULL OR workflow_id = $4)`,
+			env, ref, name, nullUUID(owner))
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
-			var s sub
-			if err := rows.Scan(&s.workflow, &s.version, &s.events, &s.connection); err != nil {
+			var s subscriber
+			var opts []byte
+			if err := rows.Scan(&s.workflow, &s.version, &s.events, &s.connection, &opts); err != nil {
 				return err
+			}
+			if len(opts) > 0 {
+				_ = json.Unmarshal(opts, &s.options)
 			}
 			subs = append(subs, s)
 		}
@@ -684,6 +749,9 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		if spec.Split != "" {
 			payload["item"], trig["item"] = item, item
 		}
+		if test {
+			out["test"], trig["test"] = true, true
+		}
 		if correlation != "" {
 			woke, fresh, err := h.Store.DeliverSignalOnce(ctx, tenant, env, ref+":"+name, correlation, dedup, payload)
 			if err != nil {
@@ -694,18 +762,28 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		runs := []uuid.UUID{}
 		for _, s := range subs {
-			if len(s.events) > 0 && !slices.Contains(s.events, event) {
+			if (len(s.events) > 0 || test) && !slices.Contains(s.events, event) {
 				continue
 			}
 			if s.connection != nil && *s.connection != connection {
 				continue
+			}
+			runTrig := trig
+			if enrich := conn.Enrichers[name]; enrich != nil {
+				body, err := h.enrich(ctx, enrich, tenant, env, conn, connection, s.options, p.body)
+				if err != nil {
+					h.unavailable(w, r, fmt.Errorf("completing the event: %w", err))
+					return
+				}
+				runTrig = maps.Clone(trig)
+				runTrig["body"] = body
 			}
 			// Signals above were delivered whatever the tenant's limits; a
 			// refused start fails the delivery so the provider retries, and
 			// the retry's signal is recognised as a duplicate.
 			run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
 				TenantID: tenant, WorkflowID: s.workflow, Version: s.version, Environment: env,
-				Trigger: trig, StartedBy: "connector:" + ref, TriggerID: "event/" + s.workflow.String() + "/" + env, DedupKey: dedup,
+				Trigger: runTrig, StartedBy: "connector:" + ref, TriggerID: "event/" + s.workflow.String() + "/" + env, DedupKey: dedup,
 				Throttled: d.throttled,
 			})
 			if le, ok := runtime.IsLimit(err); ok {
@@ -788,4 +866,36 @@ func (h *Handler) connectorHandshake(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte(answer))
+}
+
+// enrichTimeout bounds an enricher's calls to the provider, inside the
+// delivery's budget.
+const enrichTimeout = 3 * time.Second
+
+// enrich lets a connector complete a verified event before the run it
+// starts is recorded. The connection is read only if the enricher calls
+// the provider.
+func (h *Handler) enrich(ctx context.Context, f connector.Enricher, tenant uuid.UUID, env string, conn *connector.Connector, connection string, opts map[string]any, body any) (any, error) {
+	ctx, cancel := context.WithTimeout(ctx, enrichTimeout)
+	defer cancel()
+	call := connector.EventCall{Options: opts, Connect: func() (map[string]string, *http.Client, error) {
+		if h.Egress == nil {
+			return nil, nil, errors.New("no egress guard: this edge cannot call providers")
+		}
+		use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: secrets.PurposeIngestEnrich})
+		creds, err := h.Connections.Credentials(use, tenant, env, conn.Manifest.ID, connection)
+		if err != nil {
+			return nil, nil, err
+		}
+		pol := egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":ingest"}
+		return creds, h.Egress.Client(pol, enrichTimeout), nil
+	}}
+	return f(ctx, call, body)
+}
+
+func nullUUID(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
 }

@@ -44,6 +44,12 @@ const (
 	PurposeIngestVerify = "ingest.verify"
 	PurposeGitSync      = "git.sync"
 	PurposeAlertDeliver = "alert.deliver"
+	// PurposeRemoteRegister: creating, updating, checking or deleting a
+	// trigger's subscription at its provider (decision 0021).
+	PurposeRemoteRegister = "remote.register"
+	// PurposeIngestEnrich: completing a verified delivery at the provider
+	// before its runs start (a truncated event's row).
+	PurposeIngestEnrich = "ingest.enrich"
 	PurposeUnspecified  = "unspecified"
 )
 

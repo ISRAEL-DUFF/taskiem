@@ -30,6 +30,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/httpsec"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -110,6 +111,11 @@ type Server struct {
 	// Billing is plans, subscriptions and payments (billing.go); nil or
 	// not enabled is billing off: the internal plan, every feature.
 	Billing *billing.Service
+	// Remote applies remotely registered triggers' subscriptions at their
+	// providers right after a publish or undeploy (decision 0021); the
+	// scheduler retries what it cannot finish. Nil leaves it all to the
+	// scheduler.
+	Remote *remote.Reconciler
 
 	ussd     ussdState  // USSD channels, sessions and menus (ussd.go)
 	limiters limiterSet // sign-in and other unauthenticated attempts
@@ -233,6 +239,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/workflows/{wf}/versions/{v}/publish", s.publish)
 			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/triggers", s.listTriggers)
 			r.With(s.need(PermWorkflowPublish)).Post("/workflows/{wf}/promote", s.promote)
+			r.With(s.need(PermWorkflowPublish)).Delete("/workflows/{wf}/deployments/{env}", s.undeploy)
 			r.With(s.need(PermWorkflowRead)).Get("/environments", s.listEnvironments)
 			r.With(s.need(PermAlertManage)).Get("/alerts", s.listAlerts)
 			r.With(s.need(PermAlertManage)).Get("/alerts/channels", s.listAlertChannels)

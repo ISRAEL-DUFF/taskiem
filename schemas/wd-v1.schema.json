@@ -1375,6 +1375,10 @@
                   },
                   "connection": {
                     "type": "string"
+                  },
+                  "options": {
+                    "type": "object",
+                    "description": "Settings of the connector trigger, checked against its manifest's options schema (for a remotely registered trigger: what to subscribe to at the provider)."
                   }
                 }
               }

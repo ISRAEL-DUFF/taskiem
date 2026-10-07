@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
@@ -403,8 +404,14 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		}
 		by := p.id()
 		var digest string
-		if probs, digest, published, err = s.publishTx(r.Context(), tx, p.TenantID, wf, v, &by, ""); err != nil || !published {
+		if probs, digest, published, err = s.publishTx(r.Context(), tx, p.TenantID, wf, v, &by, ""); err != nil {
 			return err
+		}
+		if !published {
+			// Publishing a published version again repairs its remote
+			// subscriptions (a webhook paused, broken or deleted at the
+			// provider).
+			return remote.Repair(r.Context(), tx, wf)
 		}
 		return auditTx(r, tx, "workflow.publish", fmt.Sprintf("%s/%d", wf, v), map[string]any{"digest": digest})
 	})
@@ -425,6 +432,9 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		if g := s.proposeToGit(r, wf, v); g != nil {
 			out["git"] = g
 		}
+	}
+	if subs := s.applyRemote(r, wf); len(subs) > 0 {
+		out["remote_subscriptions"] = subs
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -586,6 +596,10 @@ type triggerInfo struct {
 	NextFireAt  *time.Time `json:"next_fire_at,omitempty"`
 	ServiceCode *string    `json:"service_code,omitempty"` // ussd: the code the edge routes by
 	URL         string     `json:"url,omitempty"`
+	// Remote is the subscription Taskiem keeps at the provider for a
+	// remotely registered trigger (decision 0021); its URL is Taskiem's to
+	// manage.
+	Remote *remote.Status `json:"remote,omitempty"`
 }
 
 // listTriggers shows where a published workflow listens: webhook and
@@ -598,6 +612,7 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var out []triggerInfo
+	var subs []remote.Status
 	err = s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, NULLIF(next_fire_at, 'infinity'), service_code
 			FROM triggers WHERE workflow_id = $1 ORDER BY environment`, wf)
@@ -609,6 +624,10 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 			err := row.Scan(&t.ID, &t.Environment, &t.Type, &t.Version, &t.Path, &t.Auth, &t.SecretName, &t.Connector, &t.Trigger, &t.Cron, &t.Timezone, &t.NextFireAt, &t.ServiceCode)
 			return t, err
 		})
+		if err != nil {
+			return err
+		}
+		subs, err = remote.List(r.Context(), tx, `workflow_id = $1`, wf)
 		return err
 	})
 	if err != nil {
@@ -616,6 +635,11 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i, t := range out {
+		for j, sub := range subs {
+			if sub.Desired == "present" && sub.Environment == t.Environment && t.Connector != nil && sub.Connector == *t.Connector {
+				out[i].Remote = &subs[j]
+			}
+		}
 		base := "/hooks/" + p.TenantID.String()
 		switch {
 		case t.Path != nil:
@@ -624,5 +648,5 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 			out[i].URL = base + "/connectors/" + *t.Connector + "/" + *t.Trigger + "?env=" + t.Environment
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"triggers": nonNil(out)})
+	writeJSON(w, http.StatusOK, map[string]any{"triggers": nonNil(out), "remote_subscriptions": subs})
 }

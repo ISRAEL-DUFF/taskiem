@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/audit"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -61,6 +62,9 @@ type connectionInfo struct {
 	ExpiresAt   *time.Time `json:"expires_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at"` // last recorded read of its credentials
+	// Remote is the state of the subscriptions Taskiem keeps at the
+	// provider through this connection (decision 0021), when there are any.
+	Remote *remoteSummary `json:"remote,omitempty" db:"-"`
 }
 
 func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +77,11 @@ func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[connectionInfo])
+		if out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[connectionInfo]); err != nil {
+			return err
+		}
+		subs, err := remote.List(r.Context(), tx, `$1 = '' OR environment = $1`, only)
+		summarise(out, subs)
 		return err
 	})
 	if err != nil {
@@ -133,6 +141,11 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		}
 		s.fail(w, r, err)
 		return
+	}
+	// Remote subscriptions that waited for a connection in this
+	// environment are tried again now (decision 0021).
+	if err := s.tx(r, func(tx pgx.Tx) error { return remote.Retry(r.Context(), tx, env, c.Ref()) }); err != nil {
+		s.Logger.Warn("remote subscriptions: retrying after a new connection", "err", err)
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name})
 }

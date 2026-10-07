@@ -5,6 +5,7 @@ package ingest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -17,6 +18,8 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -42,6 +45,8 @@ type webhookConfig struct {
 type eventConfig struct {
 	connector, trigger, connection string
 	events                         []string
+	options                        map[string]any
+	remote                         bool
 }
 
 type scheduleConfig struct {
@@ -89,6 +94,26 @@ func parseEvent(c map[string]any, reg connector.Lookup) (eventConfig, error) {
 		if len(spec.Events) > 0 && !slices.Contains(spec.Events, ev) {
 			return e, fmt.Errorf("trigger %q does not send %q (it sends %s)", e.trigger, ev, strings.Join(spec.Events, ", "))
 		}
+	}
+	e.remote = spec.Remote()
+	opts, given := c["options"]
+	if given {
+		if e.options, ok = opts.(map[string]any); !ok {
+			return e, fmt.Errorf("trigger options must be an object")
+		}
+	}
+	if len(spec.Options) == 0 {
+		if given {
+			return e, fmt.Errorf("trigger %q of %s takes no options", e.trigger, e.connector)
+		}
+		return e, nil
+	}
+	if e.options == nil {
+		e.options = map[string]any{}
+	}
+	raw, _ := json.Marshal(e.options)
+	if msgs := schemacheck.New("https://schemas.taskiem.dev/connectors/"+e.connector+"/triggers/"+e.trigger+"/options.json", spec.Options).Validate(raw); len(msgs) > 0 {
+		return e, fmt.Errorf("trigger options: %s", strings.Join(msgs, "; "))
 	}
 	return e, nil
 }
@@ -169,6 +194,18 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 	}
 	var err error
 	c := def.Trigger.Config
+	// A remotely registered trigger's subscription is declared here, in the
+	// deploying transaction; one this version no longer has is released.
+	// The reconciler (engine/remote) calls the provider afterwards.
+	var ev eventConfig
+	if def.Trigger.Type == "connector_event" {
+		ev, _ = parseEvent(c, reg)
+	}
+	if !ev.remote {
+		if err := remote.Release(ctx, tx, wf, envs); err != nil {
+			return err
+		}
+	}
 	for _, env := range envs {
 		id := uuid.Must(uuid.NewV7())
 		switch def.Trigger.Type {
@@ -177,9 +214,17 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, path, auth, dedup, secret_name)
 				VALUES ($1, $2, $3, $4, $5, 'webhook', $6, $7, NULLIF($8, ''), $9)`, id, tenant, wf, version, env, w.path, w.auth, w.dedup, WebhookSecret(def))
 		case "connector_event":
-			e, _ := parseEvent(c, reg)
-			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, connector, trigger_name, events, connection)
-				VALUES ($1, $2, $3, $4, $5, 'connector_event', $6, $7, $8, NULLIF($9, ''))`, id, tenant, wf, version, env, e.connector, e.trigger, e.events, e.connection)
+			e := ev
+			var opts []byte
+			if e.options != nil {
+				opts, _ = json.Marshal(e.options)
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, connector, trigger_name, events, connection, options)
+				VALUES ($1, $2, $3, $4, $5, 'connector_event', $6, $7, $8, NULLIF($9, ''), $10)`, id, tenant, wf, version, env, e.connector, e.trigger, e.events, e.connection, opts)
+			if err == nil && e.remote {
+				_, err = remote.Declare(ctx, tx, tenant, wf, env, version, remote.Declaration{
+					Connector: e.connector, Trigger: e.trigger, Connection: e.connection, Events: e.events, Options: e.options})
+			}
 		case "schedule":
 			if env != ScheduleEnvironment {
 				continue

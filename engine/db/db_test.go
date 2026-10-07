@@ -367,6 +367,8 @@ func TestDispatchRoleCannotReadPayloads(t *testing.T) {
 		"SELECT detail FROM audit_log",
 		"SELECT environment FROM runs",
 		"SELECT name FROM users",
+		"SELECT options FROM remote_subscriptions",
+		"SELECT remote_id FROM remote_subscriptions",
 	} {
 		_, err := d.Dispatch.Exec(ctx, q)
 		if sqlState(err) != "42501" {
