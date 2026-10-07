@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/mysql"
 	"github.com/israel-duff/taskiem/connectors/opay"
 	"github.com/israel-duff/taskiem/connectors/paystack"
+	"github.com/israel-duff/taskiem/connectors/pgdock"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/prembly"
 	"github.com/israel-duff/taskiem/connectors/remita"
@@ -44,6 +45,9 @@ type Options struct {
 	OpayURL, RemitaURL                            string
 	MonoURL, PremblyURL, YouverifyURL             string
 	MpesaURL, MTNMoMoURL                          string
+	// PGDockURL is the platform's PGDock, for connections that name no
+	// server of their own (TASKIEM_PGDOCK_URL; none by default).
+	PGDockURL string
 	// GoogleTokenURL overrides Google's OAuth token endpoint (tests).
 	GoogleTokenURL string
 }
@@ -75,6 +79,7 @@ func Register(r *connector.Registry, o Options) error {
 		mpesa.New(mpesa.Options{BaseURL: o.MpesaURL}),
 		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
 		postgres.New(),
+		pgdock.New(pgdock.Options{BaseURL: o.PGDockURL}),
 		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),
 		sftp.New(),

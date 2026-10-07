@@ -1,0 +1,150 @@
+# PGDock (managed Postgres). Built only from what PGDock publishes, read
+# 7 October 2026 (decision 0018, the "third-party test"):
+#   docs/webhooks.md   webhooks: payload, PGDock-Signature, delivery, truncation
+#   docs/cli.md        API tokens: one organisation, scopes, project restriction
+#   api/openapi.yaml   /me (TokenGrant), /orgs/{org}, /projects,
+#                      /projects/{id}/webhooks[/{webhook_id}[/rotate-secret]],
+#                      /projects/{id}/tables/{schema}/{table}/rows, Error
+# Writes wait for a parameterised endpoint (plan item P1-G1); this version
+# reads rows and starts workflows from row changes. See docs/integrations/pgdock.md.
+manifest: connector/v1
+id: pgdock
+version: 1.0.0
+name: PGDock
+description: Start workflows when rows change in a PGDock project (Taskiem creates and removes the webhook itself), and query a table's rows.
+category: database
+auth:
+  type: api_key
+  fields:
+    - { key: token, label: "API token (pgd_…). Restrict it to the project; read and write scopes", secret: true }
+    - { key: project_id, label: Project ID }
+    - { key: org_id, label: Organisation ID (optional; checked against the token), required: false }
+    - { key: base_url, label: "PGDock server URL (https://…; empty: the platform's PGDock)", required: false }
+  test: { action: test_connection }
+# The server is the platform's PGDock (TASKIEM_PGDOCK_URL) or the
+# connection's own (a self-hosted PGDock); the egress guard still refuses
+# private addresses.
+egress_hosts: ["${connection.base_url}"]
+actions:
+  test_connection:
+    title: Check the connection
+    description: Reads the token (organisation, scopes, projects it is restricted to) and names its organisation and projects. Fails when the connection's project is not one the token can reach.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        organisation:
+          type: object
+          properties:
+            id:   { type: string }
+            name: { type: string }
+        project:
+          type: object
+          properties:
+            id:   { type: string }
+            name: { type: string }
+        projects:
+          type: array
+          items:
+            type: object
+            properties:
+              id:   { type: string }
+              name: { type: string }
+        scopes:     { type: array, items: { type: string } }
+        restricted: { type: boolean, description: The token is restricted to some projects (recommended) }
+        expires_at: { type: string }
+        warnings:   { type: array, items: { type: string } }
+  query_rows:
+    title: Query rows
+    description: >-
+      A page of a table's rows through PGDock's rows endpoint: structured
+      filters (compiled by PGDock to a parameterised WHERE clause), order,
+      up to 1,000 rows, and keyset pagination (pass next as after). Values
+      are never put into SQL text. PGDock returns every value as text.
+    class: read
+    input:
+      type: object
+      required: [table]
+      properties:
+        schema: { type: string, default: public }
+        table:  { type: string }
+        filters:
+          type: array
+          items:
+            type: object
+            required: [column, op]
+            properties:
+              column: { type: string }
+              op:     { type: string, enum: [eq, neq, lt, lte, gt, gte, contains, is_null, not_null, in] }
+              value:  {}
+              values: { type: array }
+        order:
+          type: array
+          items:
+            type: object
+            required: [column]
+            properties:
+              column: { type: string }
+              desc:   { type: boolean }
+        limit: { type: integer, minimum: 1, maximum: 1000, default: 50 }
+        after: { type: string, description: The previous page's next }
+    output:
+      type: object
+      properties:
+        rows:        { type: array, items: { type: object } }
+        columns:     { type: array, items: { type: object, properties: { name: { type: string }, type: { type: string } } } }
+        next:        { type: string, description: Cursor of the next page; empty on the last }
+        order:       { type: string }
+        key_columns: { type: array, items: { type: string } }
+    pii:
+      - { field: output.rows, category: other }
+  get_row:
+    title: Get a row by its key
+    description: One row by its primary key (for example the primary_key of a truncated row-changed event). found is false when there is no such row.
+    class: read
+    input:
+      type: object
+      required: [table, key]
+      properties:
+        schema: { type: string, default: public }
+        table:  { type: string }
+        key:    { type: object, description: "Primary key columns and values, e.g. {id: 7}" }
+    output:
+      type: object
+      properties:
+        found: { type: boolean }
+        row:   { type: object }
+    pii:
+      - { field: output.row, category: other }
+triggers:
+  row_changed:
+    type: webhook
+    # Taskiem creates the PGDock webhook when a workflow using this trigger
+    # is deployed, updates it on a redeploy and deletes it when the
+    # workflow leaves the environment (decision 0021).
+    registration: remote
+    verify: { scheme: hmac_sha256_timestamped, header: PGDock-Signature, signature_format: t_v1, tolerance: 5m }
+    events: [INSERT, UPDATE, DELETE, TEST]
+    event_type: =body.type
+    # PGDock delivers at least once; PGDock-Event-Id names the event.
+    dedup: "='pgdock-event-id' in headers ? headers['pgdock-event-id'] : body.id"
+    test_event: =body.type == 'TEST'
+    options:
+      type: object
+      required: [tables]
+      additionalProperties: false
+      properties:
+        tables:
+          type: array
+          minItems: 1
+          items: { type: string, pattern: "^[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)?$" }
+          description: Tables as schema.table, or table in public
+        columns:
+          type: array
+          items: { type: string }
+          description: For UPDATE, start only when one of these columns changed
+        refetch_truncated:
+          type: boolean
+          default: false
+          description: A change over 256 KB arrives without its records; fetch the row by its primary key before the run starts (it may have changed since)
