@@ -257,6 +257,9 @@ type versionInfo struct {
 	PublishedAt *time.Time `json:"published_at"`
 	GitCommit   *string    `json:"git_commit"`  // the commit a Git-led sync deployed it from
 	GitRequest  *string    `json:"git_request"` // the pull or merge request a platform-led publish opened
+	// AIBuild is the AI build a version was saved from: the AI is its
+	// co-author, the person in created_by its author.
+	AIBuild *uuid.UUID `json:"ai_build"`
 }
 
 func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -274,7 +277,7 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key, &sum.GitPath); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr
+		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id
 			FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC`, wf)
 		if err != nil {
 			return err
@@ -314,9 +317,9 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	var info versionInfo
 	var def, layout []byte
 	err = s.tx(r, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, definition, layout
+		return tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id, definition, layout
 			FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
-			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &def, &layout)
+			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &info.AIBuild, &def, &layout)
 	})
 	if err != nil {
 		s.fail(w, r, err)

@@ -51,6 +51,10 @@ type Limits struct {
 	// MaxSecrets and MaxConnections: named secrets and active connections.
 	MaxSecrets     int `json:"max_secrets"`
 	MaxConnections int `json:"max_connections"`
+	// AIMonthlyTokens: tokens AI building may use per UTC month (spec
+	// 12.3). Beyond it AI building is refused and people build by hand;
+	// runs are never affected.
+	AIMonthlyTokens int64 `json:"ai_monthly_tokens"`
 
 	// A sub-tenant's partner and the partner-wide run caps it shares with
 	// its siblings (spec 13.1); zero for other tenants. Set by the store.
@@ -110,7 +114,12 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"max_payload_bytes", "largest webhook body accepted (0: the platform maximum)"},
 	{"max_secrets", "named secrets (0: no limit)"},
 	{"max_connections", "active connections (0: no limit)"},
+	{"ai_monthly_tokens", "tokens AI building may use per UTC month; beyond it, build by hand (0: no limit)"},
 }
+
+// DefaultAIMonthlyTokens is the platform's default monthly AI budget: a
+// few dozen builds with self-correction on a frontier model.
+const DefaultAIMonthlyTokens = 2_000_000
 
 // MaxPayload is the largest delivery any tenant may be allowed.
 const MaxPayload = 10 << 20
@@ -124,6 +133,7 @@ func DefaultLimits() Limits {
 		MaxStepsPerRun:    100000,
 		WorkerConcurrency: 32,
 		MaxPayloadBytes:   1 << 20,
+		AIMonthlyTokens:   DefaultAIMonthlyTokens,
 	}
 }
 
@@ -176,7 +186,7 @@ func ParseLimit(key, s string) (any, error) {
 		return f, nil
 	}
 	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && n > math.MaxInt32) {
+	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && n > math.MaxInt32) {
 		return nil, fmt.Errorf("%s: %q is not a non-negative whole number", key, s)
 	}
 	if key == "max_payload_bytes" && n > MaxPayload {
@@ -342,6 +352,7 @@ type Usage struct {
 	Workflows     int64          `json:"workflows"`
 	Secrets       int64          `json:"secrets"`
 	Connections   int64          `json:"connections"`
+	AITokens      int64          `json:"ai_tokens_this_month"`
 	TasksInFlight map[string]int `json:"tasks_in_flight"` // per queue
 }
 
@@ -380,6 +391,9 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 			Scan(&u.RunningRuns, &u.QueuedRuns, &u.Workflows, &u.Secrets, &u.Connections); err != nil {
 			return err
 		}
+		if u.AITokens, err = AITokensThisMonth(ctx, tx, tenant); err != nil {
+			return err
+		}
 		u.TasksInFlight = map[string]int{}
 		rows, err := tx.Query(ctx, `SELECT queue, count(*) FROM tasks WHERE tenant_id = $1 AND lease_owner IS NOT NULL GROUP BY queue`, tenant)
 		if err != nil {
@@ -413,6 +427,14 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 		v.Hits = []LimitHit{}
 	}
 	return v, err
+}
+
+// AITokensThisMonth is what a tenant's AI building used this UTC month.
+func AITokensThisMonth(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(total_tokens), 0)::bigint FROM ai_interactions
+		WHERE tenant_id = $1 AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, tenant).Scan(&n)
+	return n, err
 }
 
 // SetLimits changes a tenant's limits (operators only: no API calls it).

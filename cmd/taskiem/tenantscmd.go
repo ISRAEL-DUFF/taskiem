@@ -98,8 +98,8 @@ func tenantsCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	_ = tw.Flush()
 	u := v.Usage
-	fmt.Fprintf(stdout, "\nusage: %d runs today, %d this month; %d running, %d queued; %d workflows, %d secrets, %d connections\n",
-		u.RunsToday, u.RunsThisMonth, u.RunningRuns, u.QueuedRuns, u.Workflows, u.Secrets, u.Connections)
+	fmt.Fprintf(stdout, "\nusage: %d runs today, %d this month; %d running, %d queued; %d workflows, %d secrets, %d connections; %d AI tokens this month\n",
+		u.RunsToday, u.RunsThisMonth, u.RunningRuns, u.QueuedRuns, u.Workflows, u.Secrets, u.Connections, u.AITokens)
 	for _, h := range v.Hits {
 		fmt.Fprintf(stdout, "reached %s on %s (%d times)\n", h.Limit, h.Day, h.Hits)
 	}
@@ -112,5 +112,6 @@ func limitsMap(l runtime.Limits) map[string]any {
 		"max_running_runs": l.MaxRunningRuns, "max_queued_runs": l.MaxQueuedRuns, "runs_per_day": l.RunsPerDay, "runs_per_month": l.RunsPerMonth,
 		"max_workflows": l.MaxWorkflows, "max_steps_per_run": l.MaxStepsPerRun, "worker_concurrency": l.WorkerConcurrency,
 		"max_payload_bytes": l.MaxPayloadBytes, "max_secrets": l.MaxSecrets, "max_connections": l.MaxConnections,
+		"ai_monthly_tokens": l.AIMonthlyTokens,
 	}
 }

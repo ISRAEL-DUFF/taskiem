@@ -22,14 +22,17 @@ var schema = schemacheck.New("https://schemas.taskiem.dev/connector/v1.json", sc
 
 // Manifest is the subset of a connector/v1 manifest the engine reads.
 type Manifest struct {
-	ID       string                 `json:"id"`
-	Version  string                 `json:"version"`
-	Name     string                 `json:"name"`
-	Auth     Auth                   `json:"auth"`
-	BaseURL  string                 `json:"base_url"`
-	Egress   []string               `json:"egress_hosts"`
-	Actions  map[string]ActionSpec  `json:"actions"`
-	Triggers map[string]TriggerSpec `json:"triggers"`
+	ID       string `json:"id"`
+	Version  string `json:"version"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	// Description is the manifest's own summary, shown to builders.
+	Description string                 `json:"description"`
+	Auth        Auth                   `json:"auth"`
+	BaseURL     string                 `json:"base_url"`
+	Egress      []string               `json:"egress_hosts"`
+	Actions     map[string]ActionSpec  `json:"actions"`
+	Triggers    map[string]TriggerSpec `json:"triggers"`
 }
 
 type Auth struct {
@@ -50,6 +53,7 @@ type AuthField struct {
 
 type ActionSpec struct {
 	Title       string          `json:"title"`
+	Description string          `json:"description"`
 	Class       effects.Class   `json:"class"`
 	Idempotency *effects.Spec   `json:"idempotency"`
 	Reconcile   string          `json:"reconcile"`

@@ -23,6 +23,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
+	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -64,6 +65,8 @@ type config struct {
 	Limits runtime.Limits
 	// WhatsApp is the platform number (TASKIEM_WHATSAPP_*); nil: off.
 	WhatsApp *whatsapp.Config
+	// AI is the model provider for AI building (TASKIEM_AI_*, docs/ai.md).
+	AI ai.Config
 }
 
 func env(k, def string) string {
@@ -149,6 +152,9 @@ func loadConfig() (config, error) {
 	}
 	c.Limits = limits
 	if c.WhatsApp, err = whatsapp.ConfigFromEnv(os.LookupEnv); err != nil {
+		return c, err
+	}
+	if c.AI, err = ai.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
 	if c.DSN == "" {
@@ -301,6 +307,12 @@ func serve(ctx context.Context, args []string) error {
 		srv.PublicURL = cfg.PublicURL
 		srv.Alerts = alerter
 		srv.LoginBurst = cfg.LoginBurst
+		if prov, err := ai.New(cfg.AI); err != nil {
+			return err
+		} else if prov != nil {
+			srv.AI = &api.AISettings{Provider: prov, Effort: cfg.AI.Effort, MaxTokens: cfg.AI.MaxTokens}
+			log.Info("AI building on", "provider", prov.Name(), "model", prov.Model())
+		}
 		// Checking a Python step compiles CPython first (seconds): do it now.
 		go func() { _ = sandbox.InitPython() }()
 		srv.Done = ctx.Done()

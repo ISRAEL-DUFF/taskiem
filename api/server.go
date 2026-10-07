@@ -75,6 +75,9 @@ type Server struct {
 	Done <-chan struct{}
 	// Alerts sends channels' test messages; nil refuses them.
 	Alerts *alerts.Alerter
+	// AI drafts workflows from goals (spec 12, docs/ai.md); nil turns AI
+	// building off (503 on /v1/ai/build).
+	AI *AISettings
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
@@ -179,6 +182,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/environments", s.createEnvironment)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/environments/{env}", s.putEnvironment)
 			r.With(s.need(PermWorkflowEdit)).Post("/validate", s.validate)
+			r.Route("/ai", s.aiRoutes)
 			r.With(s.need(PermWorkflowRead)).Post("/code/generate", s.generateCode)
 			r.With(s.need(PermWorkflowEdit)).Post("/code/compile", s.compileCode)
 
