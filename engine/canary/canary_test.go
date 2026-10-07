@@ -92,21 +92,21 @@ func (f *fake) server(t *testing.T) *httptest.Server {
 func TestProbe(t *testing.T) {
 	cases := []struct {
 		name         string
-		f            fake
+		f            *fake
 		secret       string
 		ok           bool
 		stage, check string
 	}{
-		{name: "ok", f: fake{pending: 2}, ok: true},
-		{name: "bad signature", secret: "wrong", stage: "accept", check: "http_401"},
-		{name: "ingest down", f: fake{status: 503}, stage: "accept", check: "http_503"},
-		{name: "run failed", f: fake{finish: "failed"}, stage: "complete", check: "run_failed"},
-		{name: "wrong output", f: fake{wrong: true}, stage: "output"},
-		{name: "never finishes", f: fake{pending: 1 << 30}, stage: "complete", check: "timeout"},
+		{name: "ok", f: &fake{pending: 2}, ok: true},
+		{name: "bad signature", f: &fake{}, secret: "wrong", stage: "accept", check: "http_401"},
+		{name: "ingest down", f: &fake{status: 503}, stage: "accept", check: "http_503"},
+		{name: "run failed", f: &fake{finish: "failed"}, stage: "complete", check: "run_failed"},
+		{name: "wrong output", f: &fake{wrong: true}, stage: "output"},
+		{name: "never finishes", f: &fake{pending: 1 << 30}, stage: "complete", check: "timeout"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			f := &c.f
+			f := c.f
 			f.secret = "s3cret"
 			srv := f.server(t)
 			defer srv.Close()

@@ -107,11 +107,16 @@ const statusUsage = `usage:
 components: api, webhooks, runs, scheduler, integration:<name>; impacts: degraded, partial_outage, major_outage
 `
 
+var (
+	errStatusUsage = errors.New(strings.TrimSpace(statusUsage))
+	errCanaryUsage = errors.New(strings.TrimSpace(canaryUsage))
+)
+
 // statusCmd declares incidents and maintenance on the status page, as the
 // operator ($USER), recorded in the append-only updates.
 func statusCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New(statusUsage)
+		return errStatusUsage
 	}
 	if args[0] == "token" {
 		if len(args) != 2 || !nameOK(args[1]) {
@@ -147,7 +152,7 @@ func statusCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	var id uuid.UUID
 	if args[0] == "update" || args[0] == "resolve" {
 		if len(rest) == 0 {
-			return errors.New(statusUsage)
+			return errStatusUsage
 		}
 		if id, err = uuid.Parse(rest[0]); err != nil {
 			return fmt.Errorf("status %s: %q is not an incident id", args[0], rest[0])
@@ -155,7 +160,7 @@ func statusCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		rest = rest[1:]
 	}
 	if err := fs.Parse(rest); err != nil {
-		return fmt.Errorf("%w\n%s", err, statusUsage)
+		return fmt.Errorf("%w\n%w", err, errStatusUsage)
 	}
 	split := func(v string) []string {
 		var out []string
@@ -217,7 +222,7 @@ func statusCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "%s: %s (recorded as %s)\n", id, c.Status, actor)
 		return nil
 	}
-	return errors.New(statusUsage)
+	return errStatusUsage
 }
 
 func nameOK(s string) bool {
@@ -225,7 +230,8 @@ func nameOK(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !(r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+		word := r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+		if !word {
 			return false
 		}
 	}
@@ -244,7 +250,7 @@ const canaryUsage = `usage:
 // canaryCmd sets up and runs the synthetic probe (docs/reliability.md).
 func canaryCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New(canaryUsage)
+		return errCanaryUsage
 	}
 	switch args[0] {
 	case "setup":
@@ -286,7 +292,7 @@ func canaryCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		}
 		return nil
 	}
-	return errors.New(canaryUsage)
+	return errCanaryUsage
 }
 
 // canarySetup uses an owner's API key of the internal canary tenant.

@@ -47,8 +47,13 @@ func TestCanaryEndToEnd(t *testing.T) {
 	// The canary's key reads runs and nothing else.
 	req, _ := http.NewRequest("GET", srv.base+"/v1/workflows", nil)
 	req.Header.Set("Authorization", "Bearer "+settings["TASKIEM_CANARY_API_KEY"])
-	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusForbidden {
-		t.Errorf("canary key lists workflows: %v %v", resp, err)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("canary key lists workflows: %d", resp.StatusCode)
 	}
 
 	out.Reset()
