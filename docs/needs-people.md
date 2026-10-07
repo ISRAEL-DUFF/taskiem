@@ -77,6 +77,23 @@ Each connector is built from the provider's public documentation and tested agai
 | X4 | [ ] Onboard each partner: tenant created, SSO connected, their providers' credentials entered, first workflows in production | Partner success, with the partner | `taskiem bootstrap` or signup (`TASKIEM_ALLOW_SIGNUP`) creates tenants | G2 ("running production workflows") |
 | X5 | [ ] A design partner's compliance or risk team reviews approvals, audit and reports, and signs off | The partner's compliance team | Policies, four-eyes, audit chain, anchors and reports built ([governance](governance.md), [compliance](compliance.md)) | G2 |
 
+## Phase 3
+
+Code goes ahead without these. Each is needed before its feature works for real users ([Phase 3 status](phase-3-status.md)).
+
+| # | Item | Who | Code status | Unblocks |
+| --- | --- | --- | --- | --- |
+| W1 | [ ] Meta Business verification and a WhatsApp Business Account for the shared platform number; the number itself | Ops / legal | The `whatsapp@1` connector and the chat interface run against a fake Cloud API | Every WhatsApp feature in production |
+| W2 | [ ] Message templates submitted and approved by Meta (one per notification type, approval request, OTP binding), in each launch language | Product / ops | Templates are defined in code with their variables | Notifications outside the 24-hour window, approvals |
+| W3 | [ ] A Business Solution Provider decision (become one, or partner with one) for tenants' own numbers through embedded signup | Leadership | Planned for A2 | Own-number onboarding |
+| W4 | [ ] A USSD aggregator account (shortcode, sandbox credentials) | Ops | Planned for A3 | USSD fast path |
+| W5 | [ ] Native speakers of Pidgin, Yoruba, Hausa and Igbo to write and test intents and replies; a transcription vendor or model decision | Product | Planned for A4 | Language support, voice notes |
+| AI1 | [ ] A model API account for the AI builder (Anthropic by default), its data-processing terms, and whether prompts may leave Nigeria; which self-hosted open model to offer tenants with strict residency | Leadership / legal | Model layer is provider-agnostic, with Claude by default and a fake model for tests | AI builder and repair against a real model |
+| AI2 | [ ] 200+ real automation requests from dogfooding and design partners for the evaluation suite, with the expected workflows reviewed by a person | Product / design partners | Suite runner and seed requests in code | Gate G3 (70% first-try) |
+| AI3 | [ ] Per-plan monthly AI budgets (amounts) | Leadership | Budgets enforced per tenant with a default | Pricing |
+| EM1 | [ ] A holdco product team (Payrolla) to embed the builder for its customers, and its partner connector bridge | Payrolla | Planned for C2–C4 | Gate G3 |
+| EM2 | [ ] Custom domain and TLS issuance for white-label partners (DNS ownership checks, certificates) | Infra | Planned for C2 | White-label tiers |
+
 ## Decisions waiting on someone
 
 | # | Decision | Who | Today |
