@@ -130,16 +130,13 @@ func (m *Manifest) check() []string {
 				add("%s/idempotency: %v", p, strings.TrimPrefix(err.Error(), "effects: "))
 			}
 		}
-		if len(a.PII) > 0 {
-			props := inputProperties(a.Input)
-			for _, f := range a.PII {
-				if segs, ok := OutputPIIPath(f.Field); ok {
-					if !schemaHasPath(a.Output, segs) {
-						add("%s/pii: %q is not in the output schema", p, f.Field)
-					}
-				} else if !props[f.Field] {
-					add("%s/pii: %q is not an input property", p, f.Field)
+		for _, f := range a.PII {
+			if segs, ok := OutputPIIPath(f.Field); ok {
+				if !schemaHasPath(a.Output, segs) {
+					add("%s/pii: %q is not in the output schema", p, f.Field)
 				}
+			} else if !schemaHasPath(a.Input, InputPIIPath(f.Field)) {
+				add("%s/pii: %q is not in the input schema", p, f.Field)
 			}
 		}
 	}
@@ -153,16 +150,11 @@ func (m *Manifest) check() []string {
 	return out
 }
 
-func inputProperties(schema json.RawMessage) map[string]bool {
-	var s struct {
-		Properties map[string]json.RawMessage `json:"properties"`
-	}
-	_ = json.Unmarshal(schema, &s)
-	out := make(map[string]bool, len(s.Properties))
-	for k := range s.Properties {
-		out[k] = true
-	}
-	return out
+// InputPIIPath reads a pii field naming a place in the action's input:
+// "<key>[.<key>|.*]...", optionally prefixed "input.", "*" standing for
+// every array element (transfers.*.account_name).
+func InputPIIPath(field string) []string {
+	return strings.Split(strings.TrimPrefix(field, "input."), ".")
 }
 
 // OutputPIIPath reads a pii field naming a place in the action's output:

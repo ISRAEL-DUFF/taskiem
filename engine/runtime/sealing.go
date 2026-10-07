@@ -83,7 +83,7 @@ func (s *Store) connectorPIIPaths(ctx context.Context, tenant uuid.UUID, p histo
 		if _, isOutput := connector.OutputPIIPath(f.Field); isOutput {
 			continue // sealed when the result is written (outputPIIPaths)
 		}
-		out = append(out, pii.Path{Segments: []string{"input", f.Field}, Category: piiCategory(f.Category)})
+		out = append(out, pii.Path{Segments: append([]string{"input"}, connector.InputPIIPath(f.Field)...), Category: piiCategory(f.Category)})
 	}
 	return out, nil
 }

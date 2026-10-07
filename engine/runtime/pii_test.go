@@ -241,3 +241,52 @@ func TestErasureReachesCachedDecisions(t *testing.T) {
 		t.Error("check was not scheduled")
 	}
 }
+
+// Personal data deep in an input (a bulk transfer's account names) is
+// sealed when declared by path.
+func TestNestedInputPIIIsSealed(t *testing.T) {
+	e := rt.New(t)
+	m := connector.MustParse([]byte(`
+manifest: connector/v1
+id: bulk
+version: 1.0.0
+name: Bulk test
+description: A bulk transfer.
+category: payments
+auth: { type: none, fields: [] }
+base_url: https://bulk.test
+egress_hosts: [bulk.test]
+actions:
+  send:
+    title: Send
+    class: read
+    input: { type: object, properties: { transfers: { type: array, items: { type: object, properties: { account_name: { type: string }, amount: { type: integer } } } }, notify: { type: array, items: { type: string } } } }
+    output: { type: object }
+    pii: [{ field: input.transfers.*.account_name, category: name }, { field: notify, category: email }]
+`))
+	var got []any
+	if err := e.Registry.Register(&connector.Connector{Manifest: m, Actions: map[string]connector.Action{
+		"send": connector.ActionFunc(func(_ context.Context, req connector.Request) (connector.Response, error) {
+			got, _ = req.Input["transfers"].([]any)
+			return connector.Response{Output: map[string]any{"ok": true}}, nil
+		})}}); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_bulk","version":1,"name":"bulk","trigger":{"type":"manual"},
+	  "steps":[{"id":"pay","type":"connector","connector":"bulk@1","action":"send","input":{"transfers":[{"account_name":"Chiamaka Obi","amount":5000},{"account_name":"Tunde Bello","amount":7000}],"notify":["ops@payrolla.ng"]}}]}`)
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	for _, ev := range events(t, e, ref) {
+		for _, name := range []string{"Chiamaka", "Tunde", "ops@payrolla"} {
+			if strings.Contains(string(ev.Payload), name) {
+				t.Errorf("plaintext %q in stored %s(%s): %s", name, ev.Type, ev.StepID, ev.Payload)
+			}
+		}
+	}
+	if len(got) != 2 || got[0].(map[string]any)["account_name"] != "Chiamaka Obi" || got[1].(map[string]any)["amount"] == nil {
+		t.Errorf("the connector should get the plaintext input: %v", got)
+	}
+}

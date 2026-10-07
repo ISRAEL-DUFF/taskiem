@@ -52,6 +52,7 @@ actions:
       than sent twice. Quota refusals (429, rate-limit 403s) prove nothing
       was sent and are retried.
     class: unsafe_write
+    pii: [{ field: to, category: email }, { field: cc, category: email }, { field: bcc, category: email }]
     compensate: null
     input: &email
       type: object
@@ -97,6 +98,7 @@ actions:
     title: Create a draft
     description: users.drafts.create. Not idempotent (a repeat makes a second draft).
     class: unsafe_write
+    pii: [{ field: to, category: email }, { field: cc, category: email }, { field: bcc, category: email }]
     compensate: null
     input: *email
     output:

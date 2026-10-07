@@ -81,7 +81,9 @@ func TestInvalid(t *testing.T) {
     idempotency: { field: ref, encoding: base64url, length: 22, limits: { charset: "a-z0-9" } }
     input: { type: object }`, "alphabet"},
 		"pii field missing": {`
-  get: { title: Get, class: read, input: { type: object, properties: { a: { type: string } } }, pii: [b] }`, `"b" is not an input property`},
+  get: { title: Get, class: read, input: { type: object, properties: { a: { type: string } } }, pii: [b] }`, `"b" is not in the input schema`},
+		"nested pii field missing": {`
+  get: { title: Get, class: read, input: { type: object, properties: { xs: { type: array, items: { type: object, properties: { a: { type: string } } } } } }, pii: [xs.*.b] }`, `"xs.*.b" is not in the input schema`},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

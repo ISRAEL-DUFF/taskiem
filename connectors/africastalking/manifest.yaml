@@ -144,7 +144,7 @@ actions:
               discount:      { type: string }
               error_message: { type: string }
     pii:
-      - { field: recipients, category: phone }
+      - { field: recipients.*.phone_number, category: phone }
       - { field: output.responses.*.phone_number, category: phone }
   get_airtime_status:
     title: Get an airtime transaction's status

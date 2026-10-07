@@ -129,6 +129,17 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 		if v == nil || IsEnvelope(v) {
 			return v, nil
 		}
+		if list, ok := v.([]any); ok {
+			// A declared list of values (recipients' numbers): each is sealed.
+			for i := range list {
+				s, err := sealAt(ctx, c, tx, tenant, list[i], nil, cat, taint)
+				if err != nil {
+					return nil, err
+				}
+				list[i] = s
+			}
+			return list, nil
+		}
 		if _, ok := scalarKey(v); !ok {
 			return v, nil // only scalars are sealed; objects keep their shape
 		}

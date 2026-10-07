@@ -44,7 +44,7 @@ Income and creditworthiness requests start a billed analysis but change nothing,
 
 **Never twice.** The engine's key is the `reference` of payments, mandates and debits: 22 characters of base64url, because Mono caps payment references at 24 characters and requires at least 10. These actions are reconcilable writes: after an unknown outcome the engine looks the reference up before sending again. If Mono refuses a reference it has seen, the connector reports the payment, mandate or debit already made under it. A debit Mono refuses (insufficient funds, code 51; mandate not ready; the same-day lockout after repeated failures) fails the step with Mono's response code: no money moved. Codes 01, 09 and 99 mean the bank has not answered; the step parks for a person (or wait for the debit event). A debit that reconciles is reported in `verify_payment`'s shape; check its `status`.
 
-**Personal data.** Inputs carrying names, emails, phone numbers, addresses, BVNs and account numbers are declared PII. Outputs (`get_identity`, account names and numbers) are not declared, because the manifest contract only declares input fields; BVNs, phone numbers, account numbers and emails in outputs are caught by detection, names and addresses are not (see below).
+**Personal data.** Inputs carrying names, emails, phone numbers, addresses, BVNs and account numbers are declared PII. Personal data in outputs (`get_identity`'s name, BVN, contacts and address; account names and numbers) is declared by output place (`output.<path>`) and sealed when the result is written.
 
 ## Webhooks
 
