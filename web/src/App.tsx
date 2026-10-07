@@ -6,6 +6,7 @@ import { Editor } from "./pages/Editor";
 import { Runs } from "./pages/Runs";
 import { RunPage } from "./pages/Run";
 import { Approvals } from "./pages/Approvals";
+import { Catalogue } from "./pages/Catalogue";
 import { Connections } from "./pages/Connections";
 import { Settings } from "./pages/Settings";
 import { Audit } from "./pages/Audit";
@@ -116,6 +117,7 @@ function SignedIn() {
     ["/approvals", "Approvals", can("approval.decide") || can("workflow.publish")],
     ["/policies", "Approval policies", can("workflow.read")],
     ["/connections", "Connections", can("connection.manage")],
+    ["/catalogue", "Connector catalogue", can("connector.manage") || can("workflow.read")],
     ["/settings", "Secrets & settings", can("secret.manage") || can("workflow.read")],
     ["/alerts", "Alerts", can("alert.manage")],
     ["/audit", "Audit log", can("audit.read")],
@@ -157,6 +159,7 @@ function SignedIn() {
           <Route path="/runs/:id" element={<RunPage />} />
           <Route path="/approvals" element={<Approvals />} />
           <Route path="/connections" element={<Connections />} />
+          <Route path="/catalogue" element={<Catalogue />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/billing" element={<Billing />} />
           <Route path="/alerts" element={<Alerts />} />

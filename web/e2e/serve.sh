@@ -17,6 +17,8 @@ TASKIEM_BOOTSTRAP_PASSWORD='correct horse battery' bin/taskiem bootstrap --tenan
 # The E2E tenant is also a partner (embed.spec.ts embeds the builder).
 tenant=$(psql "$dsn" -tAc "SELECT id FROM tenants WHERE name = 'E2E'")
 bin/taskiem tenants partner "$tenant" --capabilities white_label,custom_domains >/dev/null
+# It also publishes a connector in the public catalogue (catalogue.spec.ts).
+bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant"
 export TASKIEM_LISTEN=127.0.0.1:18080 TASKIEM_METRICS_LISTEN=127.0.0.1:19090 TASKIEM_WEB_DIR="$root/web/dist" TASKIEM_SECURE_COOKIES=false
 # Passkeys need a host name: the passkey test browses http://localhost:18080.
 export TASKIEM_PUBLIC_URL=http://localhost:18080 TASKIEM_REQUIRE_ADMIN_PASSKEYS=false
