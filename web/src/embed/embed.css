@@ -1,0 +1,36 @@
+/* The embedded builder's own rules, on top of the console's stylesheet
+   (whose :root rules apply to the shadow host). Branding tokens arrive as
+   custom properties set on .tk-root (theme.ts). */
+:host {
+  display: block;
+  min-height: 560px;
+}
+.tk-root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 var(--tk-font, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  display: flex;
+  flex-direction: column;
+}
+.tk-root button,
+.tk-root input,
+.tk-root select,
+.tk-root textarea,
+.tk-root .card,
+.tk-root .canvas,
+.tk-root .side,
+.tk-root .step-node {
+  border-radius: var(--tk-radius, 6px);
+}
+.tk-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 0;
+}
+.tk-header .grow { flex: 1; }
+.tk-logo { max-height: 28px; max-width: 160px; }
+.tk-body { padding: 12px 16px; flex: 1; min-width: 0; }
+.tk-root .editor { height: 560px; }
+.tk-footer { color: var(--muted); font-size: 11px; text-align: right; padding: 4px 16px 8px; }

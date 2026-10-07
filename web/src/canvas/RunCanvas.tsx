@@ -10,8 +10,23 @@ import { StepNode, type StepFlowNode } from "./StepNode";
 const nodeTypes = { step: StepNode };
 
 /** The workflow's canvas with each step lit by its state in a run. */
-export function RunCanvas({ workflow, version, rows, ended, onSelect }: { workflow: string; version: number; rows: StepRow[]; ended: boolean; onSelect?: (step: string) => void }) {
-  const doc = useLoad(() => get<{ definition: WorkflowDefinition; layout?: Layout }>(`/v1/workflows/${workflow}/versions/${version}`), [workflow, version]);
+export function RunCanvas({
+  workflow,
+  version,
+  rows,
+  ended,
+  onSelect,
+  load = (wf, v) => get(`/v1/workflows/${wf}/versions/${v}`),
+}: {
+  workflow: string;
+  version: number;
+  rows: StepRow[];
+  ended: boolean;
+  onSelect?: (step: string) => void;
+  /** Loads the version (the embedded builder reads it through the embed API). */
+  load?: (workflow: string, version: number) => Promise<{ definition: WorkflowDefinition; layout?: Layout }>;
+}) {
+  const doc = useLoad(() => load(workflow, version), [workflow, version]);
   const graph = useMemo(() => (doc.data ? toGraph(doc.data.definition, doc.data.layout ?? {}) : { nodes: [], edges: [] }), [doc.data]);
   const status = topLevelStatus(
     rows,
