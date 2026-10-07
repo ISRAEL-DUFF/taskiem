@@ -26,7 +26,7 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
-          {{- range $path := list "/hooks/" "/git-hooks/" }}
+          {{- range $path := list "/hooks/" "/git-hooks/" "/channels/" }}
           - path: {{ $path }}
             pathType: Prefix
             backend:

@@ -698,6 +698,13 @@ spec:
                 name: taskiem-edge
                 port:
                   name: edge
+          - path: /channels/
+            pathType: Prefix
+            backend:
+              service:
+                name: taskiem-edge
+                port:
+                  name: edge
           - path: /
             pathType: Prefix
             backend:

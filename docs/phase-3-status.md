@@ -12,7 +12,7 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 
 | Workstream | Milestone | Scope | Spec | Status |
 | --- | --- | --- | --- | --- |
-| A | A1 | Number binding by OTP; `chat_sessions` state machine; template library; approvals by interactive buttons with signed decision tokens; step-up hand-off to a web passkey or TOTP; status and trigger commands with explicit confirmation; per-number rate limits | 11.1–11.3, 11.5, 9.1 | In progress |
+| A | A1 | Number binding by OTP; `chat_sessions` state machine; template library; approvals by interactive buttons with signed decision tokens; step-up hand-off to a web passkey or TOTP; status and trigger commands with explicit confirmation; per-number rate limits | 11.1–11.3, 11.5, 9.1 | Done (code; [what exists](#a1-whatsapp-as-a-client-of-the-platform)); needs W1, W2 for production |
 | A | A2 | WhatsApp Flows forms for inputs and PIN step-up; shared platform number vs own number (embedded signup); template cost accounting | 11.1, 11.4, 16 | Planned |
 | A | A3 | USSD fast path (menu steps inline at the edge, writes handed to the engine) and an aggregator connector | 8.4 | Planned |
 | A | A4 | Pidgin, Yoruba, Hausa and Igbo intents and replies; voice-note transcription (beta, tested by native speakers) | 11.6 | Planned |
@@ -25,6 +25,26 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 | C | C3 | Partner connector bridge (the partner's API as a pre-authenticated connector) | 13.4 | Planned |
 | C | C4 | First embedded deployment inside a holdco product (Payrolla customer automations) | — | Needs people |
 | — | X | Container steps (gVisor or Firecracker); mobile money (M-Pesa, MTN MoMo, Airtel Money); tax and statutory connectors | 7.5 | Planned |
+
+## A1: WhatsApp as a client of the platform
+
+Done 7 October 2026. Setup, user guide and security model: [WhatsApp](whatsapp.md). Production needs the number and approved templates ([needs people](needs-people.md#phase-3) W1, W2).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Platform number | `TASKIEM_WHATSAPP_*` from the Secret; Meta's webhook at `/channels/whatsapp` on the edge (handshake with the verify token, `X-Hub-Signature-256` before parsing, message ids claimed once); sends to the Graph API through the egress guard (base URL overridable for tests); every tenant message prefixed with the tenant's name (shared number) | `engine/whatsapp` (`graph.go`, `webhook.go`, `platform.go`), `api/whatsapp_chat.go`, `cmd/taskiem/serve.go` |
+| Number binding (11.2) | Account > WhatsApp: proof of the account, a 6-digit code by the `taskiem_otp` authentication template, typed in the web app or sent back from the number; one number per account and per number; 10 minutes, five guesses, three codes an hour; unlinking; audited in each of the person's tenants with the number masked | `api/whatsapp.go`, migration 00035, `web/src/pages/Account.tsx` |
+| Identity per message | A message resolves to (tenant, user, roles): the person bound to the number, in the tenant the number works in (`switch <organisation>`), with their current permissions; unbound numbers get a short reply, with a hook (`Server.WhatsAppPublic`) for public menus later | `api/whatsapp_chat.go` |
+| `chat_sessions` (11.3) | idle, collecting_input, awaiting_confirmation, awaiting_approval_stepup; tenant data under forced RLS, read only in the conversation's current tenant; expiring within the 24-hour window; the window and current tenant per number in person-level tables reached only by functions | migrations 00035, 00036 |
+| Templates | Eight templates (OTP, approval request, step-up link, run failed, run completed, needs reconciliation, approval waiting, generic alert) defined in code with category, body, variables and buttons; text inside the window, the template outside it, and on Meta's 131047 | `engine/whatsapp/templates.go`, [list for submission](whatsapp.md#templates) |
+| Approvals by buttons (11.1, 9.1) | The notifier sends each open approval to eligible approvers with bound numbers (role or delegation, not makers, approval.decide), subject masked (account numbers last four); Approve/Reject carry signed single-use decision tokens; a tap is checked against the token and the sender's number, then decided by `VoteApproval` (policies, levels, distinct approvers, makers, delegation); refusals audited; `approvals` resends | `api/whatsapp_approvals.go`, `engine/whatsapp/token.go`, `engine/whatsapp/mask.go` |
+| Step-up hand-off | A policy needing step-up gets a 10-minute single-use link (token in the fragment) to `/handoff`, where the same person, signed in to the same tenant, confirms that decision with a passkey or TOTP | `api/whatsapp_approvals.go`, `web/src/pages/Handoff.tsx` |
+| Status and triggers (11.1, 11.5) | `status` / `what failed today?` (run.read; counts and latest failures, redacted); `run <workflow>` matched deterministically to workflows deployed in prod the person may start (run.start), required inputs collected field by field against the input schema (personal ones sealed while waiting), an explicit summary and **yes**, then `StartRun` with plan limits; the person hears how the run ended | `api/whatsapp_chat.go`, `engine/whatsapp/inputs.go` |
+| Rate limits (11.5) | Per number: messages, run starts, unbound replies, codes | `api/whatsapp_chat.go` |
+| Notifications | WhatsApp alert channel kind (members by email; text in the window, the kind's template outside) | `engine/alerts`, `api/alerts.go`, migration 00037 |
+| Tests | Fake Graph API (`engine/whatsapp/whatsapptest`); binding (happy path, wrong code, expiry, attempt limit, number taken, pacing, by reply, unbinding, audit); signature, handshake and dedup; unbound reply; tenant switch; approvals end to end through the runtime (approve and reject, forgery, other key, replay, pair, expiry, wrong sender, self-approval, closed); step-up hand-off; status redaction; trigger with inputs and confirmation; flood limit; window and template fallback; a browser test of binding | `api/whatsapp_test.go`, `engine/whatsapp/whatsapp_test.go`, `web/e2e/whatsapp.spec.ts` |
+
+Left for A2: WhatsApp Flows forms (inputs) and a Flows PIN for step-up; tenants' own numbers (a second `whatsapp.Platform` per phone number id, embedded signup, W3); template cost accounting against plan allowances; languages beyond English.
 
 ## Exit gate G3
 

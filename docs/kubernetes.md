@@ -14,7 +14,7 @@ Both need Kubernetes 1.27 or later, a Postgres 16 database, and (in production) 
 | Role | Default replicas | Serves | Probes |
 |---|---|---|---|
 | `api` | 2 | Web app and HTTP API on 8080 | `/readyz` (readiness) and `/healthz` (liveness) on 8080 |
-| `edge` | 2 | Webhooks (`/hooks/`) and Git push hooks (`/git-hooks/`) on 8081 | `/healthz` on 8081 |
+| `edge` | 2 | Webhooks (`/hooks/`), Git push hooks (`/git-hooks/`) and the platform WhatsApp number (`/channels/whatsapp`) on 8081 | `/healthz` on 8081 |
 | `orchestrator` | 2 | Nothing; advances runs | `/healthz` on 9090 |
 | `scheduler` | 1 | Nothing; runs schedules, timers, retention archiving, audit anchoring and alerts | `/healthz` on 9090 |
 | `worker` | 2, or autoscaled | Nothing; runs connector and sandbox steps | `/healthz` on 9090 |
@@ -24,7 +24,7 @@ Every role also serves Prometheus metrics on 9090. `mode: all` runs every role i
 Alongside the Deployments the chart creates:
 
 - a Service per role;
-- an Ingress, if enabled, that sends `/hooks/` and `/git-hooks/` to the edge role and everything else to the API;
+- an Ingress, if enabled, that sends `/hooks/`, `/git-hooks/` and `/channels/` to the edge role and everything else to the API;
 - a migration Job (a Helm pre-install and pre-upgrade hook);
 - a PersistentVolumeClaim for the scheduler;
 - PodDisruptionBudgets;

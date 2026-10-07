@@ -83,8 +83,8 @@ Code goes ahead without these. Each is needed before its feature works for real 
 
 | # | Item | Who | Code status | Unblocks |
 | --- | --- | --- | --- | --- |
-| W1 | [ ] Meta Business verification and a WhatsApp Business Account for the shared platform number; the number itself | Ops / legal | The `whatsapp@1` connector and the chat interface run against a fake Cloud API | Every WhatsApp feature in production |
-| W2 | [ ] Message templates submitted and approved by Meta (one per notification type, approval request, OTP binding), in each launch language | Product / ops | Templates are defined in code with their variables | Notifications outside the 24-hour window, approvals |
+| W1 | [ ] Meta Business verification and a WhatsApp Business Account for the shared platform number; the number itself | Ops / legal | Done in code (A1): the platform number (`TASKIEM_WHATSAPP_*`, [WhatsApp](whatsapp.md)) with binding, approvals, status, triggers and alerts, tested against a fake Cloud API; needs the real number, its token, app secret and the webhook subscription | Every WhatsApp feature in production |
+| W2 | [ ] Message templates submitted and approved by Meta (one per notification type, approval request, OTP binding), in each launch language | Product / ops | Done in code (A1): eight templates with names, categories, bodies, variables and buttons, listed for submission in [WhatsApp](whatsapp.md#templates); English only | Notifications outside the 24-hour window, approvals |
 | W3 | [ ] A Business Solution Provider decision (become one, or partner with one) for tenants' own numbers through embedded signup | Leadership | Planned for A2 | Own-number onboarding |
 | W4 | [ ] A USSD aggregator account (shortcode, sandbox credentials) | Ops | Planned for A3 | USSD fast path |
 | W5 | [ ] Native speakers of Pidgin, Yoruba, Hausa and Igbo to write and test intents and replies; a transcription vendor or model decision | Product | Planned for A4 | Language support, voice notes |

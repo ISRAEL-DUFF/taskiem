@@ -1,6 +1,6 @@
 # WhatsApp integration
 
-The connector is `connectors/whatsapp` (`whatsapp@1`). It uses the WhatsApp Cloud API on Meta's Graph API v25.0, built only from Meta's public documentation (developers.facebook.com/docs/whatsapp/cloud-api, now served from developers.facebook.com/documentation/business-messaging/whatsapp), read 6 October 2026.
+The connector is `connectors/whatsapp` (`whatsapp@1`), used by tenants inside workflows with their own credentials. Taskiem's own number, through which people approve and run workflows by chat, is separate: see [WhatsApp](../whatsapp.md). It uses the WhatsApp Cloud API on Meta's Graph API v25.0, built only from Meta's public documentation (developers.facebook.com/docs/whatsapp/cloud-api, now served from developers.facebook.com/documentation/business-messaging/whatsapp), read 6 October 2026.
 
 ## Set up the app
 

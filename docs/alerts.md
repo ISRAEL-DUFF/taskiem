@@ -8,6 +8,7 @@ Under **Alerts** (`alert.manage`), a tenant chooses where alerts go (channels) a
 | --- | --- | --- |
 | Email | Recipients (up to 20). The deployment sets `TASKIEM_SMTP_URL` and `TASKIEM_ALERT_FROM` | A plain-text message: subject `[Taskiem] <title>`, the details, and a link to the run |
 | Slack | An [incoming webhook](https://api.slack.com/messaging/webhooks) URL (`https://hooks.slack.com/services/…`). It is a credential: it is kept encrypted in the vault and never shown again | The title in bold, the details and the link |
+| WhatsApp | Members, by email (up to 20). The deployment sets up the platform number ([WhatsApp](whatsapp.md)); each member links their own number under Account | To each member with a linked number: the title, details (personal data masked) and link as text if they wrote to Taskiem in the last 24 hours, otherwise the approved template for the rule's kind. Fails with a reason when no member has a number |
 | Webhook | An HTTPS URL. Taskiem creates a signing key and shows it once | `POST` of the alert as JSON (`id`, `kind`, `rule`, `title`, `body`, `link`, `detail`, `created_at`) |
 
 **Send test** delivers a test message straight away and reports the error if it fails. Calls to Slack and webhooks go through the egress guard: private and metadata addresses are refused.
