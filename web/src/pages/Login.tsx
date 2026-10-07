@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, post } from "../api";
 import { useAuth } from "../auth";
 import { passkeysSupported } from "../passkeys";
@@ -64,6 +65,9 @@ export function Login() {
             <button className={sso ? "" : "primary"} type="submit" disabled={act.busy} style={{ width: "100%" }}>
               {act.busy ? "Signing in…" : "Sign in"}
             </button>
+            <p className="hint" style={{ textAlign: "center" }}>
+              <Link to="/forgot-password">Forgot password?</Link>
+            </p>
           </>
         )}
       </form>

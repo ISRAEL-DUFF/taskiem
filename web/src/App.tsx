@@ -17,6 +17,7 @@ import { Account, Passkeys } from "./pages/Account";
 import { useState } from "react";
 import { ErrorBox, useAction } from "./ui";
 import { Reports } from "./pages/Reports";
+import { ForgotPassword, ResetPassword } from "./pages/Password";
 
 export function App() {
   return (
@@ -59,6 +60,9 @@ function EnrolPasskey() {
 function Shell() {
   const { me, can, logout } = useAuth();
   const loc = useLocation();
+  // Password recovery works signed in or out.
+  if (loc.pathname === "/forgot-password") return <ForgotPassword />;
+  if (loc.pathname === "/reset-password") return <ResetPassword />;
   if (me === undefined) return <div className="empty">Loading…</div>;
   if (me === null) {
     return loc.pathname === "/login" ? <Login /> : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;

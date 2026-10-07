@@ -3,6 +3,7 @@ import { del, get, post, type Invitation } from "../api";
 import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof } from "../passkeys";
 import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
+import { ChangePassword } from "./Password";
 
 interface Passkey {
   id: string;
@@ -145,6 +146,7 @@ export function Account() {
     <>
       <h1>Account</h1>
       <Invitations />
+      <ChangePassword />
       <Passkeys />
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Authenticator app</h2>
