@@ -105,7 +105,7 @@ Done 7 October 2026 (code): heavy workloads in a pinned image, in a sandbox per 
 | Worker | `container` queue and pool; effect classes and idempotency keys as for writes; heartbeats keep the lease for up to 30 minutes; cancelling the run or step deletes the Pod; secret reads audited (`step.container`); outputs, logs and errors scrubbed of secret values and the proxy token | `engine/runtime/containerstep.go` |
 | Plan limits | `container_minutes_monthly` (0, the default, turns container steps off) counted in `container_usage` from the sandbox's own timestamps; `container_concurrency` enforced when tasks are claimed; both inherited by sub-tenants, which can only be lowered | migration 00080, `engine/runtime/limits.go` |
 | Deployment | Helm `containerSteps`: sandbox namespace (Pod Security `restricted`), NetworkPolicy, ResourceQuota, a Role limited to the sandbox namespace, the container worker Deployment, optional RuntimeClass | `deploy/helm/taskiem/templates/containersteps.yaml`, [Kubernetes](kubernetes.md#container-steps) |
-| Threat model | Boundary B14 | [threat model](security/threat-model.md) |
+| Threat model | Boundary B15 | [threat model](security/threat-model.md) |
 
 Tests: schema and validation (digest, registry, clamping), the Kubernetes runner against a fake API server (the Pod specification, failures, cancellation, cleanup), the local runner (timeouts, output caps, files, environment), the egress proxy (allow, deny, private addresses, revocation), and the worker end to end with the fake runner (secrets scrubbed and audited, effect classes, cancellation, plan minutes, concurrency, egress through the proxy).
 

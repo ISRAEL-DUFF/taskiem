@@ -99,7 +99,7 @@ Cancelling a run, or losing a `parallel` race, stops a running container step wi
 
 ## Security model
 
-The container sandbox is trust boundary B14 in the [threat model](security/threat-model.md). In production (the Kubernetes runner) each attempt is a Pod in a dedicated namespace:
+The container sandbox is trust boundary B15 in the [threat model](security/threat-model.md). In production (the Kubernetes runner) each attempt is a Pod in a dedicated namespace:
 
 - **Runtime**: a gVisor RuntimeClass (`runsc`): the program's system calls are served by a user-space kernel, not the node's.
 - **Pod**: non-root (65532), read-only root file system, every capability dropped, no privilege escalation, the runtime's default seccomp profile; no service account token, no service links, no DNS resolver; `restartPolicy: Never`; guaranteed CPU and memory; `activeDeadlineSeconds` as a backstop to the step's timeout. The namespace enforces the `restricted` Pod Security Standard and has a ResourceQuota.

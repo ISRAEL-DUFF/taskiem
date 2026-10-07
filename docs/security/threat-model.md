@@ -45,7 +45,7 @@ Out of scope for the model: a compromised KMS root key together with the databas
                        orchestrator, scheduler ┤
  providers ◀─egress guard── worker ───────────┘──▶ OpenBao transit (root key)
                               └─ sandboxes: QuickJS, CPython, tenant WASM (wazero)
- providers ◀─egress guard── container worker ◀─proxy :3128── sandbox Pods (gVisor, B14)
+ providers ◀─egress guard── container worker ◀─proxy :3128── sandbox Pods (gVisor, B15)
                               └──▶ Kubernetes API (namespaced Role: sandbox namespace)
 ```
 
