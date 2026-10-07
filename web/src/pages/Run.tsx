@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { get, post, type RunEvent, type RunSummary } from "../api";
 import { useAuth } from "../auth";
 import { RunCanvas } from "../canvas/RunCanvas";
+import { RepairPanel } from "./RepairPanel";
 import { duration, timeline, type StepRow } from "../lib/timeline";
 import { Badge, ErrorBox, Field, Json, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
 
@@ -125,6 +126,7 @@ export function RunPage() {
           </div>
         )}
       </div>
+      <RepairPanel run={id} status={shownStatus} />
       <div className="toolbar">
         <h2 className="grow">Steps</h2>
         <div className="tabs" role="tablist">
