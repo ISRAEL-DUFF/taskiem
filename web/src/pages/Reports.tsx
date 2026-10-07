@@ -8,6 +8,7 @@ const KINDS: [string, string, string][] = [
   ["pii", "Access to personal data", "Every reveal of personal data in run history, and every erasure."],
   ["changes", "Workflow changes", "Every version: who wrote and published it, its commit or pull request, and what changed from the version before."],
   ["chain", "Audit chain", "The hash chain verified now, and the signed anchors made in the period."],
+  ["secret-use", "Secret use", "How often each secret and connection was decrypted, per day; those not used; and the hourly digests checked against the reads."],
 ];
 
 interface Report {

@@ -179,6 +179,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
 			r.With(s.need(PermSecretManage)).Get("/secrets", s.listSecrets)
+			r.With(s.need(PermAuditRead)).Get("/secrets/reads", s.listSecretReads)
 			r.With(s.need(PermSecretManage)).Put("/secrets/{env}/{name}", s.putSecret)
 			r.With(s.need(PermSecretManage)).Delete("/secrets/{env}/{name}", s.deleteSecret)
 			r.With(s.need(PermWorkflowRead)).Get("/variables", s.listVariables)

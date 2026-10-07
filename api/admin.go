@@ -60,14 +60,16 @@ type connectionInfo struct {
 	Status      string     `json:"status"`
 	ExpiresAt   *time.Time `json:"expires_at"`
 	CreatedAt   time.Time  `json:"created_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"` // last recorded read of its credentials
 }
 
 func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	var out []connectionInfo
 	only := principalFrom(r.Context()).Environment // a key limited to one environment sees only it
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT id, environment, connector, name, auth_type, status, expires_at, created_at FROM connections
-			WHERE $1 = '' OR environment = $1 ORDER BY environment, connector, name`, only)
+		rows, err := tx.Query(r.Context(), `SELECT c.id, c.environment, c.connector, c.name, c.auth_type, c.status, c.expires_at, c.created_at,
+			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = c.tenant_id AND sr.connection_id = c.id)
+			FROM connections c WHERE $1 = '' OR c.environment = $1 ORDER BY c.environment, c.connector, c.name`, only)
 		if err != nil {
 			return err
 		}
@@ -145,16 +147,19 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listSecrets(w http.ResponseWriter, r *http.Request) {
 	type secret struct {
-		Environment string    `json:"environment"`
-		Name        string    `json:"name"`
-		CreatedBy   string    `json:"created_by"`
-		UpdatedAt   time.Time `json:"updated_at"`
+		Environment string     `json:"environment"`
+		Name        string     `json:"name"`
+		CreatedBy   string     `json:"created_by"`
+		UpdatedAt   time.Time  `json:"updated_at"`
+		LastUsedAt  *time.Time `json:"last_used_at"` // last recorded read for use
 	}
 	var out []secret
 	only := principalFrom(r.Context()).Environment
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT environment, name, created_by, updated_at FROM secrets WHERE name IS NOT NULL AND environment NOT LIKE '\_%'
-			AND ($1 = '' OR environment = $1) ORDER BY environment, name`, only)
+		rows, err := tx.Query(r.Context(), `SELECT s.environment, s.name, s.created_by, s.updated_at,
+			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = s.tenant_id AND sr.connection_id IS NULL AND sr.environment = s.environment AND sr.name = s.name)
+			FROM secrets s WHERE s.name IS NOT NULL AND s.environment NOT LIKE '\_%'
+			AND ($1 = '' OR s.environment = $1) ORDER BY s.environment, s.name`, only)
 		if err != nil {
 			return err
 		}

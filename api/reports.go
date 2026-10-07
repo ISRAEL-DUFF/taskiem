@@ -34,18 +34,19 @@ type report struct {
 }
 
 var reportKinds = map[string]func(context.Context, pgx.Tx, *Server, uuid.UUID, time.Time, time.Time) (*report, error){
-	"approvals": approvalsReport,
-	"effects":   effectsReport,
-	"pii":       piiReport,
-	"changes":   changesReport,
-	"chain":     chainReport,
+	"approvals":  approvalsReport,
+	"effects":    effectsReport,
+	"pii":        piiReport,
+	"changes":    changesReport,
+	"chain":      chainReport,
+	"secret-use": secretUseReport,
 }
 
 func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {
 	kind := chi.URLParam(r, "kind")
 	build, ok := reportKinds[kind]
 	if !ok {
-		writeErr(w, http.StatusNotFound, "reports: approvals, effects, pii, changes, chain")
+		writeErr(w, http.StatusNotFound, "reports: approvals, effects, pii, changes, chain, secret-use")
 		return
 	}
 	q := r.URL.Query()

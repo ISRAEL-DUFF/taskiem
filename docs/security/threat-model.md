@@ -50,7 +50,7 @@ Out of scope for the model: a compromised KMS root key together with the databas
 | B5 | Worker → internet | HTTP steps, connectors, alert webhooks, Slack | Egress guard: per-tenant host allow-list, private, loopback, link-local and metadata ranges refused, the vetted IP pinned for the connection, redirects re-checked | `engine/egress` |
 | B6 | Tenant code → host | `code` steps, tenant WASM connectors, flow code at compile time | WebAssembly only (wazero, no host filesystem or sockets); memory, time and output limits; fetch only through the egress guard; secrets only those the step declares; a fresh instance per run | `engine/sandbox`, `engine/wasmconn`, `engine/flowcode` |
 | B7 | Tenant → tenant | Every table holding tenant data | Postgres row-level security, forced, on every tenant table; the app connects as `taskiem_app` and sets the tenant per transaction; services that run across tenants (scheduler, ingest) scope each query explicitly | `engine/db/migrations`, `api.Server.tx` |
-| B8 | Application → secrets | Secret reads in the worker | Envelope encryption, ciphertext bound to tenant and name; decrypted only in worker memory for the call; never in logs, events or responses (log attributes redacted) | `engine/secrets`, `cmd/taskiem` (`redactAttr`) |
+| B8 | Application → secrets | Secret reads in the worker | Envelope encryption, ciphertext bound to tenant and name; decrypted only in worker memory for the call; never in logs, events or responses (log attributes redacted) | `engine/secrets` (every decryption recorded in `secret_reads`, migration 00033), `cmd/taskiem` (`redactAttr`) |
 | B9 | Application → audit | Every privileged action | Append-only hash chain; heads signed and written outside the database and emailed; offline verification of exports | `engine/audit` |
 
 ## Threats and responses
@@ -74,7 +74,8 @@ STRIDE per boundary. **Status** is what the code does today. "Self-review" point
 | B6 | Sandbox escape | WebAssembly isolation; no host functions beyond fetch, logs and declared secrets | In place |
 | B6 | Resource exhaustion by tenant code | Memory, time and output limits per instance; queue concurrency | In place |
 | B7 | Cross-tenant read through a missing tenant filter | Forced RLS, so a missing `WHERE tenant_id` returns nothing rather than another tenant's rows | In place |
-| B8 | Secrets in logs, errors, run history or AI prompts | Redaction of log attributes; secret values never placed in events | In place. Per-use `secret.read` auditing is carried gap A4 |
+| B8 | Secrets in logs, errors, run history or AI prompts | Redaction of log attributes; secret values never placed in events | In place |
+| B8 | A secret used without a trace, or its trace removed | Every decryption for use recorded in `secret_reads` in the decrypting transaction (purpose, run, step, attempt; never the value); insert-only for the application role; hourly per-tenant digests appended to the audit chain, so a read removed, changed or added later fails the check ([compliance](../compliance.md#secret-use)) | In place (was carried gap A4). Someone with database write access can still remove reads of an hour not yet digested (at most about 75 minutes) |
 | B8 | Ciphertext swapped between tenants or names | Associated data binds tenant and name | In place |
 | B9 | History rewritten by someone with database access | Hash chain plus anchors outside the database; anchors emailed | In place, provided anchors go to write-once storage (see [kubernetes.md](../kubernetes.md#storage)) |
 | All | Personal data exposed in history, approvals or reports | Declared PII fields sealed (inputs and outputs); unsealing needs a permission and is audited | Nested input paths (`transfers[].account_name`) are carried gap A4 |

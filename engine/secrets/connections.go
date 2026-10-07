@@ -50,11 +50,13 @@ func (v *Vault) CreateConnection(ctx context.Context, tenant uuid.UUID, env, con
 }
 
 // Credentials returns a connection's decrypted credential fields. An empty
-// name selects the only active connection for the connector.
+// name selects the only active connection for the connector. The decryption
+// is recorded in secret_reads with the Use attached to ctx; a connection
+// without credentials decrypts nothing and records nothing.
 func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connector, name string) (map[string]string, error) {
 	out := map[string]string{}
 	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		q := `SELECT c.name, c.secret_ref FROM connections c WHERE c.tenant_id = $1 AND c.environment = $2 AND c.connector = $3 AND c.status = 'active'`
+		q := `SELECT c.id, c.name, c.secret_ref FROM connections c WHERE c.tenant_id = $1 AND c.environment = $2 AND c.connector = $3 AND c.status = 'active'`
 		args := []any{tenant, env, connector}
 		if name != "" {
 			q += ` AND c.name = $4`
@@ -65,13 +67,14 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 			return err
 		}
 		type match struct {
+			id   uuid.UUID
 			name string
 			ref  *uuid.UUID
 		}
 		var ms []match
 		for rows.Next() {
 			var m match
-			if err := rows.Scan(&m.name, &m.ref); err != nil {
+			if err := rows.Scan(&m.id, &m.name, &m.ref); err != nil {
 				rows.Close()
 				return err
 			}
@@ -96,7 +99,10 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 		if err != nil {
 			return err
 		}
-		return json.Unmarshal(raw, &out)
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return err
+		}
+		return record(ctx, tx, tenant, useFrom(ctx, KindConnection), env, ms[0].name, &ms[0].id, connector)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrNotFound

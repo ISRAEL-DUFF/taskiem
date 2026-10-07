@@ -27,6 +27,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
 // VaultEnv is the vault environment holding channels' secrets: the Slack
@@ -544,7 +545,7 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 		}
 		return a.Mailer.Send(ctx, a.From, cfg.To, BuildEmail(a.From, cfg.To, "[Taskiem] "+m.Title, text, m.ID.String()))
 	case "slack":
-		hook, err := a.Secrets.Get(ctx, tenant, VaultEnv, SecretName(channelID))
+		hook, err := a.Secrets.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindAlertChannel, Purpose: secrets.PurposeAlertDeliver}), tenant, VaultEnv, SecretName(channelID))
 		if err != nil {
 			return fmt.Errorf("reading the Slack webhook: %w", err)
 		}
@@ -555,7 +556,7 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 			URL string `json:"url"`
 		}
 		_ = json.Unmarshal(cfgRaw, &cfg)
-		key, err := a.Secrets.Get(ctx, tenant, VaultEnv, SecretName(channelID))
+		key, err := a.Secrets.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindAlertChannel, Purpose: secrets.PurposeAlertDeliver}), tenant, VaultEnv, SecretName(channelID))
 		if err != nil {
 			return fmt.Errorf("reading the signing key: %w", err)
 		}

@@ -9,6 +9,7 @@ interface Secret {
   name: string;
   created_by: string;
   updated_at: string;
+  last_used_at: string | null;
 }
 interface Variable {
   environment: string;
@@ -150,6 +151,7 @@ function Secrets({ env }: { env: string }) {
                 <td className="hint">
                   updated {fmtTime(s.updated_at)} by {s.created_by}
                 </td>
+                <td className="hint">{s.last_used_at ? `last used ${fmtTime(s.last_used_at)}` : "never used"}</td>
                 <td style={{ textAlign: "right" }}>
                   <button className="danger" onClick={() => confirm(`Delete ${s.name}?`) && void act.run(async () => (await del(`/v1/secrets/${env}/${s.name}`), reload()))}>
                     Delete

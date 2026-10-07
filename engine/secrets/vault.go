@@ -164,7 +164,8 @@ func (v *Vault) Put(ctx context.Context, tenant uuid.UUID, env, name string, val
 	return id, err
 }
 
-// Get returns a named secret's value; it implements runtime.Secrets.
+// Get returns a named secret's value; it implements runtime.Secrets. The
+// decryption is recorded in secret_reads with the Use attached to ctx.
 func (v *Vault) Get(ctx context.Context, tenant uuid.UUID, env, name string) (string, error) {
 	var out []byte
 	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -179,8 +180,10 @@ func (v *Vault) Get(ctx context.Context, tenant uuid.UUID, env, name string) (st
 		if err != nil {
 			return err
 		}
-		out, err = v.decrypt(ctx, tx, tenant, id, ct, wdek, ver)
-		return err
+		if out, err = v.decrypt(ctx, tx, tenant, id, ct, wdek, ver); err != nil {
+			return err
+		}
+		return record(ctx, tx, tenant, useFrom(ctx, KindSecret), env, name, nil, "")
 	})
 	return string(out), err
 }

@@ -495,7 +495,7 @@ func (s *Server) confirmTOTP(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, errTOTPEnrolled)
 		return
 	}
-	secret, err := s.Vault.Get(ctx, p.TenantID, identityEnv, totpName(p.UserID, true))
+	secret, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindIdentity, Purpose: "totp.enrol", Actor: p.Actor()}), p.TenantID, identityEnv, totpName(p.UserID, true))
 	if err != nil {
 		s.fail(w, r, fmt.Errorf("%w: start enrolment first", errConflict))
 		return
@@ -538,7 +538,7 @@ var errTOTPLocked = errors.New("too many wrong authenticator codes; try again in
 // same code cannot be replayed. Wrong codes are counted and audited; past
 // the limit it returns errTOTPLocked without looking at the code.
 func (s *Server) verifyTOTP(ctx context.Context, tenant, user uuid.UUID, code string) (bool, error) {
-	secret, err := s.Vault.Get(ctx, tenant, identityEnv, totpName(user, false))
+	secret, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindIdentity, Purpose: "totp.verify", Actor: user.String()}), tenant, identityEnv, totpName(user, false))
 	if errors.Is(err, secrets.ErrNotFound) {
 		return false, nil // not enrolled
 	}

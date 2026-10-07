@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/oidc"
 	"github.com/israel-duff/taskiem/engine/saml"
+	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
 // Single sign-on (spec 13.2) with a tenant's OIDC or SAML identity
@@ -485,7 +486,7 @@ func (s *Server) oidcProvider(ctx context.Context, c ssoConn) (*oidc.Provider, o
 	if err := json.Unmarshal(c.config, &cfg); err != nil {
 		return nil, cfg, err
 	}
-	secret, err := s.Vault.Get(ctx, c.tenant, identityEnv, ssoSecretName(c.id))
+	secret, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindIdentity, Purpose: "sso.login"}), c.tenant, identityEnv, ssoSecretName(c.id))
 	if err != nil {
 		return nil, cfg, err
 	}

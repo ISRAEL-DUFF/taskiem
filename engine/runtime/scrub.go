@@ -85,7 +85,7 @@ func (w *Worker) scrubCodeSecrets(ctx context.Context, p *plan) {
 		return
 	}
 	for _, name := range p.step.Code.Secrets {
-		if v, err := w.Secrets.Get(ctx, p.c.tenant, p.env, name); err == nil {
+		if v, err := w.secret(ctx, p, name); err == nil {
 			p.scrub = append(p.scrub, v)
 		}
 	}

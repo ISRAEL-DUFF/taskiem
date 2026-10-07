@@ -13,6 +13,19 @@ interface RunDoc {
 }
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
+/** A recorded decryption of a secret or connection credential (GET /v1/secrets/reads). */
+interface SecretRead {
+  id: string;
+  at: string;
+  kind: string;
+  environment: string;
+  name: string;
+  connector?: string;
+  purpose: string;
+  step_id?: string;
+  attempt?: number;
+}
+
 export function RunPage() {
   const { id = "" } = useParams();
   const { can } = useAuth();
@@ -26,6 +39,19 @@ export function RunPage() {
   const [resolving, setResolving] = useState<string | null>(null);
   const act = useAction();
   const status = data?.run.status;
+  // Which secrets and connections each step decrypted (audit.read only).
+  const reads = useLoad(
+    () => (can("audit.read") ? get<{ reads: SecretRead[] }>(`/v1/secrets/reads?run=${id}&limit=1000`) : Promise.resolve({ reads: [] as SecretRead[] })),
+    [id, status],
+  );
+  const readsByStep = useMemo(() => {
+    const m = new Map<string, SecretRead[]>();
+    for (const r of reads.data?.reads ?? []) {
+      if (!r.step_id) continue;
+      m.set(r.step_id, [...(m.get(r.step_id) ?? []), r]);
+    }
+    return m;
+  }, [reads.data]);
   useEffect(() => {
     if (status && TERMINAL.has(status)) setLive(false);
   }, [status]);
@@ -114,7 +140,7 @@ export function RunPage() {
       <div className="timeline" hidden={view !== "timeline"}>
         {rows.length === 0 && <div className="empty">No steps yet.</div>}
         {rows.map((s) => (
-          <StepCard key={s.id} row={s} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
+          <StepCard key={s.id} row={s} reads={readsByStep.get(s.id) ?? []} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
         ))}
       </div>
       {ended && ended.type === "RunFailed" && (
@@ -164,7 +190,7 @@ export function RunPage() {
   );
 }
 
-function StepCard({ row, canResolve, onResolve }: { row: StepRow; canResolve: boolean; onResolve: () => void }) {
+function StepCard({ row, reads, canResolve, onResolve }: { row: StepRow; reads: SecretRead[]; canResolve: boolean; onResolve: () => void }) {
   return (
     <div className={`step ${row.status}`} data-testid={`step-${row.id}`}>
       <div className="toolbar" style={{ marginBottom: 2 }}>
@@ -200,6 +226,24 @@ function StepCard({ row, canResolve, onResolve }: { row: StepRow; canResolve: bo
         <details>
           <summary>logs</summary>
           <Json value={row.logs} />
+        </details>
+      )}
+      {reads.length > 0 && (
+        <details>
+          <summary>secrets used ({reads.length})</summary>
+          <table>
+            <tbody>
+              {reads.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <code>{r.connector ? `${r.connector}/${r.name}` : r.name}</code> <span className="hint">{r.kind}</span>
+                  </td>
+                  <td className="hint">attempt {r.attempt}</td>
+                  <td className="hint">{fmtTime(r.at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </details>
       )}
     </div>

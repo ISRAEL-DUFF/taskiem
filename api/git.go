@@ -85,7 +85,7 @@ func (s *Server) gitHTTP(tenant uuid.UUID, apiURL, provider string) (*http.Clien
 
 // provider builds the client for a connection, with its stored credentials.
 func (s *Server) provider(ctx context.Context, tenant uuid.UUID, c gitConnection) (gitprovider.Provider, error) {
-	raw, err := s.Vault.Get(ctx, tenant, gitVaultEnv, gitCredName(c.Environment))
+	raw, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindGit, Purpose: secrets.PurposeGitSync}), tenant, gitVaultEnv, gitCredName(c.Environment))
 	if err != nil {
 		return nil, fmt.Errorf("git credentials for %s: %w", c.Environment, err)
 	}
@@ -253,7 +253,7 @@ func (s *Server) putGit(w http.ResponseWriter, r *http.Request) {
 	} else if !sameRepo {
 		s.fail(w, r, fmt.Errorf("%w: auth is required to connect a repository, or to change its provider, api_url or repo", errBadRequest))
 		return
-	} else if raw, err := s.Vault.Get(ctx, p.TenantID, gitVaultEnv, gitCredName(env)); err == nil {
+	} else if raw, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindGit, Purpose: "git.connect", Actor: p.Actor()}), p.TenantID, gitVaultEnv, gitCredName(env)); err == nil {
 		creds = []byte(raw)
 	} else {
 		s.fail(w, r, fmt.Errorf("%w: auth is required to connect a repository", errBadRequest))
@@ -288,7 +288,7 @@ func (s *Server) putGit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	secret := ""
-	if _, err := s.Vault.Get(ctx, p.TenantID, gitVaultEnv, gitHookName(env)); err != nil || req.RotateWebhookSecret {
+	if ok, err := s.Vault.Exists(ctx, p.TenantID, gitVaultEnv, gitHookName(env)); err != nil || !ok || req.RotateWebhookSecret {
 		secret = newToken()
 		if _, err := s.Vault.Put(ctx, p.TenantID, gitVaultEnv, gitHookName(env), []byte(secret), p.Actor()); err != nil {
 			s.fail(w, r, err)
@@ -390,7 +390,7 @@ func (s *Server) decideGit(approve bool) http.HandlerFunc {
 		if q.NewCredentials {
 			pending := gitPendingCredName(env)
 			if approve {
-				raw, err := s.Vault.Get(ctx, p.TenantID, gitVaultEnv, pending)
+				raw, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindGit, Purpose: "git.connect", Actor: p.Actor()}), p.TenantID, gitVaultEnv, pending)
 				if err == nil {
 					_, err = s.Vault.Put(ctx, p.TenantID, gitVaultEnv, gitCredName(env), []byte(raw), q.RequestedBy.String())
 				}
@@ -490,7 +490,7 @@ func (s *Server) gitHook(w http.ResponseWriter, r *http.Request) {
 		deny()
 		return
 	}
-	secret, err := s.Vault.Get(ctx, tenant, gitVaultEnv, gitHookName(env))
+	secret, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindGit, Purpose: secrets.PurposeIngestVerify}), tenant, gitVaultEnv, gitHookName(env))
 	if errors.Is(err, secrets.ErrNotFound) {
 		deny()
 		return

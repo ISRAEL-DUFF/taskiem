@@ -107,7 +107,7 @@ Besides the built-in roles, owners and admins define roles as named sets of perm
 
 An API key belongs to the person who made it (`POST /v1/api-keys`). It acts with its own permissions **and** within its owner's current ones: when the owner loses a permission the key loses it at once, and when the owner leaves the tenant or their account is disabled, the key stops working. For four-eyes and maker-checker a key *is* its owner: a policy or version written, a run started, or a version published or deployed with a key counts as the owner's, and API keys never approve (publishing, policies, Git-led connections, approvals). A key made with a key limited to one environment is limited to it too.
 
-A key limited to one environment (`environment` when created) works only there: secrets, variables and connections of other environments are neither listed nor changed, and actions that reach every environment are refused (`403`): publishing, creating environments or changing gates, Git connections and syncs, policies, members and roles, erasure, audit and reports.
+A key limited to one environment (`environment` when created) works only there: secrets, variables and connections of other environments are neither listed nor changed, and actions that reach every environment are refused (`403`): publishing, creating environments or changing gates, Git connections and syncs, policies, members and roles, erasure, audit and reports. It may list its own environment's [secret reads](compliance.md#secret-use) (`GET /v1/secrets/reads`, with `audit.read`).
 
 Runs outside `dev` use the version deployed in their environment; pinning another (`version` on `POST /v1/workflows/{id}/runs`) needs `workflow.publish`.
 

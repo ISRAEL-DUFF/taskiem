@@ -28,7 +28,10 @@ type Env struct {
 	Provider *Provider
 	Tenant   uuid.UUID
 	Secrets  runtime.MapSecrets
-	Vault    *secrets.Vault
+	// VaultSecrets makes workers read workflow secrets from Vault (which
+	// records each read) instead of Secrets.
+	VaultSecrets bool
+	Vault        *secrets.Vault
 	// Connectors loads the tenant's own WebAssembly connectors.
 	Connectors *wasmconn.Source
 	// Egress allows loopback so tests can reach httptest servers; every
@@ -101,7 +104,11 @@ func (e *Env) Start(t testing.TB, wf uuid.UUID, trigger any) runtime.RunRef {
 
 // Worker returns a worker for the connector queue.
 func (e *Env) Worker(id string) *runtime.Worker {
-	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: e.Secrets, Connections: e.Vault, Egress: e.Egress,
+	var s runtime.Secrets = e.Secrets
+	if e.VaultSecrets {
+		s = e.Vault
+	}
+	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: s, Connections: e.Vault, Egress: e.Egress,
 		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: 200 * time.Millisecond}
 }
 

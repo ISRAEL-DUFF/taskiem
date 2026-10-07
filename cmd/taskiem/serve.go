@@ -308,7 +308,10 @@ func serve(ctx context.Context, args []string) error {
 			log.Warn("TASKIEM_ARCHIVE_DIR unset: runs past retention are kept, not purged")
 		}
 		cron := &ingest.Cron{Store: e.store, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run)
+		// Hourly digests of secret reads into each tenant's audit chain,
+		// and their retention.
+		digests := &secrets.ReadDigester{Pool: e.pool, Logger: log}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run)
 		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)

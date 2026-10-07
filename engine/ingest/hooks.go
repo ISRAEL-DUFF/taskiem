@@ -351,7 +351,8 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	if t.auth != "none" {
 		secret := ""
 		if t.secret != nil {
-			secret, err = h.Secrets.Get(ctx, tenant, env, *t.secret)
+			use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindWebhook, Purpose: secrets.PurposeIngestVerify})
+			secret, err = h.Secrets.Get(use, tenant, env, *t.secret)
 			if err != nil && !errors.Is(err, secrets.ErrNotFound) {
 				h.unavailable(w, r, err)
 				return
@@ -422,7 +423,8 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	connection := r.URL.Query().Get("connection")
-	creds, err := h.Connections.Credentials(ctx, tenant, env, conn.Manifest.ID, connection)
+	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: secrets.PurposeIngestVerify})
+	creds, err := h.Connections.Credentials(use, tenant, env, conn.Manifest.ID, connection)
 	if errors.Is(err, secrets.ErrAmbiguous) {
 		replyErr(w, http.StatusUnauthorized, "several connections match; name one with ?connection=")
 		return

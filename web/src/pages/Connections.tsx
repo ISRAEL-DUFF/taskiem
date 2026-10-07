@@ -12,6 +12,7 @@ interface Conn {
   auth_type: string;
   status: string;
   created_at: string;
+  last_used_at: string | null;
 }
 
 export function Connections() {
@@ -40,6 +41,7 @@ export function Connections() {
               <th>Environment</th>
               <th>Status</th>
               <th>Created</th>
+              <th>Last used</th>
             </tr>
           </thead>
           <tbody>
@@ -52,6 +54,7 @@ export function Connections() {
                   <Badge value={c.status === "active" ? "ok" : c.status} />
                 </td>
                 <td>{fmtTime(c.created_at)}</td>
+                <td>{c.last_used_at ? fmtTime(c.last_used_at) : <span className="hint">never</span>}</td>
               </tr>
             ))}
           </tbody>

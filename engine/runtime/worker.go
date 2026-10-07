@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sandbox"
+	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -50,12 +51,33 @@ func ReservedSecret(name string) bool {
 	return name == "git_credentials" || name == "git_webhook_secret" || strings.HasPrefix(name, "webhook_wf_")
 }
 
-// secret reads a secret a workflow names.
+// secret reads a secret a workflow names. Each secret is decrypted at most
+// once per attempt, so the vault records one read per secret per attempt.
 func (w *Worker) secret(ctx context.Context, p *plan, name string) (string, error) {
 	if ReservedSecret(name) {
 		return "", fmt.Errorf("secret %q is reserved for the platform: %w", name, effects.ErrFatal)
 	}
-	return w.Secrets.Get(ctx, p.c.tenant, p.env, name)
+	if v, ok := p.secrets[name]; ok {
+		return v, nil
+	}
+	v, err := w.Secrets.Get(secrets.WithUse(ctx, p.use(secrets.KindSecret)), p.c.tenant, p.env, name)
+	if err != nil {
+		return "", err
+	}
+	if p.secrets == nil {
+		p.secrets = map[string]string{}
+	}
+	p.secrets[name] = v
+	return v, nil
+}
+
+// use describes this attempt's reads to the vault (secret_reads).
+func (p *plan) use(kind string) secrets.Use {
+	purpose := "step." + p.stepType
+	if p.mode == modeReconcile {
+		purpose = "step.reconcile"
+	}
+	return secrets.Use{Kind: kind, Purpose: purpose, RunID: p.c.run, StepID: p.c.step, Attempt: p.c.attempt, Actor: "system"}
 }
 
 // MapSecrets is an in-memory Secrets for development and tests.
@@ -327,9 +349,11 @@ type plan struct {
 	intentAt time.Time // when the EffectIntent in force was recorded (database clock)
 	keyFirst time.Time // when this attempt group's key was first about to be sent
 	step     *wd.Step
-	taint    pii.Taint       // personal values in this run; outputs repeating them are sealed
-	drift    []drift.Finding // how a successful output departed from its schema
-	scrub    []string        // secret values used by this attempt; never written to history
+	taint    pii.Taint         // personal values in this run; outputs repeating them are sealed
+	drift    []drift.Finding   // how a successful output departed from its schema
+	scrub    []string          // secret values used by this attempt; never written to history
+	secrets  map[string]string // secrets read by this attempt, by name
+	creds    map[string]string // the connection's credentials, once read
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -959,10 +983,13 @@ func (w *Worker) credentials(ctx context.Context, p *plan) (map[string]string, e
 	if p.conn == nil || p.conn.Manifest.Auth.Type == "none" {
 		return map[string]string{}, nil
 	}
+	if p.creds != nil {
+		return p.creds, nil // read once per attempt: one recorded read
+	}
 	if w.Connections == nil {
 		return nil, fmt.Errorf("no connection store configured")
 	}
-	creds, err := w.Connections.Credentials(ctx, p.c.tenant, p.env, p.conn.Manifest.ID, p.sched.Connection)
+	creds, err := w.Connections.Credentials(secrets.WithUse(ctx, p.use(secrets.KindConnection)), p.c.tenant, p.env, p.conn.Manifest.ID, p.sched.Connection)
 	if err != nil {
 		return nil, err
 	}
@@ -978,6 +1005,7 @@ func (w *Worker) credentials(ctx context.Context, p *plan) (map[string]string, e
 			p.scrub = append(p.scrub, v) // secret fields, and tokens the manifest does not list
 		}
 	}
+	p.creds = creds
 	return creds, nil
 }
 
