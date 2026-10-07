@@ -4,6 +4,8 @@ Phase 4 turns a hand-held product into a self-serve cloud: Nigeria-hosted, highl
 
 Gate G4: 99.9% availability for 60 days before GA; signup to first successful run in under 15 minutes; **at least 10 paying external tenants across at least two tiers**; counsel IP review and trademark filing. Anything that needs people is in [What needs people](needs-people.md#phase-4); code goes ahead without waiting for it.
 
+The PGDock integration runs as a separate parallel plan ([PGDock integration](pgdock-integration.md)). Phase 4 does not wait for it.
+
 ## Milestones
 
 | Area | Milestone | Scope | Spec | Status |

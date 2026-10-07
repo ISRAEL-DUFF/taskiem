@@ -21,3 +21,4 @@ One file per decision, numbered in order: `NNNN-short-title.md`. Each entry reco
 | [0015](0015-embedding-tenancy.md) | Embedding: sub-tenants entered through one audited function, opaque end-user tokens, a separate embed API | Accepted |
 | [0016](0016-repair-and-resume.md) | Self-repair: a background queue, rules before the model, a shadow sandbox, and resuming a failed run as a fork | Accepted |
 | [0017](0017-plans-and-billing.md) | Plans and billing: a config-file catalogue under the limits, subscriptions per top-level tenant, degraded never stranded | Accepted (prices pending B1) |
+| [0018](0018-pgdock-integration-principles.md) | PGDock integration: public contracts only, each product stands alone | Accepted |
