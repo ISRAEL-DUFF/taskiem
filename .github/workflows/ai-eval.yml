@@ -1,0 +1,78 @@
+name: ai-eval
+
+# The AI evaluation against the real model (spec 12.4, docs/ai.md#evaluation):
+# nightly and on demand, with ANTHROPIC_API_KEY as a repository secret. Without
+# the secret every step succeeds without running (needs-people AI1). The gate
+# is G3's: valid and test-passing on the first try for at least 70% of the
+# builder suite. A model or prompt change ships only if this run, started by
+# hand on its branch, shows no regression against the last accepted report
+# (attach that report as evals/builder/real-baseline.json to compare with it).
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Model under test (default TASKIEM_AI_MODEL's default, claude-opus-5-5)
+        required: false
+      min_gate:
+        description: Minimum valid-and-passing-on-first-try rate (0..1)
+        required: false
+        default: "0.7"
+      judge:
+        description: Also grade with the model-graded rubric (claude-sonnet-5-5)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-eval
+  cancel-in-progress: false
+
+jobs:
+  real-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MODEL: ${{ inputs.model }}
+      MIN_GATE: ${{ inputs.min_gate || '0.7' }}
+      JUDGE: ${{ inputs.judge && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Builder suite with the real model
+        run: |
+          args=(-provider anthropic -skip-without-key -parallel 4 -min-gate "$MIN_GATE" -out builder-eval.json -markdown builder-eval.md)
+          if [ -n "$MODEL" ]; then args+=(-model "$MODEL"); fi
+          if [ "$JUDGE" = "true" ]; then args+=(-judge -judge-model claude-sonnet-5-5); fi
+          if [ -f evals/builder/real-baseline.json ]; then args+=(-compare evals/builder/real-baseline.json -tolerance 0.05); fi
+          go run ./tools/aieval "${args[@]}"
+      - name: Repair suite with the real model
+        if: always()
+        run: |
+          args=(-mode repair -provider anthropic -skip-without-key -out repair-eval.json -markdown repair-eval.md)
+          if [ -n "$MODEL" ]; then args+=(-model "$MODEL"); fi
+          go run ./tools/aieval "${args[@]}"
+      - name: Summary
+        if: always()
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY is not configured as a repository secret: the real-model evaluation was skipped (needs-people AI1)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          cat builder-eval.md repair-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-eval-real-model
+          path: |
+            builder-eval.json
+            builder-eval.md
+            repair-eval.json
+            repair-eval.md
+          if-no-files-found: ignore

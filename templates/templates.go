@@ -99,6 +99,9 @@ type Template struct {
 type Library struct {
 	list []*Template
 	byID map[string]*Template
+
+	idxOnce sync.Once
+	idx     *index
 }
 
 var (

@@ -1,21 +1,29 @@
-// Command aieval runs the AI builder's evaluation suite (spec 12.4): each
-// request in evals/builder/*.jsonl goes through the real pipeline
-// (engine/ai/builder: retrieval, draft, publishing checks, self-correction,
-// dry run) against the connectors compiled into this binary, and the
-// report gives the rates gate G3 and B3 measure: valid on the first try,
-// valid and test-passing, and policy violations.
+// Command aieval runs the AI evaluation suites (spec 12.4, docs/ai.md#evaluation).
 //
-//	go run ./tools/aieval                                 # deterministic fake model
-//	go run ./tools/aieval -provider anthropic -out r.json # Claude (ANTHROPIC_API_KEY)
-//	go run ./tools/aieval -tags payments -min-first-try 0.7
+// The builder suite (evals/builder/*.jsonl, at least 200 requests) puts
+// every request through the real builder pipeline (engine/ai/builder:
+// retrieval with templates first, draft, publishing checks, self-
+// correction, dry run) against the connectors compiled into this binary,
+// and grades each draft deterministically: valid on the first try, valid
+// after corrections, dry-run tests, the connectors, step types, trigger
+// and properties the case requires (rules.go), and policy findings. A
+// model-graded rubric ("does it do what was asked") is optional (-judge).
+// The repair suite (evals/repair) checks failure classification and
+// patches (-mode repair).
 //
-// The fake model is a keyword heuristic, not a model: it exercises the
-// pipeline and the report offline, and sets a floor any real model must
-// beat. Nothing runs against a provider: dry runs mock every connector.
+//	go run ./tools/aieval                                          # offline heuristic
+//	go run ./tools/aieval -compare evals/builder/baseline.json     # the CI gate
+//	go run ./tools/aieval -provider anthropic -min-gate 0.7 -out r.json -markdown r.md
+//	go run ./tools/aieval -mode repair -compare evals/repair/baseline.json
+//
+// The fake provider is a keyword heuristic, not a model: it exercises the
+// pipeline and the grader offline, deterministically, so a change to the
+// pipeline, the prompt plumbing, the templates or the grader that makes
+// it worse fails the comparison with the committed baseline. Nothing runs
+// against a connector's provider: dry runs mock every step.
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,65 +31,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"sort"
-	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	"github.com/israel-duff/taskiem/engine/ai"
-	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/connector"
-	"github.com/israel-duff/taskiem/engine/wd"
-	"github.com/israel-duff/taskiem/engine/wdcheck"
 )
-
-// Case is one line of a suite.
-type Case struct {
-	ID      string `json:"id"`
-	Request string `json:"request"`
-	Expect  struct {
-		Connectors []string `json:"connectors,omitempty"`
-		Steps      []string `json:"steps,omitempty"` // step types the workflow should use
-	} `json:"expect"`
-	Tags []string `json:"tags,omitempty"`
-}
-
-// Result is one case's outcome.
-type Result struct {
-	ID               string   `json:"id"`
-	Tags             []string `json:"tags,omitempty"`
-	Error            string   `json:"error,omitempty"`
-	ValidFirstTry    bool     `json:"valid_first_try"`
-	Valid            bool     `json:"valid"`
-	TestsPassed      bool     `json:"tests_passed"`
-	PolicyViolations int      `json:"policy_violations"`
-	Rounds           int      `json:"rounds"`
-	Tokens           int64    `json:"tokens"`
-	ConnectorRecall  float64  `json:"connector_recall"`
-	StepRecall       float64  `json:"step_recall"`
-	Missing          []string `json:"missing,omitempty"`
-	Problems         []string `json:"problems,omitempty"`
-	Seconds          float64  `json:"seconds"`
-}
-
-// Report is the suite's summary.
-type Report struct {
-	Provider         string   `json:"provider"`
-	Model            string   `json:"model"`
-	Cases            int      `json:"cases"`
-	Errors           int      `json:"errors"`
-	ValidFirstTry    float64  `json:"valid_first_try_rate"`
-	Valid            float64  `json:"valid_rate"`
-	FirstTryAndTests float64  `json:"valid_first_try_and_tests_pass_rate"`
-	TestPass         float64  `json:"test_pass_rate"`
-	PolicyViolations int      `json:"policy_violations"`
-	ConnectorRecall  float64  `json:"connector_recall"`
-	StepRecall       float64  `json:"step_recall"`
-	Tokens           int64    `json:"tokens"`
-	Results          []Result `json:"results"`
-}
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
@@ -90,51 +45,76 @@ func main() {
 	}
 }
 
+// errRegression fails the command when a comparison finds one.
+var errRegression = errors.New("regression against the baseline")
+
+type options struct {
+	mode, suite, provider, model, tags string
+	limit, reps, parallel              int
+	caseTimeout                        time.Duration
+	out, md, baselineOut, compare      string
+	tolerance, minGate                 float64
+	judge                              bool
+	judgeProvider, judgeModel          string
+	prices                             multiFlag
+	verbose, skipWithoutKey            bool
+}
+
 func run(args []string, stdout io.Writer) error {
+	var o options
 	fs := flag.NewFlagSet("aieval", flag.ContinueOnError)
-	suite := fs.String("suite", "evals/builder", "a .jsonl file or a directory of them")
-	provider := fs.String("provider", "fake", "fake | anthropic | selfhosted (configured by TASKIEM_AI_* and ANTHROPIC_API_KEY)")
-	model := fs.String("model", "", "model id (default: TASKIEM_AI_MODEL or claude-opus-5-5)")
-	tags := fs.String("tags", "", "comma-separated tags; run only cases with one of them")
-	limit := fs.Int("limit", 0, "run at most this many cases")
-	out := fs.String("out", "", "write the full JSON report here")
-	minFirst := fs.Float64("min-first-try", 0, "fail when the valid-and-tests-pass-on-first-try rate is below this (0..1)")
+	fs.StringVar(&o.mode, "mode", "builder", "builder | repair")
+	fs.StringVar(&o.suite, "suite", "", "a .jsonl file or a directory of them (default evals/<mode>)")
+	fs.StringVar(&o.provider, "provider", "fake", "fake | anthropic | selfhosted (configured by TASKIEM_AI_* and ANTHROPIC_API_KEY)")
+	fs.StringVar(&o.model, "model", "", "model id (default: TASKIEM_AI_MODEL or claude-opus-5-5); answers from another model are not scored")
+	fs.StringVar(&o.tags, "tags", "", "comma-separated tags; run only cases with one of them")
+	fs.IntVar(&o.limit, "limit", 0, "run at most this many cases")
+	fs.IntVar(&o.reps, "reps", 1, "attempts per case (builder)")
+	fs.IntVar(&o.parallel, "parallel", 1, "attempts in flight at once (builder)")
+	fs.DurationVar(&o.caseTimeout, "case-timeout", 10*time.Minute, "wall-clock ceiling per attempt; a timeout is not scored")
+	fs.StringVar(&o.out, "out", "", "write the full JSON report here")
+	fs.StringVar(&o.md, "markdown", "", "write a Markdown report here")
+	fs.StringVar(&o.baselineOut, "baseline-out", "", "write the report as a baseline (no timings) here")
+	fs.StringVar(&o.compare, "compare", "", "compare with this baseline and fail on a regression beyond -tolerance")
+	fs.Float64Var(&o.tolerance, "tolerance", 0.02, "allowed drop in any rate when comparing (0..1)")
+	fs.Float64Var(&o.minGate, "min-gate", 0, "fail when the valid-and-test-passing-on-first-try rate is below this (0..1)")
+	fs.Float64Var(&o.minGate, "min-first-try", 0, "alias of -min-gate")
+	fs.BoolVar(&o.judge, "judge", false, "also grade with a model-graded rubric (builder)")
+	fs.StringVar(&o.judgeProvider, "judge-provider", "anthropic", "the judge's provider: anthropic | selfhosted | fake")
+	fs.StringVar(&o.judgeModel, "judge-model", "claude-sonnet-5-5", "the judge's model; never the model under test")
+	fs.Var(&o.prices, "price", "model=in,out[,cache_read] in dollars per million tokens (repeatable; Anthropic's prices are built in)")
+	fs.BoolVar(&o.verbose, "v", false, "print every case")
+	fs.BoolVar(&o.skipWithoutKey, "skip-without-key", false, "with -provider anthropic: succeed without running when ANTHROPIC_API_KEY is not set")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	cases, err := load(*suite)
+	if o.suite == "" {
+		o.suite = "evals/" + o.mode
+	}
+	if o.skipWithoutKey && o.provider == "anthropic" && os.Getenv("ANTHROPIC_API_KEY") == "" {
+		fmt.Fprintln(stdout, "aieval: ANTHROPIC_API_KEY is not set; skipping the real-model evaluation")
+		return nil
+	}
+	prices, err := parsePrices(o.prices)
 	if err != nil {
 		return err
-	}
-	cases = filter(cases, *tags, *limit)
-	if len(cases) == 0 {
-		return errors.New("no cases")
 	}
 	reg := connector.NewRegistry()
 	if err := builtin.Register(reg, builtin.Options{}); err != nil {
 		return err
 	}
-	prov, err := providerFor(*provider, *model)
-	if err != nil {
-		return err
+	switch o.mode {
+	case "builder":
+		return runBuilder(o, prices, reg, stdout)
+	case "repair":
+		return runRepairSuite(o, prices, reg, stdout)
 	}
-	rep := evaluate(context.Background(), prov, reg, cases)
-	printReport(stdout, rep)
-	if *out != "" {
-		raw, _ := json.MarshalIndent(rep, "", "  ")
-		if err := os.WriteFile(*out, raw, 0o600); err != nil {
-			return err
-		}
-	}
-	if *minFirst > 0 && rep.FirstTryAndTests < *minFirst {
-		return fmt.Errorf("valid and test-passing on the first try: %.0f%%, below %.0f%%", 100*rep.FirstTryAndTests, 100**minFirst)
-	}
-	return nil
+	return fmt.Errorf("unknown -mode %q", o.mode)
 }
 
-func providerFor(name, model string) (ai.Provider, error) {
+func providerFor(name, model string, respond func(ai.Request) (*ai.Response, error), fakeModel string) (ai.Provider, error) {
 	if name == "fake" {
-		return &ai.Fake{Respond: heuristic, Models: "heuristic"}, nil
+		return &ai.Fake{Respond: respond, Models: fakeModel}, nil
 	}
 	lookup := func(k string) (string, bool) {
 		switch k {
@@ -154,205 +134,129 @@ func providerFor(name, model string) (ai.Provider, error) {
 	return ai.New(cfg)
 }
 
-func load(path string) ([]Case, error) {
-	files := []string{path}
-	if st, err := os.Stat(path); err == nil && st.IsDir() {
-		files, err = filepath.Glob(filepath.Join(path, "*.jsonl"))
+func runBuilder(o options, prices map[string]Price, reg *connector.Registry, stdout io.Writer) error {
+	cases, err := load(o.suite)
+	if err != nil {
+		return err
+	}
+	cases = filter(cases, func(c Case) []string { return c.Tags }, o.tags, o.limit)
+	if len(cases) == 0 {
+		return errors.New("no cases")
+	}
+	prov, err := providerFor(o.provider, o.model, heuristic, "heuristic")
+	if err != nil {
+		return err
+	}
+	eo := evalOptions{Reps: o.reps, Parallel: o.parallel, CaseTimeout: o.caseTimeout, Prices: prices}
+	if o.provider != "fake" {
+		eo.WantModel = prov.Model()
+	}
+	judgeModel := ""
+	if o.judge {
+		if o.judgeProvider != "fake" && o.judgeModel == prov.Model() {
+			return fmt.Errorf("the judge must not be the model under test (%s); pick another -judge-model", o.judgeModel)
+		}
+		jp, err := providerFor(o.judgeProvider, o.judgeModel, fakeJudge, "fake-judge")
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("judge: %w", err)
 		}
-		sort.Strings(files)
+		eo.Judge = &Judge{Provider: jp, Prices: prices}
+		judgeModel = jp.Model()
 	}
-	var out []Case
-	seen := map[string]bool{}
-	for _, f := range files {
-		fh, err := os.Open(f) //nolint:gosec // the suite named on the command line
-		if err != nil {
-			return nil, err
+	results := evaluate(context.Background(), prov, reg, cases, eo)
+	rep := buildReport(o.suite, prov.Name(), prov.Model(), judgeModel, max(o.reps, 1), results)
+	printReport(stdout, rep, o.verbose)
+	if err := writeOutputs(o, rep, markdown(rep), func() any {
+		base := rep
+		base.Results = make([]Result, len(rep.Results))
+		for i, r := range rep.Results {
+			r.Seconds = 0
+			base.Results[i] = r
 		}
-		sc := bufio.NewScanner(fh)
-		sc.Buffer(make([]byte, 1<<20), 1<<20)
-		line := 0
-		for sc.Scan() {
-			line++
-			text := strings.TrimSpace(sc.Text())
-			if text == "" || strings.HasPrefix(text, "//") {
-				continue
-			}
-			var c Case
-			dec := json.NewDecoder(strings.NewReader(text))
-			dec.DisallowUnknownFields()
-			if err := dec.Decode(&c); err != nil {
-				_ = fh.Close()
-				return nil, fmt.Errorf("%s:%d: %w", f, line, err)
-			}
-			if c.ID == "" || c.Request == "" || seen[c.ID] {
-				_ = fh.Close()
-				return nil, fmt.Errorf("%s:%d: every case needs a unique id and a request", f, line)
-			}
-			seen[c.ID] = true
-			out = append(out, c)
+		return base
+	}); err != nil {
+		return err
+	}
+	var failure error
+	if o.compare != "" {
+		var base Report
+		if err := readReport(o.compare, &base); err != nil {
+			return err
 		}
-		_ = fh.Close()
-		if err := sc.Err(); err != nil {
-			return nil, err
+		if base.Kind != "" && base.Kind != "builder" {
+			return fmt.Errorf("%s is a %s baseline", o.compare, base.Kind)
+		}
+		regs, lost := compareBuilder(base, rep, o.tolerance)
+		printComparison(stdout, regs, lost, o.tolerance)
+		if len(regs) > 0 {
+			failure = errRegression
 		}
 	}
-	return out, nil
+	if o.minGate > 0 && rep.Summary.Gate < o.minGate {
+		return fmt.Errorf("valid and test-passing on the first try: %s, below %s", pct(rep.Summary.Gate), pct(o.minGate))
+	}
+	return failure
 }
 
-func filter(cases []Case, tags string, limit int) []Case {
-	if tags != "" {
-		want := map[string]bool{}
-		for _, t := range strings.Split(tags, ",") {
-			want[strings.TrimSpace(t)] = true
-		}
-		var kept []Case
-		for _, c := range cases {
-			for _, t := range c.Tags {
-				if want[t] {
-					kept = append(kept, c)
-					break
-				}
-			}
-		}
-		cases = kept
+func runRepairSuite(o options, prices map[string]Price, reg *connector.Registry, stdout io.Writer) error {
+	cases, err := loadRepair(o.suite)
+	if err != nil {
+		return err
 	}
-	if limit > 0 && len(cases) > limit {
-		cases = cases[:limit]
+	cases = filter(cases, func(c RepairCase) []string { return c.Tags }, o.tags, o.limit)
+	if len(cases) == 0 {
+		return errors.New("no cases")
 	}
-	return cases
+	prov, err := providerFor(o.provider, o.model, repairHeuristic, "heuristic")
+	if err != nil {
+		return err
+	}
+	results := evaluateRepairs(context.Background(), prov, reg, cases, prices)
+	rep := buildRepairReport(o.suite, prov.Name(), prov.Model(), results)
+	printRepairReport(stdout, rep)
+	if err := writeOutputs(o, rep, repairMarkdown(rep), func() any { return rep }); err != nil {
+		return err
+	}
+	if o.compare != "" {
+		var base RepairReport
+		if err := readReport(o.compare, &base); err != nil {
+			return err
+		}
+		if base.Kind != "repair" {
+			return fmt.Errorf("%s is not a repair baseline", o.compare)
+		}
+		regs := compareRepair(base, rep, o.tolerance)
+		printComparison(stdout, regs, nil, o.tolerance)
+		if len(regs) > 0 {
+			return errRegression
+		}
+	}
+	return nil
 }
 
-func evaluate(ctx context.Context, prov ai.Provider, reg *connector.Registry, cases []Case) Report {
-	b := &builder.Builder{
-		Provider:   prov,
-		Connectors: reg,
-		Validate: func(doc []byte) []builder.Problem {
-			var out []builder.Problem
-			for _, p := range wdcheck.Check(doc, reg) {
-				out = append(out, builder.Problem{Path: p.Path, Message: p.Message})
-			}
-			return out
-		},
+func writeOutputs(o options, full any, md string, baseline func() any) error {
+	if o.out != "" {
+		if err := writeJSON(o.out, full); err != nil {
+			return err
+		}
 	}
-	rep := Report{Provider: prov.Name(), Model: prov.Model(), Cases: len(cases)}
-	var first, valid, both, tests, crec, srec float64
-	for _, c := range cases {
-		start := time.Now()
-		r := Result{ID: c.ID, Tags: c.Tags}
-		p, err := b.Build(ctx, builder.Request{Goal: c.Request})
-		r.Seconds = time.Since(start).Seconds()
-		if err != nil {
-			r.Error = err.Error()
-			rep.Errors++
-			rep.Results = append(rep.Results, r)
-			continue
+	if o.md != "" {
+		if err := os.WriteFile(o.md, []byte(md), 0o600); err != nil {
+			return err
 		}
-		r.ValidFirstTry, r.Valid, r.TestsPassed = p.ValidFirstTry, p.Valid(), p.TestsPassed()
-		r.PolicyViolations, r.Rounds, r.Tokens = p.PolicyViolations(), p.Rounds, p.Usage.Total()
-		for _, pr := range p.Problems {
-			r.Problems = append(r.Problems, pr.Path+": "+pr.Message)
-		}
-		r.ConnectorRecall, r.StepRecall, r.Missing = recall(p.Definition, c)
-		if r.ValidFirstTry {
-			first++
-		}
-		if r.Valid {
-			valid++
-		}
-		if r.TestsPassed {
-			tests++
-		}
-		if r.ValidFirstTry && r.TestsPassed {
-			both++
-		}
-		crec += r.ConnectorRecall
-		srec += r.StepRecall
-		rep.PolicyViolations += r.PolicyViolations
-		rep.Tokens += r.Tokens
-		rep.Results = append(rep.Results, r)
 	}
-	n := float64(len(cases))
-	rep.ValidFirstTry, rep.Valid, rep.FirstTryAndTests, rep.TestPass = first/n, valid/n, both/n, tests/n
-	rep.ConnectorRecall, rep.StepRecall = crec/n, srec/n
-	return rep
+	if o.baselineOut != "" {
+		if err := writeJSON(o.baselineOut, baseline()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// recall measures how many expected connectors and step types the draft
-// uses.
-func recall(doc []byte, c Case) (float64, float64, []string) {
-	usedC, usedS := map[string]bool{}, map[string]bool{}
-	if def, err := wd.Load(doc); err == nil {
-		var walk func(steps []*wd.Step)
-		walk = func(steps []*wd.Step) {
-			for _, st := range steps {
-				usedS[st.Type] = true
-				if st.Connector != "" {
-					usedC[st.Connector] = true
-				}
-				for _, sub := range st.Children() {
-					walk(sub)
-				}
-			}
-		}
-		walk(def.Steps)
-		if ref, ok := def.Trigger.Config["connector"].(string); ok {
-			usedC[ref] = true
-		}
+func readReport(path string, v any) error {
+	raw, err := os.ReadFile(path) //nolint:gosec // the baseline named on the command line
+	if err != nil {
+		return err
 	}
-	cr, missC := coverage(c.Expect.Connectors, usedC)
-	sr, missS := coverage(c.Expect.Steps, usedS)
-	return cr, sr, append(missC, missS...)
-}
-
-// coverage is the share of want that used has, and what it lacks.
-//
-// (An earlier version returned a slice appended to by a closure that was
-// called, and inlined, twice in the same return statement. Built with Go
-// 1.26.0, the binary corrupted its heap and crashed in the GC on every
-// full run; `go build -gcflags=-m=2` showed both inlined calls sharing one
-// result temporary. A plain function fixed it; a minimal program did not
-// reproduce the crash. Keep this a plain function.)
-func coverage(want []string, used map[string]bool) (float64, []string) {
-	if len(want) == 0 {
-		return 1, nil
-	}
-	missing := make([]string, 0, len(want))
-	for _, w := range want {
-		if !used[w] {
-			missing = append(missing, w)
-		}
-	}
-	return float64(len(want)-len(missing)) / float64(len(want)), missing
-}
-
-func printReport(w io.Writer, rep Report) {
-	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "CASE\tFIRST TRY\tVALID\tTESTS\tPOLICY\tROUNDS\tRECALL\tNOTE")
-	for _, r := range rep.Results {
-		note := r.Error
-		if note == "" && len(r.Missing) > 0 {
-			note = "missing " + strings.Join(r.Missing, ", ")
-		}
-		if note == "" && len(r.Problems) > 0 {
-			note = r.Problems[0]
-		}
-		if len(note) > 80 {
-			note = note[:77] + "..."
-		}
-		fmt.Fprintf(tw, "%s\t%v\t%v\t%v\t%d\t%d\t%.0f%%/%.0f%%\t%s\n", r.ID, yes(r.ValidFirstTry), yes(r.Valid), yes(r.TestsPassed),
-			r.PolicyViolations, r.Rounds, 100*r.ConnectorRecall, 100*r.StepRecall, note)
-	}
-	_ = tw.Flush()
-	fmt.Fprintf(w, "\n%s %s, %d cases (%d errors): valid on first try %.0f%%, valid %.0f%%, tests pass %.0f%%, valid and passing on first try %.0f%%; %d policy violations; connector recall %.0f%%, step recall %.0f%%; %d tokens\n",
-		rep.Provider, rep.Model, rep.Cases, rep.Errors, 100*rep.ValidFirstTry, 100*rep.Valid, 100*rep.TestPass, 100*rep.FirstTryAndTests,
-		rep.PolicyViolations, 100*rep.ConnectorRecall, 100*rep.StepRecall, rep.Tokens)
-}
-
-func yes(b bool) string {
-	if b {
-		return "yes"
-	}
-	return "no"
+	return json.Unmarshal(raw, v)
 }

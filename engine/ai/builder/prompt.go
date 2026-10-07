@@ -22,14 +22,18 @@ import (
 var envelopeSchema = map[string]any{
 	"type":                 "object",
 	"additionalProperties": false,
-	"required":             []any{"summary", "assumptions", "workflow", "tests"},
+	"required":             []any{"summary", "assumptions", "workflow", "tests", "template", "template_params"},
 	"properties": map[string]any{
 		"summary": map[string]any{"type": "string",
 			"description": "Plain-language summary of what the workflow does, step by step, for the person reviewing it."},
 		"assumptions": map[string]any{"type": "array", "items": map[string]any{"type": "string"},
 			"description": "Anything assumed that the reviewer must confirm: connection names, variables or secrets to create, payload fields."},
 		"workflow": map[string]any{"type": "string",
-			"description": "The complete wd/v1 workflow definition, serialised as one JSON document."},
+			"description": "The complete wd/v1 workflow definition, serialised as one JSON document; empty when template is set and the template is used as it stands."},
+		"template": map[string]any{"type": "string",
+			"description": "The id of the starting template the draft is built from, or empty."},
+		"template_params": map[string]any{"type": "string",
+			"description": "With template and an empty workflow: the template's parameter values the goal states, serialised as one JSON object (leave out any the goal does not state). Otherwise empty."},
 		"tests": map[string]any{"type": "array",
 			"description": "Up to 3 wd-test/v1 cases, each serialised as one JSON object with trigger, mocks, approvals, signals and expect.",
 			"items": map[string]any{"type": "object", "additionalProperties": false, "required": []any{"name", "case"},
@@ -48,7 +52,11 @@ type Envelope struct {
 	Summary     string   `json:"summary"`
 	Assumptions []string `json:"assumptions"`
 	Workflow    string   `json:"workflow"`
-	Tests       []struct {
+	// Template is the starting template the draft is built from; with an
+	// empty Workflow, the builder instantiates it with TemplateParams.
+	Template       string `json:"template,omitempty"`
+	TemplateParams string `json:"template_params,omitempty"`
+	Tests          []struct {
 		Name string `json:"name"`
 		Case string `json:"case"`
 	} `json:"tests"`
@@ -64,6 +72,7 @@ Answer with JSON matching the response schema:
 - summary: what the workflow does, step by step, in plain language.
 - assumptions: everything the reviewer must confirm or create (connection names, variables, secrets, payload fields).
 - workflow: the complete wd/v1 document serialised as a JSON string. It must be valid against the schema below and the rules that follow.
+- template, template_params: see "Starting templates" below; empty strings when no template is used.
 - tests: up to 3 wd-test/v1 cases (each serialised as a JSON object string with "trigger", "mocks", "approvals", "signals" and "expect"; no "name" inside: the name goes in the name field). Mock every connector, http and code step; decide every approval; deliver every signal.
 
 # wd/v1 rules
@@ -79,6 +88,13 @@ Answer with JSON matching the response schema:
 9. Approval outputs {decision, decided_by}; signal outputs the signal payload; branch outputs {path, steps}; foreach outputs a list of objects keyed by body step id; transform outputs its config.output.
 10. Durations are like 90s, 15m, 24h, 7d.
 11. Use only connectors and actions from the catalogue. Prefer the tenant's existing connections (by name) and variables (by name). Keep the workflow as small as the goal allows.
+
+# Starting templates
+
+The context may list starting_templates: ready workflows from Taskiem's template library that resemble the goal, each with its parameters ({{name}} markers in its definition) and the tenant variables it reads. Prefer a template when it does what the goal asks:
+- If the template does what the goal asks as it stands, set template to its id, put the parameter values the goal states into template_params (a JSON object, values of the parameter's type; leave out anything the goal does not state: the person is asked for it), and leave workflow empty. Never put personal data (phone numbers, email addresses, account numbers, BVNs) in a parameter: templates read those from tenant variables.
+- If the goal needs changes to the template (another connector, an extra step, a different trigger), write the complete workflow yourself starting from the template's definition, with every {{marker}} replaced, and still set template to its id (template_params empty).
+- If no template fits, leave template and template_params empty and write the workflow.
 
 # An example
 

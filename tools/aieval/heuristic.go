@@ -3,23 +3,35 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/ai/repair"
 )
 
 // heuristic is the evaluation's offline "model": it reads the context
-// document the builder put in the prompt and wires the best-matching
-// action of up to two retrieved connectors into a manual workflow, behind
-// an approval when one of them moves money. It is a deterministic floor
-// for the report, not an attempt at a model.
+// document the builder put in the prompt; when a starting template is
+// offered with a strong retrieval score it answers with that template and no parameters (the builder
+// instantiates it and lists what is missing); otherwise it wires the
+// best-matching action of up to two retrieved connectors into a manual
+// workflow, behind an approval when one of them moves money. It is a
+// deterministic floor for the report and a regression check of the
+// pipeline, not an attempt at a model.
 func heuristic(req ai.Request) (*ai.Response, error) {
 	prompt := req.Messages[0].Text
 	goal := strings.ToLower(builder.GoalFrom(prompt))
 	ctxDoc, _ := builder.ContextFrom(prompt)
+	if tpls, _ := ctxDoc["starting_templates"].([]any); len(tpls) > 0 && templateScore(tpls[0]) >= heuristicTemplateScore {
+		t, _ := tpls[0].(map[string]any)
+		id, _ := t["id"].(string)
+		env, _ := json.Marshal(map[string]any{"summary": "Starts from a template.", "assumptions": []string{}, "workflow": "", "tests": []any{},
+			"template": id, "template_params": "{}"})
+		return &ai.Response{Text: string(env)}, nil
+	}
 	conns, _ := ctxDoc["relevant_connectors"].([]any)
 	type pick struct {
 		ref, action string
@@ -96,8 +108,20 @@ func heuristic(req ai.Request) (*ai.Response, error) {
 	}
 	def := map[string]any{"schema": "wd/v1", "id": "wf_draft", "version": 1, "name": "Draft", "trigger": map[string]any{"type": "manual"}, "steps": steps}
 	doc, _ := json.Marshal(def)
-	env, _ := json.Marshal(map[string]any{"summary": "Heuristic draft.", "assumptions": []string{}, "workflow": string(doc), "tests": []any{}})
+	env, _ := json.Marshal(map[string]any{"summary": "Heuristic draft.", "assumptions": []string{}, "workflow": string(doc), "tests": []any{},
+		"template": "", "template_params": ""})
 	return &ai.Response{Text: string(env)}, nil
+}
+
+// heuristicTemplateScore is the retrieval score above which the
+// heuristic trusts a starting template (a model reads the template).
+const heuristicTemplateScore = 20
+
+func templateScore(t any) float64 {
+	m, _ := t.(map[string]any)
+	match, _ := m["match"].(map[string]any)
+	s, _ := match["score"].(float64)
+	return s
 }
 
 func tokens(s string) []string {
@@ -108,4 +132,34 @@ func tokens(s string) []string {
 		}
 	}
 	return out
+}
+
+var reClassHint = regexp.MustCompile(`(?:of class|best guess is) ([a-z_]+)`)
+
+// repairHeuristic is the offline repair "model": it keeps the class it
+// is told (or the rules' guess), and for classes that patch returns the
+// workflow with only its description changed. A floor: such a patch is
+// valid and changes the definition but fixes nothing, so it fails any
+// recorded failing case.
+func repairHeuristic(req ai.Request) (*ai.Response, error) {
+	prompt := req.Messages[0].Text
+	class := repair.Logic
+	if m := reClassHint.FindStringSubmatch(prompt); m != nil {
+		class = repair.Class(m[1])
+	}
+	if class == repair.UnknownOutcome {
+		class = repair.Logic
+	}
+	workflow := ""
+	if class.Patches() {
+		var def map[string]any
+		if err := json.Unmarshal([]byte(repair.WorkflowFrom(prompt)), &def); err == nil {
+			def["description"] = "Patched by the offline heuristic."
+			raw, _ := json.Marshal(def)
+			workflow = string(raw)
+		}
+	}
+	env, _ := json.Marshal(map[string]any{"class": class, "explanation": "Offline heuristic.", "workflow": workflow,
+		"test": map[string]any{"name": "", "case": ""}})
+	return &ai.Response{Text: string(env)}, nil
 }

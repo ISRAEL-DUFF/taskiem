@@ -5,7 +5,7 @@
   "description": "Gives your online shop or order form a signed web address. Each order it sends (order number, customer name and total in naira) is texted to the owner straight away, and an order sent twice is only texted once. The owner's phone number is the tenant variable owner_phone.",
   "category": "sales",
   "tags": ["sales", "orders", "alerts", "sms", "webhook", "owner"],
-  "keywords": ["order", "orders", "new", "shop", "store", "online", "website", "customer", "notify", "alert", "sale"],
+  "keywords": ["order", "orders", "online", "website", "checkout", "notify", "alert", "sale"],
   "connectors": ["termii@1"],
   "variables": [{"name": "owner_phone", "why": "The owner's phone number in international format without +."}],
   "params": [

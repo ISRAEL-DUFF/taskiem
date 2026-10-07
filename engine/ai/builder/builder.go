@@ -19,12 +19,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Problem is a validation failure: the draft would not publish.
@@ -98,6 +100,25 @@ type Builder struct {
 	Effort         string
 	// MaxConnectors bounds how many connectors' schemas a prompt carries.
 	MaxConnectors int
+	// Templates is the SME template library offered as starting points
+	// (retrieval context: templates first, then free drafting). Nil offers
+	// none.
+	Templates *templates.Library
+}
+
+// TemplateUse is the template a draft started from.
+type TemplateUse struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	// Instantiated: the builder filled the template itself (the model
+	// gave parameter values, not a workflow).
+	Instantiated bool `json:"instantiated"`
+	// Params are the values taken from the goal, checked against the
+	// template; Missing are required parameters the goal did not state,
+	// which the draft holds the template's example values for until a
+	// person supplies them.
+	Params  map[string]any `json:"params"`
+	Missing []string       `json:"missing"`
 }
 
 // Proposal is the review a person sees.
@@ -116,8 +137,12 @@ type Proposal struct {
 	Rounds        int      `json:"rounds"`
 	ValidFirstTry bool     `json:"valid_first_try"`
 	Connectors    []string `json:"connectors"` // retrieved for the prompt
-	Usage         ai.Usage `json:"usage"`
-	Model         string   `json:"model"`
+	// TemplatesOffered are the starting templates the prompt carried;
+	// Template is the one the draft started from, if any.
+	TemplatesOffered []string     `json:"templates_offered"`
+	Template         *TemplateUse `json:"template,omitempty"`
+	Usage            ai.Usage     `json:"usage"`
+	Model            string       `json:"model"`
 }
 
 // Valid reports whether the proposal passes the publishing checks.
@@ -180,12 +205,13 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 
 	b.progress("context")
 	system := systemBlocks(Catalogue(reg))
-	ctxDoc, refs := b.contextDoc(req, reg)
+	ctxDoc, refs, offered := b.contextDoc(req, reg)
 	messages := []ai.Message{{Role: "user", Text: userPrompt(req.Goal, req.Base, ctxDoc)}}
 	digest := sha256.Sum256([]byte(system[0].Text + "\x00" + system[1].Text))
 	sysDigest := hex.EncodeToString(digest[:])
 
-	p := &Proposal{Connectors: refs, Problems: []Problem{}, Warnings: []Warning{}, Results: []TestResult{}, Assumptions: []string{}}
+	p := &Proposal{Connectors: refs, TemplatesOffered: offered, Problems: []Problem{}, Warnings: []Warning{}, Results: []TestResult{}, Assumptions: []string{}}
+	var use *TemplateUse
 	var env *Envelope
 	var doc []byte
 	var findings []Warning
@@ -251,8 +277,16 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 		} else {
 			env = next
 			doc = []byte(next.Workflow)
+			use = nil
+			if next.Template != "" {
+				var tplProblems []Problem
+				use, doc, tplProblems = b.fromTemplate(next, offered)
+				problems = append(problems, tplProblems...)
+			}
 			b.progress("validate")
-			problems = b.validate(doc)
+			if len(problems) == 0 {
+				problems = b.validate(doc)
+			}
 			findings = nil
 			if len(problems) == 0 {
 				if def, err := wd.Load(doc); err == nil {
@@ -296,6 +330,11 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 		p.Assumptions = env.Assumptions
 	}
 	p.Definition = json.RawMessage(doc)
+	p.Template = use
+	if use != nil && len(use.Missing) > 0 {
+		p.Warnings = append(p.Warnings, Warning{Kind: "template", Message: fmt.Sprintf("the goal does not say %s; the draft holds the template's example values until you set them",
+			strings.Join(use.Missing, ", "))})
+	}
 	if p.Problems == nil {
 		p.Problems = []Problem{}
 	}
@@ -366,6 +405,10 @@ func parseEnvelope(resp *ai.Response) (*Envelope, error) {
 		return nil, fmt.Errorf("the answer is not the expected JSON: %w", err)
 	}
 	w := strings.TrimSpace(env.Workflow)
+	if w == "" && env.Template != "" {
+		env.Workflow = ""
+		return &env, nil
+	}
 	if w == "" {
 		return nil, errors.New("the answer has no workflow")
 	}
@@ -377,8 +420,62 @@ func parseEnvelope(resp *ai.Response) (*Envelope, error) {
 	return &env, nil
 }
 
+// fromTemplate resolves a draft that names a starting template: the
+// template must be one the prompt offered; with no workflow of its own,
+// the template is instantiated with the parameter values the model read
+// from the goal (values that do not fit are dropped and asked for like
+// missing ones), required parameters still missing holding the template's
+// examples.
+func (b *Builder) fromTemplate(env *Envelope, offered []string) (*TemplateUse, []byte, []Problem) {
+	doc := []byte(env.Workflow)
+	if b.Templates == nil || !slices.Contains(offered, env.Template) {
+		if env.Workflow == "" {
+			return nil, doc, []Problem{{Path: "/template", Message: fmt.Sprintf("%q is not one of the starting templates offered; write the workflow instead", env.Template)}}
+		}
+		return nil, doc, nil // a template named in passing; the workflow stands on its own
+	}
+	tpl, _ := b.Templates.Get(env.Template)
+	use := &TemplateUse{ID: tpl.ID, Title: tpl.Title, Params: map[string]any{}, Missing: []string{}}
+	if env.Workflow != "" {
+		return use, doc, nil
+	}
+	use.Instantiated = true
+	values := map[string]any{}
+	if strings.TrimSpace(env.TemplateParams) != "" {
+		if err := json.Unmarshal([]byte(env.TemplateParams), &values); err != nil {
+			return use, nil, []Problem{{Path: "/template_params", Message: "template_params is not a JSON object: " + err.Error()}}
+		}
+	}
+	// Each value is checked on its own: one that does not fit is asked for
+	// again rather than failing the draft.
+	for k, v := range values {
+		p, ok := tpl.Param(k)
+		if !ok {
+			continue
+		}
+		if c, err := p.Coerce(v); err == nil {
+			use.Params[k] = c
+		}
+	}
+	resolved, missing, _ := tpl.Resolve(use.Params)
+	use.Missing = append(use.Missing, missing...)
+	fill := map[string]any{}
+	for k, v := range resolved {
+		fill[k] = v
+	}
+	for _, m := range missing {
+		p, _ := tpl.Param(m)
+		fill[m] = p.Example
+	}
+	out, err := tpl.Instantiate(fill, "")
+	if err != nil {
+		return use, nil, []Problem{{Path: "/template_params", Message: err.Error()}}
+	}
+	return use, out, nil
+}
+
 // contextDoc assembles the per-request context.
-func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any, []string) {
+func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any, []string, []string) {
 	n := b.MaxConnectors
 	if n <= 0 {
 		n = 6
@@ -434,7 +531,41 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	if refs == nil {
 		refs = []string{}
 	}
-	return doc, refs
+	offered := []string{}
+	if b.Templates != nil && len(req.Base) == 0 {
+		var tpls []map[string]any
+		for _, m := range b.Templates.Match(req.Goal, 2) {
+			tc := TemplateContext(m.Template)
+			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
+			tpls = append(tpls, tc)
+			offered = append(offered, m.Template.ID)
+		}
+		doc["starting_templates"] = nonNil(tpls)
+	}
+	return doc, refs, offered
+}
+
+// TemplateContext is how a template appears in a prompt: what it does,
+// its parameters, the variables it reads, and its definition with
+// {{markers}}.
+func TemplateContext(t *templates.Template) map[string]any {
+	params := make([]map[string]any, 0, len(t.Params))
+	for _, p := range t.Params {
+		x := map[string]any{"name": p.Name, "type": p.Type, "title": p.Title, "description": p.Description, "required": p.Required}
+		if p.Default != nil {
+			x["default"] = p.Default
+		}
+		if len(p.Enum) > 0 {
+			x["enum"] = p.Enum
+		}
+		params = append(params, x)
+	}
+	vars := make([]string, 0, len(t.Variables))
+	for _, v := range t.Variables {
+		vars = append(vars, v.Name)
+	}
+	return map[string]any{"id": t.ID, "title": t.Title, "description": t.Description, "connectors": t.Connectors,
+		"variables": vars, "params": params, "definition": t.Definition}
 }
 
 func nonNil[T any](s []T) []T {
