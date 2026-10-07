@@ -346,6 +346,11 @@ triggers:
     type: webhook
     verify: { scheme: connector, secret_field: secret }
     event_type: =body.kind
+  pathed:
+    type: webhook
+    verify: { scheme: path_secret, secret_field: secret }
+    ack: { status: 200 }
+    event_type: '=size(query) == 0 ? body.kind : "leaked"'
   slack:
     type: webhook
     verify: { scheme: header_secret, header: X-Secret, secret_field: secret }
@@ -425,6 +430,33 @@ func TestConnectorHandshakes(t *testing.T) {
 	}
 	if st, _ := tokened("env=prod"); st != 401 {
 		t.Errorf("no token: %d", st)
+	}
+
+	// The path form: env, connection and token in the path (no query
+	// string), as PUT or POST; only for path_secret triggers.
+	pathed := func(method, trigger, tail string) int {
+		req, _ := http.NewRequest(method, w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/"+trigger+tail, bytes.NewReader([]byte(`{"kind":"paid"}`)))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	for _, c := range []struct {
+		method, trigger, tail string
+		want                  int
+	}{
+		{"PUT", "pathed", "/prod/main/s1", 200},
+		{"POST", "pathed", "/prod/main/s1", 200},
+		{"PUT", "pathed", "/prod/main/nope", 401},
+		{"PUT", "pathed", "/prod/other/s1", 401},  // no such connection
+		{"POST", "pathed", "", 401},               // no token at all
+		{"POST", "tokened", "/prod/main/s1", 404}, // the path form is only for path_secret
+	} {
+		if st := pathed(c.method, c.trigger, c.tail); st != c.want {
+			t.Errorf("%s %s%s: %d, want %d", c.method, c.trigger, c.tail, st, c.want)
+		}
 	}
 
 	// A connector-verified trigger: the connector's own check decides.

@@ -81,6 +81,15 @@ func VerifyQuerySecret(v *VerifySpec, secret string, q url.Values) error {
 	return nil
 }
 
+// VerifyPathSecret checks a path_secret delivery: the last segment of the
+// path form (/{env}/{connection}/{token}) must equal the secret.
+func VerifyPathSecret(secret, token string) error {
+	if secret == "" || token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(secret)) != 1 {
+		return ErrBadSignature
+	}
+	return nil
+}
+
 // DefaultTolerance is how far a timestamped signature may be from now.
 const DefaultTolerance = 5 * time.Minute
 
@@ -158,8 +167,8 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 			return ErrBadSignature
 		}
 		return nil
-	case "query_secret":
-		return fmt.Errorf("%w: query_secret is checked against the URL", ErrBadSignature)
+	case "query_secret", "path_secret":
+		return fmt.Errorf("%w: %s is checked against the URL", ErrBadSignature, v.Scheme)
 	case "connector":
 		return fmt.Errorf("%w: the connector verifies this trigger itself", ErrBadSignature)
 	default:

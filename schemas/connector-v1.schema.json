@@ -176,7 +176,7 @@
           "additionalProperties": false,
           "required": ["scheme"],
           "properties": {
-            "scheme": { "enum": ["hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "query_secret", "connector", "bearer", "basic", "none"], "description": "header_secret: the header carries the shared secret itself (compared in constant time). connector: the connector's own code verifies (for signatures no scheme describes). slack_v0: HMAC-SHA256 over 'v0:<timestamp>:<raw body>', the header carrying 'v0=<hex>'." },
+            "scheme": { "enum": ["hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "query_secret", "path_secret", "connector", "bearer", "basic", "none"], "description": "header_secret: the header carries the shared secret itself (compared in constant time). path_secret: the URL's path form /{env}/{connection}/{token} carries the shared secret (for providers whose callback URLs may not carry a query string). connector: the connector's own code verifies (for signatures no scheme describes). slack_v0: HMAC-SHA256 over 'v0:<timestamp>:<raw body>', the header carrying 'v0=<hex>'." },
             "encoding": { "enum": ["hex", "base64", "base64_of_hex"], "description": "hmac_*: how the signature header encodes the MAC (default hex; base64_of_hex is base64 of the lowercase hex string)." },
             "key_derivation": { "enum": ["none", "sha256_hex"], "description": "hmac_*: the MAC key is the secret itself (none, default) or the lowercase hex SHA-256 of the secret." },
             "header": { "type": "string" },

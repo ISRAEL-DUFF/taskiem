@@ -49,8 +49,12 @@ type Connections interface {
 //
 //	POST /hooks/{tenant}/{path...}                          webhook triggers
 //	POST /hooks/{tenant}/connectors/{connector}/{trigger}   connector events
+//	POST /hooks/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}
+//	                                                        the same, for providers whose callback URLs may not carry a query string (path_secret)
 //
-// A delivery names its environment with ?env= (default prod).
+// Connector events are also taken as PUT (MTN MoMo calls back with PUT or
+// POST). A delivery names its environment with ?env= (default prod), or in
+// the path form.
 type Handler struct {
 	Store       *runtime.Store
 	Secrets     Secrets
@@ -85,6 +89,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.wdExprs = expr.MustNew()
 		rt := chi.NewRouter()
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
+		rt.Put("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
+		rt.Post("/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}", h.connectorEvent)
+		rt.Put("/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}", h.connectorEvent)
 		rt.Get("/{tenant}/connectors/{connector}/{trigger}", h.connectorHandshake)
 		rt.Post("/{tenant}/*", h.webhook)
 		h.router = rt
@@ -167,6 +174,9 @@ func (h *Handler) receive(w http.ResponseWriter, r *http.Request) (d delivery, o
 	}
 	d.tenant, d.body = tenant, body
 	d.env = r.URL.Query().Get("env")
+	if e := chi.URLParam(r, "env"); e != "" {
+		d.env = e // the path form of a connector event
+	}
 	if d.env == "" {
 		d.env = "prod"
 	}
@@ -493,6 +503,15 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	connection := r.URL.Query().Get("connection")
+	pathToken := chi.URLParam(r, "token")
+	if pathToken != "" {
+		// The path form exists only for triggers verified by the token in it.
+		if spec.Verify == nil || spec.Verify.Scheme != "path_secret" {
+			replyErr(w, http.StatusNotFound, "no such connector trigger")
+			return
+		}
+		connection = chi.URLParam(r, "connection")
+	}
 	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: secrets.PurposeIngestVerify})
 	creds, err := h.Connections.Credentials(use, tenant, env, conn.Manifest.ID, connection)
 	if errors.Is(err, secrets.ErrAmbiguous) {
@@ -510,6 +529,9 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	verify := func() error { return connector.VerifyWebhook(spec.Verify, secret, r.Header, body) }
 	if spec.Verify != nil && spec.Verify.Scheme == "query_secret" {
 		verify = func() error { return connector.VerifyQuerySecret(spec.Verify, secret, r.URL.Query()) }
+	}
+	if spec.Verify != nil && spec.Verify.Scheme == "path_secret" {
+		verify = func() error { return connector.VerifyPathSecret(secret, pathToken) }
 	}
 	if spec.Verify != nil && spec.Verify.Scheme == "connector" {
 		verify = func() error {

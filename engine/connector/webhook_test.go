@@ -105,4 +105,16 @@ func TestBasicAndQuerySecret(t *testing.T) {
 	if VerifyWebhook(qs, "s", http.Header{}, nil) == nil {
 		t.Error("query_secret must be checked against the URL, not passed by VerifyWebhook")
 	}
+	ps := &VerifySpec{Scheme: "path_secret"}
+	if VerifyWebhook(ps, "s", http.Header{}, nil) == nil {
+		t.Error("path_secret must be checked against the URL path, not passed by VerifyWebhook")
+	}
+	if VerifyPathSecret("s3cret", "s3cret") != nil {
+		t.Error("path_secret: the right token refused")
+	}
+	for _, c := range [][2]string{{"s3cret", "guess"}, {"s3cret", ""}, {"", ""}, {"", "x"}} {
+		if VerifyPathSecret(c[0], c[1]) == nil {
+			t.Errorf("path_secret accepted %q for %q", c[1], c[0])
+		}
+	}
 }
