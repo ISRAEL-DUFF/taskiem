@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -79,6 +80,8 @@ type Server struct {
 
 	limiters limiterSet // sign-in and other unauthenticated attempts
 	defs     sync.Map   // "workflow/version" -> *wd.Definition
+	bg       sync.WaitGroup
+	bgActive atomic.Int64 // work running after its request was answered (reset emails)
 }
 
 // Handler builds the router.
@@ -100,6 +103,8 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/login", s.login)
 		r.Post("/auth/passkey/options", s.passkeyLoginOptions)
 		r.Post("/auth/passkey", s.passkeyLogin)
+		r.Post("/auth/password/forgot", s.forgotPassword)
+		r.Post("/auth/password/reset", s.resetPassword)
 		r.Post("/auth/sso/discover", s.ssoDiscover)
 		r.Get("/auth/sso/{id}/start", s.ssoStart)
 		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
@@ -112,6 +117,7 @@ func (s *Server) Handler() http.Handler {
 			r.Use(s.authenticate)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
+			r.Post("/me/password", s.changePassword)
 			r.Get("/me/invitations", s.myInvitations)
 			r.Post("/me/invitations/{tenant}/accept", s.acceptInvitation)
 			r.Get("/me/passkeys", s.listPasskeys)
