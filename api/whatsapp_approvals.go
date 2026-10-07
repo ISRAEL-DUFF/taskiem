@@ -182,7 +182,12 @@ func (s *Server) waNotifyApprovals(ctx context.Context, tenant uuid.UUID) error 
 func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approvalTarget, resend bool) error {
 	var msg whatsapp.Message
 	sent := false
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
+	// From the tenant's own number when it has one.
+	wa, err := s.WhatsApp.ForTenant(ctx, tenant.ID)
+	if err != nil {
+		return err
+	}
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
 		q := `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`
 		if resend {
 			q = `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id) VALUES ($1, $2, $3, $4, $5)
@@ -236,7 +241,7 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 		if levels > 1 {
 			where = fmt.Sprintf("%s, level %d of %d", env, t.level+1, levels)
 		}
-		text := "[" + tenant.Name + "] Approval needed: " + title + " (" + where + ")"
+		text := wa.Prefix(tenant.Name) + "Approval needed: " + title + " (" + where + ")"
 		if len(lines) > 0 {
 			text += "\n\n" + strings.Join(lines, "\n")
 		}
@@ -248,14 +253,14 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 		tpl := whatsapp.TplApprovalRequest
 		msg = whatsapp.Message{Text: text, Buttons: []whatsapp.Button{{ID: tokens["approved"], Title: "Approve"}, {ID: tokens["rejected"], Title: "Reject"}},
 			Template: &tpl, Vars: map[string]string{"tenant": tenant.Name, "title": title, "summary": summary, "environment": where},
-			Payloads: []string{tokens["approved"], tokens["rejected"]}}
+			Payloads: []string{tokens["approved"], tokens["rejected"]}, Tenant: tenant.ID}
 		sent = true
 		return nil
 	})
 	if err != nil || !sent {
 		return err
 	}
-	_, sendErr := s.WhatsApp.Send(ctx, t.number, msg)
+	_, sendErr := wa.Send(ctx, t.number, msg)
 	if sendErr != nil {
 		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, `UPDATE whatsapp_notices SET error = $5 WHERE run_id = $1 AND step_id = $2 AND level = $3 AND user_id = $4`,
@@ -366,10 +371,10 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 		}
 		tenant = c.tenants[i]
 		if p, err = s.principalOf(ctx, tenant.ID, c.p.UserID); err != nil {
-			return s.waSay(ctx, c.number, tenant.Name, "You cannot act in "+tenant.Name+" any more.")
+			return s.waSay(ctx, c.wa, c.number, tenant.Name, "You cannot act in "+tenant.Name+" any more.")
 		}
 	}
-	say := func(text string) error { return s.waSay(ctx, c.number, tenant.Name, text) }
+	say := func(text string) error { return s.waSay(ctx, c.wa, c.number, tenant.Name, text) }
 	var row tokenRow
 	refusal := ""
 	var level int
@@ -429,12 +434,19 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 // waVote records a decision made over WhatsApp, or hands it off for
 // step-up.
 func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Principal, cl whatsapp.Claims, stepUp, via string) error {
-	say := func(text string) error { return s.waSay(ctx, c.number, tenant.Name, text) }
+	say := func(text string) error { return s.waSay(ctx, c.wa, c.number, tenant.Name, text) }
 	ref := runtime.RunRef{ID: cl.Run, TenantID: tenant.ID}
 	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: "whatsapp", StepUp: stepUp})
 	var su *runtime.StepUpError
 	switch {
 	case errors.As(err, &su):
+		// A policy that takes the WhatsApp PIN gets a PIN form bound to
+		// this decision; anything stronger, or no PIN set, the web link.
+		if su.Method == runtime.StepUpWhatsAppPIN {
+			if sent, err := s.waSendPinFlow(ctx, c, tenant, p, cl); err != nil || sent {
+				return err
+			}
+		}
 		return s.waHandoff(ctx, c, tenant, cl)
 	case errors.Is(err, runtime.ErrNotAllowed):
 		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
@@ -478,7 +490,7 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 // app with a passkey or authenticator code (step-up; spec 11.2).
 func (s *Server) waHandoff(ctx context.Context, c *chat, tenant tenantRef, cl whatsapp.Claims) error {
 	if s.PublicURL == "" {
-		return s.waSay(ctx, c.number, tenant.Name, "This decision needs your passkey or authenticator code: decide it in Taskiem's web app, under Approvals.")
+		return s.waSay(ctx, c.wa, c.number, tenant.Name, "This decision needs your passkey or authenticator code: decide it in Taskiem's web app, under Approvals.")
 	}
 	h := cl
 	h.Purpose, h.Nonce = whatsapp.PurposeHandoff, whatsapp.NewNonce()
@@ -505,9 +517,9 @@ func (s *Server) waHandoff(ctx context.Context, c *chat, tenant tenantRef, cl wh
 	}
 	what := verb + " " + h.Step
 	tpl := whatsapp.TplStepUpLink
-	_, err = s.WhatsApp.Send(ctx, c.number, whatsapp.Message{
-		Text:     "[" + tenant.Name + "] To " + what + ", confirm with your passkey or authenticator code in Taskiem within 10 minutes:\n" + link,
-		Template: &tpl, Vars: map[string]string{"tenant": tenant.Name, "what": what, "link": link}})
+	_, err = c.wa.Send(ctx, c.number, whatsapp.Message{
+		Text:     c.wa.Prefix(tenant.Name) + "To " + what + ", confirm with your passkey or authenticator code in Taskiem within 10 minutes:\n" + link,
+		Template: &tpl, Vars: map[string]string{"tenant": tenant.Name, "what": what, "link": link}, Tenant: tenant.ID})
 	return err
 }
 
@@ -672,7 +684,9 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 			return tx.QueryRow(r.Context(), `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&name)
 		})
 		// Inside the window only: a confirmation is not worth a template.
-		_, _ = s.WhatsApp.Send(r.Context(), *number, whatsapp.Message{Text: "[" + name + "] Recorded with step-up: your decision on " + cl.Step + " (" + res.Status + ")."})
+		if wa, err := s.WhatsApp.ForTenant(r.Context(), p.TenantID); err == nil {
+			_, _ = wa.Send(r.Context(), *number, whatsapp.Message{Text: wa.Prefix(name) + "Recorded with step-up: your decision on " + cl.Step + " (" + res.Status + ")."})
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"run_id": cl.Run, "step_id": cl.Step, "decision": cl.Decision, "status": res.Status, "level": res.Level + 1, "levels": res.Levels})
 }
@@ -746,7 +760,16 @@ func (s *Server) waNotifyRuns(ctx context.Context, tenant uuid.UUID) error {
 			kind, title = "run_cancelled", e.wf+" was cancelled in "+e.env+"."
 		}
 		m := whatsapp.AlertMessage(name, kind, title, "The run you started from WhatsApp has ended.", link, map[string]any{"workflow": e.wf, "environment": e.env})
-		if _, err := s.WhatsApp.Send(ctx, n, m); err != nil {
+		m.Tenant = tenant
+		wa, err := s.WhatsApp.ForTenant(ctx, tenant)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if wa.Own() {
+			m.Text = strings.TrimPrefix(m.Text, "["+name+"] ")
+		}
+		if _, err := wa.Send(ctx, n, m); err != nil {
 			errs = append(errs, err)
 		}
 	}

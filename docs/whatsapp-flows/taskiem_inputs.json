@@ -1,0 +1,1180 @@
+{
+  "data_api_version": "3.0",
+  "routing_model": {
+    "INPUTS": []
+  },
+  "screens": [
+    {
+      "data": {
+        "c10_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c10_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c10_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c10_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c10_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c10_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c1_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c1_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c1_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c1_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c1_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c1_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c2_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c2_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c2_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c2_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c2_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c2_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c3_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c3_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c3_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c3_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c3_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c3_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c4_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c4_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c4_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c4_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c4_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c4_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c5_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c5_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c5_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c5_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c5_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c5_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c6_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c6_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c6_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c6_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c6_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c6_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c7_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c7_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c7_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c7_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c7_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c7_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c8_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c8_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c8_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c8_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c8_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c8_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c9_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c9_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "c9_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "c9_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "c9_opts": {
+          "__example__": [
+            {
+              "id": "-",
+              "title": "-"
+            }
+          ],
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "c9_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "error": {
+          "__example__": "",
+          "type": "string"
+        },
+        "has_error": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "intro": {
+          "__example__": "Fill in the details, then tap Continue. You confirm in the chat before anything starts.",
+          "type": "string"
+        },
+        "n10_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n10_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n10_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n10_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n10_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n1_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n1_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n1_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n1_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n1_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n2_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n2_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n2_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n2_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n2_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n3_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n3_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n3_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n3_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n3_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n4_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n4_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n4_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n4_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n4_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n5_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n5_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n5_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n5_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n5_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n6_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n6_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n6_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n6_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n6_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n7_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n7_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n7_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n7_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n7_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n8_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n8_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n8_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n8_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n8_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n9_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n9_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "n9_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "n9_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "n9_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t10_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t10_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t10_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t10_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t10_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t1_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t1_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t1_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t1_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t1_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t2_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t2_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t2_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t2_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t2_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t3_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t3_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t3_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t3_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t3_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t4_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t4_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t4_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t4_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t4_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t5_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t5_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t5_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t5_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t5_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t6_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t6_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t6_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t6_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t6_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t7_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t7_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t7_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t7_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t7_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t8_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t8_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t8_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t8_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t8_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t9_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t9_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "t9_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "t9_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "t9_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "title": {
+          "__example__": "Pay supplier",
+          "type": "string"
+        }
+      },
+      "id": "INPUTS",
+      "layout": {
+        "children": [
+          {
+            "text": "${data.title}",
+            "type": "TextHeading"
+          },
+          {
+            "text": "${data.intro}",
+            "type": "TextBody"
+          },
+          {
+            "font-weight": "bold",
+            "text": "${data.error}",
+            "type": "TextBody",
+            "visible": "${data.has_error}"
+          },
+          {
+            "error-message": "${data.t1_err}",
+            "helper-text": "${data.t1_help}",
+            "input-type": "text",
+            "label": "${data.t1_label}",
+            "name": "t1",
+            "required": "${data.t1_req}",
+            "type": "TextInput",
+            "visible": "${data.t1_on}"
+          },
+          {
+            "error-message": "${data.n1_err}",
+            "helper-text": "${data.n1_help}",
+            "input-type": "number",
+            "label": "${data.n1_label}",
+            "name": "n1",
+            "required": "${data.n1_req}",
+            "type": "TextInput",
+            "visible": "${data.n1_on}"
+          },
+          {
+            "data-source": "${data.c1_opts}",
+            "error-message": "${data.c1_err}",
+            "label": "${data.c1_label}",
+            "name": "c1",
+            "required": "${data.c1_req}",
+            "type": "Dropdown",
+            "visible": "${data.c1_on}"
+          },
+          {
+            "error-message": "${data.t2_err}",
+            "helper-text": "${data.t2_help}",
+            "input-type": "text",
+            "label": "${data.t2_label}",
+            "name": "t2",
+            "required": "${data.t2_req}",
+            "type": "TextInput",
+            "visible": "${data.t2_on}"
+          },
+          {
+            "error-message": "${data.n2_err}",
+            "helper-text": "${data.n2_help}",
+            "input-type": "number",
+            "label": "${data.n2_label}",
+            "name": "n2",
+            "required": "${data.n2_req}",
+            "type": "TextInput",
+            "visible": "${data.n2_on}"
+          },
+          {
+            "data-source": "${data.c2_opts}",
+            "error-message": "${data.c2_err}",
+            "label": "${data.c2_label}",
+            "name": "c2",
+            "required": "${data.c2_req}",
+            "type": "Dropdown",
+            "visible": "${data.c2_on}"
+          },
+          {
+            "error-message": "${data.t3_err}",
+            "helper-text": "${data.t3_help}",
+            "input-type": "text",
+            "label": "${data.t3_label}",
+            "name": "t3",
+            "required": "${data.t3_req}",
+            "type": "TextInput",
+            "visible": "${data.t3_on}"
+          },
+          {
+            "error-message": "${data.n3_err}",
+            "helper-text": "${data.n3_help}",
+            "input-type": "number",
+            "label": "${data.n3_label}",
+            "name": "n3",
+            "required": "${data.n3_req}",
+            "type": "TextInput",
+            "visible": "${data.n3_on}"
+          },
+          {
+            "data-source": "${data.c3_opts}",
+            "error-message": "${data.c3_err}",
+            "label": "${data.c3_label}",
+            "name": "c3",
+            "required": "${data.c3_req}",
+            "type": "Dropdown",
+            "visible": "${data.c3_on}"
+          },
+          {
+            "error-message": "${data.t4_err}",
+            "helper-text": "${data.t4_help}",
+            "input-type": "text",
+            "label": "${data.t4_label}",
+            "name": "t4",
+            "required": "${data.t4_req}",
+            "type": "TextInput",
+            "visible": "${data.t4_on}"
+          },
+          {
+            "error-message": "${data.n4_err}",
+            "helper-text": "${data.n4_help}",
+            "input-type": "number",
+            "label": "${data.n4_label}",
+            "name": "n4",
+            "required": "${data.n4_req}",
+            "type": "TextInput",
+            "visible": "${data.n4_on}"
+          },
+          {
+            "data-source": "${data.c4_opts}",
+            "error-message": "${data.c4_err}",
+            "label": "${data.c4_label}",
+            "name": "c4",
+            "required": "${data.c4_req}",
+            "type": "Dropdown",
+            "visible": "${data.c4_on}"
+          },
+          {
+            "error-message": "${data.t5_err}",
+            "helper-text": "${data.t5_help}",
+            "input-type": "text",
+            "label": "${data.t5_label}",
+            "name": "t5",
+            "required": "${data.t5_req}",
+            "type": "TextInput",
+            "visible": "${data.t5_on}"
+          },
+          {
+            "error-message": "${data.n5_err}",
+            "helper-text": "${data.n5_help}",
+            "input-type": "number",
+            "label": "${data.n5_label}",
+            "name": "n5",
+            "required": "${data.n5_req}",
+            "type": "TextInput",
+            "visible": "${data.n5_on}"
+          },
+          {
+            "data-source": "${data.c5_opts}",
+            "error-message": "${data.c5_err}",
+            "label": "${data.c5_label}",
+            "name": "c5",
+            "required": "${data.c5_req}",
+            "type": "Dropdown",
+            "visible": "${data.c5_on}"
+          },
+          {
+            "error-message": "${data.t6_err}",
+            "helper-text": "${data.t6_help}",
+            "input-type": "text",
+            "label": "${data.t6_label}",
+            "name": "t6",
+            "required": "${data.t6_req}",
+            "type": "TextInput",
+            "visible": "${data.t6_on}"
+          },
+          {
+            "error-message": "${data.n6_err}",
+            "helper-text": "${data.n6_help}",
+            "input-type": "number",
+            "label": "${data.n6_label}",
+            "name": "n6",
+            "required": "${data.n6_req}",
+            "type": "TextInput",
+            "visible": "${data.n6_on}"
+          },
+          {
+            "data-source": "${data.c6_opts}",
+            "error-message": "${data.c6_err}",
+            "label": "${data.c6_label}",
+            "name": "c6",
+            "required": "${data.c6_req}",
+            "type": "Dropdown",
+            "visible": "${data.c6_on}"
+          },
+          {
+            "error-message": "${data.t7_err}",
+            "helper-text": "${data.t7_help}",
+            "input-type": "text",
+            "label": "${data.t7_label}",
+            "name": "t7",
+            "required": "${data.t7_req}",
+            "type": "TextInput",
+            "visible": "${data.t7_on}"
+          },
+          {
+            "error-message": "${data.n7_err}",
+            "helper-text": "${data.n7_help}",
+            "input-type": "number",
+            "label": "${data.n7_label}",
+            "name": "n7",
+            "required": "${data.n7_req}",
+            "type": "TextInput",
+            "visible": "${data.n7_on}"
+          },
+          {
+            "data-source": "${data.c7_opts}",
+            "error-message": "${data.c7_err}",
+            "label": "${data.c7_label}",
+            "name": "c7",
+            "required": "${data.c7_req}",
+            "type": "Dropdown",
+            "visible": "${data.c7_on}"
+          },
+          {
+            "error-message": "${data.t8_err}",
+            "helper-text": "${data.t8_help}",
+            "input-type": "text",
+            "label": "${data.t8_label}",
+            "name": "t8",
+            "required": "${data.t8_req}",
+            "type": "TextInput",
+            "visible": "${data.t8_on}"
+          },
+          {
+            "error-message": "${data.n8_err}",
+            "helper-text": "${data.n8_help}",
+            "input-type": "number",
+            "label": "${data.n8_label}",
+            "name": "n8",
+            "required": "${data.n8_req}",
+            "type": "TextInput",
+            "visible": "${data.n8_on}"
+          },
+          {
+            "data-source": "${data.c8_opts}",
+            "error-message": "${data.c8_err}",
+            "label": "${data.c8_label}",
+            "name": "c8",
+            "required": "${data.c8_req}",
+            "type": "Dropdown",
+            "visible": "${data.c8_on}"
+          },
+          {
+            "error-message": "${data.t9_err}",
+            "helper-text": "${data.t9_help}",
+            "input-type": "text",
+            "label": "${data.t9_label}",
+            "name": "t9",
+            "required": "${data.t9_req}",
+            "type": "TextInput",
+            "visible": "${data.t9_on}"
+          },
+          {
+            "error-message": "${data.n9_err}",
+            "helper-text": "${data.n9_help}",
+            "input-type": "number",
+            "label": "${data.n9_label}",
+            "name": "n9",
+            "required": "${data.n9_req}",
+            "type": "TextInput",
+            "visible": "${data.n9_on}"
+          },
+          {
+            "data-source": "${data.c9_opts}",
+            "error-message": "${data.c9_err}",
+            "label": "${data.c9_label}",
+            "name": "c9",
+            "required": "${data.c9_req}",
+            "type": "Dropdown",
+            "visible": "${data.c9_on}"
+          },
+          {
+            "error-message": "${data.t10_err}",
+            "helper-text": "${data.t10_help}",
+            "input-type": "text",
+            "label": "${data.t10_label}",
+            "name": "t10",
+            "required": "${data.t10_req}",
+            "type": "TextInput",
+            "visible": "${data.t10_on}"
+          },
+          {
+            "error-message": "${data.n10_err}",
+            "helper-text": "${data.n10_help}",
+            "input-type": "number",
+            "label": "${data.n10_label}",
+            "name": "n10",
+            "required": "${data.n10_req}",
+            "type": "TextInput",
+            "visible": "${data.n10_on}"
+          },
+          {
+            "data-source": "${data.c10_opts}",
+            "error-message": "${data.c10_err}",
+            "label": "${data.c10_label}",
+            "name": "c10",
+            "required": "${data.c10_req}",
+            "type": "Dropdown",
+            "visible": "${data.c10_on}"
+          },
+          {
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "c1": "${form.c1}",
+                "c10": "${form.c10}",
+                "c2": "${form.c2}",
+                "c3": "${form.c3}",
+                "c4": "${form.c4}",
+                "c5": "${form.c5}",
+                "c6": "${form.c6}",
+                "c7": "${form.c7}",
+                "c8": "${form.c8}",
+                "c9": "${form.c9}",
+                "n1": "${form.n1}",
+                "n10": "${form.n10}",
+                "n2": "${form.n2}",
+                "n3": "${form.n3}",
+                "n4": "${form.n4}",
+                "n5": "${form.n5}",
+                "n6": "${form.n6}",
+                "n7": "${form.n7}",
+                "n8": "${form.n8}",
+                "n9": "${form.n9}",
+                "t1": "${form.t1}",
+                "t10": "${form.t10}",
+                "t2": "${form.t2}",
+                "t3": "${form.t3}",
+                "t4": "${form.t4}",
+                "t5": "${form.t5}",
+                "t6": "${form.t6}",
+                "t7": "${form.t7}",
+                "t8": "${form.t8}",
+                "t9": "${form.t9}"
+              }
+            },
+            "type": "Footer"
+          }
+        ],
+        "type": "SingleColumnLayout"
+      },
+      "terminal": true,
+      "title": "Details"
+    }
+  ],
+  "version": "7.3"
+}

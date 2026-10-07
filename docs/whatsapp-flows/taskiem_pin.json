@@ -1,0 +1,71 @@
+{
+  "data_api_version": "3.0",
+  "routing_model": {
+    "PIN": []
+  },
+  "screens": [
+    {
+      "data": {
+        "error": {
+          "__example__": "",
+          "type": "string"
+        },
+        "has_error": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "summary": {
+          "__example__": "Pay supplier · prod",
+          "type": "string"
+        },
+        "title": {
+          "__example__": "Approve disburse",
+          "type": "string"
+        }
+      },
+      "id": "PIN",
+      "layout": {
+        "children": [
+          {
+            "text": "${data.title}",
+            "type": "TextHeading"
+          },
+          {
+            "text": "${data.summary}",
+            "type": "TextBody"
+          },
+          {
+            "helper-text": "The WhatsApp PIN you set in Taskiem",
+            "input-type": "passcode",
+            "label": "Approval PIN",
+            "max-chars": "6",
+            "min-chars": "6",
+            "name": "pin",
+            "required": true,
+            "type": "TextInput"
+          },
+          {
+            "font-weight": "bold",
+            "text": "${data.error}",
+            "type": "TextBody",
+            "visible": "${data.has_error}"
+          },
+          {
+            "label": "Confirm",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "pin": "${form.pin}"
+              }
+            },
+            "type": "Footer"
+          }
+        ],
+        "type": "SingleColumnLayout"
+      },
+      "terminal": true,
+      "title": "Confirm decision"
+    }
+  ],
+  "version": "7.3"
+}

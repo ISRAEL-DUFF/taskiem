@@ -3,6 +3,8 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +13,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,6 +38,15 @@ const (
 
 var waKey = bytes.Repeat([]byte{42}, 32)
 
+// waFlowKey is the Flows endpoint's key pair, made once per test binary.
+var waFlowKey = sync.OnceValue(func() *rsa.PrivateKey {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return k
+})
+
 type waWorld struct {
 	*world
 	graph *whatsapptest.Graph
@@ -48,10 +60,17 @@ func newWAWorld(t *testing.T) *waWorld {
 	g := whatsapptest.New(t, waPNID, waToken)
 	wa := whatsapp.New(e.Store.Pool, whatsapp.Config{PhoneNumberID: waPNID, AccessToken: waToken, AppSecret: waSecret, VerifyToken: waVerify,
 		TokenKey: waKey, GraphURL: g.URL, DisplayNumber: "+15550001111"}, e.Egress, slog.New(slog.DiscardHandler))
+	wa.Secrets = e.Vault
+	wa.Meter = &whatsapp.UsageMeter{Pool: e.Store.Pool, Allowance: func(ctx context.Context, t uuid.UUID) (int64, error) {
+		l, err := e.Store.LimitsFor(ctx, t)
+		return l.WhatsAppTemplatesMonthly, err
+	}}
 	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress,
 		Logger: slog.New(slog.DiscardHandler), WhatsApp: wa, PublicURL: waPublicURL}
 	mux := http.NewServeMux()
-	mux.Handle("/channels/whatsapp", http.StripPrefix("/channels/whatsapp", srv.WhatsAppHooks()))
+	hooks := http.StripPrefix("/channels/whatsapp", srv.WhatsAppHooks())
+	mux.Handle("/channels/whatsapp", hooks)
+	mux.Handle("/channels/whatsapp/", hooks)
 	mux.Handle("/", srv.Handler())
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)

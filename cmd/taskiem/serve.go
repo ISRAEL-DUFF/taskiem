@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
@@ -251,6 +252,13 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits}}
 	if cfg.WhatsApp != nil {
 		e.wa = whatsapp.New(pool, *cfg.WhatsApp, &egress.Guard{Logger: log}, log)
+		// Tenants' own numbers (credentials in their vaults) and template
+		// cost accounting against their plans (spec 11.4, 16).
+		e.wa.Secrets = vault
+		e.wa.Meter = &whatsapp.UsageMeter{Pool: pool, Allowance: func(ctx context.Context, t uuid.UUID) (int64, error) {
+			l, err := e.store.LimitsFor(ctx, t)
+			return l.WhatsAppTemplatesMonthly, err
+		}}
 	}
 	return e, nil
 }

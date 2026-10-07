@@ -44,7 +44,10 @@ type Policy struct {
 type Rule struct {
 	When   string  `json:"when,omitempty"` // CEL over subject; empty always matches
 	Levels []Level `json:"levels"`
-	StepUp string  `json:"step_up,omitempty"` // "" | totp | passkey
+	// StepUp is the weakest second factor a decision under this rule takes:
+	// "" (none), whatsapp_pin (the WhatsApp approval PIN, or stronger),
+	// totp (an authenticator code or a passkey) or passkey.
+	StepUp string `json:"step_up,omitempty"`
 }
 
 // Level is one stage of approval: count people holding role. Levels are
@@ -119,9 +122,9 @@ func (p *Policy) Validate() error {
 			}
 		}
 		switch r.StepUp {
-		case "", "totp", "passkey":
+		case "", "whatsapp_pin", "totp", "passkey":
 		default:
-			add("rules[%d].step_up must be totp or passkey", i)
+			add("rules[%d].step_up must be whatsapp_pin, totp or passkey", i)
 		}
 	}
 	if p.Timeout != "" {

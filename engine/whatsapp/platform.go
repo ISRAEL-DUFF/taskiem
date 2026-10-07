@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,6 +41,10 @@ type Config struct {
 	// DisplayNumber is the platform number as people should save it
 	// (TASKIEM_WHATSAPP_DISPLAY_NUMBER), shown on the Account page.
 	DisplayNumber string
+	// FlowKey decrypts requests to the Flows data endpoint
+	// (TASKIEM_WHATSAPP_FLOWS_PRIVATE_KEY, PEM); nil turns Flows off and
+	// inputs and step-up stay in chat and the web app.
+	FlowKey *FlowKey
 }
 
 // ConfigFromEnv reads the platform number's settings; nil when
@@ -73,6 +78,11 @@ func ConfigFromEnv(lookup func(string) (string, bool)) (*Config, error) {
 		return nil, errors.New("TASKIEM_WHATSAPP_TOKEN_KEY must be at least 32 bytes, base64 (openssl rand -base64 32)")
 	}
 	c.TokenKey = key
+	if pk := get("TASKIEM_WHATSAPP_FLOWS_PRIVATE_KEY"); pk != "" {
+		if c.FlowKey, err = ParseFlowKey(pk); err != nil {
+			return nil, fmt.Errorf("TASKIEM_WHATSAPP_FLOWS_PRIVATE_KEY: %w", err)
+		}
+	}
 	return c, nil
 }
 
@@ -86,7 +96,24 @@ type Platform struct {
 	Logger *slog.Logger
 	// Now is the clock (tests).
 	Now func() time.Time
+	// Meter counts template messages per tenant against the plan's
+	// allowance (spec 16); nil counts nothing.
+	Meter Meter
+	// Secrets reads tenants' own numbers' credentials from their vaults;
+	// nil turns own numbers off (everything goes from this number).
+	Secrets Secrets
+	// Tenant is an own number's tenant (spec 11.4); uuid.Nil for the
+	// shared platform number.
+	Tenant uuid.UUID
+	// OwnApp: the own number is on the tenant's own Meta app (its own app
+	// secret and webhook path), not on Taskiem's.
+	OwnApp bool
+
+	own sync.Map // own numbers by "t:<tenant>" and "n:<phone number id>"
 }
+
+// Own reports whether this is a tenant's own number.
+func (p *Platform) Own() bool { return p.Tenant != uuid.Nil }
 
 // New builds the platform from its configuration.
 func New(pool *pgxpool.Pool, cfg Config, guard *egress.Guard, log *slog.Logger) *Platform {
@@ -126,6 +153,9 @@ type Message struct {
 	Template *Template
 	Vars     map[string]string
 	Payloads []string
+	// Tenant is whom a template is counted against (spec 16); uuid.Nil
+	// counts nothing (replies to unbound numbers are text only).
+	Tenant uuid.UUID
 }
 
 // Send delivers m to a number: as text when the number wrote in the last
@@ -155,7 +185,30 @@ func (p *Platform) Send(ctx context.Context, number string, m Message) (string, 
 	if m.Template == nil {
 		return "", ErrWindowClosed
 	}
-	return p.Client.SendTemplate(ctx, number, *m.Template, p.Config.Language, m.Vars, m.Payloads)
+	return p.SendTemplate(ctx, m.Tenant, number, *m.Template, m.Vars, m.Payloads)
+}
+
+// SendTemplate sends a template, counted against the tenant's allowance
+// (spec 16): a blockable one beyond it is not sent (ErrTemplateBlocked);
+// any other is sent and counted, beyond the allowance as overage.
+func (p *Platform) SendTemplate(ctx context.Context, tenant uuid.UUID, number string, t Template, vars map[string]string, payloads []string) (string, error) {
+	metered := tenant != uuid.Nil && p.Meter != nil
+	if metered {
+		ok, err := p.Meter.Allow(ctx, tenant, t)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", ErrTemplateBlocked
+		}
+	}
+	id, err := p.Client.SendTemplate(ctx, number, t, p.Config.Language, vars, payloads)
+	if err == nil && metered {
+		if merr := p.Meter.Record(ctx, tenant, t); merr != nil && p.Logger != nil {
+			p.Logger.Error("whatsapp: counting a template", "template", t.Name, "err", merr)
+		}
+	}
+	return id, err
 }
 
 // Contact is a number's conversation.
@@ -164,9 +217,23 @@ type Contact struct {
 	LastInbound *time.Time
 }
 
-// Contact reads a number's conversation.
+// Contact reads a number's conversation. On a tenant's own number it
+// always speaks to that tenant, and the window is that number's.
 func (p *Platform) Contact(ctx context.Context, number string) (Contact, error) {
 	var c Contact
+	if p.Own() {
+		t := p.Tenant
+		c.Tenant = &t
+		err := db.InTenantTx(ctx, p.Pool, []uuid.UUID{p.Tenant}, func(tx pgx.Tx) error {
+			err := tx.QueryRow(ctx, `SELECT last_inbound_at FROM whatsapp_own_contacts WHERE phone_number_id = $1 AND number = $2`,
+				p.Config.PhoneNumberID, number).Scan(&c.LastInbound)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		})
+		return c, err
+	}
 	err := p.Pool.QueryRow(ctx, `SELECT current_tenant, last_inbound_at FROM taskiem_wa_contact($1)`, number).Scan(&c.Tenant, &c.LastInbound)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, nil
@@ -175,10 +242,29 @@ func (p *Platform) Contact(ctx context.Context, number string) (Contact, error) 
 }
 
 // Touch records an inbound message, and with setTenant the tenant the
-// number now speaks to.
+// number now speaks to (the shared number only).
 func (p *Platform) Touch(ctx context.Context, number string, inbound, setTenant bool, tenant *uuid.UUID) error {
+	if p.Own() {
+		if !inbound {
+			return nil
+		}
+		return db.InTenantTx(ctx, p.Pool, []uuid.UUID{p.Tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO whatsapp_own_contacts (tenant_id, phone_number_id, number, last_inbound_at) VALUES ($1, $2, $3, now())
+				ON CONFLICT (phone_number_id, number) DO UPDATE SET last_inbound_at = now()`, p.Tenant, p.Config.PhoneNumberID, number)
+			return err
+		})
+	}
 	_, err := p.Pool.Exec(ctx, `SELECT taskiem_wa_contact_touch($1, $2, $3, $4)`, number, inbound, setTenant, tenant)
 	return err
+}
+
+// Prefix is how a tenant's messages start: its name in brackets on the
+// shared number, nothing on its own.
+func (p *Platform) Prefix(tenant string) string {
+	if p.Own() || tenant == "" {
+		return ""
+	}
+	return "[" + tenant + "] "
 }
 
 // ClaimInbound reports whether a message id is new (Meta retries).
@@ -201,8 +287,17 @@ func (p *Platform) UserOf(ctx context.Context, number string) (uuid.UUID, error)
 }
 
 // Notify sends an alert to those of members who have bound a number, in
-// the tenant's name (the WhatsApp alert channel).
+// the tenant's name (the WhatsApp alert channel), from the tenant's own
+// number when it has one.
 func (p *Platform) Notify(ctx context.Context, tenant uuid.UUID, members []uuid.UUID, kind, title, body, link string, detail map[string]any) error {
+	q, err := p.ForTenant(ctx, tenant)
+	if err != nil {
+		return err
+	}
+	return q.notify(ctx, tenant, members, kind, title, body, link, detail)
+}
+
+func (p *Platform) notify(ctx context.Context, tenant uuid.UUID, members []uuid.UUID, kind, title, body, link string, detail map[string]any) error {
 	type dest struct {
 		user   uuid.UUID
 		number string
@@ -230,6 +325,10 @@ func (p *Platform) Notify(ctx context.Context, tenant uuid.UUID, members []uuid.
 		return errors.New("none of the channel's members has bound a WhatsApp number")
 	}
 	m := AlertMessage(name, kind, title, body, link, detail)
+	m.Tenant = tenant
+	if p.Own() {
+		m.Text = strings.TrimPrefix(m.Text, "["+name+"] ")
+	}
 	var errs []error
 	for _, d := range dests {
 		if _, err := p.Send(ctx, d.number, m); err != nil {

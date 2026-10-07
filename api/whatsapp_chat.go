@@ -43,19 +43,49 @@ const (
 	waHandoffTTL = 10 * time.Minute // a step-up link
 )
 
-// WhatsAppHooks receives the platform number's webhooks: GET for Meta's
-// subscription handshake, POST for messages.
+// WhatsAppHooks receives Meta's webhooks: GET for the subscription
+// handshake, POST for messages. "/" is Taskiem's app: the shared number
+// and own numbers connected through it; "/n/{pnid}" is an own number on
+// the tenant's own Meta app, verified with that app's secret; "/flows" and
+// "/flows/{pnid}" are the WhatsApp Flows data endpoint (whatsapp_flows.go).
 func (s *Server) WhatsAppHooks() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", s.waHandshake)
 	r.Post("/", s.waReceive)
+	r.Get("/n/{pnid}", s.waHandshake)
+	r.Post("/n/{pnid}", s.waReceive)
+	r.Post("/flows", s.waFlowsEndpoint)
+	r.Post("/flows/{pnid}", s.waFlowsEndpoint)
+	r.Post("/embedded-signup", s.waEmbeddedSignup)
 	return r
+}
+
+// waHookPlatform is the number a webhook path is for: the shared number's
+// app for "/", an own number on its own app for "/n/{pnid}"; nil if none.
+func (s *Server) waHookPlatform(r *http.Request) *whatsapp.Platform {
+	if s.WhatsApp == nil {
+		return nil
+	}
+	pnid := chi.URLParam(r, "pnid")
+	if pnid == "" {
+		return s.WhatsApp
+	}
+	wa, err := s.WhatsApp.ForPhoneNumberID(r.Context(), pnid)
+	if err != nil {
+		s.Logger.Error("whatsapp: routing a webhook", "err", err)
+		return nil
+	}
+	if wa == nil || !wa.OwnApp {
+		return nil
+	}
+	return wa
 }
 
 func (s *Server) waHandshake(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	if s.WhatsApp == nil || q.Get("hub.mode") != "subscribe" ||
-		subtle.ConstantTimeCompare([]byte(q.Get("hub.verify_token")), []byte(s.WhatsApp.Config.VerifyToken)) != 1 {
+	wa := s.waHookPlatform(r)
+	if wa == nil || q.Get("hub.mode") != "subscribe" || wa.Config.VerifyToken == "" ||
+		subtle.ConstantTimeCompare([]byte(q.Get("hub.verify_token")), []byte(wa.Config.VerifyToken)) != 1 {
 		writeErr(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -72,7 +102,8 @@ func (s *Server) waHandshake(w http.ResponseWriter, r *http.Request) {
 var challengeRe = regexp.MustCompile(`^[0-9A-Za-z_-]{1,128}$`)
 
 func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
-	if s.WhatsApp == nil {
+	hook := s.waHookPlatform(r)
+	if hook == nil {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -81,7 +112,7 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusRequestEntityTooLarge, "too large")
 		return
 	}
-	if !whatsapp.VerifySignature(s.WhatsApp.Config.AppSecret, body, r.Header.Get("X-Hub-Signature-256")) {
+	if !whatsapp.VerifySignature(hook.Config.AppSecret, body, r.Header.Get("X-Hub-Signature-256")) {
 		writeErr(w, http.StatusUnauthorized, "bad signature")
 		return
 	}
@@ -93,12 +124,30 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 30*time.Second)
 	defer cancel()
 	for _, m := range msgs {
-		if m.PhoneNumberID != s.WhatsApp.Config.PhoneNumberID || m.ID == "" {
-			continue // another number on the same app
+		if m.ID == "" {
+			continue
+		}
+		// Messages are routed by the number they were sent to. A delivery
+		// signed with one app's secret speaks only for that app's numbers:
+		// Taskiem's app for the shared number and own numbers connected
+		// through it; an own app for its own number.
+		wa := hook
+		if m.PhoneNumberID != hook.Config.PhoneNumberID {
+			if hook.Own() {
+				continue
+			}
+			if wa, err = s.WhatsApp.ForPhoneNumberID(ctx, m.PhoneNumberID); err != nil {
+				s.Logger.Error("whatsapp: routing a message", "err", err)
+				writeErr(w, http.StatusServiceUnavailable, "try again")
+				return
+			}
+			if wa == nil || wa.OwnApp {
+				continue // another number on the same app, or one that must come signed by its own app
+			}
 		}
 		// At most once: a message is claimed before it is acted on, so a
 		// retried delivery never repeats a command.
-		fresh, err := s.WhatsApp.ClaimInbound(ctx, m.ID)
+		fresh, err := wa.ClaimInbound(ctx, m.ID)
 		if err != nil {
 			s.Logger.Error("whatsapp: claiming a message", "err", err)
 			writeErr(w, http.StatusServiceUnavailable, "try again")
@@ -107,7 +156,7 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 		if !fresh {
 			continue
 		}
-		if err := s.waHandle(ctx, m); err != nil {
+		if err := s.waHandle(ctx, wa, m); err != nil {
 			s.Logger.Error("whatsapp: handling a message", "err", err)
 		}
 	}
@@ -116,6 +165,7 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 
 // chat is one inbound message being handled.
 type chat struct {
+	wa      *whatsapp.Platform // the number it was sent to; replies go from it
 	number  string
 	in      whatsapp.Inbound
 	p       *Principal // nil until resolved
@@ -137,27 +187,31 @@ type chatData struct {
 	Run         uuid.UUID      `json:"run,omitempty"`
 	Step        string         `json:"step,omitempty"`
 	Decision    string         `json:"decision,omitempty"`
+	// Flow is the hex SHA-256 of the flow token of the inputs Flow sent,
+	// while the inputs are collected by a WhatsApp form.
+	Flow string `json:"flow,omitempty"`
 }
 
-// WhatsAppPublic, when set, answers a message from a number bound to no
-// one, such as a tenant's public self-service menu (spec 11.2; a later
-// milestone). It reports whether it handled the message.
+// WhatsAppPublic, when set, answers a message to the shared number from a
+// number bound to no one. It reports whether it handled the message.
+// Tenants' own numbers have their public menus built in
+// (whatsapp_public.go).
 type WhatsAppPublic func(ctx context.Context, number string, in whatsapp.Inbound) (bool, error)
 
 var sixDigits = regexp.MustCompile(`^\s*(\d{6})\s*$`)
 
-func (s *Server) waHandle(ctx context.Context, in whatsapp.Inbound) error {
+func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsapp.Inbound) error {
 	number, err := whatsapp.FromWaID(in.From)
 	if err != nil {
 		return nil //nolint:nilerr // a sender id that is not a phone number: nothing to answer
 	}
-	if err := s.WhatsApp.Touch(ctx, number, true, false, nil); err != nil {
+	if err := wa.Touch(ctx, number, true, false, nil); err != nil {
 		return err
 	}
 	// Per number (spec 11.5): a compromised phone cannot flood.
 	if !s.limiter("wa:"+number, 3*time.Second, 20).Allow() {
 		if s.limiter("wa-warn:"+number, time.Minute, 1).Allow() {
-			return s.waSay(ctx, number, "", "You are sending messages too quickly. Wait a minute, then try again.")
+			return s.waSay(ctx, wa, number, "", "You are sending messages too quickly. Wait a minute, then try again.")
 		}
 		return nil
 	}
@@ -166,32 +220,41 @@ func (s *Server) waHandle(ctx context.Context, in whatsapp.Inbound) error {
 		return err
 	}
 	if user == uuid.Nil {
-		return s.waUnbound(ctx, number, in)
+		return s.waUnbound(ctx, wa, number, in)
 	}
-	c := &chat{number: number, in: in}
+	c := &chat{wa: wa, number: number, in: in}
 	if c.tenants, err = s.tenantsOf(ctx, user); err != nil {
 		return err
 	}
-	if len(c.tenants) == 0 {
-		return s.waSay(ctx, number, "", "Your Taskiem account has no active organisation.")
-	}
-	contact, err := s.WhatsApp.Contact(ctx, number)
-	if err != nil {
-		return err
-	}
-	c.tenant = c.tenants[0]
-	if contact.Tenant != nil {
-		if i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == *contact.Tenant }); i >= 0 {
-			c.tenant = c.tenants[i]
+	if wa.Own() {
+		// A tenant's own number speaks for that tenant only.
+		i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == wa.Tenant })
+		if i < 0 {
+			return s.waSay(ctx, wa, number, "", "Your Taskiem account is not a member of this organisation.")
 		}
-	}
-	if contact.Tenant == nil || *contact.Tenant != c.tenant.ID {
-		if err := s.WhatsApp.Touch(ctx, number, false, true, &c.tenant.ID); err != nil {
+		c.tenant, c.tenants = c.tenants[i], c.tenants[i:i+1]
+	} else {
+		if len(c.tenants) == 0 {
+			return s.waSay(ctx, wa, number, "", "Your Taskiem account has no active organisation.")
+		}
+		contact, err := wa.Contact(ctx, number)
+		if err != nil {
 			return err
+		}
+		c.tenant = c.tenants[0]
+		if contact.Tenant != nil {
+			if i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == *contact.Tenant }); i >= 0 {
+				c.tenant = c.tenants[i]
+			}
+		}
+		if contact.Tenant == nil || *contact.Tenant != c.tenant.ID {
+			if err := wa.Touch(ctx, number, false, true, &c.tenant.ID); err != nil {
+				return err
+			}
 		}
 	}
 	if c.p, err = s.principalOf(ctx, c.tenant.ID, user); err != nil {
-		return s.waSay(ctx, number, "", "Your account cannot act in "+c.tenant.Name+" any more.")
+		return s.waSay(ctx, wa, number, "", "Your account cannot act in "+c.tenant.Name+" any more.")
 	}
 	// A tapped approval button carries a signed decision token.
 	if strings.HasPrefix(in.Reply, "tk1.") {
@@ -200,12 +263,17 @@ func (s *Server) waHandle(ctx context.Context, in whatsapp.Inbound) error {
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
 	}
+	// A completed WhatsApp form carries its flow token.
+	if in.Flow != "" {
+		return s.waFlowCompleted(ctx, c)
+	}
 	return s.waCommand(ctx, c)
 }
 
 // waUnbound answers a number bound to no one: the code it was sent, if it
-// sends that back, or how to link it.
-func (s *Server) waUnbound(ctx context.Context, number string, in whatsapp.Inbound) error {
+// sends that back; a tenant's public menu on its own number; or how to
+// link it.
+func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) error {
 	if m := sixDigits.FindStringSubmatch(in.Text); m != nil {
 		var user *uuid.UUID
 		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_wa_otp_user_for($1, $2)`, number, m[1]).Scan(&user); err != nil {
@@ -213,12 +281,16 @@ func (s *Server) waUnbound(ctx context.Context, number string, in whatsapp.Inbou
 		}
 		if user != nil {
 			if _, err := s.waVerifyCode(ctx, *user, m[1], "whatsapp", ""); err != nil {
-				return s.waSay(ctx, number, "", "That code did not link this number: "+err.Error()+".")
+				return s.waSay(ctx, wa, number, "", "That code did not link this number: "+err.Error()+".")
 			}
-			return s.waSay(ctx, number, "", "This number is now linked to your Taskiem account. Send *help* to see what you can do here.")
+			return s.waSay(ctx, wa, number, "", "This number is now linked to your Taskiem account. Send *help* to see what you can do here.")
 		}
 	}
-	if s.WhatsAppPublic != nil {
+	if wa.Own() {
+		if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
+			return err
+		}
+	} else if s.WhatsAppPublic != nil {
 		if done, err := s.WhatsAppPublic(ctx, number, in); done || err != nil {
 			return err
 		}
@@ -230,21 +302,19 @@ func (s *Server) waUnbound(ctx context.Context, number string, in whatsapp.Inbou
 	if s.PublicURL != "" {
 		where = s.PublicURL + "/account"
 	}
-	return s.waSay(ctx, number, "", "This number is not linked to a Taskiem account. To use Taskiem here, sign in, open "+where+
+	return s.waSay(ctx, wa, number, "", "This number is not linked to a Taskiem account. To use Taskiem here, sign in, open "+where+
 		", add this number under WhatsApp, then type or send back the code we send you.")
 }
 
-// waSay replies inside the conversation window, in the tenant's name.
-func (s *Server) waSay(ctx context.Context, number, tenant, text string, buttons ...whatsapp.Button) error {
-	if tenant != "" {
-		text = "[" + tenant + "] " + text
-	}
-	_, err := s.WhatsApp.Send(ctx, number, whatsapp.Message{Text: text, Buttons: buttons})
+// waSay replies inside the conversation window from wa, in the tenant's
+// name (on the shared number).
+func (s *Server) waSay(ctx context.Context, wa *whatsapp.Platform, number, tenant, text string, buttons ...whatsapp.Button) error {
+	_, err := wa.Send(ctx, number, whatsapp.Message{Text: wa.Prefix(tenant) + text, Buttons: buttons})
 	return err
 }
 
 func (c *chat) say(ctx context.Context, s *Server, text string, buttons ...whatsapp.Button) error {
-	return s.waSay(ctx, c.number, c.tenant.Name, text, buttons...)
+	return s.waSay(ctx, c.wa, c.number, c.tenant.Name, text, buttons...)
 }
 
 // loadSession reads the number's session in its current tenant; an
@@ -383,7 +453,7 @@ func (s *Server) waSwitch(ctx context.Context, c *chat, name string) error {
 		return err
 	}
 	t := match[0]
-	if err := s.WhatsApp.Touch(ctx, c.number, false, true, &t.ID); err != nil {
+	if err := c.wa.Touch(ctx, c.number, false, true, &t.ID); err != nil {
 		return err
 	}
 	c.tenant = t
@@ -583,6 +653,11 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 		return err
 	}
 	if len(fields) > 0 {
+		// A WhatsApp form where Flows are set up and the fields fit one;
+		// otherwise field by field in chat.
+		if sent, err := s.waSendInputsFlow(ctx, c, data, fields); err != nil || sent {
+			return err
+		}
 		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 			return err
 		}
@@ -593,13 +668,18 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 
 // waFields are the inputs to collect for the session's workflow.
 func (s *Server) waFields(ctx context.Context, c *chat) ([]whatsapp.Field, error) {
+	return s.waFieldsOf(ctx, c.tenant.ID, c.data.Workflow, c.data.Version)
+}
+
+// waFieldsOf are the required inputs of a workflow version.
+func (s *Server) waFieldsOf(ctx context.Context, tenant, wf uuid.UUID, version int) ([]whatsapp.Field, error) {
 	var def []byte
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, c.data.Workflow, c.data.Version).Scan(&def)
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, version).Scan(&def)
 	}); err != nil {
 		return nil, err
 	}
-	d, err := s.definitionFor(c.data.Workflow, c.data.Version, def)
+	d, err := s.definitionFor(wf, version, def)
 	if err != nil {
 		return nil, err
 	}
@@ -615,6 +695,17 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 	fields, err := s.waFields(ctx, c)
 	if err != nil {
 		return err
+	}
+	if c.data.Flow != "" {
+		// Writing instead of using the form: the form is dropped, and the
+		// inputs are asked here one by one.
+		data := c.data
+		s.waDropFlow(ctx, c.tenant.ID, data.Flow)
+		data.Flow, data.Index, data.Inputs = "", 0, map[string]any{}
+		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
+			return err
+		}
+		return c.say(ctx, s, "The form is closed; answer here instead. Send *cancel* to stop.\n\n"+fields[0].Prompt())
 	}
 	if c.data.Index >= len(fields) {
 		return s.waAskConfirm(ctx, c, c.data)

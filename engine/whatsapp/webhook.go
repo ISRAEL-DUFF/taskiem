@@ -44,6 +44,20 @@ type Inbound struct {
 	// Reply is a tapped button's id (interactive.button_reply.id) or a
 	// template quick reply's payload (button.payload).
 	Reply string
+	// Flow is a completed Flow's response_json (interactive.nfm_reply):
+	// it carries the flow token.
+	Flow string
+}
+
+// FlowToken is the flow token of a completed Flow's response.
+func (in Inbound) FlowToken() string {
+	var r struct {
+		Token string `json:"flow_token"`
+	}
+	if in.Flow == "" || json.Unmarshal([]byte(in.Flow), &r) != nil {
+		return ""
+	}
+	return r.Token
 }
 
 // Parse extracts the inbound messages of a webhook delivery. Statuses and
@@ -76,6 +90,11 @@ func Parse(body []byte) ([]Inbound, error) {
 								ID    string `json:"id"`
 								Title string `json:"title"`
 							} `json:"list_reply"`
+							NfmReply struct {
+								Name         string `json:"name"`
+								Body         string `json:"body"`
+								ResponseJSON string `json:"response_json"`
+							} `json:"nfm_reply"`
 						} `json:"interactive"`
 						Button struct {
 							Payload string `json:"payload"`
@@ -106,6 +125,8 @@ func Parse(body []byte) ([]Inbound, error) {
 						in.Reply, in.Text = m.Interactive.ButtonReply.ID, m.Interactive.ButtonReply.Title
 					case "list_reply":
 						in.Reply, in.Text = m.Interactive.ListReply.ID, m.Interactive.ListReply.Title
+					case "nfm_reply":
+						in.Flow, in.Text = m.Interactive.NfmReply.ResponseJSON, m.Interactive.NfmReply.Body
 					}
 				case "button":
 					in.Reply, in.Text = m.Button.Payload, m.Button.Text

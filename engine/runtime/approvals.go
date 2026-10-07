@@ -31,6 +31,39 @@ type StepUpError struct{ Method string }
 func (e *StepUpError) Error() string { return "this approval needs " + e.Method + " step-up" }
 func (e *StepUpError) Unwrap() error { return ErrStepUpRequired }
 
+// Step-up factors, weakest first (spec 9.1, 11.2). A policy names the
+// weakest it accepts: "whatsapp_pin" takes the WhatsApp approval PIN
+// entered in a WhatsApp Flow bound to the decision, or an authenticator
+// code or passkey; "totp" takes an authenticator code or a passkey;
+// "passkey" only a passkey.
+const (
+	StepUpWhatsAppPIN = "whatsapp_pin"
+	StepUpTOTP        = "totp"
+	StepUpPasskey     = "passkey"
+)
+
+func stepUpRank(m string) int {
+	switch m {
+	case StepUpWhatsAppPIN:
+		return 1
+	case StepUpTOTP:
+		return 2
+	case StepUpPasskey:
+		return 3
+	}
+	return 0
+}
+
+// StepUpSatisfies reports whether the factor given meets the step-up
+// required: the same, or a stronger one.
+func StepUpSatisfies(required, given string) bool {
+	if required == "" || required == given {
+		return true
+	}
+	r, g := stepUpRank(required), stepUpRank(given)
+	return r > 0 && g >= r
+}
+
 // Vote is one approver's decision on an approval step.
 type Vote struct {
 	UserID   uuid.UUID
@@ -169,8 +202,8 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 		}
 		// Step-up last: nobody is asked for a second factor to cast a vote
 		// that would be refused anyway.
-		// A passkey is the stronger factor: it also satisfies "totp".
-		if a.stepUp != nil && *a.stepUp != v.StepUp && (*a.stepUp != "totp" || v.StepUp != "passkey") {
+		// A stronger factor satisfies a weaker requirement.
+		if a.stepUp != nil && !StepUpSatisfies(*a.stepUp, v.StepUp) {
 			return &StepUpError{Method: *a.stepUp}
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO approval_decisions (tenant_id, run_id, step_id, level, user_id, decision, channel, ip, shown, step_up, on_behalf_of)

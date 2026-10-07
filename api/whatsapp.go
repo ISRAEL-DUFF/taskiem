@@ -40,18 +40,32 @@ type waBindingInfo struct {
 		Number    string    `json:"number"`
 		ExpiresAt time.Time `json:"expires_at"`
 	} `json:"pending,omitempty"`
+	// Pin is the WhatsApp approval PIN's state (spec 11.2).
+	Pin waPinInfo `json:"pin"`
+	// Flows: WhatsApp forms are set up (inputs and the PIN).
+	Flows bool `json:"flows"`
 }
 
 // getWhatsApp is the caller's binding.
 func (s *Server) getWhatsApp(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	out := waBindingInfo{Enabled: s.WhatsApp != nil}
-	if s.WhatsApp != nil {
-		out.PlatformNumber = s.WhatsApp.Config.DisplayNumber
-	}
 	if p.UserID == uuid.Nil {
 		writeErr(w, http.StatusForbidden, "a WhatsApp number belongs to a person, not an API key")
 		return
+	}
+	if s.WhatsApp != nil {
+		// The number this organisation's messages come from.
+		wa, err := s.WhatsApp.ForTenant(r.Context(), p.TenantID)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		out.PlatformNumber, out.Flows = wa.Config.DisplayNumber, wa.Config.FlowKey != nil
+		if out.Pin, err = s.waPinInfo(r.Context(), p.UserID); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	var pn *string
 	var pe *time.Time
@@ -120,8 +134,14 @@ func (s *Server) startWhatsAppBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The code is an authentication template: it goes out whatever the
-	// conversation window.
-	if _, err := s.WhatsApp.Client.SendTemplate(r.Context(), number, whatsapp.TplOTP, s.WhatsApp.Config.Language, map[string]string{"code": code}, nil); err != nil {
+	// conversation window, from the tenant's own number when it has one,
+	// and counts against the tenant's template allowance (never held back).
+	wa, err := s.WhatsApp.ForTenant(r.Context(), p.TenantID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if _, err := wa.SendTemplate(r.Context(), p.TenantID, number, whatsapp.TplOTP, map[string]string{"code": code}, nil); err != nil {
 		s.Logger.Warn("whatsapp: sending a code failed", "err", err)
 		writeErr(w, http.StatusBadGateway, "the code could not be sent to that number; check it is on WhatsApp and try again")
 		return
@@ -216,6 +236,11 @@ func (s *Server) unbindWhatsApp(w http.ResponseWriter, r *http.Request) {
 	}
 	if number == nil {
 		writeErr(w, http.StatusNotFound, "no number is linked")
+		return
+	}
+	// The PIN goes with the number: a new number starts without one.
+	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_wa_pin_remove($1)`, p.UserID); err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	if err := s.auditEverywhere(r.Context(), p.UserID, "whatsapp.unbind", map[string]any{"number": whatsapp.MaskNumber(*number), "channel": "web", "ip": clientIP(r)}); err != nil {

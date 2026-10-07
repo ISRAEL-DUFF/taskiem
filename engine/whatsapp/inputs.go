@@ -13,7 +13,8 @@ import (
 
 // Collecting a workflow's inputs in chat (spec 11.1): field by field, each
 // answer checked against the field's schema from the workflow's inputs
-// schema. WhatsApp Flows forms replace this later (milestone A2).
+// schema. Where Flows are set up, a WhatsApp Flows form (flows.go) takes
+// their place, and chat remains the fallback.
 
 // Field is one input asked for in chat.
 type Field struct {
@@ -171,13 +172,22 @@ func (f Field) Parse(text string) (any, error) {
 			}
 		}
 	}
+	if err := f.Check(v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// Check checks a value against the field's schema; the error says what is
+// wrong.
+func (f Field) Check(v any) error {
 	doc, _ := json.Marshal(v)
 	if probs := f.schema.Validate(doc); len(probs) > 0 {
 		msg := probs[0]
 		if _, after, ok := strings.Cut(msg, ": "); ok {
 			msg = after
 		}
-		return nil, errors.New(msg)
+		return errors.New(msg)
 	}
-	return v, nil
+	return nil
 }

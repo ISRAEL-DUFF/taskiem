@@ -55,6 +55,11 @@ type Limits struct {
 	// 12.3). Beyond it AI building is refused and people build by hand;
 	// runs are never affected.
 	AIMonthlyTokens int64 `json:"ai_monthly_tokens"`
+	// WhatsAppTemplatesMonthly: WhatsApp template messages included per UTC
+	// month (spec 16). Beyond it they are still sent and counted as
+	// overage for pass-through billing; only marketing templates are held
+	// back (docs/whatsapp.md#template-costs).
+	WhatsAppTemplatesMonthly int64 `json:"whatsapp_templates_monthly"`
 
 	// A sub-tenant's partner and the partner-wide run caps it shares with
 	// its siblings (spec 13.1); zero for other tenants. Set by the store.
@@ -115,7 +120,12 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"max_secrets", "named secrets (0: no limit)"},
 	{"max_connections", "active connections (0: no limit)"},
 	{"ai_monthly_tokens", "tokens AI building may use per UTC month; beyond it, build by hand (0: no limit)"},
+	{"whatsapp_templates_monthly", "WhatsApp template messages included per UTC month; beyond it they are counted as overage, and only marketing ones are held back (0: no limit)"},
 }
+
+// DefaultWhatsAppTemplatesMonthly is the platform's default monthly
+// allowance of WhatsApp template messages.
+const DefaultWhatsAppTemplatesMonthly = 1000
 
 // DefaultAIMonthlyTokens is the platform's default monthly AI budget: a
 // few dozen builds with self-correction on a frontier model.
@@ -134,6 +144,8 @@ func DefaultLimits() Limits {
 		WorkerConcurrency: 32,
 		MaxPayloadBytes:   1 << 20,
 		AIMonthlyTokens:   DefaultAIMonthlyTokens,
+
+		WhatsAppTemplatesMonthly: DefaultWhatsAppTemplatesMonthly,
 	}
 }
 
@@ -186,7 +198,7 @@ func ParseLimit(key, s string) (any, error) {
 		return f, nil
 	}
 	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && n > math.MaxInt32) {
+	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && key != "whatsapp_templates_monthly" && n > math.MaxInt32) {
 		return nil, fmt.Errorf("%s: %q is not a non-negative whole number", key, s)
 	}
 	if key == "max_payload_bytes" && n > MaxPayload {
@@ -354,6 +366,41 @@ type Usage struct {
 	Connections   int64          `json:"connections"`
 	AITokens      int64          `json:"ai_tokens_this_month"`
 	TasksInFlight map[string]int `json:"tasks_in_flight"` // per queue
+	// WhatsApp template messages this UTC month (spec 16).
+	WhatsAppTemplates WhatsAppTemplateUsage `json:"whatsapp_templates_this_month"`
+}
+
+// WhatsAppTemplateUsage is a month's WhatsApp template messages: sent by
+// Meta's category, how many of them were beyond the allowance (overage,
+// billed through), and how many were held back.
+type WhatsAppTemplateUsage struct {
+	Sent       int64            `json:"sent"`
+	ByCategory map[string]int64 `json:"by_category"`
+	Overage    int64            `json:"overage"`
+	Blocked    int64            `json:"blocked"`
+}
+
+// WhatsAppTemplatesThisMonth reads a tenant's template usage this UTC month.
+func WhatsAppTemplatesThisMonth(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (WhatsAppTemplateUsage, error) {
+	u := WhatsAppTemplateUsage{ByCategory: map[string]int64{}}
+	rows, err := tx.Query(ctx, `SELECT category, sent, over_allowance, blocked FROM whatsapp_template_usage
+		WHERE tenant_id = $1 AND month = date_trunc('month', now() AT TIME ZONE 'UTC')::date`, tenant)
+	if err != nil {
+		return u, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c string
+		var sent, over, blocked int64
+		if err := rows.Scan(&c, &sent, &over, &blocked); err != nil {
+			return u, err
+		}
+		u.ByCategory[c] = sent
+		u.Sent += sent
+		u.Overage += over
+		u.Blocked += blocked
+	}
+	return u, rows.Err()
 }
 
 // LimitHit is a limit reached on a day.
@@ -392,6 +439,9 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 			return err
 		}
 		if u.AITokens, err = AITokensThisMonth(ctx, tx, tenant); err != nil {
+			return err
+		}
+		if u.WhatsAppTemplates, err = WhatsAppTemplatesThisMonth(ctx, tx, tenant); err != nil {
 			return err
 		}
 		u.TasksInFlight = map[string]int{}
