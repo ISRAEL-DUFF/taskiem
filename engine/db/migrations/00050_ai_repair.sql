@@ -155,7 +155,7 @@ CREATE INDEX ai_interactions_repair ON ai_interactions (repair_id) WHERE repair_
 
 -- A version created from a repair proposal: created_by is the system, the
 -- proposal (with the person who accepted it) is the AI co-author.
-ALTER TABLE workflow_versions ADD COLUMN repair_id uuid REFERENCES repair_proposals(id);
+ALTER TABLE workflow_versions ADD COLUMN repair_id uuid REFERENCES repair_proposals(id) ON DELETE SET NULL;
 
 -- +goose Down
 ALTER TABLE workflow_versions DROP COLUMN repair_id;

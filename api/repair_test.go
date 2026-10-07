@@ -11,11 +11,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/repair"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
@@ -264,6 +266,23 @@ func TestRepairDataPatchPublishAndResume(t *testing.T) {
 	if p2 := rw.only(t, run2); len(p2["evidence"].(map[string]any)["existing_tests"].([]any)) < 1 {
 		t.Errorf("existing tests not run: %v", toJSON(p2["evidence"]))
 	}
+	// Retention still purges the repaired run: its proposal and replays go
+	// with it; the version keeps its place, the audit chain the co-author.
+	bg := context.Background()
+	if _, err := rw.env.DB.Admin.Exec(bg, `UPDATE runs SET retain_until = now() - interval '1 second' WHERE id = ANY ($1)`,
+		[]uuid.UUID{uuid.MustParse(run), uuid.MustParse(resumed)}); err != nil {
+		t.Fatal(err)
+	}
+	tenant := uuid.MustParse(rw.owner.must(200, "GET", "/v1/me", nil)["tenant_id"].(string))
+	for _, id := range []string{run, resumed} {
+		var ok bool
+		if err := db.InTenantTx(bg, rw.env.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			return tx.QueryRow(bg, `SELECT taskiem_purge_run($1)`, uuid.MustParse(id)).Scan(&ok)
+		}); err != nil || !ok {
+			t.Fatalf("purge %s: %v %v", id, ok, err)
+		}
+	}
+	rw.owner.must(404, "GET", "/v1/repairs/"+p["id"].(string), nil)
 }
 
 // A patch that does not fix the failure never reaches a person: the shadow

@@ -190,6 +190,11 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, status FROM runs WHERE id = $1`, j.run).Scan(&wf, &version, &env, &status); err != nil {
 			return err
 		}
+		// An analysis a stopped process left unfinished no longer counts.
+		if _, err := tx.Exec(ctx, `UPDATE repair_proposals SET status = 'failed', error = 'the analysis was interrupted', finished_at = now()
+			WHERE run_id = $1 AND status = 'analysing' AND created_at < now() - $2::interval`, j.run, (repairTimeout + time.Minute).String()); err != nil {
+			return err
+		}
 		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM repair_proposals WHERE run_id = $1
 			AND status IN ('analysing', 'proposed', 'action', 'awaiting_publish', 'awaiting_promotion'))`, j.run).Scan(&open)
 	})
