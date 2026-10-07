@@ -38,17 +38,22 @@ Secrets are also bound to where they belong. The encrypted value of a secret onl
 
 ## Bringing your key
 
-In the web app: **Settings > Encryption keys > Bring your own key**. Or use the API:
+In the web app: **Settings > Encryption keys > Bring your own key**. Or use the API, with a session of yours (sign in with `"bearer": true` to get its token) and a code from your authenticator app:
 
 ```sh
 curl -X PUT https://taskiem.example.com/v1/keys/byok \
-  -H "Authorization: Bearer $TASKIEM_API_KEY" -H "Content-Type: application/json" -d '{
+  -H "Authorization: Bearer $TASKIEM_SESSION" -H "Content-Type: application/json" -d '{
     "provider": "aws_kms",
     "region": "af-south-1",
     "key": "arn:aws:kms:af-south-1:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-    "credentials": { "access_key_id": "AKIA…", "secret_access_key": "…" }
+    "credentials": { "access_key_id": "AKIA…", "secret_access_key": "…" },
+    "totp": "123456"
   }'
 ```
+
+**Every key change is confirmed.** Rotating the tenant key, bringing or replacing a key, replacing its credentials and returning to Taskiem's key need you to confirm it is you, as a step-up approval does: with a passkey (the page asks for it; through the API, an assertion for a challenge from `POST /v1/me/step-up/options` with `{"operation": "key.rotate" | "key.byok.enable" | "key.byok.credentials" | "key.byok.disable", "target": "<your organisation's id>"}`, sent as `passkey`), or with a current code from your authenticator app (`totp`). A passkey confirmation is good for that one change only. Without one the answer is `403` with `"step_up": "required"` and the methods you have; with neither enrolled, add one under **Account** first. API keys cannot change keys. **Check now** changes nothing and needs no confirmation.
+
+While your key is unavailable, authenticator codes cannot be checked (their secrets are in your vault), so confirm with a passkey. Owners are held to passkeys by default. Restoring Taskiem's access in your KMS and pressing **Check now** needs neither.
 
 1. **Verification.** Taskiem first wraps a random 32-byte value with your key and unwraps it again. If the round trip fails, nothing is stored and the answer is 422 `key_verification_failed`, with your KMS's error. A configuration problem (an `http://` address, an unknown region, a malformed key name, extra or missing credential fields) is 400 `invalid_key_config`, sent before any call.
 2. **Switch.** In one transaction:
@@ -155,7 +160,6 @@ The key job runs in the `scheduler` role. Set the cache TTL on every role, becau
   - signing in to AWS by assuming a role in your account (STS) instead of an IAM user's keys;
   - Google workload identity federation and Azure managed identities;
   - external key managers (Cloud EKM, AWS XKS);
-  - a separate key per environment;
-  - step-up (passkey) before key operations.
+  - a separate key per environment.
 
   See the [Phase 4 status](phase-4-status.md#p4-5-enterprise).

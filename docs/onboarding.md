@@ -83,7 +83,7 @@ Gate G4 asks for self-serve signup to first successful run in under 15 minutes.
 | Route | Who | What it does |
 | --- | --- | --- |
 | `GET /v1/signup` | anyone | `{"enabled": bool}` |
-| `POST /v1/signup` | anyone (when on) | `{tenant, email, name?, password}`: creates the organisation, signs the owner in (session cookie and `token`), starts the trial; `201 {tenant_id, user_id, token, verification_sent}` |
+| `POST /v1/signup` | anyone (when on) | `{tenant, email, name?, password, bearer?}`: creates the organisation, signs the owner in (a session cookie; with `bearer: true`, `token` in the answer instead), starts the trial; `201 {tenant_id, user_id, verification_sent}` (and `token` with `bearer`) |
 | `POST /v1/me/email/verify` | the person | `{token}` from the link |
 | `POST /v1/me/email/verify/resend` | the person | A new link (`202`), or `200` when already confirmed |
 | `GET /v1/onboarding` | any member | `items` (`[{id, done}]`), `done`, `total`, `complete`, `dismissed`, `self_serve`, `email_verified`, `can_send_email`, `docs_url`, `signed_up_at`, `first_run_at`, `seconds_to_first_run` |

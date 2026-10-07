@@ -54,6 +54,9 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 | `TASKIEM_PGDOCK_URL` | — | The platform's PGDock server, for PGDock connections that name none ([PGDock](integrations/pgdock.md#connection)). PGDock has not published its cloud address, so there is no default |
 | `TASKIEM_PASSKEY_RP_ID` | the URL's host | The passkey domain, if passkeys should work across subdomains (a parent of the URL's host) |
 | `TASKIEM_REQUIRE_ADMIN_PASSKEYS` | `true` with a public URL | Hold administrators to passkeys ([governance](governance.md#passkeys)) |
+| `TASKIEM_HSTS` | `max-age=31536000` with an https public URL | The `Strict-Transport-Security` header on the platform's own host (never on partners' custom domains): a value starting `max-age=` (add `includeSubDomains` only if every subdomain is HTTPS), or `off` |
+| `TASKIEM_TENANT_CODE_CONCURRENCY` | the CPUs, at least 2 | How much tenant code (flow compile, code checks, catalogue and connector checks) one API process runs at once; more waits up to 5 s, then gets 503 `code_checks_busy` |
+| `TASKIEM_TENANT_CODE_PER_TENANT` | half of the above, at least 1 | How much of it one tenant holds at once; more gets 429 `tenant_code_busy`. Refusals: `taskiem_tenant_code_refused_total{reason}` |
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |
 | `TASKIEM_ALLOW_SIGNUP` | `false` | Self-serve signup ([onboarding](onboarding.md)). Needs email (`TASKIEM_SMTP_URL`, `TASKIEM_ALERT_FROM`, a public URL) for confirmation links |
 | `TASKIEM_SIGNUP_PER_ADDRESS` | `5` | Signups per client address a day, across replicas; negative: no limit |

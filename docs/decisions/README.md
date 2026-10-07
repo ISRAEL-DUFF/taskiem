@@ -27,3 +27,4 @@ One file per decision, numbered in order: `NNNN-short-title.md`. Each entry reco
 | [0021](0021-remote-trigger-registration.md) | Remote trigger registration: intent recorded in the deploy, a reconciler for the provider (amends 0012) | Accepted |
 | [0022](0022-self-serve-onboarding.md) | Self-serve onboarding: confirm email without blocking the first run, and measure G4 where runs end | Accepted |
 | [0024](0024-production-cloud.md) | Production cloud: worker pools routed at claim time, a replica only for stale-tolerant views, retries only where safe (amends 0002) | Accepted (infrastructure pending P4-C1 to P4-C6) |
+| [0026](0026-bound-step-up-and-cookie-sessions.md) | Step-up bound to its operation, cookie sessions without a body token, key changes behind step-up | Accepted |

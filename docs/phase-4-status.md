@@ -18,6 +18,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Ecosystem | P4-6 | Public connector SDK and a submission review process for third-party connectors | 6 | **Done** (code; [what exists](#p4-6-connector-sdk-and-catalogue)); publisher agreement, reviewers and review SLA need people (P4-E1 to P4-E3) |
 | Docs | P4-7 | Public docs site, API reference, connector SDK guide | — | Planned |
 | Trust | P4-8 | Bug bounty, security page, ISO 27001 and SOC 2 Type II preparation | 14.4 | Needs people |
+| Security | Self-review | The self-review's open findings before the pen test: step-up for key changes (K5); step-up bound to its operation, no session token in a browser sign-in's body, HSTS (S35); tenant code in the API process bounded and caches bounded (S34); personal data masked in error text (S22); embed preflights paced | 14.4 | **Done** (code; [what exists](#security-self-review-round)) |
 | Legal | P4-9 | Counsel IP review, trademark registration, terms of service, DPA under the NDPA | — | Needs people |
 
 ## P4-1: billing
@@ -115,9 +116,27 @@ Done 7 October 2026. Tenant and operator guide: [bring your own key](byok.md); d
 What is left in P4-5:
 
 - **People:** a real test against each customer KMS (P4-K1), the legal wording for revocation (P4-K2), the backup retention statement (P4-K3), published egress IPs (P4-K4), and the dedicated-deployment offering (P4-K5) ([needs people](needs-people.md#phase-4)).
-- **Step-up before key operations** (self-review K5): owners only and audited today.
+- ~~**Step-up before key operations** (self-review K5).~~ Done ([below](#security-self-review-round)).
 - **More ways to sign in to a customer's cloud:** AWS STS role assumption (cross-account), Google workload identity federation, Azure managed identities. Today they use long-lived credentials, which Taskiem seals.
 - **External key managers** (Google Cloud EKM, AWS XKS), keys per environment, Vault transit `rewrap` to move ciphertext onto the newest customer key version without a tenant key rotation, and sovereign Azure clouds.
+
+## Security: self-review round
+
+Done 7 October 2026. [Self-review addendum](security/self-review.md#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text) (K5, S22, S34, S35 fixed); design: [decision 0026](decisions/0026-bound-step-up-and-cookie-sessions.md); threat model B1, B6, B11, B17 amended. Migration 00130.
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Bound step-up (S35) | `POST /v1/me/step-up/options` takes `{operation, target}`; the challenge row keeps the scope and its last 16 bytes are the scope's hash; approvals, the WhatsApp hand-off, factor changes and key changes each check their own scope | `api/passkeys.go`, `api/approvals.go`, `api/whatsapp_approvals.go`, migration 00130 |
+| Cookie sessions (S35) | Sign-in, passkey sign-in, signup and invitee sessions answer a browser with the `HttpOnly` cookie only; `"bearer": true` gets the token and no cookie; accepting an invitation keeps the session's kind; the CLI and test suites ask for `bearer` | `api/passkeys.go`, `api/invitations.go`, `api/onboarding.go`, `cmd/taskiem/dev.go` |
+| HSTS (S35) | `TASKIEM_HSTS`, `max-age=31536000` by default with an https public URL, on the platform's host only | `api/server.go`, `cmd/taskiem/hardening.go` |
+| Key step-up (K5) | Rotate, bring, replace credentials and remove need a passkey for that operation on that tenant or an authenticator code; API keys refused; configuration errors answered first; the Encryption keys page asks when the server does | `api/keys.go`, `web/src/stepup.tsx`, `web/src/pages/Keys.tsx` |
+| Tenant code gate (S34) | Per-process and per-tenant slots for code compiled or checked in the API (429 `tenant_code_busy`, 503 `code_checks_busy`), `TASKIEM_TENANT_CODE_CONCURRENCY` and `_PER_TENANT`, `taskiem_tenant_code_refused_total` | `api/codegate.go`, `api/workflows.go`, `api/server.go`, `api/embed.go` |
+| Bounded caches (S34) | `engine/lru` for definitions, USSD menus, compiled code (now in `sandbox.Compile`), CEL programs, own WhatsApp numbers; connector lists capped per tenant count | `engine/lru`, `engine/sandbox`, `engine/expr`, `engine/runtime`, `engine/whatsapp`, `engine/wasmconn` |
+| Free text (S22) | Exact occurrences of the run's known personal values (5+ characters) masked by category in failure messages, code-step logs and reconciliation errors, before the pattern masks | `engine/pii/pii.go`, `engine/runtime/sealing.go`, `engine/runtime/reconcilecheck.go` |
+| Embed preflights | Paced per address before the origin lookup (burst 60, 20 a second) | `api/embed.go` |
+| Tests | `TestStepUpIsBoundToItsOperation`, `TestSignInTokenOnlyForBearerClients`, `TestHSTS`, `TestKeyOperationsNeedStepUp`, `TestEmbedPreflightIsPaced`, `TestCodeGateBoundsTenantsAndProcess`, `TestTenantCodeAnswers429And503`, `TestKnownPIIIsMaskedInErrorText`, `TestTaintRedactText`, `engine/lru` tests, `TestHSTSFromEnv`, `TestCodeLimitsFromEnv`, `web/e2e/keys.spec.ts` | `api/hardening_test.go`, `api/codegate_test.go`, `engine/runtime/pii_test.go`, `engine/pii/redact_test.go`, `engine/lru/lru_test.go`, `cmd/taskiem/hardening_test.go` |
+
+What is left: TOTP codes are not bound to an operation (passkeys are); the tenant-code gate is per replica; compiled tenant WebAssembly modules stay loaded; S22 masks only values the run holds; K6 (low) stays open ([addendum](security/self-review.md#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text)).
 
 ## P4-6: connector SDK and catalogue
 

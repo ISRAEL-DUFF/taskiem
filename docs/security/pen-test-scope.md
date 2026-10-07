@@ -29,7 +29,7 @@ In order of priority:
    - reach other tenants;
    - reach internal network addresses;
    - deny service to other tenants.
-5. **Authentication.** Test password sign-in, passkeys, TOTP, OIDC and SAML sign-in, SCIM provisioning, API keys and sessions.
+5. **Authentication.** Test password sign-in, passkeys, TOTP, OIDC and SAML sign-in, SCIM provisioning, API keys and sessions. Step-up challenges (`POST /v1/me/step-up/options`) name an operation and target; try spending one on another approval, decision or change. Browser sign-ins get a cookie and no token in the body (`"bearer": true` for API clients).
 6. **Integrity of the audit chain.** Show whether history can be changed without detection, given access to the application database role.
 
 ## In scope
@@ -41,7 +41,7 @@ In order of priority:
 | SSO and provisioning | OIDC and SAML sign-in against a test IdP that the testers control, and SCIM 2.0 at `/scim/v2` |
 | Sandboxes | `code` steps in all three languages, tenant WASM connectors (upload and run), and flow-code compile at `/v1/code/compile` |
 | Egress | HTTP steps, connectors, and alert webhooks, tested as SSRF from a tenant's point of view |
-| Customer keys (BYOK, B17) | `/v1/keys`: a tenant-supplied KMS address as SSRF, recovering or moving another tenant's key credentials, keeping access after a customer revokes its key (beyond the documented cache bound), and making a revocation lose data or send a payment twice ([BYOK](../byok.md)). Use the testers' own OpenBao or cloud KMS |
+| Customer keys (BYOK, B17) | `/v1/keys`: changing keys without step-up or with a step-up made for something else (rotate, bring, replace credentials and remove need a passkey asked for that operation, or an authenticator code), a tenant-supplied KMS address as SSRF, recovering or moving another tenant's key credentials, keeping access after a customer revokes its key (beyond the documented cache bound), and making a revocation lose data or send a payment twice ([BYOK](../byok.md)). Use the testers' own OpenBao or cloud KMS |
 | Deployment | The Helm chart's defaults (`deploy/helm/taskiem`): pod security, network policy, the metrics port, the migration job. White-box review of the chart is welcome. |
 | Source code | The full repository, for white-box testing. Testers get read access. |
 

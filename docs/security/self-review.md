@@ -51,7 +51,7 @@ It does not replace people-task I3 (an independent internal review, [needs-peopl
 | S19 | Ingest | Connector deliveries with an empty or unsigned deduplication key could be replayed | Fixed |
 | S20 | Ingest | A tenant connector could answer webhooks with HTML on the platform's origin. The edge sent no security headers. | Fixed |
 | S21 | Audit | The application's database role could insert audit rows and move the chain head directly | Fixed |
-| S22 | Privacy | Personal data inside free text (provider error messages) is not sealed | Open: needs a design for redacting tainted substrings without false positives |
+| S22 | Privacy | Personal data inside free text (provider error messages) is not sealed | Fixed ([addendum](#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text)): values the run holds as personal data are masked where they appear exactly |
 | S23 | Secrets | Key rotation does not re-wrap personal-data subject keys. The pseudonymisation key is tied to tenant key v1. | Fixed (P4-5, [addendum](#addendum-2026-10-07-bring-your-own-key-phase-4-p4-5)) |
 
 ### Low and informational
@@ -68,8 +68,8 @@ It does not replace people-task I3 (an independent internal review, [needs-peopl
 | S31 | Egress blocklist missed 6to4, Teredo and IPv4-compatible IPv6 ranges | Fixed |
 | S32 | The PostgreSQL connector did not verify server certificates by default | Fixed |
 | S33 | The encryption context binds a secret to its id but not to its environment and name | Fixed (P4-5, [addendum](#addendum-2026-10-07-bring-your-own-key-phase-4-p4-5)) |
-| S34 | Tenant code (flow compile, Python checks) runs in the API process with no concurrency limit. Several in-memory caches never evict. | Open, low |
-| S35 | Passkey step-up is not bound to the specific approval. The session token is also returned in the sign-in body. No HSTS header. | Open, informational |
+| S34 | Tenant code (flow compile, Python checks) runs in the API process with no concurrency limit. Several in-memory caches never evict. | Fixed ([addendum](#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text)) |
+| S35 | Passkey step-up is not bound to the specific approval. The session token is also returned in the sign-in body. No HSTS header. | Fixed ([addendum](#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text)) |
 
 ## Controls the review confirmed
 
@@ -149,7 +149,7 @@ Open, carried to the next round:
 
 - ~~A suspended sub-tenant's schedules and webhook triggers keep firing; only its tokens and sessions stop.~~ Closed: a suspended tenant does no new work ([governance](../governance.md#suspended-tenants)).
 - With four-eyes publishing on in a sub-tenant, an end user's publish is now a request that the partner (as its key's owner) or a sub-tenant member decides ([embedding](../embedding.md#end-users-and-four-eyes)). The partner mints its end users' tokens, so one partner person could both ask (as an end user) and approve (with the key): four-eyes in a sub-tenant separates the partner's people from its end users, not two partner people from each other.
-- CORS preflights for `/v1/embed/{app}` look the app's origins up in the database without authentication (one indexed read; no per-address limit yet).
+- ~~CORS preflights for `/v1/embed/{app}` look the app's origins up in the database without authentication (one indexed read; no per-address limit yet).~~ Closed: preflights are paced per address before the read (`TestEmbedPreflightIsPaced`; [addendum](#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text)).
 - The partner's run counts across its sub-tenants (`taskiem_partner_usage`) are read without an audit entry: counts only, no sub-tenant data.
 
 ## Addendum 2026-10-07: bring your own key (Phase 4, P4-5)
@@ -169,7 +169,28 @@ The BYOK code was reviewed against the same four areas before commit:
 | K2 | Secrets | Marking a completed write whose result could not be sealed as "parked, nothing sent" would make the resume send it again | Avoided by design: only failures before the call park as `key_unavailable` (secrets, credentials, client); a result that cannot be sealed takes the crash path (reconcile, or park for a person) |
 | K3 | Egress | A tenant-supplied KMS address is an SSRF vector | Fixed before commit: egress guard, HTTPS only, no redirects, private ranges only with `TASKIEM_BYOK_ALLOW_PRIVATE` (`TestVaultTransit`) |
 | K4 | Secrets | Customer key credentials copied between tenants' rows by someone with database write access | Fixed before commit: tenant and row id are inside the plaintext the platform KMS authenticates (`TestBYOKLifecycle`) |
-| K5 | Authorization | Key operations need only an owner's session: no step-up (passkey or TOTP) | Open, medium. Owners only, every operation audited, leaving still needs the customer's key |
+| K5 | Authorization | Key operations need only an owner's session: no step-up (passkey or TOTP) | Fixed ([addendum](#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text)) |
 | K6 | Secrets | Rows sealed under the first encryption context can still be renamed by someone with database write access until the re-wrap job reaches them | Open, low: the job starts at once after migration 00100, in batches of 500 per tenant per pass |
 | K7 | Secrets | Unwrapped tenant keys stay in process memory until the cache entry expires and the garbage collector reuses it (Go does not zero memory) | Accepted, informational: the same as every key in a running process |
 | K8 | Availability | A short KMS blip parks steps until the next key job pass (at most `TASKIEM_KEY_CHECK_INTERVAL`, a minute by default) | Accepted: parking is safe, and **Check now** resumes at once |
+
+## Addendum 2026-10-07: step-up, sessions, tenant code and free text
+
+This round closed the findings left open above. Each has a regression test:
+
+| # | Status | How | Test |
+| --- | --- | --- | --- |
+| K5 | Fixed | Rotating the tenant key, bringing or replacing a customer key, replacing its credentials and returning to Taskiem's key need a person's step-up: a passkey assertion for a challenge asked for that operation on that tenant, or a current authenticator code. Without one the answer is `403 {"step_up": "required", "methods": [...]}`; with no factor enrolled it says to add one. API keys are refused (a key is not a person and has no second factor). A configuration mistake is answered (400) before the step-up, so fixing it costs no code. Checking a key changes nothing and needs none. Operators' `taskiem tenants keys` is unchanged | `TestKeyOperationsNeedStepUp`, `TestKeysAPI`, `TestKeysAPIPlanFeature`, `keys.spec.ts` |
+| S35 | Fixed | **Step-up binding.** `POST /v1/me/step-up/options` takes `{"operation", "target"}` and refuses anything else. The challenge row keeps the scope, and the challenge's last 16 bytes are the scope's SHA-256 prefix, so the signed client data says what it was for. Approvals use `approval.decide` and `<run>/<step>/<decision>` (the WhatsApp hand-off too); factor changes `account.reauth` and the change (`passkey.add`, `passkey.remove/<id>`, `totp.setup`, `password.change`, `whatsapp.link`, `whatsapp.pin`); key changes `key.*` and the tenant. An assertion passes only the operation and target it was asked for (migration 00130). **Sign-in token.** Password and passkey sign-in, signup, invitee sessions and accepting an invitation answer a browser with the `HttpOnly` cookie only. A client that asks with `"bearer": true` gets the token in the body and no cookie; accepting an invitation follows the session it came with. The web app never read the token; the CLI (`taskiem dev`), the Go and browser test helpers and the e2e suites now ask for `bearer`. **HSTS.** `Strict-Transport-Security` on the platform's own host, `max-age=31536000` by default when `TASKIEM_PUBLIC_URL` is https (`TASKIEM_HSTS` sets the value or `off`). A partner's custom domain gets none | `TestStepUpIsBoundToItsOperation`, `TestPasskeyStepUp`, `TestFactorChangesNeedProof`, `TestSignInTokenOnlyForBearerClients`, `TestInviteeSession`, `TestHSTS`, `TestHSTSFromEnv` |
+| S34 | Fixed | **Tenant code in the API process** runs within a gate: at most `TASKIEM_TENANT_CODE_CONCURRENCY` at once (default the CPUs, at least 2), of which one tenant holds at most `TASKIEM_TENANT_CODE_PER_TENANT` (default half). A request waits up to 5 seconds, then gets 429 `tenant_code_busy` (its tenant's share is in use) or 503 `code_checks_busy` (the process is full), with `Retry-After`. It covers saving, reading, validating, publishing and promoting versions, templates, `/v1/code/compile` and `/generate`, catalogue submissions, connector uploads and the same routes on the embed API; work outside a request (Git sync, AI drafts, repairs, WhatsApp building) waits up to a minute for a slot. Refusals are counted (`taskiem_tenant_code_refused_total`). **Caches.** Workflow definitions (API and engine), USSD menus, compiled code (now cached in `sandbox.Compile`, so a Python check runs once per source per process), CEL programs and own WhatsApp numbers are bounded LRU caches (`engine/lru`); tenants' connector lists are capped at 4,096 tenants | `TestCodeGateBoundsTenantsAndProcess`, `TestTenantCodeAnswers429And503`, `TestCodeLimitsFromEnv`, `TestBoundEvictsLeastRecentlyUsed`, `TestZeroCache` |
+| S22 | Fixed | Before a worker result is written, a failure's message and a code step's log lines are searched for every personal value the run already holds (its sealed inputs and earlier outputs, opened into the run's taint), and each exact occurrence of a value of 5 characters or more becomes its category (`[name]`, `[bvn]`), longest first. Then the pattern masks run as before. The reconciliation check's error text gets the same. Exact matches only, so no text that is not a known value is masked | `TestKnownPIIIsMaskedInErrorText`, `TestTaintRedactText` |
+| Embedding | Closed | Unauthenticated CORS preflights on `/v1/embed/{app}` are paced per address (a burst of 60, then 20 a second) before the origin lookup; 429 with `Retry-After` | `TestEmbedPreflightIsPaced` |
+
+The new code was reviewed against the same four areas before commit. What remains, carried to the next round:
+
+- **TOTP codes are not bound to an operation.** A code is single-use per time step and goes with the request it confirms, but a code phished for one change could be spent on another within its 30 seconds. Passkeys are bound; prefer them for owners (they are held to passkeys by default).
+- **Bearer sign-in is opt-in.** A script that signed in with a password and read `token` must now send `"bearer": true`. API keys remain the way to automate.
+- **Key changes cannot be automated with an API key.** Rotation on a schedule is the operator's `taskiem tenants keys TENANT_ID rotate`, or a person.
+- **The tenant-code gate is per process.** A tenant's share is per API replica, so its total across replicas grows with them. Compiled WebAssembly modules of tenants' connectors stay loaded once used (releasing them safely needs the runtime to close them; their number is bounded by the versions uploaded and installed).
+- **S22 masks known values only.** Personal data the run never held (a name only the provider knows), values shorter than 5 characters, and changed forms of a value (upper-cased, URL-encoded) are left to the pattern masks.
+- **K6** stays open, low, as above.
