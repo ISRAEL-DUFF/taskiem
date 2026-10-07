@@ -30,7 +30,8 @@ export function Policies() {
       <h1>Approval policies</h1>
       <p className="hint">
         An approval step names a policy in its configuration. Runs keep the version that was active when they started. Conditions are CEL over the
-        approval's <code>subject</code>.
+        approval's <code>subject</code>. A rule's <code>step_up</code> is the weakest second factor it takes: <code>whatsapp_pin</code> (the
+        approver's WhatsApp PIN, or anything stronger), <code>totp</code> (an authenticator code or a passkey) or <code>passkey</code>.
       </p>
       <ErrorBox error={error ?? act.error} />
       {data?.policies.map((p) => (

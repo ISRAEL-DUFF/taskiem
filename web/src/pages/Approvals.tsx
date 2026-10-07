@@ -30,7 +30,15 @@ export function Approvals() {
             </span>
           </div>
           {a.on_behalf_of && <p className="hint">You are covering for {a.on_behalf_of} under a delegation.</p>}
-          {a.step_up && <p className="hint">{a.step_up === "passkey" ? "This approval needs your passkey." : "This approval needs your passkey or a code from your authenticator app."}</p>}
+          {a.step_up && (
+            <p className="hint">
+              {a.step_up === "passkey"
+                ? "This approval needs your passkey."
+                : a.step_up === "whatsapp_pin"
+                  ? "This approval needs your passkey or a code from your authenticator app here, or your WhatsApp PIN in WhatsApp."
+                  : "This approval needs your passkey or a code from your authenticator app."}
+            </p>
+          )}
           <Json value={a.subject} />
           <div className="toolbar" style={{ marginTop: 8 }}>
             <button className="primary" onClick={() => setDeciding({ a, decision: "approved" })}>

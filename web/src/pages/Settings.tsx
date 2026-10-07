@@ -3,6 +3,7 @@ import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
 import { ErrorBox, Field, JsonInput, fmtTime, useAction, useLoad } from "../ui";
+import { WhatsAppNumber } from "./WhatsAppNumber";
 
 interface Secret {
   environment: string;
@@ -34,6 +35,7 @@ export function Settings() {
       <Variables env={env} editable={can("secret.manage")} />
       {can("secret.manage") && <Egress env={env} />}
       {can("git.manage") && <Git env={env} />}
+      {can("secret.manage") && <WhatsAppNumber />}
       <Governance />
       <PlanLimits />
     </>
@@ -43,7 +45,16 @@ export function Settings() {
 interface LimitsView {
   limits: Record<string, number>;
   overrides: Record<string, number>;
-  usage: { runs_today: number; runs_this_month: number; running_runs: number; queued_runs: number; workflows: number; secrets: number; connections: number };
+  usage: {
+    runs_today: number;
+    runs_this_month: number;
+    running_runs: number;
+    queued_runs: number;
+    workflows: number;
+    secrets: number;
+    connections: number;
+    whatsapp_templates_this_month?: { sent: number; by_category: Record<string, number>; overage: number; blocked: number };
+  };
   recent_hits: { limit: string; day: string; hits: number }[];
   help: Record<string, string>;
 }
@@ -60,7 +71,9 @@ function PlanLimits() {
     max_workflows: data.usage.workflows,
     max_secrets: data.usage.secrets,
     max_connections: data.usage.connections,
+    whatsapp_templates_monthly: data.usage.whatsapp_templates_this_month?.sent ?? 0,
   };
+  const wt = data.usage.whatsapp_templates_this_month;
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Plan limits</h2>
@@ -88,6 +101,12 @@ function PlanLimits() {
           ))}
         </tbody>
       </table>
+      {wt && wt.sent + wt.blocked > 0 && (
+        <p className="hint" data-testid="whatsapp-templates">
+          WhatsApp templates this month: {wt.sent} sent ({Object.entries(wt.by_category).map(([c, n]) => `${n} ${c}`).join(", ")}); {wt.overage} beyond the allowance, billed
+          through; {wt.blocked} marketing held back.
+        </p>
+      )}
       {data.recent_hits.length > 0 && (
         <>
           <h2>Reached lately</h2>

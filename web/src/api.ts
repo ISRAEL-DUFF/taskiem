@@ -212,7 +212,7 @@ export interface Approval {
   /** 1-based level of a multi-level approval, and how many there are. */
   level: number;
   levels: number;
-  step_up: "totp" | "passkey" | null;
+  step_up: "whatsapp_pin" | "totp" | "passkey" | null;
   policy: string | null;
   /** Set when a delegated role makes this approval the caller's. */
   on_behalf_of?: string;

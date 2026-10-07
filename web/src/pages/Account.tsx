@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { del, get, post, type Invitation } from "../api";
+import { del, get, post, put, type Invitation } from "../api";
 import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof } from "../passkeys";
 import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
@@ -110,6 +110,59 @@ interface WhatsAppBinding {
   number: string | null;
   verified_at: string | null;
   pending?: { number: string; expires_at: string };
+  pin?: { set: boolean; set_at?: string; locked_until?: string };
+  flows?: boolean;
+}
+
+/** The WhatsApp approval PIN: entered in a WhatsApp form, it confirms
+ * decisions whose policy accepts it (step_up whatsapp_pin). */
+function WhatsAppPin({ pin, onChange }: { pin: NonNullable<WhatsAppBinding["pin"]>; onChange: () => void }) {
+  const { me } = useAuth();
+  const [value, setValue] = useState("");
+  const [typed, setTyped] = useState("");
+  const act = useAction();
+  const strong = me?.factors?.passkey || me?.factors?.totp;
+  return (
+    <div data-testid="whatsapp-pin">
+      <h3>Approval PIN</h3>
+      <p className="hint">
+        Six digits you enter in WhatsApp to confirm approvals whose policy allows a WhatsApp PIN. Policies asking for a passkey or authenticator code still
+        send you here. Five wrong PINs lock it for 15 minutes.
+      </p>
+      <ErrorBox error={act.error} />
+      {pin.set && (
+        <div className="row">
+          <p className="grow">
+            PIN set {pin.set_at && <span className="hint">{fmtTime(pin.set_at)}</span>}
+            {pin.locked_until && <strong> · locked until {fmtTime(pin.locked_until)}</strong>}
+          </p>
+          <button className="danger" disabled={act.busy} onClick={() => confirm("Remove your WhatsApp PIN?") && void act.run(async () => (await del("/v1/me/whatsapp/pin"), onChange()))}>
+            Remove
+          </button>
+        </div>
+      )}
+      {strong ? (
+        <form
+          className="row"
+          style={{ alignItems: "flex-end" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act.run(async () => (await put("/v1/me/whatsapp/pin", { pin: value, ...(await proof(me?.factors, typed)) }), setValue(""), setTyped(""), onChange()));
+          }}
+        >
+          <Field label={pin.set ? "New PIN" : "PIN"} hint="Not one digit repeated, nor a run like 123456">
+            <input type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={value} onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))} />
+          </Field>
+          <ProofField to="set the PIN" value={typed} onChange={setTyped} />
+          <button type="submit" disabled={act.busy || value.length !== 6}>
+            {pin.set ? "Change PIN" : "Set PIN"}
+          </button>
+        </form>
+      ) : (
+        <p className="hint">Add a passkey or an authenticator first: the PIN stands in for them in WhatsApp.</p>
+      )}
+    </div>
+  );
 }
 
 /** The member's WhatsApp number: linked by a code sent to it, it lets them
@@ -181,6 +234,7 @@ function WhatsApp() {
           </button>
         </form>
       )}
+      {b.data.number && b.data.flows && b.data.pin && <WhatsAppPin pin={b.data.pin} onChange={b.reload} />}
     </section>
   );
 }
