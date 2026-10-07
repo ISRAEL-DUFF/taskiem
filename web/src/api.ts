@@ -94,7 +94,10 @@ export interface TenantConnector {
 }
 
 export interface Me {
-  tenant_id: string;
+  /** Null for a person with no membership answering invitations. */
+  tenant_id: string | null;
+  /** Signed in only to answer invitations: no organisation yet. */
+  invitations_only?: boolean;
   roles: string[];
   permissions: string[];
   user?: { id: string; email: string; name: string };

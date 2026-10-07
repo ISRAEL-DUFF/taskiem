@@ -239,25 +239,45 @@ function WhatsApp() {
   );
 }
 
-/** Organisations that invited the member: they join when they accept. */
-function Invitations() {
+/** Organisations that invited the member: they join when they accept, or
+ * decline. Also the whole page of someone who belongs to no organisation
+ * yet (`always`), whose session becomes one in the organisation they join. */
+export function Invitations({ always = false, onJoined }: { always?: boolean; onJoined?: () => void }) {
   const list = useLoad(() => get<{ invitations: Invitation[] }>("/v1/me/invitations"), []);
   const act = useAction();
-  if (!list.data?.invitations.length) return null;
+  if (!always && !list.data?.invitations.length) return null;
+  if (always && list.data && !list.data.invitations.length) {
+    return (
+      <section className="card">
+        <h2 style={{ marginTop: 0 }}>Invitations</h2>
+        <p>No invitations are waiting for you.</p>
+      </section>
+    );
+  }
   return (
-    <section className="card">
+    <section className="card" data-testid="my-invitations">
       <h2 style={{ marginTop: 0 }}>Invitations</h2>
       <ErrorBox error={act.error} />
       <table>
         <tbody>
-          {list.data.invitations.map((i) => (
+          {(list.data?.invitations ?? []).map((i) => (
             <tr key={i.tenant_id}>
               <td>{i.tenant}</td>
               <td>{i.roles.join(", ")}</td>
               <td>{fmtTime(i.invited_at)}</td>
               <td>
-                <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/me/invitations/${i.tenant_id}/accept`), list.reload()))}>
+                <button
+                  className="primary"
+                  disabled={act.busy}
+                  onClick={() => void act.run(async () => (await post(`/v1/me/invitations/${i.tenant_id}/accept`), onJoined ? onJoined() : list.reload()))}
+                >
                   Accept
+                </button>{" "}
+                <button
+                  disabled={act.busy}
+                  onClick={() => confirm(`Decline the invitation from ${i.tenant}?`) && void act.run(async () => (await post(`/v1/me/invitations/${i.tenant_id}/decline`), list.reload()))}
+                >
+                  Decline
                 </button>
               </td>
             </tr>

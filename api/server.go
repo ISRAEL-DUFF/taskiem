@@ -149,6 +149,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/password", s.changePassword)
 			r.Get("/me/invitations", s.myInvitations)
 			r.Post("/me/invitations/{tenant}/accept", s.acceptInvitation)
+			r.Post("/me/invitations/{tenant}/decline", s.declineInvitation)
 			r.Get("/me/passkeys", s.listPasskeys)
 			r.Post("/me/passkeys/options", s.passkeyRegisterOptions)
 			r.Post("/me/passkeys", s.passkeyRegister)
@@ -240,6 +241,8 @@ func (s *Server) Handler() http.Handler {
 
 			r.With(s.need(PermMemberManage)).Get("/members", s.listMembers)
 			r.With(s.need(PermMemberManage), s.tenantWide).Post("/members", s.addMember)
+			r.With(s.need(PermMemberManage)).Get("/invitations", s.listInvitations)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/invitations/{user}", s.cancelInvitation)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/members/{user}/roles/{role}", s.revokeRole)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI

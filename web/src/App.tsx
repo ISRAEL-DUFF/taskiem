@@ -13,7 +13,7 @@ import { Alerts } from "./pages/Alerts";
 import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
 import { Policies } from "./pages/Policies";
-import { Account, Passkeys } from "./pages/Account";
+import { Account, Invitations, Passkeys } from "./pages/Account";
 import { useState } from "react";
 import { ErrorBox, useAction } from "./ui";
 import { Reports } from "./pages/Reports";
@@ -60,6 +60,22 @@ function EnrolPasskey() {
   );
 }
 
+/** Someone with an account but no organisation, signed in to answer the
+ * invitations waiting for them; nothing else is open to them. */
+function InviteeHome() {
+  const { me, logout, refresh } = useAuth();
+  return (
+    <div className="login card" style={{ maxWidth: 720 }}>
+      <h1>Welcome back{me?.user?.name ? `, ${me.user.name}` : ""}</h1>
+      <p>You do not belong to an organisation on Taskiem yet. Accept an invitation to join one.</p>
+      <Invitations always onJoined={() => void refresh()} />
+      <p>
+        <button onClick={() => void logout()}>Sign out</button>
+      </p>
+    </div>
+  );
+}
+
 function Shell() {
   const { me, can, logout } = useAuth();
   const loc = useLocation();
@@ -70,6 +86,7 @@ function Shell() {
   if (me === null) {
     return loc.pathname === "/login" ? <Login /> : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`} replace />;
   }
+  if (me.invitations_only) return <InviteeHome />;
   if (me.enrol_passkey) return <EnrolPasskey />;
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || "/workflows"} replace />;
   const links: [string, string, boolean][] = [

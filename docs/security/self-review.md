@@ -125,7 +125,9 @@ These hold today. Testers should still try them.
 
 These are known residuals, carried to the next round:
 
-- **Invitations.** Admins cannot yet list or cancel pending invitations, and invitees cannot decline one. Someone with an account but no membership anywhere cannot sign in to accept.
+- **Invitations.** ~~Admins cannot yet list or cancel pending invitations, and invitees cannot decline one. Someone with an account but no membership anywhere cannot sign in to accept.~~ Closed: `GET`/`DELETE /v1/invitations`, `POST /v1/me/invitations/{tenant}/decline`, and an invitee session limited to the invitation routes (`TestInviteeSession` checks it reaches no tenant data). Two notes remain:
+  - **Invitee oracle.** `POST /v1/members` answers alike whether or not the email had an account, but what follows differs: someone new is listed as a member at once, someone with an account as a pending invitation (`GET /v1/invitations`, and before it, by their absence from `GET /v1/members`). An admin with `member.manage` can therefore learn whether an email has a Taskiem account. Accepted: it needs `member.manage` in some tenant, reveals existence only (not which tenants), and is the same signal the members list gave before invitations were listed. Closing it would mean inviting new people too, rather than creating their account.
+  - **Invitee sessions** sign in someone who belongs nowhere, so the sign-in limiter, the dummy-hash timing and the passkey rules apply to them as to members; they last as long as ordinary sessions (12 hours) and end on sign-out, on accepting (replaced by a tenant session) and when the person is disabled.
 - **Git-led connections.**
   - A connection set up before four-eyes was turned on, or before its environment was gated, is not re-reviewed.
   - On an ungated environment with four-eyes off, one `git.manage` holder can still connect a repository in Git-led mode. That follows the tenant's own settings.

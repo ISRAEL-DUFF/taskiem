@@ -34,6 +34,62 @@ interface Key {
   revoked_at: string | null;
 }
 
+interface PendingInvitation {
+  user_id: string;
+  email: string;
+  name: string;
+  roles: string[];
+  source: "manual" | "scim";
+  invited_by: string;
+  invited_at: string;
+}
+
+/** People with an account elsewhere who were invited and have not answered:
+ * they join when they accept; an admin may withdraw the invitation. */
+function PendingInvitations({ refresh }: { refresh: unknown }) {
+  const list = useLoad(() => get<{ invitations: PendingInvitation[] }>("/v1/invitations"), [refresh]);
+  const act = useAction();
+  if (!list.data?.invitations.length) return list.error ? <ErrorBox error={list.error} /> : null;
+  return (
+    <section data-testid="pending-invitations">
+      <h2>Pending invitations</h2>
+      <p className="hint">These people already have a Taskiem account. They join, with the roles offered, when they accept.</p>
+      <ErrorBox error={act.error} />
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Roles offered</th>
+            <th>Invited</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {list.data.invitations.map((i) => (
+            <tr key={i.user_id}>
+              <td>{i.email}</td>
+              <td>{i.roles.join(", ")}</td>
+              <td className="hint">
+                {fmtTime(i.invited_at)}
+                {i.source === "scim" ? " by SCIM" : ""}
+              </td>
+              <td style={{ textAlign: "right" }}>
+                <button
+                  className="danger"
+                  disabled={act.busy}
+                  onClick={() => confirm(`Withdraw the invitation to ${i.email}?`) && void act.run(async () => (await del(`/v1/invitations/${i.user_id}`), list.reload()))}
+                >
+                  Withdraw
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 export function Members() {
   const { can } = useAuth();
   const members = useLoad(() => get<{ members: Member[] }>("/v1/members"), []);
@@ -88,6 +144,7 @@ export function Members() {
           </tbody>
         </table>
       )}
+      <PendingInvitations refresh={members.data} />
       <div className="toolbar" style={{ marginTop: 24 }}>
         <h2 className="grow" style={{ margin: 0 }}>
           Roles

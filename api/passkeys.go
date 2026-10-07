@@ -679,6 +679,16 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 	case errors.Is(err, errSSORequired):
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": err.Error(), "sso_required": true})
 		return
+	case errors.Is(err, errNoMembership) && method != "sso":
+		// No membership anywhere, but perhaps invitations to answer.
+		if ok, ierr := s.startInviteeSession(w, r, user, method); ierr != nil {
+			s.fail(w, r, ierr)
+			return
+		} else if ok {
+			return
+		}
+		writeErr(w, http.StatusUnauthorized, err.Error())
+		return
 	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
 		writeErr(w, http.StatusUnauthorized, err.Error())
 		return

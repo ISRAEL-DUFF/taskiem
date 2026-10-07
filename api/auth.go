@@ -81,8 +81,12 @@ type Principal struct {
 	EnrolOnly bool
 	// EndUser is set for an embed app's end user (embed.go): a lightweight
 	// principal in a sub-tenant, with neither UserID nor KeyID.
-	EndUser   *EndUser
-	viaCookie bool
+	EndUser *EndUser
+	// Invitee is a person with no membership signed in to answer their
+	// invitations (invitations.go): UserID only, no tenant, no permissions.
+	Invitee                   bool
+	inviteeEmail, inviteeName string
+	viaCookie                 bool
 }
 
 func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
@@ -191,6 +195,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
+		if p.Invitee && !inviteeAllowed(r.Method, r.URL.Path) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "you belong to no organisation yet: accept an invitation first", "invitations_only": true})
+			return
+		}
 		if p.EnrolOnly && !enrolOnly[r.Method+" "+r.URL.Path] {
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "administrators sign in with a passkey: add one to continue", "enrol_passkey": true})
 			return
@@ -255,6 +263,10 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 	}
 	p := Principal{viaCookie: viaCookie, Permissions: map[string]bool{}}
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Perhaps someone with no membership answering invitations.
+			return s.resolveInvitee(r, tok, viaCookie)
+		}
 		return nil, err
 	}
 	if err := s.loadRoles(ctx, &p); err != nil {
@@ -405,10 +417,15 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		tok = c.Value
 	}
-	err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE token_hash = $1`, hashToken(tok))
-		return err
-	})
+	var err error
+	if principalFrom(r.Context()).Invitee {
+		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_invitee_end($1)`, hashToken(tok))
+	} else {
+		err = s.tx(r, func(tx pgx.Tx) error {
+			_, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE token_hash = $1`, hashToken(tok))
+			return err
+		})
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -419,6 +436,11 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
+	if p.Invitee {
+		writeJSON(w, http.StatusOK, map[string]any{"tenant_id": nil, "roles": []string{}, "permissions": []string{}, "auth_method": p.AuthMethod,
+			"invitations_only": true, "user": map[string]any{"id": p.UserID, "email": p.inviteeEmail, "name": p.inviteeName}})
+		return
+	}
 	perms := make([]string, 0, len(p.Permissions))
 	for k := range p.Permissions {
 		perms = append(perms, k)
@@ -711,7 +733,19 @@ func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tenant_id": tenant, "roles": nonNil(roles)})
+	out := map[string]any{"tenant_id": tenant, "roles": nonNil(roles)}
+	if p.Invitee {
+		// Now a member: the invitee session becomes one in this tenant.
+		more, err := s.upgradeInvitee(w, r, p, tenant)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		for k, v := range more {
+			out[k] = v
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 type keyReq struct {
