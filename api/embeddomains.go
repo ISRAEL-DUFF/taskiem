@@ -27,6 +27,12 @@ type appDomain struct {
 	Record     string     `json:"record"`    // the TXT record's name
 	TXTValue   string     `json:"txt_value"` // its value
 	VerifiedAt *time.Time `json:"verified_at"`
+	// Re-verification (embed.DomainChecker): the last check, failures in a
+	// row and why, and when it was unverified for failing too long.
+	CheckedAt      *time.Time `json:"checked_at,omitempty"`
+	CheckFailures  int        `json:"check_failures,omitempty"`
+	LastCheckError *string    `json:"last_check_error,omitempty"`
+	UnverifiedAt   *time.Time `json:"unverified_at,omitempty"`
 }
 
 // partnerCapabilities are the capabilities the operator granted the
@@ -39,6 +45,11 @@ func partnerCapabilities(r *http.Request, tx pgx.Tx) ([]string, error) {
 	}
 	return caps, err
 }
+
+// ForgetCustomDomain drops a host from this replica's cache at once, for a
+// domain unverified elsewhere (embed.DomainChecker.Unverified); other
+// replicas follow within the cache's 30 seconds.
+func (s *Server) ForgetCustomDomain(domain string) { s.hosts.forget(strings.ToLower(domain)) }
 
 // addAppDomain claims a domain for an app. It serves nothing until
 // verified.
@@ -136,7 +147,8 @@ func (s *Server) verifyAppDomain(w http.ResponseWriter, r *http.Request) {
 		if !slices.Contains(caps, embed.CapCustomDomains) {
 			return fmt.Errorf("%w: custom domains need the partner's plan to include custom_domains (ask the operator)", errForbidden)
 		}
-		if _, err := tx.Exec(r.Context(), `UPDATE embed_app_domains SET verified_at = now() WHERE app_id = $1 AND domain = $2`, app, domain); err != nil {
+		if _, err := tx.Exec(r.Context(), `UPDATE embed_app_domains SET verified_at = now(), checked_at = now(), check_failures = 0, failing_since = NULL,
+			last_check_error = NULL, unverified_at = NULL WHERE app_id = $1 AND domain = $2`, app, domain); err != nil {
 			if isUnique(err) {
 				return fmt.Errorf("%w: another partner has verified %s", errConflict, domain)
 			}

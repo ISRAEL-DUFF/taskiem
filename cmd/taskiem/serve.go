@@ -443,7 +443,9 @@ func serve(ctx context.Context, args []string) error {
 		// Partner webhooks: sub-tenants' run outcomes, publishes and usage.
 		hooks := &embed.Webhooks{Pool: e.pool, Secrets: e.vault, Limits: e.store.LimitsFor, Egress: &egress.Guard{Logger: log}, Logger: log}
 		// Billing: periods, dunning, payment reconciliation, usage snapshots.
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run)
+		// Verified custom domains are re-verified (docs/embedding.md).
+		domains := &embed.DomainChecker{Pool: e.pool, Logger: log}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run)
 		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)

@@ -33,7 +33,7 @@ var DefaultEndUserPermissions = []string{"workflow.read", "workflow.edit", "run.
 var gatedStepTypes = []string{"http", "code", "container", "ai"}
 
 // Events are the partner webhook events.
-var Events = []string{"run.completed", "run.failed", "workflow.published", "usage.threshold"}
+var Events = []string{"run.completed", "run.failed", "workflow.published", "usage.threshold", EventDomainUnverified}
 
 // Uses lists what a definition needs its embed app to allow, sorted:
 // connector ids (a reference's part before "@") and "http", "code", "container" or "ai"

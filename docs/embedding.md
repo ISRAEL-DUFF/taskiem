@@ -89,7 +89,7 @@ POST /v1/partner/embed-apps
   "end_user_permissions": ["workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"],
   "headless": false,
   "webhook_url": "https://api.payrolla.com/taskiem/webhooks",
-  "webhook_events": ["run.completed", "run.failed", "workflow.published", "usage.threshold"]
+  "webhook_events": ["run.completed", "run.failed", "workflow.published", "usage.threshold", "domain.unverified"]
 }
 → 201 {"id": "...", "webhook_secret": "whsec_...", "app": {...}}
 ```
@@ -169,6 +169,7 @@ Taskiem posts events about your sub-tenants to each active app with a `webhook_u
 | `run.completed`, `run.failed` | A sub-tenant's run ends (queued in the transaction that ends it) | `run`: id, workflow id, version, environment, status, start and end. No inputs or outputs |
 | `workflow.published` | A sub-tenant publishes a version | `workflow`: id, version, time |
 | `usage.threshold` | A sub-tenant reaches 80% and 100% of its daily or monthly run quota, or all your sub-tenants reach 80% and 100% of a partner-wide cap; once per period | `usage`: scope (`sub_tenant` or `partner`), limit, period, used, cap, percent |
+| `domain.unverified` | One of the app's [custom domains](#10-custom-domains) failed re-verification long enough and stopped serving; sent to that app whether or not it lists the event | `domain`, `app_id`, `failures`, `failing_since`, `reason` |
 
 ```http
 POST https://api.payrolla.com/taskiem/webhooks
@@ -303,6 +304,8 @@ Once verified, and while your plan keeps the capability and the app is active:
 
 A domain is claimed per partner; any number of partners may claim one, but only one can verify it, and the platform's own host and its subdomains cannot be claimed. An app may have up to 10 domains.
 
+**Keep the TXT record.** The scheduler checks every verified domain's `_taskiem-verify` record again every six hours (`embed.DomainChecker`). A check that finds the record gone, or without the value, counts as a failure; a lookup that times out or cannot reach a resolver counts for nothing. After **four failures in a row spanning at least 24 hours** the domain is **unverified**: it stops serving the app (each replica within 30 seconds), the app's webhook receives `domain.unverified` (whatever events the app subscribes to, when it has a webhook URL), and the partner's audit chain records `embed_app.domain_unverified` by the system actor `domain-checker`. A passing check clears the failures. The app's `domains` show `checked_at`, `check_failures`, `last_check_error` and `unverified_at`; restore an unverified domain by putting the record back and verifying again.
+
 **Ingress and certificates (operators).** The application never issues certificates. Each verified host needs one at the ingress. With the Helm chart:
 
 ```yaml
@@ -371,4 +374,4 @@ The threat model's boundary B11 covers this ([threat model](security/threat-mode
 | --- | --- |
 | C4: first embedded deployment (Payrolla) | Needs people ([needs people](needs-people.md#phase-3), EM1) |
 
-Known gaps: a suspended sub-tenant's schedules and webhook triggers keep firing; end users cannot hold `approval.decide` (decisions are recorded against platform users); deleting a sub-tenant is an operator task; verified custom domains are not re-verified periodically; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.
+Known gaps: a suspended sub-tenant's schedules and webhook triggers keep firing; end users cannot hold `approval.decide` (decisions are recorded against platform users); deleting a sub-tenant is an operator task; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.

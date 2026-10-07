@@ -71,7 +71,8 @@ const embedAppColumns = `a.id, a.name, a.allowed_origins, a.branding, a.allowed_
 	EXISTS (SELECT 1 FROM secrets s WHERE s.environment = '` + embed.VaultEnv + `' AND s.name = 'app_' || a.id::text || '_webhook'),
 	a.white_label,
 	COALESCE((SELECT jsonb_agg(jsonb_build_object('domain', d.domain, 'record', '_taskiem-verify.' || d.domain, 'txt_value', d.token,
-	  'verified_at', d.verified_at) ORDER BY d.domain) FROM embed_app_domains d WHERE d.app_id = a.id), '[]')`
+	  'verified_at', d.verified_at, 'checked_at', d.checked_at, 'check_failures', d.check_failures, 'last_check_error', d.last_check_error,
+	  'unverified_at', d.unverified_at) ORDER BY d.domain) FROM embed_app_domains d WHERE d.app_id = a.id), '[]')`
 
 // check validates and normalises an embed app's settings.
 func (s *Server) checkEmbedApp(r *http.Request, req *embedAppReq) error {
