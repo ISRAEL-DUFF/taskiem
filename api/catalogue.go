@@ -249,20 +249,20 @@ func (s *Server) submitPackage(w http.ResponseWriter, r *http.Request) {
 		if pub.Status != "verified" {
 			return fmt.Errorf("%w: the namespace %q is %s; Taskiem verifies publishers before they submit", errForbidden, pub.Slug, pub.Status)
 		}
-		rows, err := tx.Query(r.Context(), `SELECT version, manifest FROM catalogue_versions WHERE connector_id = $1 AND state IN ('published', 'revoked', 'approved', 'in_review')`, pkg.ID)
+		rows, err := tx.Query(r.Context(), `SELECT version, manifest, state FROM catalogue_versions WHERE connector_id = $1 AND state IN ('published', 'revoked', 'approved', 'in_review')`, pkg.ID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var v, m string
-			if err := rows.Scan(&v, &m); err != nil {
+			var v, m, state string
+			if err := rows.Scan(&v, &m, &state); err != nil {
 				return err
 			}
 			if v == pkg.Version {
 				return fmt.Errorf("%w: %s %s is already submitted; versions never change, so raise the version", errConflict, pkg.ID, pkg.Version)
 			}
-			if mm, probs := connector.Parse([]byte(m)); len(probs) == 0 {
+			if mm, probs := connector.Parse([]byte(m)); len(probs) == 0 && (state == "published" || state == "revoked") {
 				published = append(published, catalogue.Published{Version: v, Manifest: mm})
 			}
 		}
