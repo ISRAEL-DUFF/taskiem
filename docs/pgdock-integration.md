@@ -1,6 +1,6 @@
 # PGDock integration plan
 
-Status: **planned**. This plan runs in parallel with Taskiem's own phases. It never blocks them, and they never wait for it.
+Status: **phase 1 in progress**: the trigger, reads and remote registration are built ([PGDock connector](integrations/pgdock.md)); writes wait for P1-G1. This plan runs in parallel with Taskiem's own phases. It never blocks them, and they never wait for it.
 
 Source: *PGDock × Taskiem: How the Two Platforms Work Together* (7 October 2026, @EaziDeFi), called **the joint doc** below. This plan turns the joint doc into tracked work. It records:
 
@@ -46,13 +46,13 @@ These are the joint doc's integration principles, adopted as written. Decision [
 | Capability | Status | Use in this plan |
 | --- | --- | --- |
 | Connector framework (connector/v1) | Built: manifests, action classes, idempotency, reconcile, triggers with verify schemes, dedup, PII declarations by path | The `pgdock@1` connector |
-| `hmac_sha256_timestamped` verify scheme | Built | PGDock signatures, if the header format matches (P1-T2) |
+| `hmac_sha256_timestamped` verify scheme | Built, with `signature_format: t_v1` for PGDock's `t=<unix>,v1=<hex>` header (several `v1` values accepted) | PGDock signatures (P1-T3) |
 | Encrypted credential vault, with each use audited | Built | PGDock tokens |
 | Outbound traffic guard | Built | Calls to PGDock |
 | Plan limits and billing | Built (Phase 4) | Combined plan (P4) |
-| A connector registering its own webhook with a provider at publish, and removing it at unpublish | **Not built.** Triggers are registered inside Taskiem; providers are configured by hand today. | Needed by P1-T1 |
+| A connector registering its own webhook with a provider at publish, and removing it at unpublish | **Built** (P1-T1, [decision 0021](decisions/0021-remote-trigger-registration.md)): `registration: remote` triggers, intent recorded at deploy, a reconciler, health on the connection and workflow, `DELETE /v1/workflows/{wf}/deployments/{env}` | The `pgdock@1` row-changed trigger |
 | A generic OAuth authorization-code connection flow | **Not built.** Google uses pasted refresh tokens or service accounts. | Needed by P2 |
-| `database_change` trigger type | Reserved in the wd/v1 schema, not implemented. Spec 8 describes it as logical replication or `LISTEN` on a customer database. | Decide how it relates to PGDock's trigger (Q11) |
+| `database_change` trigger type | Reserved in the wd/v1 schema, not implemented. Spec 8 describes it as logical replication or `LISTEN` on a customer database. | Kept for that; the PGDock trigger is a `connector_event` (Q11, default taken) |
 | Data tables, forms | **Do not exist** in Taskiem's spec or code | See correction C1 |
 
 ## 3. Corrections to the joint doc
@@ -83,15 +83,15 @@ These are the joint doc's four phases, with each item's owner, dependency and st
 
 | ID | Item | Detail | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| P1-T1 | **Remote trigger registration** (engine) | Connector triggers gain an optional lifecycle. On publish, the connector calls the provider to create the subscription (here, a PGDock webhook pointed at Taskiem's ingest URL) and stores the returned secret in the vault. On unpublish or redeploy it updates or deletes the subscription. The connection's status shows a broken or paused remote subscription. The lifecycle is generic, so Telegram, WhatsApp and the mobile-money callbacks can use it later. | — | Planned |
-| P1-T2 | `pgdock@1` connection | API token, plus organisation and project (the token should be project-restricted). Scopes: `read` for the trigger and query, `write` for the webhook API and writes. A connection test that names the token's organisation and projects. Base URL per connection (self-hosted PGDock) or the platform default. | — | Planned |
-| P1-T3 | Row-changed trigger | Table(s), events and optional changed columns, registered through P1-T1. Signature checked with `hmac_sha256_timestamped` against `PGDock-Signature`, adding a format if the existing one differs. De-duplicated on `PGDock-Event-Id`. `TEST` events delivered as tests. Truncated events refetched through the rows endpoint by `primary_key` before the run starts, or passed as truncated (Q14). PII declared by path when a table's columns are marked. | P1-T1, P1-T2 | Planned |
-| P1-T4 | Query rows (read) | Through the rows endpoint: structured filters, order, limit (≤ 1,000), keyset pagination, as a `read` action. Never through the SQL endpoint with values in the text. | P1-T2 | Planned |
+| P1-T1 | **Remote trigger registration** (engine) | Connector triggers gain an optional lifecycle. On publish, the connector calls the provider to create the subscription (here, a PGDock webhook pointed at Taskiem's ingest URL) and stores the returned secret in the vault. On unpublish or redeploy it updates or deletes the subscription. The connection's status shows a broken or paused remote subscription. The lifecycle is generic, so Telegram, WhatsApp and the mobile-money callbacks can use it later. | — | Done |
+| P1-T2 | `pgdock@1` connection | API token, plus organisation and project (the token should be project-restricted). Scopes: `read` for the trigger and query, `write` for the webhook API and writes. A connection test that names the token's organisation and projects. Base URL per connection (self-hosted PGDock) or the platform default. | — | Done (base URL: Q20 open) |
+| P1-T3 | Row-changed trigger | Table(s), events and optional changed columns, registered through P1-T1. Signature checked with `hmac_sha256_timestamped` against `PGDock-Signature`, adding a format if the existing one differs. De-duplicated on `PGDock-Event-Id`. `TEST` events delivered as tests. Truncated events refetched through the rows endpoint by `primary_key` before the run starts, or passed as truncated (Q14). PII declared by path when a table's columns are marked. | P1-T1, P1-T2 | Done (Q14, Q22–Q24 open; table PII marking not yet) |
+| P1-T4 | Query rows (read) | Through the rows endpoint: structured filters, order, limit (≤ 1,000), keyset pagination, as a `read` action. Never through the SQL endpoint with values in the text. | P1-T2 | Done |
 | P1-T5 | Write actions (insert, upsert, update, delete with a required filter and a maximum-affected guard; call a function) | Built only on a parameterised endpoint (P1-G1). Insert is `unsafe_write` until P1-G2; upsert on a conflict column is `idempotent_write`; update and delete need a filter and refuse when more rows than the guard would change. | P1-G1 (P1-G2 for idempotent insert) | Blocked |
-| P1-T6 | Error mapping | Map PGDock `{code}` values to Taskiem's classes (validation, permission, conflict, rate limit, temporarily unavailable). Map SQL errors returned with status 200 by SQLSTATE: `23505` conflict, `40001` and `40P01` retryable, `57014` timeout, `42501` permission. Refusals with a `Retry-After` are retryable. | P1-G4 (error code list) | Planned |
-| P1-T7 | Fake PGDock server and fixtures | Built from the published payloads and OpenAPI file: signing, ordering, retries, truncation, test events, the webhook API, the rows endpoint, errors. | — | Planned |
-| P1-T8 | End-to-end acceptance test | The joint doc's "done when": a new `orders` row starts a workflow that sends a WhatsApp message (fake Graph API) and writes a status back to the row (needs P1-T5); a rolled-back insert starts nothing; deliveries retried after Taskiem was unavailable are taken once. | P1-T3, P1-T5 | Planned (write-back blocked on P1-G1) |
-| P1-T9 | Docs and SDK | `docs/integrations/pgdock.md`, SDK helpers, a template ("new row → WhatsApp message"), and an entry in the evaluation suite | P1-T3 | Planned |
+| P1-T6 | Error mapping | Map PGDock `{code}` values to Taskiem's classes (validation, permission, conflict, rate limit, temporarily unavailable). Map SQL errors returned with status 200 by SQLSTATE: `23505` conflict, `40001` and `40P01` retryable, `57014` timeout, `42501` permission. Refusals with a `Retry-After` are retryable. | P1-G4 (error code list) | Done, by HTTP status where no code is published (P1-G4) |
+| P1-T7 | Fake PGDock server and fixtures | Built from the published payloads and OpenAPI file: signing, ordering, retries, truncation, test events, the webhook API, the rows endpoint, errors. | — | Done |
+| P1-T8 | End-to-end acceptance test | The joint doc's "done when": a new `orders` row starts a workflow that sends a WhatsApp message (fake Graph API) and writes a status back to the row (needs P1-T5); a rolled-back insert starts nothing; deliveries retried after Taskiem was unavailable are taken once. | P1-T3, P1-T5 | Done without the write-back (blocked on P1-G1) |
+| P1-T9 | Docs and SDK | `docs/integrations/pgdock.md`, SDK helpers, a template ("new row → WhatsApp message"), and an entry in the evaluation suite | P1-T3 | Done |
 
 **PGDock team**
 
@@ -164,6 +164,10 @@ The joint doc's five questions come first (Q1–Q5). The rest came up while chec
 | Q22 | During `rotate-secret`, is there an overlap window in which deliveries carry signatures from both the old and new secrets (two `v1=` values)? Without one, deliveries in flight during a rotation fail verification. | PGDock | P1-T3, P1-G3 |
 | Q23 | Is `primary_key` enough to refetch a truncated event's row through the rows endpoint, and could it be sent on every event, not only truncated ones? | PGDock | P1-T3, Q14 |
 | Q24 | Does an `UPDATE` event's `old_record` hold every column, or only the changed ones? The trigger's changed-columns filter depends on it. | PGDock | P1-T3 |
+| Q25 | How does an API token authenticate? The OpenAPI file declares no security scheme; the connector sends `Authorization: Bearer <token>`, as PGDock's metrics endpoint documents. Do token-authenticated calls skip the CSRF header the session flow needs? | PGDock | P1-T2 |
+| Q26 | Which scope does deleting a webhook need, and does it need a typed confirmation like other destructive actions (`confirm`)? Taskiem assumes `write` and no confirmation. | PGDock | P1-T1 |
+| Q27 | Are webhook names unique within a project? Taskiem finds a webhook it created before a crash by its name (`taskiem-<id>`). Could PGDock add a description or metadata field for integrators' tags? | PGDock | P1-T1 |
+| Q28 | Is the payload's `project` the project's id? The published example (`p_k2f9a7bq3d`) is not a UUID like the API's project ids. | PGDock | P1-T3 |
 
 ## 6. Updates this plan needs elsewhere
 
@@ -172,25 +176,26 @@ The joint doc's five questions come first (Q1–Q5). The rest came up while chec
 | Where | Update | Status |
 | --- | --- | --- |
 | `docs/decisions/0018-pgdock-integration-principles.md` | The principles in section 1 | Done with this plan |
-| `docs/needs-people.md` | A "PGDock integration" section pointing to Q1–Q24 and the PGDock-side items | Done with this plan |
+| `docs/needs-people.md` | A "PGDock integration" section pointing to Q1–Q28 and the PGDock-side items | Done with this plan |
 | `docs/phase-4-status.md` | A line saying the PGDock integration runs as a parallel plan, linking here | Done with this plan |
 | `docs/spec/architecture.md` | If Q6 or Q10 is yes, a new section for data tables or public forms; if Q11 is answered, a note on the `database_change` trigger | After decisions |
-| `docs/contracts/connector-v1.md` | The trigger lifecycle from P1-T1 (remote registration) | With P1-T1 |
-| `docs/security/threat-model.md` | A boundary for PGDock ↔ Taskiem: tokens, webhook signatures, the scope of linked accounts, cross-product audit | With P1 |
-| `docs/integrations/pgdock.md` | Connector guide | With P1 |
+| `docs/contracts/connector-v1.md` | The trigger lifecycle from P1-T1 (remote registration) | Done (rules 7–10; [decision 0021](decisions/0021-remote-trigger-registration.md)) |
+| `docs/security/threat-model.md` | A boundary for PGDock ↔ Taskiem: tokens, webhook signatures, the scope of linked accounts, cross-product audit | Done (B16); linked-account consent with P2 |
+| `docs/integrations/pgdock.md` | Connector guide | Done |
 
 ### In PGDock
 
 | Where | Update |
 | --- | --- |
-| `docs/webhooks.md` | Note that integrators (Taskiem) create webhooks through the API with project-restricted tokens, and how deliveries count against rate limits (Q15) |
+| `docs/webhooks.md` | Note that integrators (Taskiem) create webhooks through the API with project-restricted tokens, and how deliveries count against rate limits (Q15); whether rotation signs with both secrets for a while (Q22); `primary_key`'s shape (Q23); whether webhook names are unique (Q27) |
+| `api/openapi.yaml` (auth) | A security scheme for API tokens (Q25); the scope each webhook operation needs (Q26) |
 | `api/openapi.yaml` | A parameterised SQL endpoint or row-write endpoints (P1-G1); `Idempotency-Key` (P1-G2); the error code list (P1-G4) |
 | Authorization | The OAuth-style consent flow (P2-G1) |
 | CI | Run Taskiem's `pgdock@1` contract tests (P4-T5) |
 
 ### In the joint doc
 
-Apply corrections C1–C11. Replace its open-questions section with a link to Q1–Q24 here, or copy them.
+Apply corrections C1–C11. Replace its open-questions section with a link to Q1–Q28 here, or copy them.
 
 ## 7. Risks
 

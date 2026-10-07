@@ -43,7 +43,7 @@ taskiem connector submit ./ledger/p_acme_ledger-1.0.0.tcpkg
 | `licence` | On the [accepted list](#licences) |
 | `attestation` | `--original` given, and a contact email address |
 | `hosts` | Every declared host resolves, and only to public addresses (no private, loopback, link-local, metadata or documentation ranges) |
-| `semver` | The version is newer than every published version of its major, and does not remove actions, input or output fields, or change a class within the major ([rule 8](contracts/connector-v1.md)) |
+| `semver` | The version is newer than every published version of its major, and does not remove actions, input or output fields, or change a class within the major ([rule 11](contracts/connector-v1.md)) |
 | `conformance` | Every case passes in the sandbox, every action has a case, and every idempotent write's key reaches the provider |
 
 A package that fails is kept as `checks_failed` with the reasons (`taskiem connector submissions`, or `GET /v1/catalogue/submissions/{id}`); fix it and submit again, under the same version if you like. One that passes is `in_review`. A version that is in review, approved, published or revoked can never be submitted again: raise the version.
@@ -60,7 +60,7 @@ taskiem connector revoke p_acme_ledger@1.0.0 --reason "sends amounts in naira, n
 
 **Revoking** is the kill switch for a version you find is wrong: it leaves the catalogue, new steps stop using it at once (within a minute on every engine), and every organisation that installed it is alerted on all its alert channels with your reason. It cannot be undone; publish a fixed version. Taskiem can revoke a version too.
 
-A published version never changes. Fix things in a new version: a patch or minor for compatible changes, a new major for anything rule 8 forbids. Installing organisations stay on the version they pinned until they upgrade.
+A published version never changes. Fix things in a new version: a patch or minor for compatible changes, a new major for anything rule 11 forbids. Installing organisations stay on the version they pinned until they upgrade.
 
 ### Licences
 

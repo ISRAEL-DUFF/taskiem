@@ -45,6 +45,8 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 | `TASKIEM_WEB_DIR` | — | Built web app to serve (`/web` in the image). |
 | `TASKIEM_SECURE_COOKIES` | `true` | Set `false` only for plain-HTTP local use. |
 | `TASKIEM_PUBLIC_URL` | — | Where people reach the web app (`https://…`, or `http://localhost:…`). Turns on passkeys, which are bound to it; password-reset links point at it (none are sent without it) |
+| `TASKIEM_HOOKS_URL` | `TASKIEM_PUBLIC_URL` + `/hooks` | Where providers reach the edge's `/hooks` (`https://hooks.example.com/hooks`). Taskiem points the subscriptions it registers itself at it (PGDock webhooks, [decision 0021](decisions/0021-remote-trigger-registration.md)); without it none is created and each shows why. Set it on the api and scheduler roles |
+| `TASKIEM_PGDOCK_URL` | — | The platform's PGDock server, for PGDock connections that name none ([PGDock](integrations/pgdock.md#connection)). PGDock has not published its cloud address, so there is no default |
 | `TASKIEM_PASSKEY_RP_ID` | the URL's host | The passkey domain, if passkeys should work across subdomains (a parent of the URL's host) |
 | `TASKIEM_REQUIRE_ADMIN_PASSKEYS` | `true` with a public URL | Hold administrators to passkeys ([governance](governance.md#passkeys)) |
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |
