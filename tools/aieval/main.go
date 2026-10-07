@@ -308,10 +308,12 @@ func recall(doc []byte, c Case) (float64, float64, []string) {
 
 // coverage is the share of want that used has, and what it lacks.
 //
-// (An earlier version appended to a slice captured by a closure called in
-// the same return statement that read the slice; with Go 1.26.0 that
-// returned a header to a dead stack-allocated backing array and corrupted
-// the heap. Keep slices built here plainly returned.)
+// (An earlier version returned a slice appended to by a closure that was
+// called, and inlined, twice in the same return statement. Built with Go
+// 1.26.0, the binary corrupted its heap and crashed in the GC on every
+// full run; `go build -gcflags=-m=2` showed both inlined calls sharing one
+// result temporary. A plain function fixed it; a minimal program did not
+// reproduce the crash. Keep this a plain function.)
 func coverage(want []string, used map[string]bool) (float64, []string) {
 	if len(want) == 0 {
 		return 1, nil
