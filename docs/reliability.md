@@ -209,7 +209,7 @@ Every `api` pod serves a public status page. It needs no sign-in and shows no te
 
 **Caching.** Each pod computes the page at most every 15 seconds, and answers carry `Cache-Control: public, max-age=30, stale-while-revalidate=30, stale-if-error=86400` and an ETag, so a CDN in front can serve it during a flood and keep serving the last copy if Taskiem is down. If the database cannot be read, a pod serves the last page it has, marked stale.
 
-**Declaring.** Operators use the CLI (with database access) or the admin API. Both record who posted each update in append-only tables (migration 00116: no update or delete, even by the superuser); `taskiem status list` and `GET /v1/status/admin/incidents` show them. The public page never does.
+**Declaring.** Operators use the CLI (with database access) or the admin API. Both record who posted each update in append-only tables (migration 00123: no update or delete, even by the superuser); `taskiem status list` and `GET /v1/status/admin/incidents` show them. The public page never does.
 
 | CLI | Admin API |
 | --- | --- |
@@ -259,7 +259,7 @@ Spec 15.4: rolling upgrades never stop running workflows, and workers finish or 
 2. **Keeps serving for `TASKIEM_SHUTDOWN_DELAY`** (default 0; the chart sets 10 s), so the Service and ingress take the pod out before it stops listening. Without this, requests routed in the meantime fail.
 3. **Stops taking work.** HTTP servers stop accepting and finish open requests (up to 20 s). Long-lived run streams end. Workers claim nothing new; schedulers stop ticking.
 4. **Drains.** Workers let in-flight steps finish for up to `TASKIEM_WORKER_DRAIN` (30 s). Steps still running then are cancelled.
-5. **Releases leases.** Each worker and scheduler hands back the task, timer and orchestration leases it still holds (`taskiem_release_leases`, migration 00115; `taskiem_leases_released_total`), so another pod takes them at once instead of after the lease expires (60 s for tasks). The lease epoch is kept, so anything the stopping process still tries to write is fenced out. A write step cut off mid-call is reconciled by the next worker before anything is re-sent (decision 0009).
+5. **Releases leases.** Each worker and scheduler hands back the task, timer and orchestration leases it still holds (`taskiem_release_leases`, migration 00122; `taskiem_leases_released_total`), so another pod takes them at once instead of after the lease expires (60 s for tasks). The lease epoch is kept, so anything the stopping process still tries to write is fenced out. A write step cut off mid-call is reconciled by the next worker before anything is re-sent (decision 0009).
 
 The pod's grace period must cover the delay, the drain and a few seconds to release leases: the chart's `shutdown.*` values enforce it (`gracePeriodSeconds` ≥ `delaySeconds` + `workerDrainSeconds` + 10). Tested by `TestShutdownFlipsReadinessFirst` (`cmd/taskiem`) and `TestWorkerDrainsThenReleasesLeases` (`engine/runtime`).
 
