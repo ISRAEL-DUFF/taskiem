@@ -15,7 +15,8 @@ import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
 import { Policies } from "./pages/Policies";
 import { Account, Invitations, Passkeys } from "./pages/Account";
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import { Icon } from "./icons";
 import { ErrorBox, useAction } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
@@ -107,44 +108,87 @@ function SignedIn() {
   const { me, can, logout } = useAuth();
   const onboarding = useOnboarding().data;
   if (!me) return null;
-  const links: [string, string, boolean][] = [
-    // For organisations that signed themselves up, until the checklist is
-    // done or hidden (it stays at /start).
-    ["/start", `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`, !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed],
-    ["/dashboard", "Dashboard", can("run.read")],
-    ["/workflows", "Workflows", can("workflow.read")],
-    ["/templates", "Templates", true],
-    ["/runs", "Runs", can("run.read")],
-    ["/approvals", "Approvals", can("approval.decide") || can("workflow.publish")],
-    ["/policies", "Approval policies", can("workflow.read")],
-    ["/connections", "Connections", can("connection.manage")],
-    ["/catalogue", "Connector catalogue", can("connector.manage") || can("workflow.read")],
-    ["/settings", "Secrets & settings", can("secret.manage") || can("workflow.read")],
-    ["/alerts", "Alerts", can("alert.manage")],
-    ["/audit", "Audit log", can("audit.read")],
-    ["/reports", "Reports", can("audit.read")],
-    ["/members", "Members & keys", can("member.manage")],
-    ["/settings/billing", "Billing", can("billing.manage")],
-    ["/settings/keys", "Encryption keys", can("key.manage")],
+  // Grouped as the sidebar shows them; [path, label, icon, visible].
+  const groups: [string, [string, string, string, boolean][]][] = [
+    [
+      "Build",
+      [
+        // For organisations that signed themselves up, until the checklist is
+        // done or hidden (it stays at /start).
+        ["/start", `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`, "start", !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed],
+        ["/dashboard", "Dashboard", "dashboard", can("run.read")],
+        ["/workflows", "Workflows", "workflows", can("workflow.read")],
+        ["/templates", "Templates", "templates", true],
+        ["/runs", "Runs", "runs", can("run.read")],
+        ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish")],
+      ],
+    ],
+    [
+      "Connect",
+      [
+        ["/connections", "Connections", "connections", can("connection.manage")],
+        ["/catalogue", "Connector catalogue", "catalogue", can("connector.manage") || can("workflow.read")],
+        ["/settings", "Secrets & settings", "settings", can("secret.manage") || can("workflow.read")],
+      ],
+    ],
+    [
+      "Govern",
+      [
+        ["/policies", "Approval policies", "policies", can("workflow.read")],
+        ["/alerts", "Alerts", "alerts", can("alert.manage")],
+        ["/audit", "Audit log", "audit", can("audit.read")],
+        ["/reports", "Reports", "reports", can("audit.read")],
+      ],
+    ],
+    [
+      "Organisation",
+      [
+        ["/members", "Members & keys", "members", can("member.manage")],
+        ["/settings/billing", "Billing", "billing", can("billing.manage")],
+        ["/settings/keys", "Encryption keys", "keys", can("key.manage")],
+      ],
+    ],
   ];
+  const who = me.user?.email ?? "API key";
   return (
     <div className="shell">
       <nav className="nav" aria-label="Main">
-        <div className="brand">Taskiem</div>
-        {links
-          .filter(([, , ok]) => ok)
-          .map(([to, label]) => (
-            <NavLink key={to} to={to}>
-              {label}
-            </NavLink>
-          ))}
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            T
+          </span>
+          Taskiem
+        </div>
+        {groups.map(([section, links]) => {
+          const shown = links.filter(([, , , ok]) => ok);
+          if (shown.length === 0) return null;
+          return (
+            <Fragment key={section}>
+              <div className="section" aria-hidden="true">
+                {section}
+              </div>
+              {shown.map(([to, label, icon]) => (
+                <NavLink key={to} to={to} end={to === "/settings"}>
+                  <Icon name={icon} />
+                  {label}
+                </NavLink>
+              ))}
+            </Fragment>
+          );
+        })}
         <div className="spacer" />
         <div className="who">
-          <NavLink to="/account">{me.user?.email ?? "API key"}</NavLink>
-          <br />
-          {me.roles.join(", ")}
+          <span className="avatar" aria-hidden="true">
+            {who.slice(0, 2)}
+          </span>
+          <div>
+            <NavLink to="/account">{who}</NavLink>
+            <div className="roles">{me.roles.join(", ")}</div>
+          </div>
         </div>
-        <button onClick={() => void logout()}>Sign out</button>
+        <button className="signout" onClick={() => void logout()}>
+          Sign out
+        </button>
       </nav>
       <main className="main">
         <BillingBanner />

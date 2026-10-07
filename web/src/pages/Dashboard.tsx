@@ -154,36 +154,43 @@ function FailureTable({ rows, cols }: { rows: Failure[]; cols: (keyof Failure)[]
   );
 }
 
-/** Stacked bars per day: completed, failed, other. */
+/** Stacked bars per day: completed, failed, other. Day labels are HTML
+ * under the bars so they keep their shape when the chart stretches. */
 function DailyChart({ days }: { days: Day[] }) {
   const max = Math.max(1, ...days.map((d) => d.completed + d.failed + d.other));
   const w = 100 / Math.max(days.length, 1);
   const h = 120;
+  const every = days.length <= 14 ? 1 : Math.ceil(days.length / 10);
   return (
-    <svg className="chart" viewBox={`0 0 100 ${h + 14}`} preserveAspectRatio="none" role="img" aria-label="Runs per day">
-      {days.map((d, i) => {
-        const x = i * w + w * 0.15;
-        const bw = w * 0.7;
-        let y = h;
-        const seg = (n: number, cls: string) => {
-          const sh = (n / max) * h;
-          y -= sh;
-          return n > 0 ? <rect key={cls} className={cls} x={x} y={y} width={bw} height={sh} /> : null;
-        };
-        return (
-          <g key={d.day}>
-            <title>{`${d.day}: ${d.completed} completed, ${d.failed} failed, ${d.other} other`}</title>
-            {seg(d.completed, "bar-ok")}
-            {seg(d.failed, "bar-failed")}
-            {seg(d.other, "bar-other")}
-            {(days.length <= 14 || i % Math.ceil(days.length / 10) === 0) && (
-              <text x={x + bw / 2} y={h + 11} textAnchor="middle" className="chart-label">
-                {d.day.slice(5)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+    <div className="chart-wrap">
+      <svg className="chart" viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" role="img" aria-label="Runs per day">
+        {[0.25, 0.5, 0.75].map((f) => (
+          <line key={f} className="chart-grid" x1={0} x2={100} y1={h * f} y2={h * f} vectorEffect="non-scaling-stroke" />
+        ))}
+        {days.map((d, i) => {
+          const x = i * w + w * 0.2;
+          const bw = w * 0.6;
+          let y = h;
+          const seg = (n: number, cls: string) => {
+            const sh = (n / max) * h;
+            y -= sh;
+            return n > 0 ? <rect key={cls} className={cls} x={x} y={y} width={bw} height={sh} /> : null;
+          };
+          return (
+            <g key={d.day}>
+              <title>{`${d.day}: ${d.completed} completed, ${d.failed} failed, ${d.other} other`}</title>
+              {seg(d.completed, "bar-ok")}
+              {seg(d.failed, "bar-failed")}
+              {seg(d.other, "bar-other")}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="chart-days" aria-hidden="true">
+        {days.map((d, i) => (
+          <span key={d.day}>{i % every === 0 ? d.day.slice(5) : ""}</span>
+        ))}
+      </div>
+    </div>
   );
 }
