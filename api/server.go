@@ -125,6 +125,13 @@ type Server struct {
 	// HSTS is the Strict-Transport-Security value sent on the platform's
 	// own host (TASKIEM_HSTS); empty sends none.
 	HSTS string
+	// Status is the public status page and its admin API (status.go); nil
+	// turns both off.
+	Status *StatusSettings
+	// Draining reports that the process is shutting down: /readyz answers
+	// 503 so load balancers stop sending requests, while those already
+	// sent are still served (docs/reliability.md#graceful-shutdown).
+	Draining func() bool
 
 	code     codeGate                          // tenant code admitted at once (codegate.go)
 	ussd     ussdState                         // USSD channels, sessions and menus (ussd.go)
@@ -144,6 +151,12 @@ func (s *Server) Handler() http.Handler {
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
+	if s.Status != nil && s.Status.Page != nil {
+		// The public status page: no session, no tenant data, cacheable.
+		r.Get("/status", s.Status.Page.HTML)
+		r.Get("/status.json", s.Status.Page.JSON)
+		r.Get("/status/feed.atom", s.Status.Page.Atom)
+	}
 	r.Mount("/git-hooks", s.GitHooks())
 	r.Mount("/scim/v2", s.SCIM())
 	r.Route("/embed", s.embedPages) // the embedded builder's bundle and frame page (embedframe.go)
@@ -171,6 +184,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}
 		r.Post("/billing/webhooks/{provider}", s.billingWebhook) // payment providers (billing.go)
+		r.Route("/status/admin", s.statusAdminRoutes)            // operators' incidents (status.go)
 		// End users of embed apps: their own tokens, CORS (embed.go).
 		r.Route("/embed/{app}", s.embedRoutes)
 		r.Group(func(r chi.Router) {
@@ -349,6 +363,10 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
+	if s.Draining != nil && s.Draining() {
+		writeErr(w, http.StatusServiceUnavailable, "draining")
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 	if err := s.Store.Pool.Ping(ctx); err != nil {

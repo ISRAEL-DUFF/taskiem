@@ -234,7 +234,7 @@ type claim struct {
 
 func claimTasks(t *testing.T, d *dbtest.DB, worker string, n int, lease string) []claim {
 	t.Helper()
-	rows, err := d.App.Query(ctx, `SELECT * FROM taskiem_claim_tasks('connector', $1, $2, $3::interval)`, worker, n, lease)
+	rows, err := d.App.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch FROM taskiem_claim_tasks('connector', $1, $2, $3::interval)`, worker, n, lease)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -151,6 +151,8 @@ func (c *Cron) fire(ctx context.Context, tenant, id uuid.UUID) (bool, error) {
 		c.Logger.Warn("schedule fire skipped: tenant limit", "tenant", tenant, "trigger", id, "scheduled_time", fireAt, "limit", le.Limit, "err", le.Message)
 		telemetry.Ingest.WithLabelValues("schedule", "refused").Inc()
 		fired = false
+	} else if late := c.now().Sub(at).Seconds(); late >= 0 {
+		telemetry.SchedulerLateness.WithLabelValues("schedule").Observe(late)
 	}
 	from := c.now()
 	if at.After(from) {

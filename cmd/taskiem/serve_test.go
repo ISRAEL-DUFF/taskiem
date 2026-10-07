@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,6 +33,10 @@ func freeAddr(t *testing.T) string {
 // server is a running `taskiem serve --role all` on a fresh database.
 type server struct {
 	base, metrics string
+	// stop sends the shutdown signal (it ends serve's context, as SIGTERM
+	// does); wait returns serve's result.
+	stop context.CancelFunc
+	wait func() error
 }
 
 // startServer bootstraps a tenant (admin@smoke.test) and serves every role
@@ -57,15 +62,22 @@ func startServer(t *testing.T) server {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- serve(ctx, []string{"--role", "all"}) }()
+	var once sync.Once
+	var result error
+	wait := func() error {
+		once.Do(func() {
+			select {
+			case result = <-done:
+			case <-time.After(40 * time.Second):
+				result = errors.New("serve did not stop")
+			}
+		})
+		return result
+	}
 	t.Cleanup(func() {
 		cancel()
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Errorf("serve: %v", err)
-			}
-		case <-time.After(40 * time.Second):
-			t.Error("serve did not stop")
+		if err := wait(); err != nil {
+			t.Errorf("serve: %v", err)
 		}
 	})
 	base := "http://" + apiAddr
@@ -83,7 +95,7 @@ func startServer(t *testing.T) server {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return server{base: base, metrics: metricsAddr}
+	return server{base: base, metrics: metricsAddr, stop: cancel, wait: wait}
 }
 
 // call makes an API request and decodes the JSON answer; it fails the test

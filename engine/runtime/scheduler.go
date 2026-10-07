@@ -57,9 +57,16 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	s.defaults()
 	t := time.NewTicker(s.Interval)
 	defer t.Stop()
+	defer s.releaseLeases()
+	mode := "scheduler"
+	if s.SweepOnly {
+		mode = "sweep"
+	}
 	for {
 		if _, err := s.Tick(ctx); err != nil && ctx.Err() == nil {
 			s.Logger.Error("scheduler tick failed", "err", err)
+		} else if err == nil {
+			telemetry.SchedulerTick.WithLabelValues(mode).SetToCurrentTime()
 		}
 		select {
 		case <-ctx.Done():
@@ -67,6 +74,19 @@ func (s *Scheduler) Run(ctx context.Context) error {
 		case <-t.C:
 		}
 	}
+}
+
+// releaseLeases hands back the timer and orchestration leases a tick cut
+// short by shutdown left behind, so another scheduler picks them up at once.
+func (s *Scheduler) releaseLeases() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var n int
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_release_leases($1)`, s.ID).Scan(&n); err != nil {
+		s.Logger.Warn("could not release leases at shutdown; they expire instead", "scheduler", s.ID, "err", err)
+		return
+	}
+	telemetry.LeasesReleased.Add(float64(n))
 }
 
 // Tick does one round of scheduler work.
@@ -113,18 +133,20 @@ func (s *Scheduler) Tick(ctx context.Context) (TickStats, error) {
 }
 
 func (s *Scheduler) fireTimers(ctx context.Context) (int, error) {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT timer_id, tenant_id, run_id, COALESCE(step_id, ''), kind FROM taskiem_claim_due_timers($1, 100)`, s.ID)
+	rows, err := s.Store.Pool.Query(ctx, `SELECT timer_id, tenant_id, run_id, COALESCE(step_id, ''), kind,
+		GREATEST(extract(epoch FROM clock_timestamp() - fire_at), 0)::float8 FROM taskiem_claim_due_timers($1, 100)`, s.ID)
 	if err != nil {
 		return 0, err
 	}
 	type due struct {
 		id, tenant, run uuid.UUID
 		step, kind      string
+		late            float64
 	}
 	var timers []due
 	for rows.Next() {
 		var d due
-		if err := rows.Scan(&d.id, &d.tenant, &d.run, &d.step, &d.kind); err != nil {
+		if err := rows.Scan(&d.id, &d.tenant, &d.run, &d.step, &d.kind, &d.late); err != nil {
 			rows.Close()
 			return 0, err
 		}
@@ -153,6 +175,7 @@ func (s *Scheduler) fireTimers(ctx context.Context) (int, error) {
 				return err
 			}
 			fired++
+			telemetry.SchedulerLateness.WithLabelValues("timer").Observe(d.late)
 			return s.Store.decideInline(ctx, tx, run.ref)
 		})
 		if err != nil {

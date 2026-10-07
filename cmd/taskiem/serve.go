@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,6 +31,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/byok"
+	"github.com/israel-duff/taskiem/engine/canary"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -42,6 +44,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/status"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
 	"github.com/israel-duff/taskiem/engine/webauthn"
@@ -92,6 +95,45 @@ type config struct {
 	// Keys tunes customer keys and the key job (TASKIEM_BYOK_*,
 	// TASKIEM_KEY_*; docs/byok.md).
 	Keys KeysConfig
+	// Shutdown is how the process stops on SIGTERM (docs/reliability.md).
+	Shutdown ShutdownConfig
+	// Status is the public status page and its admin API; Canary the
+	// synthetic end-to-end probe (docs/reliability.md).
+	Status StatusConfig
+	Canary CanaryConfig
+}
+
+// ShutdownConfig orders a graceful stop (spec 15.4): readiness flips at
+// once, the process keeps serving for Delay so load balancers stop sending
+// it traffic, then servers stop accepting work and workers drain in-flight
+// steps for up to WorkerDrain before releasing what they still hold.
+// Delay + WorkerDrain + a few seconds must fit in the pod's grace period.
+type ShutdownConfig struct {
+	Delay       time.Duration // TASKIEM_SHUTDOWN_DELAY, default 0 (the chart sets 10s)
+	WorkerDrain time.Duration // TASKIEM_WORKER_DRAIN, default 30s
+}
+
+func shutdownConfig() (ShutdownConfig, error) {
+	c := ShutdownConfig{WorkerDrain: 30 * time.Second}
+	for _, d := range []struct {
+		name     string
+		into     *time.Duration
+		min, max time.Duration
+	}{
+		{"TASKIEM_SHUTDOWN_DELAY", &c.Delay, 0, 2 * time.Minute},
+		{"TASKIEM_WORKER_DRAIN", &c.WorkerDrain, time.Second, 10 * time.Minute},
+	} {
+		v := os.Getenv(d.name)
+		if v == "" {
+			continue
+		}
+		dur, err := time.ParseDuration(v)
+		if err != nil || dur < d.min || dur > d.max {
+			return c, fmt.Errorf("%s must be a duration between %s and %s, not %q", d.name, d.min, d.max, v)
+		}
+		*d.into = dur
+	}
+	return c, nil
 }
 
 // KeysConfig is how tenant keys and customer keys (BYOK) behave.
@@ -311,6 +353,15 @@ func loadConfig() (config, error) {
 	if c.Keys, err = keysConfig(); err != nil {
 		return c, err
 	}
+	if c.Shutdown, err = shutdownConfig(); err != nil {
+		return c, err
+	}
+	if c.Status, err = statusConfig(); err != nil {
+		return c, err
+	}
+	if c.Canary, err = canaryConfig(); err != nil {
+		return c, err
+	}
 	if c.Cloud, err = cloudConfigFromEnv(); err != nil {
 		return c, err
 	}
@@ -502,6 +553,43 @@ func serve(ctx context.Context, args []string) error {
 	db.RetryWindow = cfg.Cloud.RetryWindow
 
 	is := func(r string) bool { return *role == r || *role == "all" }
+	// Graceful shutdown (spec 15.4, docs/reliability.md): SIGTERM ends ctx;
+	// readiness flips at once, the process keeps serving for the shutdown
+	// delay so load balancers stop routing to it, and only then does runCtx
+	// end, stopping servers and letting workers drain.
+	var draining atomic.Bool
+	runCtx, stopRun := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopRun()
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-runCtx.Done():
+			return
+		}
+		draining.Store(true)
+		telemetry.Draining.Set(1)
+		log.Info("shutting down: not ready; draining", "delay", cfg.Shutdown.Delay.String(), "worker_drain", cfg.Shutdown.WorkerDrain.String())
+		t := time.NewTimer(cfg.Shutdown.Delay)
+		defer t.Stop()
+		select {
+		case <-t.C:
+		case <-runCtx.Done():
+		}
+		stopRun()
+	}()
+	ready := func(w http.ResponseWriter, r *http.Request) {
+		if draining.Load() {
+			http.Error(w, "draining", http.StatusServiceUnavailable)
+			return
+		}
+		pctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := e.pool.Ping(pctx); err != nil {
+			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}
 	alerter, err := cfg.alerter(e, log)
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
@@ -554,7 +642,14 @@ func serve(ctx context.Context, args []string) error {
 		}
 		// Checking a Python step compiles CPython first (seconds): do it now.
 		go func() { _ = sandbox.InitPython() }()
-		srv.Done = ctx.Done()
+		srv.Done = runCtx.Done()
+		srv.Draining = draining.Load
+		if cfg.Status.Page || len(cfg.Status.Tokens) > 0 {
+			srv.Status = &api.StatusSettings{Tokens: cfg.Status.Tokens}
+			if cfg.Status.Page {
+				srv.Status.Page = &status.Handler{Pool: e.pool, PublicURL: cfg.PublicURL, Logger: log, Options: status.Options{Canary: cfg.Status.Canary}}
+			}
+		}
 		if *role == "all" {
 			srv.Ingest = e.hooks() // one listener for a small install
 		}
@@ -582,6 +677,7 @@ func serve(ctx context.Context, args []string) error {
 		// USSD aggregators' callbacks: the fast path (docs/ussd.md).
 		mux.Handle("/channels/ussd/", http.StripPrefix("/channels/ussd", git.USSDHooks()))
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+		mux.HandleFunc("/readyz", ready)
 		tasks = append(tasks, httpTask("edge", cfg.EdgeListen, httpsec.Headers(mux), log))
 	}
 	if is("scheduler") {
@@ -611,6 +707,15 @@ func serve(ctx context.Context, args []string) error {
 				telemetry.KeyChecksFailed.WithLabelValues(by).Inc()
 			}}
 		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, e.remote().Run, keys.Run)
+		if cfg.Canary.On() {
+			// The synthetic end-to-end probe (docs/reliability.md).
+			p := cfg.Canary.prober(log)
+			p.Record = func(ctx context.Context, r canary.Result) error {
+				return status.RecordProbe(ctx, e.pool, r.OK, r.Accept, r.Complete, r.Code())
+			}
+			tasks = append(tasks, func(ctx context.Context) error { return p.Run(ctx, cfg.Canary.Interval) })
+			log.Info("canary on", "interval", cfg.Canary.Interval.String())
+		}
 		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)
@@ -632,7 +737,8 @@ func serve(ctx context.Context, args []string) error {
 		for _, q := range cfg.Queues {
 			w := &runtime.Worker{Store: e.store, Registry: e.registry, Secrets: e.vault, Connections: e.vault,
 				Egress: &egress.Guard{Logger: log, Loopback: loopback}, ID: prefix + strings.TrimSpace(q) + "/" + strconv.Itoa(os.Getpid()),
-				Queue: strings.TrimSpace(q), Pool: cfg.Cloud.WorkerPool, Logger: log}
+				Queue: strings.TrimSpace(q), Pool: cfg.Cloud.WorkerPool, Logger: log,
+				Drain: cfg.Shutdown.WorkerDrain}
 			if w.Queue == "container" {
 				// Container steps (spec 7.5): the sandbox runner and egress proxy.
 				more, err := containerSetup(ctx, w, log)
@@ -651,20 +757,19 @@ func serve(ctx context.Context, args []string) error {
 	metrics := http.NewServeMux()
 	metrics.Handle("/metrics", promhttp.Handler())
 	metrics.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	metrics.HandleFunc("/readyz", ready)
 	tasks = append(tasks, httpTask("metrics", cfg.MetricsListen, metrics, log))
 
 	log.Info("taskiem starting")
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	var wg sync.WaitGroup
 	errs := make(chan error, len(tasks))
 	for _, t := range tasks {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := t(ctx); err != nil {
+			if err := t(runCtx); err != nil {
 				errs <- err
-				cancel() // one role failing stops the process; the supervisor restarts it
+				stopRun() // one role failing stops the process; the supervisor restarts it
 			}
 		}()
 	}

@@ -85,6 +85,9 @@ Usage:
                                      put a tenant on a plan without payment (design partners; audited)
   taskiem pools [assign POOL | unassign] [--tenant TENANT_ID | --plan PLAN] [--force]
                                      list worker pools, or route a tenant or plan to a dedicated pool (audited)
+  taskiem status show|list|open|maintenance|update|resolve|token
+                                     declare incidents and maintenance on the public status page (operators; recorded)
+  taskiem canary setup|probe|run     set up and run the synthetic end-to-end probe (docs/reliability.md)
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 
@@ -152,6 +155,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return connectorCmd(context.Background(), args[1:], stdout)
 	case "catalogue":
 		return catalogueCmd(context.Background(), args[1:], stdout)
+	case "status":
+		return statusCmd(context.Background(), args[1:], stdout)
+	case "canary":
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return canaryCmd(ctx, args[1:], stdout)
 	case "healthcheck":
 		return healthcheck()
 	case "help", "-h", "--help":

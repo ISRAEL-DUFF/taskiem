@@ -11,7 +11,7 @@ import (
 
 func claimCapped(t *testing.T, d *dbtest.DB, worker string, n, tenantCap int) map[uuid.UUID]int {
 	t.Helper()
-	rows, err := d.App.Query(ctx, `SELECT * FROM taskiem_claim_tasks('connector', $1, $2, '60 seconds', $3)`, worker, n, tenantCap)
+	rows, err := d.App.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch FROM taskiem_claim_tasks('connector', $1, $2, '60 seconds', $3)`, worker, n, tenantCap)
 	if err != nil {
 		t.Fatal(err)
 	}

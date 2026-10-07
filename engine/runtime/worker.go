@@ -188,6 +188,24 @@ type claim struct {
 	epoch             int64
 }
 
+// releaseLeases hands back the leases this worker still holds once its
+// executors have stopped (spec 15.4): a step cut off at the end of the
+// drain is claimable at once rather than after its lease expires. The
+// lease epoch is kept, so nothing this process still tries to write lands.
+func (w *Worker) releaseLeases() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var n int
+	if err := w.Store.Pool.QueryRow(ctx, `SELECT taskiem_release_leases($1)`, w.ID).Scan(&n); err != nil {
+		w.Logger.Warn("could not release leases at shutdown; they expire instead", "worker", w.ID, "err", err)
+		return
+	}
+	if n > 0 {
+		telemetry.LeasesReleased.Add(float64(n))
+		w.Logger.Info("released leases at shutdown", "worker", w.ID, "tasks", n)
+	}
+}
+
 // Run claims and executes tasks until ctx ends. One claimer feeds the
 // executors and claims only as many tasks as are free (decision 0002).
 func (w *Worker) Run(ctx context.Context) error {
@@ -215,6 +233,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	// abort provider calls midway and leave outcomes unknown.
 	execCtx, cancelExec := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelExec()
+	defer w.releaseLeases() // after the executors below have stopped
 	drain := w.Drain
 	if drain <= 0 {
 		drain = 30 * time.Second
@@ -310,18 +329,21 @@ func (w *Worker) claim(ctx context.Context, n int) ([]claim, error) {
 	if w.Queue == "container" {
 		tenantCap = w.Store.defaults().ContainerConcurrency
 	}
-	rows, err := w.Store.Pool.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch FROM taskiem_claim_tasks($1, $2, $3, $4::interval, $5, $6)`,
+	rows, err := w.Store.Pool.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch, ready_seconds FROM taskiem_claim_tasks($1, $2, $3, $4::interval, $5, $6)`,
 		w.Queue, w.ID, n, w.Lease.String(), tenantCap, w.Pool)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []claim
+	delay := telemetry.DispatchDelay.WithLabelValues(w.Queue)
 	for rows.Next() {
 		var c claim
-		if err := rows.Scan(&c.task, &c.tenant, &c.run, &c.step, &c.attempt, &c.epoch); err != nil {
+		var waited float64
+		if err := rows.Scan(&c.task, &c.tenant, &c.run, &c.step, &c.attempt, &c.epoch, &waited); err != nil {
 			return nil, err
 		}
+		delay.Observe(waited)
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -488,6 +510,33 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 	return w.finish(ctx, p, &result)
 }
 
+// observeRunStart reports how long the run waited for its first worker
+// step: once per run, when the first step it ever scheduled is claimed for
+// the first time, from the run's first event, both on the database clock.
+func observeRunStart(hist []history.Event, c claim, now time.Time) {
+	if c.attempt != 1 || len(hist) == 0 {
+		return
+	}
+	for _, e := range hist {
+		if e.Type != history.StepScheduled {
+			continue
+		}
+		if e.StepID != c.step || e.Attempt != 1 {
+			return
+		}
+		for _, later := range hist {
+			// Claimed before (a crash, a lease that expired): counted then.
+			if later.StepID == c.step && (later.Type == history.EffectIntent || later.Type == history.StepCompleted || later.Type == history.StepFailed) {
+				return
+			}
+		}
+		if d := now.Sub(hist[0].RecordedAt).Seconds(); d >= 0 {
+			telemetry.RunStart.Observe(d)
+		}
+		return
+	}
+}
+
 func failed(c claim, kind, msg, next string) history.Event {
 	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: kind, Message: msg, Next: next}})
 	return history.Event{Type: history.StepFailed, StepID: c.step, Attempt: c.attempt, Payload: raw}
@@ -506,7 +555,8 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		var wfID uuid.UUID
 		var version int
 		var runSeed string // a fork's inherited seed (fork.go)
-		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, '') FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed); err != nil {
+		var dbNow time.Time
+		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp() FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow); err != nil {
 			return err
 		}
 		def, err := w.Store.definition(ctx, tx, wfID, version)
@@ -522,6 +572,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			return err
 		}
 		p.taint = taint
+		observeRunStart(hist, c, dbNow)
 		found, cancelled := false, false
 		var intents []history.IntentPayload
 		var intentAttempts []int
