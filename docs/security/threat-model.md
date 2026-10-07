@@ -66,8 +66,8 @@ STRIDE per boundary. **Status** is what the code does today. "Self-review" point
 | B1 | Approving your own request; approving without a second factor | Policies forbid the requester; step-up per decision; four-eyes on publishing and policy changes | In place |
 | B2 | Forged SAML assertion (signature wrapping), replay | Signature validation by gosaml2/goxmldsig; single-use request ids; window checks | In place |
 | B2 | Account takeover by linking an IdP identity to an existing account | JIT only within DNS-verified domains; SSO enforcement with an owner break-glass | In place |
-| B3 | Forged or replayed webhook starting a payout | Signature before parsing; deduplication; workflows take money decisions only after the provider's own verification step | In place |
-| B3 | Flooding `/hooks` | Body size limit; soft ingest limits per tenant | Body limit in place. Per-tenant ingest limits are carried gap A4 |
+| B3 | Forged or replayed webhook starting a payout | Signature before parsing; deduplication on signed material (a hash of the body when there is no key); a delivery verified in one environment reaches only that environment's runs | In place (self-review S8, S19) |
+| B3 | Flooding `/hooks` | Body size limit; per-tenant rate limit, created only for tenants that exist and bounded in memory | In place. Soft limits that queue rather than refuse are carried gap A4 |
 | B4 | A push deploying around four-eyes | Git-led publishing still passes validation and the environment's publish policy | In place |
 | B5 | SSRF to cloud metadata or the cluster network | Egress guard on every outbound connection, with the IP pinned against DNS rebinding | In place. Private databases (MySQL, Postgres, SFTP inside a customer network) need a reviewed design: carried gap A4 |
 | B6 | Sandbox escape | WebAssembly isolation; no host functions beyond fetch, logs and declared secrets | In place |

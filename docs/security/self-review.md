@@ -9,7 +9,13 @@ Date: 2026-10-07. This review runs ahead of the external penetration test ([pen-
 
 Two findings were also confirmed against a scratch database: the cross-tenant SSO domain and the global passkey wipe. The rest come from reading the code end to end.
 
-The **Status** column is updated as fixes land. A finding is closed only when its fix has a regression test. The test is named in the fix's commit.
+Every finding marked Fixed has a regression test, named in its commit:
+
+- `Harden ingest, sandboxes, egress, audit and alerts`
+- `Governance hardening: keys act as their owners, Git-led needs a second person`
+- `Identity hardening` (S1–S4, S10, S11, S24–S26).
+
+The whole Go suite, the TypeScript suites and the 9 browser specs pass with all three applied.
 
 It does not replace people-task I3 (an independent internal review, [needs-people.md](../needs-people.md)). It gives that reviewer, and the external testers, a starting list.
 
@@ -19,32 +25,32 @@ It does not replace people-task I3 (an independent internal review, [needs-peopl
 
 | # | Area | Finding | Status |
 | --- | --- | --- | --- |
-| S1 | Tenancy | A tenant could attach a domain to another tenant's SSO connection. Foreign-key checks ignore row-level security, so the domain would pass verification and the attacker would be added to that tenant on first sign-in (JIT membership). | Fixing |
-| S2 | Identity | Adding a passkey or TOTP needed only a session. A stolen session could enrol its own second factor and pass approval step-up. Separately, password sign-in into a tenant where the user is not an admin could be used to enrol a passkey that also signs in to tenants where they are. | Fixing |
-| S3 | Identity, tenancy | Any tenant admin could attach any existing user by email, without consent, and then delete that user's passkeys in every tenant. | Fixing |
-| S4 | Identity | TOTP step-up codes could be guessed without limit. | Fixing |
-| S5 | Secrets | Secret values could reach run history through transport error text: a URL holding an API key in its query, and Slack webhook URLs in alert errors. | Fixing |
-| S6 | Governance | An API key acts as `key:<id>`, so its creator counted as a different person. One admin could author a policy and approve it with their own key, or start a payout run with a key and approve it themselves. | Fixing |
-| S7 | Governance | Git-led sync could put a repository one person controls in charge of a gated environment, which bypassed four-eyes publishing, policy approval and promotion. | Fixing |
-| S8 | Ingest | Connector deliveries verified with one environment's secret could wake runs waiting in another, so a staging test key could forge a production payment confirmation. | Fixing |
-| S9 | Ingest | A cron that never fires (30 February) was stored with a zero next-fire time and refired forever, starving every tenant's schedules. | Fixing |
+| S1 | Tenancy | A tenant could attach a domain to another tenant's SSO connection. Foreign-key checks ignore row-level security, so the domain would pass verification and the attacker would be added to that tenant on first sign-in (JIT membership). | Fixed |
+| S2 | Identity | Adding a passkey or TOTP needed only a session. A stolen session could enrol its own second factor and pass approval step-up. Separately, password sign-in into a tenant where the user is not an admin could be used to enrol a passkey that also signs in to tenants where they are. | Fixed |
+| S3 | Identity, tenancy | Any tenant admin could attach any existing user by email, without consent, and then delete that user's passkeys in every tenant. | Fixed |
+| S4 | Identity | TOTP step-up codes could be guessed without limit. | Fixed |
+| S5 | Secrets | Secret values could reach run history through transport error text: a URL holding an API key in its query, and Slack webhook URLs in alert errors. | Fixed |
+| S6 | Governance | An API key acts as `key:<id>`, so its creator counted as a different person. One admin could author a policy and approve it with their own key, or start a payout run with a key and approve it themselves. | Fixed |
+| S7 | Governance | Git-led sync could put a repository one person controls in charge of a gated environment, which bypassed four-eyes publishing, policy approval and promotion. | Fixed |
+| S8 | Ingest | Connector deliveries verified with one environment's secret could wake runs waiting in another, so a staging test key could forge a production payment confirmation. | Fixed |
+| S9 | Ingest | A cron that never fires (30 February) was stored with a zero next-fire time and refired forever, starving every tenant's schedules. | Fixed |
 
 ### Medium
 
 | # | Area | Finding | Status |
 | --- | --- | --- | --- |
-| S10 | Identity | Open redirect after SSO (`return_to=/%5Cevil.com`) | Fixing |
-| S11 | Identity | Sign-in CSRF: SSO state was not bound to the browser, and password sign-in accepted non-JSON bodies | Fixing |
-| S12 | Governance | API keys outlived their creator's roles and membership, and ignored the creator's environment limit | Fixing |
-| S13 | Governance | Delegations stayed valid after the delegator lost the role | Fixing |
-| S14 | Governance | Business roles that decide approvals could be granted by anyone with `member.manage` | Fixing |
-| S15 | Governance | Several handlers ignored an API key's environment limit | Fixing |
-| S16 | Git | A stored Git token could be sent to a new `api_url`. Old push deliveries could be replayed to roll an environment back. | Fixing |
-| S17 | Secrets | Platform secrets (Git credentials, webhook secrets) were readable by workflows. The secrets API could write the reserved `_identity` and `_alerts` namespaces. | Fixing |
-| S18 | Sandboxes | Code-step CPU and memory limits were set by the workflow's author, with no ceiling. JavaScript `fetch` had no call cap. | Fixing |
-| S19 | Ingest | Connector deliveries with an empty or unsigned deduplication key could be replayed | Fixing |
-| S20 | Ingest | A tenant connector could answer webhooks with HTML on the platform's origin. The edge sent no security headers. | Fixing |
-| S21 | Audit | The application's database role could insert audit rows and move the chain head directly | Fixing |
+| S10 | Identity | Open redirect after SSO (`return_to=/%5Cevil.com`) | Fixed |
+| S11 | Identity | Sign-in CSRF: SSO state was not bound to the browser, and password sign-in accepted non-JSON bodies | Fixed |
+| S12 | Governance | API keys outlived their creator's roles and membership, and ignored the creator's environment limit | Fixed |
+| S13 | Governance | Delegations stayed valid after the delegator lost the role | Fixed |
+| S14 | Governance | Business roles that decide approvals could be granted by anyone with `member.manage` | Fixed |
+| S15 | Governance | Several handlers ignored an API key's environment limit | Fixed |
+| S16 | Git | A stored Git token could be sent to a new `api_url`. Old push deliveries could be replayed to roll an environment back. | Fixed |
+| S17 | Secrets | Platform secrets (Git credentials, webhook secrets) were readable by workflows. The secrets API could write the reserved `_identity` and `_alerts` namespaces. | Fixed |
+| S18 | Sandboxes | Code-step CPU and memory limits were set by the workflow's author, with no ceiling. JavaScript `fetch` had no call cap. | Fixed |
+| S19 | Ingest | Connector deliveries with an empty or unsigned deduplication key could be replayed | Fixed |
+| S20 | Ingest | A tenant connector could answer webhooks with HTML on the platform's origin. The edge sent no security headers. | Fixed |
+| S21 | Audit | The application's database role could insert audit rows and move the chain head directly | Fixed |
 | S22 | Privacy | Personal data inside free text (provider error messages) is not sealed | Open: needs a design for redacting tainted substrings without false positives |
 | S23 | Secrets | Key rotation does not re-wrap personal-data subject keys. The pseudonymisation key is tied to tenant key v1. | Open: planned with BYOK (spec 14.1) |
 
@@ -52,15 +58,15 @@ It does not replace people-task I3 (an independent internal review, [needs-peopl
 
 | # | Finding | Status |
 | --- | --- | --- |
-| S24 | Suspended tenants' and users' sessions and API keys kept working | Fixing |
-| S25 | Sign-in and ingest rate-limiter maps grew without bound. Rate limiting was per IP only. | Fixing |
-| S26 | User enumeration through adding members, and unverified SSO domain claims blocking the real owner | Fixing |
-| S27 | Race that could leave a tenant without an owner | Fixing |
-| S28 | Runs could pin a deprecated version in an ungated production environment | Fixing |
-| S29 | The compliance chain report checked anchor signatures but not the chain against them. The anchorer signed the stored head without recomputing it. | Fixing |
-| S30 | Retention purges were not audited | Fixing |
-| S31 | Egress blocklist missed 6to4, Teredo and IPv4-compatible IPv6 ranges | Fixing |
-| S32 | The PostgreSQL connector did not verify server certificates by default | Fixing |
+| S24 | Suspended tenants' and users' sessions and API keys kept working | Fixed |
+| S25 | Sign-in and ingest rate-limiter maps grew without bound. Rate limiting was per IP only. | Fixed |
+| S26 | User enumeration through adding members, and unverified SSO domain claims blocking the real owner | Fixed |
+| S27 | Race that could leave a tenant without an owner | Fixed |
+| S28 | Runs could pin a deprecated version in an ungated production environment | Fixed |
+| S29 | The compliance chain report checked anchor signatures but not the chain against them. The anchorer signed the stored head without recomputing it. | Fixed |
+| S30 | Retention purges were not audited | Fixed |
+| S31 | Egress blocklist missed 6to4, Teredo and IPv4-compatible IPv6 ranges | Fixed |
+| S32 | The PostgreSQL connector did not verify server certificates by default | Fixed |
 | S33 | The encryption context binds a secret to its id but not to its environment and name | Open, low: needs database write access to exploit |
 | S34 | Tenant code (flow compile, Python checks) runs in the API process with no concurrency limit. Several in-memory caches never evict. | Open, low |
 | S35 | Passkey step-up is not bound to the specific approval. The session token is also returned in the sign-in body. No HSTS header. | Open, informational |
@@ -114,3 +120,16 @@ These hold today. Testers should still try them.
   - Anchors are Ed25519-signed and append-only.
   - Exports verify offline.
   - Revealing personal data needs a permission and is audited.
+
+## What the fixes left open
+
+These are known residuals, carried to the next round:
+
+- **Invitations.** Admins cannot yet list or cancel pending invitations, and invitees cannot decline one. Someone with an account but no membership anywhere cannot sign in to accept.
+- **Git-led connections.**
+  - A connection set up before four-eyes was turned on, or before its environment was gated, is not re-reviewed.
+  - On an ungated environment with four-eyes off, one `git.manage` holder can still connect a repository in Git-led mode. That follows the tenant's own settings.
+  - Pending connection requests are not shown in the web app yet. They are available through the API.
+- **Signals.** Signals are matched by environment, not by connection. Signal steps do not name a connection in wd/v1.
+- **SAML sign-in** now needs HTTPS or localhost. The browser-binding cookie must be `SameSite=None`, and browsers accept that only on a `Secure` cookie.
+- **PostgreSQL connections.** Connections with no `sslmode` now verify the server certificate. A server whose certificate chains to a private CA needs `sslmode` set explicitly.
