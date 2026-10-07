@@ -15,7 +15,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Cloud | P4-3 | Nigeria-region production cloud: HA Postgres with synchronous standby, PITR, fixed egress IPs; workers split by queue, dedicated pools, read replicas | 2.3, 15.4 | Planned; needs people (infrastructure, D-items) |
 | Reliability | P4-4 | 99.9% SLO with on-call, status page, incident process | 15.3 | Planned; needs people |
 | Enterprise | P4-5 | BYOK (the `byok` plan feature exists; the key path does not), dedicated single-tenant deployments, white-label tier (built in Phase 3, C2) | 13.4, 14.1 | Planned |
-| Ecosystem | P4-6 | Public connector SDK and a submission review process for third-party connectors | 6 | Planned |
+| Ecosystem | P4-6 | Public connector SDK and a submission review process for third-party connectors | 6 | **Done** (code; [what exists](#p4-6-connector-sdk-and-catalogue)); publisher agreement, reviewers and review SLA need people (P4-E1 to P4-E3) |
 | Docs | P4-7 | Public docs site, API reference, connector SDK guide | — | Planned |
 | Trust | P4-8 | Bug bounty, security page, ISO 27001 and SOC 2 Type II preparation | 14.4 | Needs people |
 | Legal | P4-9 | Counsel IP review, trademark registration, terms of service, DPA under the NDPA | — | Needs people |
@@ -67,3 +67,29 @@ What is left in onboarding:
 - **Cleanup of unconfirmed tenants** (suspend or delete after N days) waits for the abuse policy.
 - **WhatsApp as the entry point** (go-to-market step 2): signing up from WhatsApp, rather than linking a number after a web signup, is not built.
 - A connection test before the first run (`auth.test` in manifests) is not called by the guide yet; a wrong key shows as a failed step on the test run.
+
+## P4-6: connector SDK and catalogue
+
+Done 7 October 2026. Developer guide: [connector SDK](connector-sdk.md); publisher, installer and reviewer guide with the review checklist: [connector submissions](connector-submissions.md); design: [decision 0020](decisions/0020-connector-catalogue.md); threats: boundary B18 in the [threat model](security/threat-model.md).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| SDK commands | `taskiem connector init` (scaffolds from the example, under `x_<name>` or `p_<publisher>_<name>`, with fixtures and cases), `build`, `validate` (strict lint and module inspection), `test` (conformance in the sandbox), `check`, `push`; `keygen`, `package`, `verify` for the catalogue | `cmd/taskiem/connectorcmd.go`, `cmd/taskiem/connectorpkg.go`, `examples/examples.go` |
+| Strict lint | Classes honest (a read named like a change is an error; unsafe writes warned), hosts declared, https, no IPs, wildcards or private names in the catalogue, personal fields by name must be under `pii`, verified triggers, namespace | `engine/catalogue/lint.go` |
+| Conformance kit | Cases over recorded exchanges in the built-in fixture format (`connectors/internal/fixture` aliases it), replayed against the compiled module in the sandbox with every other host refused; reports uncovered actions, idempotent keys never sent, reads that POST, and schema drift; the example ships six cases | `engine/conntest`, `examples/wasm-connector/testdata` |
+| Package format | `taskiem-connector-package/v1`: manifest, module, inline suite, licence, attestation; SHA-256 digest over the content; Ed25519 publisher signature over the digest, as audit anchors | `engine/connpkg` |
+| Publishers | Namespaces `p_<slug>_` per tenant, reserved words refused, unique; pending until an operator verifies; key rotation; suspension stops every version | migration 00105, `api/catalogue.go` |
+| Submissions and checks | Signature, manifest, module (imports, export, memory, size, loads), licence, attestation, hosts resolve to public addresses only, semver rule 8 against published versions, conformance passes with full coverage; stored as `checks_failed` or `in_review` with the report and a history | `engine/catalogue/checks.go`, migration 00106 |
+| Review | Reviewer list; four eyes in the database (listed, not the submitter, not a member of the publisher), a note, the eight-item checklist; only definer functions approve or reject; content immutable and states forward-only by trigger, even for the superuser; the publisher publishes, withdraws, revokes | migration 00106, `cmd/taskiem/cataloguecmd.go` |
+| Catalogue and installs | Browse published versions (publisher, hosts, classes, personal fields, licence, digest); install a pinned version per major with consent to hosts and writes; upgrade diff (hosts, actions, writes, classes, fields, personal data) with re-consent when they widen; uninstall; all audited with the digest; cross-tenant reads only through definer functions; the engine loads installs through them, so drift monitoring applies | migration 00107, `api/catalogue.go`, `engine/wasmconn/source.go` |
+| Revocation | Publisher or reviewer revokes with a reason; new steps stop using the version at once; every installing tenant alerted on all channels and audited | `engine/catalogue/revoke.go`, `engine/alerts.Notify` |
+| Web | Connector catalogue page: browse, install with a consent dialog, installed versions with state and revocation reason, upgrade with the diff | `web/src/pages/Catalogue.tsx`, `web/src/lib/catalogue.ts` |
+| Tests | Lint rules; diff, consent and semver; every automated check failing on its own (tampered, foreign namespace, private and metadata hosts, licence, attestation, coverage, junk module, size); signing and tampering; the kit against the example in the sandbox and a misbehaving native connector; end to end through the API (namespace, verification, checks, refused self-approval and insider review, publication, isolation, install with consent, a run with drift recorded for the installer, upgrade with re-consent, revocation alerting once and stopping use); the CLI from `init` to a verified package, and the operator commands; the browser test installs a seeded connector | `engine/catalogue/catalogue_test.go`, `engine/connpkg/connpkg_test.go`, `engine/conntest/conntest_test.go`, `api/catalogue_test.go`, `cmd/taskiem/cataloguecmd_test.go`, `web/src/lib/catalogue.test.ts`, `web/e2e/catalogue.spec.ts` |
+
+What is left in the ecosystem:
+
+- **People** (needs people P4-E1 to P4-E3): the publisher agreement and terms (liability, support, takedown, licensing of proprietary connectors), who reviews and how publishers are verified, and the review service level.
+- **An operator console**: reviews run from the CLI with database access and a reviewer identity asserted with `--as` (checked against the list and the publisher's members). A web console would need operator sign-in (SSO).
+- **A publisher web page**: publishers use the API and CLI; the web app has the installer's side.
+- **Hardening**: running submission checks in a separate worker rather than the API process; re-checking published versions when the lint tightens; Taskiem countersignatures for packages distributed outside the platform.
+- Paid connectors, ratings and usage statistics for publishers.

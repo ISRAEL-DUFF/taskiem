@@ -24,6 +24,10 @@ These use `$TASKIEM_URL` (default `http://localhost:8080`) and an API key in `$T
 
 Deploy publishes to every environment not gated on another; `promote` carries a version into a gated one.
 
+## Connectors and the catalogue
+
+`taskiem connector init|build|validate|test|check|push` write, test and upload your own WebAssembly connectors; `keygen|package|verify|publisher|submit|submissions|publish|withdraw|revoke` take one through the public catalogue ([connector SDK](connector-sdk.md), [connector submissions](connector-submissions.md)). Operators review submissions, verify publishers and revoke versions with `taskiem catalogue reviewers|publishers|queue|show|review|revoke` (database access; audited). `taskiem connector` and `taskiem catalogue` without arguments print their usage.
+
 ## Local development
 
 `taskiem dev` runs every engine role in one process with the web app (when `web/dist` is built) and watches a directory:
