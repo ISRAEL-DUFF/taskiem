@@ -70,6 +70,9 @@ type Principal struct {
 	Roles       []string
 	Permissions map[string]bool
 	Environment string // API keys may be limited to one environment
+	// KeyOwner is the person an API key belongs to: it acts within their
+	// current permissions, and counts as them for four-eyes.
+	KeyOwner uuid.UUID
 	// AuthMethod is how the session signed in: password, passkey or sso.
 	AuthMethod string
 	// EnrolOnly marks a password session of an administrator held to
@@ -85,6 +88,14 @@ func (p *Principal) Actor() string {
 		return "key:" + p.KeyID.String()
 	}
 	return p.UserID.String()
+}
+
+// Human is the person behind the caller: the user, or an API key's owner.
+func (p *Principal) Human() uuid.UUID {
+	if p.KeyID != uuid.Nil {
+		return p.KeyOwner
+	}
+	return p.UserID
 }
 
 func (p *Principal) ActorType() string {
@@ -195,14 +206,30 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		var p Principal
 		var perms []string
 		var env *string
-		err := s.Store.Pool.QueryRow(ctx, `SELECT key_id, tenant_id, permissions, environment FROM taskiem_auth_api_key($1)`, hashToken(tok)).
-			Scan(&p.KeyID, &p.TenantID, &perms, &env)
+		var owner *uuid.UUID
+		err := s.Store.Pool.QueryRow(ctx, `SELECT key_id, tenant_id, permissions, environment, owner_id FROM taskiem_auth_api_key($1)`, hashToken(tok)).
+			Scan(&p.KeyID, &p.TenantID, &perms, &env, &owner)
 		if err != nil {
 			return nil, err
 		}
+		if owner == nil {
+			return nil, errors.New("api key has no owner")
+		}
+		// A key acts within what its owner may do now: it loses whatever
+		// they lose, and stops when they leave the tenant.
+		p.KeyOwner = *owner
+		held := Principal{TenantID: p.TenantID, UserID: p.KeyOwner, Permissions: map[string]bool{}}
+		if err := s.loadRoles(ctx, &held); err != nil {
+			return nil, err
+		}
+		if len(held.Roles) == 0 || !s.userActive(ctx, p.TenantID, p.KeyOwner) {
+			return nil, errors.New("api key owner is no longer a member")
+		}
 		p.Permissions = map[string]bool{}
 		for _, x := range perms {
-			p.Permissions[x] = true
+			if held.Permissions[x] {
+				p.Permissions[x] = true
+			}
 		}
 		if env != nil {
 			p.Environment = *env
@@ -225,6 +252,15 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 	}
 	p.EnrolOnly = s.RequireAdminPasskeys && p.AuthMethod == "password" && isAdmin(p.Permissions)
 	return &p, nil
+}
+
+// userActive reports whether a member's account is enabled.
+func (s *Server) userActive(ctx context.Context, tenant, user uuid.UUID) bool {
+	var status string
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status FROM users WHERE id = $1`, user).Scan(&status)
+	})
+	return err == nil && status == "active"
 }
 
 // loadRoles fills a user principal's roles and permissions.
@@ -536,16 +572,23 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: name and permissions are required", errBadRequest))
 		return
 	}
+	// A key made with a key limited to one environment is limited to it too.
+	env, err := keyEnvironment(p, req.Environment)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	req.Environment = env
 	days := req.ExpiresDays
 	if days <= 0 || days > 365 {
 		days = 90
 	}
 	key := apiKeyPrefix + newToken()
 	id := uuid.Must(uuid.NewV7())
-	err := s.tx(r, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(r.Context(), `INSERT INTO api_keys (id, tenant_id, name, key_hash, prefix, permissions, environment, created_by, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, now() + make_interval(days => $9))`,
-			id, p.TenantID, req.Name, hashToken(key), key[:len(apiKeyPrefix)+6], req.Permissions, req.Environment, p.Actor(), days); err != nil {
+	err = s.tx(r, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `INSERT INTO api_keys (id, tenant_id, name, key_hash, prefix, permissions, environment, created_by, owner_id, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, now() + make_interval(days => $10))`,
+			id, p.TenantID, req.Name, hashToken(key), key[:len(apiKeyPrefix)+6], req.Permissions, req.Environment, p.Actor(), p.Human(), days); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "api_key.create", id.String(), map[string]any{"permissions": req.Permissions, "environment": req.Environment})
@@ -555,6 +598,18 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "key": key, "expires_days": days})
+}
+
+// keyEnvironment is the environment a new key is limited to: a caller
+// limited to one environment cannot make a key reaching further.
+func keyEnvironment(p *Principal, requested string) (string, error) {
+	switch {
+	case p.Environment == "":
+		return requested, nil
+	case requested == "" || requested == p.Environment:
+		return p.Environment, nil
+	}
+	return "", fmt.Errorf("%w: this key is limited to %s", errForbidden, p.Environment)
 }
 
 func (s *Server) listKeys(w http.ResponseWriter, r *http.Request) {

@@ -4,7 +4,7 @@ A tenant starts with `dev` and `prod`. Each environment has its own secrets, con
 
 ## Staging
 
-Add an environment under **Secrets & settings → Environments** (`POST /v1/environments`, `secret.manage`) and choose how it takes versions:
+Add an environment under **Secrets & settings → Environments** (`POST /v1/environments`, `workflow.publish`) and choose how it takes versions:
 
 - **When published** (ungated): publishing a version deploys it here, with its triggers. A new ungated environment starts with every workflow's published version.
 - **By promotion from another environment** (gated): only a version running in the named environment can reach it. Gating `prod` on `staging` gives the usual path: publish → `dev` and `staging` → test there → promote to `prod`.
@@ -25,3 +25,5 @@ The workflow page shows the version each environment runs, with **Promote** wher
 - A key limited to one environment can promote only into it.
 - An environment connected to Git in Git-led mode deploys from its branch, not by promotion; Git review is its gate. Gates cannot form a circle.
 - Changing a gate changes nothing that is running; it applies to the next publish or promotion.
+- Adding a gate needs `workflow.publish`; lifting a gate or pointing it at another environment, which lets publishes reach the environment directly, needs an owner. Keys limited to one environment can do neither.
+- Outside `dev`, a run of an ungated environment can pin a version other than the deployed one only for someone with `workflow.publish`.

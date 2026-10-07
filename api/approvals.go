@@ -36,7 +36,8 @@ type approvalItem struct {
 }
 
 // listApprovals is the caller's inbox: open approvals for a role they hold
-// (or naming no role) that they have not decided yet. Approvers see the
+// (or naming no role, or delegated to them by someone who still holds it)
+// that they have not decided yet. Approvers see the
 // subject opened: it is what they are deciding on, and what is recorded
 // with their decision.
 func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
@@ -54,11 +55,13 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 				a.level + 1, COALESCE(jsonb_array_length(a.levels), 1), a.step_up, a.policy,
 				CASE WHEN a.role IS NULL OR a.role = ANY ($1) THEN NULL ELSE
 				  (SELECT u.email FROM delegations g JOIN users u ON u.id = g.from_user WHERE g.to_user = $2 AND a.role = ANY (g.roles)
-				     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now() ORDER BY g.created_at LIMIT 1) END,
+				     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
+				     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = a.role) ORDER BY g.created_at LIMIT 1) END,
 				a.requested_at, a.timeout_at, a.subject
 			FROM approvals a JOIN runs r ON r.id = a.run_id JOIN workflows w ON w.id = r.workflow_id
 			WHERE a.status = 'open' AND (a.role IS NULL OR a.role = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
-			    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()))
+			    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
+			    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = a.role)))
 			  AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.user_id = $2)
 			ORDER BY a.requested_at`, p.Roles, p.UserID)
 		if err != nil {

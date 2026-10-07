@@ -26,6 +26,29 @@ func envParam(r *http.Request, v string) (string, error) {
 	return environment(principalFrom(r.Context()), v)
 }
 
+// secretEnv is an environment the secrets API may touch: a tenant
+// environment in the caller's scope, never a reserved one (_identity, _git,
+// _alerts), which hold the platform's own secrets.
+func secretEnv(r *http.Request, v string) (string, error) {
+	env, err := envParam(r, v)
+	if err == nil && !envNameRe.MatchString(env) {
+		err = fmt.Errorf("%w: %q is not an environment secrets can be written to", errBadRequest, env)
+	}
+	return env, err
+}
+
+// tenantWide refuses API keys limited to one environment on routes whose
+// effect reaches every environment.
+func (s *Server) tenantWide(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p := principalFrom(r.Context()); p.Environment != "" {
+			writeErr(w, http.StatusForbidden, "this key is limited to "+p.Environment+"; this reaches every environment")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // --- connections ---
 
 type connectionInfo struct {
@@ -41,8 +64,10 @@ type connectionInfo struct {
 
 func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	var out []connectionInfo
+	only := principalFrom(r.Context()).Environment // a key limited to one environment sees only it
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT id, environment, connector, name, auth_type, status, expires_at, created_at FROM connections ORDER BY environment, connector, name`)
+		rows, err := tx.Query(r.Context(), `SELECT id, environment, connector, name, auth_type, status, expires_at, created_at FROM connections
+			WHERE $1 = '' OR environment = $1 ORDER BY environment, connector, name`, only)
 		if err != nil {
 			return err
 		}
@@ -126,8 +151,10 @@ func (s *Server) listSecrets(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt   time.Time `json:"updated_at"`
 	}
 	var out []secret
+	only := principalFrom(r.Context()).Environment
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT environment, name, created_by, updated_at FROM secrets WHERE name IS NOT NULL AND environment NOT LIKE '\_%' ORDER BY environment, name`)
+		rows, err := tx.Query(r.Context(), `SELECT environment, name, created_by, updated_at FROM secrets WHERE name IS NOT NULL AND environment NOT LIKE '\_%'
+			AND ($1 = '' OR environment = $1) ORDER BY environment, name`, only)
 		if err != nil {
 			return err
 		}
@@ -142,7 +169,7 @@ func (s *Server) listSecrets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
-	env, err := envParam(r, chi.URLParam(r, "env"))
+	env, err := secretEnv(r, chi.URLParam(r, "env"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -168,13 +195,18 @@ func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteSecret(w http.ResponseWriter, r *http.Request) {
-	env, err := envParam(r, chi.URLParam(r, "env"))
+	env, err := secretEnv(r, chi.URLParam(r, "env"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	name := chi.URLParam(r, "name")
+	if !nameRe.MatchString(name) {
+		s.fail(w, r, fmt.Errorf("%w: secret names are letters, digits and _", errBadRequest))
+		return
+	}
 	p := principalFrom(r.Context())
-	if err := s.Vault.Delete(r.Context(), p.TenantID, env, chi.URLParam(r, "name"), p.Actor()); err != nil {
+	if err := s.Vault.Delete(r.Context(), p.TenantID, env, name, p.Actor()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -191,8 +223,9 @@ func (s *Server) listVariables(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt   time.Time       `json:"updated_at"`
 	}
 	var out []variable
+	only := principalFrom(r.Context()).Environment
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT environment, name, value, updated_at FROM variables ORDER BY environment, name`)
+		rows, err := tx.Query(r.Context(), `SELECT environment, name, value, updated_at FROM variables WHERE $1 = '' OR environment = $1 ORDER BY environment, name`, only)
 		if err != nil {
 			return err
 		}

@@ -98,6 +98,9 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 				return err
 			} else if gated && deployed != version {
 				return fmt.Errorf("%w: %s runs only the version promoted to it (%d)", errConflict, env, deployed)
+			} else if deployed != version && env != "dev" && !p.Can(PermWorkflowPublish) {
+				// Pinning another version outside dev is a deploy of sorts.
+				return fmt.Errorf("%w: %s runs version %d; running another takes %s", errForbidden, env, deployed, PermWorkflowPublish)
 			}
 		}
 		var state string

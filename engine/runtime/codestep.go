@@ -50,7 +50,7 @@ func (w *Worker) runCode(ctx context.Context, p *plan, input any) (sandbox.Resul
 	}
 	secrets := map[string]string{}
 	for _, name := range cfg.Secrets {
-		v, err := w.Secrets.Get(ctx, p.c.tenant, p.env, name)
+		v, err := w.secret(ctx, p, name)
 		if err != nil {
 			return sandbox.Result{}, fmt.Errorf("secret %q: %w: %w", name, err, effects.ErrFatal)
 		}

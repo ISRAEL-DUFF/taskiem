@@ -34,7 +34,7 @@ The step names it: `{"type": "approval", "config": {"policy": "high_value", "sub
 
 ## Delegation
 
-A member can hand approval roles they hold to a colleague for up to 90 days, with a reason (`POST /v1/delegations`, or Approvals → Delegations). The colleague sees those approvals in their inbox marked "covering for …". A vote under a delegation records both people; maker-checker applies to both, and the person delegating cannot also vote on the same level. The delegator or a member admin can revoke it. Every delegation, revocation and decision is audited.
+A member can hand approval roles they hold to a colleague for up to 90 days, with a reason (`POST /v1/delegations`, or Approvals → Delegations). The colleague sees those approvals in their inbox marked "covering for …". A vote under a delegation records both people; maker-checker applies to both, and the person delegating cannot also vote on the same level. The delegator or a member admin can revoke it. A delegation counts only while the delegator still holds the role: taking the role from them (`DELETE /v1/members/{id}/roles/{role}`) ends their delegations of it, and a role removed any other way (SCIM) stops them counting at once. Every delegation, revocation and decision is audited.
 
 ## Step-up with an authenticator app
 
@@ -68,6 +68,18 @@ An identity provider (Okta, Microsoft Entra ID, others) keeps members in step wi
 
 Besides the built-in roles, owners and admins define roles as named sets of permissions (Members → Roles, `PUT /v1/roles/{name}`). No one can create, widen, grant or take away a role carrying a permission they do not hold; this also applies to built-in roles. A role someone holds cannot be deleted. Narrowing a role takes effect on its members' next request.
 
+**Business roles decide who approves.** A role with no permissions of its own (`credit_officer`, say), or a custom role that an approval step or policy names, decides who can approve money. Granting or taking one away (by hand, by SSO group mapping or by SCIM mapping) also needs `approval.decide`, so an admin without it cannot make themselves or a friend a credit officer. Turning a name members already hold into a custom role (`PUT /v1/roles/{name}`) gives them its permissions, so it needs `member.manage` and the standing to grant that role.
+
+**Owners.** A tenant keeps at least one owner; two owners revoking each other at the same moment leave one.
+
+## API keys
+
+An API key belongs to the person who made it (`POST /v1/api-keys`). It acts with its own permissions **and** within its owner's current ones: when the owner loses a permission the key loses it at once, and when the owner leaves the tenant or their account is disabled, the key stops working. For four-eyes and maker-checker a key *is* its owner: a policy or version written, a run started, or a version published or deployed with a key counts as the owner's, and API keys never approve (publishing, policies, Git-led connections, approvals). A key made with a key limited to one environment is limited to it too.
+
+A key limited to one environment (`environment` when created) works only there: secrets, variables and connections of other environments are neither listed nor changed, and actions that reach every environment are refused (`403`): publishing, creating environments or changing gates, Git connections and syncs, policies, members and roles, erasure, audit and reports.
+
+Runs outside `dev` use the version deployed in their environment; pinning another (`version` on `POST /v1/workflows/{id}/runs`) needs `workflow.publish`.
+
 ## Four-eyes on change
 
 Owners turn these on under **Secrets & settings → Four-eyes** (`PUT /v1/governance`); every change is audited with its before and after.
@@ -77,4 +89,6 @@ Owners turn these on under **Secrets & settings → Four-eyes** (`PUT /v1/govern
 | Publishing needs a second publisher | Publish returns `202 pending_approval` and opens a publish request. Another member with `workflow.publish`, who neither asked nor wrote the version, publishes or rejects it (Approvals → Publishing to review) |
 | A new policy version needs a second person | A saved policy version is `pending` until someone other than its author approves it; the previous version stays active meanwhile |
 
-Git-led environments publish from merged commits: the repository's branch protection and review are the second pair of eyes there.
+The second person is a person, not an API key, and not the one behind the key that wrote the change.
+
+Git-led environments publish from merged commits: the repository's branch protection and review are the second pair of eyes there. Because of that, with either setting on (or for a gated environment), **connecting a repository in Git-led mode, switching to it, or pointing a Git-led connection at another provider, host, repository, branch or path needs a second person too** (see [Git](git.md)).

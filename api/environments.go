@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -208,7 +209,9 @@ func (s *Server) createEnvironment(w http.ResponseWriter, r *http.Request) {
 }
 
 // putEnvironment gates an environment on another, or lifts the gate. What
-// it runs does not change until the next publish or promotion.
+// it runs does not change until the next publish or promotion. Adding a
+// gate takes workflow.publish; lifting or moving one, which lets publishes
+// reach the environment directly, takes an owner.
 func (s *Server) putEnvironment(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "env")
 	var req struct {
@@ -218,11 +221,15 @@ func (s *Server) putEnvironment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	p := principalFrom(r.Context())
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		var before *string
 		if err := tx.QueryRow(ctx, `SELECT promotion_from FROM environments WHERE name = $1 FOR UPDATE`, name).Scan(&before); err != nil {
 			return err
+		}
+		if before != nil && *before != req.PromotionFrom && !slices.Contains(p.Roles, "owner") {
+			return fmt.Errorf("%w: only an owner lifts or moves the gate on %s", errForbidden, name)
 		}
 		if err := checkPromotionFrom(ctx, tx, name, req.PromotionFrom); err != nil {
 			return err
@@ -287,7 +294,7 @@ func (s *Server) promote(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("%w: %s deploys from Git: merge to its branch instead", errConflict, req.To)
 		}
 		var deployedBy *string
-		if err := tx.QueryRow(ctx, `SELECT version, deployed_by FROM deployments WHERE workflow_id = $1 AND environment = $2`, wf, req.From).Scan(&v, &deployedBy); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT version, taskiem_actor_human(deployed_by) FROM deployments WHERE workflow_id = $1 AND environment = $2`, wf, req.From).Scan(&v, &deployedBy); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return fmt.Errorf("%w: nothing is deployed in %s", errConflict, req.From)
 			}
@@ -307,14 +314,15 @@ func (s *Server) promote(w http.ResponseWriter, r *http.Request) {
 		}
 		var def []byte
 		var author *string
-		if err := tx.QueryRow(ctx, `SELECT definition, created_by FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&def, &author); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT definition, taskiem_actor_human(created_by) FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&def, &author); err != nil {
 			return err
 		}
 		if g.FourEyesPublish {
 			if p.UserID == uuid.Nil {
 				return fmt.Errorf("%w: with four-eyes publishing, a person promotes", errForbidden)
 			}
-			if (author != nil && *author == p.Actor()) || (deployedBy != nil && *deployedBy == p.Actor()) {
+			// Authors and deployers count as the people behind any API key.
+			if me := p.UserID.String(); (author != nil && *author == me) || (deployedBy != nil && *deployedBy == me) {
 				return fmt.Errorf("%w: promotion needs a second person: not the version's author, nor whoever deployed it to %s", errForbidden, req.From)
 			}
 		}

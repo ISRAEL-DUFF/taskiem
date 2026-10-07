@@ -40,6 +40,24 @@ type Secrets interface {
 	Get(ctx context.Context, tenant uuid.UUID, environment, name string) (string, error)
 }
 
+// ReservedSecret reports whether a secret name belongs to the platform, not
+// to workflows: Git sync's credentials and webhook secret (kept in their own
+// environment since migration 00028, refused here too), and webhook
+// triggers' keys ("webhook_" plus the WD id, so "webhook_wf_..."), which
+// tenants set but only deliveries are verified with. A workflow naming one
+// fails rather than reading it.
+func ReservedSecret(name string) bool {
+	return name == "git_credentials" || name == "git_webhook_secret" || strings.HasPrefix(name, "webhook_wf_")
+}
+
+// secret reads a secret a workflow names.
+func (w *Worker) secret(ctx context.Context, p *plan, name string) (string, error) {
+	if ReservedSecret(name) {
+		return "", fmt.Errorf("secret %q is reserved for the platform: %w", name, effects.ErrFatal)
+	}
+	return w.Secrets.Get(ctx, p.c.tenant, p.env, name)
+}
+
 // MapSecrets is an in-memory Secrets for development and tests.
 type MapSecrets map[string]string
 
@@ -893,7 +911,7 @@ func (w *Worker) resolveSecrets(ctx context.Context, p *plan) (any, error) {
 	}
 	vals := map[string]any{}
 	for n := range names {
-		v, err := w.Secrets.Get(ctx, p.c.tenant, p.env, n)
+		v, err := w.secret(ctx, p, n)
 		if err != nil {
 			return nil, err
 		}

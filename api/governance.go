@@ -225,16 +225,21 @@ func (s *Server) decidePolicy(approve bool) http.HandlerFunc {
 			return
 		}
 		p := principalFrom(r.Context())
+		if p.UserID == uuid.Nil {
+			writeErr(w, http.StatusForbidden, "policy changes are approved by people, not API keys")
+			return
+		}
 		err = s.tx(r, func(tx pgx.Tx) error {
 			ctx := r.Context()
 			var state, author string
-			if err := tx.QueryRow(ctx, `SELECT state, created_by FROM approval_policies WHERE name = $1 AND version = $2 FOR UPDATE`, name, v).Scan(&state, &author); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT state, taskiem_actor_human(created_by) FROM approval_policies WHERE name = $1 AND version = $2 FOR UPDATE`, name, v).Scan(&state, &author); err != nil {
 				return err
 			}
 			if state != "pending" {
 				return fmt.Errorf("%w: version %d is %s", errConflict, v, state)
 			}
-			if author == p.Actor() {
+			// The author is the person behind it, through any API key.
+			if author == p.UserID.String() {
 				return fmt.Errorf("%w: a policy change needs someone other than its author to approve it", errForbidden)
 			}
 			next := "rejected"
@@ -622,7 +627,7 @@ func (s *Server) decidePublish(approve bool) http.HandlerFunc {
 			var requester uuid.UUID
 			var status string
 			var author *string
-			if err := tx.QueryRow(ctx, `SELECT q.requested_by, q.status, v.created_by FROM publish_requests q
+			if err := tx.QueryRow(ctx, `SELECT q.requested_by, q.status, taskiem_actor_human(v.created_by) FROM publish_requests q
 				JOIN workflow_versions v ON v.workflow_id = q.workflow_id AND v.version = q.version
 				WHERE q.workflow_id = $1 AND q.version = $2 FOR UPDATE OF q`, wf, v).Scan(&requester, &status, &author); err != nil {
 				return err
@@ -630,7 +635,7 @@ func (s *Server) decidePublish(approve bool) http.HandlerFunc {
 			if status != "pending" {
 				return fmt.Errorf("%w: the request is %s", errConflict, status)
 			}
-			if requester == p.UserID || (author != nil && *author == p.Actor()) {
+			if requester == p.UserID || (author != nil && *author == p.UserID.String()) {
 				return fmt.Errorf("%w: publishing needs a second person: not whoever asked, nor the version's author", errForbidden)
 			}
 			next := "rejected"

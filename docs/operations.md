@@ -63,7 +63,7 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
 
 ## Webhooks
 
-- Webhook triggers: `POST /hooks/{tenant}/{path}?env=prod`. `hmac` expects `X-Taskiem-Signature: sha256=<hex HMAC-SHA256 of the body>`; `bearer` expects `Authorization: Bearer <token>`. The key is the environment secret `webhook_<WD id>`.
+- Webhook triggers: `POST /hooks/{tenant}/{path}?env=prod`. `hmac` expects `X-Taskiem-Signature: sha256=<hex HMAC-SHA256 of the body>`; `bearer` expects `Authorization: Bearer <token>`. The key is the environment secret `webhook_<WD id>`; workflows cannot read it (nor `git_credentials` or `git_webhook_secret`): an expression or code step naming one fails.
 - Connector events: `POST /hooks/{tenant}/connectors/{connector}/{trigger}?env=prod`, verified with the connection's credentials. `GET /v1/workflows/{id}/triggers` lists the exact URLs.
 - Replies: 202 with the run id (a duplicate returns the original), 401 on a bad signature, 422 when the body does not match the inputs schema, 429 with `Retry-After` above the tenant's ingest ceiling, 503 with `Retry-After` when nothing was recorded.
 

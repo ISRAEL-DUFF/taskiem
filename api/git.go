@@ -24,20 +24,23 @@ import (
 	"github.com/israel-duff/taskiem/engine/flowcode"
 	"github.com/israel-duff/taskiem/engine/gitprovider"
 	"github.com/israel-duff/taskiem/engine/policy"
+	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 )
 
 // Git integration (spec 10.3). Credentials and the webhook secret are
-// tenant secrets in the connection's environment, so they are encrypted
-// like every other secret and never returned.
+// tenant secrets in the reserved _git environment, so they are encrypted
+// like every other secret, never returned, and out of reach of workflows
+// and of the secrets API.
 // policiesDir holds approval policies in a repository (spec 10.3 layout).
 const policiesDir = "policies"
 
-const (
-	gitCredSecret = "git_credentials"
-	gitHookSecret = "git_webhook_secret" //nolint:gosec // a secret's name, not its value
-)
+const gitVaultEnv = "_git"
+
+func gitCredName(env string) string        { return "credentials_" + env }
+func gitHookName(env string) string        { return "webhook_secret_" + env }
+func gitPendingCredName(env string) string { return "pending_credentials_" + env }
 
 type gitConnection struct {
 	Environment string    `json:"environment"`
@@ -82,9 +85,9 @@ func (s *Server) gitHTTP(tenant uuid.UUID, apiURL, provider string) (*http.Clien
 
 // provider builds the client for a connection, with its stored credentials.
 func (s *Server) provider(ctx context.Context, tenant uuid.UUID, c gitConnection) (gitprovider.Provider, error) {
-	raw, err := s.Vault.Get(ctx, tenant, c.Environment, gitCredSecret)
+	raw, err := s.Vault.Get(ctx, tenant, gitVaultEnv, gitCredName(c.Environment))
 	if err != nil {
-		return nil, fmt.Errorf("git credentials (secret %s in %s): %w", gitCredSecret, c.Environment, err)
+		return nil, fmt.Errorf("git credentials for %s: %w", c.Environment, err)
 	}
 	var auth gitprovider.Auth
 	if err := json.Unmarshal([]byte(raw), &auth); err != nil {
@@ -107,6 +110,7 @@ func (s *Server) listGit(w http.ResponseWriter, r *http.Request) {
 		LastSync   *syncEntry `json:"last_sync,omitempty"`
 	}
 	var out []entry
+	var requests []gitRequest
 	err := s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT `+gitColumns+` FROM git_connections ORDER BY environment`)
 		if err != nil {
@@ -123,13 +127,35 @@ func (s *Server) listGit(w http.ResponseWriter, r *http.Request) {
 			}
 			out = append(out, e)
 		}
-		return nil
+		rows, err = tx.Query(r.Context(), `SELECT environment, provider, api_url, repo, branch, path, tests_path, mode, credentials, requested_by, requested_at
+			FROM git_connection_requests WHERE status = 'pending' ORDER BY requested_at`)
+		if err != nil {
+			return err
+		}
+		requests, err = pgx.CollectRows(rows, pgx.RowToStructByPos[gitRequest])
+		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"connections": nonNil(out)})
+	writeJSON(w, http.StatusOK, map[string]any{"connections": nonNil(out), "requests": nonNil(requests)})
+}
+
+// gitRequest is a change to a Git-led connection waiting for a second
+// person (see putGit).
+type gitRequest struct {
+	Environment    string    `json:"environment"`
+	Provider       string    `json:"provider"`
+	APIURL         string    `json:"api_url"`
+	Repo           string    `json:"repo"`
+	Branch         string    `json:"branch"`
+	Path           string    `json:"path"`
+	TestsPath      string    `json:"tests_path"`
+	Mode           string    `json:"mode"`
+	NewCredentials bool      `json:"new_credentials"`
+	RequestedBy    uuid.UUID `json:"requested_by"`
+	RequestedAt    time.Time `json:"requested_at"`
 }
 
 type gitReq struct {
@@ -148,6 +174,13 @@ type gitReq struct {
 // putGit connects an environment to a repository, or changes its settings.
 // The repository is reached once with the credentials before anything is
 // saved. The webhook secret is returned only when it is created.
+//
+// Stored credentials are reused only for the same provider, api_url and
+// repo: sending them anywhere new takes auth again, from someone who has
+// them. A Git-led connection deploys and activates policies on its own, so
+// when the tenant has four-eyes on, or the environment is gated, creating
+// one, switching to Git-led, or pointing one elsewhere waits for a second
+// person (decideGit); until then the connection keeps its old settings.
 func (s *Server) putGit(w http.ResponseWriter, r *http.Request) {
 	env := chi.URLParam(r, "env")
 	if !envRe.MatchString(env) {
@@ -178,12 +211,49 @@ func (s *Server) putGit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	conn := gitConnection{Environment: env, Provider: req.Provider, APIURL: req.APIURL, Repo: req.Repo, Branch: req.Branch, Path: req.Path, TestsPath: req.TestsPath, Mode: req.Mode}
 
+	// The connection as it stands, and whether this change is governed.
+	var current *gitConnection
+	governed := false
+	err := s.tx(r, func(tx pgx.Tx) error {
+		c, err := scanGit(tx.QueryRow(ctx, `SELECT `+gitColumns+` FROM git_connections WHERE environment = $1`, env))
+		switch {
+		case err == nil:
+			current = &c
+		case !errors.Is(err, pgx.ErrNoRows):
+			return err
+		}
+		g, err := governanceTx(ctx, tx)
+		if err != nil {
+			return err
+		}
+		var gated bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM environments WHERE name = $1 AND promotion_from IS NOT NULL)`, env).Scan(&gated); err != nil {
+			return err
+		}
+		governed = g.FourEyesPublish || g.FourEyesPolicies || gated
+		return nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	sameRepo := current != nil && current.Provider == conn.Provider && current.APIURL == conn.APIURL && current.Repo == conn.Repo
+	needsApproval := governed && conn.Mode == "git_led" && (!sameRepo || current.Mode != "git_led" || current.Branch != conn.Branch ||
+		current.Path != conn.Path || current.TestsPath != conn.TestsPath)
+	if needsApproval && p.UserID == uuid.Nil {
+		s.fail(w, r, fmt.Errorf("%w: a Git-led connection here is asked for by a person and approved by another, not by an API key", errForbidden))
+		return
+	}
+
 	// Credentials: new ones are checked against the repository; omitted
-	// ones keep what is stored.
+	// ones keep what is stored, for the same repository only.
 	var creds []byte
 	if req.Auth != nil {
 		creds, _ = json.Marshal(req.Auth) //nolint:gosec // serialised only to be encrypted into the vault
-	} else if raw, err := s.Vault.Get(ctx, p.TenantID, env, gitCredSecret); err == nil {
+	} else if !sameRepo {
+		s.fail(w, r, fmt.Errorf("%w: auth is required to connect a repository, or to change its provider, api_url or repo", errBadRequest))
+		return
+	} else if raw, err := s.Vault.Get(ctx, p.TenantID, gitVaultEnv, gitCredName(env)); err == nil {
 		creds = []byte(raw)
 	} else {
 		s.fail(w, r, fmt.Errorf("%w: auth is required to connect a repository", errBadRequest))
@@ -206,21 +276,42 @@ func (s *Server) putGit(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "cannot read branch " + req.Branch + " of " + req.Repo + ": " + err.Error()})
 		return
 	}
+	credName := gitCredName(env)
+	if needsApproval {
+		credName = gitPendingCredName(env)
+		_ = s.Vault.Delete(ctx, p.TenantID, gitVaultEnv, credName, p.Actor())
+	}
 	if req.Auth != nil {
-		if _, err := s.Vault.Put(ctx, p.TenantID, env, gitCredSecret, creds, p.Actor()); err != nil {
+		if _, err := s.Vault.Put(ctx, p.TenantID, gitVaultEnv, credName, creds, p.Actor()); err != nil {
 			s.fail(w, r, err)
 			return
 		}
 	}
 	secret := ""
-	if _, err := s.Vault.Get(ctx, p.TenantID, env, gitHookSecret); err != nil || req.RotateWebhookSecret {
+	if _, err := s.Vault.Get(ctx, p.TenantID, gitVaultEnv, gitHookName(env)); err != nil || req.RotateWebhookSecret {
 		secret = newToken()
-		if _, err := s.Vault.Put(ctx, p.TenantID, env, gitHookSecret, []byte(secret), p.Actor()); err != nil {
+		if _, err := s.Vault.Put(ctx, p.TenantID, gitVaultEnv, gitHookName(env), []byte(secret), p.Actor()); err != nil {
 			s.fail(w, r, err)
 			return
 		}
 	}
 	err = s.tx(r, func(tx pgx.Tx) error {
+		if needsApproval {
+			if _, err := tx.Exec(ctx, `INSERT INTO git_connection_requests (tenant_id, environment, provider, api_url, repo, branch, path, tests_path, mode, credentials, requested_by)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+				ON CONFLICT (tenant_id, environment) DO UPDATE SET provider = EXCLUDED.provider, api_url = EXCLUDED.api_url, repo = EXCLUDED.repo,
+				  branch = EXCLUDED.branch, path = EXCLUDED.path, tests_path = EXCLUDED.tests_path, mode = EXCLUDED.mode, credentials = EXCLUDED.credentials,
+				  requested_by = EXCLUDED.requested_by, requested_at = now(), status = 'pending', decided_by = NULL, decided_at = NULL, comment = NULL`,
+				p.TenantID, env, conn.Provider, conn.APIURL, conn.Repo, conn.Branch, conn.Path, conn.TestsPath, conn.Mode, req.Auth != nil, p.UserID); err != nil {
+				return err
+			}
+			return auditTx(r, tx, "git.connect_request", env, map[string]any{"provider": conn.Provider, "api_url": conn.APIURL, "repo": conn.Repo, "branch": conn.Branch,
+				"mode": conn.Mode, "credentials_changed": req.Auth != nil, "webhook_secret_issued": secret != ""})
+		}
+		// A change made directly supersedes any change still waiting.
+		if _, err := tx.Exec(ctx, `UPDATE git_connection_requests SET status = 'withdrawn', decided_at = now() WHERE environment = $1 AND status = 'pending'`, env); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO git_connections (tenant_id, environment, provider, api_url, repo, branch, path, tests_path, mode, created_by)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (tenant_id, environment) DO UPDATE SET provider = EXCLUDED.provider, api_url = EXCLUDED.api_url, repo = EXCLUDED.repo,
@@ -239,13 +330,88 @@ func (s *Server) putGit(w http.ResponseWriter, r *http.Request) {
 	if secret != "" {
 		out["webhook_secret"] = secret
 	}
+	if needsApproval {
+		out["state"] = "pending_approval"
+		writeJSON(w, http.StatusAccepted, out)
+		return
+	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// decideGit approves or rejects a waiting change to a Git-led connection.
+// A person approves it, other than whoever asked; on approval the
+// connection takes the asked-for settings and credentials.
+func (s *Server) decideGit(approve bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		env := chi.URLParam(r, "env")
+		p := principalFrom(r.Context())
+		if p.UserID == uuid.Nil {
+			writeErr(w, http.StatusForbidden, "Git-led connections are approved by people, not API keys")
+			return
+		}
+		var req struct {
+			Comment string `json:"comment"`
+		}
+		_ = decodeBody(r, &req)
+		ctx := r.Context()
+		var q gitRequest
+		err := s.tx(r, func(tx pgx.Tx) error {
+			if err := tx.QueryRow(ctx, `SELECT environment, provider, api_url, repo, branch, path, tests_path, mode, credentials, requested_by, requested_at
+				FROM git_connection_requests WHERE environment = $1 AND status = 'pending' FOR UPDATE`, env).
+				Scan(&q.Environment, &q.Provider, &q.APIURL, &q.Repo, &q.Branch, &q.Path, &q.TestsPath, &q.Mode, &q.NewCredentials, &q.RequestedBy, &q.RequestedAt); err != nil {
+				return err
+			}
+			if q.RequestedBy == p.UserID {
+				return fmt.Errorf("%w: a Git-led connection needs a second person: not whoever asked for it", errForbidden)
+			}
+			next := "rejected"
+			if approve {
+				next = "approved"
+				if _, err := tx.Exec(ctx, `INSERT INTO git_connections (tenant_id, environment, provider, api_url, repo, branch, path, tests_path, mode, created_by)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+					ON CONFLICT (tenant_id, environment) DO UPDATE SET provider = EXCLUDED.provider, api_url = EXCLUDED.api_url, repo = EXCLUDED.repo,
+					  branch = EXCLUDED.branch, path = EXCLUDED.path, tests_path = EXCLUDED.tests_path, mode = EXCLUDED.mode, updated_at = now()`,
+					p.TenantID, env, q.Provider, q.APIURL, q.Repo, q.Branch, q.Path, q.TestsPath, q.Mode, q.RequestedBy.String()); err != nil {
+					return err
+				}
+			}
+			if _, err := tx.Exec(ctx, `UPDATE git_connection_requests SET status = $2, decided_by = $3, decided_at = now(), comment = NULLIF($4, '') WHERE environment = $1`,
+				env, next, p.UserID, req.Comment); err != nil {
+				return err
+			}
+			return auditTx(r, tx, "git.connect_"+map[bool]string{true: "approve", false: "reject"}[approve], env,
+				map[string]any{"repo": q.Repo, "branch": q.Branch, "mode": q.Mode, "requested_by": q.RequestedBy, "comment": req.Comment})
+		})
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		// The waiting credentials become the connection's, or are dropped.
+		if q.NewCredentials {
+			pending := gitPendingCredName(env)
+			if approve {
+				raw, err := s.Vault.Get(ctx, p.TenantID, gitVaultEnv, pending)
+				if err == nil {
+					_, err = s.Vault.Put(ctx, p.TenantID, gitVaultEnv, gitCredName(env), []byte(raw), q.RequestedBy.String())
+				}
+				if err != nil {
+					s.fail(w, r, err)
+					return
+				}
+			}
+			_ = s.Vault.Delete(ctx, p.TenantID, gitVaultEnv, pending, p.Actor())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"environment": env, "state": map[bool]string{true: "approved", false: "rejected"}[approve]})
+	}
 }
 
 func (s *Server) deleteGit(w http.ResponseWriter, r *http.Request) {
 	env := chi.URLParam(r, "env")
 	p := principalFrom(r.Context())
 	err := s.tx(r, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `UPDATE git_connection_requests SET status = 'withdrawn', decided_at = now() WHERE environment = $1 AND status = 'pending'`, env); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(r.Context(), `DELETE FROM git_connections WHERE environment = $1`, env)
 		if err != nil {
 			return err
@@ -265,8 +431,8 @@ func (s *Server) deleteGit(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	for _, name := range []string{gitCredSecret, gitHookSecret} {
-		_ = s.Vault.Delete(r.Context(), p.TenantID, env, name, p.Actor())
+	for _, name := range []string{gitCredName(env), gitHookName(env), gitPendingCredName(env)} {
+		_ = s.Vault.Delete(r.Context(), p.TenantID, gitVaultEnv, name, p.Actor())
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -290,8 +456,9 @@ func (s *Server) refuseGitManaged(ctx context.Context, tx pgx.Tx, wf uuid.UUID) 
 // --- Git-led: push webhook and syncs ---
 
 // GitHooks receives push webhooks at /git-hooks/{tenant}/{env}. A verified
-// push to the connected branch queues a sync; nothing else happens in the
-// request, so the Git host gets its answer quickly.
+// push of the connected branch's current head queues a sync, once per
+// delivery; besides reading the head, nothing else happens in the request,
+// so the Git host gets its answer quickly.
 func (s *Server) GitHooks() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/{tenant}/{env}", s.gitHook)
@@ -299,9 +466,12 @@ func (s *Server) GitHooks() http.Handler {
 }
 
 func (s *Server) gitHook(w http.ResponseWriter, r *http.Request) {
+	// An unknown tenant or environment gets the same answer as a bad
+	// signature, so the endpoint does not say which connections exist.
+	deny := func() { writeErr(w, http.StatusUnauthorized, "signature does not match") }
 	tenant, err := uuid.Parse(chi.URLParam(r, "tenant"))
 	if err != nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		deny()
 		return
 	}
 	env := chi.URLParam(r, "env")
@@ -317,22 +487,31 @@ func (s *Server) gitHook(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		writeErr(w, http.StatusNotFound, "not found")
+		deny()
 		return
 	}
-	secret, err := s.Vault.Get(ctx, tenant, env, gitHookSecret)
+	secret, err := s.Vault.Get(ctx, tenant, gitVaultEnv, gitHookName(env))
+	if errors.Is(err, secrets.ErrNotFound) {
+		deny()
+		return
+	}
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, "webhook secret unavailable")
 		return
 	}
-	prov, err := s.provider(ctx, tenant, conn)
-	if err != nil {
+	// Verify before the credentials are decrypted: checking a signature
+	// needs only the webhook secret.
+	// The placeholder credentials are never used, so a complaint about them
+	// does not matter; only an unknown provider leaves no verifier.
+	verifier, _ := gitprovider.New(gitprovider.Config{Provider: conn.Provider, APIURL: conn.APIURL, Repo: conn.Repo, Branch: conn.Branch,
+		Auth: gitprovider.Auth{Type: "token", Token: "unused"}})
+	if verifier == nil {
 		writeErr(w, http.StatusServiceUnavailable, "git connection unavailable")
 		return
 	}
-	push, err := prov.VerifyPush(r.Header, body, secret)
+	push, err := verifier.VerifyPush(r.Header, body, secret)
 	if errors.Is(err, gitprovider.ErrSignature) {
-		writeErr(w, http.StatusUnauthorized, "signature does not match")
+		deny()
 		return
 	}
 	if err != nil {
@@ -350,12 +529,60 @@ func (s *Server) gitHook(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusAccepted, map[string]any{"ignored": "platform-led: pushes do not deploy"})
 		return
 	}
+	// A push deploys only while it is the branch head, so an old delivery
+	// sent again cannot roll the environment back; and each delivery is
+	// taken once.
+	prov, err := s.provider(ctx, tenant, conn)
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, "git connection unavailable")
+		return
+	}
+	head, err := prov.Head(ctx)
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, "cannot read the branch head")
+		return
+	}
+	if head != push.Commit {
+		s.Logger.Info("git push ignored: not the branch head", "tenant", tenant, "environment", env, "commit", push.Commit, "head", head)
+		writeJSON(w, http.StatusAccepted, map[string]any{"ignored": "commit " + push.Commit + " is not the head of " + conn.Branch})
+		return
+	}
+	if delivery := deliveryID(r.Header); delivery != "" {
+		fresh := false
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			tag, err := tx.Exec(ctx, `INSERT INTO git_push_receipts (tenant_id, environment, delivery_id, commit) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+				tenant, env, delivery, push.Commit)
+			fresh = err == nil && tag.RowsAffected() == 1
+			return err
+		})
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if !fresh {
+			writeJSON(w, http.StatusAccepted, map[string]any{"ignored": "delivery " + delivery + " was already received"})
+			return
+		}
+	}
 	id, err := s.queueSync(ctx, tenant, env, push.Commit, "webhook")
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"sync_id": id})
+}
+
+// deliveryID is a webhook delivery's unique id, as the Git host sends it.
+func deliveryID(h http.Header) string {
+	for _, k := range []string{"X-GitHub-Delivery", "X-Gitlab-Event-UUID", "X-Request-UUID"} {
+		if v := h.Get(k); v != "" {
+			if len(v) > 200 {
+				v = v[:200]
+			}
+			return v
+		}
+	}
+	return ""
 }
 
 func (s *Server) queueSync(ctx context.Context, tenant uuid.UUID, env, commit, by string) (uuid.UUID, error) {

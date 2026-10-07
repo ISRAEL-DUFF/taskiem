@@ -112,12 +112,14 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 			forbidSelf, distinct = a.constraints.ForbidSelfApproval, a.constraints.DistinctApprovers
 		}
 
-		// Role: the voter's own, or one delegated to them now.
+		// Role: the voter's own, or one delegated to them now by someone
+		// who still holds it.
 		var onBehalfOf *uuid.UUID
 		if a.role != nil && !slices.Contains(v.Roles, *a.role) {
 			var from uuid.UUID
-			err := tx.QueryRow(ctx, `SELECT from_user FROM delegations WHERE to_user = $1 AND $2 = ANY (roles)
-				AND revoked_at IS NULL AND starts_at <= now() AND ends_at > now() ORDER BY created_at LIMIT 1`, v.UserID, *a.role).Scan(&from)
+			err := tx.QueryRow(ctx, `SELECT g.from_user FROM delegations g WHERE g.to_user = $1 AND $2 = ANY (g.roles)
+				AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
+				AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = $2) ORDER BY g.created_at LIMIT 1`, v.UserID, *a.role).Scan(&from)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return fmt.Errorf("approval %q needs role %q: %w", step, *a.role, ErrNotAllowed)
 			}
@@ -132,7 +134,9 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 		}
 		if forbidSelf {
 			var startedBy, createdBy, publishedBy *string
-			if err := tx.QueryRow(ctx, `SELECT r.started_by, wv.created_by, wv.published_by::text FROM runs r
+			// Makers are the people behind them: a run started, a version
+			// written or published with an API key is its owner's.
+			if err := tx.QueryRow(ctx, `SELECT taskiem_actor_human(r.started_by), taskiem_actor_human(wv.created_by), taskiem_actor_human(wv.published_by::text) FROM runs r
 				JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version WHERE r.id = $1`, ref.ID).
 				Scan(&startedBy, &createdBy, &publishedBy); err != nil {
 				return err
