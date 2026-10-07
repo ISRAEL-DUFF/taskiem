@@ -935,6 +935,158 @@ export const mono = {
   verify_payment: (input: MonoVerifyPaymentInput, extra?: ConnectorExtra): StepSpec => connector("mono@1", "verify_payment", input, extra),
 };
 
+// M-Pesa (Daraja) (mpesa@1)
+export interface MpesaAccountBalanceInput {
+  identifier_type?: Val<string>;
+  /** Defaults to the B2C short code */
+  party_a?: Val<string>;
+  remarks?: Val<string>;
+}
+export interface MpesaB2cPaymentInput {
+  /** KES cents; whole shillings only */
+  amount: Val<number>;
+  command_id?: Val<"BusinessPayment" | "SalaryPayment" | "PromotionPayment">;
+  occasion?: Val<string>;
+  originator_conversation_id?: Val<string>;
+  /** Recipient, 2547XXXXXXXX (PartyB) */
+  phone: Val<string>;
+  remarks: Val<string>;
+}
+export interface MpesaCheckCredentialsInput {
+  [key: string]: Value;
+}
+export interface MpesaRegisterC2bUrlsInput {
+  /** Overrides the URL built from hooks_url */
+  confirmation_url?: Val<string>;
+  /** What M-Pesa does when the validation URL cannot be reached */
+  response_type?: Val<"Completed" | "Cancelled">;
+  /** Defaults to the connection's */
+  shortcode?: Val<string>;
+  /** Overrides the URL built from hooks_url */
+  validation_url?: Val<string>;
+}
+export interface MpesaReversalInput {
+  /** KES cents; whole shillings only */
+  amount: Val<number>;
+  occasion?: Val<string>;
+  /** Defaults to the connection's shortcode */
+  receiver_party?: Val<string>;
+  remarks?: Val<string>;
+  /** Receipt number of the transaction to reverse */
+  transaction_id: Val<string>;
+}
+export interface MpesaStkPushInput {
+  /** Shown to the customer in the prompt (12 characters at most) */
+  account_reference: Val<string>;
+  /** KES cents; whole shillings only (100 = KES 1) */
+  amount: Val<number>;
+  /** Overrides the stk_callback URL built from hooks_url */
+  callback_url?: Val<string>;
+  /** TransactionDesc (13 characters at most) */
+  description?: Val<string>;
+  /** Receiving short code; the till number for CustomerBuyGoodsOnline. Defaults to shortcode */
+  party_b?: Val<string>;
+  /** Customer's M-Pesa number, 2547XXXXXXXX (PartyA and PhoneNumber) */
+  phone: Val<string>;
+  transaction_type?: Val<"CustomerPayBillOnline" | "CustomerBuyGoodsOnline">;
+}
+export interface MpesaStkQueryInput {
+  checkout_request_id: Val<string>;
+}
+export interface MpesaTransactionStatusInput {
+  /** 4: organisation short code */
+  identifier_type?: Val<string>;
+  occasion?: Val<string>;
+  /** The OriginatorConversationID of the request */
+  original_conversation_id?: Val<string>;
+  /** Short code (or MSISDN) the transaction belongs to; defaults to the B2C short code */
+  party_a?: Val<string>;
+  remarks?: Val<string>;
+  /** M-Pesa receipt number */
+  transaction_id?: Val<string>;
+}
+export const mpesa = {
+  /** Ask for the account balance (read) */
+  account_balance: (input?: MpesaAccountBalanceInput, extra?: ConnectorExtra): StepSpec => connector("mpesa@1", "account_balance", input, extra),
+  /** Pay a customer (B2C) (idempotent_write) */
+  b2c_payment: (input: MpesaB2cPaymentInput, extra?: ConnectorExtra): StepSpec => connector("mpesa@1", "b2c_payment", input, extra),
+  /** Check the Daraja app's keys (read) */
+  check_credentials: (input?: MpesaCheckCredentialsInput, extra?: ConnectorExtra): StepSpec => connector("mpesa@1", "check_credentials", input, extra),
+  /** Register C2B confirmation and validation URLs (unsafe_write) */
+  register_c2b_urls: (input?: MpesaRegisterC2bUrlsInput, extra?: ConnectorExtra): StepSpec => connector("mpesa@1", "register_c2b_urls", input, extra),
+  /** Reverse a transaction (unsafe_write) */
+  reversal: (input: MpesaReversalInput, extra?: ConnectorExtra): StepSpec => connector("mpesa@1", "reversal", input, extra),
+  /** Request a payment by STK push (M-Pesa Express) (unsafe_write) */
+  stk_push: (input: MpesaStkPushInput, extra?: ConnectorExtra): StepSpec => connector("mpesa@1", "stk_push", input, extra),
+  /** Get an STK push's outcome (read) */
+  stk_query: (input: MpesaStkQueryInput, extra?: ConnectorExtra): StepSpec => connector("mpesa@1", "stk_query", input, extra),
+  /** Ask for a transaction's status (read) */
+  transaction_status: (input?: MpesaTransactionStatusInput, extra?: ConnectorExtra): StepSpec => connector("mpesa@1", "transaction_status", input, extra),
+};
+
+// MTN MoMo (mtnmomo@1)
+export interface MtnmomoGetAccountHolderNameInput {
+  msisdn: Val<string>;
+  product?: Val<"collection" | "disbursement" | "remittance">;
+}
+export interface MtnmomoGetBalanceInput {
+  /** Defaults to the first product the connection has a subscription key for */
+  product?: Val<"collection" | "disbursement" | "remittance">;
+}
+export interface MtnmomoGetPaymentInput {
+  /** The X-Reference-Id (UUID) or the engine's key */
+  reference_id: Val<string>;
+}
+export interface MtnmomoGetTransferInput {
+  product?: Val<"disbursement" | "remittance">;
+  reference_id: Val<string>;
+}
+export interface MtnmomoRequestToPayInput {
+  /** Minor units of currency */
+  amount: Val<number>;
+  /** ISO 4217; must be the target environment's (sandbox: EUR). Defaults to the connection's */
+  currency?: Val<string>;
+  /** Payer, with country code, no + */
+  msisdn: Val<string>;
+  /** Written in your history */
+  payee_note?: Val<string>;
+  /** Written in the payer's history */
+  payer_message?: Val<string>;
+  reference_id?: Val<string>;
+}
+export interface MtnmomoTransferInput {
+  /** Minor units of currency */
+  amount: Val<number>;
+  currency?: Val<string>;
+  /** Payee, with country code, no + */
+  msisdn: Val<string>;
+  payee_note?: Val<string>;
+  payer_message?: Val<string>;
+  product?: Val<"disbursement" | "remittance">;
+  reference_id?: Val<string>;
+}
+export interface MtnmomoValidateAccountHolderInput {
+  /** Number with country code, no + (E.164 digits) */
+  msisdn: Val<string>;
+  product?: Val<"collection" | "disbursement" | "remittance">;
+}
+export const mtnmomo = {
+  /** Get an account holder's name (read) */
+  get_account_holder_name: (input: MtnmomoGetAccountHolderNameInput, extra?: ConnectorExtra): StepSpec => connector("mtnmomo@1", "get_account_holder_name", input, extra),
+  /** Get the account balance (read) */
+  get_balance: (input?: MtnmomoGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("mtnmomo@1", "get_balance", input, extra),
+  /** Get a request to pay's status (read) */
+  get_payment: (input: MtnmomoGetPaymentInput, extra?: ConnectorExtra): StepSpec => connector("mtnmomo@1", "get_payment", input, extra),
+  /** Get a transfer's status (read) */
+  get_transfer: (input: MtnmomoGetTransferInput, extra?: ConnectorExtra): StepSpec => connector("mtnmomo@1", "get_transfer", input, extra),
+  /** Request a payment (request to pay) (idempotent_write) */
+  request_to_pay: (input: MtnmomoRequestToPayInput, extra?: ConnectorExtra): StepSpec => connector("mtnmomo@1", "request_to_pay", input, extra),
+  /** Send money to a customer (transfer) (idempotent_write) */
+  transfer: (input: MtnmomoTransferInput, extra?: ConnectorExtra): StepSpec => connector("mtnmomo@1", "transfer", input, extra),
+  /** Check that a customer is active (read) */
+  validate_account_holder: (input: MtnmomoValidateAccountHolderInput, extra?: ConnectorExtra): StepSpec => connector("mtnmomo@1", "validate_account_holder", input, extra),
+};
+
 // MySQL (mysql@1)
 export interface MysqlExecuteInput {
   params?: Value;
@@ -1895,6 +2047,8 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "lenco@1": "lenco",
   "moniepoint@1": "moniepoint",
   "mono@1": "mono",
+  "mpesa@1": "mpesa",
+  "mtnmomo@1": "mtnmomo",
   "mysql@1": "mysql",
   "opay@1": "opay",
   "paystack@1": "paystack",
@@ -1924,6 +2078,8 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
   "mono@1": ["cancel_mandate", "check_mandate_balance", "create_customer", "create_mandate", "debit_mandate", "exchange_token", "get_account", "get_balance", "get_debit", "get_identity", "get_income_records", "get_mandate", "get_statement", "get_statement_pdf", "initiate_account_linking", "initiate_mandate", "initiate_payment", "initiate_reauthorisation", "list_banks", "list_transactions", "pause_mandate", "reinstate_mandate", "request_creditworthiness", "request_income", "unlink_account", "verify_payment"],
+  "mpesa@1": ["account_balance", "b2c_payment", "check_credentials", "register_c2b_urls", "reversal", "stk_push", "stk_query", "transaction_status"],
+  "mtnmomo@1": ["get_account_holder_name", "get_balance", "get_payment", "get_transfer", "request_to_pay", "transfer", "validate_account_holder"],
   "mysql@1": ["execute", "query"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "paystack@1": ["check_balance", "transfer", "verify_charge", "verify_transfer"],

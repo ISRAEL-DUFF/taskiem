@@ -15,6 +15,8 @@ import (
 	"github.com/israel-duff/taskiem/connectors/lenco"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
 	"github.com/israel-duff/taskiem/connectors/mono"
+	"github.com/israel-duff/taskiem/connectors/mpesa"
+	"github.com/israel-duff/taskiem/connectors/mtnmomo"
 	"github.com/israel-duff/taskiem/connectors/mysql"
 	"github.com/israel-duff/taskiem/connectors/opay"
 	"github.com/israel-duff/taskiem/connectors/paystack"
@@ -41,6 +43,7 @@ type Options struct {
 	SlackURL, GmailURL, GooglesheetsURL           string
 	OpayURL, RemitaURL                            string
 	MonoURL, PremblyURL, YouverifyURL             string
+	MpesaURL, MTNMoMoURL                          string
 	// GoogleTokenURL overrides Google's OAuth token endpoint (tests).
 	GoogleTokenURL string
 }
@@ -69,6 +72,8 @@ func Register(r *connector.Registry, o Options) error {
 		mono.New(mono.Options{BaseURL: o.MonoURL}),
 		prembly.New(prembly.Options{BaseURL: o.PremblyURL}),
 		youverify.New(youverify.Options{BaseURL: o.YouverifyURL}),
+		mpesa.New(mpesa.Options{BaseURL: o.MpesaURL}),
+		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
 		postgres.New(),
 		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),

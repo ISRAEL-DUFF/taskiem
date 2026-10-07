@@ -136,6 +136,8 @@ func loadConfig() (config, error) {
 			MonoURL:           os.Getenv("TASKIEM_MONO_URL"),
 			PremblyURL:        os.Getenv("TASKIEM_PREMBLY_URL"),
 			YouverifyURL:      os.Getenv("TASKIEM_YOUVERIFY_URL"),
+			MpesaURL:          os.Getenv("TASKIEM_MPESA_URL"),
+			MTNMoMoURL:        os.Getenv("TASKIEM_MTNMOMO_URL"),
 		},
 		PoolSize: 20,
 	}
