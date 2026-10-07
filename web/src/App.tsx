@@ -20,6 +20,7 @@ import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
+import { Billing, BillingBanner } from "./pages/Billing";
 
 export function App() {
   return (
@@ -84,6 +85,7 @@ function Shell() {
     ["/audit", "Audit log", can("audit.read")],
     ["/reports", "Reports", can("audit.read")],
     ["/members", "Members & keys", can("member.manage")],
+    ["/settings/billing", "Billing", can("billing.manage")],
   ];
   return (
     <div className="shell">
@@ -105,6 +107,7 @@ function Shell() {
         <button onClick={() => void logout()}>Sign out</button>
       </nav>
       <main className="main">
+        <BillingBanner />
         <Routes>
           <Route path="/" element={<Navigate to="/workflows" replace />} />
           <Route path="/workflows" element={<Workflows />} />
@@ -116,6 +119,7 @@ function Shell() {
           <Route path="/approvals" element={<Approvals />} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/billing" element={<Billing />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/members" element={<Members />} />

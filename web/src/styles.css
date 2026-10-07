@@ -209,3 +209,13 @@ button.link {
 .plain-steps li { margin: 4px 0; }
 .capitalize { text-transform: capitalize; }
 .error-text { color: var(--danger, #b42318); }
+
+/* Billing (pages/Billing.tsx) */
+.warning { color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); padding: 8px 10px; border-radius: 6px; margin: 8px 0; }
+.meter { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 20%, transparent); overflow: hidden; }
+.meter-fill { height: 100%; background: var(--ok); }
+.meter-fill.warn { background: var(--warn); }
+.meter-fill.full { background: var(--danger); }
+.plan-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.plan-card.current { border-color: var(--info); }
+.plan-card .price { font-size: 18px; font-weight: 600; }
