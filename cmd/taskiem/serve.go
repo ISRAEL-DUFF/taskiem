@@ -460,6 +460,14 @@ func serve(ctx context.Context, args []string) error {
 		for _, q := range cfg.Queues {
 			w := &runtime.Worker{Store: e.store, Registry: e.registry, Secrets: e.vault, Connections: e.vault,
 				Egress: &egress.Guard{Logger: log}, ID: host + "/" + q + "/" + strconv.Itoa(os.Getpid()), Queue: strings.TrimSpace(q), Logger: log}
+			if w.Queue == "container" {
+				// Container steps (spec 7.5): the sandbox runner and egress proxy.
+				more, err := containerSetup(ctx, w, log)
+				if err != nil {
+					return fmt.Errorf("serve: container queue: %w", err)
+				}
+				tasks = append(tasks, more...)
+			}
 			tasks = append(tasks, w.Run)
 		}
 	}

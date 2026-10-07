@@ -260,10 +260,10 @@ func (s *Server) embedConnectors(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"connectors": out, "step_types": embedStepTypes(allowed)})
 }
 
-// embedStepTypes are the gated step types (http, code, ai) the app allows.
+// embedStepTypes are the gated step types (http, code, container, ai) the app allows.
 func embedStepTypes(allowed []string) []string {
 	out := []string{}
-	for _, t := range []string{"http", "code", "ai"} {
+	for _, t := range []string{"http", "code", "container", "ai"} {
 		if slices.Contains(allowed, t) {
 			out = append(out, t)
 		}

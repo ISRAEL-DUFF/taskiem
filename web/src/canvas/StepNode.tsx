@@ -12,6 +12,8 @@ export function summary(s: Step): string {
       return `${s.config.method} ${s.config.url}`;
     case "code":
       return s.config.language;
+    case "container":
+      return `${s.config.image.split("@")[0]?.split("/").pop() ?? "container"} · ${s.config.network === "egress" ? "egress" : "no network"}`;
     case "wait":
       return "duration" in s.config ? `wait ${s.config.duration}` : `until ${s.config.until}`;
     case "signal":

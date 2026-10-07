@@ -143,6 +143,8 @@ func (v *validator) children(p string, st map[string]any) {
 		v.scope(p+"/config/steps", cfg["steps"].([]any))
 	case "code":
 		v.codeLimits(p+"/config/limits", cfg["limits"])
+	case "container":
+		v.containerConfig(p+"/config", cfg)
 	}
 }
 

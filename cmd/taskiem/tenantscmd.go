@@ -104,6 +104,9 @@ func tenantsCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "whatsapp templates this month: %d sent (%d authentication, %d utility, %d marketing), %d beyond the allowance, %d held back\n",
 			wt.Sent, wt.ByCategory["authentication"], wt.ByCategory["utility"], wt.ByCategory["marketing"], wt.Overage, wt.Blocked)
 	}
+	if u.ContainerSeconds > 0 {
+		fmt.Fprintf(stdout, "container steps this month: %.1f minutes\n", float64(u.ContainerSeconds)/60)
+	}
 	for _, h := range v.Hits {
 		fmt.Fprintf(stdout, "reached %s on %s (%d times)\n", h.Limit, h.Day, h.Hits)
 	}
@@ -117,5 +120,6 @@ func limitsMap(l runtime.Limits) map[string]any {
 		"max_workflows": l.MaxWorkflows, "max_steps_per_run": l.MaxStepsPerRun, "worker_concurrency": l.WorkerConcurrency,
 		"max_payload_bytes": l.MaxPayloadBytes, "max_secrets": l.MaxSecrets, "max_connections": l.MaxConnections,
 		"ai_monthly_tokens": l.AIMonthlyTokens, "whatsapp_templates_monthly": l.WhatsAppTemplatesMonthly,
+		"container_minutes_monthly": l.ContainerMinutesMonthly, "container_concurrency": l.ContainerConcurrency,
 	}
 }

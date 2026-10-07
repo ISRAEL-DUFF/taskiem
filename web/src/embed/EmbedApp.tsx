@@ -18,7 +18,7 @@ import { addFontStylesheet, parseBranding, themeVariables } from "./theme";
 const nodeTypes = { step: StepNode };
 /** Step types an app's end users may add; http and code only when the app allows them. */
 const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "wait", "branch", "parallel", "foreach"];
-const GATED = new Set<string>(["http", "code", "ai"]);
+const GATED = new Set<string>(["http", "code", "container", "ai"]);
 
 /** Events the builder reports to its host (element events, or messages to the parent page). */
 export type Emit = (name: string, detail: Record<string, unknown>) => void;

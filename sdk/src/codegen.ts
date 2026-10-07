@@ -161,6 +161,10 @@ class Gen {
         if (typeof c.source === "string") c.source = new Raw(template(c.source));
         return call("code", c, optional(s.input));
       }
+      case "container":
+        take("config", "input", "effect");
+        this.use("container");
+        return call("container", cfg, optional(s.input), s.effect === undefined ? undefined : { effect: s.effect });
       case "transform":
         take("config");
         this.use("transform");

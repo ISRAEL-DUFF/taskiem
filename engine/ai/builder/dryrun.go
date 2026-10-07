@@ -90,7 +90,7 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 				c.Mocks[st.ID] = wdtest.Mocks{{Output: out}}
 			case "http":
 				c.Mocks[st.ID] = wdtest.Mocks{{Output: map[string]any{"status": 200, "body": map[string]any{}}}}
-			case "code":
+			case "code", "container":
 				c.Mocks[st.ID] = wdtest.Mocks{{Output: map[string]any{}}}
 			case "approval":
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}

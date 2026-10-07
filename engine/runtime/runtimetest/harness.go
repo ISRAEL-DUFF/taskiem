@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/container"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -37,6 +38,11 @@ type Env struct {
 	// Egress allows loopback so tests can reach httptest servers; every
 	// other non-public address is still refused.
 	Egress *egress.Guard
+	// Containers runs container steps for Drain's container worker (nil:
+	// they fail as not enabled); Proxy and ProxyAddr give them egress.
+	Containers container.Runner
+	Proxy      *egress.Proxy
+	ProxyAddr  string
 }
 
 // New creates an engine environment; it skips without a test database.
@@ -133,6 +139,13 @@ func (e *Env) Worker(id string) *runtime.Worker {
 		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: 200 * time.Millisecond}
 }
 
+// ContainerWorker returns a worker for the container queue.
+func (e *Env) ContainerWorker(id string) *runtime.Worker {
+	w := e.Worker(id)
+	w.Queue, w.Containers, w.Proxy, w.ProxyAddr = "container", e.Containers, e.Proxy, e.ProxyAddr
+	return w
+}
+
 // Scheduler returns a scheduler.
 func (e *Env) Scheduler() *runtime.Scheduler {
 	return &runtime.Scheduler{Store: e.Store, ID: "sched", Interval: 50 * time.Millisecond}
@@ -146,6 +159,7 @@ func (e *Env) Drain(t testing.TB) {
 	w, s := e.Worker("drain"), e.Scheduler()
 	sb := e.Worker("drain-sandbox")
 	sb.Queue = "sandbox"
+	cw := e.ContainerWorker("drain-container")
 	for i := 0; i < 1000; i++ {
 		n, err := w.RunOnce(ctx)
 		if err != nil {
@@ -153,6 +167,10 @@ func (e *Env) Drain(t testing.TB) {
 		}
 		m, err := sb.RunOnce(ctx)
 		if err != nil {
+			t.Fatal(err)
+		}
+		n += m
+		if m, err = cw.RunOnce(ctx); err != nil {
 			t.Fatal(err)
 		}
 		n += m

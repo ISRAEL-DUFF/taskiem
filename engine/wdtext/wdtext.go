@@ -284,6 +284,12 @@ func (d describer) what(st *wd.Step) string {
 			return "Run custom " + c.Language + " code"
 		}
 		return "Run custom code"
+	case "container":
+		if c := st.Container; c != nil {
+			repo, _, _ := strings.Cut(c.Image, "@")
+			return "Run the " + plain(repo[strings.LastIndex(repo, "/")+1:]) + " container"
+		}
+		return "Run a container"
 	}
 	return strings.ReplaceAll(st.Type, "_", " ")
 }

@@ -53,6 +53,37 @@ export interface CodeStep extends StepBase {
     | { language: "wasm"; module: `sha256:${string}`; secrets?: string[]; limits?: { memory_mb?: number; cpu?: Duration } };
 }
 
+/** Container step limits; the platform clamps them and refuses more than its maxima. */
+export interface ContainerLimits {
+  /** CPU cores, as Kubernetes writes them: "500m", "1", "1.5" (at most 4). */
+  cpu?: string;
+  /** At most 4096. */
+  memory_mb?: number;
+  /** At most 30m. */
+  timeout?: Duration;
+  /** Largest output accepted, at most 1 MiB. */
+  output_bytes?: number;
+}
+
+/** A pinned image run in the container sandbox (docs/container-steps.md). */
+export interface ContainerStep extends StepBase {
+  type: "container";
+  input?: Values;
+  effect?: { idempotency_seed?: Expression };
+  config: {
+    /** registry/repository@sha256:<64 hex>; tags are refused. */
+    image: `${string}@sha256:${string}`;
+    command: string[];
+    args?: string[];
+    input_mode?: "stdin" | "file";
+    output_mode?: "stdout" | "file";
+    secrets?: string[];
+    secrets_mode?: "env" | "file";
+    class?: "read" | "idempotent_write" | "unsafe_write";
+    limits?: ContainerLimits;
+  } & ({ network?: "none"; hosts?: never } | { network: "egress"; hosts: string[] });
+}
+
 export interface HttpStep extends StepBase {
   type: "http";
   effect?: { idempotency_seed?: Expression };
@@ -116,7 +147,7 @@ export interface AiStep extends StepBase {
 }
 
 export type Step =
-  | ConnectorStep | CodeStep | HttpStep | BranchStep | ParallelStep | ForeachStep
+  | ConnectorStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
   | WaitStep | SignalStep | ApprovalStep | SubflowStep | TransformStep | AiStep;
 
 export type StepType = Step["type"];

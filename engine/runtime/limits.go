@@ -60,6 +60,13 @@ type Limits struct {
 	// overage for pass-through billing; only marketing templates are held
 	// back (docs/whatsapp.md#template-costs).
 	WhatsAppTemplatesMonthly int64 `json:"whatsapp_templates_monthly"`
+	// ContainerMinutesMonthly: container-step minutes per UTC month (spec
+	// 7.5). Unlike the other limits, 0 means off: container steps are
+	// enabled per plan. Beyond it container steps fail (limit_exceeded).
+	ContainerMinutesMonthly int64 `json:"container_minutes_monthly"`
+	// ContainerConcurrency: the tenant's container steps running at once
+	// (enforced when tasks are claimed).
+	ContainerConcurrency int `json:"container_concurrency"`
 	// MaxRetentionDays caps how long an ended run's history is kept, whatever
 	// its workflow or the tenant's governance settings ask for (spec 16.2).
 	MaxRetentionDays int `json:"max_retention_days"`
@@ -94,7 +101,14 @@ func (l Limits) CapTo(ceiling Limits) Limits {
 	m, c := l.toMap(), ceiling.toMap()
 	for k, cv := range c {
 		cf, _ := cv.(float64)
-		if v, _ := m[k].(float64); cf > 0 && (v <= 0 || v > cf) {
+		v, _ := m[k].(float64)
+		if zeroIsOff[k] {
+			if v > cf {
+				m[k] = cf // a ceiling of 0 (off) turns it off
+			}
+			continue
+		}
+		if cf > 0 && (v <= 0 || v > cf) {
 			m[k] = cf
 		}
 	}
@@ -111,13 +125,24 @@ func (l Limits) Exceeds(ceiling Limits) []string {
 	m := l.toMap()
 	for k, cv := range ceiling.toMap() {
 		cf, _ := cv.(float64)
-		if v, _ := m[k].(float64); cf > 0 && (v <= 0 || v > cf) {
+		v, _ := m[k].(float64)
+		if zeroIsOff[k] {
+			if v > cf {
+				out = append(out, k)
+			}
+			continue
+		}
+		if cf > 0 && (v <= 0 || v > cf) {
 			out = append(out, k)
 		}
 	}
 	sort.Strings(out)
 	return out
 }
+
+// zeroIsOff are the limits whose 0 turns a feature off rather than lifting
+// the limit; a partner's 0 turns it off for its sub-tenants too.
+var zeroIsOff = map[string]bool{"container_minutes_monthly": true}
 
 // LimitKeys describes every limit, in display order.
 var LimitKeys = []struct{ Key, Help string }{
@@ -137,8 +162,14 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"max_connections", "active connections (0: no limit)"},
 	{"ai_monthly_tokens", "tokens AI building may use per UTC month; beyond it, build by hand (0: no limit)"},
 	{"whatsapp_templates_monthly", "WhatsApp template messages included per UTC month; beyond it they are counted as overage, and only marketing ones are held back (0: no limit)"},
+	{"container_minutes_monthly", "container-step minutes per UTC month; beyond it container steps fail (0: container steps are off)"},
+	{"container_concurrency", "container steps running at once (0: the platform default)"},
 	{"max_retention_days", "days an ended run's history is kept at most, whatever a workflow asks (0: no cap)"},
 }
+
+// DefaultContainerConcurrency is the platform's default cap on one
+// tenant's container steps running at once.
+const DefaultContainerConcurrency = 2
 
 // DefaultWhatsAppTemplatesMonthly is the platform's default monthly
 // allowance of WhatsApp template messages.
@@ -163,6 +194,7 @@ func DefaultLimits() Limits {
 		AIMonthlyTokens:   DefaultAIMonthlyTokens,
 
 		WhatsAppTemplatesMonthly: DefaultWhatsAppTemplatesMonthly,
+		ContainerConcurrency:     DefaultContainerConcurrency,
 	}
 }
 
@@ -215,7 +247,7 @@ func ParseLimit(key, s string) (any, error) {
 		return f, nil
 	}
 	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && key != "whatsapp_templates_monthly" && n > math.MaxInt32) {
+	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && key != "whatsapp_templates_monthly" && key != "container_minutes_monthly" && n > math.MaxInt32) {
 		return nil, fmt.Errorf("%s: %q is not a non-negative whole number", key, s)
 	}
 	if key == "max_payload_bytes" && n > MaxPayload {
@@ -440,6 +472,8 @@ type Usage struct {
 	TasksInFlight map[string]int `json:"tasks_in_flight"` // per queue
 	// WhatsApp template messages this UTC month (spec 16).
 	WhatsAppTemplates WhatsAppTemplateUsage `json:"whatsapp_templates_this_month"`
+	// Container-step time this UTC month, in seconds (spec 7.5).
+	ContainerSeconds int64 `json:"container_seconds_this_month"`
 }
 
 // WhatsAppTemplateUsage is a month's WhatsApp template messages: sent by
@@ -514,6 +548,9 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 			return err
 		}
 		if u.WhatsAppTemplates, err = WhatsAppTemplatesThisMonth(ctx, tx, tenant); err != nil {
+			return err
+		}
+		if u.ContainerSeconds, err = ContainerSecondsThisMonth(ctx, tx, tenant); err != nil {
 			return err
 		}
 		u.TasksInFlight = map[string]int{}

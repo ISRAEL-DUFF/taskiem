@@ -104,7 +104,7 @@ func (s *Server) checkEmbedApp(r *http.Request, req *embedAppReq) error {
 	// Connectors must exist for the partner's sub-tenants: the platform's
 	// catalogue, the partner's own connectors it shares with them (the
 	// connector bridge), plus the gated step types by name.
-	known := []string{"http", "code", "ai"}
+	known := []string{"http", "code", "container", "ai"}
 	for _, c := range s.Registry.List() {
 		known = append(known, c.Manifest.ID)
 	}

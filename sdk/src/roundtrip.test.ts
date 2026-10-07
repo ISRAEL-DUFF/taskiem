@@ -143,3 +143,31 @@ describe("ussd menus", () => {
     expect(evaluate(code)).toEqual(def);
   });
 });
+
+describe("container steps", () => {
+  it("build with the helper and print back to it", () => {
+    const image = `registry.example.com/tools/pdf@sha256:${"0f".repeat(32)}`;
+    const def = sdk
+      .workflow({ id: "wf_render", name: "render", trigger: sdk.manual() })
+      .step(
+        "render",
+        sdk.container(
+          { image, command: ["/bin/render"], secrets: ["api_key"], class: "idempotent_write", network: "egress", hosts: ["api.example.com"], limits: { cpu: "1.5", memory_mb: 1024, timeout: "10m" } },
+          { html: ({ trigger }) => trigger.body.html },
+          { effect: { idempotency_seed: ({ trigger }) => trigger.body.id } },
+        ),
+      )
+      .build();
+    expect(def.steps[0]).toEqual({
+      id: "render",
+      type: "container",
+      input: { html: "=trigger.body.html" },
+      effect: { idempotency_seed: "=trigger.body.id" },
+      config: { image, command: ["/bin/render"], secrets: ["api_key"], class: "idempotent_write", network: "egress", hosts: ["api.example.com"], limits: { cpu: "1.5", memory_mb: 1024, timeout: "10m" } },
+    });
+    const code = sdk.generate(def);
+    expect(code).toContain("container(");
+    expect(evaluate(code)).toEqual(def);
+    expect(sdk.generate(evaluate(code))).toBe(code);
+  });
+});

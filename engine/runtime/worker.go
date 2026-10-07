@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/container"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/drift"
 	"github.com/israel-duff/taskiem/engine/effects"
@@ -128,6 +129,17 @@ type Worker struct {
 	// before they are cancelled (spec 15.4); default 30s. Nothing new is
 	// claimed once shutdown begins.
 	Drain time.Duration
+	// Containers runs container steps (the "container" queue, spec 7.5);
+	// nil: they fail as not enabled.
+	Containers container.Runner
+	// Proxy is the egress proxy for container steps with network
+	// "egress"; ProxyAddr is its address as the sandbox reaches it
+	// (host:port).
+	Proxy     *egress.Proxy
+	ProxyAddr string
+	// CancelPoll is how often a running container step checks whether
+	// it was cancelled; default 2s.
+	CancelPoll time.Duration
 }
 
 func (w *Worker) defaults() {
@@ -136,8 +148,9 @@ func (w *Worker) defaults() {
 	}
 	if w.Concurrency <= 0 {
 		w.Concurrency = 16
-		if w.Queue == "sandbox" {
-			// Each script may use up to the sandbox memory cap.
+		if w.Queue == "sandbox" || w.Queue == "container" {
+			// Each script may use up to the sandbox memory cap; each
+			// container holds a sandbox Pod.
 			w.Concurrency = 4
 		}
 	}
@@ -187,6 +200,9 @@ func (w *Worker) Run(ctx context.Context) error {
 		return err
 	}
 	defer stop()
+	if sw, ok := w.Containers.(container.Sweeper); ok && w.Queue == "container" {
+		go w.sweep(ctx, sw)
+	}
 	// In-flight steps outlive ctx by up to Drain, so a shutdown does not
 	// abort provider calls midway and leave outcomes unknown.
 	execCtx, cancelExec := context.WithCancel(context.WithoutCancel(ctx))
@@ -282,8 +298,12 @@ func (w *Worker) RunOnce(ctx context.Context) (int, error) {
 }
 
 func (w *Worker) claim(ctx context.Context, n int) ([]claim, error) {
+	tenantCap := w.Store.defaults().WorkerConcurrency
+	if w.Queue == "container" {
+		tenantCap = w.Store.defaults().ContainerConcurrency
+	}
 	rows, err := w.Store.Pool.Query(ctx, `SELECT task_id, tenant_id, run_id, step_id, attempt, lease_epoch FROM taskiem_claim_tasks($1, $2, $3, $4::interval, $5)`,
-		w.Queue, w.ID, n, w.Lease.String(), w.Store.defaults().WorkerConcurrency)
+		w.Queue, w.ID, n, w.Lease.String(), tenantCap)
 	if err != nil {
 		return nil, err
 	}
@@ -641,6 +661,17 @@ func (w *Worker) resolveExecutor(ctx context.Context, p *plan) error {
 		// Code has no external effects of its own; host.fetch goes through
 		// the egress guard. It is treated as a read for retries.
 		p.class = effects.Read
+	case p.stepType == "container":
+		// A container step is an unsafe_write unless it declares a class:
+		// what an arbitrary program did cannot be assumed undone.
+		if p.step == nil || p.step.Container == nil {
+			return fmt.Errorf("container step has no config")
+		}
+		c, err := effects.ParseClass(p.step.Container.ContainerClass())
+		if err != nil {
+			return err
+		}
+		p.class, p.spec = c, &defaultHTTPKey
 	case p.stepType == "http":
 		in, _ := p.sched.Input.(map[string]any)
 		method, _ := in["method"].(string)
@@ -890,6 +921,11 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		raw, _ := json.Marshal(history.CompletedPayload{Output: res.Output, Logs: res.Logs})
 		return history.Event{Type: history.StepCompleted, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
+	}
+	if p.stepType == "container" {
+		// The runner enforces the step's own time limit, however long; the
+		// heartbeat keeps the lease meanwhile.
+		return w.containerEvent(ctx, p, in)
 	}
 	deadline := time.Now().Add(w.CallTimeout)
 	if p.class.IsWrite() {

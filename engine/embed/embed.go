@@ -30,13 +30,13 @@ var DefaultEndUserPermissions = []string{"workflow.read", "workflow.edit", "run.
 
 // Step types an app must allow by name, like connectors: they reach the
 // network or run code without a connector's declared actions.
-var gatedStepTypes = []string{"http", "code", "ai"}
+var gatedStepTypes = []string{"http", "code", "container", "ai"}
 
 // Events are the partner webhook events.
 var Events = []string{"run.completed", "run.failed", "workflow.published", "usage.threshold"}
 
 // Uses lists what a definition needs its embed app to allow, sorted:
-// connector ids (a reference's part before "@") and "http", "code" or "ai"
+// connector ids (a reference's part before "@") and "http", "code", "container" or "ai"
 // for steps of those types. It reads the trigger and the steps (nested ones
 // too), and drafts as well as valid definitions: anything that is JSON.
 func Uses(doc []byte) ([]string, error) {

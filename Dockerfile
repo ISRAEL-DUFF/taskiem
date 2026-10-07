@@ -30,10 +30,13 @@ RUN --mount=type=secret,id=extra_ca \
 COPY . .
 ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/taskiem ./cmd/taskiem
+# The container-step supervisor, copied into sandbox Pods by their init container (docs/container-steps.md).
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/taskiem-shim ./cmd/taskiem-shim
 RUN mkdir -p /out/archive /out/anchors
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/taskiem /taskiem
+COPY --from=build /out/taskiem-shim /taskiem-shim
 COPY --from=web /src/web/dist /web
 COPY --from=build /src/deploy/plans.yaml /etc/taskiem/plans.yaml
 COPY --from=build --chown=nonroot:nonroot /out/archive /var/lib/taskiem/archive

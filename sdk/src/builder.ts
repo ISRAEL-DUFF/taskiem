@@ -10,7 +10,7 @@
 // functions over the expression context, compiled to CEL by build().
 
 import { compileFunction, ExpressionError } from "./expr.js";
-import type { ActionClass, Duration, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
+import type { ActionClass, ContainerLimits, Duration, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
 
 /** What an expression can read (wd/v1 rule 10). Values are untyped. */
 export interface Context {
@@ -146,6 +146,27 @@ export interface CodeConfig {
 
 export function code(config: CodeConfig, input?: Values): StepSpec {
   return { type: "code", ...(input === undefined ? {} : { input }), config };
+}
+
+export interface ContainerConfig {
+  /** registry/repository@sha256:<64 hex>; tags are refused. */
+  image: string;
+  command: string[];
+  args?: string[];
+  input_mode?: "stdin" | "file";
+  output_mode?: "stdout" | "file";
+  secrets?: string[];
+  secrets_mode?: "env" | "file";
+  /** unsafe_write unless declared. */
+  class?: "read" | "idempotent_write" | "unsafe_write";
+  network?: "none" | "egress";
+  hosts?: string[];
+  limits?: ContainerLimits;
+}
+
+/** A container step: a pinned image run in the container sandbox (docs/container-steps.md). */
+export function container(config: ContainerConfig, input?: Values, extra?: { effect?: { idempotency_seed?: Expr } }): StepSpec {
+  return { type: "container", ...(input === undefined ? {} : { input }), ...extra, config };
 }
 
 export function transform(output: Value): StepSpec {

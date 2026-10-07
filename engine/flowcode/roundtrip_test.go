@@ -341,7 +341,7 @@ func (g *gen) step(outer scope, earlier []string, depth int) obj {
 	var s obj
 	id := g.id(pick(g, "s", "step_", "pay", "x"))
 	s.set("id", id)
-	types := []string{"connector", "connector", "code", "http", "wait", "signal", "approval", "subflow", "transform", "ai"}
+	types := []string{"connector", "connector", "code", "container", "http", "wait", "signal", "approval", "subflow", "transform", "ai"}
 	if depth < 2 {
 		types = append(types, "branch", "parallel", "foreach")
 	}
@@ -428,6 +428,45 @@ func (g *gen) step(outer scope, earlier []string, depth int) obj {
 		s.set("config", c)
 		if g.chance(0.6) {
 			s.set("input", g.values(sc, 2))
+		}
+	case "container":
+		c := obj{{"image", "registry.example.com/tools/" + pick(g, "pdf", "ocr", "ml-score") + "@sha256:" + strings.Repeat("0f", 32)},
+			{"command", pick(g, []string{"/bin/render"}, []string{"python", "/app/main.py"})}}
+		if g.chance(0.4) {
+			c.set("args", []string{"--fast", g.word(4)})
+		}
+		if g.chance(0.3) {
+			c.set("input_mode", pick(g, "stdin", "file"))
+		}
+		if g.chance(0.3) {
+			c.set("output_mode", pick(g, "stdout", "file"))
+		}
+		if g.chance(0.3) {
+			c.set("secrets", []string{"api_key"})
+			if g.chance(0.5) {
+				c.set("secrets_mode", pick(g, "env", "file"))
+			}
+		}
+		if g.chance(0.5) {
+			c.set("class", pick(g, "read", "idempotent_write", "unsafe_write"))
+		}
+		if g.chance(0.3) {
+			c.set("network", "egress")
+			c.set("hosts", []string{"api.example.com", "*.example.org"})
+		} else if g.chance(0.2) {
+			c.set("network", "none")
+		}
+		if g.chance(0.4) {
+			c.set("limits", obj{{"cpu", pick(g, "500m", "1", "1.5")}, {"memory_mb", 1024}, {"timeout", "10m"}, {"output_bytes", 65536}})
+		}
+		s.set("config", c)
+		if g.chance(0.6) {
+			sec := sc
+			sec.secrets = true
+			s.set("input", g.values(sec, 2))
+		}
+		if g.chance(0.2) {
+			s.set("effect", obj{{"idempotency_seed", "=run.id + '/" + id + "'"}})
 		}
 	case "http":
 		m := pick(g, "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE")

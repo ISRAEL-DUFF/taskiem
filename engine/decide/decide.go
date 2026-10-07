@@ -452,7 +452,7 @@ func (d *decider) fail(inst, kind string, err error) {
 }
 
 func isTask(t string) bool {
-	return t == "connector" || t == "http" || t == "code" || t == "ai"
+	return t == "connector" || t == "http" || t == "code" || t == "container" || t == "ai"
 }
 
 // begin starts a ready step.
