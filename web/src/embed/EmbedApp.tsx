@@ -264,14 +264,21 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
   const publish = () =>
     act.run(async () => {
       const n = await save();
+      let out: { state?: string } | undefined;
       try {
-        await client.post(`/workflows/${id}/versions/${n}/publish`);
+        out = await client.post<{ state?: string }>(`/workflows/${id}/versions/${n}/publish`);
       } catch (e) {
         if (e instanceof ApiError && e.status === 422) setProblems(e.problems as Problem[]);
         throw e;
       }
-      setNotice(`Version ${n} is published.`);
-      emit("published", { workflow: id, version: n });
+      if (out?.state === "pending_approval") {
+        // Four-eyes publishing: someone else approves it.
+        setNotice(`Version ${n} is waiting for approval before it is published.`);
+        emit("publish-requested", { workflow: id, version: n });
+      } else {
+        setNotice(`Version ${n} is published.`);
+        emit("published", { workflow: id, version: n });
+      }
       wf.reload();
       doc.reload();
     });

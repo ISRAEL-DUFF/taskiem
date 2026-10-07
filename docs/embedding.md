@@ -70,6 +70,7 @@ A sub-tenant gets a default workspace and the `dev` and `prod` environments. It 
 | `GET /v1/partner/sub-tenants/{sub}/workflows` | read | Its workflows: names and versions, not definitions |
 | `GET /v1/partner/sub-tenants/{sub}/runs` | read | Its runs, redacted to their outcome: workflow, version, environment, status, who started them, timing, and for a failure the error's kind. Never inputs, outputs, step data or error messages. Filters: `status`, `before`, `limit` |
 | `GET /v1/partner/sub-tenants/{sub}/usage` | read | Its effective limits, usage and recent limit hits |
+| `GET /v1/partner/sub-tenants/{sub}/publish-requests`; `POST …/publish-requests/{wf}/{v}/approve`, `/reject` | read; manage | Its end users' pending publish requests under four-eyes, and deciding them as the key's owner ([end users and four-eyes](#end-users-and-four-eyes)) |
 
 **Suspending** a sub-tenant stops at once every end-user token and session in it, revokes its outstanding tokens (resuming does not revive them: mint new ones), and refuses new tokens with 409. The partner can still read it, and resume it. While suspended it does no new work: its schedules do not fire, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resuming continues its schedules from now, without catching up fires missed meanwhile ([suspended tenants](governance.md#suspended-tenants)).
 
@@ -158,7 +159,16 @@ End users call `/v1/embed/{app}/...` with `Authorization: Bearer <token>`. The t
 
 **Headless mode** is the same API without a browser: register the app with `"headless": true` and call these routes from your servers with an end-user token, to build your own UI on the engine. `TestHeadlessFlow` (`api/embed_test.go`) walks it end to end: list connectors, create from a template, validate, save a second version, lay out, publish, start a run, read it, stream it, list runs, and see the outcome, redacted, through the partner API.
 
-What end users cannot do, by design: manage secrets, variables, connections, members, roles, policies, Git or alerts; read the audit log; reveal or erase personal data; decide approvals. Those stay with the partner and platform; the partner provisions connections for them ([connector bridge](#12-the-partner-connector-bridge)). With four-eyes publishing on, a publish needs a person, so end users cannot publish.
+What end users cannot do, by design: manage secrets, variables, connections, members, roles, policies, Git or alerts; read the audit log; reveal or erase personal data; decide approvals or publish requests. Those stay with the partner and platform; the partner provisions connections for them ([connector bridge](#12-the-partner-connector-bridge)).
+
+### End users and four-eyes
+
+When a sub-tenant has four-eyes publishing on ([governance](governance.md#four-eyes-on-change); the operator sets it, as sub-tenants have no owner of their own), an end user's `POST /workflows/{wf}/versions/{v}/publish` answers `202` with `"state": "pending_approval"`: it opens a publish request in the end user's name, and nothing is deployed. The builder says the version is waiting and fires `taskiem-publish-requested` instead of `taskiem-published`. A person decides it:
+
+- **the partner**, through its API: `GET /v1/partner/sub-tenants/{sub}/publish-requests` (read) lists the pending requests, and `POST /v1/partner/sub-tenants/{sub}/publish-requests/{wf}/{v}/approve` or `/reject` (manage, optional `{"comment": "..."}`) decides one. A partner key acts as its owner, so the version is published by that person; the decision is audited in the sub-tenant's chain (`publish_request.approve`, `workflow.publish`, `via: partner`) and the access in both chains (`partner.subtenant.publish.approve`);
+- or a **member of the sub-tenant** with `workflow.publish`, with the usual routes (`GET /v1/publish-requests`, `POST /v1/workflows/{wf}/versions/{v}/publish/approve`).
+
+The second person is never the requester or the version's author (an end user, so any platform person qualifies). Your own end users and your partner key are both yours: four-eyes here means that a person at the partner, or in the sub-tenant, looks at what an end user wants to publish. API keys of the sub-tenant still cannot ask to publish.
 
 ## 6. Partner webhooks
 
@@ -374,4 +384,4 @@ The threat model's boundary B11 covers this ([threat model](security/threat-mode
 | --- | --- |
 | C4: first embedded deployment (Payrolla) | Needs people ([needs people](needs-people.md#phase-3), EM1) |
 
-Known gaps: end users cannot hold `approval.decide` (decisions are recorded against platform users); deleting a sub-tenant is an operator task; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.
+Known gaps: end users cannot hold `approval.decide` (decisions are recorded against platform users), and their publishes under four-eyes wait for a platform person; deleting a sub-tenant is an operator task; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.

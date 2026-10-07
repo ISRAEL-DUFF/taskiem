@@ -388,13 +388,15 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 			if state == "published" {
 				return nil
 			}
-			if p.UserID == uuid.Nil {
+			// A person asks, or an embed app's end user (docs/embedding.md):
+			// a platform person approves. API keys do not ask.
+			if p.UserID == uuid.Nil && p.EndUser == nil {
 				return fmt.Errorf("%w: with four-eyes publishing, a person asks to publish and another approves", errForbidden)
 			}
 			pending = true
 			if _, err := tx.Exec(r.Context(), `INSERT INTO publish_requests (tenant_id, workflow_id, version, requested_by) VALUES ($1, $2, $3, $4)
 				ON CONFLICT (workflow_id, version) DO UPDATE SET requested_by = EXCLUDED.requested_by, requested_at = now(), status = 'pending', decided_by = NULL, decided_at = NULL`,
-				p.TenantID, wf, v, p.UserID); err != nil {
+				p.TenantID, wf, v, p.Human()); err != nil {
 				return err
 			}
 			return auditTx(r, tx, "publish_request.create", fmt.Sprintf("%s/%d", wf, v), nil)

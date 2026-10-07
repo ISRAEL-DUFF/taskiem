@@ -148,5 +148,6 @@ The embedding foundations ([embedding.md](../embedding.md), decision 0015, threa
 Open, carried to the next round:
 
 - ~~A suspended sub-tenant's schedules and webhook triggers keep firing; only its tokens and sessions stop.~~ Closed: a suspended tenant does no new work ([governance](../governance.md#suspended-tenants)).
+- With four-eyes publishing on in a sub-tenant, an end user's publish is now a request that the partner (as its key's owner) or a sub-tenant member decides ([embedding](../embedding.md#end-users-and-four-eyes)). The partner mints its end users' tokens, so one partner person could both ask (as an end user) and approve (with the key): four-eyes in a sub-tenant separates the partner's people from its end users, not two partner people from each other.
 - CORS preflights for `/v1/embed/{app}` look the app's origins up in the database without authentication (one indexed read; no per-address limit yet).
 - The partner's run counts across its sub-tenants (`taskiem_partner_usage`) are read without an audit entry: counts only, no sub-tenant data.

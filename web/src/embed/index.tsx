@@ -63,6 +63,7 @@ class Mount {
  * (or call setToken), base (the API's origin; default the bundle's).
  * Events (bubbling, composed): taskiem-loaded, taskiem-token-expiring
  * (detail: expiresAt, remaining), taskiem-token-expired, taskiem-published,
+ * taskiem-publish-requested (four-eyes: a version waits for approval),
  * taskiem-run-started, taskiem-run-completed, taskiem-run-ended.
  */
 abstract class TaskiemElement extends HTMLElement {

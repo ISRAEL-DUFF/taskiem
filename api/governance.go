@@ -697,58 +697,82 @@ func (s *Server) decidePublish(approve bool) http.HandlerFunc {
 			Comment string `json:"comment"`
 		}
 		_ = decodeBody(r, &req)
-		var probs []problem
-		published := false
+		var d publishDecision
 		err = s.tx(r, func(tx pgx.Tx) error {
-			ctx := r.Context()
-			var requester uuid.UUID
-			var status string
-			var author *string
-			if err := tx.QueryRow(ctx, `SELECT q.requested_by, q.status, taskiem_actor_human(v.created_by) FROM publish_requests q
-				JOIN workflow_versions v ON v.workflow_id = q.workflow_id AND v.version = q.version
-				WHERE q.workflow_id = $1 AND q.version = $2 FOR UPDATE OF q`, wf, v).Scan(&requester, &status, &author); err != nil {
-				return err
-			}
-			if status != "pending" {
-				return fmt.Errorf("%w: the request is %s", errConflict, status)
-			}
-			if requester == p.UserID || (author != nil && *author == p.UserID.String()) {
-				return fmt.Errorf("%w: publishing needs a second person: not whoever asked, nor the version's author", errForbidden)
-			}
-			next := "rejected"
-			if approve {
-				next = "approved"
-				by := p.UserID
-				var digest string
-				var err error
-				if probs, digest, published, err = s.publishTx(ctx, tx, p.TenantID, wf, v, &by, ""); err != nil {
-					return err
-				}
-				if err := auditTx(r, tx, "workflow.publish", fmt.Sprintf("%s/%d", wf, v), map[string]any{"digest": digest, "requested_by": requester}); err != nil {
-					return err
-				}
-			}
-			if _, err := tx.Exec(ctx, `UPDATE publish_requests SET status = $3, decided_by = $4, decided_at = now(), comment = NULLIF($5, '') WHERE workflow_id = $1 AND version = $2`,
-				wf, v, next, p.UserID, req.Comment); err != nil {
-				return err
-			}
-			return auditTx(r, tx, "publish_request."+map[bool]string{true: "approve", false: "reject"}[approve], fmt.Sprintf("%s/%d", wf, v), map[string]any{"comment": req.Comment})
+			var err error
+			d, err = s.decidePublishTx(r, tx, p.TenantID, wf, v, p.UserID, approve, req.Comment, func(action string, detail map[string]any) error {
+				return auditTx(r, tx, action, fmt.Sprintf("%s/%d", wf, v), detail)
+			})
+			return err
 		})
-		if errors.Is(err, errInvalid) {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "definition is not valid", "problems": probs})
-			return
-		}
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		s.repairsAfterDeploy(r.Context(), p.TenantID, wf) // an accepted repair waiting for this decision
-		out := map[string]any{"id": wf, "version": v, "state": map[bool]string{true: "published", false: "draft"}[approve]}
-		if published {
-			if g := s.proposeToGit(r, wf, v); g != nil {
-				out["git"] = g
-			}
-		}
-		writeJSON(w, http.StatusOK, out)
+		s.answerPublishDecision(w, r, p.TenantID, wf, v, approve, d, err)
 	}
+}
+
+// publishDecision is what deciding a publish request came to.
+type publishDecision struct {
+	probs     []problem
+	published bool
+}
+
+// decidePublishTx decides the pending request to publish version v of wf
+// in tenant (in scope in tx) as approver, a person; audit records each
+// step in the tenant's chain.
+func (s *Server) decidePublishTx(r *http.Request, tx pgx.Tx, tenant, wf uuid.UUID, v int, approver uuid.UUID, approve bool, comment string,
+	audit func(action string, detail map[string]any) error) (publishDecision, error) {
+	ctx := r.Context()
+	var d publishDecision
+	var requester uuid.UUID
+	var status string
+	var author *string
+	if err := tx.QueryRow(ctx, `SELECT q.requested_by, q.status, taskiem_actor_human(v.created_by) FROM publish_requests q
+		JOIN workflow_versions v ON v.workflow_id = q.workflow_id AND v.version = q.version
+		WHERE q.workflow_id = $1 AND q.version = $2 FOR UPDATE OF q`, wf, v).Scan(&requester, &status, &author); err != nil {
+		return d, err
+	}
+	if status != "pending" {
+		return d, fmt.Errorf("%w: the request is %s", errConflict, status)
+	}
+	if requester == approver || (author != nil && *author == approver.String()) {
+		return d, fmt.Errorf("%w: publishing needs a second person: not whoever asked, nor the version's author", errForbidden)
+	}
+	next := "rejected"
+	if approve {
+		next = "approved"
+		by := approver
+		var digest string
+		var err error
+		if d.probs, digest, d.published, err = s.publishTx(ctx, tx, tenant, wf, v, &by, ""); err != nil {
+			return d, err
+		}
+		if err := audit("workflow.publish", map[string]any{"digest": digest, "requested_by": requester}); err != nil {
+			return d, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE publish_requests SET status = $3, decided_by = $4, decided_at = now(), comment = NULLIF($5, '') WHERE workflow_id = $1 AND version = $2`,
+		wf, v, next, approver, comment); err != nil {
+		return d, err
+	}
+	return d, audit("publish_request."+map[bool]string{true: "approve", false: "reject"}[approve], map[string]any{"comment": comment})
+}
+
+// answerPublishDecision answers a publish decision and does what follows
+// it outside the transaction.
+func (s *Server) answerPublishDecision(w http.ResponseWriter, r *http.Request, tenant, wf uuid.UUID, v int, approve bool, d publishDecision, err error) {
+	if errors.Is(err, errInvalid) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "definition is not valid", "problems": d.probs})
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.repairsAfterDeploy(r.Context(), tenant, wf) // an accepted repair waiting for this decision
+	out := map[string]any{"id": wf, "version": v, "state": map[bool]string{true: "published", false: "draft"}[approve]}
+	if d.published {
+		if g := s.proposeToGit(r, wf, v); g != nil {
+			out["git"] = g
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }

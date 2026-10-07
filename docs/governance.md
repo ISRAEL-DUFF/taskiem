@@ -138,6 +138,6 @@ Owners turn these on under **Secrets & settings → Four-eyes** (`PUT /v1/govern
 | Publishing needs a second publisher | Publish returns `202 pending_approval` and opens a publish request. Another member with `workflow.publish`, who neither asked nor wrote the version, publishes or rejects it (Approvals → Publishing to review) |
 | A new policy version needs a second person | A saved policy version is `pending` until someone other than its author approves it; the previous version stays active meanwhile |
 
-The second person is a person, not an API key, and not the one behind the key that wrote the change.
+The second person is a person, not an API key, and not the one behind the key that wrote the change. In a sub-tenant, an embed app's end user may ask to publish; a member of the sub-tenant or the partner (as its key's owner) decides ([embedding](embedding.md#end-users-and-four-eyes)).
 
 Git-led environments publish from merged commits: the repository's branch protection and review are the second pair of eyes there. Because of that, with either setting on (or for a gated environment), **connecting a repository in Git-led mode, switching to it, or pointing a Git-led connection at another provider, host, repository, branch or path needs a second person too** (see [Git](git.md)).
