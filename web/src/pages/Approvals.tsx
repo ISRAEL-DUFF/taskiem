@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { assert, passkeysSupported } from "../passkeys";
+import { passkeysSupported, stepUpAssert } from "../passkeys";
 import { ApiError, del, get, post, type Approval, type Delegation, type PublishRequest } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field, Json, Modal, fmtTime, useAction, useLoad } from "../ui";
@@ -81,7 +81,8 @@ function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "appr
     onDone();
   };
   const submit = () => act.run(() => send(code ? { totp: code } : {}));
-  const withPasskey = () => act.run(async () => send({ passkey: await assert("/v1/me/step-up/options") }));
+  // The passkey is asked for this decision on this approval only.
+  const withPasskey = () => act.run(async () => send({ passkey: await stepUpAssert("approval.decide", `${a.run_id}/${a.step_id}/${decision}`) }));
   return (
     <Modal title={decision === "approved" ? "Approve" : "Reject"} onClose={onClose}>
       <p>

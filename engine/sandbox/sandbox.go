@@ -6,6 +6,7 @@ package sandbox
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/expr"
+	"github.com/israel-duff/taskiem/engine/lru"
 )
 
 // Limits bound one execution (spec 7.2).
@@ -70,10 +72,28 @@ var (
 	ErrNoExport = errors.New("code step must export a default function")
 )
 
+// compiled keeps successful compiles by language and source hash, so a
+// version checked on every read (and a Python syntax check, which runs the
+// interpreter) is compiled once per process. Bounded: sources come from
+// tenants (self-review S34).
+var compiled = lru.New[[32]byte, string](2048, 0)
+
 // Compile turns step source into the script the sandbox runs. TypeScript
 // types are stripped and the module is bundled into one expression; imports
 // are not allowed (packages are curated and bundled by the platform).
 func Compile(source, language string) (string, error) {
+	key := sha256.Sum256([]byte(language + "\x00" + source))
+	if s, ok := compiled.Get(key); ok {
+		return s, nil
+	}
+	s, err := compile(source, language)
+	if err == nil {
+		compiled.Put(key, s)
+	}
+	return s, err
+}
+
+func compile(source, language string) (string, error) {
 	if language == "python" {
 		return compilePython(source)
 	}

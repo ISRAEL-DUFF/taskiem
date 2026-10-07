@@ -16,7 +16,7 @@ import (
 // to its end.
 func TestDeployDiffAndTail(t *testing.T) {
 	srv := startServer(t)
-	login := srv.call(t, "POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery"})
+	login := srv.call(t, "POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery", "bearer": true})
 	tok := login["token"].(string)
 	key := srv.call(t, "POST", "/v1/api-keys", tok, map[string]any{"name": "ci",
 		"permissions": []string{"workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"}})["key"].(string)

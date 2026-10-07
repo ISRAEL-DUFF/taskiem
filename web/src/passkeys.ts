@@ -67,9 +67,11 @@ export interface Proof {
 }
 
 /** Builds the proof the server asks for: an existing passkey, else the
- * authenticator code or password the member typed. */
-export async function proof(factors: Me["factors"], typed: string): Promise<Proof> {
-  if (factors?.passkey) return { passkey: await assert("/v1/me/step-up/options") };
+ * authenticator code or password the member typed. A passkey is asked for
+ * this change only (action: passkey.add, passkey.remove/<id>, totp.setup,
+ * password.change, whatsapp.link, whatsapp.pin). */
+export async function proof(factors: Me["factors"], typed: string, action: string): Promise<Proof> {
+  if (factors?.passkey) return { passkey: await stepUpAssert("account.reauth", action) };
   if (factors?.totp) return { totp: typed };
   if (factors?.password) return { password: typed };
   return {};
@@ -91,14 +93,18 @@ export async function addPasskey(name: string, p: Proof) {
 }
 
 /** Asks for a passkey for options from the server; returns its JSON. */
-export async function assert(path: string) {
-  const { publicKey: o } = await post<{ publicKey: RequestJSON }>(path);
+export async function assert(path: string, body?: object) {
+  const { publicKey: o } = await post<{ publicKey: RequestJSON }>(path, body);
   const cred = (await navigator.credentials.get({
     publicKey: { ...o, challenge: fromB64(o.challenge), allowCredentials: descriptors(o.allowCredentials) },
   })) as PublicKeyCredential | null;
   if (!cred) throw new Error("No passkey was used");
   return credentialJSON(cred);
 }
+
+/** A passkey assertion for step-up, good only for this operation on this
+ * target (an approval decision, a key change, a factor change). */
+export const stepUpAssert = (operation: string, target: string) => assert("/v1/me/step-up/options", { operation, target });
 
 /** Signs in with a passkey. */
 export async function passkeyLogin() {

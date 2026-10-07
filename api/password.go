@@ -347,7 +347,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case f.Passkey || f.TOTP:
-		if !s.proveFactor(w, r, factorProof{TOTP: req.TOTP, Passkey: req.Passkey}) {
+		if !s.proveFactor(w, r, factorProof{TOTP: req.TOTP, Passkey: req.Passkey}, "password.change") {
 			return
 		}
 	default:

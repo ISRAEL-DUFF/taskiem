@@ -460,7 +460,7 @@ func (s *Server) beginTOTP(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, errTOTPEnrolled)
 		return
 	}
-	if !s.proveFactor(w, r, proof) {
+	if !s.proveFactor(w, r, proof, "totp.setup") {
 		return
 	}
 	secret, err := totp.NewSecret()

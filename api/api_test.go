@@ -99,7 +99,7 @@ func (w *world) tenant(t *testing.T, name, email string) *client {
 
 func (w *world) login(t *testing.T, email, pw string) *client {
 	anon := &client{t: t, base: w.base}
-	out := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": email, "password": pw})
+	out := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": email, "password": pw, "bearer": true})
 	return &client{t: t, base: w.base, token: out["token"].(string)}
 }
 

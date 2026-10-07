@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/africastalking"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/expr"
+	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/ussd"
@@ -75,7 +76,7 @@ type ussdState struct {
 	mu       sync.Mutex
 	channels map[string]ussdChannelEntry
 	sessions map[string]ussdSess
-	menus    sync.Map // "workflow/version" -> *ussdMenu
+	menus    lru.Cache[string, *ussdMenu] // "workflow/version"; bounded (S34)
 	// start replaces StartRun (tests make the engine slow).
 	start func(context.Context, runtime.StartRequest) (runtime.RunRef, bool, error)
 }
@@ -460,8 +461,8 @@ func (s *Server) ussdLoad(ctx context.Context, tenant uuid.UUID, provider string
 // read once per process.
 func (s *Server) ussdMenuFor(ctx context.Context, tenant, wf uuid.UUID, version int) (*ussdMenu, error) {
 	key := wf.String() + "/" + strconv.Itoa(version)
-	if m, ok := s.ussd.menus.Load(key); ok {
-		return m.(*ussdMenu), nil
+	if m, ok := s.ussd.menus.Get(key); ok {
+		return m, nil
 	}
 	var doc []byte
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -481,7 +482,7 @@ func (s *Server) ussdMenuFor(ctx context.Context, tenant, wf uuid.UUID, version 
 		return nil, err
 	}
 	m := &ussdMenu{menu: menu, def: def, doc: doc}
-	s.ussd.menus.Store(key, m)
+	s.ussd.menus.Put(key, m)
 	return m, nil
 }
 

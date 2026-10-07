@@ -58,15 +58,15 @@ func (s *Server) embedRoutes(r chi.Router) {
 		r.Get("/me", s.embedMe)
 		r.Get("/connectors", s.embedConnectors)
 		r.With(s.need(PermWorkflowRead)).Get("/workflows", s.listWorkflows)
-		r.With(s.need(PermWorkflowEdit), s.embedGuardBody).Post("/workflows", s.createWorkflow)
+		r.With(s.need(PermWorkflowEdit), s.embedGuardBody, s.tenantCode).Post("/workflows", s.createWorkflow)
 		r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}", s.getWorkflow)
-		r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/versions/{v}", s.getVersion)
-		r.With(s.need(PermWorkflowEdit), s.embedGuardBody).Post("/workflows/{wf}/versions", s.createVersion)
+		r.With(s.need(PermWorkflowRead), s.tenantCode).Get("/workflows/{wf}/versions/{v}", s.getVersion)
+		r.With(s.need(PermWorkflowEdit), s.embedGuardBody, s.tenantCode).Post("/workflows/{wf}/versions", s.createVersion)
 		r.With(s.need(PermWorkflowEdit)).Put("/workflows/{wf}/versions/{v}/layout", s.putLayout)
-		r.With(s.need(PermWorkflowPublish), s.embedGuardVersion).Post("/workflows/{wf}/versions/{v}/publish", s.publish)
-		r.With(s.need(PermWorkflowEdit), s.embedGuardBody).Post("/validate", s.validate)
+		r.With(s.need(PermWorkflowPublish), s.embedGuardVersion, s.tenantCode).Post("/workflows/{wf}/versions/{v}/publish", s.publish)
+		r.With(s.need(PermWorkflowEdit), s.embedGuardBody, s.tenantCode).Post("/validate", s.validate)
 		r.Get("/templates", s.embedTemplates)
-		r.With(s.need(PermWorkflowEdit)).Post("/templates/{id}/instantiate", s.embedInstantiate)
+		r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/templates/{id}/instantiate", s.embedInstantiate)
 		r.With(s.need(PermRunStart), s.embedGuardRun).Post("/workflows/{wf}/runs", s.startRun)
 		r.With(s.need(PermRunRead)).Get("/runs", s.listRuns)
 		r.With(s.need(PermRunRead)).Get("/runs/{run}", s.getRun)
@@ -75,12 +75,27 @@ func (s *Server) embedRoutes(r chi.Router) {
 	})
 }
 
+// Unauthenticated CORS preflights are paced per client address: a burst of
+// 60, then 20 a second. Browsers cache an answer for ten minutes per URL,
+// so a builder page needs far fewer.
+const (
+	embedPreflightEvery = 50 * time.Millisecond
+	embedPreflightBurst = 60
+)
+
 // embedCORS answers preflights and sets CORS headers for the app's allowed
 // origins only. A request from any other origin gets no CORS headers, so
 // browsers withhold the answer from the page; embedAuth refuses it as well.
 func (s *Server) embedCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
+		// A preflight carries no credentials, so it is paced per address
+		// before its database read (embedding residual).
+		if r.Method == http.MethodOptions && !s.limiter("embed-preflight:"+clientIP(r), embedPreflightEvery, embedPreflightBurst).Allow() {
+			w.Header().Set("Retry-After", "1")
+			writeErr(w, http.StatusTooManyRequests, "too many requests")
+			return
+		}
 		allowed := false
 		if origin != "" {
 			if app, err := uuid.Parse(chi.URLParam(r, "app")); err == nil {

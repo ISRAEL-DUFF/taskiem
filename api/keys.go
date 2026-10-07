@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/byok"
@@ -20,6 +21,15 @@ import (
 // PermKeyManage lets a member see the tenant's keys, rotate the tenant key,
 // and bring, check, replace or remove a customer key. Owners hold it.
 const PermKeyManage = "key.manage"
+
+// Key operations that change what protects the tenant's data. Each needs a
+// person's step-up (self-review K5), bound to the operation and the tenant.
+const (
+	keyOpRotate      = "key.rotate"
+	keyOpEnable      = "key.byok.enable"
+	keyOpCredentials = "key.byok.credentials" //nolint:gosec // an operation name, not a credential
+	keyOpDisable     = "key.byok.disable"
+)
 
 func init() {
 	allPermissions = append(allPermissions, PermKeyManage)
@@ -41,6 +51,44 @@ func (s *Server) keyRoutes(r chi.Router) {
 	r.With(s.tenantWide).Delete("/byok", s.deleteBYOK)
 }
 
+// keyStepUp holds a key operation to a person who confirms it with a
+// passkey (for a challenge asked for op and this tenant) or a current
+// authenticator code. API keys cannot: a key is not a person and has no
+// second factor. It answers the request and returns false when the proof
+// is missing or wrong.
+func (s *Server) keyStepUp(w http.ResponseWriter, r *http.Request, proof stepUpProof, op string) bool {
+	p := principalFrom(r.Context())
+	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": "encryption key changes are made by a person who confirms with a passkey or authenticator code, not with an API key", "step_up": "required"})
+		return false
+	}
+	method, ok := s.checkStepUp(w, r, proof, stepUpScope(op, p.TenantID.String()))
+	if !ok {
+		return false
+	}
+	if method != "" {
+		return true
+	}
+	f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID)
+	if err != nil {
+		s.fail(w, r, err)
+		return false
+	}
+	var methods []string
+	if f.Passkey {
+		methods = append(methods, "passkey")
+	}
+	if f.TOTP {
+		methods = append(methods, "totp")
+	}
+	msg := "confirm with your passkey or authenticator code"
+	if len(methods) == 0 {
+		msg = "add a passkey or an authenticator app under Account first: changing encryption keys needs one"
+	}
+	writeJSON(w, http.StatusForbidden, map[string]any{"error": msg, "step_up": "required", "methods": nonNil(methods), "operation": op, "target": p.TenantID})
+	return false
+}
+
 func (s *Server) getKeys(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Vault.KeyStatus(r.Context(), principalFrom(r.Context()).TenantID)
 	if err != nil {
@@ -52,6 +100,14 @@ func (s *Server) getKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) rotateKey(w http.ResponseWriter, r *http.Request) {
+	var proof stepUpProof
+	if err := decodeOptional(r, &proof); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.keyStepUp(w, r, proof, keyOpRotate) {
+		return
+	}
 	p := principalFrom(r.Context())
 	ver, err := s.Vault.Rotate(r.Context(), p.TenantID, p.Actor())
 	if err != nil {
@@ -61,16 +117,27 @@ func (s *Server) rotateKey(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"version": ver, "rewrap": "queued"})
 }
 
-// byokRequest is a customer key's location and the credentials to reach it.
+// byokRequest is a customer key's location and the credentials to reach it,
+// with the step-up that confirms the change.
 type byokRequest struct {
 	byok.Config
 	Credentials map[string]string `json:"credentials"`
+	stepUpProof
 }
 
 func (s *Server) putBYOK(w http.ResponseWriter, r *http.Request) {
 	var req byokRequest
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	// A configuration mistake is answered before the step-up, so fixing it
+	// does not spend another code.
+	if err := byok.Validate(req.Normalise(), req.Credentials); err != nil {
+		s.keyFail(w, r, err)
+		return
+	}
+	if !s.keyStepUp(w, r, req.stepUpProof, keyOpEnable) {
 		return
 	}
 	p := principalFrom(r.Context())
@@ -85,9 +152,13 @@ func (s *Server) putBYOK(w http.ResponseWriter, r *http.Request) {
 func (s *Server) putBYOKCredentials(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Credentials map[string]string `json:"credentials"`
+		stepUpProof
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if !s.keyStepUp(w, r, req.stepUpProof, keyOpCredentials) {
 		return
 	}
 	p := principalFrom(r.Context())
@@ -100,6 +171,8 @@ func (s *Server) putBYOKCredentials(w http.ResponseWriter, r *http.Request) {
 	s.checkAndResume(w, r, map[string]any{"byok": key})
 }
 
+// checkBYOK checks the key in use. It changes nothing (it can only resume
+// steps the key job would resume within a minute), so it needs no step-up.
 func (s *Server) checkBYOK(w http.ResponseWriter, r *http.Request) {
 	s.checkAndResume(w, r, map[string]any{})
 }
@@ -126,6 +199,14 @@ func (s *Server) checkAndResume(w http.ResponseWriter, r *http.Request, out map[
 }
 
 func (s *Server) deleteBYOK(w http.ResponseWriter, r *http.Request) {
+	var proof stepUpProof
+	if err := decodeOptional(r, &proof); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.keyStepUp(w, r, proof, keyOpDisable) {
+		return
+	}
 	p := principalFrom(r.Context())
 	ver, err := s.Vault.DisableBYOK(r.Context(), p.TenantID, p.Actor())
 	if err != nil {

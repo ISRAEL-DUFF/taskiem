@@ -142,6 +142,9 @@ type signupReq struct {
 	Password string `json:"password"`
 	// Website is the form's hidden field: people leave it empty.
 	Website string `json:"website,omitempty"`
+	// Bearer asks for the session token in the answer instead of a cookie
+	// (API and CLI clients; S35).
+	Bearer bool `json:"bearer,omitempty"`
 }
 
 // signupOptions tells the web app whether to offer signup.
@@ -248,8 +251,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"tenant_id": tenant, "user_id": user, "verification_sent": token != ""}
 	// Signed in at once: the first run should not wait for anything.
 	if sess, err := s.createSession(r, user, tenant, "password"); err == nil {
-		s.setSessionCookie(w, sess.token)
-		out["token"] = sess.token
+		s.deliverSession(w, req.Bearer, sess.token, out)
 	} else {
 		s.Logger.Warn("signup: not signed in", "err", err)
 	}

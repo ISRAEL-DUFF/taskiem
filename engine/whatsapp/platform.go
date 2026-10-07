@@ -9,7 +9,6 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/lru"
 )
 
 // Window is WhatsApp's customer service window: free-form messages may be
@@ -109,7 +109,7 @@ type Platform struct {
 	// secret and webhook path), not on Taskiem's.
 	OwnApp bool
 
-	own sync.Map // own numbers by "t:<tenant>" and "n:<phone number id>"
+	own lru.Cache[string, ownEntry] // own numbers by "t:<tenant>" and "n:<phone number id>"; bounded (S34)
 }
 
 // Own reports whether this is a tenant's own number.

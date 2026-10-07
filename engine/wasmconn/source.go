@@ -37,6 +37,9 @@ type Source struct {
 	loaded  map[string]*connector.Connector // by tenant, id and version
 }
 
+// maxTenantLists bounds the tenants whose connector lists are kept.
+const maxTenantLists = 4096
+
 type cached struct {
 	at   time.Time
 	list []*connector.Connector
@@ -157,6 +160,17 @@ func (s *Source) Connectors(ctx context.Context, tenant string) ([]*connector.Co
 	s.mu.Lock()
 	if s.tenants == nil {
 		s.tenants = map[string]cached{}
+	}
+	if len(s.tenants) >= maxTenantLists {
+		// Bounded (self-review S34): stale lists go first, then all of them.
+		for k, c := range s.tenants {
+			if time.Since(c.at) >= ttl {
+				delete(s.tenants, k)
+			}
+		}
+		if len(s.tenants) >= maxTenantLists {
+			s.tenants = map[string]cached{}
+		}
 	}
 	s.tenants[tenant] = cached{at: time.Now(), list: list}
 	s.mu.Unlock()

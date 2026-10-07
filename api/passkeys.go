@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -100,21 +102,40 @@ func (s *Server) passkeysOn(w http.ResponseWriter) bool {
 	return true
 }
 
-func (s *Server) issueChallenge(ctx context.Context, purpose string, user *uuid.UUID) ([]byte, error) {
+// issueChallenge stores a single-use challenge for purpose and person. A
+// step-up challenge also names its scope, the operation and target it is
+// for (S35): its last 16 bytes are the scope's SHA-256 prefix, so what the
+// authenticator signed says what it was for, and the row holds the scope
+// the challenge can be taken for. Sign-in and registration have no scope.
+func (s *Server) issueChallenge(ctx context.Context, purpose string, user *uuid.UUID, scope string) ([]byte, error) {
 	ch := webauthn.NewChallenge()
-	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_challenge_issue($1, $2, $3, $4::interval)`, ch, purpose, user, challengeTTL.String())
+	var sc *string
+	if scope != "" {
+		sum := sha256.Sum256([]byte(scope))
+		copy(ch[16:], sum[:16])
+		sc = &scope
+	}
+	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_challenge_issue($1, $2, $3, $4::interval, $5)`, ch, purpose, user, challengeTTL.String(), sc)
 	return ch, err
 }
 
 // takeChallenge consumes the challenge a response was made for. It works
-// once, within five minutes, for the purpose and person it was issued to.
-func (s *Server) takeChallenge(ctx context.Context, clientData []byte, purpose string, user *uuid.UUID) ([]byte, error) {
+// once, within five minutes, for the purpose, person and scope it was
+// issued for.
+func (s *Server) takeChallenge(ctx context.Context, clientData []byte, purpose string, user *uuid.UUID, scope string) ([]byte, error) {
 	ch, err := challengeOf(clientData)
 	if err != nil {
 		return nil, err
 	}
+	var sc *string
+	if scope != "" {
+		if sum := sha256.Sum256([]byte(scope)); !bytes.Equal(ch[16:], sum[:16]) {
+			return nil, errPasskey // asked for another operation
+		}
+		sc = &scope
+	}
 	var owner *uuid.UUID
-	err = s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_challenge_take($1, $2)`, ch, purpose).Scan(&owner)
+	err = s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_challenge_take($1, $2, $3)`, ch, purpose, sc).Scan(&owner)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errPasskey
 	}
@@ -140,7 +161,7 @@ func (s *Server) passkeyLoginOptions(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return
 	}
-	ch, err := s.issueChallenge(r.Context(), "login", nil)
+	ch, err := s.issueChallenge(r.Context(), "login", nil, "")
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -162,22 +183,24 @@ func (s *Server) passkeyLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Credential credentialJSON `json:"credential"`
 		TenantID   uuid.UUID      `json:"tenant_id,omitempty"`
+		Bearer     bool           `json:"bearer,omitempty"` // the token in the answer, no cookie (S35)
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	user, err := s.verifyPasskey(r.Context(), req.Credential, "login", nil)
+	user, err := s.verifyPasskey(r.Context(), req.Credential, "login", nil, "")
 	if err != nil {
 		s.passkeyFail(w, r, err)
 		return
 	}
-	s.startSession(w, r, user, req.TenantID, "passkey")
+	s.startSession(w, r, user, req.TenantID, "passkey", req.Bearer)
 }
 
 // verifyPasskey checks an assertion against the stored credential and
-// records its use. With user set, the credential must be theirs.
-func (s *Server) verifyPasskey(ctx context.Context, c credentialJSON, purpose string, user *uuid.UUID) (uuid.UUID, error) {
+// records its use. With user set, the credential must be theirs; with
+// scope set, the challenge must have been asked for it.
+func (s *Server) verifyPasskey(ctx context.Context, c credentialJSON, purpose string, user *uuid.UUID, scope string) (uuid.UUID, error) {
 	id, clientData, err := c.decode()
 	if err != nil {
 		return uuid.Nil, err
@@ -187,7 +210,7 @@ func (s *Server) verifyPasskey(ctx context.Context, c credentialJSON, purpose st
 	if err1 != nil || err2 != nil {
 		return uuid.Nil, fmt.Errorf("%w: bad assertion", errBadRequest)
 	}
-	ch, err := s.takeChallenge(ctx, clientData, purpose, user)
+	ch, err := s.takeChallenge(ctx, clientData, purpose, user, scope)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -251,7 +274,7 @@ func (s *Server) passkeyRegisterOptions(w http.ResponseWriter, r *http.Request) 
 		s.fail(w, r, err)
 		return
 	}
-	if !s.proveFactor(w, r, proof) {
+	if !s.proveFactor(w, r, proof, "passkey.add") {
 		return
 	}
 	var email, name string
@@ -271,7 +294,7 @@ func (s *Server) passkeyRegisterOptions(w http.ResponseWriter, r *http.Request) 
 		s.fail(w, r, err)
 		return
 	}
-	ch, err := s.issueChallenge(r.Context(), "register", &p.UserID)
+	ch, err := s.issueChallenge(r.Context(), "register", &p.UserID, "")
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -322,7 +345,7 @@ func (s *Server) passkeyRegister(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: bad attestationObject", errBadRequest))
 		return
 	}
-	ch, err := s.takeChallenge(r.Context(), clientData, "register", &p.UserID)
+	ch, err := s.takeChallenge(r.Context(), clientData, "register", &p.UserID, "")
 	if err != nil {
 		s.passkeyFail(w, r, err)
 		return
@@ -404,7 +427,7 @@ func (s *Server) removePasskey(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if !s.proveFactor(w, r, proof) {
+	if !s.proveFactor(w, r, proof, "passkey.remove/"+chi.URLParam(r, "id")) {
 		return
 	}
 	err = s.tx(r, func(tx pgx.Tx) error {
@@ -476,11 +499,60 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 
 // --- step-up ---
 
+// stepUpOps are the operations a step-up challenge is asked for, each with
+// its target (S35):
+//
+//	approval.decide       <run>/<step>/<approved|rejected>
+//	account.reauth        passkey.add, passkey.remove/<id>, totp.setup,
+//	                      password.change, whatsapp.link, whatsapp.pin
+//	key.rotate, key.byok.enable, key.byok.credentials, key.byok.disable
+//	                      <tenant id>
+//
+// An assertion for one operation and target passes no other.
+var stepUpOps = map[string]bool{
+	"approval.decide": true, "account.reauth": true,
+	keyOpRotate: true, keyOpEnable: true, keyOpCredentials: true, keyOpDisable: true,
+}
+
+// stepUpScope is what a step-up challenge is bound to.
+func stepUpScope(op, target string) string { return op + " " + target }
+
+// approvalScope binds a step-up to one decision on one approval.
+func approvalScope(run uuid.UUID, step, decision string) string {
+	return stepUpScope("approval.decide", run.String()+"/"+step+"/"+decision)
+}
+
+func validTarget(t string) bool {
+	if t == "" || len(t) > 200 {
+		return false
+	}
+	for _, c := range t {
+		if c <= ' ' || c == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// stepUpOptions issues a passkey challenge for one operation on one target:
+// {"operation", "target"}.
 func (s *Server) stepUpOptions(w http.ResponseWriter, r *http.Request) {
 	if !s.passkeysOn(w) {
 		return
 	}
 	p := principalFrom(r.Context())
+	var req struct {
+		Operation string `json:"operation"`
+		Target    string `json:"target"`
+	}
+	if err := decodeOptional(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !stepUpOps[req.Operation] || !validTarget(req.Target) {
+		s.fail(w, r, fmt.Errorf("%w: name the operation and its target this passkey confirms (operation, target)", errBadRequest))
+		return
+	}
 	var ids [][]byte
 	err := s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT id FROM webauthn_credentials WHERE user_id = $1`, p.UserID)
@@ -498,7 +570,7 @@ func (s *Server) stepUpOptions(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: you have no passkey; add one under Account", errBadRequest))
 		return
 	}
-	ch, err := s.issueChallenge(r.Context(), "step_up", &p.UserID)
+	ch, err := s.issueChallenge(r.Context(), "step_up", &p.UserID, stepUpScope(req.Operation, req.Target))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -551,8 +623,10 @@ func (s *Server) factorsOf(ctx context.Context, tenant, user uuid.UUID) (factorS
 // proveFactor checks the proof and answers the request when it falls
 // short. A member with a passkey or authenticator proves themselves with a
 // fresh assertion or code; one with neither, with their password; one with
-// none of these (signed in by SSO only) has nothing more to give.
-func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof factorProof) bool {
+// none of these (signed in by SSO only) has nothing more to give. A
+// passkey assertion must be for a challenge asked for "account.reauth"
+// and action (passkey.add, totp.setup, ...).
+func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof factorProof, action string) bool {
 	ctx := r.Context()
 	p := principalFrom(ctx)
 	f, hash, err := s.factorsOf(ctx, p.TenantID, p.UserID)
@@ -575,8 +649,8 @@ func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof facto
 		}
 		switch {
 		case proof.Passkey != nil && f.Passkey:
-			if _, err := s.verifyPasskey(ctx, *proof.Passkey, "step_up", &p.UserID); err != nil {
-				if errors.Is(err, errPasskey) || errors.Is(err, webauthn.ErrInvalid) || errors.Is(err, webauthn.ErrCloned) {
+			if _, err := s.verifyPasskey(ctx, *proof.Passkey, "step_up", &p.UserID, stepUpScope("account.reauth", action)); err != nil {
+				if passkeyRefused(err) {
 					return need("that passkey response is not valid; try again", methods...)
 				}
 				s.fail(w, r, err)
@@ -602,6 +676,48 @@ func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof facto
 		}
 	}
 	return true
+}
+
+// passkeyRefused reports whether err refuses the assertion (rather than
+// failing to check it).
+func passkeyRefused(err error) bool {
+	return errors.Is(err, errPasskey) || errors.Is(err, webauthn.ErrInvalid) || errors.Is(err, webauthn.ErrCloned)
+}
+
+// stepUpProof is a second factor given with a request that needs step-up:
+// a passkey assertion for a challenge asked for this operation and target
+// (POST /v1/me/step-up/options), or a current authenticator code.
+type stepUpProof struct {
+	TOTP    string          `json:"totp,omitempty"`
+	Passkey *credentialJSON `json:"passkey,omitempty"`
+}
+
+// checkStepUp verifies a step-up proof for scope. It returns the method
+// that passed ("passkey", "totp"), or "" when none was given. On a proof
+// that does not pass it answers 403 (429 when codes are locked out) and
+// returns false.
+func (s *Server) checkStepUp(w http.ResponseWriter, r *http.Request, proof stepUpProof, scope string) (string, bool) {
+	p := principalFrom(r.Context())
+	switch {
+	case proof.Passkey != nil:
+		if _, err := s.verifyPasskey(r.Context(), *proof.Passkey, "step_up", &p.UserID, scope); err != nil {
+			if passkeyRefused(err) {
+				writeJSON(w, http.StatusForbidden, map[string]any{"error": "that passkey response is not valid for this; try again", "step_up": "passkey"})
+				return "", false
+			}
+			s.fail(w, r, err)
+			return "", false
+		}
+		return "passkey", true
+	case proof.TOTP != "":
+		ok, err := s.verifyTOTP(r.Context(), p.TenantID, p.UserID, proof.TOTP)
+		if err != nil || !ok {
+			s.totpRefused(w, r, err, map[string]any{"error": "that authenticator code is not right, or was already used", "step_up": "totp"})
+			return "", false
+		}
+		return "totp", true
+	}
+	return "", true
 }
 
 // decodeOptional reads a JSON body that may be absent.
@@ -672,8 +788,20 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, tok string) {
 		SameSite: http.SameSiteLaxMode, MaxAge: int(sessionTTL.Seconds())})
 }
 
+// deliverSession hands a new session to the client (S35): as an HttpOnly
+// cookie, which the page's scripts cannot read, or, to a client that asked
+// for a bearer token (API, CLI), as "token" in the answer and no cookie.
+// Never both.
+func (s *Server) deliverSession(w http.ResponseWriter, bearer bool, tok string, out map[string]any) {
+	if bearer {
+		out["token"] = tok
+		return
+	}
+	s.setSessionCookie(w, tok)
+}
+
 // startSession signs user in and answers with the session as JSON.
-func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want uuid.UUID, method string) {
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want uuid.UUID, method string, bearer bool) {
 	sess, err := s.createSession(r, user, want, method)
 	switch {
 	case errors.Is(err, errSSORequired):
@@ -681,7 +809,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 		return
 	case errors.Is(err, errNoMembership) && method != "sso":
 		// No membership anywhere, but perhaps invitations to answer.
-		if ok, ierr := s.startInviteeSession(w, r, user, method); ierr != nil {
+		if ok, ierr := s.startInviteeSession(w, r, user, method, bearer); ierr != nil {
 			s.fail(w, r, ierr)
 			return
 		} else if ok {
@@ -696,8 +824,9 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 		s.fail(w, r, err)
 		return
 	}
-	s.setSessionCookie(w, sess.token)
-	writeJSON(w, http.StatusOK, map[string]any{"token": sess.token, "tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user})
+	out := map[string]any{"tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user}
+	s.deliverSession(w, bearer, sess.token, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // ResetPasskeys removes every passkey of the person with email and ends

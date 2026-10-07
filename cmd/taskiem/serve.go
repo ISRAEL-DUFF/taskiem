@@ -540,6 +540,9 @@ func serve(ctx context.Context, args []string) error {
 		// started per submission (docs/connector-submissions.md).
 		srv.Catalogue = &catalogue.Checker{}
 		srv.LoginBurst = cfg.LoginBurst
+		if err := harden(srv, cfg.PublicURL); err != nil { // HSTS, tenant code limits (hardening.go)
+			return err
+		}
 		srv.SignupPerAddress, srv.SignupBlockedDomains, srv.DocsURL = cfg.SignupPerAddress, cfg.SignupBlockedDomains, cfg.DocsURL
 		if prov, err := ai.New(cfg.AI); err != nil {
 			return err

@@ -83,6 +83,12 @@ var (
 	KeyChecksFailed = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_tenant_key_checks_failed_total", Help: "Key job checks where a tenant key could not be unwrapped (customer: BYOK revoked, disabled or unreachable; platform: the KMS).",
 	}, []string{"wrapped_by"})
+	// TenantCodeRefused counts requests that would run tenant code in the
+	// API process (flow compile, code checks, catalogue checks) refused
+	// because the tenant held its share or the process was full.
+	TenantCodeRefused = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_tenant_code_refused_total", Help: "Requests to compile or check tenant code in the API process refused, by reason (tenant: its share in use; process: every slot in use).",
+	}, []string{"reason"})
 )
 
 // QueueCollector reports queue depth and the age of the oldest ready task,

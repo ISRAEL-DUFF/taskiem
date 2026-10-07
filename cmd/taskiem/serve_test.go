@@ -121,7 +121,7 @@ func TestServeAllSmoke(t *testing.T) {
 		t.Helper()
 		return srv.call(t, method, path, token, body)
 	}
-	login := call("POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery"})
+	login := call("POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery", "bearer": true})
 	tok, tenant := login["token"].(string), login["tenant_id"].(string)
 	wf := call("POST", "/v1/workflows", tok, map[string]any{"name": "smoke", "definition": json.RawMessage(`{"schema":"wd/v1","id":"wf_smoke","version":1,"name":"smoke",
 	  "trigger":{"type":"webhook","config":{"path":"/smoke","auth":"none"}},

@@ -2,12 +2,10 @@ package runtime
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -17,24 +15,13 @@ import (
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
-// compiled caches transpiled code by source hash; versions are immutable,
-// so a compiled script never goes stale.
-var compiled sync.Map
-
+// compileStep transpiles a step's code; sandbox.Compile caches it by
+// source hash (versions are immutable, so it never goes stale).
 func compileStep(c *wd.CodeConfig) (string, error) {
 	if c.Language != "javascript" && c.Language != "typescript" && c.Language != "python" {
 		return "", fmt.Errorf("%s code steps are not available in this engine version: %w", c.Language, effects.ErrFatal)
 	}
-	key := sha256.Sum256([]byte(c.Language + "\x00" + c.Source))
-	if s, ok := compiled.Load(key); ok {
-		return s.(string), nil
-	}
-	s, err := sandbox.Compile(c.Source, c.Language)
-	if err != nil {
-		return "", err
-	}
-	compiled.Store(key, s)
-	return s, nil
+	return sandbox.Compile(c.Source, c.Language)
 }
 
 // maxFetchBody bounds a host.fetch response handed to a script.

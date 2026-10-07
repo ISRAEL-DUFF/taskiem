@@ -15,10 +15,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/webauthn/webauthntest"
 )
 
-// stepUp is a passkey assertion for a fresh step-up challenge.
-func stepUp(t *testing.T, c *client, key *webauthntest.Authenticator) map[string]any {
+// stepUp is a passkey assertion for a fresh step-up challenge asked for op
+// and target.
+func stepUp(t *testing.T, c *client, key *webauthntest.Authenticator, op, target string) map[string]any {
 	t.Helper()
-	return key.Assert(challengeFrom(t, c.must(200, "POST", "/v1/me/step-up/options", nil))).JSON()
+	return key.Assert(challengeFrom(t, c.must(200, "POST", "/v1/me/step-up/options", map[string]any{"operation": op, "target": target}))).JSON()
 }
 
 func b64url(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
@@ -71,13 +72,13 @@ func TestFactorChangesNeedProof(t *testing.T) {
 		t.Fatalf("authenticator with only the password: %d %v", st, body)
 	}
 	ada.must(403, "POST", "/v1/me/passkeys/options", map[string]any{"password": testPassword})
-	secret := ada.must(200, "POST", "/v1/me/totp", map[string]any{"passkey": stepUp(t, ada, key)})["secret"].(string)
+	secret := ada.must(200, "POST", "/v1/me/totp", map[string]any{"passkey": stepUp(t, ada, key, "account.reauth", "totp.setup")})["secret"].(string)
 	code, _ := totp.Code(secret, totp.Step(time.Now()))
 	ada.must(204, "POST", "/v1/me/totp/confirm", map[string]any{"code": code})
 
 	// An enrolled authenticator is not replaced, even with proof: it is
 	// removed first, with a current code.
-	ada.must(409, "POST", "/v1/me/totp", map[string]any{"passkey": stepUp(t, ada, key)})
+	ada.must(409, "POST", "/v1/me/totp", map[string]any{"passkey": stepUp(t, ada, key, "account.reauth", "totp.setup")})
 	ada.must(409, "POST", "/v1/me/totp/confirm", map[string]any{"code": codeAfter(secret, 1)})
 
 	// Removing a passkey needs proof too: the authenticator's code serves.
@@ -140,7 +141,7 @@ func TestExistingPeopleAreInvited(t *testing.T) {
 	}
 	acme.must(404, "POST", "/v1/me/invitations/"+tenantOf(t, acme)+"/accept", nil)
 	acme.must(200, "POST", "/v1/me/invitations/"+betaID+"/accept", nil)
-	in := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": "owner@acme.test", "password": testPassword, "tenant_id": betaID})
+	in := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": "owner@acme.test", "password": testPassword, "tenant_id": betaID, "bearer": true})
 	me := (&client{t: t, base: w.base, token: in["token"].(string)}).must(200, "GET", "/v1/me", nil)
 	if toJSON(me["roles"]) != `["viewer"]` {
 		t.Errorf("roles after accepting: %v", me["roles"])

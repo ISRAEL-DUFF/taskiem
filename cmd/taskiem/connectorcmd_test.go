@@ -10,7 +10,7 @@ import (
 // offline, uploads it, and is refused the same version twice.
 func TestConnectorBuildCheckPush(t *testing.T) {
 	srv := startServer(t)
-	login := srv.call(t, "POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery"})
+	login := srv.call(t, "POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery", "bearer": true})
 	key := srv.call(t, "POST", "/v1/api-keys", login["token"].(string), map[string]any{"name": "ci", "permissions": []string{"connector.manage"}})["key"].(string)
 	t.Setenv("TASKIEM_URL", srv.base)
 	t.Setenv("TASKIEM_API_KEY", key)

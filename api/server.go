@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,11 +31,13 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/httpsec"
+	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
+	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/webauthn"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -116,11 +119,18 @@ type Server struct {
 	// scheduler retries what it cannot finish. Nil leaves it all to the
 	// scheduler.
 	Remote *remote.Reconciler
+	// CodeLimits bound tenant code compiled or checked in this process
+	// (codegate.go).
+	CodeLimits CodeLimits
+	// HSTS is the Strict-Transport-Security value sent on the platform's
+	// own host (TASKIEM_HSTS); empty sends none.
+	HSTS string
 
-	ussd     ussdState  // USSD channels, sessions and menus (ussd.go)
-	limiters limiterSet // sign-in and other unauthenticated attempts
-	hosts    hostCache  // custom domains: Host to embed app
-	defs     sync.Map   // "workflow/version" -> *wd.Definition
+	code     codeGate                          // tenant code admitted at once (codegate.go)
+	ussd     ussdState                         // USSD channels, sessions and menus (ussd.go)
+	limiters limiterSet                        // sign-in and other unauthenticated attempts
+	hosts    hostCache                         // custom domains: Host to embed app
+	defs     lru.Cache[string, *wd.Definition] // "workflow/version"; versions are immutable, bounded (S34)
 	bg       sync.WaitGroup
 	bgActive atomic.Int64 // work running after its request was answered (reset emails)
 }
@@ -131,7 +141,7 @@ func (s *Server) Handler() http.Handler {
 		s.Logger = slog.Default()
 	}
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders, s.customDomains)
+	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
 	r.Mount("/git-hooks", s.GitHooks())
@@ -212,7 +222,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
 			r.With(s.need(PermConnectionManage)).Post("/connector-drift/acknowledge", s.acknowledgeDrift)
 			r.With(s.need(PermWorkflowRead)).Get("/tenant-connectors", s.listTenantConnectors)
-			r.With(s.need(PermConnectorManage)).Post("/tenant-connectors", s.uploadTenantConnector)
+			r.With(s.need(PermConnectorManage), s.tenantCode).Post("/tenant-connectors", s.uploadTenantConnector)
 			r.With(s.need(PermConnectorManage)).Post("/tenant-connectors/{id}/{version}/disable", s.disableTenantConnector)
 			// The public connector catalogue (docs/connector-submissions.md).
 			r.With(s.need(PermWorkflowRead)).Get("/catalogue", s.listCatalogue)
@@ -225,21 +235,21 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectorManage)).Get("/catalogue/publisher", s.getPublisher)
 			r.With(s.need(PermConnectorManage), s.tenantWide).Put("/catalogue/publisher", s.putPublisher)
 			r.With(s.need(PermConnectorManage)).Get("/catalogue/submissions", s.listSubmissions)
-			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/submissions", s.submitPackage)
+			r.With(s.need(PermConnectorManage), s.tenantWide, s.tenantCode).Post("/catalogue/submissions", s.submitPackage)
 			r.With(s.need(PermConnectorManage)).Get("/catalogue/submissions/{id}", s.getSubmission)
 			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/submissions/{id}/withdraw", s.moveSubmission("withdrawn"))
 			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/submissions/{id}/publish", s.moveSubmission("published"))
 			r.With(s.need(PermConnectorManage), s.tenantWide).Post("/catalogue/submissions/{id}/revoke", s.moveSubmission("revoked"))
 
 			r.With(s.need(PermWorkflowRead)).Get("/workflows", s.listWorkflows)
-			r.With(s.need(PermWorkflowEdit)).Post("/workflows", s.createWorkflow)
+			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/workflows", s.createWorkflow)
 			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}", s.getWorkflow)
-			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/versions/{v}", s.getVersion)
-			r.With(s.need(PermWorkflowEdit)).Post("/workflows/{wf}/versions", s.createVersion)
+			r.With(s.need(PermWorkflowRead), s.tenantCode).Get("/workflows/{wf}/versions/{v}", s.getVersion)
+			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/workflows/{wf}/versions", s.createVersion)
 			r.With(s.need(PermWorkflowEdit)).Put("/workflows/{wf}/versions/{v}/layout", s.putLayout)
-			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/workflows/{wf}/versions/{v}/publish", s.publish)
+			r.With(s.need(PermWorkflowPublish), s.tenantWide, s.tenantCode).Post("/workflows/{wf}/versions/{v}/publish", s.publish)
 			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/triggers", s.listTriggers)
-			r.With(s.need(PermWorkflowPublish)).Post("/workflows/{wf}/promote", s.promote)
+			r.With(s.need(PermWorkflowPublish), s.tenantCode).Post("/workflows/{wf}/promote", s.promote)
 			r.With(s.need(PermWorkflowPublish)).Delete("/workflows/{wf}/deployments/{env}", s.undeploy)
 			r.With(s.need(PermWorkflowRead)).Get("/environments", s.listEnvironments)
 			r.With(s.need(PermAlertManage)).Get("/alerts", s.listAlerts)
@@ -253,13 +263,13 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermAlertManage)).Delete("/alerts/rules/{id}", s.deleteAlertRule)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/environments", s.createEnvironment)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/environments/{env}", s.putEnvironment)
-			r.With(s.need(PermWorkflowEdit)).Post("/validate", s.validate)
+			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/validate", s.validate)
 			r.With(s.feature(billing.FeatureAI, true)).Route("/ai", s.aiRoutes)
 			r.Get("/templates", s.listTemplates) // the SME template library (templates.go)
-			r.Get("/templates/{id}", s.getTemplate)
-			r.With(s.need(PermWorkflowEdit)).Post("/templates/{id}/instantiate", s.instantiateTemplate)
-			r.With(s.need(PermWorkflowRead)).Post("/code/generate", s.generateCode)
-			r.With(s.need(PermWorkflowEdit)).Post("/code/compile", s.compileCode)
+			r.With(s.tenantCode).Get("/templates/{id}", s.getTemplate)
+			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/templates/{id}/instantiate", s.instantiateTemplate)
+			r.With(s.need(PermWorkflowRead), s.tenantCode).Post("/code/generate", s.generateCode)
+			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/code/compile", s.compileCode)
 
 			r.With(s.need(PermRunStart)).Post("/workflows/{wf}/runs", s.startRun)
 			r.With(s.need(PermRunRead)).Get("/runs", s.listRuns)
@@ -383,6 +393,28 @@ func observe(next http.Handler) http.Handler {
 }
 
 func securityHeaders(next http.Handler) http.Handler { return httpsec.Headers(next) }
+
+// hsts sends Strict-Transport-Security (S35) on the platform's own host:
+// the public URL's host, or any host when no public URL is set. A
+// partner's custom domain gets none; it is the partner's to commit.
+func (s *Server) hsts(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.HSTS != "" {
+			host := ""
+			if u, err := url.Parse(s.PublicURL); err == nil {
+				host = u.Hostname()
+			}
+			h, _, err := net.SplitHostPort(r.Host)
+			if err != nil {
+				h = r.Host
+			}
+			if host == "" || strings.EqualFold(h, host) {
+				w.Header().Set("Strict-Transport-Security", s.HSTS)
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 func (s *Server) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

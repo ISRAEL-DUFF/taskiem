@@ -154,14 +154,14 @@ func (s *Server) inputProblems(wf uuid.UUID, version int, def, input []byte) []s
 // definitionFor parses a version's definition once; versions are immutable.
 func (s *Server) definitionFor(wf uuid.UUID, version int, doc []byte) (*wd.Definition, error) {
 	key := wf.String() + "/" + strconv.Itoa(version)
-	if d, ok := s.defs.Load(key); ok {
-		return d.(*wd.Definition), nil
+	if d, ok := s.defs.Get(key); ok {
+		return d, nil
 	}
 	d, err := wd.Load(doc)
 	if err != nil {
 		return nil, err
 	}
-	s.defs.Store(key, d)
+	s.defs.Put(key, d)
 	return d, nil
 }
 

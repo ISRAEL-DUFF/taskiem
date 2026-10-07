@@ -109,7 +109,7 @@ func (s *Server) startWhatsAppBinding(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: %w", errBadRequest, err))
 		return
 	}
-	if !s.proveFactor(w, r, req.factorProof) {
+	if !s.proveFactor(w, r, req.factorProof, "whatsapp.link") {
 		return
 	}
 	// Codes cost money and land on someone's phone: paced per person and

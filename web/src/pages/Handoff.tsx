@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { assert, passkeysSupported } from "../passkeys";
+import { passkeysSupported, stepUpAssert } from "../passkeys";
 import { ApiError, get, post } from "../api";
 import { ErrorBox, Field, Json, fmtTime, useAction, useLoad } from "../ui";
 
@@ -53,7 +53,7 @@ export function Handoff() {
           <Json value={d.subject} />
           {passkeysSupported() && (
             <p>
-              <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => send({ passkey: await assert("/v1/me/step-up/options") }))}>
+              <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => send({ passkey: await stepUpAssert("approval.decide", `${d.run_id}/${d.step_id}/${d.decision}`) }))}>
                 Confirm with your passkey
               </button>
             </p>

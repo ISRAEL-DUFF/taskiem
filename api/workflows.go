@@ -34,7 +34,17 @@ func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []prob
 	if err != nil {
 		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
 	}
-	return wdcheck.Check(doc, reg)
+	return s.checkWith(ctx, tenant, doc, reg)
+}
+
+// checkWith is wdcheck.Check holding a tenant-code slot: checking code
+// steps compiles them, and a Python check runs the interpreter.
+func (s *Server) checkWith(ctx context.Context, tenant uuid.UUID, doc []byte, reg connector.Lookup) []problem {
+	var out []problem
+	if err := s.withCodeSlot(ctx, tenant, func() { out = wdcheck.Check(doc, reg) }); err != nil {
+		return []problem{{Path: "/", Message: "the definition could not be checked: " + err.Error()}}
+	}
+	return out
 }
 
 // checkFor is check for the caller's tenant.

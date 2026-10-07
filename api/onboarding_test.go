@@ -31,7 +31,7 @@ func (m *fakeMail) drop(text string) {
 var verifyLink = regexp.MustCompile(`https://app\.taskiem\.test/verify-email#token=([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)`)
 
 func signupBody(tenant, email string) map[string]any {
-	return map[string]any{"tenant": tenant, "email": email, "name": "Ada Obi", "password": "correct horse battery"}
+	return map[string]any{"tenant": tenant, "email": email, "name": "Ada Obi", "password": "correct horse battery", "bearer": true}
 }
 
 // TestSignupRefusesAbuse: the checks a public signup form needs, none of

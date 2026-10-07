@@ -276,7 +276,7 @@ func devKey(ctx context.Context, base string, st *devState) (string, error) {
 	var login struct {
 		Token string `json:"token"`
 	}
-	if err := post("/v1/auth/login", "", map[string]string{"email": st.Email, "password": st.Password}, &login); err != nil {
+	if err := post("/v1/auth/login", "", map[string]any{"email": st.Email, "password": st.Password, "bearer": true}, &login); err != nil {
 		return "", fmt.Errorf("dev: sign in: %w", err)
 	}
 	var key struct {

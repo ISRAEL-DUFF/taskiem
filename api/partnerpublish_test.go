@@ -80,7 +80,7 @@ func TestEndUserFourEyesPublish(t *testing.T) {
 		t.Fatal(err)
 	}
 	anon := &client{t: t, base: w.base}
-	member := &client{t: t, base: w.base, token: anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": "ops@ops.test", "password": testPassword, "tenant_id": sub})["token"].(string)}
+	member := &client{t: t, base: w.base, token: anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": "ops@ops.test", "password": testPassword, "tenant_id": sub, "bearer": true})["token"].(string)}
 	pending := member.must(200, "GET", "/v1/publish-requests", nil)["requests"].([]any)
 	if len(pending) != 1 || pending[0].(map[string]any)["requested_by"] != endUserID {
 		t.Fatalf("member's list: %v", pending)

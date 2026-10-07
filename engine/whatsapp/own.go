@@ -50,11 +50,11 @@ type ownEntry struct {
 }
 
 func (p *Platform) cached(key string) (*Platform, bool) {
-	v, ok := p.own.Load(key)
-	if !ok || time.Since(v.(ownEntry).at) > ownTTL {
+	v, ok := p.own.Get(key)
+	if !ok || time.Since(v.at) > ownTTL {
 		return nil, false
 	}
-	return v.(ownEntry).p, true
+	return v.p, true
 }
 
 // Forget drops what this process knows of own numbers (after a change).
@@ -79,7 +79,7 @@ func (p *Platform) ForTenant(ctx context.Context, tenant uuid.UUID) (*Platform, 
 			Scan(&pnid, &display, &ownApp)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		p.own.Store("t:"+tenant.String(), ownEntry{at: time.Now()})
+		p.own.Put("t:"+tenant.String(), ownEntry{at: time.Now()})
 		return p, nil
 	}
 	if err != nil {
@@ -89,8 +89,8 @@ func (p *Platform) ForTenant(ctx context.Context, tenant uuid.UUID) (*Platform, 
 	if err != nil {
 		return nil, err
 	}
-	p.own.Store("t:"+tenant.String(), ownEntry{p: q, at: time.Now()})
-	p.own.Store("n:"+pnid, ownEntry{p: q, at: time.Now()})
+	p.own.Put("t:"+tenant.String(), ownEntry{p: q, at: time.Now()})
+	p.own.Put("n:"+pnid, ownEntry{p: q, at: time.Now()})
 	return q, nil
 }
 
@@ -110,7 +110,7 @@ func (p *Platform) ForPhoneNumberID(ctx context.Context, pnid string) (*Platform
 	var ownApp bool
 	err := p.Pool.QueryRow(ctx, `SELECT tenant_id, own_app FROM taskiem_wa_number_route($1)`, pnid).Scan(&tenant, &ownApp)
 	if errors.Is(err, pgx.ErrNoRows) {
-		p.own.Store("n:"+pnid, ownEntry{at: time.Now()})
+		p.own.Put("n:"+pnid, ownEntry{at: time.Now()})
 		return nil, nil
 	}
 	if err != nil {

@@ -25,7 +25,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/gitprovider"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/secrets"
-	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 )
 
@@ -795,7 +794,7 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 			continue
 		}
 		doc := snap.Files[p]
-		for _, pr := range wdcheck.Check(doc, reg) {
+		for _, pr := range s.checkWith(ctx, tenant, doc, reg) {
 			rep.Problems = append(rep.Problems, p+": "+pr.String())
 		}
 		var head struct {
@@ -1066,7 +1065,9 @@ func (s *Server) openRequest(r *http.Request, tenant uuid.UUID, c gitConnection,
 		return "", err
 	}
 	files := []gitprovider.File{{Path: file, Content: pretty}}
-	if code, err := flowcode.Generate(ctx, def); err == nil {
+	var code string
+	var genErr error
+	if err := s.withCodeSlot(ctx, tenant, func() { code, genErr = flowcode.Generate(ctx, def) }); err == nil && genErr == nil {
 		files = append(files, gitprovider.File{Path: strings.TrimSuffix(file, ".wd.json") + ".flow.ts", Content: []byte(code)})
 	}
 	prov, err := s.provider(ctx, tenant, c)

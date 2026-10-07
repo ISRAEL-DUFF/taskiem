@@ -104,7 +104,7 @@ func (s *Server) setWhatsAppPin(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: add a passkey or an authenticator first; the PIN stands in for them on WhatsApp", errConflict))
 		return
 	}
-	if !s.proveFactor(w, r, req.factorProof) {
+	if !s.proveFactor(w, r, req.factorProof, "whatsapp.pin") {
 		return
 	}
 	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_wa_pin_set($1, $2)`, p.UserID, hashPassword(req.Pin)); err != nil {

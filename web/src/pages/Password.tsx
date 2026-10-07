@@ -121,7 +121,7 @@ export function ChangePassword() {
   const submit = async () => {
     const body: Record<string, unknown> = { new_password: password };
     if (f.password) body.current_password = current;
-    else Object.assign(body, await proof(f, code));
+    else Object.assign(body, await proof(f, code, "password.change"));
     await post("/v1/me/password", body);
     setCurrent("");
     setPassword("");

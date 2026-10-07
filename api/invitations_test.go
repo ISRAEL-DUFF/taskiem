@@ -72,7 +72,7 @@ func TestInviteeSession(t *testing.T) {
 	bob := acme.must(201, "POST", "/v1/members", map[string]any{"email": "bob@acme.test", "password": testPassword, "roles": []string{"viewer"}})["user_id"].(string)
 	acme.must(204, "DELETE", "/v1/members/"+bob+"/roles/viewer", nil)
 	anon := &client{t: t, base: w.base}
-	login := map[string]any{"email": "bob@acme.test", "password": testPassword}
+	login := map[string]any{"email": "bob@acme.test", "password": testPassword, "bearer": true}
 
 	// With no membership and no invitation, sign-in is refused as before.
 	if st, out := anon.do("POST", "/v1/auth/login", login); st != 401 || out["invitations_only"] != nil {
@@ -140,7 +140,7 @@ func TestInviteeSessionEnds(t *testing.T) {
 	acme.must(204, "DELETE", "/v1/members/"+bob+"/roles/viewer", nil)
 	beta.must(201, "POST", "/v1/members", map[string]any{"email": "bob@acme.test", "roles": []string{"viewer"}})
 	anon := &client{t: t, base: w.base}
-	login := map[string]any{"email": "bob@acme.test", "password": testPassword}
+	login := map[string]any{"email": "bob@acme.test", "password": testPassword, "bearer": true}
 	inv := &client{t: t, base: w.base, token: anon.must(200, "POST", "/v1/auth/login", login)["token"].(string)}
 	inv.must(204, "POST", "/v1/auth/logout", nil)
 	if st, _ := inv.do("GET", "/v1/me/invitations", nil); st != 401 {

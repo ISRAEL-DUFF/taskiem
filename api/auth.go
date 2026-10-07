@@ -335,6 +335,10 @@ type loginReq struct {
 	Email    string    `json:"email"`
 	Password string    `json:"password"`
 	TenantID uuid.UUID `json:"tenant_id,omitempty"`
+	// Bearer asks for the session token in the answer, for API and CLI
+	// clients; without it the session is a cookie the page cannot read
+	// (S35).
+	Bearer bool `json:"bearer,omitempty"`
 }
 
 // jsonOnly refuses a body that is not JSON. A cross-site page can POST a
@@ -409,7 +413,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.startSession(w, r, userID, req.TenantID, "password")
+	s.startSession(w, r, userID, req.TenantID, "password", req.Bearer)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {

@@ -70,7 +70,7 @@ export function Passkeys({ onAdded }: { onAdded?: () => void }) {
                     className="danger"
                     onClick={() =>
                       confirm(`Remove ${k.name}?`) &&
-                      void act.run(async () => (await del(`/v1/me/passkeys/${k.id}`, await proof(me?.factors, typed)), setTyped(""), list.reload(), await refresh()))
+                      void act.run(async () => (await del(`/v1/me/passkeys/${k.id}`, await proof(me?.factors, typed, `passkey.remove/${k.id}`)), setTyped(""), list.reload(), await refresh()))
                     }
                   >
                     Remove
@@ -91,7 +91,7 @@ export function Passkeys({ onAdded }: { onAdded?: () => void }) {
             className="primary"
             disabled={act.busy}
             onClick={() =>
-              void act.run(async () => (await addPasskey(name || "Passkey", await proof(me?.factors, typed)), setName(""), setTyped(""), list.reload(), await refresh(), onAdded?.()))
+              void act.run(async () => (await addPasskey(name || "Passkey", await proof(me?.factors, typed, "passkey.add")), setName(""), setTyped(""), list.reload(), await refresh(), onAdded?.()))
             }
           >
             Add a passkey
@@ -147,7 +147,7 @@ function WhatsAppPin({ pin, onChange }: { pin: NonNullable<WhatsAppBinding["pin"
           style={{ alignItems: "flex-end" }}
           onSubmit={(e) => {
             e.preventDefault();
-            void act.run(async () => (await put("/v1/me/whatsapp/pin", { pin: value, ...(await proof(me?.factors, typed)) }), setValue(""), setTyped(""), onChange()));
+            void act.run(async () => (await put("/v1/me/whatsapp/pin", { pin: value, ...(await proof(me?.factors, typed, "whatsapp.pin")) }), setValue(""), setTyped(""), onChange()));
           }}
         >
           <Field label={pin.set ? "New PIN" : "PIN"} hint="Not one digit repeated, nor a run like 123456">
@@ -206,7 +206,7 @@ function WhatsApp() {
         style={{ alignItems: "flex-end" }}
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await post("/v1/me/whatsapp", { number, ...(await proof(me?.factors, typed)) }), setTyped(""), setSent(true), b.reload()));
+          void act.run(async () => (await post("/v1/me/whatsapp", { number, ...(await proof(me?.factors, typed, "whatsapp.link")) }), setTyped(""), setSent(true), b.reload()));
         }}
       >
         <Field label={b.data.number ? "Link another number instead" : "Your WhatsApp number"} hint="With the country code, e.g. +2348012345678">
@@ -329,7 +329,7 @@ export function Account() {
             <button
               className="primary"
               disabled={act.busy}
-              onClick={() => void act.run(async () => (setPending(await post<{ secret: string; uri: string }>("/v1/me/totp", await proof(me?.factors, typed))), setTyped("")))}
+              onClick={() => void act.run(async () => (setPending(await post<{ secret: string; uri: string }>("/v1/me/totp", await proof(me?.factors, typed, "totp.setup"))), setTyped("")))}
             >
               Set up an authenticator
             </button>

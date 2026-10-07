@@ -48,7 +48,7 @@ func (w *world) passkeyLogin(t *testing.T, a *webauthntest.Authenticator, want i
 	t.Helper()
 	anon := &client{t: t, base: w.base}
 	ch := challengeFrom(t, anon.must(200, "POST", "/v1/auth/passkey/options", nil))
-	out := anon.must(want, "POST", "/v1/auth/passkey", map[string]any{"credential": a.Assert(ch).JSON()})
+	out := anon.must(want, "POST", "/v1/auth/passkey", map[string]any{"credential": a.Assert(ch).JSON(), "bearer": true})
 	if want != 200 {
 		return nil
 	}
@@ -138,7 +138,7 @@ func TestPasskeyStepUp(t *testing.T) {
 	if st, _ := ada.do("POST", path, map[string]any{"decision": "approved", "passkey": key.Assert(login).JSON()}); st != 403 {
 		t.Errorf("a login challenge passed step-up: %d", st)
 	}
-	ch := challengeFrom(t, ada.must(200, "POST", "/v1/me/step-up/options", nil))
+	ch := challengeFrom(t, ada.must(200, "POST", "/v1/me/step-up/options", map[string]any{"operation": "approval.decide", "target": run + "/ok/approved"}))
 	res := ada.must(200, "POST", path, map[string]any{"decision": "approved", "passkey": key.Assert(ch).JSON()})
 	if res["status"] != "approved" {
 		t.Fatalf("after passkey step-up: %v", res)

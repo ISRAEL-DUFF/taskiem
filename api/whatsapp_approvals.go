@@ -16,7 +16,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
-	"github.com/israel-duff/taskiem/engine/webauthn"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -752,30 +751,16 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	stepUp := ""
-	switch {
-	case req.Passkey != nil:
-		if _, err := s.verifyPasskey(r.Context(), *req.Passkey, "step_up", &p.UserID); err != nil {
-			if errors.Is(err, errPasskey) || errors.Is(err, webauthn.ErrInvalid) || errors.Is(err, webauthn.ErrCloned) {
-				writeJSON(w, http.StatusForbidden, map[string]any{"error": "that passkey response is not valid; try again", "step_up": "passkey"})
-				return
-			}
-			s.fail(w, r, err)
-			return
-		}
-		stepUp = "passkey"
-	case req.TOTP != "":
-		ok, err := s.verifyTOTP(r.Context(), p.TenantID, p.UserID, req.TOTP)
-		if err != nil || !ok {
-			s.totpRefused(w, r, err, map[string]any{"error": "that authenticator code is not right, or was already used", "step_up": "totp"})
-			return
-		}
-		stepUp = "totp"
-	default:
+	cl := row.claims
+	// A passkey must have been asked for this decision on this approval.
+	stepUp, ok := s.checkStepUp(w, r, stepUpProof{TOTP: req.TOTP, Passkey: req.Passkey}, approvalScope(cl.Run, cl.Step, cl.Decision))
+	if !ok {
+		return
+	}
+	if stepUp == "" {
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": "confirm with your passkey or authenticator code", "step_up": "required"})
 		return
 	}
-	cl := row.claims
 	res, err := s.Store.VoteApproval(r.Context(), runtime.RunRef{ID: cl.Run, TenantID: p.TenantID}, cl.Step,
 		runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: "whatsapp", IP: clientIP(r), StepUp: stepUp})
 	var su *runtime.StepUpError

@@ -1,13 +1,19 @@
 import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { byokRequest, healthLine, missingFields, providerFields, providerNames, versionState, type FieldSpec, type KeysView, type Provider } from "../lib/keys";
+import { useStepUp, type StepUpProof } from "../stepup";
 import { Badge, ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
 
+/** Sends a key change, asking for step-up when the server needs it. */
+type KeyRequest = <T>(title: string, send: (p: StepUpProof) => Promise<T>) => Promise<T>;
+
 /** Settings > Encryption keys (docs/byok.md): the tenant key, rotation, and
- * bring your own key. Credentials go in once and are never shown again. */
+ * bring your own key. Credentials go in once and are never shown again.
+ * Every change is confirmed with a passkey or authenticator code. */
 export function Keys() {
   const view = useLoad(() => get<KeysView>("/v1/keys"), []);
   const act = useAction();
+  const step = useStepUp();
   const [notice, setNotice] = useState("");
   const v = view.data;
   if (!v) return view.error ? <ErrorBox error={view.error} /> : <div className="empty">Loading…</div>;
@@ -16,6 +22,7 @@ export function Keys() {
   return (
     <div>
       <h1>Encryption keys</h1>
+      {step.modal}
       <p className="hint">
         Every secret, connection credential and piece of personal data is encrypted with its own data key, under your organisation's tenant key. The tenant
         key is wrapped by Taskiem's key{st.mode === "customer" ? " and by your own key" : ""}.
@@ -51,7 +58,10 @@ export function Keys() {
             disabled={act.busy}
             onClick={() =>
               confirm("Rotate the tenant key? Data keys are re-wrapped under a new version in the background; nothing is re-encrypted.") &&
-              run(async () => `Version ${(await post<{ version: number }>("/v1/keys/rotate")).version} is current; re-wrapping runs in the background.`)
+              run(
+                async () =>
+                  `Version ${(await step.request("rotate the tenant key", (p) => post<{ version: number }>("/v1/keys/rotate", p))).version} is current; re-wrapping runs in the background.`,
+              )
             }
           >
             Rotate tenant key
@@ -114,16 +124,19 @@ export function Keys() {
                 disabled={act.busy}
                 onClick={() =>
                   confirm("Return to Taskiem's key? Your data is re-wrapped under a new tenant key that only Taskiem's key wraps. Your key must stay available until that finishes.") &&
-                  run(async () => `Version ${(await del<{ version: number }>("/v1/keys/byok")).version} is current; your key is no longer used once re-wrapping finishes.`)
+                  run(
+                    async () =>
+                      `Version ${(await step.request("return to Taskiem's key", (p) => del<{ version: number }>("/v1/keys/byok", p))).version} is current; your key is no longer used once re-wrapping finishes.`,
+                  )
                 }
               >
                 Return to Taskiem's key
               </button>
             </div>
-            <Credentials provider={st.byok.provider} onSaved={(msg) => run(async () => msg)} />
+            <Credentials provider={st.byok.provider} request={step.request} onSaved={(msg) => run(async () => msg)} />
           </>
         ) : v.plan_allows_byok ? (
-          <Onboard providers={v.providers} onDone={(msg) => run(async () => msg)} />
+          <Onboard providers={v.providers} request={step.request} onDone={(msg) => run(async () => msg)} />
         ) : (
           <p className="hint">Your plan does not include bringing your own key. It is part of the Enterprise plan (Settings &gt; Billing).</p>
         )}
@@ -153,7 +166,7 @@ function Inputs({ fields, values, set }: { fields: FieldSpec[]; values: Record<s
 
 /** Onboarding: Taskiem wraps and unwraps a test value with the key before
  * anything is saved. */
-function Onboard({ providers, onDone }: { providers: Provider[]; onDone: (msg: string) => void }) {
+function Onboard({ providers, request, onDone }: { providers: Provider[]; request: KeyRequest; onDone: (msg: string) => void }) {
   const [provider, setProvider] = useState<Provider>(providers[0] ?? "vault_transit");
   const [auth, setAuth] = useState<"token" | "approle">("token");
   const [values, setValues] = useState<Record<string, string>>({});
@@ -166,7 +179,7 @@ function Onboard({ providers, onDone }: { providers: Provider[]; onDone: (msg: s
       onSubmit={(e) => {
         e.preventDefault();
         void act.run(async () => {
-          const out = await put<{ version: number }>("/v1/keys/byok", byokRequest(provider, values, auth));
+          const out = await request("use your own key", (p) => put<{ version: number }>("/v1/keys/byok", { ...byokRequest(provider, values, auth), ...p }));
           setValues({});
           onDone(`Your key is in use: tenant key version ${out.version} is wrapped by it. Existing data keys are re-wrapped in the background.`);
         });
@@ -204,7 +217,7 @@ function Onboard({ providers, onDone }: { providers: Provider[]; onDone: (msg: s
 }
 
 /** New credentials for the key in use; they must reach the same key. */
-function Credentials({ provider, onSaved }: { provider: Provider; onSaved: (msg: string) => void }) {
+function Credentials({ provider, request, onSaved }: { provider: Provider; request: KeyRequest; onSaved: (msg: string) => void }) {
   const [open, setOpen] = useState(false);
   const [auth, setAuth] = useState<"token" | "approle">("token");
   const [values, setValues] = useState<Record<string, string>>({});
@@ -217,7 +230,7 @@ function Credentials({ provider, onSaved }: { provider: Provider; onSaved: (msg:
         e.preventDefault();
         void act.run(async () => {
           const body = byokRequest(provider, values, auth).credentials;
-          const out = await put<{ health?: { ok: boolean } }>("/v1/keys/byok/credentials", { credentials: body });
+          const out = await request("replace the key's credentials", (p) => put<{ health?: { ok: boolean } }>("/v1/keys/byok/credentials", { credentials: body, ...p }));
           setValues({});
           setOpen(false);
           onSaved(out.health?.ok ? "New credentials saved; your key works." : "New credentials saved.");

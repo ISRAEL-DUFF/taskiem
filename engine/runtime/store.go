@@ -22,6 +22,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -47,7 +48,7 @@ type Store struct {
 	// (ReadTx); nil reads from Pool (decision 0024).
 	Read *db.Replica
 
-	defs     sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
+	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache
 	limits   sync.Map // tenant -> cachedLimits
 	hits     sync.Map // "tenant/limit" -> time recorded
@@ -297,8 +298,8 @@ func (s *Store) Definition(ctx context.Context, tenant, workflowID uuid.UUID, ve
 
 func (s *Store) definition(ctx context.Context, tx pgx.Tx, workflowID uuid.UUID, version int) (*wd.Definition, error) {
 	key := workflowID.String() + "/" + strconv.Itoa(version)
-	if d, ok := s.defs.Load(key); ok {
-		return d.(*wd.Definition), nil
+	if d, ok := s.defs.Get(key); ok {
+		return d, nil
 	}
 	var raw []byte
 	err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, workflowID, version).Scan(&raw)
@@ -312,7 +313,7 @@ func (s *Store) definition(ctx context.Context, tx pgx.Tx, workflowID uuid.UUID,
 	if err != nil {
 		return nil, err
 	}
-	s.defs.Store(key, d)
+	s.defs.Put(key, d)
 	return d, nil
 }
 

@@ -119,15 +119,16 @@ func inviteeAllowed(method, path string) bool {
 // startInviteeSession signs in a person who belongs to no tenant but is
 // invited by one, to answer their invitations. It reports false when they
 // are invited by none (the caller refuses the sign-in as before).
-func (s *Server) startInviteeSession(w http.ResponseWriter, r *http.Request, user uuid.UUID, method string) (bool, error) {
+func (s *Server) startInviteeSession(w http.ResponseWriter, r *http.Request, user uuid.UUID, method string, bearer bool) (bool, error) {
 	tok := newToken()
 	var ok bool
 	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_auth_invitee_start($1, $2, $3, $4::interval, $5)`,
 		hashToken(tok), user, method, sessionTTL.String(), clientIP(r)).Scan(&ok); err != nil || !ok {
 		return false, err
 	}
-	s.setSessionCookie(w, tok)
-	writeJSON(w, http.StatusOK, map[string]any{"token": tok, "user_id": user, "tenants": []uuid.UUID{}, "invitations_only": true})
+	out := map[string]any{"user_id": user, "tenants": []uuid.UUID{}, "invitations_only": true}
+	s.deliverSession(w, bearer, tok, out)
+	writeJSON(w, http.StatusOK, out)
 	return true, nil
 }
 
@@ -170,6 +171,9 @@ func (s *Server) upgradeInvitee(w http.ResponseWriter, r *http.Request, p *Princ
 	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_invitee_end($1)`, hashToken(requestToken(r))); err != nil {
 		return nil, err
 	}
-	s.setSessionCookie(w, sess.token)
-	return map[string]any{"token": sess.token, "tenants": sess.tenants}, nil
+	// The new session goes the way the invitee session came: a cookie
+	// stays a cookie, a bearer token is answered with a token.
+	out := map[string]any{"tenants": sess.tenants}
+	s.deliverSession(w, !p.viaCookie, sess.token, out)
+	return out, nil
 }

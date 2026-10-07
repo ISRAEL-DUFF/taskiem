@@ -54,7 +54,7 @@ const page = (appID: string) => `<!doctype html>
 </body></html>`;
 
 test.beforeAll(async () => {
-  const login = await call<{ token: string }>("POST", "/v1/auth/login", "", { email: "owner@e2e.test", password: "correct horse battery" });
+  const login = await call<{ token: string }>("POST", "/v1/auth/login", "", { email: "owner@e2e.test", password: "correct horse battery", bearer: true });
   partnerKey = (await call<{ key: string }>("POST", "/v1/api-keys", login.token, { name: `partner ${Date.now()}`, permissions: ["partner.read", "partner.manage"] })).key;
   sub = (await call<{ id: string }>("POST", "/v1/partner/sub-tenants", partnerKey, { name: `Customer ${Date.now()}` })).id;
   app = (
