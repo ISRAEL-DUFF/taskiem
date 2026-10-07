@@ -615,6 +615,9 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 		return d.finalise(inst, f, e, fmt.Sprintf("gave up after %d attempts", n))
 	}
 	delay := backoff(r, n, d.runID(), inst)
+	if ra := min(time.Duration(e.RetryAfterMS)*time.Millisecond, time.Hour); ra > delay {
+		delay = ra // the provider said when to come back (Retry-After), up to an hour
+	}
 	if r.maxDuration > 0 && d.now.Add(delay).Sub(f.firstSchedAt) > r.maxDuration {
 		return d.finalise(inst, f, e, "retry budget exhausted")
 	}

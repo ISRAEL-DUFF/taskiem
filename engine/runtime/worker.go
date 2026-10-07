@@ -977,10 +977,13 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 func (w *Worker) classify(p *plan, err error) history.Event {
 	kind := effects.Classify(err)
 	next := map[effects.Next]string{effects.Retry: "retry", effects.Reconcile: "reconcile", effects.Park: "park", effects.Fail: "fail"}[effects.AfterError(p.class, kind)]
-	if !p.class.MayHaveApplied(kind) {
-		return failed(p.c, kind.String(), err.Error(), next)
+	e := history.Error{Kind: kind.String(), Message: err.Error(), Next: next, MaybeApplied: p.class.MayHaveApplied(kind)}
+	// A provider that said when to come back (Retry-After) is not asked sooner.
+	var ra interface{ RetryAfterDelay() time.Duration }
+	if errors.As(err, &ra) && kind == effects.KindRetryable {
+		e.RetryAfterMS = ra.RetryAfterDelay().Milliseconds()
 	}
-	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: kind.String(), Message: err.Error(), Next: next, MaybeApplied: true}})
+	raw, _ := json.Marshal(history.FailedPayload{Error: e})
 	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 }
 
@@ -1056,10 +1059,6 @@ func (w *Worker) credentials(ctx context.Context, p *plan) (map[string]string, e
 	return creds, nil
 }
 
-// connectionHost in a manifest's egress_hosts stands for the host the
-// tenant configured on the connection (databases, SFTP servers).
-const connectionHost = "${connection.host}"
-
 // policy is the egress policy for this task: a connector may reach only its
 // manifest's hosts; an http step or sandbox fetch only the tenant's
 // allow-list for the environment.
@@ -1067,14 +1066,7 @@ func (w *Worker) policy(ctx context.Context, p *plan, creds map[string]string) (
 	pol := egress.Policy{Tenant: p.c.tenant.String()}
 	if p.conn != nil {
 		pol.Purpose = "connector:" + p.conn.Manifest.ID
-		for _, h := range p.conn.Manifest.Hosts() {
-			if h == connectionHost {
-				h = creds["host"]
-			}
-			if h != "" {
-				pol.Hosts = append(pol.Hosts, h)
-			}
-		}
+		pol.Hosts = p.conn.Manifest.HostsFor(creds)
 		return pol, nil
 	}
 	hosts, err := w.Store.EgressHosts(ctx, p.c.tenant, p.env)

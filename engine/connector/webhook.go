@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -38,7 +39,21 @@ type TriggerSpec struct {
 	Handshake *HandshakeSpec `json:"handshake"`
 	// Ack replaces the default 202 JSON answer to an accepted delivery.
 	Ack *AckSpec `json:"ack"`
+	// Registration remote: Taskiem creates, updates and deletes the
+	// provider's subscription itself (decision 0021), and verifies
+	// deliveries with the secret the provider returned, kept in the vault.
+	Registration string `json:"registration"`
+	// Options is the JSON Schema of the workflow trigger's options
+	// (tables, columns...), given to the registrar and the enricher.
+	Options json.RawMessage `json:"options"`
+	// TestEvent, an expression, marks a delivery the provider sends to
+	// test the endpoint: it is verified and acknowledged, and starts only
+	// workflows that subscribe to its event by name.
+	TestEvent string `json:"test_event"`
 }
+
+// Remote reports whether Taskiem registers this trigger at the provider.
+func (t TriggerSpec) Remote() bool { return t.Registration == "remote" }
 
 // HandshakeSpec is a trigger's endpoint check. GET: the query parameter
 // TokenQuery must equal the connection's SecretField, and Respond (over
@@ -62,6 +77,11 @@ type VerifySpec struct {
 	KeyDerivation   string `json:"key_derivation"` // none (default), sha256_hex
 	// Query names the URL parameter carrying the secret (query_secret).
 	Query string `json:"query"`
+	// SignatureFormat t_v1 (hmac_sha256_timestamped): the header carries
+	// "t=<unix>,v1=<hex>[,v1=<hex>...]" instead of a timestamp header; any
+	// v1 value may match, so a provider can sign with an old and a new
+	// secret while it rotates.
+	SignatureFormat string `json:"signature_format"`
 }
 
 // AckSpec is the answer a provider expects to a delivery it made.
@@ -109,6 +129,17 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 	case "hmac_sha256_timestamped":
 		mac = sha256.New
 		ts := strings.TrimSpace(h.Get(v.TimestampHeader))
+		if v.SignatureFormat == "t_v1" {
+			var sigs []string
+			ts, sigs = parseTV1(got)
+			if len(sigs) == 0 {
+				return fmt.Errorf("%w: no v1 signature in %s", ErrBadSignature, v.Header)
+			}
+			if err := checkTimestamp(v, ts); err != nil {
+				return err
+			}
+			return verifyAny(secret, append([]byte(ts+"."), body...), sigs)
+		}
 		sec, err := strconv.ParseInt(ts, 10, 64)
 		if err != nil {
 			return fmt.Errorf("%w: missing or bad %s", ErrBadSignature, v.TimestampHeader)
@@ -196,6 +227,63 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 		got = strings.TrimPrefix(strings.ToLower(got), "sha256=")
 	}
 	if subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+		return ErrBadSignature
+	}
+	return nil
+}
+
+// parseTV1 reads a "t=<unix>,v1=<hex>,v1=<hex>" signature header: the
+// timestamp and every v1 signature (several while the provider rotates its
+// secret). Unknown parts (other versions) are ignored.
+func parseTV1(header string) (ts string, sigs []string) {
+	for _, part := range strings.Split(header, ",") {
+		k, val, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "t":
+			ts = val
+		case "v1":
+			if val != "" {
+				sigs = append(sigs, strings.ToLower(val))
+			}
+		}
+	}
+	return ts, sigs
+}
+
+func checkTimestamp(v *VerifySpec, ts string) error {
+	sec, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return fmt.Errorf("%w: missing or bad timestamp", ErrBadSignature)
+	}
+	tol := DefaultTolerance
+	if v.Tolerance != "" {
+		if d, err := time.ParseDuration(v.Tolerance); err == nil {
+			tol = d
+		}
+	}
+	if skew := Now().Sub(time.Unix(sec, 0)); skew > tol || skew < -tol {
+		return fmt.Errorf("%w: timestamp outside %s", ErrBadSignature, tol)
+	}
+	return nil
+}
+
+// verifyAny accepts signed when any of sigs is its hex HMAC-SHA256 under
+// secret. Every candidate is compared, in constant time each.
+func verifyAny(secret string, signed []byte, sigs []string) error {
+	if secret == "" {
+		return ErrBadSignature
+	}
+	m := hmac.New(sha256.New, []byte(secret))
+	m.Write(signed)
+	want := []byte(hex.EncodeToString(m.Sum(nil)))
+	ok := 0
+	for _, s := range sigs {
+		ok |= subtle.ConstantTimeCompare([]byte(s), want)
+	}
+	if ok != 1 {
 		return ErrBadSignature
 	}
 	return nil

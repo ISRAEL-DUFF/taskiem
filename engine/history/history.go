@@ -120,6 +120,9 @@ type Error struct {
 	// may still have taken effect. A step with such a failure parks instead
 	// of failing when its retries run out.
 	MaybeApplied bool `json:"maybe_applied,omitempty"`
+	// RetryAfterMS is how long the provider asked to wait (Retry-After) on
+	// a refusal; the next attempt waits at least this long.
+	RetryAfterMS int64 `json:"retry_after_ms,omitempty"`
 }
 
 type FailedPayload struct {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"mime"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -157,6 +158,19 @@ func (m *Manifest) check() []string {
 				add("/triggers/%s/ack/content_type: must be text/plain or application/json, not %q", name, a.ContentType)
 			}
 		}
+		// A remote trigger is verified with the secret the provider returned
+		// when Taskiem created the subscription, never a connection field.
+		if t := m.Triggers[name]; t.Remote() {
+			switch {
+			case t.Type != "webhook":
+				add("/triggers/%s/registration: only webhook triggers are registered remotely", name)
+			case t.Verify == nil:
+			case t.Verify.SecretField != "":
+				add("/triggers/%s/verify/secret_field: a remote trigger is verified with the secret the provider returned", name)
+			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer"}, t.Verify.Scheme):
+				add("/triggers/%s/verify/scheme: %s cannot verify a remotely registered trigger", name, t.Verify.Scheme)
+			}
+		}
 	}
 	if m.Auth.Test != nil {
 		if a, ok := m.Actions[m.Auth.Test.Action]; !ok {
@@ -232,6 +246,26 @@ func (m *Manifest) Hosts() []string {
 		return []string{u.Hostname()}
 	}
 	return nil
+}
+
+// HostsFor are the hosts this connector may reach for a connection: Hosts,
+// with "${connection.<field>}" standing for the connection's field (a
+// database host, or the host of a server URL the tenant configured, such
+// as a self-hosted provider's). A field left empty adds nothing.
+func (m *Manifest) HostsFor(creds map[string]string) []string {
+	var out []string
+	for _, h := range m.Hosts() {
+		if f, ok := strings.CutPrefix(h, "${connection."); ok && strings.HasSuffix(f, "}") {
+			h = strings.TrimSpace(creds[strings.TrimSuffix(f, "}")])
+			if u, err := url.Parse(h); err == nil && u.Hostname() != "" && strings.Contains(h, "://") {
+				h = u.Hostname()
+			}
+		}
+		if h != "" && !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // OverrideBaseURL points the connector at another endpoint (a provider

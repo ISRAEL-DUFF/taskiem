@@ -37,6 +37,10 @@ func (e *HTTPError) Error() string {
 
 func (e *HTTPError) Unwrap() error { return e.kind }
 
+// RetryAfterDelay is the provider's Retry-After; the engine waits at least
+// this long before the next attempt.
+func (e *HTTPError) RetryAfterDelay() time.Duration { return e.RetryAfter }
+
 // DoJSON sends a JSON request and decodes a JSON response into out. Errors
 // are classified for the engine: transport failures before sending are
 // not_sent, after sending unknown_outcome; 429 and 503 retryable; other 5xx

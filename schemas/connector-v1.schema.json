@@ -183,10 +183,11 @@
             "query": { "type": "string", "description": "query_secret: the URL parameter carrying the shared secret (for providers that sign nothing; the callback URL is registered with it)." },
             "secret_field": { "$ref": "#/$defs/name" },
             "timestamp_header": { "type": "string", "description": "hmac_sha256_timestamped: header with the unix-seconds timestamp; the signed string is '<timestamp>.<raw body>'." },
-            "tolerance": { "$ref": "#/$defs/duration", "description": "hmac_sha256_timestamped: reject timestamps further than this from now (default 5m)." }
+            "tolerance": { "$ref": "#/$defs/duration", "description": "hmac_sha256_timestamped: reject timestamps further than this from now (default 5m)." },
+            "signature_format": { "enum": ["t_v1"], "description": "hmac_sha256_timestamped: the header carries 't=<unix>,v1=<hex>[,v1=<hex>...]', timestamp and signatures together, instead of a separate timestamp_header; any v1 value may match (a provider signing with an old and a new secret while it rotates)." }
           },
           "allOf": [
-            { "if": { "properties": { "scheme": { "const": "hmac_sha256_timestamped" } } }, "then": { "required": ["header", "timestamp_header"] } },
+            { "if": { "properties": { "scheme": { "const": "hmac_sha256_timestamped" } } }, "then": { "required": ["header"], "anyOf": [{ "required": ["timestamp_header"] }, { "required": ["signature_format"] }] } },
             { "if": { "properties": { "scheme": { "const": "slack_v0" } } }, "then": { "required": ["header", "timestamp_header"] } }
           ]
         },
@@ -221,7 +222,10 @@
         "split": { "$ref": "#/$defs/expr", "description": "A list-valued expression: each element becomes one event, seen by event_type, dedup and correlation as item (for providers that batch several events in one delivery)." },
         "event_type": { "$ref": "#/$defs/expr" },
         "dedup": { "$ref": "#/$defs/expr" },
-        "correlation": { "$ref": "#/$defs/expr" }
+        "correlation": { "$ref": "#/$defs/expr" },
+        "registration": { "enum": ["manual", "remote"], "description": "manual (default): the provider is pointed at Taskiem's ingest URL by hand. remote: Taskiem creates, updates and deletes the provider's subscription as workflows using the trigger are deployed and removed, and verifies deliveries with the secret the provider returned (decision 0021); the connector supplies a registrar." },
+        "options": { "$ref": "#/$defs/jsonSchema", "description": "JSON Schema of the workflow trigger's options (trigger.config.options in wd/v1): what to subscribe to at the provider, and how to complete events." },
+        "test_event": { "$ref": "#/$defs/expr", "description": "Marks a delivery the provider sends to test the endpoint: it is verified and acknowledged, and starts only workflows that list its event by name." }
       },
       "allOf": [
         { "if": { "properties": { "type": { "const": "webhook" } } }, "then": { "required": ["verify"] } }
