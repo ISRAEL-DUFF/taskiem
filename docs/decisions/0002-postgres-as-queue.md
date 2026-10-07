@@ -28,3 +28,7 @@ The spike sustained 500 steps/s at p95 dispatch 4–5 ms and peaked at 1,302 ste
 
 1. **One claimer per process.** Each worker or orchestrator process holds a single `LISTEN` connection and a single claim loop that feeds its executors. One claimer per executor caused a thundering herd costing 7× the commits.
 2. **Inline decide.** `decide()` runs inside the transaction that appends a step's result, as ingest already does for `RunStarted`. The orchestrator role sweeps runs left undecided. This cut commits per step by 43% and raised peak throughput by 34%.
+
+## Amendment — 2026-10-07, dedicated worker pools and failover (decision 0024)
+
+Claims take a worker pool: `taskiem_claim_tasks` keeps only the tenants routed to the claiming worker's pool (their own routing, their partner's, their plan's, else `shared`), read at claim time, with fair claiming within the pool unchanged. The five-argument claim claims for the shared pool only. Transactions that record a fenced outcome are retried through a failover; see [0024](0024-production-cloud.md).

@@ -21,7 +21,7 @@ publicURL: ""
 # TASKIEM_SMTP_URL, and for the platform WhatsApp number TASKIEM_WHATSAPP_*
 # (docs/whatsapp.md). Nothing secret is ever put in values.
 existingSecret: taskiem
-# For a highly available Postgres (docs/operations.md#high-availability-postgres),
+# For a highly available Postgres (docs/cloud.md#high-availability-postgres),
 # put every host in TASKIEM_DATABASE_URL with target_session_attrs=read-write;
 # an optional read replica for run lists and dashboards goes in
 # TASKIEM_DATABASE_READ_URL (its lag bound, TASKIEM_DATABASE_READ_MAX_LAG, in

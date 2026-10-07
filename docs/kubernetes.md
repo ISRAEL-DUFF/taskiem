@@ -17,7 +17,8 @@ Both need Kubernetes 1.27 or later, a Postgres 16 database, and (in production) 
 | `edge` | 2 | Webhooks (`/hooks/`), Git push hooks (`/git-hooks/`) and the platform WhatsApp number (`/channels/whatsapp`) on 8081 | `/healthz` on 8081 |
 | `orchestrator` | 2 | Nothing; advances runs | `/healthz` on 9090 |
 | `scheduler` | 1 | Nothing; runs schedules, timers, retention archiving, audit anchoring and alerts | `/healthz` on 9090 |
-| `worker` | 2, or autoscaled | Nothing; runs connector and sandbox steps | `/healthz` on 9090 |
+| `worker` | 2, or autoscaled | Nothing; runs connector and sandbox steps for the shared pool | `/healthz` on 9090 |
+| `worker-<pool>` | per entry of `workerPools` (none by default) | The same, for tenants routed to that pool ([below](#dedicated-worker-pools)) | `/healthz` on 9090 |
 
 Every role also serves Prometheus metrics on 9090. `mode: all` runs every role in a single Deployment instead, which suits small installs and trials.
 
@@ -128,6 +129,23 @@ This adds:
 
 The main worker Deployment does not serve the `container` queue; container steps wait for the container pool. Each container step is a Pod (`tsk-…`) that lives for the attempt; `kubectl -n taskiem-sandbox get pods -l taskiem.dev/sandbox=true` shows those running. Give tenants minutes with `taskiem tenants limits <tenant> --set container_minutes_monthly=<n>`.
 
+## Dedicated worker pools
+
+`roles.worker` is the shared pool. Each entry of `workerPools` adds a pool of its own for tenants an operator routes there (decision 0024, [cloud](cloud.md#dedicated-worker-pools)):
+
+```yaml
+workerPools:
+  - name: acme
+    queues: connector,sandbox
+    replicas: 2
+    nodeSelector: { pool: dedicated }   # optional: isolate it on its own nodes
+    autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6 }
+```
+
+Each pool gets a Deployment `taskiem-worker-<name>` (`serve --role worker` with `TASKIEM_WORKER_POOL=<name>`), a metrics Service, an HPA with `autoscaling.enabled`, a PodDisruptionBudget when it keeps more than one replica, and a NetworkPolicy with `networkPolicy.enabled`. Pods are labelled `app.kubernetes.io/component: worker-pool` and `taskiem.io/worker-pool: <name>`. Unset fields take `roles.worker`'s resources and the chart's `nodeSelector` and `tolerations`. The chart refuses invalid or repeated names, `shared`, and the `container` queue. Split mode only.
+
+Install the pool first, then route tenants with `taskiem pools assign <name> --tenant <id>` (or `--plan <plan>`): routing to a pool with no live worker is refused. Scale a pool on its backlog with KEDA on `taskiem_pool_ready{pool="<name>"}`.
+
 ## Storage
 
 The scheduler mounts the claim at `/var/lib/taskiem`:
@@ -159,7 +177,7 @@ Infrastructure for dedicated deployments (where they run, who operates them, bac
 
 ## Sizing
 
-The defaults are per-role `databasePool` and `resources`. Each pod opens up to `databasePool` connections, plus 2 for loading tenant connectors. Size Postgres `max_connections` to cover (pool + 2) × replicas, summed across roles, with headroom for the migration Job. The defaults need about 170.
+The defaults are per-role `databasePool` and `resources`. Each pod opens up to `databasePool` connections, plus 2 for loading tenant connectors. Size Postgres `max_connections` to cover (pool + 2) × replicas, summed across roles and worker pools, with headroom for the migration Job. The defaults need about 170.
 
 Workers need the most memory. Each running Python step can use up to 256 MiB of interpreter memory, which is why the default limit is 2 GiB. Scale workers on CPU with `roles.worker.autoscaling`, or on queue backlog (`taskiem_queue_ready`, `taskiem_queue_oldest_ready_seconds`) with KEDA.
 

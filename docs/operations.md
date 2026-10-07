@@ -12,6 +12,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `taskiem tenants limits TENANT_ID [--set KEY=VALUE]...` | Shows a tenant's plan limits, usage and recent limit hits; `--set` changes a limit (`default` returns it to the platform default). Audited as `limits.set`. See [plan limits](#plan-limits). |
 | `taskiem tenants partner TENANT_ID [--max-subtenants N] [--subtenant-runs-per-day N] [--subtenant-runs-per-month N] [--disable]` | Makes a tenant a partner, which may create sub-tenants and embed apps through the partner admin API, and sets its partner-wide caps (0: no cap; flags left out keep their value). `--disable` stops it being one: its sub-tenants are kept, unreachable, and their end-user tokens stop. Audited as `partner.enable` and `partner.disable`. See [embedding](embedding.md). |
 | `taskiem tenants keys TENANT_ID [status \| rotate [--wait] \| rewrap \| check]` | Shows a tenant's encryption keys: tenant key versions and what wraps them, its own key's health (BYOK), re-wrapping progress and parked steps. `rotate` adds a tenant key version (`--wait` re-wraps at once), `rewrap` re-wraps now, `check` checks the keys and resumes steps parked while they were unavailable. Audited in the tenant's log as `platform_admin`. See [BYOK](byok.md#operators). |
+| `taskiem pools [assign POOL \| unassign] [--tenant TENANT_ID \| --plan PLAN] [--force]` | Lists live workers by pool and queue, queue depth by pool, and every routing; `assign` routes a tenant (with its sub-tenants) or a plan's tenants to a dedicated worker pool, refused while no live worker serves it unless `--force`; `unassign` removes the routing. Audited in the tenant's log as `platform_admin`; every change kept in `worker_pool_changes`. See [cloud](cloud.md#dedicated-worker-pools). |
 | `taskiem audit verify FILE` | Recomputes every hash and link of an audit export (`GET /v1/audit/export`) without the database. Exits non-zero on a broken chain. |
 | `taskiem validate FILE...` | Validates `*.wd.json` definitions and connector manifests. |
 | `taskiem healthcheck` | Probes the local API's `/readyz` (for images without a shell). |
@@ -24,7 +25,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `edge` | Webhook and connector-event ingest, Git push hooks, the platform WhatsApp number's webhook (`/channels/whatsapp`, [WhatsApp](whatsapp.md)), and USSD aggregators' callbacks (`/channels/ussd`, [USSD](ussd.md)) | `TASKIEM_EDGE_LISTEN` (`:8081`) |
 | `orchestrator` | Decides runs left with undecided events (most decisions are inline) | — |
 | `scheduler` | Timers, lease recovery, the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, partner webhooks ([embedding](embedding.md#6-partner-webhooks)), and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
-| `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`; `container` for container steps, on their own pool with `TASKIEM_CONTAINER_*`, see [container steps](container-steps.md#operator-setup)); drains in-flight steps for up to 30 s on shutdown | — |
+| `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`; `container` for container steps, on their own pool with `TASKIEM_CONTAINER_*`, see [container steps](container-steps.md#operator-setup)), for the tenants of its worker pool (`TASKIEM_WORKER_POOL`, [cloud](cloud.md#dedicated-worker-pools)); drains in-flight steps for up to 30 s on shutdown | — |
 
 Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/healthz`) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
 
@@ -32,7 +33,10 @@ Every role serves Prometheus metrics (`/metrics`) and a liveness check (`/health
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `TASKIEM_DATABASE_URL` | — | Required. |
+| `TASKIEM_DATABASE_URL` | — | Required. For a highly available Postgres, every host with `target_session_attrs=read-write` ([cloud](cloud.md#connection-strings)). |
+| `TASKIEM_DATABASE_READ_URL`, `TASKIEM_DATABASE_READ_MAX_LAG` | —, `10s` | A read replica for the run list and dashboard (`api` role), set aside while it lags beyond the bound or fails ([cloud](cloud.md#read-replica)) |
+| `TASKIEM_DATABASE_RETRY_WINDOW` | `30s` | How long a worker keeps a step's outcome through a database failover before giving up to lease expiry ([cloud](cloud.md#what-happens-during-a-failover)) |
+| `TASKIEM_WORKER_POOL` | `shared` | The worker pool this worker serves ([cloud](cloud.md#dedicated-worker-pools)) |
 | `TASKIEM_DATABASE_ROLE` | `taskiem_app` | Role set on every connection (`SET ROLE`); row-level security applies to it. Empty disables. |
 | `TASKIEM_DATABASE_POOL` | `20` | Connections per process. |
 | `TASKIEM_KMS` | `local` | `openbao` in production: transit key `TASKIEM_KMS_KEY` (`taskiem`) at `TASKIEM_OPENBAO_ADDR` with `TASKIEM_OPENBAO_TOKEN`. `local` takes a 32-byte base64 `TASKIEM_LOCAL_KMS_KEY` and is for development. |
@@ -96,6 +100,9 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
 | `taskiem_ingest_deliveries_total` | kind (`webhook`, `connector`, `schedule`), result |
 | `taskiem_steps_total`, `taskiem_step_duration_seconds` | queue, target (connector or step type), outcome |
 | `taskiem_queue_ready`, `taskiem_queue_leased`, `taskiem_queue_oldest_ready_seconds` | queue |
+| `taskiem_pool_ready`, `taskiem_pool_leased`, `taskiem_pool_oldest_ready_seconds` | pool, queue ([worker pools](cloud.md#dedicated-worker-pools)) |
+| `taskiem_db_retries_total` | outcome (`retried`, `recovered`, `gave_up`): transactions retried through a failover ([cloud](cloud.md#what-happens-during-a-failover)) |
+| `taskiem_db_replica_lag_seconds`, `taskiem_db_replica_in_use`, `taskiem_db_reads_total` | `taskiem_db_reads_total`: target (`replica`, `fallback`, `no_replica`) ([read replica](cloud.md#read-replica)) |
 | `taskiem_timers_fired_total`, `taskiem_lease_expiries_total`, `taskiem_runs_swept_total` | — |
 | `taskiem_connector_drift_total` | connector, action, kind (`type`, `enum`, `missing`) |
 | `taskiem_tenant_limit_hits_total` | limit (no tenant label: which tenant is in `GET /v1/limits`, the CLI and `limit` alerts) |
@@ -141,6 +148,10 @@ Limits reached are recorded per tenant and day (`tenant_limit_hits`), counted in
 **Plans** (billing on, [billing](billing.md)): a tenant's limits are the platform defaults, then its plan's limits (`deploy/plans.yaml`), then its own overrides set here, which still win. `taskiem tenants limits` shows the result. With billing off the plan layer is absent. `taskiem billing grant TENANT PLAN [--until]` puts a tenant on a plan without payment.
 
 **Sub-tenants** (embedding) have no platform defaults of their own: a sub-tenant's limits are its partner's effective limits, lowered by whatever the partner sets for it through the partner API, and never above the partner's. Lowering a partner's limits with `taskiem tenants limits` lowers its sub-tenants' within a minute. A partner's caps across all its sub-tenants (`max_subtenants`, `subtenant_runs_per_day`, `subtenant_runs_per_month`) are set with `taskiem tenants partner`. See [embedding](embedding.md#2-create-sub-tenants).
+
+## Production cloud
+
+High availability Postgres (synchronous standby, failover, point-in-time recovery and restore drills), dedicated worker pools, the read replica and fixed egress addresses are in [cloud](cloud.md).
 
 ## Docker Compose
 

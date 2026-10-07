@@ -19,3 +19,4 @@ connector.wasm
 # Built binary (go build ./cmd/taskiem)
 /taskiem
 /taskiem-shim
+/cmd/taskiem/_conntest*/

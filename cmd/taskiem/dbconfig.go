@@ -71,7 +71,7 @@ func dsnWarnings(name, dsn string) []string {
 		hosts[fmt.Sprintf("%s:%d", f.Host, f.Port)] = true
 	}
 	if len(hosts) > 1 && pc.ConnConfig.ValidateConnect == nil && name == "TASKIEM_DATABASE_URL" {
-		return []string{name + " names several hosts without target_session_attrs=read-write: a connection may land on a standby (docs/operations.md#high-availability-postgres)"}
+		return []string{name + " names several hosts without target_session_attrs=read-write: a connection may land on a standby (docs/cloud.md#high-availability-postgres)"}
 	}
 	return nil
 }

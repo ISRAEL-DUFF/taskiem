@@ -12,7 +12,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | --- | --- | --- | --- | --- |
 | Billing | P4-1 | Plans catalogue from a config file mapped onto every plan limit, features gated at the API, subscriptions (trial, active, past due with grace, degraded, cancelled, comped), plan changes with proration and downgrade blockers, immutable gapless invoices with VAT and pass-through overage, naira payments through Paystack (checkout, webhooks, saved cards, reconciliation) and Flutterwave, dunning, usage snapshots, billing API and page, operator CLI | 16, 13.1 | **Done** (code; [what exists](#p4-1-billing)); live payments need P4-B2, prices B1 |
 | Onboarding | P4-2 | Self-serve signup hardened for the public (email confirmation, limits, abuse checks, trial), getting-started checklist, guided first workflow over the template gallery, in-product help, signup-to-first-run measurement | — | **Done** (code; [what exists](#p4-2-onboarding)); going public needs P4-O1–P4-O4 |
-| Cloud | P4-3 | Nigeria-region production cloud: HA Postgres with synchronous standby, PITR, fixed egress IPs; workers split by queue, dedicated pools, read replicas | 2.3, 15.4 | Planned; needs people (infrastructure, D-items) |
+| Cloud | P4-3 | Nigeria-region production cloud: HA Postgres with synchronous standby, PITR, fixed egress IPs; workers split by queue, dedicated pools, read replicas | 2.3, 15.4 | **Done** (code; [what exists](#p4-3-cloud)); the infrastructure itself needs people (P4-C1 to P4-C6) |
 | Reliability | P4-4 | 99.9% SLO with on-call, status page, incident process | 15.3 | Planned; needs people |
 | Enterprise | P4-5 | BYOK (tenant keys wrapped by the customer's own KMS key: OpenBao/Vault transit, AWS KMS, Google Cloud KMS, Azure Key Vault), background re-wrapping (S23) and secrets bound to environment and name (S33), fail closed with parked steps that resume, dedicated single-tenant deployments (Helm, documented), white-label tier (built in Phase 3, C2) | 13.4, 14.1 | **Done** (code; [what exists](#p4-5-enterprise)); a real customer KMS test and the revocation wording need people (P4-K1, P4-K2) |
 | Ecosystem | P4-6 | Public connector SDK and a submission review process for third-party connectors | 6 | **Done** (code; [what exists](#p4-6-connector-sdk-and-catalogue)); publisher agreement, reviewers and review SLA need people (P4-E1 to P4-E3) |
@@ -67,6 +67,29 @@ What is left in onboarding:
 - **Cleanup of unconfirmed tenants** (suspend or delete after N days) waits for the abuse policy.
 - **WhatsApp as the entry point** (go-to-market step 2): signing up from WhatsApp, rather than linking a number after a web signup, is not built.
 - A connection test before the first run (`auth.test` in manifests) is not called by the guide yet; a wrong key shows as a failed step on the test run.
+
+## P4-3: cloud
+
+Done 7 October 2026 (code). Operator guide: [cloud](cloud.md); design: [decision 0024](decisions/0024-production-cloud.md) (amends 0002); threat model: B5 and B7 amended, no new boundary. Migrations 00120 and 00121.
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Worker pools | A worker serves one pool (`TASKIEM_WORKER_POOL`, default `shared`) on its queues (`TASKIEM_WORKER_QUEUES`, unchanged); `taskiem_claim_tasks` keeps only tenants routed to that pool: own routing, partner's, plan's, else shared, read at claim time so queued tasks move at once; round-robin across a pool's tenants under each one's cap, as before; the previous release's five-argument claim serves the shared pool only | migration 00120, `engine/runtime/worker.go`, `engine/runtime/pools.go` |
+| Routing | `taskiem pools` (live workers, depth by pool, routings), `assign POOL --tenant \| --plan [--force]`, `unassign`; refused while no live worker has reported for the pool in five minutes; definer functions owned by `taskiem_dispatch`; audited in the tenant's chain as `platform_admin`, every change in `worker_pool_changes` | `cmd/taskiem/poolscmd.go`, migration 00120 |
+| Pool metrics | `taskiem_pool_ready`, `taskiem_pool_leased`, `taskiem_pool_oldest_ready_seconds` by pool and queue (counts only) | `engine/telemetry/database.go` |
+| Helm | `workerPools`: per pool a Deployment, metrics Service, optional HPA, PDB and NetworkPolicy; names validated, `shared` and the `container` queue refused | `deploy/helm/taskiem/templates/workerpools.yaml` |
+| Read replica | Optional `TASKIEM_DATABASE_READ_URL` (api role): `READ ONLY` transactions with the same role switch and tenant scope, so RLS holds there; only the run list and the dashboard; lag by a heartbeat row written on the primary and read on the replica; the primary used beyond `TASKIEM_DATABASE_READ_MAX_LAG` (10 s) or when the replica fails a query; `taskiem_db_replica_lag_seconds`, `taskiem_db_replica_in_use`, `taskiem_db_reads_total` | `engine/db/replica.go`, `api/server.go`, migration 00121 |
+| Failover | `db.InTenantTxRetry`: retries a transaction that certainly did not commit, and one whose `COMMIT` was lost only when idempotent, for `TASKIEM_DATABASE_RETRY_WINDOW` (30 s), resetting the pool on a lost connection or a read-only server; the worker's fenced `finish` and `postpone` and its `EffectIntent` (before `COMMIT` only) use it; `LISTEN` already reconnected; a start-up warning for several hosts without `target_session_attrs=read-write`; `taskiem_db_retries_total` | `engine/db/retry.go`, `engine/runtime/worker.go`, `cmd/taskiem/dbconfig.go` |
+| Runbooks | Synchronous standby settings, connection strings, what happens during a failover, PITR (WAL archiving, base backups, restore), monthly restore drills with checks against the audit anchors, fixed egress addresses by NAT and why proxy variables are ignored | [cloud](cloud.md) |
+| Tests | Routing by tenant, partner and plan; the old claim; empty pools refused; audit and change log; fairness within a pool; the CLI; transient errors; connections dropped mid-transaction, refused for a while, and cut just before and just after `COMMIT` through a TCP proxy (lands once, idempotent retried); a connection on a read-only server; a worker through a storm of drops (every payment once, `LISTEN` back); replica under RLS, writes refused, lag and outage fallbacks, its callers pinned; the API with a read-only replica (starting, revealing, cancelling never touch it); configuration and the multi-host warning; chart rendering | `engine/runtime/pools_test.go`, `engine/runtime/ha_test.go`, `engine/db/ha_test.go`, `engine/db/replica_test.go`, `api/replica_test.go`, `cmd/taskiem/poolscmd_test.go`, `engine/db/dbtest/proxy.go` |
+
+What is left in the cloud:
+
+- **People** (needs people P4-C1 to P4-C6): the provider and region, the HA Postgres service and a real failover under load, PITR with a first restore drill, backup retention, the NAT addresses, and which tenants get dedicated pools.
+- **Dedicated container capacity**: the `container` queue runs only in the container worker pool, for every tenant.
+- **More replica reads**: run detail and history, reports and usage stay on the primary (a summary and history from different servers could disagree).
+- **An explicit egress proxy**: designed (the guard vets, then `CONNECT`s to the vetted IP), not built; NAT covers fixed addresses.
+- **Retries in the API and scheduler**: only the worker's outcome paths retry; API requests fail over to client retries with idempotency keys, and the scheduler waits for its next tick.
 
 ## P4-5: enterprise
 
