@@ -32,3 +32,4 @@ One file per decision, numbered in order: `NNNN-short-title.md`. Each entry reco
 | [0026](0026-bound-step-up-and-cookie-sessions.md) | Step-up bound to its operation, cookie sessions without a body token, key changes behind step-up | Accepted |
 | [0027](0027-operator-console.md) | An operator identity apart from tenants, a console on it, and a platform audit chain | Accepted (operator accounts and SSO issuer pending P4-X1, P4-X2) |
 | [0028](0028-explicit-egress-proxy.md) | Explicit egress proxy: the guard vets the destination, then CONNECTs to the vetted IP, never a name (amends 0024) | Accepted |
+| [0029](0029-languages-and-voice-notes.md) | Languages and voice notes: catalogues with English as the source, drafts off until reviewed, the model routes but never confirms, transcripts sealed | Accepted (native-speaker review and the speech-to-text account pending L1 to L5) |

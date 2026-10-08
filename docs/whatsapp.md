@@ -58,6 +58,8 @@ Outbound messages go to `graph.facebook.com` through the egress guard. Sends are
 | `build <what to automate>`, or just the goal ("every Friday text my customers who owe me") | Drafts a workflow with AI, shows it as plain steps, asks for any missing details, and saves it as a draft after your **yes** ([below](#build)). Needs `workflow.edit` |
 | `switch <organisation>` | Work in another organisation you belong to; `switch` alone lists them |
 | `cancel` | Drops what is in progress |
+| `language`, `language <name>` | Which languages are on, or choose one (`language yoruba`, `language english`), where an operator or the organisation turned languages beyond English on ([Languages](languages.md); drafts until native speakers review them) |
+| A voice note | Where voice notes are on (a beta): transcribed and read as if typed, to start something; the reply says what was heard. Answers and **yes** are typed ([Languages](languages.md#voice-notes)) |
 
 On the shared number every message from Taskiem starts with the organisation's name in brackets: the number is shared by every organisation on this Taskiem. An organisation with [its own number](#own-numbers) writes to you from that number, without the brackets, and messages you send to it act in that organisation only (`switch` does not apply there).
 
@@ -214,5 +216,5 @@ Limits are per `edge` replica (in memory), like the sign-in limiter.
 - Delivery receipts: templates are counted when Meta accepts them, not from the `pricing` object of status webhooks.
 - Run outcomes for public-menu runs (the person gets a reference only), and menus on the shared number.
 - Flows for inputs beyond ten flat fields (nested objects, lists), date pickers.
-- Languages beyond English, voice notes (A4).
+- Languages beyond English and voice notes are built (A4, [Languages](languages.md)) but their texts are unreviewed drafts, off by default; templates stay in the language Meta approved them in.
 - Building: changing an existing workflow by chat (`build` creates new drafts only), and naming the draft in the chat (it takes the template's or the model's name).

@@ -142,7 +142,7 @@ type Adapter interface {
 - When a caller dials a code with an extension (`*384*123*1#`), whether the extension arrives in `serviceCode` or in `text` is not confirmed (W4). Menus route by the exact service code.
 - Africa's Talking's end-of-session notifications (Events URL) are not used.
 - The result is not shown on a next screen: a run usually outlasts the session, so outcomes go by SMS.
-- Menus are English only (A4 adds languages).
+- Menus are in the words the tenant writes (plain ASCII). Taskiem's own screens (busy, expired, ended, too many requests, not taken, not available) and the reconciliation SMS follow the tenant's default language when it is on, folded to ASCII ([Languages](languages.md)); callers cannot choose a language on USSD yet.
 
 ## Sources
 
