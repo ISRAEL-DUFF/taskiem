@@ -1,6 +1,33 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/israel-duff/taskiem/engine/egress"
+)
+
+// TestEgressProxyMustBeExplicit: a badly set TASKIEM_EGRESS_PROXY stops
+// the process; HTTPS_PROXY never configures it.
+func TestEgressProxyMustBeExplicit(t *testing.T) {
+	t.Cleanup(func() { egress.SetUpstream(nil) })
+	t.Setenv("HTTPS_PROXY", "http://corp-proxy:3128")
+	t.Setenv("TASKIEM_EGRESS_PROXY", "")
+	if err := configureEgress(nil); err != nil || egress.CurrentUpstream() != nil {
+		t.Fatalf("unset: %v %v", egress.CurrentUpstream(), err)
+	}
+	for _, bad := range []string{"env", "corp-proxy:3128", "http://corp-proxy", "http://u:p@corp-proxy:3128"} {
+		t.Setenv("TASKIEM_EGRESS_PROXY", bad)
+		if err := configureEgress(nil); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	t.Setenv("TASKIEM_EGRESS_PROXY", "http://corp-proxy:3128")
+	t.Setenv("TASKIEM_EGRESS_PROXY_USER", "taskiem")
+	t.Setenv("TASKIEM_EGRESS_PROXY_PASSWORD", "pw")
+	if err := configureEgress(nil); err != nil || egress.CurrentUpstream() == nil || egress.CurrentUpstream().Addr != "corp-proxy:3128" {
+		t.Errorf("set: %+v %v", egress.CurrentUpstream(), err)
+	}
+}
 
 func lookupFrom(m map[string]string) func(string) (string, bool) {
 	return func(k string) (string, bool) { v, ok := m[k]; return v, ok }

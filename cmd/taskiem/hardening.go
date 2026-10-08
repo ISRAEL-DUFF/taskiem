@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/israel-duff/taskiem/api"
+	"github.com/israel-duff/taskiem/engine/egress"
 )
 
 // defaultHSTS is sent when TASKIEM_PUBLIC_URL is https and TASKIEM_HSTS is
@@ -68,5 +70,21 @@ func harden(srv *api.Server, publicURL string) error {
 		return err
 	}
 	srv.HSTS, srv.CodeLimits = hsts, limits
+	return nil
+}
+
+// configureEgress sets the explicit egress proxy tenant traffic leaves
+// through (TASKIEM_EGRESS_PROXY, decision 0028), or none. A proxy set
+// badly stops the process: tenant traffic must never leave by a route the
+// operator did not name.
+func configureEgress(log *slog.Logger) error {
+	up, err := egress.UpstreamFromEnv(os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	egress.SetUpstream(up)
+	if up != nil && log != nil {
+		log.Info("tenant traffic leaves through the egress proxy", "proxy", up.String(), "authenticated", up.User != "")
+	}
 	return nil
 }

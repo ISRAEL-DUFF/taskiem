@@ -70,6 +70,9 @@ func keysCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	defer pool.Close()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := configureEgress(nil); err != nil {
+		return fmt.Errorf("tenants keys: %w", err)
+	}
 	v := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey, BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
 		BYOK: &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate}}
 	by := "cli:" + env("USER", "operator")

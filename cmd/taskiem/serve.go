@@ -536,6 +536,9 @@ func serve(ctx context.Context, args []string) error {
 	}
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{ReplaceAttr: redactAttr})).With("role", *role, "version", version)
 	slog.SetDefault(log)
+	if err := configureEgress(log); err != nil { // TASKIEM_EGRESS_PROXY (hardening.go)
+		return fmt.Errorf("serve: %w", err)
+	}
 	shutdownTracing, err := telemetry.Setup(ctx, "taskiem", version)
 	if err != nil {
 		return err

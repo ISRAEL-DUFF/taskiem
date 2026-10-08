@@ -66,6 +66,17 @@ type Guard struct {
 	// still applies, and nothing else private becomes reachable.
 	Loopback map[string]string
 	Timeout  time.Duration
+	// Upstream is the explicit CONNECT proxy this guard's connections
+	// leave through; nil uses the process-wide one (SetUpstream), if any.
+	// Loopback exceptions are dialled directly.
+	Upstream *Upstream
+}
+
+func (g *Guard) upstream() *Upstream {
+	if g.Upstream != nil {
+		return g.Upstream
+	}
+	return defaultUpstream.Load()
 }
 
 // loopbackOK reports whether a is loopback and the purpose may reach it on
@@ -165,11 +176,31 @@ func (g *Guard) DialContext(ctx context.Context, p Policy, network, addr string)
 	if d.Timeout == 0 {
 		d.Timeout = 10 * time.Second
 	}
+	up := g.upstream()
+	if up != nil && !strings.HasPrefix(network, "tcp") {
+		return deny("only TCP can leave through the egress proxy")
+	}
 	var lastErr error
 	for _, a := range addrs {
-		conn, err := d.DialContext(ctx, network, net.JoinHostPort(a.String(), port))
+		target := net.JoinHostPort(a.String(), port)
+		var conn net.Conn
+		var err error
+		if up != nil && !g.loopbackOK(p, a, port) {
+			// The vetted address, never the name (decision 0028).
+			conn, err = up.dial(ctx, target, d.Timeout)
+			if errors.Is(err, ErrDenied) {
+				g.logger().Warn("egress denied", "tenant", p.Tenant, "purpose", p.Purpose, "host", host, "ip", a.String(), "port", port, "reason", "refused by the egress proxy")
+				return nil, err
+			}
+		} else {
+			conn, err = d.DialContext(ctx, network, target)
+		}
 		if err == nil {
-			g.logger().Info("egress", "tenant", p.Tenant, "purpose", p.Purpose, "host", host, "ip", a.String(), "port", port)
+			if up != nil {
+				g.logger().Info("egress", "tenant", p.Tenant, "purpose", p.Purpose, "host", host, "ip", a.String(), "port", port, "via", up.String())
+			} else {
+				g.logger().Info("egress", "tenant", p.Tenant, "purpose", p.Purpose, "host", host, "ip", a.String(), "port", port)
+			}
 			return conn, nil
 		}
 		lastErr = err
