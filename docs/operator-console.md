@@ -56,7 +56,7 @@ An operator signed in with single sign-on who has no passkey can read but not ch
 | Tenants | Search by name or id: status, plan, subscription state, worker pool; one tenant's subscription dates, effective limits (and which are the tenant's own) and usage. Read-only. | `taskiem tenants limits`, `taskiem pools` |
 | Platform audit | The platform audit chain, whether it verifies, and an export | — |
 
-**The reviewer is who signed in.** In the console the reviewer is the signed-in operator's email, not an email typed in (`--as` in the CLI). The database still decides: the reviewer must be on the list, must not be the submitter or a member of the publisher's organisation, and needs a note; approving needs every checklist item confirmed, which the database now checks too (migration 00136), for the CLI as well. A revocation from the console alerts every installing organisation, as from the CLI.
+**The reviewer is who signed in.** In the console the reviewer is the signed-in operator's email, not an email typed in (`--as` in the CLI). The database still decides: the reviewer must be on the list, must not be the submitter or a member of the publisher's organisation, and needs a note; approving needs every checklist item confirmed, which the database now checks too (migration 00143), for the CLI as well. A revocation from the console alerts every installing organisation, as from the CLI.
 
 **What the console shows about tenants** is what the CLI already shows: a tenant's id, name, status, plan, subscription state and dates, limits, usage counts and worker pool. Never its members, workflows, runs, secrets, invoices or card details. Opening a tenant is recorded in the platform audit chain.
 

@@ -29,7 +29,7 @@ import (
 
 // PlatformChain is the audit chain id of platform-level actions: the
 // ordinary hash chain (anchored, exported and verified like a tenant's)
-// under an id no tenant can have (migration 00135).
+// under an id no tenant can have (migration 00142).
 var PlatformChain = uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")
 
 // ErrNotFound is an operator that does not exist (or is not active).

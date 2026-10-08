@@ -52,4 +52,4 @@ Package signing over a content digest follows our own audit anchors (spec 9.2). 
 
 ## Amendment 2026-10-08
 
-Reviewers can now work from the operator console ([decision 0027](0027-operator-console.md)), signed in as themselves with a passkey and asked for it again for each decision; there the reviewer is the signed-in operator, not an email given with `--as`. `taskiem_catalogue_review` now also refuses an approval unless every checklist item is confirmed (migration 00136), from the CLI as from the console.
+Reviewers can now work from the operator console ([decision 0027](0027-operator-console.md)), signed in as themselves with a passkey and asked for it again for each decision; there the reviewer is the signed-in operator, not an email given with `--as`. `taskiem_catalogue_review` now also refuses an approval unless every checklist item is confirmed (migration 00143), from the CLI as from the console.
