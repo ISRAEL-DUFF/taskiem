@@ -369,6 +369,23 @@ func TestDispatchRoleCannotReadPayloads(t *testing.T) {
 		"SELECT name FROM users",
 		"SELECT options FROM remote_subscriptions",
 		"SELECT remote_id FROM remote_subscriptions",
+		// Phase 4 tables (security review 2026-10-08): routing columns only.
+		"SELECT limits FROM usage_snapshots",
+		"SELECT runs_started FROM usage_snapshots",
+		"SELECT authorization_code FROM subscriptions",
+		"SELECT billing_email FROM subscriptions",
+		"SELECT amount_kobo FROM billing_payments",
+		"SELECT checkout_url FROM billing_payments",
+		"SELECT credentials FROM tenant_byok_keys",
+		"SELECT config FROM tenant_byok_keys",
+		"SELECT reason FROM key_rewrap_due",
+		"SELECT transcript FROM voice_transcripts",
+		"SELECT consent FROM catalogue_installs",
+		"SELECT wrapped_key FROM tenant_pseudonym_keys",
+		"SELECT email FROM email_verifications",
+		"SELECT lease_id FROM tenant_code_leases",
+		"SELECT binding FROM secret_legacy_bindings",
+		"SELECT languages FROM tenant_channel_settings",
 	} {
 		_, err := d.Dispatch.Exec(ctx, q)
 		if sqlState(err) != "42501" {

@@ -86,6 +86,20 @@ func TestCatalogueSubmitReviewInstall(t *testing.T) {
 	if _, err := pool.Exec(ctx, `SELECT taskiem_catalogue_set_publisher('acme', 'verified', 'cli:ops', '')`); err != nil {
 		t.Fatal(err)
 	}
+	// Once verified, the name installing tenants see is fixed (security
+	// review R4): not through the API, not through the database role. The
+	// key can still be rotated.
+	if st, out := acme.do("PUT", "/v1/catalogue/publisher", map[string]any{"name": "Paystack (official)", "public_key": pubB64}); st != 409 || !strings.Contains(toJSON(out), "verified") {
+		t.Errorf("verified publisher renamed itself: %d %v", st, out)
+	}
+	err = db.InTenantTx(ctx, pool, []uuid.UUID{acmeID}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE connector_publishers SET name = 'Paystack (official)'`)
+		return err
+	})
+	if err == nil || !strings.Contains(err.Error(), "verified name") {
+		t.Errorf("verified publisher renamed itself in the database: %v", err)
+	}
+	acme.must(200, "PUT", "/v1/catalogue/publisher", map[string]any{"name": "Acme Ltd", "public_key": pubB64})
 
 	// Automated checks: a good package goes to review; a tampered one is
 	// kept as checks_failed with the reason; another namespace is refused.

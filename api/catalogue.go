@@ -114,6 +114,14 @@ func (s *Server) putPublisher(w http.ResponseWriter, r *http.Request) {
 		if body.Slug != "" && body.Slug != cur.Slug {
 			return fmt.Errorf("%w: this organisation publishes as %q; a namespace never changes", errConflict, cur.Slug)
 		}
+		// The name is what an operator verified, and what installing
+		// tenants see beside every version: once verified it changes only
+		// through Taskiem, or a publisher could pass itself off as
+		// another (security review R4; also held in the database,
+		// migration 00160).
+		if cur.Status != "pending" && body.Name != cur.Name {
+			return fmt.Errorf("%w: the publisher name %q was verified; ask Taskiem to change it", errConflict, cur.Name)
+		}
 		rotated := cur.KeyID != connpkg.KeyID(pub)
 		if _, err := tx.Exec(r.Context(), `UPDATE connector_publishers SET name = $1, public_key = $2, key_id = $3,
 			key_rotated_at = CASE WHEN $4 THEN now() ELSE key_rotated_at END`, body.Name, []byte(pub), connpkg.KeyID(pub), rotated); err != nil {
