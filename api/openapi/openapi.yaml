@@ -9060,7 +9060,7 @@ components:
       required:
       - operator
       - languages
-      - on
+      - 'on'
       - default_language
       - voice_notes
       - voice_available
