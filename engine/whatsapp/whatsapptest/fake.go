@@ -6,6 +6,8 @@ package whatsapptest
 
 import (
 	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -48,6 +50,74 @@ type Graph struct {
 	Fail int
 	// failTo answers sends to one number with a Graph error code.
 	failTo map[string]int
+	// media are uploaded recordings people "sent", by media id.
+	media     map[string]fakeMedia
+	downloads int
+}
+
+type fakeMedia struct {
+	data []byte
+	mime string
+	size int64 // reported size; 0 reports the real one
+}
+
+// AddMedia makes a media id known, as if a person had sent that audio;
+// reportSize, when not 0, is the size the lookup claims.
+func (g *Graph) AddMedia(id, mime string, data []byte, reportSize int64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.media == nil {
+		g.media = map[string]fakeMedia{}
+	}
+	g.media[id] = fakeMedia{data: data, mime: mime, size: reportSize}
+}
+
+// Downloads counts media downloads.
+func (g *Graph) Downloads() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.downloads
+}
+
+// serveMedia answers media lookups and downloads, with any known token.
+func (g *Graph) serveMedia(w http.ResponseWriter, r *http.Request, parts []string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	tokenOK := false
+	for _, tok := range g.numbers {
+		tokenOK = tokenOK || r.Header.Get("Authorization") == "Bearer "+tok
+	}
+	if len(parts) == 2 && parts[0] == "media-download" {
+		m, ok := g.media[parts[1]]
+		if !ok || !tokenOK {
+			http.NotFound(w, r)
+			return true
+		}
+		g.downloads++
+		w.Header().Set("Content-Type", m.mime)
+		_, _ = w.Write(m.data)
+		return true
+	}
+	if len(parts) != 1 || r.Method != http.MethodGet {
+		return false
+	}
+	m, ok := g.media[parts[0]]
+	if !ok {
+		return false
+	}
+	if !tokenOK {
+		refuse(w, http.StatusUnauthorized, 190, "Invalid OAuth access token.")
+		return true
+	}
+	size := m.size
+	if size == 0 {
+		size = int64(len(m.data))
+	}
+	sum := sha256.Sum256(m.data)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"messaging_product": "whatsapp", "url": g.URL + "/media-download/" + parts[0], "mime_type": m.mime,
+		"sha256": hex.EncodeToString(sum[:]), "file_size": size, "id": parts[0]})
+	return true
 }
 
 // SetFailTo makes sends to one number fail with a Graph error code (0:
@@ -93,6 +163,9 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) > 0 && strings.HasPrefix(parts[0], "v") && len(parts) > 1 {
 		parts = parts[1:] // a version prefix in the base URL
+	}
+	if g.serveMedia(w, r, parts) {
+		return
 	}
 	g.mu.Lock()
 	token, known := g.numbers[parts[0]]
@@ -289,6 +362,11 @@ func Delivery(phoneNumberID, from, id string, msg map[string]any) []byte {
 		}}},
 	}}})
 	return body
+}
+
+// Audio is an inbound audio message; voice marks a voice note.
+func Audio(mediaID, mime string, voice bool) map[string]any {
+	return map[string]any{"type": "audio", "audio": map[string]any{"id": mediaID, "mime_type": mime, "voice": voice}}
 }
 
 // Text is an inbound text message.

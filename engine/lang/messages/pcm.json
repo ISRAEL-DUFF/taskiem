@@ -1,0 +1,692 @@
+{
+  "language": "pcm",
+  "reviewed": false,
+  "status": "DRAFT, NOT REVIEWED. Machine-assisted draft written without a native speaker. Do not treat as accurate; shown only where an operator or tenant turns this language on. A native speaker reviews each entry and sets reviewed to true (docs/languages.md).",
+  "reviewers": [],
+  "messages": {
+    "approval.status.approved": {
+      "text": "approved",
+      "reviewed": false
+    },
+    "approval.status.cancelled": {
+      "text": "cancel",
+      "reviewed": false
+    },
+    "approval.status.expired": {
+      "text": "expire",
+      "reviewed": false
+    },
+    "approval.status.open": {
+      "text": "open",
+      "reviewed": false
+    },
+    "approval.status.rejected": {
+      "text": "rejected",
+      "reviewed": false
+    },
+    "button.approve": {
+      "text": "Approve",
+      "reviewed": false
+    },
+    "button.cancel": {
+      "text": "Cancel",
+      "reviewed": false
+    },
+    "button.enter_pin": {
+      "text": "Enter PIN",
+      "reviewed": false
+    },
+    "button.fill_in": {
+      "text": "Fill am",
+      "reviewed": false
+    },
+    "button.no": {
+      "text": "No",
+      "reviewed": false
+    },
+    "button.reject": {
+      "text": "Reject",
+      "reviewed": false
+    },
+    "button.yes_run": {
+      "text": "Yes, run am",
+      "reviewed": false
+    },
+    "button.yes_save": {
+      "text": "Yes, save am",
+      "reviewed": false
+    },
+    "lang.current": {
+      "text": "I dey write you for {language}. Languages wey dey here: {languages}. Send *language* and the name to change.",
+      "reviewed": false
+    },
+    "lang.detected": {
+      "text": "(I go reply you for {language}. Send *language english* to change am.)",
+      "reviewed": false
+    },
+    "lang.draft_note": {
+      "text": "This translation na draft wey people wey sabi Pidgin never check. Send *language english* to go back to English.",
+      "reviewed": false
+    },
+    "lang.switched": {
+      "text": "From now I go dey write you for {language}.",
+      "reviewed": false
+    },
+    "lang.unavailable": {
+      "text": "{name} no dey here. Languages wey dey here: {languages}.",
+      "reviewed": false
+    },
+    "run.status.cancelled": {
+      "text": "don cancel",
+      "reviewed": false
+    },
+    "run.status.completed": {
+      "text": "don finish",
+      "reviewed": false
+    },
+    "run.status.failed": {
+      "text": "fail",
+      "reviewed": false
+    },
+    "run.status.needs_reconciliation": {
+      "text": "need checking",
+      "reviewed": false
+    },
+    "run.status.queued": {
+      "text": "dey line",
+      "reviewed": false
+    },
+    "run.status.running": {
+      "text": "dey run",
+      "reviewed": false
+    },
+    "run.status.waiting": {
+      "text": "dey wait",
+      "reviewed": false
+    },
+    "sms.reconcile": {
+      "text": "We dey check your request {reference}. We go let you know.",
+      "reviewed": false
+    },
+    "ussd.busy": {
+      "text": "This service dey busy. Abeg try again soon.",
+      "reviewed": false
+    },
+    "ussd.ended": {
+      "text": "This session don end. Abeg dial again.",
+      "reviewed": false
+    },
+    "ussd.expired": {
+      "text": "Your session don expire. Abeg dial again.",
+      "reviewed": false
+    },
+    "ussd.gone": {
+      "text": "This service no dey available.",
+      "reviewed": false
+    },
+    "ussd.not_taken": {
+      "text": "Sorry, we no fit take your request. Nothing start. Abeg try again.",
+      "reviewed": false
+    },
+    "ussd.too_many": {
+      "text": "Too many requests from this number. Abeg try again later.",
+      "reviewed": false
+    },
+    "voice.empty": {
+      "text": "I no hear any word for that voice note. Abeg type your message.",
+      "reviewed": false
+    },
+    "voice.failed": {
+      "text": "I no fit understand that voice note. Abeg type your message.",
+      "reviewed": false
+    },
+    "voice.heard": {
+      "text": "Voice note still dey test (beta), so abeg check am. Wetin I hear: \"{transcript}\"",
+      "reviewed": false
+    },
+    "voice.off": {
+      "text": "Voice note no dey work here yet. Abeg type your message.",
+      "reviewed": false
+    },
+    "voice.too_large": {
+      "text": "That voice note too big. Abeg send short one, or type your message.",
+      "reviewed": false
+    },
+    "voice.too_long": {
+      "text": "That voice note pass {seconds} seconds. Abeg send short one, or type your message.",
+      "reviewed": false
+    },
+    "voice.too_many": {
+      "text": "You don send plenty voice notes now now. Abeg type your message.",
+      "reviewed": false
+    },
+    "voice.type_now": {
+      "text": "Abeg type your answer: voice note na only to start new tin.",
+      "reviewed": false
+    },
+    "voice.unsupported": {
+      "text": "Na only voice note and audio I fit listen to. Abeg type your message.",
+      "reviewed": false
+    },
+    "wa.approval.already": {
+      "text": "That request don already {status}.",
+      "reviewed": false
+    },
+    "wa.approval.already_decided": {
+      "text": "You don already decide this request.",
+      "reviewed": false
+    },
+    "wa.approval.answered": {
+      "text": "Dem don answer that request from this chat.",
+      "reviewed": false
+    },
+    "wa.approval.closed": {
+      "text": "That request don close.",
+      "reviewed": false
+    },
+    "wa.approval.denied": {
+      "text": "You no fit decide approvals for {org} (you need approval.decide).",
+      "reviewed": false
+    },
+    "wa.approval.expires": {
+      "text": "This request go expire {time} UTC.",
+      "reviewed": false
+    },
+    "wa.approval.level": {
+      "text": "{env}, level {level} of {levels}",
+      "reviewed": false
+    },
+    "wa.approval.needed": {
+      "text": "Approval needed: {title} ({where})",
+      "reviewed": false
+    },
+    "wa.approval.next_level": {
+      "text": "That request don move to the next level. Send *approvals* to see wetin dey wait for you.",
+      "reviewed": false
+    },
+    "wa.approval.not_recorded": {
+      "text": "E no record: {reason}.",
+      "reviewed": false
+    },
+    "wa.approval.other_person": {
+      "text": "Dem send that request to another person; you no fit decide am from this number.",
+      "reviewed": false
+    },
+    "wa.approval.recorded_approved": {
+      "text": "E don record: you approve {step}.",
+      "reviewed": false
+    },
+    "wa.approval.recorded_rejected": {
+      "text": "E don record: you reject {step}.",
+      "reviewed": false
+    },
+    "wa.approval.result_approved": {
+      "text": "The request don approve and the run dey continue.",
+      "reviewed": false
+    },
+    "wa.approval.result_rejected": {
+      "text": "The request don reject.",
+      "reviewed": false
+    },
+    "wa.approval.result_waiting": {
+      "text": "E still dey wait for more approvals.",
+      "reviewed": false
+    },
+    "wa.approval.stale": {
+      "text": "That button no valid again. Send *approvals* to see wetin dey wait for you.",
+      "reviewed": false
+    },
+    "wa.approvals.denied": {
+      "text": "You no dey decide approvals for {org}.",
+      "reviewed": false
+    },
+    "wa.approvals.none": {
+      "text": "Nothing dey wait for you.",
+      "reviewed": false
+    },
+    "wa.build.budget": {
+      "text": "The AI budget for {org} for this month don finish, so I no fit build am now. You still fit build workflows for the web app.",
+      "reviewed": false
+    },
+    "wa.build.budget_ran_out": {
+      "text": "The AI budget for this month finish before the draft ready. You still fit build workflows for the web app.",
+      "reviewed": false
+    },
+    "wa.build.denied": {
+      "text": "You no fit build workflows for {org} (you need workflow.edit).",
+      "reviewed": false
+    },
+    "wa.build.denied_now": {
+      "text": "You no fit build workflows for {org} again.",
+      "reviewed": false
+    },
+    "wa.build.denied_save": {
+      "text": "You no fit build workflows for {org} again; nothing save.",
+      "reviewed": false
+    },
+    "wa.build.details_invalid": {
+      "text": "With those details the workflow no pass Taskiem checks ({problem}). Build am for the web app{link}.",
+      "reviewed": false
+    },
+    "wa.build.details_misfit": {
+      "text": "Those details no fit the template: {reason}. Send *build* again to start afresh.",
+      "reviewed": false
+    },
+    "wa.build.failed": {
+      "text": "The build fail. Try again after some time, or build am for the web app{link}.",
+      "reviewed": false
+    },
+    "wa.build.gone": {
+      "text": "That draft no dey wait to save again (dem don save am or change am somewhere else).",
+      "reviewed": false
+    },
+    "wa.build.head": {
+      "text": "See the workflow wey I draft:",
+      "reviewed": false
+    },
+    "wa.build.head_template": {
+      "text": "See the workflow wey I draft, starting from the template *{template}*:",
+      "reviewed": false
+    },
+    "wa.build.invalid": {
+      "text": "I no fit draft workflow for that one wey pass Taskiem checks. Try talk am another way (wetin go start am, and wetin suppose happen), or build am for the web app{link}.",
+      "reviewed": false
+    },
+    "wa.build.limit": {
+      "text": "E no save: {reason}",
+      "reviewed": false
+    },
+    "wa.build.more_steps": {
+      "text": "…and {count} more step; see dem for Taskiem.",
+      "reviewed": false
+    },
+    "wa.build.need_details": {
+      "text": "I need {count} more detail to finish am. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.build.not_saved": {
+      "text": "OK, nothing save.",
+      "reviewed": false
+    },
+    "wa.build.off": {
+      "text": "Building with AI never set up for this Taskiem. You fit build workflows for the web app.",
+      "reviewed": false
+    },
+    "wa.build.refused": {
+      "text": "I no fit build that one. Try talk am another way.",
+      "reviewed": false
+    },
+    "wa.build.save_question": {
+      "text": "Make I save this one as draft workflow? Reply *yes* or *no*. (Draft no dey run until dem publish am for Taskiem.)",
+      "reviewed": false
+    },
+    "wa.build.save_reminder": {
+      "text": "Reply *yes* make I save the draft, or *no*.",
+      "reviewed": false
+    },
+    "wa.build.saved": {
+      "text": "I don save *{name}* as draft. E never dey live: check am, set any connections and variables wey e need, and publish am for Taskiem{link}.",
+      "reviewed": false
+    },
+    "wa.build.still_drafting": {
+      "text": "I still dey draft your workflow; I go send am when e ready. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.build.too_long": {
+      "text": "E too long for me; talk am for less than {max} characters.",
+      "reviewed": false
+    },
+    "wa.build.too_many": {
+      "text": "You don ask for plenty builds now now. Wait small, then try again.",
+      "reviewed": false
+    },
+    "wa.build.unreadable": {
+      "text": "I no fit read the draft back. Build am for the web app{link}.",
+      "reviewed": false
+    },
+    "wa.build.variables": {
+      "text": "Before e run, set these variables for Taskiem: {names}.",
+      "reviewed": false
+    },
+    "wa.build.warn_policy": {
+      "text": "Warning: one step dey move money without approval before am.",
+      "reviewed": false
+    },
+    "wa.build.warn_test": {
+      "text": "Warning: the draft test run no pass; check am for Taskiem before you publish.",
+      "reviewed": false
+    },
+    "wa.build.what": {
+      "text": "Tell me wetin you wan automate after *build*, like:\n*build every Friday text my customers who owe me*",
+      "reviewed": false
+    },
+    "wa.build.with_details": {
+      "text": "Thank you. With your details:\n\n{steps}\n\nMake I save this one as draft workflow? Reply *yes* or *no*.",
+      "reviewed": false
+    },
+    "wa.build.working": {
+      "text": "I dey work on am: I dey draft the workflow and I go send you the steps make you check. E fit take one or two minutes. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.button_invalid": {
+      "text": "That button no valid.",
+      "reviewed": false
+    },
+    "wa.cancelled": {
+      "text": "E don cancel.",
+      "reviewed": false
+    },
+    "wa.cancelled_nothing_started": {
+      "text": "E don cancel. Nothing start.",
+      "reviewed": false
+    },
+    "wa.cannot_act": {
+      "text": "Your account no fit do anything for {org} again.",
+      "reviewed": false
+    },
+    "wa.code_failed": {
+      "text": "That code no link this number: {reason}.",
+      "reviewed": false
+    },
+    "wa.confirm_reminder": {
+      "text": "Reply *yes* make {workflow} start, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.form.gone": {
+      "text": "We no need that form again. Send *run* and the workflow name to start again.",
+      "reviewed": false
+    },
+    "wa.form.inputs": {
+      "text": "{workflow} need {count} input. Tap *{cta}* to enter dem; you go confirm before e start. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.form.invalid": {
+      "text": "That form no valid again.",
+      "reviewed": false
+    },
+    "wa.form.not_confirmed": {
+      "text": "The decision no confirm. Tap the button again, or decide for Taskiem.",
+      "reviewed": false
+    },
+    "wa.form.pin_approve": {
+      "text": "To approve {step}, enter your WhatsApp PIN inside 10 minutes.",
+      "reviewed": false
+    },
+    "wa.form.pin_reject": {
+      "text": "To reject {step}, enter your WhatsApp PIN inside 10 minutes.",
+      "reviewed": false
+    },
+    "wa.handoff.approve": {
+      "text": "To approve {step}, confirm with your passkey or authenticator code for Taskiem inside 10 minutes:\n{link}",
+      "reviewed": false
+    },
+    "wa.handoff.no_link": {
+      "text": "This decision need your passkey or authenticator code: decide am for Taskiem web app, under Approvals.",
+      "reviewed": false
+    },
+    "wa.handoff.recorded": {
+      "text": "E don record with step-up: your decision on {step} ({status}).",
+      "reviewed": false
+    },
+    "wa.handoff.reject": {
+      "text": "To reject {step}, confirm with your passkey or authenticator code for Taskiem inside 10 minutes:\n{link}",
+      "reviewed": false
+    },
+    "wa.help.approvals": {
+      "text": "• *approvals*: request wey dey wait for you",
+      "reviewed": false
+    },
+    "wa.help.build": {
+      "text": "• *build* and wetin you wan automate, e.g. *build every Friday text my customers who owe me* (e go save as draft after you confirm)",
+      "reviewed": false
+    },
+    "wa.help.cancel": {
+      "text": "• *cancel*: drop wetin dey go on",
+      "reviewed": false
+    },
+    "wa.help.intro": {
+      "text": "You fit send:",
+      "reviewed": false
+    },
+    "wa.help.language": {
+      "text": "• *language* and the language name: make I reply you for {languages}",
+      "reviewed": false
+    },
+    "wa.help.run": {
+      "text": "• *run* and the workflow name: start am (you go confirm first)",
+      "reviewed": false
+    },
+    "wa.help.status": {
+      "text": "• *status*: wetin run and wetin fail today",
+      "reviewed": false
+    },
+    "wa.help.switch": {
+      "text": "• *switch* and organisation name: work for another one",
+      "reviewed": false
+    },
+    "wa.help.voice": {
+      "text": "• voice note: I go try write wetin you talk (beta)",
+      "reviewed": false
+    },
+    "wa.link_at": {
+      "text": " for {url}",
+      "reviewed": false
+    },
+    "wa.linked": {
+      "text": "This number don join your Taskiem account. Send *help* make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "wa.no_org": {
+      "text": "Your Taskiem account no get any organisation wey dey active.",
+      "reviewed": false
+    },
+    "wa.not_member": {
+      "text": "Your Taskiem account no dey inside this organisation.",
+      "reviewed": false
+    },
+    "wa.not_understood": {
+      "text": "Sorry, I no understand wetin you talk.",
+      "reviewed": false
+    },
+    "wa.nothing_to_cancel": {
+      "text": "Nothing dey to cancel.",
+      "reviewed": false
+    },
+    "wa.outcome.body": {
+      "text": "The run wey you start from WhatsApp don end.",
+      "reviewed": false
+    },
+    "wa.outcome.cancelled": {
+      "text": "Dem cancel {workflow} for {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.completed": {
+      "text": "{workflow} don finish for {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.failed": {
+      "text": "{workflow} fail for {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.needs_reconciliation": {
+      "text": "{workflow} need checking for {env}.",
+      "reviewed": false
+    },
+    "wa.public.bad_details": {
+      "text": "The details no fit: {problems}. Send *menu* to start again.",
+      "reviewed": false
+    },
+    "wa.public.busy": {
+      "text": "This service dey busy now. Try again later.",
+      "reviewed": false
+    },
+    "wa.public.cancelled": {
+      "text": "E don cancel. Send *menu* to see wetin you fit do here.",
+      "reviewed": false
+    },
+    "wa.public.changed": {
+      "text": "{label} don change or e no dey available again. Send *menu* to start again.",
+      "reviewed": false
+    },
+    "wa.public.confirm": {
+      "text": "{label}\n\nReply *yes* make we go ahead, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.confirm_inputs": {
+      "text": "{label} with:\n{inputs}\n\nReply *yes* make we go ahead, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.confirm_reminder": {
+      "text": "Reply *yes* make we go ahead, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.form": {
+      "text": "{label}: tap *{cta}* to enter the details. You go confirm before anything happen.",
+      "reviewed": false
+    },
+    "wa.public.form_failed": {
+      "text": "The form no gree open. Try again later.",
+      "reviewed": false
+    },
+    "wa.public.form_gone": {
+      "text": "We no need that form again. Send *menu* to start again.",
+      "reviewed": false
+    },
+    "wa.public.menu": {
+      "text": "Wetin you wan do? Reply with number:\n{list}\n\nSend *cancel* any time.",
+      "reviewed": false
+    },
+    "wa.public.not_here": {
+      "text": "{label} no dey for WhatsApp.",
+      "reviewed": false
+    },
+    "wa.public.started": {
+      "text": "E don do: {label} don start. Your reference na {reference}.",
+      "reviewed": false
+    },
+    "wa.public.too_many": {
+      "text": "Too many requests now now. Try again later.",
+      "reviewed": false
+    },
+    "wa.public.unavailable": {
+      "text": "{label} no dey available now.",
+      "reviewed": false
+    },
+    "wa.run.bad_inputs": {
+      "text": "The inputs no fit {workflow}: {problems}. Send *run* again.",
+      "reviewed": false
+    },
+    "wa.run.changed": {
+      "text": "{workflow} change while you dey confirm. Send *run* again.",
+      "reviewed": false
+    },
+    "wa.run.confirm": {
+      "text": "Make I start {workflow} (version {version}) for {env}?\n\nReply *yes* make e start or *cancel*.",
+      "reviewed": false
+    },
+    "wa.run.confirm_inputs": {
+      "text": "Make I start {workflow} (version {version}) for {env} with:\n{inputs}\n\nReply *yes* make e start or *cancel*.",
+      "reviewed": false
+    },
+    "wa.run.denied": {
+      "text": "You no fit start runs for {org} (you need run.start).",
+      "reviewed": false
+    },
+    "wa.run.denied_now": {
+      "text": "You no fit start runs for {org} again.",
+      "reviewed": false
+    },
+    "wa.run.does_not_fit": {
+      "text": "That one no fit: {reason}.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.form_closed": {
+      "text": "The form don close; answer here instead. Send *cancel* to stop.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.limit": {
+      "text": "E no start: {reason}",
+      "reviewed": false
+    },
+    "wa.run.needs_inputs": {
+      "text": "{workflow} need {count} input. Send *cancel* to stop.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.no_match": {
+      "text": "No workflow for {env} match {name}. Send *run* and the workflow name.",
+      "reviewed": false
+    },
+    "wa.run.started": {
+      "text": "{workflow} don start. I go tell you when e finish.",
+      "reviewed": false
+    },
+    "wa.run.too_many": {
+      "text": "You don start plenty runs now now. Wait small, then try again.",
+      "reviewed": false
+    },
+    "wa.run.unsupported_inputs": {
+      "text": "{workflow} need inputs wey you no fit enter here yet. Start am for Taskiem.",
+      "reviewed": false
+    },
+    "wa.run.which": {
+      "text": "Which one?\n{list}\nSend *run* and the full name.",
+      "reviewed": false
+    },
+    "wa.status.denied": {
+      "text": "You no fit see runs for {org} (you need run.read).",
+      "reviewed": false
+    },
+    "wa.status.failed_head": {
+      "text": "Wetin fail:",
+      "reviewed": false
+    },
+    "wa.status.failed_line": {
+      "text": "• {workflow} ({env}) {what} by {time} UTC",
+      "reviewed": false
+    },
+    "wa.status.none": {
+      "text": "No run for the last 24 hours.",
+      "reviewed": false
+    },
+    "wa.status.nothing_failed": {
+      "text": "Nothing fail.",
+      "reviewed": false
+    },
+    "wa.status.summary": {
+      "text": "Last 24 hours: {count} runs ({parts}).",
+      "reviewed": false
+    },
+    "wa.status.summary_one": {
+      "text": "Last 24 hours: {count} run ({parts}).",
+      "reviewed": false
+    },
+    "wa.status.waiting": {
+      "text": "{count} approval dey wait for you: send *approvals*.",
+      "reviewed": false
+    },
+    "wa.stepup_waiting": {
+      "text": "Your decision on {step} dey wait make you confirm am for Taskiem with the link wey we send you. Send *cancel* to drop am.",
+      "reviewed": false
+    },
+    "wa.switch.current": {
+      "text": "You dey work for {org}. Your organisations:\n{list}\nSend *switch* and the name to change.",
+      "reviewed": false
+    },
+    "wa.switch.done": {
+      "text": "Now you dey work for {org}.",
+      "reviewed": false
+    },
+    "wa.switch.which": {
+      "text": "Which organisation? Your own na:\n{list}",
+      "reviewed": false
+    },
+    "wa.too_fast": {
+      "text": "You dey send message too fast. Wait small, then try again.",
+      "reviewed": false
+    },
+    "wa.unbound": {
+      "text": "This number never join any Taskiem account. To use Taskiem here, sign in, open {where}, add this number under WhatsApp, then type or send back the code wey we go send you.",
+      "reviewed": false
+    }
+  }
+}

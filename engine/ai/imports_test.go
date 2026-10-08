@@ -32,6 +32,7 @@ var forbidden = []struct{ pkg, why string }{
 var covered = []string{
 	"github.com/israel-duff/taskiem/engine/ai",
 	"github.com/israel-duff/taskiem/engine/ai/builder",
+	"github.com/israel-duff/taskiem/engine/ai/intent",
 	"github.com/israel-duff/taskiem/engine/ai/repair",
 }
 

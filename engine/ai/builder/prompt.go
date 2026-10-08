@@ -128,11 +128,15 @@ func systemBlocks(catalogue string) []ai.SystemBlock {
 
 // userPrompt is the per-request part: the goal and its context, as one
 // JSON document after the goal.
-func userPrompt(goal string, base json.RawMessage, ctxDoc map[string]any) string {
+func userPrompt(goal, language string, base json.RawMessage, ctxDoc map[string]any) string {
 	var b strings.Builder
 	b.WriteString("Build a workflow for this goal:\n\n<goal>\n")
 	b.WriteString(goal)
 	b.WriteString("\n</goal>\n\n")
+	if language != "" && language != "English" {
+		b.WriteString("The goal is written in " + language + " (it may mix in English). Read it in that language. Write the workflow's id, names and descriptions in English; " +
+			"texts the workflow sends to people may stay in " + language + " when the goal asks for that.\n\n")
+	}
 	if len(base) > 0 {
 		b.WriteString("Modify this existing workflow (keep its id, step ids and anything the goal does not change):\n\n<current_workflow>\n")
 		b.Write(base)

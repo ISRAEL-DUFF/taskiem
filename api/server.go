@@ -111,6 +111,12 @@ type Server struct {
 	WhatsAppPublic WhatsAppPublic
 	// USSD tunes the USSD fast path (ussd.go).
 	USSD USSDSettings
+	// Languages turns languages beyond English on for WhatsApp, USSD and
+	// SMS (languages.go, docs/languages.md); nil: English only.
+	Languages *LanguageSettings
+	// Voice transcribes WhatsApp voice notes (a beta; whatsapp_voice.go);
+	// nil: people are asked to type.
+	Voice *VoiceSettings
 	// Billing is plans, subscriptions and payments (billing.go); nil or
 	// not enabled is billing off: the internal plan, every feature.
 	Billing *billing.Service
@@ -136,13 +142,14 @@ type Server struct {
 	// sent are still served (docs/reliability.md#graceful-shutdown).
 	Draining func() bool
 
-	code     codeGate                          // tenant code admitted at once (codegate.go)
-	ussd     ussdState                         // USSD channels, sessions and menus (ussd.go)
-	limiters limiterSet                        // sign-in and other unauthenticated attempts
-	hosts    hostCache                         // custom domains: Host to embed app
-	defs     lru.Cache[string, *wd.Definition] // "workflow/version"; versions are immutable, bounded (S34)
-	bg       sync.WaitGroup
-	bgActive atomic.Int64 // work running after its request was answered (reset emails)
+	code         codeGate                            // tenant code admitted at once (codegate.go)
+	ussd         ussdState                           // USSD channels, sessions and menus (ussd.go)
+	chanSettings lru.Cache[uuid.UUID, tenantChannel] // tenants' language settings (languages.go); bounded (S34)
+	limiters     limiterSet                          // sign-in and other unauthenticated attempts
+	hosts        hostCache                           // custom domains: Host to embed app
+	defs         lru.Cache[string, *wd.Definition]   // "workflow/version"; versions are immutable, bounded (S34)
+	bg           sync.WaitGroup
+	bgActive     atomic.Int64 // work running after its request was answered (reset emails)
 }
 
 // Handler builds the router.
@@ -227,6 +234,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermApprovalDecide)).Get("/whatsapp/handoff/{token}", s.getHandoff)
 			r.With(s.need(PermApprovalDecide)).Post("/whatsapp/handoff/{token}", s.completeHandoff)
 			r.With(s.need(PermSecretManage)).Get("/ussd", s.getUSSD)
+			r.With(s.need(PermSecretManage)).Get("/languages", s.getLanguages)
+			r.With(s.need(PermSecretManage), s.tenantWide).Put("/languages", s.putLanguages)
+			r.With(s.need(PermPIIReveal)).Get("/languages/transcripts", s.getTranscripts)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/ussd/channels/{provider}", s.putUSSDChannel)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/ussd/channels/{provider}", s.deleteUSSDChannel)
 			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)

@@ -13,6 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/expr"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/ussd"
@@ -193,7 +194,9 @@ func (s *Server) ussdSendOutcome(ctx context.Context, tenant uuid.UUID, o ussdOu
 			tmpl = n.Completed
 		}
 	case o.state == "started" && o.run == "needs_reconciliation":
-		tmpl = ussdTextReconcile
+		// Taskiem's own text, in the caller's language when it is on
+		// (a menu's own texts are the tenant's, in its words).
+		tmpl = lang.ASCII(tr(s.chooseLang(ctx, tenant, phone, "").Tag, "sms.reconcile", "reference", "{{reference}}"))
 	}
 	return s.ussdSMS(ctx, tenant, o.env, n.Connection, phone, m.menu.Render(tmpl, inputs, o.ref))
 }

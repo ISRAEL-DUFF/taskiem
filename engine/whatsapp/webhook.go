@@ -47,6 +47,17 @@ type Inbound struct {
 	// Flow is a completed Flow's response_json (interactive.nfm_reply):
 	// it carries the flow token.
 	Flow string
+	// Media is an audio message or voice note (type audio): only its id
+	// and type arrive; the recording is fetched from the Graph API.
+	Media *Media
+}
+
+// Media is an audio message's reference.
+type Media struct {
+	ID       string
+	MimeType string
+	SHA256   string // as Meta reports it (base64 or hex); checked on download when set
+	Voice    bool   // recorded in WhatsApp as a voice note
 }
 
 // FlowToken is the flow token of a completed Flow's response.
@@ -100,6 +111,12 @@ func Parse(body []byte) ([]Inbound, error) {
 							Payload string `json:"payload"`
 							Text    string `json:"text"`
 						} `json:"button"`
+						Audio struct {
+							ID       string `json:"id"`
+							MimeType string `json:"mime_type"`
+							SHA256   string `json:"sha256"`
+							Voice    bool   `json:"voice"`
+						} `json:"audio"`
 					} `json:"messages"`
 				} `json:"value"`
 			} `json:"changes"`
@@ -130,6 +147,10 @@ func Parse(body []byte) ([]Inbound, error) {
 					}
 				case "button":
 					in.Reply, in.Text = m.Button.Payload, m.Button.Text
+				case "audio":
+					if m.Audio.ID != "" {
+						in.Media = &Media{ID: m.Audio.ID, MimeType: m.Audio.MimeType, SHA256: m.Audio.SHA256, Voice: m.Audio.Voice}
+					}
 				}
 				out = append(out, in)
 			}

@@ -216,6 +216,22 @@ func TestPromptsAreRedacted(t *testing.T) {
 	}
 }
 
+// A goal in another language reaches the model with its language named
+// (spec 11.6); an English goal carries no such line.
+func TestGoalLanguageIsPassed(t *testing.T) {
+	for _, c := range []struct{ language, want string }{{"Yoruba", "The goal is written in Yoruba"}, {"", ""}} {
+		f := &ai.Fake{Script: []ai.Response{envelope(t, builder.ExampleWD)}}
+		b, _ := newBuilder(t, f)
+		if _, err := b.Build(context.Background(), builder.Request{Goal: "Ní gbogbo ọjọ́ Ẹtì, fi ọ̀rọ̀ ránṣẹ́ sí àwọn oníbàárà", Language: c.language}); err != nil {
+			t.Fatal(err)
+		}
+		sent := ai.PromptText(f.Requests()[0])
+		if c.want != "" && !strings.Contains(sent, c.want) || c.want == "" && strings.Contains(sent, "The goal is written in") {
+			t.Errorf("language %q: prompt %s", c.language, sent[:min(len(sent), 400)])
+		}
+	}
+}
+
 func TestContextCarriesNamesOnly(t *testing.T) {
 	f := &ai.Fake{Script: []ai.Response{envelope(t, builder.ExampleWD)}}
 	b, _ := newBuilder(t, f)

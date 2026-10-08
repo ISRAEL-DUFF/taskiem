@@ -110,6 +110,9 @@ tags:
 - name: USSD
   description: USSD channels.
   x-taskiem-guide: ussd
+- name: Languages
+  description: Languages beyond English and voice notes on WhatsApp, USSD and SMS (drafts until reviewed by native speakers).
+  x-taskiem-guide: languages
 paths:
   /v1/ai/build:
     post:
@@ -3637,6 +3640,87 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/StepUpProof'
+  /v1/languages:
+    get:
+      operationId: getLanguages
+      tags:
+      - Languages
+      summary: Get language and voice-note settings
+      description: The languages on for the tenant (the operator's and its own), the default for USSD callers and new numbers, whether voice notes are transcribed, and each catalogue's review progress.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Languages'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putLanguages
+      tags:
+      - Languages
+      summary: Turn languages and voice notes on or off
+      description: '`languages` lists the draft languages (pcm, yo, ha, ig) turned on for this tenant; `default_language` must be on; `voice_notes` needs a transcription provider on the deployment (409 otherwise). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LanguagesUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Languages'
+        '400':
+          description: An unknown language, or a default language that is not on.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Voice notes asked for, with no transcription provider on the deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/languages/transcripts:
+    get:
+      operationId: getTranscripts
+      tags:
+      - Languages
+      summary: List voice-note transcripts
+      description: Transcripts still within retention, opened for review by native-speaker testers, with refusals and failures and their reasons. Needs `pii.reveal`; audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: pii.reveal
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptList'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/limits:
     get:
       operationId: getLimits
@@ -8944,6 +9028,149 @@ components:
           format: uuid
         status:
           $ref: '#/components/schemas/RunStatusValue'
+    LanguageTag:
+      type: string
+      enum:
+      - en
+      - pcm
+      - yo
+      - ha
+      - ig
+      description: English, or a draft catalogue (Nigerian Pidgin, Yoruba, Hausa, Igbo) until a native speaker reviews it.
+    CatalogueProgress:
+      type: object
+      required:
+      - language
+      - reviewed
+      - entries
+      - reviewed_entries
+      properties:
+        language:
+          $ref: '#/components/schemas/LanguageTag'
+        reviewed:
+          type: boolean
+          description: The whole catalogue is reviewed (always true for English).
+        entries:
+          type: integer
+        reviewed_entries:
+          type: integer
+      additionalProperties: false
+    Languages:
+      type: object
+      required:
+      - operator
+      - languages
+      - on
+      - default_language
+      - voice_notes
+      - voice_available
+      - catalogues
+      properties:
+        operator:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/LanguageTag'
+          description: Turned on by the operator for every tenant (`TASKIEM_LANGUAGES`).
+        languages:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/LanguageTag'
+          description: Turned on by this tenant.
+        'on':
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/LanguageTag'
+          description: What its people and callers may get.
+        default_language:
+          $ref: '#/components/schemas/LanguageTag'
+        voice_notes:
+          type: boolean
+        voice_available:
+          type: boolean
+          description: A transcription provider is configured on the deployment.
+        catalogues:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/CatalogueProgress'
+      additionalProperties: false
+    LanguagesUpdate:
+      type: object
+      properties:
+        languages:
+          type: array
+          items:
+            type: string
+            enum:
+            - pcm
+            - yo
+            - ha
+            - ig
+        default_language:
+          type: string
+          description: '`en` or a language that is on.'
+        voice_notes:
+          type: boolean
+    Transcript:
+      type: object
+      required:
+      - id
+      - user_id
+      - language
+      - provider
+      - status
+      - created_at
+      - expires_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        language:
+          $ref: '#/components/schemas/LanguageTag'
+        provider:
+          type: string
+        status:
+          type: string
+          enum:
+          - transcribed
+          - refused
+          - failed
+        reason:
+          type: string
+        duration_ms:
+          type: integer
+        transcript:
+          type: string
+          description: Personal data, shown only with `pii.reveal`.
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+    TranscriptList:
+      type: object
+      required:
+      - transcripts
+      properties:
+        transcripts:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/Transcript'
+      additionalProperties: false
     LoginRequest:
       type: object
       required:

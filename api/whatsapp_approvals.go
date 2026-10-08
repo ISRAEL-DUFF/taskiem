@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,6 +64,11 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 		return err
 	}
 	var errs []error
+	// Voice-note transcripts past their retention (whatsapp_voice.go),
+	// whether or not transcription is still on.
+	if err := s.purgeTranscripts(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("transcripts: %w", err))
+	}
 	for _, t := range tenants {
 		if err := s.waNotifyApprovals(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: approvals: %w", t, err))
@@ -277,16 +283,20 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	if s.PublicURL != "" {
 		link = s.PublicURL + "/runs/" + it.Run.String()
 	}
-	kind, title := "run_completed", wf+" completed in "+env+"."
+	// Inside the window the text is in the person's language; outside it,
+	// the template Meta approved (TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE).
+	l := s.chooseLang(ctx, it.Tenant, number, "").Tag
+	kind, outcome := "run_completed", "wa.outcome.completed"
 	switch status {
 	case "failed":
-		kind, title = "run_failed", wf+" failed in "+env+"."
+		kind, outcome = "run_failed", "wa.outcome.failed"
 	case "needs_reconciliation":
-		kind, title = "needs_reconciliation", wf+" needs reconciliation in "+env+"."
+		kind, outcome = "needs_reconciliation", "wa.outcome.needs_reconciliation"
 	case "cancelled":
-		kind, title = "run_cancelled", wf+" was cancelled in "+env+"."
+		kind, outcome = "run_cancelled", "wa.outcome.cancelled"
 	}
-	m := whatsapp.AlertMessage(name, kind, title, "The run you started from WhatsApp has ended.", link, map[string]any{"workflow": wf, "environment": env})
+	title := tr(l, outcome, "workflow", wf, "env", env)
+	m := whatsapp.AlertMessage(name, kind, title, tr(l, "wa.outcome.body"), link, map[string]any{"workflow": wf, "environment": env})
 	m.Tenant = it.Tenant
 	wa, err := s.WhatsApp.ForTenant(ctx, it.Tenant)
 	if err != nil {
@@ -311,6 +321,7 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 	if err != nil {
 		return err
 	}
+	l := s.chooseLang(ctx, tenant.ID, t.number, "").Tag
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
 		// The queued path recorded the notice when it queued the request;
 		// a resend (the approver asked) records it now.
@@ -364,17 +375,21 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 		if levels > 1 {
 			where = fmt.Sprintf("%s, level %d of %d", env, t.level+1, levels)
 		}
-		text := wa.Prefix(tenant.Name) + "Approval needed: " + title + " (" + where + ")"
+		shown := env
+		if levels > 1 {
+			shown = tr(l, "wa.approval.level", "env", env, "level", strconv.Itoa(t.level+1), "levels", strconv.Itoa(levels))
+		}
+		text := wa.Prefix(tenant.Name) + tr(l, "wa.approval.needed", "title", title, "where", shown)
 		if len(lines) > 0 {
 			text += "\n\n" + strings.Join(lines, "\n")
 		}
-		text += "\n\nThis request expires " + exp.UTC().Format("2 Jan 15:04") + " UTC."
+		text += "\n\n" + tr(l, "wa.approval.expires", "time", exp.UTC().Format("2 Jan 15:04"))
 		summary := strings.Join(lines, "; ")
 		if summary == "" {
 			summary = "No details."
 		}
 		tpl := whatsapp.TplApprovalRequest
-		msg = whatsapp.Message{Text: text, Buttons: []whatsapp.Button{{ID: tokens["approved"], Title: "Approve"}, {ID: tokens["rejected"], Title: "Reject"}},
+		msg = whatsapp.Message{Text: text, Buttons: []whatsapp.Button{{ID: tokens["approved"], Title: tr(l, "button.approve")}, {ID: tokens["rejected"], Title: tr(l, "button.reject")}},
 			Template: &tpl, Vars: map[string]string{"tenant": tenant.Name, "title": title, "summary": summary, "environment": where},
 			Payloads: []string{tokens["approved"], tokens["rejected"]}, Tenant: tenant.ID}
 		sent = true
@@ -415,7 +430,7 @@ func truncateErr(err error) string {
 // sent again with fresh buttons (at most three).
 func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
 	if !c.p.Can(PermApprovalDecide) {
-		return c.say(ctx, s, "You do not decide approvals in "+c.tenant.Name+".")
+		return c.say(ctx, s, c.t("wa.approvals.denied", "org", c.tenant.Name))
 	}
 	var targets []approvalTarget
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
@@ -438,7 +453,7 @@ func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
 		return err
 	}
 	if len(targets) == 0 {
-		return c.say(ctx, s, "Nothing is waiting for you.")
+		return c.say(ctx, s, c.t("wa.approvals.none"))
 	}
 	for _, t := range targets {
 		if err := s.waSendApproval(ctx, c.tenant, t, true); err != nil {
@@ -485,7 +500,7 @@ func (s *Server) loadToken(ctx context.Context, tx pgx.Tx, tok string, purpose s
 func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	h, _, err := whatsapp.ParseToken(tok)
 	if err != nil {
-		return c.say(ctx, s, "That button is not valid.")
+		return c.say(ctx, s, c.t("wa.button_invalid"))
 	}
 	// The decision is in the tenant the token names, which may not be the
 	// one the number is working in now; the person must belong to it.
@@ -499,11 +514,11 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 			}
 		}
 		if i < 0 {
-			return c.say(ctx, s, "That button is not valid.")
+			return c.say(ctx, s, c.t("wa.button_invalid"))
 		}
 		tenant = c.tenants[i]
 		if p, err = s.principalOf(ctx, tenant.ID, c.p.UserID); err != nil {
-			return s.waSay(ctx, c.wa, c.number, tenant.Name, "You cannot act in "+tenant.Name+" any more.")
+			return s.waSay(ctx, c.wa, c.number, tenant.Name, c.t("wa.cannot_act", "org", tenant.Name))
 		}
 	}
 	say := func(text string) error { return s.waSay(ctx, c.wa, c.number, tenant.Name, text) }
@@ -546,19 +561,19 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 		}
 		switch refusal {
 		case "wrong_sender":
-			return say("That request was sent to someone else; it cannot be decided from this number.")
+			return say(c.t("wa.approval.other_person"))
 		case "used":
-			return say("That request was already answered from this chat.")
+			return say(c.t("wa.approval.answered"))
 		}
-		return say("That button is not valid any more. Send *approvals* for what is waiting for you.")
+		return say(c.t("wa.approval.stale"))
 	}
 	switch {
 	case status != "open":
-		return say("That request is already " + status + ".")
+		return say(c.t("wa.approval.already", "status", c.t("approval.status."+status)))
 	case level != row.claims.Level:
-		return say("That request has moved to its next level. Send *approvals* for what is waiting for you.")
+		return say(c.t("wa.approval.next_level"))
 	case !p.Can(PermApprovalDecide):
-		return say("You cannot decide approvals in " + tenant.Name + " (it takes approval.decide).")
+		return say(c.t("wa.approval.denied", "org", tenant.Name))
 	}
 	return s.waVote(ctx, c, tenant, p, row.claims, "", "button")
 }
@@ -588,11 +603,11 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 		if i := strings.LastIndex(reason, ": not allowed"); i > 0 {
 			reason = reason[:i]
 		}
-		return say("Not recorded: " + reason + ".")
+		return say(c.t("wa.approval.not_recorded", "reason", reason))
 	case errors.Is(err, runtime.ErrAlreadyDecided):
-		return say("You have already decided this request.")
+		return say(c.t("wa.approval.already_decided"))
 	case errors.Is(err, runtime.ErrApprovalClosed):
-		return say("That request is already closed.")
+		return say(c.t("wa.approval.closed"))
 	case err != nil:
 		return err
 	}
@@ -602,18 +617,17 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 	}); err != nil {
 		return err
 	}
-	verb := "approved"
+	msg := c.t("wa.approval.recorded_approved", "step", cl.Step)
 	if cl.Decision == "rejected" {
-		verb = "rejected"
+		msg = c.t("wa.approval.recorded_rejected", "step", cl.Step)
 	}
-	msg := "Recorded: you " + verb + " " + cl.Step + "."
 	switch res.Status {
 	case "approved":
-		msg += " The request is approved and the run continues."
+		msg += " " + c.t("wa.approval.result_approved")
 	case "rejected":
-		msg += " The request is rejected."
+		msg += " " + c.t("wa.approval.result_rejected")
 	default:
-		msg += " It is waiting for more approvals."
+		msg += " " + c.t("wa.approval.result_waiting")
 	}
 	return say(msg)
 }
@@ -622,7 +636,7 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 // app with a passkey or authenticator code (step-up; spec 11.2).
 func (s *Server) waHandoff(ctx context.Context, c *chat, tenant tenantRef, cl whatsapp.Claims) error {
 	if s.PublicURL == "" {
-		return s.waSay(ctx, c.wa, c.number, tenant.Name, "This decision needs your passkey or authenticator code: decide it in Taskiem's web app, under Approvals.")
+		return s.waSay(ctx, c.wa, c.number, tenant.Name, c.t("wa.handoff.no_link"))
 	}
 	h := cl
 	h.Purpose, h.Nonce = whatsapp.PurposeHandoff, whatsapp.NewNonce()
@@ -650,7 +664,7 @@ func (s *Server) waHandoff(ctx context.Context, c *chat, tenant tenantRef, cl wh
 	what := verb + " " + h.Step
 	tpl := whatsapp.TplStepUpLink
 	_, err = c.wa.Send(ctx, c.number, whatsapp.Message{
-		Text:     c.wa.Prefix(tenant.Name) + "To " + what + ", confirm with your passkey or authenticator code in Taskiem within 10 minutes:\n" + link,
+		Text:     c.wa.Prefix(tenant.Name) + c.t("wa.handoff."+verb, "step", h.Step, "link", link),
 		Template: &tpl, Vars: map[string]string{"tenant": tenant.Name, "what": what, "link": link}, Tenant: tenant.ID})
 	return err
 }
@@ -803,7 +817,8 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 		})
 		// Inside the window only: a confirmation is not worth a template.
 		if wa, err := s.WhatsApp.ForTenant(r.Context(), p.TenantID); err == nil {
-			_, _ = wa.Send(r.Context(), *number, whatsapp.Message{Text: wa.Prefix(name) + "Recorded with step-up: your decision on " + cl.Step + " (" + res.Status + ")."})
+			l := s.chooseLang(r.Context(), p.TenantID, *number, "").Tag
+			_, _ = wa.Send(r.Context(), *number, whatsapp.Message{Text: wa.Prefix(name) + tr(l, "wa.handoff.recorded", "step", cl.Step, "status", tr(l, "approval.status."+res.Status))})
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"run_id": cl.Run, "step_id": cl.Step, "decision": cl.Decision, "status": res.Status, "level": res.Level + 1, "levels": res.Levels})

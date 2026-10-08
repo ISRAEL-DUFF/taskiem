@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -173,7 +175,14 @@ type chat struct {
 	tenants []tenantRef
 	state   string
 	data    chatData
+	// lang is the language replies are in, and the commands understood.
+	lang langChoice
+	// note goes before the next reply (a voice note's transcript).
+	note string
 }
+
+// t is a message in the conversation's language.
+func (c *chat) t(id string, kv ...string) string { return tr(c.lang.Tag, id, kv...) }
 
 // chatData is a session's tenant-scoped state.
 type chatData struct {
@@ -214,7 +223,7 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 	// Per number (spec 11.5): a compromised phone cannot flood.
 	if !s.limiter("wa:"+number, 3*time.Second, 20).Allow() {
 		if s.limiter("wa-warn:"+number, time.Minute, 1).Allow() {
-			return s.waSay(ctx, wa, number, "", "You are sending messages too quickly. Wait a minute, then try again.")
+			return s.waSay(ctx, wa, number, "", tr(s.chooseLang(ctx, wa.Tenant, number, "").Tag, "wa.too_fast"))
 		}
 		return nil
 	}
@@ -226,6 +235,7 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		return s.waUnbound(ctx, wa, number, in)
 	}
 	c := &chat{wa: wa, number: number, in: in}
+	c.lang = s.chooseLang(ctx, wa.Tenant, number, "")
 	if c.tenants, err = s.tenantsOf(ctx, user); err != nil {
 		return err
 	}
@@ -233,12 +243,12 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		// A tenant's own number speaks for that tenant only.
 		i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == wa.Tenant })
 		if i < 0 {
-			return s.waSay(ctx, wa, number, "", "Your Taskiem account is not a member of this organisation.")
+			return s.waSay(ctx, wa, number, "", c.t("wa.not_member"))
 		}
 		c.tenant, c.tenants = c.tenants[i], c.tenants[i:i+1]
 	} else {
 		if len(c.tenants) == 0 {
-			return s.waSay(ctx, wa, number, "", "Your Taskiem account has no active organisation.")
+			return s.waSay(ctx, wa, number, "", c.t("wa.no_org"))
 		}
 		contact, err := wa.Contact(ctx, number)
 		if err != nil {
@@ -257,7 +267,17 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		}
 	}
 	if c.p, err = s.principalOf(ctx, c.tenant.ID, user); err != nil {
-		return s.waSay(ctx, wa, number, "", "Your account cannot act in "+c.tenant.Name+" any more.")
+		return s.waSay(ctx, wa, number, "", c.t("wa.cannot_act", "org", c.tenant.Name))
+	}
+	// The language of this tenant's conversation: chosen, detected from
+	// what is written, or the tenant's default (languages.go).
+	text := ""
+	if in.Type == "text" {
+		text = in.Text
+	}
+	c.lang = s.chooseLang(ctx, c.tenant.ID, number, text)
+	if c.lang.Detected {
+		c.note = c.t("lang.detected", "language", langName(c.lang.Tag))
 	}
 	// A tapped approval button carries a signed decision token.
 	if strings.HasPrefix(in.Reply, "tk1.") {
@@ -270,6 +290,10 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 	if in.Flow != "" {
 		return s.waFlowCompleted(ctx, c)
 	}
+	// A voice note is transcribed (a beta) and then read as if typed.
+	if in.Media != nil {
+		return s.waVoice(ctx, c)
+	}
 	return s.waCommand(ctx, c)
 }
 
@@ -277,6 +301,11 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 // sends that back; a tenant's public menu on its own number; or how to
 // link it.
 func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) error {
+	text := ""
+	if in.Type == "text" {
+		text = in.Text
+	}
+	l := s.chooseLang(ctx, wa.Tenant, number, text).Tag
 	if m := sixDigits.FindStringSubmatch(in.Text); m != nil {
 		var user *uuid.UUID
 		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_wa_otp_user_for($1, $2)`, number, m[1]).Scan(&user); err != nil {
@@ -284,9 +313,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		}
 		if user != nil {
 			if _, err := s.waVerifyCode(ctx, *user, m[1], "whatsapp", ""); err != nil {
-				return s.waSay(ctx, wa, number, "", "That code did not link this number: "+err.Error()+".")
+				return s.waSay(ctx, wa, number, "", tr(l, "wa.code_failed", "reason", err.Error()))
 			}
-			return s.waSay(ctx, wa, number, "", "This number is now linked to your Taskiem account. Send *help* to see what you can do here.")
+			return s.waSay(ctx, wa, number, "", tr(l, "wa.linked"))
 		}
 	}
 	if wa.Own() {
@@ -305,8 +334,7 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if s.PublicURL != "" {
 		where = s.PublicURL + "/account"
 	}
-	return s.waSay(ctx, wa, number, "", "This number is not linked to a Taskiem account. To use Taskiem here, sign in, open "+where+
-		", add this number under WhatsApp, then type or send back the code we send you.")
+	return s.waSay(ctx, wa, number, "", tr(l, "wa.unbound", "where", where))
 }
 
 // waSay replies inside the conversation window from wa, in the tenant's
@@ -317,6 +345,9 @@ func (s *Server) waSay(ctx context.Context, wa *whatsapp.Platform, number, tenan
 }
 
 func (c *chat) say(ctx context.Context, s *Server, text string, buttons ...whatsapp.Button) error {
+	if c.note != "" {
+		text, c.note = c.note+"\n\n"+text, ""
+	}
 	return s.waSay(ctx, c.wa, c.number, c.tenant.Name, text, buttons...)
 }
 
@@ -367,14 +398,27 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		text = c.in.Reply
 	}
 	cmd := normalizeCommand(text)
+	// Commands in the person's language and in English (engine/lang);
+	// yes, no and cancel are only ever matched from the word lists.
+	m, matched := lang.MatchIntent(text, c.lang.Match())
+	if matched {
+		switch m.Intent {
+		case lang.IntentCancel:
+			cmd = "cancel"
+		case lang.IntentYes:
+			cmd = "yes"
+		case lang.IntentNo:
+			cmd = "no"
+		}
+	}
 	if cmd == "cancel" || cmd == "stop" {
 		if c.state == stateIdle {
-			return c.say(ctx, s, "Nothing to cancel.")
+			return c.say(ctx, s, c.t("wa.nothing_to_cancel"))
 		}
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err
 		}
-		return c.say(ctx, s, "Cancelled.")
+		return c.say(ctx, s, c.t("wa.cancelled"))
 	}
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
@@ -390,47 +434,84 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 				return err
 			}
-			return c.say(ctx, s, "Cancelled. Nothing was started.")
+			return c.say(ctx, s, c.t("wa.cancelled_nothing_started"))
 		}
-		return c.say(ctx, s, "Reply *yes* to start "+c.data.Name+", or *cancel*.", confirmButtons()...)
+		return c.say(ctx, s, c.t("wa.confirm_reminder", "workflow", c.data.Name), confirmButtons(c)...)
 	}
-	verb, arg, _ := strings.Cut(cmd, " ")
-	switch {
-	case cmd == "help" || cmd == "menu" || cmd == "hi" || cmd == "hello" || cmd == "start":
-		return c.say(ctx, s, s.waHelp(c))
-	case cmd == "status" || cmd == "what failed today" || cmd == "what failed" || cmd == "failed" || cmd == "failures":
-		return s.waStatus(ctx, c)
-	case cmd == "approvals":
-		return s.waResendApprovals(ctx, c)
-	case verb == "switch" || cmd == "organisations" || cmd == "organizations" || cmd == "tenants": //nolint:misspell // people type either
-		return s.waSwitch(ctx, c, strings.TrimSpace(arg))
-	case (verb == "run" || verb == "start") && arg != "":
-		return s.waTrigger(ctx, c, arg)
+	if matched {
+		if done, err := s.waIntent(ctx, c, m); done || err != nil {
+			return err
+		}
 	}
 	if goal, ok := waBuildGoal(text, cmd); ok && c.state == stateIdle {
 		return s.waStartBuild(ctx, c, goal)
 	}
 	if c.state == stateStepUp {
-		return c.say(ctx, s, "Your decision on "+c.data.Step+" is waiting for you to confirm it in Taskiem with the link sent to you. Send *cancel* to drop it.")
+		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
-	return c.say(ctx, s, "Sorry, I did not understand that. "+s.waHelp(c))
+	// Not recognised: in a language other than English, the model may
+	// route it (engine/ai/intent); it never confirms anything.
+	if c.state == stateIdle && !matched {
+		if m := s.waModelIntent(ctx, c, text); m.Intent != lang.IntentNone {
+			if done, err := s.waIntent(ctx, c, m); done || err != nil {
+				return err
+			}
+		}
+	}
+	return c.say(ctx, s, c.t("wa.not_understood")+" "+s.waHelp(c))
+}
+
+// waIntent does what a recognised command asks; false when it is not one
+// to act on here (yes or no with nothing to confirm, run without a name).
+func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, error) {
+	arg := strings.TrimSpace(m.Arg)
+	switch m.Intent {
+	case lang.IntentHelp:
+		return true, c.say(ctx, s, s.waHelp(c))
+	case lang.IntentStatus:
+		return true, s.waStatus(ctx, c)
+	case lang.IntentApprovals:
+		return true, s.waResendApprovals(ctx, c)
+	case lang.IntentSwitch:
+		return true, s.waSwitch(ctx, c, strings.ToLower(arg))
+	case lang.IntentLanguage:
+		return true, s.waLanguage(ctx, c, arg)
+	case lang.IntentRun:
+		if arg == "" {
+			return false, nil
+		}
+		return true, s.waTrigger(ctx, c, strings.ToLower(arg))
+	case lang.IntentBuild:
+		// The English build words are read by waBuildGoal, as before.
+		if c.state != stateIdle || m.Language == lang.EN {
+			return false, nil
+		}
+		return true, s.waStartBuild(ctx, c, arg)
+	}
+	return false, nil
 }
 
 func (s *Server) waHelp(c *chat) string {
-	lines := []string{"You can send:", "• *status*: what ran and what failed today"}
+	lines := []string{c.t("wa.help.intro"), c.t("wa.help.status")}
 	if c.p.Can(PermRunStart) {
-		lines = append(lines, "• *run* and a workflow's name: start it (you confirm first)")
+		lines = append(lines, c.t("wa.help.run"))
 	}
 	if c.p.Can(PermApprovalDecide) {
-		lines = append(lines, "• *approvals*: requests waiting for you")
+		lines = append(lines, c.t("wa.help.approvals"))
 	}
 	if c.p.Can(PermWorkflowEdit) && s.AI != nil {
-		lines = append(lines, "• *build* and what to automate, e.g. *build every Friday text my customers who owe me* (saved as a draft after you confirm)")
+		lines = append(lines, c.t("wa.help.build"))
 	}
 	if len(c.tenants) > 1 {
-		lines = append(lines, "• *switch* and an organisation's name: work in another one")
+		lines = append(lines, c.t("wa.help.switch"))
 	}
-	lines = append(lines, "• *cancel*: drop what is in progress")
+	if len(c.lang.On) > 1 {
+		lines = append(lines, c.t("wa.help.language", "languages", langNames(c.lang.On)))
+	}
+	if s.voiceOn(c.lang.Channel) {
+		lines = append(lines, c.t("wa.help.voice"))
+	}
+	lines = append(lines, c.t("wa.help.cancel"))
 	return strings.Join(lines, "\n")
 }
 
@@ -444,7 +525,7 @@ func (s *Server) waSwitch(ctx context.Context, c *chat, name string) error {
 		return strings.Join(names, "\n")
 	}
 	if name == "" {
-		return c.say(ctx, s, "You are working in "+c.tenant.Name+". Your organisations:\n"+list()+"\nSend *switch* and a name to change.")
+		return c.say(ctx, s, c.t("wa.switch.current", "org", c.tenant.Name, "list", list()))
 	}
 	var match []tenantRef
 	for _, t := range c.tenants {
@@ -458,7 +539,7 @@ func (s *Server) waSwitch(ctx context.Context, c *chat, name string) error {
 		}
 	}
 	if len(match) != 1 {
-		return c.say(ctx, s, "Which organisation? Yours are:\n"+list())
+		return c.say(ctx, s, c.t("wa.switch.which", "list", list()))
 	}
 	// What was in progress belonged to the old tenant.
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
@@ -469,14 +550,14 @@ func (s *Server) waSwitch(ctx context.Context, c *chat, name string) error {
 		return err
 	}
 	c.tenant = t
-	return c.say(ctx, s, "You are now working in "+t.Name+".")
+	return c.say(ctx, s, c.t("wa.switch.done", "org", t.Name))
 }
 
 // waStatus answers "status" / "what failed today?": a read-only summary of
 // the last 24 hours, as the person may see runs (run.read), redacted.
 func (s *Server) waStatus(ctx context.Context, c *chat) error {
 	if !c.p.Can(PermRunRead) {
-		return c.say(ctx, s, "You cannot see runs in "+c.tenant.Name+" (it takes run.read).")
+		return c.say(ctx, s, c.t("wa.status.denied", "org", c.tenant.Name))
 	}
 	counts := map[string]int{}
 	type failure struct {
@@ -528,34 +609,34 @@ func (s *Server) waStatus(ctx context.Context, c *chat) error {
 	}
 	var b strings.Builder
 	if total == 0 {
-		b.WriteString("No runs in the last 24 hours.")
+		b.WriteString(c.t("wa.status.none"))
 	} else {
-		fmt.Fprintf(&b, "Last 24 hours: %d run", total)
-		if total != 1 {
-			b.WriteString("s")
-		}
 		var parts []string
 		for _, st := range []string{"completed", "failed", "needs_reconciliation", "running", "waiting", "queued", "cancelled"} {
 			if n := counts[st]; n > 0 {
-				parts = append(parts, fmt.Sprintf("%d %s", n, strings.ReplaceAll(st, "_", " ")))
+				parts = append(parts, fmt.Sprintf("%d %s", n, c.t("run.status."+st)))
 			}
 		}
-		b.WriteString(" (" + strings.Join(parts, ", ") + ").")
+		id := "wa.status.summary"
+		if total == 1 {
+			id = "wa.status.summary_one"
+		}
+		b.WriteString(c.t(id, "count", strconv.Itoa(total), "parts", strings.Join(parts, ", ")))
 	}
 	if len(fails) > 0 {
-		b.WriteString("\n\nWhat failed:")
+		b.WriteString("\n\n" + c.t("wa.status.failed_head"))
 		for _, f := range fails {
-			what := "failed"
+			what := c.t("run.status.failed")
 			if f.status == "needs_reconciliation" {
-				what = "needs reconciliation"
+				what = c.t("run.status.needs_reconciliation")
 			}
-			fmt.Fprintf(&b, "\n• %s (%s) %s at %s UTC", whatsapp.SafeText(f.wf), f.env, what, f.at.UTC().Format("15:04"))
+			b.WriteString("\n" + c.t("wa.status.failed_line", "workflow", whatsapp.SafeText(f.wf), "env", f.env, "what", what, "time", f.at.UTC().Format("15:04")))
 		}
 	} else if total > 0 {
-		b.WriteString("\nNothing failed.")
+		b.WriteString("\n" + c.t("wa.status.nothing_failed"))
 	}
 	if waiting > 0 {
-		fmt.Fprintf(&b, "\n\n%d approval(s) waiting for you: send *approvals*.", waiting)
+		b.WriteString("\n\n" + c.t("wa.status.waiting", "count", strconv.Itoa(waiting)))
 	}
 	if s.PublicURL != "" && total > 0 {
 		b.WriteString("\n\n" + s.PublicURL + "/runs")
@@ -594,7 +675,7 @@ type runnable struct {
 // start, its inputs collected field by field, then confirmed.
 func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 	if !c.p.Can(PermRunStart) {
-		return c.say(ctx, s, "You cannot start runs in "+c.tenant.Name+" (it takes run.start).")
+		return c.say(ctx, s, c.t("wa.run.denied", "org", c.tenant.Name))
 	}
 	env, err := environment(c.p, "")
 	if err != nil {
@@ -639,13 +720,13 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 	}
 	switch {
 	case len(exact) == 0:
-		return c.say(ctx, s, fmt.Sprintf("No workflow deployed in %s matches %q. Send *run* and the workflow's name.", env, name))
+		return c.say(ctx, s, c.t("wa.run.no_match", "env", env, "name", fmt.Sprintf("%q", name)))
 	case len(exact) > 1:
 		names := make([]string, 0, 5)
 		for _, x := range exact[:min(5, len(exact))] {
 			names = append(names, "• "+x.name)
 		}
-		return c.say(ctx, s, "Which one?\n"+strings.Join(names, "\n")+"\nSend *run* and the full name.")
+		return c.say(ctx, s, c.t("wa.run.which", "list", strings.Join(names, "\n")))
 	}
 	x := exact[0]
 	d, err := s.definitionFor(x.id, x.version, x.def)
@@ -659,7 +740,7 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 	}
 	fields, err := whatsapp.InputFields(raw, d.RawTypes)
 	if errors.Is(err, whatsapp.ErrInputsUnsupported) {
-		return c.say(ctx, s, x.name+" needs inputs that cannot be entered here yet. Start it in Taskiem.")
+		return c.say(ctx, s, c.t("wa.run.unsupported_inputs", "workflow", x.name))
 	}
 	if err != nil {
 		return err
@@ -673,7 +754,7 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 			return err
 		}
-		return c.say(ctx, s, fmt.Sprintf("%s needs %d input(s). Send *cancel* to stop.\n\n%s", x.name, len(fields), fields[0].Prompt()))
+		return c.say(ctx, s, c.t("wa.run.needs_inputs", "workflow", x.name, "count", strconv.Itoa(len(fields)), "prompt", fields[0].Prompt()))
 	}
 	return s.waAskConfirm(ctx, c, data)
 }
@@ -717,7 +798,7 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 			return err
 		}
-		return c.say(ctx, s, "The form is closed; answer here instead. Send *cancel* to stop.\n\n"+fields[0].Prompt())
+		return c.say(ctx, s, c.t("wa.run.form_closed", "prompt", fields[0].Prompt()))
 	}
 	if c.data.Index >= len(fields) {
 		return s.waAskConfirm(ctx, c, c.data)
@@ -725,7 +806,7 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 	f := fields[c.data.Index]
 	v, perr := f.Parse(text)
 	if perr != nil {
-		return c.say(ctx, s, "That does not fit: "+perr.Error()+".\n\n"+f.Prompt())
+		return c.say(ctx, s, c.t("wa.run.does_not_fit", "reason", perr.Error(), "prompt", f.Prompt()))
 	}
 	data := c.data
 	if data.Inputs == nil {
@@ -753,8 +834,10 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 	return s.waAskConfirm(ctx, c, data)
 }
 
-func confirmButtons() []whatsapp.Button {
-	return []whatsapp.Button{{ID: "yes", Title: "Yes, run it"}, {ID: "cancel", Title: "Cancel"}}
+func confirmButtons(c *chat) []whatsapp.Button { return confirmButtonsIn(c.lang.Tag) }
+
+func confirmButtonsIn(l lang.Tag) []whatsapp.Button {
+	return []whatsapp.Button{{ID: "yes", Title: tr(l, "button.yes_run")}, {ID: "cancel", Title: tr(l, "button.cancel")}}
 }
 
 // waAskConfirm summarises exactly what will run (spec 11.5) and waits for
@@ -768,13 +851,12 @@ func (s *Server) waAskConfirm(ctx context.Context, c *chat, data chatData) error
 	if err != nil {
 		return err
 	}
-	msg := fmt.Sprintf("Start %s (version %d) in %s", data.Name, data.Version, data.Environment)
+	kv := []string{"workflow", data.Name, "version", strconv.Itoa(data.Version), "env", data.Environment}
+	msg := c.t("wa.run.confirm", kv...)
 	if len(lines) > 0 {
-		msg += " with:\n" + strings.Join(lines, "\n")
-	} else {
-		msg += "?"
+		msg = c.t("wa.run.confirm_inputs", append(kv, "inputs", strings.Join(lines, "\n"))...)
 	}
-	return c.say(ctx, s, msg+"\n\nReply *yes* to start it or *cancel*.", confirmButtons()...)
+	return c.say(ctx, s, msg, confirmButtons(c)...)
 }
 
 // maskedLines renders a value for a message, sealed fields opened only to
@@ -796,10 +878,10 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 		return err
 	}
 	if !c.p.Can(PermRunStart) {
-		return c.say(ctx, s, "You cannot start runs in "+c.tenant.Name+" any more.")
+		return c.say(ctx, s, c.t("wa.run.denied_now", "org", c.tenant.Name))
 	}
 	if !s.limiter("wa-run:"+c.number, 20*time.Second, 3).Allow() {
-		return c.say(ctx, s, "You have started several runs just now. Wait a minute, then try again.")
+		return c.say(ctx, s, c.t("wa.run.too_many"))
 	}
 	var input any
 	var def []byte
@@ -817,7 +899,7 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && deployed != data.Version {
-		return c.say(ctx, s, data.Name+" changed while you were confirming. Send *run* again.")
+		return c.say(ctx, s, c.t("wa.run.changed", "workflow", data.Name))
 	}
 	if err != nil {
 		return err
@@ -827,7 +909,7 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 	}
 	raw, _ := json.Marshal(input)
 	if probs := s.inputProblems(data.Workflow, data.Version, def, raw); len(probs) > 0 {
-		return c.say(ctx, s, "The inputs do not fit "+data.Name+": "+whatsapp.SafeText(strings.Join(probs, "; "))+". Send *run* again.")
+		return c.say(ctx, s, c.t("wa.run.bad_inputs", "workflow", data.Name, "problems", whatsapp.SafeText(strings.Join(probs, "; "))))
 	}
 	ref, created, err := s.Store.StartRun(ctx, runtime.StartRequest{
 		TenantID: c.tenant.ID, WorkflowID: data.Workflow, Version: data.Version, Environment: data.Environment,
@@ -835,7 +917,7 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 		StartedBy: c.p.Actor(), TriggerID: "whatsapp/" + data.Workflow.String(), DedupKey: data.Nonce,
 	})
 	if le, ok := runtime.IsLimit(err); ok {
-		return c.say(ctx, s, "Not started: "+le.Message)
+		return c.say(ctx, s, c.t("wa.run.limit", "reason", le.Message))
 	}
 	if err != nil {
 		return err
@@ -851,7 +933,7 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 	if err != nil {
 		return err
 	}
-	msg := fmt.Sprintf("Started %s. I will tell you when it finishes.", data.Name)
+	msg := c.t("wa.run.started", "workflow", data.Name)
 	if s.PublicURL != "" {
 		msg += "\n" + s.PublicURL + "/runs/" + ref.ID.String()
 	}

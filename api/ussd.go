@@ -9,7 +9,9 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/africastalking"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/expr"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -57,16 +60,34 @@ const (
 	ussdCacheMax          = 50_000
 )
 
-// Caller-facing texts.
+// Caller-facing texts: message ids in engine/lang's catalogues, marked
+// so they cannot be mistaken for a menu's own text (menus are plain
+// ASCII), and put in the tenant's USSD language as the answer is written
+// (ussdLocal).
 const (
-	ussdTextBusy      = "This service is busy. Please try again shortly."
-	ussdTextGone      = "This service is not available."
-	ussdTextExpired   = "Your session has expired. Please dial again."
-	ussdTextEnded     = "This session has ended. Please dial again."
-	ussdTextTooMany   = "Too many requests from this number. Please try again later."
-	ussdTextNotTaken  = "Sorry, we could not take your request. Nothing was started. Please try again."
-	ussdTextReconcile = "Your request {{reference}} is being checked. We will let you know."
+	ussdTextBusy     = ussdMsg + "ussd.busy"
+	ussdTextGone     = ussdMsg + "ussd.gone"
+	ussdTextExpired  = ussdMsg + "ussd.expired"
+	ussdTextEnded    = ussdMsg + "ussd.ended"
+	ussdTextTooMany  = ussdMsg + "ussd.too_many"
+	ussdTextNotTaken = ussdMsg + "ussd.not_taken"
+	ussdMsg          = "\x00"
 )
+
+// ussdLocal turns a caller-facing text id into the tenant's USSD language
+// (its default language, when on), in the ASCII USSD carries; a menu's
+// own text passes unchanged.
+func (s *Server) ussdLocal(ctx context.Context, tenant uuid.UUID, text string) string {
+	id, ok := strings.CutPrefix(text, ussdMsg)
+	if !ok {
+		return text
+	}
+	l := lang.EN
+	if tc, err := s.tenantChannel(ctx, tenant); err == nil && slices.Contains(s.langsOn(tc), tc.Default) {
+		l = tc.Default
+	}
+	return lang.ASCII(tr(l, id))
+}
 
 // ussdState is the edge's in-process cache. Everything in it is either
 // immutable (a session's pinned workflow version, a version's menu) or
@@ -167,7 +188,7 @@ func (s *Server) ussdCallback(w http.ResponseWriter, r *http.Request) {
 	ch, err := s.ussdChannelFor(ctx, tenant, provider)
 	if err != nil {
 		s.Logger.Warn("ussd: channel lookup", "tenant", tenant, "err", err)
-		ad.Reply(w, true, ussdTextBusy)
+		ad.Reply(w, true, s.ussdLocal(ctx, tenant, ussdTextBusy))
 		return
 	}
 	if ch == nil || !ch.active {
@@ -193,15 +214,15 @@ func (s *Server) ussdCallback(w http.ResponseWriter, r *http.Request) {
 	if !s.limiter("ussd-tenant:"+tkey, 5*time.Millisecond, 400).Allow() {
 		// Recorded after the answer: the record is a database write.
 		s.ussdBackground(func(ctx context.Context) { s.Store.LimitHit(ctx, tenant, "ussd_rate") })
-		ad.Reply(w, true, ussdTextBusy)
+		ad.Reply(w, true, s.ussdLocal(ctx, tenant, ussdTextBusy))
 		return
 	}
 	if !s.limiter("ussd-number:"+tkey+"/"+q.Phone, 500*time.Millisecond, 12).Allow() {
-		ad.Reply(w, true, ussdTextTooMany)
+		ad.Reply(w, true, s.ussdLocal(ctx, tenant, ussdTextTooMany))
 		return
 	}
 	end, text := s.ussdStep(ctx, tenant, provider, ad, ch, q)
-	ad.Reply(w, end, text)
+	ad.Reply(w, end, s.ussdLocal(ctx, tenant, text))
 }
 
 // ussdStep walks the session one step and says what to answer.

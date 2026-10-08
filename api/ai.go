@@ -103,6 +103,9 @@ type aiBuildReq struct {
 	Goal        string     `json:"goal"`
 	Workflow    *uuid.UUID `json:"workflow,omitempty"`
 	Environment string     `json:"environment,omitempty"`
+	// language names the language the goal is written in, when not
+	// English (WhatsApp builds; decision 0029).
+	language string
 }
 
 func (s *Server) aiBuild(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +154,7 @@ func (s *Server) aiBuild(w http.ResponseWriter, r *http.Request) {
 // command answers from it). The caller has checked the permission, the
 // rate limit and the budget.
 func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, channel string, after func(uuid.UUID, *builder.Proposal, error)) (uuid.UUID, error) {
-	breq := builder.Request{Goal: req.Goal, Environment: req.Environment}
+	breq := builder.Request{Goal: req.Goal, Environment: req.Environment, Language: req.language}
 	id := uuid.Must(uuid.NewV7())
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{who.tenant}, func(tx pgx.Tx) error {
 		if req.Workflow != nil {

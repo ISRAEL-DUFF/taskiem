@@ -51,6 +51,10 @@ type Request struct {
 	Base        json.RawMessage
 	Environment string
 	Context     Context
+	// Language names the language the goal is written in ("Yoruba"), when
+	// it is not English: the model is told, so it reads the goal as such
+	// (spec 11.6).
+	Language string
 }
 
 // Interaction is one model call, as recorded for audit: the request after
@@ -206,7 +210,7 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 	b.progress("context")
 	system := systemBlocks(Catalogue(reg))
 	ctxDoc, refs, offered := b.contextDoc(req, reg)
-	messages := []ai.Message{{Role: "user", Text: userPrompt(req.Goal, req.Base, ctxDoc)}}
+	messages := []ai.Message{{Role: "user", Text: userPrompt(req.Goal, req.Language, req.Base, ctxDoc)}}
 	digest := sha256.Sum256([]byte(system[0].Text + "\x00" + system[1].Text))
 	sysDigest := hex.EncodeToString(digest[:])
 

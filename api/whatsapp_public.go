@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -95,11 +96,23 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 		text = in.Reply
 	}
 	cmd := normalizeCommand(text)
+	lc := s.chooseLang(ctx, tenant, number, text)
+	l := lc.Tag
+	if m, ok := lang.MatchIntent(text, lc.Match()); ok {
+		switch m.Intent {
+		case lang.IntentCancel:
+			cmd = "cancel"
+		case lang.IntentYes:
+			cmd = "yes"
+		case lang.IntentNo:
+			cmd = "no"
+		}
+	}
 	if cmd == "cancel" || cmd == "stop" {
 		if err := s.pubSave(ctx, tenant, number, "", pubData{}); err != nil {
 			return true, err
 		}
-		return true, say("Cancelled. Send *menu* to see what you can do here.")
+		return true, say(tr(l, "wa.public.cancelled"))
 	}
 	if sess.state == stateConfirming {
 		switch cmd {
@@ -109,9 +122,9 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 			if err := s.pubSave(ctx, tenant, number, "", pubData{}); err != nil {
 				return true, err
 			}
-			return true, say("Cancelled. Nothing was started.")
+			return true, say(tr(l, "wa.cancelled_nothing_started"))
 		}
-		return true, say("Reply *yes* to go ahead, or *cancel*.", confirmButtons()...)
+		return true, say(tr(l, "wa.public.confirm_reminder"), confirmButtonsIn(l)...)
 	}
 	if n, err := strconv.Atoi(cmd); err == nil && n >= 1 && n <= len(items) {
 		return true, s.waPublicChoose(ctx, wa, number, items[n-1], say)
@@ -120,7 +133,7 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 	for i, x := range items {
 		lines[i] = fmt.Sprintf("%d. %s", i+1, x.Label)
 	}
-	return true, say("What would you like to do? Reply with a number:\n" + strings.Join(lines, "\n") + "\n\nSend *cancel* at any time.")
+	return true, say(tr(l, "wa.public.menu", "list", strings.Join(lines, "\n")))
 }
 
 func (s *Server) pubLoad(ctx context.Context, tenant uuid.UUID, number string) (pubSession, error) {
@@ -158,6 +171,7 @@ func (s *Server) pubSave(ctx context.Context, tenant uuid.UUID, number, state st
 // confirmation when it takes no inputs.
 func (s *Server) waPublicChoose(ctx context.Context, wa *whatsapp.Platform, number string, item waPublicWorkflow, say func(string, ...whatsapp.Button) error) error {
 	tenant := wa.Tenant
+	l := s.chooseLang(ctx, tenant, number, "").Tag
 	var version int
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
@@ -168,12 +182,12 @@ func (s *Server) waPublicChoose(ctx context.Context, wa *whatsapp.Platform, numb
 		return err
 	}
 	if version == 0 {
-		return say(item.Label + " is not available right now.")
+		return say(tr(l, "wa.public.unavailable", "label", item.Label))
 	}
 	data := pubData{Workflow: item.WorkflowID, Version: version, Label: item.Label}
 	fields, err := s.waFieldsOf(ctx, tenant, item.WorkflowID, version)
 	if errors.Is(err, whatsapp.ErrInputsUnsupported) {
-		return say(item.Label + " is not available on WhatsApp.")
+		return say(tr(l, "wa.public.not_here", "label", item.Label))
 	}
 	if err != nil {
 		return err
@@ -183,7 +197,7 @@ func (s *Server) waPublicChoose(ctx context.Context, wa *whatsapp.Platform, numb
 	}
 	form, err := whatsapp.FlowForm(item.Label, fields, nil)
 	if wa.Config.FlowKey == nil || errors.Is(err, whatsapp.ErrFlowUnsupported) {
-		return say(item.Label + " is not available on WhatsApp.")
+		return say(tr(l, "wa.public.not_here", "label", item.Label))
 	}
 	if err != nil {
 		return err
@@ -201,11 +215,11 @@ func (s *Server) waPublicChoose(ctx context.Context, wa *whatsapp.Platform, numb
 	if err := s.pubSave(ctx, tenant, number, stateCollecting, data); err != nil {
 		return err
 	}
-	if _, err := wa.Client.SendFlow(ctx, number, whatsapp.FlowMessage{Flow: whatsapp.FlowInputs, Token: tok, CTA: "Fill in", Screen: whatsapp.ScreenInputs, Data: form,
-		Body: item.Label + ": tap *Fill in* to enter the details. You confirm before anything happens."}); err != nil {
+	if _, err := wa.Client.SendFlow(ctx, number, whatsapp.FlowMessage{Flow: whatsapp.FlowInputs, Token: tok, CTA: tr(l, "button.fill_in"), Screen: whatsapp.ScreenInputs, Data: form,
+		Body: tr(l, "wa.public.form", "label", item.Label, "cta", tr(l, "button.fill_in"))}); err != nil {
 		s.Logger.Warn("whatsapp: sending a public form", "err", err)
 		s.waDropFlow(ctx, tenant, data.Flow)
-		return say("The form could not be opened. Try again later.")
+		return say(tr(l, "wa.public.form_failed"))
 	}
 	return nil
 }
@@ -216,9 +230,10 @@ func (s *Server) waPublicFlowDone(ctx context.Context, wa *whatsapp.Platform, nu
 		_, err := wa.Send(ctx, number, whatsapp.Message{Text: text, Buttons: buttons})
 		return err
 	}
+	l := s.chooseLang(ctx, wa.Tenant, number, "").Tag
 	tenant, hash, err := whatsapp.ParseFlowToken(in.FlowToken())
 	if err != nil || tenant != wa.Tenant || sess.state != stateCollecting || sess.data.Flow != hex.EncodeToString(hash) {
-		return say("That form is no longer needed. Send *menu* to start again.")
+		return say(tr(l, "wa.public.form_gone"))
 	}
 	var row flowRow
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -226,7 +241,7 @@ func (s *Server) waPublicFlowDone(ctx context.Context, wa *whatsapp.Platform, nu
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && (row.kind != "public" || row.number != number || row.status != "submitted") {
-		return say("That form is no longer needed. Send *menu* to start again.")
+		return say(tr(l, "wa.public.form_gone"))
 	}
 	if err != nil {
 		return err
@@ -249,21 +264,23 @@ func (s *Server) waPublicConfirm(ctx context.Context, wa *whatsapp.Platform, num
 	if err != nil {
 		return err
 	}
-	msg := data.Label
+	l := s.chooseLang(ctx, wa.Tenant, number, "").Tag
+	msg := tr(l, "wa.public.confirm", "label", data.Label)
 	if len(lines) > 0 {
-		msg += " with:\n" + strings.Join(lines, "\n")
+		msg = tr(l, "wa.public.confirm_inputs", "label", data.Label, "inputs", strings.Join(lines, "\n"))
 	}
-	return say(msg+"\n\nReply *yes* to go ahead, or *cancel*.", confirmButtons()...)
+	return say(msg, confirmButtonsIn(l)...)
 }
 
 // waPublicStart starts the confirmed run as whatsapp_public:<number>.
 func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, number string, data pubData, say func(string, ...whatsapp.Button) error) error {
 	tenant := wa.Tenant
+	l := s.chooseLang(ctx, tenant, number, "").Tag
 	if err := s.pubSave(ctx, tenant, number, "", pubData{}); err != nil {
 		return err
 	}
 	if !s.limiter("wa-pub-run:"+tenant.String()+"/"+number, 20*time.Minute, 3).Allow() || !s.limiter("wa-pub-run-tenant:"+tenant.String(), 6*time.Second, 30).Allow() {
-		return say("Too many requests just now. Try again later.")
+		return say(tr(l, "wa.public.too_many"))
 	}
 	var input any
 	var def []byte
@@ -284,7 +301,7 @@ func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, numbe
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && (!public || deployed != data.Version) {
-		return say(data.Label + " changed or is not available any more. Send *menu* to start again.")
+		return say(tr(l, "wa.public.changed", "label", data.Label))
 	}
 	if err != nil {
 		return err
@@ -294,7 +311,7 @@ func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, numbe
 	}
 	raw, _ := json.Marshal(input)
 	if probs := s.inputProblems(data.Workflow, data.Version, def, raw); len(probs) > 0 {
-		return say("The details do not fit: " + whatsapp.SafeText(strings.Join(probs, "; ")) + ". Send *menu* to start again.")
+		return say(tr(l, "wa.public.bad_details", "problems", whatsapp.SafeText(strings.Join(probs, "; "))))
 	}
 	actor := "whatsapp_public:" + number
 	ref, created, err := s.Store.StartRun(ctx, runtime.StartRequest{
@@ -304,7 +321,7 @@ func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, numbe
 	})
 	if le, ok := runtime.IsLimit(err); ok {
 		s.Logger.Info("whatsapp: a public run refused by a plan limit", "limit", le.Limit)
-		return say("This service is busy right now. Try again later.")
+		return say(tr(l, "wa.public.busy"))
 	}
 	if err != nil {
 		return err
@@ -316,5 +333,5 @@ func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, numbe
 	}); err != nil {
 		return err
 	}
-	return say(fmt.Sprintf("Done: %s has started. Your reference is %s.", data.Label, strings.ToUpper(ref.ID.String()[:8])))
+	return say(tr(l, "wa.public.started", "label", data.Label, "reference", strings.ToUpper(ref.ID.String()[:8])))
 }

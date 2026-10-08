@@ -1,0 +1,863 @@
+{
+  "language": "en",
+  "reviewed": true,
+  "status": "Source. Every message Taskiem sends people over WhatsApp, USSD and SMS; context says where.",
+  "reviewers": [],
+  "messages": {
+    "approval.status.approved": {
+      "text": "approved",
+      "reviewed": true,
+      "context": "An approval's status"
+    },
+    "approval.status.cancelled": {
+      "text": "cancelled",
+      "reviewed": true,
+      "context": "An approval's status"
+    },
+    "approval.status.expired": {
+      "text": "expired",
+      "reviewed": true,
+      "context": "An approval's status"
+    },
+    "approval.status.open": {
+      "text": "open",
+      "reviewed": true,
+      "context": "An approval's status"
+    },
+    "approval.status.rejected": {
+      "text": "rejected",
+      "reviewed": true,
+      "context": "An approval's status"
+    },
+    "button.approve": {
+      "text": "Approve",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters"
+    },
+    "button.cancel": {
+      "text": "Cancel",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters"
+    },
+    "button.enter_pin": {
+      "text": "Enter PIN",
+      "reviewed": true,
+      "context": "Form button, at most 20 characters"
+    },
+    "button.fill_in": {
+      "text": "Fill in",
+      "reviewed": true,
+      "context": "Form button, at most 20 characters"
+    },
+    "button.no": {
+      "text": "No",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters"
+    },
+    "button.reject": {
+      "text": "Reject",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters"
+    },
+    "button.yes_run": {
+      "text": "Yes, run it",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters"
+    },
+    "button.yes_save": {
+      "text": "Yes, save draft",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters"
+    },
+    "lang.current": {
+      "text": "I write to you in {language}. Languages here: {languages}. Send *language* and a name to change.",
+      "reviewed": true,
+      "context": "language with no name"
+    },
+    "lang.detected": {
+      "text": "(I will reply in {language}. Send *language english* to change.)",
+      "reviewed": true,
+      "context": "Before a reply in a language just detected"
+    },
+    "lang.draft_note": {
+      "text": "This translation is a draft that native speakers have not checked yet. Send *language english* to go back to English.",
+      "reviewed": true,
+      "context": "After choosing a language whose catalogue is unreviewed"
+    },
+    "lang.switched": {
+      "text": "From now on I will write to you in {language}.",
+      "reviewed": true,
+      "context": "A language was chosen"
+    },
+    "lang.unavailable": {
+      "text": "{name} is not available here. Languages here: {languages}.",
+      "reviewed": true,
+      "context": "A language that is not on"
+    },
+    "run.status.cancelled": {
+      "text": "cancelled",
+      "reviewed": true,
+      "context": "A run's status"
+    },
+    "run.status.completed": {
+      "text": "completed",
+      "reviewed": true,
+      "context": "A run's status"
+    },
+    "run.status.failed": {
+      "text": "failed",
+      "reviewed": true,
+      "context": "A run's status"
+    },
+    "run.status.needs_reconciliation": {
+      "text": "needs reconciliation",
+      "reviewed": true,
+      "context": "A run's status"
+    },
+    "run.status.queued": {
+      "text": "queued",
+      "reviewed": true,
+      "context": "A run's status"
+    },
+    "run.status.running": {
+      "text": "running",
+      "reviewed": true,
+      "context": "A run's status"
+    },
+    "run.status.waiting": {
+      "text": "waiting",
+      "reviewed": true,
+      "context": "A run's status"
+    },
+    "sms.reconcile": {
+      "text": "Your request {reference} is being checked. We will let you know.",
+      "reviewed": true,
+      "context": "SMS after a USSD run that needs reconciliation (ASCII)"
+    },
+    "ussd.busy": {
+      "text": "This service is busy. Please try again shortly.",
+      "reviewed": true,
+      "context": "USSD: the service is busy (ASCII on screen)"
+    },
+    "ussd.ended": {
+      "text": "This session has ended. Please dial again.",
+      "reviewed": true,
+      "context": "USSD: session ended"
+    },
+    "ussd.expired": {
+      "text": "Your session has expired. Please dial again.",
+      "reviewed": true,
+      "context": "USSD: session expired"
+    },
+    "ussd.gone": {
+      "text": "This service is not available.",
+      "reviewed": true,
+      "context": "USSD: no workflow serves the code"
+    },
+    "ussd.not_taken": {
+      "text": "Sorry, we could not take your request. Nothing was started. Please try again.",
+      "reviewed": true,
+      "context": "USSD: the confirmation could not be recorded"
+    },
+    "ussd.too_many": {
+      "text": "Too many requests from this number. Please try again later.",
+      "reviewed": true,
+      "context": "USSD: rate limit"
+    },
+    "voice.empty": {
+      "text": "I could not hear any words in that voice note. Please type your message.",
+      "reviewed": true,
+      "context": "No words heard"
+    },
+    "voice.failed": {
+      "text": "I could not understand that voice note. Please type your message.",
+      "reviewed": true,
+      "context": "Transcription failed"
+    },
+    "voice.heard": {
+      "text": "Voice notes are in beta, so please check this. I heard: \"{transcript}\"",
+      "reviewed": true,
+      "context": "Before the reply to a transcribed voice note (masked transcript)"
+    },
+    "voice.off": {
+      "text": "Voice notes are not available here yet. Please type your message.",
+      "reviewed": true,
+      "context": "A voice note where transcription is off"
+    },
+    "voice.too_large": {
+      "text": "That voice note is too large. Please send a shorter one, or type your message.",
+      "reviewed": true,
+      "context": "A voice note over the size cap"
+    },
+    "voice.too_long": {
+      "text": "That voice note is longer than {seconds} seconds. Please send a shorter one, or type your message.",
+      "reviewed": true,
+      "context": "A voice note over the duration cap"
+    },
+    "voice.too_many": {
+      "text": "You have sent several voice notes just now. Please type your message.",
+      "reviewed": true,
+      "context": "Rate limit on voice notes"
+    },
+    "voice.type_now": {
+      "text": "Please type your answer: voice notes only start something new.",
+      "reviewed": true,
+      "context": "A voice note in the middle of something"
+    },
+    "voice.unsupported": {
+      "text": "I can only listen to voice notes and audio. Please type your message.",
+      "reviewed": true,
+      "context": "Audio in a format not taken"
+    },
+    "wa.approval.already": {
+      "text": "That request is already {status}.",
+      "reviewed": true,
+      "context": "The approval was decided meanwhile; {status} is an approval.status.* text"
+    },
+    "wa.approval.already_decided": {
+      "text": "You have already decided this request.",
+      "reviewed": true,
+      "context": "The person already voted"
+    },
+    "wa.approval.answered": {
+      "text": "That request was already answered from this chat.",
+      "reviewed": true,
+      "context": "A decision button tapped twice"
+    },
+    "wa.approval.closed": {
+      "text": "That request is already closed.",
+      "reviewed": true,
+      "context": "The approval closed"
+    },
+    "wa.approval.denied": {
+      "text": "You cannot decide approvals in {org} (it takes approval.decide).",
+      "reviewed": true,
+      "context": "A decision without approval.decide"
+    },
+    "wa.approval.expires": {
+      "text": "This request expires {time} UTC.",
+      "reviewed": true,
+      "context": "An approval request's last line"
+    },
+    "wa.approval.level": {
+      "text": "{env}, level {level} of {levels}",
+      "reviewed": true,
+      "context": "Where an approval is, with levels"
+    },
+    "wa.approval.needed": {
+      "text": "Approval needed: {title} ({where})",
+      "reviewed": true,
+      "context": "An approval request's first line"
+    },
+    "wa.approval.next_level": {
+      "text": "That request has moved to its next level. Send *approvals* for what is waiting for you.",
+      "reviewed": true,
+      "context": "The approval moved to its next level"
+    },
+    "wa.approval.not_recorded": {
+      "text": "Not recorded: {reason}.",
+      "reviewed": true,
+      "context": "The policy refused the vote; {reason} in English"
+    },
+    "wa.approval.other_person": {
+      "text": "That request was sent to someone else; it cannot be decided from this number.",
+      "reviewed": true,
+      "context": "A decision button tapped from another number"
+    },
+    "wa.approval.recorded_approved": {
+      "text": "Recorded: you approved {step}.",
+      "reviewed": true,
+      "context": "A recorded approval; a result follows"
+    },
+    "wa.approval.recorded_rejected": {
+      "text": "Recorded: you rejected {step}.",
+      "reviewed": true,
+      "context": "A recorded rejection; a result follows"
+    },
+    "wa.approval.result_approved": {
+      "text": "The request is approved and the run continues.",
+      "reviewed": true,
+      "context": "After a recorded decision"
+    },
+    "wa.approval.result_rejected": {
+      "text": "The request is rejected.",
+      "reviewed": true,
+      "context": "After a recorded decision"
+    },
+    "wa.approval.result_waiting": {
+      "text": "It is waiting for more approvals.",
+      "reviewed": true,
+      "context": "After a recorded decision"
+    },
+    "wa.approval.stale": {
+      "text": "That button is not valid any more. Send *approvals* for what is waiting for you.",
+      "reviewed": true,
+      "context": "A decision button expired"
+    },
+    "wa.approvals.denied": {
+      "text": "You do not decide approvals in {org}.",
+      "reviewed": true,
+      "context": "approvals without approval.decide"
+    },
+    "wa.approvals.none": {
+      "text": "Nothing is waiting for you.",
+      "reviewed": true,
+      "context": "approvals: nothing waiting"
+    },
+    "wa.build.budget": {
+      "text": "This month's AI budget for {org} is used up, so I cannot build this now. You can still build workflows in the web app.",
+      "reviewed": true,
+      "context": "AI budget used up before the build"
+    },
+    "wa.build.budget_ran_out": {
+      "text": "This month's AI budget ran out before the draft was ready. You can still build workflows in the web app.",
+      "reviewed": true,
+      "context": "AI budget ran out during the build"
+    },
+    "wa.build.denied": {
+      "text": "You cannot build workflows in {org} (it takes workflow.edit).",
+      "reviewed": true,
+      "context": "build without workflow.edit"
+    },
+    "wa.build.denied_now": {
+      "text": "You cannot build workflows in {org} any more.",
+      "reviewed": true,
+      "context": "workflow.edit lost during the build"
+    },
+    "wa.build.denied_save": {
+      "text": "You cannot build workflows in {org} any more; nothing was saved.",
+      "reviewed": true,
+      "context": "workflow.edit lost before saving"
+    },
+    "wa.build.details_invalid": {
+      "text": "With those details the workflow does not pass Taskiem's checks ({problem}). Build it in the web app{link}.",
+      "reviewed": true,
+      "context": "The filled-in draft failed the checks"
+    },
+    "wa.build.details_misfit": {
+      "text": "Those details do not fit the template: {reason}. Send *build* again to start over.",
+      "reviewed": true,
+      "context": "The template refused the details; {reason} in English"
+    },
+    "wa.build.failed": {
+      "text": "The build failed. Try again in a while, or build it in the web app{link}.",
+      "reviewed": true,
+      "context": "The build failed; {link} is ' at <url>' or empty"
+    },
+    "wa.build.gone": {
+      "text": "That draft is no longer waiting to be saved (it was saved or replaced elsewhere).",
+      "reviewed": true,
+      "context": "The draft was saved or replaced elsewhere"
+    },
+    "wa.build.head": {
+      "text": "Here is the workflow I drafted:",
+      "reviewed": true,
+      "context": "Before the drafted steps"
+    },
+    "wa.build.head_template": {
+      "text": "Here is the workflow I drafted, starting from the template *{template}*:",
+      "reviewed": true,
+      "context": "Before the drafted steps, from a template"
+    },
+    "wa.build.invalid": {
+      "text": "I could not draft a workflow for that which passes Taskiem's checks. Try describing it differently (what starts it, and what should happen), or build it in the web app{link}.",
+      "reviewed": true,
+      "context": "The draft did not pass the checks"
+    },
+    "wa.build.limit": {
+      "text": "Not saved: {reason}",
+      "reviewed": true,
+      "context": "A plan limit refused saving; {reason} in English"
+    },
+    "wa.build.more_steps": {
+      "text": "…and {count} more step(s); see them in Taskiem.",
+      "reviewed": true,
+      "context": "More steps than shown"
+    },
+    "wa.build.need_details": {
+      "text": "I need {count} more detail(s) to finish it. Send *cancel* to stop.",
+      "reviewed": true,
+      "context": "A template needs details"
+    },
+    "wa.build.not_saved": {
+      "text": "OK, nothing was saved.",
+      "reviewed": true,
+      "context": "no to saving"
+    },
+    "wa.build.off": {
+      "text": "Building with AI is not set up on this Taskiem. You can build workflows in the web app.",
+      "reviewed": true,
+      "context": "No model configured"
+    },
+    "wa.build.refused": {
+      "text": "I cannot build that. Try describing it differently.",
+      "reviewed": true,
+      "context": "The model declined"
+    },
+    "wa.build.save_question": {
+      "text": "Save this as a draft workflow? Reply *yes* or *no*. (A draft does not run until it is published in Taskiem.)",
+      "reviewed": true,
+      "context": "The question before saving a draft"
+    },
+    "wa.build.save_reminder": {
+      "text": "Reply *yes* to save the draft, or *no*.",
+      "reviewed": true,
+      "context": "Waiting for yes or no to save"
+    },
+    "wa.build.saved": {
+      "text": "Saved *{name}* as a draft. It is not live yet: review it, set any connections and variables it needs, and publish it in Taskiem{link}.",
+      "reviewed": true,
+      "context": "The draft was saved"
+    },
+    "wa.build.still_drafting": {
+      "text": "I am still drafting your workflow; I will send it when it is ready. Send *cancel* to stop.",
+      "reviewed": true,
+      "context": "A message while the model drafts"
+    },
+    "wa.build.too_long": {
+      "text": "That is too long for me; describe it in under {max} characters.",
+      "reviewed": true,
+      "context": "Goal too long"
+    },
+    "wa.build.too_many": {
+      "text": "You have asked for several builds just now. Wait a minute, then try again.",
+      "reviewed": true,
+      "context": "Rate limit on builds"
+    },
+    "wa.build.unreadable": {
+      "text": "The draft could not be read back. Build it in the web app{link}.",
+      "reviewed": true,
+      "context": "The draft could not be described"
+    },
+    "wa.build.variables": {
+      "text": "Before it runs, set these variables in Taskiem: {names}.",
+      "reviewed": true,
+      "context": "Variables a template reads"
+    },
+    "wa.build.warn_policy": {
+      "text": "Warning: a step moves money without an approval before it.",
+      "reviewed": true,
+      "context": "Draft warning"
+    },
+    "wa.build.warn_test": {
+      "text": "Warning: the draft's dry run did not pass; check it in Taskiem before publishing.",
+      "reviewed": true,
+      "context": "Draft warning"
+    },
+    "wa.build.what": {
+      "text": "Tell me what to automate after *build*, for example:\n*build every Friday text my customers who owe me*",
+      "reviewed": true,
+      "context": "build with no goal"
+    },
+    "wa.build.with_details": {
+      "text": "Thanks. With your details:\n\n{steps}\n\nSave this as a draft workflow? Reply *yes* or *no*.",
+      "reviewed": true,
+      "context": "The draft again, with the person's details"
+    },
+    "wa.build.working": {
+      "text": "Working on it: I am drafting the workflow and will send you its steps to check. This can take a minute or two. Send *cancel* to stop.",
+      "reviewed": true,
+      "context": "The build started in the background"
+    },
+    "wa.button_invalid": {
+      "text": "That button is not valid.",
+      "reviewed": true,
+      "context": "A tapped button's token did not parse"
+    },
+    "wa.cancelled": {
+      "text": "Cancelled.",
+      "reviewed": true,
+      "context": "cancel dropped what was in progress"
+    },
+    "wa.cancelled_nothing_started": {
+      "text": "Cancelled. Nothing was started.",
+      "reviewed": true,
+      "context": "no to a run's confirmation"
+    },
+    "wa.cannot_act": {
+      "text": "Your account cannot act in {org} any more.",
+      "reviewed": true,
+      "context": "The person lost access to the organisation"
+    },
+    "wa.code_failed": {
+      "text": "That code did not link this number: {reason}.",
+      "reviewed": true,
+      "context": "A linking code sent from an unbound number was refused"
+    },
+    "wa.confirm_reminder": {
+      "text": "Reply *yes* to start {workflow}, or *cancel*.",
+      "reviewed": true,
+      "context": "Waiting for yes to start a run"
+    },
+    "wa.form.gone": {
+      "text": "That form is no longer needed. Send *run* and a workflow's name to start again.",
+      "reviewed": true,
+      "context": "An inputs form no longer needed"
+    },
+    "wa.form.inputs": {
+      "text": "{workflow} needs {count} input(s). Tap *{cta}* to enter them; you confirm before it starts. Send *cancel* to stop.",
+      "reviewed": true,
+      "context": "The message carrying an inputs form; {cta} is button.fill_in"
+    },
+    "wa.form.invalid": {
+      "text": "That form is not valid any more.",
+      "reviewed": true,
+      "context": "A completed form that is not valid"
+    },
+    "wa.form.not_confirmed": {
+      "text": "The decision was not confirmed. Tap the button again, or decide in Taskiem.",
+      "reviewed": true,
+      "context": "A PIN form that did not record the decision"
+    },
+    "wa.form.pin_approve": {
+      "text": "To approve {step}, enter your WhatsApp PIN within 10 minutes.",
+      "reviewed": true,
+      "context": "The message carrying a PIN form"
+    },
+    "wa.form.pin_reject": {
+      "text": "To reject {step}, enter your WhatsApp PIN within 10 minutes.",
+      "reviewed": true,
+      "context": "The message carrying a PIN form"
+    },
+    "wa.handoff.approve": {
+      "text": "To approve {step}, confirm with your passkey or authenticator code in Taskiem within 10 minutes:\n{link}",
+      "reviewed": true,
+      "context": "Step-up link to approve"
+    },
+    "wa.handoff.no_link": {
+      "text": "This decision needs your passkey or authenticator code: decide it in Taskiem's web app, under Approvals.",
+      "reviewed": true,
+      "context": "Step-up needed and no public URL"
+    },
+    "wa.handoff.recorded": {
+      "text": "Recorded with step-up: your decision on {step} ({status}).",
+      "reviewed": true,
+      "context": "After step-up in the web app; {status} is an approval.status.* text"
+    },
+    "wa.handoff.reject": {
+      "text": "To reject {step}, confirm with your passkey or authenticator code in Taskiem within 10 minutes:\n{link}",
+      "reviewed": true,
+      "context": "Step-up link to reject"
+    },
+    "wa.help.approvals": {
+      "text": "• *approvals*: requests waiting for you",
+      "reviewed": true,
+      "context": "Help line"
+    },
+    "wa.help.build": {
+      "text": "• *build* and what to automate, e.g. *build every Friday text my customers who owe me* (saved as a draft after you confirm)",
+      "reviewed": true,
+      "context": "Help line"
+    },
+    "wa.help.cancel": {
+      "text": "• *cancel*: drop what is in progress",
+      "reviewed": true,
+      "context": "Help line"
+    },
+    "wa.help.intro": {
+      "text": "You can send:",
+      "reviewed": true,
+      "context": "Help: first line"
+    },
+    "wa.help.language": {
+      "text": "• *language* and a language's name: replies in {languages}",
+      "reviewed": true,
+      "context": "Help line, when languages beyond English are on"
+    },
+    "wa.help.run": {
+      "text": "• *run* and a workflow's name: start it (you confirm first)",
+      "reviewed": true,
+      "context": "Help line"
+    },
+    "wa.help.status": {
+      "text": "• *status*: what ran and what failed today",
+      "reviewed": true,
+      "context": "Help line"
+    },
+    "wa.help.switch": {
+      "text": "• *switch* and an organisation's name: work in another one",
+      "reviewed": true,
+      "context": "Help line"
+    },
+    "wa.help.voice": {
+      "text": "• a voice note: I will try to transcribe it (beta)",
+      "reviewed": true,
+      "context": "Help line, when voice notes are on"
+    },
+    "wa.link_at": {
+      "text": " at {url}",
+      "reviewed": true,
+      "context": "Where a link goes, with its leading space"
+    },
+    "wa.linked": {
+      "text": "This number is now linked to your Taskiem account. Send *help* to see what you can do here.",
+      "reviewed": true,
+      "context": "A number was linked by sending back its code"
+    },
+    "wa.no_org": {
+      "text": "Your Taskiem account has no active organisation.",
+      "reviewed": true,
+      "context": "The person belongs to no active organisation"
+    },
+    "wa.not_member": {
+      "text": "Your Taskiem account is not a member of this organisation.",
+      "reviewed": true,
+      "context": "Own number: the person is not in that organisation"
+    },
+    "wa.not_understood": {
+      "text": "Sorry, I did not understand that.",
+      "reviewed": true,
+      "context": "A message matched no command; the help follows"
+    },
+    "wa.nothing_to_cancel": {
+      "text": "Nothing to cancel.",
+      "reviewed": true,
+      "context": "cancel with nothing in progress"
+    },
+    "wa.outcome.body": {
+      "text": "The run you started from WhatsApp has ended.",
+      "reviewed": true,
+      "context": "A run started from chat ended"
+    },
+    "wa.outcome.cancelled": {
+      "text": "{workflow} was cancelled in {env}.",
+      "reviewed": true,
+      "context": "A run started from chat ended"
+    },
+    "wa.outcome.completed": {
+      "text": "{workflow} completed in {env}.",
+      "reviewed": true,
+      "context": "A run started from chat ended"
+    },
+    "wa.outcome.failed": {
+      "text": "{workflow} failed in {env}.",
+      "reviewed": true,
+      "context": "A run started from chat ended"
+    },
+    "wa.outcome.needs_reconciliation": {
+      "text": "{workflow} needs reconciliation in {env}.",
+      "reviewed": true,
+      "context": "A run started from chat ended"
+    },
+    "wa.public.bad_details": {
+      "text": "The details do not fit: {problems}. Send *menu* to start again.",
+      "reviewed": true,
+      "context": "Public menu: inputs failed the schema; {problems} in English"
+    },
+    "wa.public.busy": {
+      "text": "This service is busy right now. Try again later.",
+      "reviewed": true,
+      "context": "Public menu: refused by a plan limit"
+    },
+    "wa.public.cancelled": {
+      "text": "Cancelled. Send *menu* to see what you can do here.",
+      "reviewed": true,
+      "context": "Public menu: cancel"
+    },
+    "wa.public.changed": {
+      "text": "{label} changed or is not available any more. Send *menu* to start again.",
+      "reviewed": true,
+      "context": "Public menu: the item changed"
+    },
+    "wa.public.confirm": {
+      "text": "{label}\n\nReply *yes* to go ahead, or *cancel*.",
+      "reviewed": true,
+      "context": "Public menu: the summary, no inputs"
+    },
+    "wa.public.confirm_inputs": {
+      "text": "{label} with:\n{inputs}\n\nReply *yes* to go ahead, or *cancel*.",
+      "reviewed": true,
+      "context": "Public menu: the summary with inputs (masked)"
+    },
+    "wa.public.confirm_reminder": {
+      "text": "Reply *yes* to go ahead, or *cancel*.",
+      "reviewed": true,
+      "context": "Public menu: waiting for yes"
+    },
+    "wa.public.form": {
+      "text": "{label}: tap *{cta}* to enter the details. You confirm before anything happens.",
+      "reviewed": true,
+      "context": "Public menu: the message carrying a form; {cta} is button.fill_in"
+    },
+    "wa.public.form_failed": {
+      "text": "The form could not be opened. Try again later.",
+      "reviewed": true,
+      "context": "Public menu: the form could not be sent"
+    },
+    "wa.public.form_gone": {
+      "text": "That form is no longer needed. Send *menu* to start again.",
+      "reviewed": true,
+      "context": "Public menu: a form no longer needed"
+    },
+    "wa.public.menu": {
+      "text": "What would you like to do? Reply with a number:\n{list}\n\nSend *cancel* at any time.",
+      "reviewed": true,
+      "context": "Public menu: the numbered list"
+    },
+    "wa.public.not_here": {
+      "text": "{label} is not available on WhatsApp.",
+      "reviewed": true,
+      "context": "Public menu: item cannot be done on WhatsApp"
+    },
+    "wa.public.started": {
+      "text": "Done: {label} has started. Your reference is {reference}.",
+      "reviewed": true,
+      "context": "Public menu: started"
+    },
+    "wa.public.too_many": {
+      "text": "Too many requests just now. Try again later.",
+      "reviewed": true,
+      "context": "Public menu: rate limit"
+    },
+    "wa.public.unavailable": {
+      "text": "{label} is not available right now.",
+      "reviewed": true,
+      "context": "Public menu: item not deployed"
+    },
+    "wa.run.bad_inputs": {
+      "text": "The inputs do not fit {workflow}: {problems}. Send *run* again.",
+      "reviewed": true,
+      "context": "Inputs failed the schema at the start; {problems} in English"
+    },
+    "wa.run.changed": {
+      "text": "{workflow} changed while you were confirming. Send *run* again.",
+      "reviewed": true,
+      "context": "The workflow changed while confirming"
+    },
+    "wa.run.confirm": {
+      "text": "Start {workflow} (version {version}) in {env}?\n\nReply *yes* to start it or *cancel*.",
+      "reviewed": true,
+      "context": "The summary before a run without inputs"
+    },
+    "wa.run.confirm_inputs": {
+      "text": "Start {workflow} (version {version}) in {env} with:\n{inputs}\n\nReply *yes* to start it or *cancel*.",
+      "reviewed": true,
+      "context": "The summary before a run with inputs (masked)"
+    },
+    "wa.run.denied": {
+      "text": "You cannot start runs in {org} (it takes run.start).",
+      "reviewed": true,
+      "context": "run without run.start"
+    },
+    "wa.run.denied_now": {
+      "text": "You cannot start runs in {org} any more.",
+      "reviewed": true,
+      "context": "run.start lost while confirming"
+    },
+    "wa.run.does_not_fit": {
+      "text": "That does not fit: {reason}.\n\n{prompt}",
+      "reviewed": true,
+      "context": "An answer does not fit the field; {reason} is in English"
+    },
+    "wa.run.form_closed": {
+      "text": "The form is closed; answer here instead. Send *cancel* to stop.\n\n{prompt}",
+      "reviewed": true,
+      "context": "Writing instead of using the form"
+    },
+    "wa.run.limit": {
+      "text": "Not started: {reason}",
+      "reviewed": true,
+      "context": "A plan limit refused the run; {reason} in English"
+    },
+    "wa.run.needs_inputs": {
+      "text": "{workflow} needs {count} input(s). Send *cancel* to stop.\n\n{prompt}",
+      "reviewed": true,
+      "context": "run: inputs asked one by one; {prompt} is the first field's question (English)"
+    },
+    "wa.run.no_match": {
+      "text": "No workflow deployed in {env} matches {name}. Send *run* and the workflow's name.",
+      "reviewed": true,
+      "context": "run: no deployed workflow matches; {name} is quoted"
+    },
+    "wa.run.started": {
+      "text": "Started {workflow}. I will tell you when it finishes.",
+      "reviewed": true,
+      "context": "The run started"
+    },
+    "wa.run.too_many": {
+      "text": "You have started several runs just now. Wait a minute, then try again.",
+      "reviewed": true,
+      "context": "Rate limit on run starts"
+    },
+    "wa.run.unsupported_inputs": {
+      "text": "{workflow} needs inputs that cannot be entered here yet. Start it in Taskiem.",
+      "reviewed": true,
+      "context": "run: inputs that chat cannot collect"
+    },
+    "wa.run.which": {
+      "text": "Which one?\n{list}\nSend *run* and the full name.",
+      "reviewed": true,
+      "context": "run: several workflows match"
+    },
+    "wa.status.denied": {
+      "text": "You cannot see runs in {org} (it takes run.read).",
+      "reviewed": true,
+      "context": "status without run.read"
+    },
+    "wa.status.failed_head": {
+      "text": "What failed:",
+      "reviewed": true,
+      "context": "status: list of failures"
+    },
+    "wa.status.failed_line": {
+      "text": "• {workflow} ({env}) {what} at {time} UTC",
+      "reviewed": true,
+      "context": "status: one failure; {what} is run.status.failed or run.status.needs_reconciliation"
+    },
+    "wa.status.none": {
+      "text": "No runs in the last 24 hours.",
+      "reviewed": true,
+      "context": "status: no runs"
+    },
+    "wa.status.nothing_failed": {
+      "text": "Nothing failed.",
+      "reviewed": true,
+      "context": "status: no failures"
+    },
+    "wa.status.summary": {
+      "text": "Last 24 hours: {count} runs ({parts}).",
+      "reviewed": true,
+      "context": "status: count of runs (several), then counts by status"
+    },
+    "wa.status.summary_one": {
+      "text": "Last 24 hours: {count} run ({parts}).",
+      "reviewed": true,
+      "context": "status: one run"
+    },
+    "wa.status.waiting": {
+      "text": "{count} approval(s) waiting for you: send *approvals*.",
+      "reviewed": true,
+      "context": "status: approvals waiting"
+    },
+    "wa.stepup_waiting": {
+      "text": "Your decision on {step} is waiting for you to confirm it in Taskiem with the link sent to you. Send *cancel* to drop it.",
+      "reviewed": true,
+      "context": "A decision waits for step-up in the web app"
+    },
+    "wa.switch.current": {
+      "text": "You are working in {org}. Your organisations:\n{list}\nSend *switch* and a name to change.",
+      "reviewed": true,
+      "context": "switch without a name"
+    },
+    "wa.switch.done": {
+      "text": "You are now working in {org}.",
+      "reviewed": true,
+      "context": "switch done"
+    },
+    "wa.switch.which": {
+      "text": "Which organisation? Yours are:\n{list}",
+      "reviewed": true,
+      "context": "switch matched none or several"
+    },
+    "wa.too_fast": {
+      "text": "You are sending messages too quickly. Wait a minute, then try again.",
+      "reviewed": true,
+      "context": "Rate limit on a number's messages"
+    },
+    "wa.unbound": {
+      "text": "This number is not linked to a Taskiem account. To use Taskiem here, sign in, open {where}, add this number under WhatsApp, then type or send back the code we send you.",
+      "reviewed": true,
+      "context": "A number linked to no one wrote"
+    }
+  }
+}

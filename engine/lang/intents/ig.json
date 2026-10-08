@@ -1,0 +1,21 @@
+{
+  "language": "ig",
+  "reviewed": false,
+  "status": "DRAFT, NOT REVIEWED. Written without a native speaker; do not treat as accurate until reviewed (docs/languages.md).",
+  "phrases": {
+    "help": ["enyemaka", "nyere m aka", "gịnị ka m nwere ike ime", "kedu", "ndewo"],
+    "status": ["gịnị dara taa", "gịnị dara", "kedu ka ihe si aga", "ọnọdụ"],
+    "approvals": ["nkwado", "gịnị na-eche m"],
+    "cancel": ["kagbuo", "kwụsị", "hapụ ya"],
+    "yes": ["ee", "ọ dị mma", "mee ya"],
+    "no": ["mba", "emela ya"]
+  },
+  "prefixes": {
+    "switch": ["gbanwee gaa", "gaa na"],
+    "run": ["malite", "mee"],
+    "build": ["wuo", "mepụta"],
+    "language": ["asụsụ", "gbanwee asụsụ gaa"]
+  },
+  "fillers": ["biko"],
+  "markers": ["biko", "kedu", "ndewo", "ego", "ziga", "enyemaka", "taa", "gịnị", "achọrọ m", "m chọrọ", "nke", "ndị", "kagbuo", "mba", "daalụ", "ụbọchị", "ndị ahịa"]
+}

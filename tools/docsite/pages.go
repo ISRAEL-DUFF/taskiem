@@ -26,7 +26,7 @@ var nav = []section{
 	{"Get started", []string{"onboarding", "templates", "dashboard", "environments", "cli"}},
 	{"Build workflows", []string{"sdk", "code-steps", "container-steps", "ai", "alerts"}},
 	{"Connectors", []string{"connector-sdk", "connector-submissions", "integrations/*"}},
-	{"Channels", []string{"whatsapp", "ussd"}},
+	{"Channels", []string{"whatsapp", "ussd", "languages"}},
 	{"Govern and secure", []string{"governance", "privacy", "compliance", "byok", "git"}},
 	{"Embed Taskiem", []string{"embedding"}},
 	{"Plans and billing", []string{"billing"}},

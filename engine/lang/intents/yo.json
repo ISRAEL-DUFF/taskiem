@@ -1,0 +1,21 @@
+{
+  "language": "yo",
+  "reviewed": false,
+  "status": "DRAFT, NOT REVIEWED. Written without a native speaker; do not treat as accurate until reviewed (docs/languages.md).",
+  "phrases": {
+    "help": ["ìrànlọ́wọ́", "ẹ ràn mí lọ́wọ́", "kí ni mo lè ṣe", "báwo", "ẹ kú àárọ̀", "ẹ kú ọ̀sán", "ẹ kú alẹ́"],
+    "status": ["kí ló kùnà lónìí", "kí ló kùnà", "báwo ni nǹkan ṣe ń lọ", "ipò"],
+    "approvals": ["àwọn ìfọwọ́sí", "kí ló ń dúró dè mí"],
+    "cancel": ["fagilé", "fagilé e", "dúró", "ẹ dúró"],
+    "yes": ["bẹ́ẹ̀ni", "bẹ́ẹ̀ ni", "ó dáa", "ṣe é"],
+    "no": ["rárá", "bẹ́ẹ̀kọ́", "má ṣe é"]
+  },
+  "prefixes": {
+    "switch": ["yí padà sí", "lọ sí"],
+    "run": ["bẹ̀rẹ̀", "ṣe iṣẹ́"],
+    "build": ["kọ́", "ṣẹ̀dá"],
+    "language": ["èdè", "yí èdè padà sí"]
+  },
+  "fillers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "ẹ jọ̀ọ́"],
+  "markers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "mo fẹ́", "kí ni", "báwo", "owó", "ọjọ́", "lónìí", "ṣé", "àwọn", "fún", "ẹ kú", "ìrànlọ́wọ́", "kùnà", "fagilé", "bẹ́ẹ̀ni", "rárá", "ẹ ṣé", "oníbàárà"]
+}

@@ -89,6 +89,9 @@ type config struct {
 	WhatsApp *whatsapp.Config
 	// AI is the model provider for AI building (TASKIEM_AI_*, docs/ai.md).
 	AI ai.Config
+	// Languages are languages beyond English and voice notes on WhatsApp,
+	// USSD and SMS (TASKIEM_LANGUAGES, TASKIEM_TRANSCRIBE_*; languages.go).
+	Languages LanguagesConfig
 	// Billing turns plans, subscriptions and payments on (TASKIEM_BILLING=on,
 	// docs/billing.md); off, every tenant is on the internal plan.
 	Billing BillingConfig
@@ -357,6 +360,9 @@ func loadConfig() (config, error) {
 		return c, err
 	}
 	if c.Status, err = statusConfig(); err != nil {
+		return c, err
+	}
+	if c.Languages, err = languagesConfig(); err != nil {
 		return c, err
 	}
 	if c.Canary, err = canaryConfig(); err != nil {
@@ -666,6 +672,9 @@ func serve(ctx context.Context, args []string) error {
 			srv.EmbedDir = cfg.WebDir + "/embed/v1"
 		}
 		srv.WhatsApp = e.wa
+		if srv.Languages, srv.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
+			return err
+		}
 		srv.Billing = bill
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD)
 	}
@@ -673,6 +682,9 @@ func serve(ctx context.Context, args []string) error {
 		mux := http.NewServeMux()
 		mux.Handle("/hooks/", http.StripPrefix("/hooks", e.hooks()))
 		git := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL, TrustProxy: cfg.TrustProxy}
+		if git.Languages, git.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
+			return err
+		}
 		mux.Handle("/git-hooks/", http.StripPrefix("/git-hooks", git.GitHooks()))
 		if e.wa != nil {
 			// The platform number's webhook (docs/whatsapp.md), apart from

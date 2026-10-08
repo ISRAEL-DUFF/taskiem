@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -248,8 +249,8 @@ func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, f
 	if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 		return false, err
 	}
-	_, err = c.wa.Client.SendFlow(ctx, c.number, whatsapp.FlowMessage{Flow: whatsapp.FlowInputs, Token: tok, CTA: "Fill in", Screen: whatsapp.ScreenInputs, Data: form,
-		Body: c.wa.Prefix(c.tenant.Name) + fmt.Sprintf("%s needs %d input(s). Tap *Fill in* to enter them; you confirm before it starts. Send *cancel* to stop.", data.Name, len(fields))})
+	_, err = c.wa.Client.SendFlow(ctx, c.number, whatsapp.FlowMessage{Flow: whatsapp.FlowInputs, Token: tok, CTA: c.t("button.fill_in"), Screen: whatsapp.ScreenInputs, Data: form,
+		Body: c.wa.Prefix(c.tenant.Name) + c.t("wa.form.inputs", "workflow", data.Name, "count", strconv.Itoa(len(fields)), "cta", c.t("button.fill_in"))})
 	if err != nil {
 		// Not delivered (an old app, the window, Meta): ask in chat.
 		s.Logger.Warn("whatsapp: sending an inputs form", "err", err)
@@ -332,7 +333,7 @@ func (s *Server) waFlowInputs(ctx context.Context, row flowRow, req whatsapp.Flo
 // waFlowCompleted handles a completed Flow arriving in the chat of a bound
 // person: the inputs' confirmation, or the PIN decision's outcome.
 func (s *Server) waFlowCompleted(ctx context.Context, c *chat) error {
-	invalid := func() error { return c.say(ctx, s, "That form is not valid any more.") }
+	invalid := func() error { return c.say(ctx, s, c.t("wa.form.invalid")) }
 	tenant, hash, err := whatsapp.ParseFlowToken(c.in.FlowToken())
 	if err != nil {
 		return invalid()
@@ -367,10 +368,10 @@ func (s *Server) waFlowCompleted(ctx context.Context, c *chat) error {
 		if out, _ := row.data["outcome"].(string); out != "" && (row.status == "done" || row.status == "refused") {
 			return say(out)
 		}
-		return say("The decision was not confirmed. Tap the button again, or decide in Taskiem.")
+		return say(c.t("wa.form.not_confirmed"))
 	case "inputs":
 		if tenant != c.tenant.ID || c.state != stateCollecting || c.data.Flow != hex.EncodeToString(hash) || row.status != "submitted" {
-			return c.say(ctx, s, "That form is no longer needed. Send *run* and a workflow's name to start again.")
+			return c.say(ctx, s, c.t("wa.form.gone"))
 		}
 		data := c.data
 		data.Inputs, _ = row.data["inputs"].(map[string]any)
@@ -423,9 +424,9 @@ func (s *Server) waSendPinFlow(ctx context.Context, c *chat, tenant tenantRef, p
 			return false, err
 		}
 	}
-	_, err = c.wa.Client.SendFlow(ctx, c.number, whatsapp.FlowMessage{Flow: whatsapp.FlowPin, Token: tok, CTA: "Enter PIN", Screen: whatsapp.ScreenPin,
+	_, err = c.wa.Client.SendFlow(ctx, c.number, whatsapp.FlowMessage{Flow: whatsapp.FlowPin, Token: tok, CTA: c.t("button.enter_pin"), Screen: whatsapp.ScreenPin,
 		Data: whatsapp.PinForm(verb+" "+cl.Step, whatsapp.SafeText(wf)+" · "+env, ""),
-		Body: c.wa.Prefix(tenant.Name) + "To " + strings.ToLower(verb) + " " + cl.Step + ", enter your WhatsApp PIN within 10 minutes."})
+		Body: c.wa.Prefix(tenant.Name) + c.t("wa.form.pin_"+strings.ToLower(verb), "step", cl.Step)})
 	if err != nil {
 		s.Logger.Warn("whatsapp: sending a PIN form", "err", err)
 		s.waDropFlow(ctx, tenant.ID, hex.EncodeToString(hash))
