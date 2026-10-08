@@ -56,6 +56,8 @@ The rule (spec 12, gate G3): **the AI can never publish, approve, read secrets, 
 | `TASKIEM_AI_FALLBACKS` | on | `off` stops sending server-side refusal fallbacks |
 | `TASKIEM_DEFAULT_AI_MONTHLY_TOKENS` | 2,000,000 | Platform default budget ([plan limits](operations.md#plan-limits)) |
 
+Set these on the `api` and `edge` roles alike. The `edge` role answers WhatsApp, so `build` there uses the same model, effort, answer size and tenant budgets as the web app.
+
 ### Claude
 
 The Anthropic provider (`engine/ai/anthropic.go`) uses the official Go SDK (`github.com/anthropics/anthropic-sdk-go`, MIT) on the Messages API's beta surface, because server-side fallbacks are a beta parameter:

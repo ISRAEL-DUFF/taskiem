@@ -526,6 +526,32 @@ func (e *engine) remote() *remote.Reconciler {
 		HooksURL: e.cfg.HooksURL, Logger: e.log}
 }
 
+// aiSettings is AI building's model and limits (TASKIEM_AI_*), or nil when
+// no model is configured. Tenants' monthly AI budgets apply wherever it is
+// used (docs/ai.md).
+func aiSettings(c ai.Config) (*api.AISettings, error) {
+	prov, err := ai.New(c)
+	if err != nil || prov == nil {
+		return nil, err
+	}
+	return &api.AISettings{Provider: prov, Effort: c.Effort, MaxTokens: c.MaxTokens}, nil
+}
+
+// edgeServer is the edge role's server: git pushes, and WhatsApp and USSD
+// callbacks. Building over WhatsApp uses the same model, effort, answer
+// size and budgets as the api role.
+func edgeServer(e *engine, cfg config, log *slog.Logger) (*api.Server, error) {
+	srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL, TrustProxy: cfg.TrustProxy}
+	var err error
+	if srv.AI, err = aiSettings(cfg.AI); err != nil {
+		return nil, err
+	}
+	if srv.Languages, srv.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
+		return nil, err
+	}
+	return srv, nil
+}
+
 // serve runs one role, or all of them in one process, until ctx ends.
 func serve(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
@@ -642,11 +668,10 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.SignupPerAddress, srv.SignupBlockedDomains, srv.DocsURL = cfg.SignupPerAddress, cfg.SignupBlockedDomains, cfg.DocsURL
-		if prov, err := ai.New(cfg.AI); err != nil {
+		if srv.AI, err = aiSettings(cfg.AI); err != nil {
 			return err
-		} else if prov != nil {
-			srv.AI = &api.AISettings{Provider: prov, Effort: cfg.AI.Effort, MaxTokens: cfg.AI.MaxTokens}
-			log.Info("AI building on", "provider", prov.Name(), "model", prov.Model())
+		} else if srv.AI != nil {
+			log.Info("AI building on", "provider", srv.AI.Provider.Name(), "model", srv.AI.Provider.Model())
 			// Self-repair works its queue where a model is configured (docs/ai.md).
 			tasks = append(tasks, func(ctx context.Context) error { srv.RunRepairs(ctx, 5*time.Second); return nil })
 		}
@@ -681,8 +706,8 @@ func serve(ctx context.Context, args []string) error {
 	if *role == "edge" {
 		mux := http.NewServeMux()
 		mux.Handle("/hooks/", http.StripPrefix("/hooks", e.hooks()))
-		git := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL, TrustProxy: cfg.TrustProxy}
-		if git.Languages, git.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
+		git, err := edgeServer(e, cfg, log)
+		if err != nil {
 			return err
 		}
 		mux.Handle("/git-hooks/", http.StripPrefix("/git-hooks", git.GitHooks()))
