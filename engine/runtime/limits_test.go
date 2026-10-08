@@ -231,6 +231,43 @@ func TestQuotaRefusesAndAlerts(t *testing.T) {
 	startIn(t, e, e.Tenant, wf, false, "")
 }
 
+// Starts are counted in shards of the day's usage (migration 00155):
+// concurrent starts are all counted, the limits page and the quota see
+// their sum, and the quota still refuses at the limit.
+func TestUsageShardsCountEveryStart(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(waitHour, ""))
+	const n = 40
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			_, err := e.Store.Start(ctx, runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: 1, Environment: "prod", Trigger: map[string]any{}, Env: map[string]any{}})
+			errs <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	var rows, total int
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*), sum(runs_started) FROM tenant_usage WHERE tenant_id = $1`, e.Tenant).Scan(&rows, &total); err != nil {
+		t.Fatal(err)
+	}
+	if total != n || rows < 2 {
+		t.Fatalf("%d starts counted in %d rows", total, rows)
+	}
+	v, err := e.Store.ViewLimits(ctx, e.Tenant)
+	if err != nil || v.Usage.RunsToday != n {
+		t.Fatalf("limits page: %v %+v", err, v.Usage)
+	}
+	setLimits(t, e, e.Tenant, map[string]any{"runs_per_day": n + 1})
+	startIn(t, e, e.Tenant, wf, false, "")
+	if _, err := e.Store.Start(ctx, runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: 1, Environment: "prod", Trigger: map[string]any{}, Env: map[string]any{}}); err == nil {
+		t.Fatal("a start beyond the quota was accepted")
+	}
+}
+
 // Runs beyond max_running_runs wait and start as running ones end.
 func TestMaxRunningRunsQueues(t *testing.T) {
 	e := rt.New(t)

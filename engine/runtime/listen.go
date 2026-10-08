@@ -12,8 +12,10 @@ import (
 // notification. One listener per process (decision 0002 amendment). When
 // the connection drops (a database restart or failover), it reconnects
 // with backoff and signals wake once, since notifications sent meanwhile
-// were lost; callers also poll, so nothing waits on it alone.
-func listen(ctx context.Context, s *Store, channel string) (<-chan struct{}, func(), error) {
+// were lost; callers also poll, so nothing waits on it alone. When want is
+// set, a notification wakes the caller only if want accepts its payload
+// (a worker skips tasks for other queues instead of claiming for nothing).
+func listen(ctx context.Context, s *Store, channel string, want func(payload string) bool) (<-chan struct{}, func(), error) {
 	conn, err := subscribe(ctx, s.Pool, channel)
 	if err != nil {
 		return nil, nil, err
@@ -38,9 +40,11 @@ func listen(ctx context.Context, s *Store, channel string) (<-chan struct{}, fun
 			c := current
 			mu.Unlock()
 			if c != nil {
-				if _, err := c.Conn().WaitForNotification(lctx); err == nil {
+				if n, err := c.Conn().WaitForNotification(lctx); err == nil {
 					backoff = 100 * time.Millisecond
-					notify()
+					if want == nil || want(n.Payload) {
+						notify()
+					}
 					continue
 				}
 				if lctx.Err() != nil {

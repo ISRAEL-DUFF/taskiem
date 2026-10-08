@@ -7,6 +7,15 @@
 // worker starts executing it).
 //
 //	go run ./tools/loadtest -rate 500 -duration 60s
+//
+// With -mode cluster it instead runs the built binary's roles as separate
+// processes (api, edge, orchestrator, scheduler, workers), sends webhooks
+// at a series of rates through the edge, and reads the SLIs of engine/slo
+// from the processes' own /metrics; -mode chaos runs failure scenarios
+// against the same set-up. See docs/performance.md.
+//
+//	go build -o /tmp/taskiem ./cmd/taskiem
+//	go run ./tools/loadtest -mode cluster -bin /tmp/taskiem -rates 10,20,40 -stage 60s
 package main
 
 import (
@@ -67,7 +76,7 @@ func (s *started) mark(run, step string) {
 
 func main() {
 	dsn := flag.String("dsn", os.Getenv("TASKIEM_TEST_DATABASE_URL"), "superuser DSN; a fresh database is created next to it")
-	mode := flag.String("mode", "latency", "latency (open-loop arrivals at -rate) or throughput (all -runs at once)")
+	mode := flag.String("mode", "latency", "latency (open-loop arrivals at -rate), throughput (all -runs at once), cluster (the binary's roles in separate processes, rate stages) or chaos (failure scenarios against the same)")
 	rate := flag.Float64("rate", 500, "latency mode: offered steps/s")
 	duration := flag.Duration("duration", 30*time.Second, "latency mode: how long to offer load")
 	runs := flag.Int("runs", 4000, "throughput mode: runs")
@@ -77,6 +86,7 @@ func main() {
 	concurrency := flag.Int("concurrency", 16, "executors per worker process")
 	conns := flag.Int("conns", 64, "pool size")
 	keep := flag.Bool("keep", false, "keep the database afterwards")
+	co := clusterFlags()
 	flag.Parse()
 	if *dsn == "" {
 		log.Fatal("-dsn or TASKIEM_TEST_DATABASE_URL required")
@@ -84,6 +94,10 @@ func main() {
 	ctx := context.Background()
 	dbDSN, drop := freshDB(ctx, *dsn, *keep)
 	defer drop()
+	if *mode == "cluster" || *mode == "chaos" {
+		runCluster(ctx, *mode, dbDSN, *tenants, co)
+		return
+	}
 	app := pool(ctx, dbDSN, "taskiem_app", *conns)
 	admin := pool(ctx, dbDSN, "", 4)
 

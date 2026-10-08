@@ -69,7 +69,7 @@ func (s *Service) SnapshotTenant(ctx context.Context, tenant uuid.UUID, day time
 	return s.tx(ctx, tenant, func(tx pgx.Tx) error {
 		var sn Snapshot
 		err := tx.QueryRow(ctx, `SELECT
-			COALESCE((SELECT runs_started FROM tenant_usage WHERE tenant_id = $1 AND day = $2::date), 0),
+			COALESCE((SELECT sum(runs_started) FROM tenant_usage WHERE tenant_id = $1 AND day = $2::date), 0)::bigint,
 			(SELECT count(*) FROM run_events e JOIN runs r ON r.id = e.run_id AND r.tenant_id = e.tenant_id
 			  WHERE r.tenant_id = $1 AND r.started_at < $3 AND (r.ended_at IS NULL OR r.ended_at >= $2)
 			    AND e.type = 'StepScheduled' AND e.recorded_at >= $2 AND e.recorded_at < $3),

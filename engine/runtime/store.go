@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"math/rand/v2"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -253,11 +254,17 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 	return out, err
 }
 
+// usageShards is how many rows a tenant's daily run count is spread over
+// (migration 00155), so concurrent starts rarely wait on each other's row.
+const usageShards = 16
+
 // countStart counts an accepted run toward the tenant's quotas. It is the
-// transaction's last write, so the usage row stays locked only briefly.
+// transaction's last write, but its row stays locked until the commit (the
+// WAL flush included), so starts add to a random shard of the day's count
+// rather than queueing on one row. Readers sum the shards.
 func countStart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
-	_, err := tx.Exec(ctx, `INSERT INTO tenant_usage (tenant_id, day, runs_started) VALUES ($1, (now() AT TIME ZONE 'UTC')::date, 1)
-		ON CONFLICT (tenant_id, day) DO UPDATE SET runs_started = tenant_usage.runs_started + 1`, tenant)
+	_, err := tx.Exec(ctx, `INSERT INTO tenant_usage (tenant_id, day, shard, runs_started) VALUES ($1, (now() AT TIME ZONE 'UTC')::date, $2, 1)
+		ON CONFLICT (tenant_id, day, shard) DO UPDATE SET runs_started = tenant_usage.runs_started + 1`, tenant, rand.IntN(usageShards)) //nolint:gosec // spreading writes, not a secret
 	return err
 }
 
