@@ -92,7 +92,7 @@ An installed version is used exactly: new runs use the pinned version, never a n
 
 ## For reviewers
 
-Reviewers are Taskiem operators on the reviewer list, working from the operator CLI (database access, as for `taskiem billing` and `taskiem tenants`). Every decision is audited in the publisher's chain.
+Reviewers are Taskiem operators on the reviewer list, working from the [operator console](operator-console.md) (signed in with a passkey, which it asks for again for each decision; the reviewer is who signed in) or from the operator CLI (database access, as for `taskiem billing` and `taskiem tenants`). Every decision is audited in the publisher's chain, and console decisions in the platform audit chain too.
 
 ```sh
 taskiem catalogue reviewers add reviewer@taskiem.example
@@ -106,7 +106,7 @@ taskiem catalogue revoke p_acme_ledger 1.0.0 --as reviewer@taskiem.example --rea
 taskiem catalogue publishers suspend acme --note "..."    # every version stops loading
 ```
 
-**Four eyes.** The reviewer must be on the list, and must not be the submitter or a member of the publisher's organisation; the database refuses otherwise. Only a review moves a submission to approved or rejected (no API, and not the publisher's own database role, can).
+**Four eyes.** The reviewer must be on the list, and must not be the submitter or a member of the publisher's organisation; the database refuses otherwise. It also refuses an approval without every checklist item confirmed. Only a review moves a submission to approved or rejected (no API, and not the publisher's own database role, can).
 
 ### Review checklist
 

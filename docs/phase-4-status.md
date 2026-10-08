@@ -20,6 +20,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Trust | P4-8 | Bug bounty, security page, ISO 27001 and SOC 2 Type II preparation | 14.4 | Needs people |
 | Security | Self-review | The self-review's open findings before the pen test: step-up for key changes (K5); step-up bound to its operation, no session token in a browser sign-in's body, HSTS (S35); tenant code in the API process bounded and caches bounded (S34); personal data masked in error text (S22); embed preflights paced | 14.4 | **Done** (code; [what exists](#security-self-review-round)) |
 | Security | Residuals | K6 closed (first-context secrets pinned to where they were recorded); compiled tenant WebAssembly modules evicted safely; the tenant-code share across API replicas; the explicit egress proxy (decision 0028); a load-flaky sandbox test | 14.2, 14.4 | **Done** (code; [what exists](#security-residuals-and-the-egress-proxy)) |
+| Operations | Operator console | A platform-level operator identity (CLI-made accounts, passkey enrolment and sign-in, optional OIDC SSO from one issuer, own short sessions on `/v1/ops`, a bound passkey step-up for every write), a platform audit chain, and a web console at `/ops`: catalogue review queue with the checklist, publishers, reviewers, status incidents and maintenance, read-only tenants | 13.2, 9.2 | **Done** (code; [what exists](#operator-console)); who gets accounts and the SSO issuer need P4-X1, P4-X2 |
 | Legal | P4-9 | Counsel IP review, trademark registration, terms of service, DPA under the NDPA | — | Needs people |
 
 ## P4-1: billing
@@ -115,7 +116,7 @@ What is left in reliability:
 - **Load balancer SLIs.** The pods cannot count requests that never reach them; add the cloud load balancer's request metrics to the G4 figures once P4-3 picks the cloud.
 - **Dispatch delay and tenant caps.** Time a task waits because its tenant is at its `worker_concurrency` cap counts as dispatch delay; separating it needs the claim to report why a task waited.
 - **Per-integration health** on the status page is declared by operators; deriving it from connector error rates is not built. Email subscriptions to the status page are not built (the Atom feed exists).
-- **Operator SSO** for the status admin API (tokens today), and an operator console.
+- **Operator SSO** for the status admin API: tokens stay for automation; people use the [operator console](#operator-console).
 
 ## P4-5: enterprise
 
@@ -178,6 +179,25 @@ Done 8 October 2026. [Self-review addendum](security/self-review.md#addendum-202
 
 What is left: a proxy that filters by host name cannot be used (it sees only IPs); the chart has no dedicated values for the proxy (set it through `config` and the Secret); `MaxCompiled` has no environment setting; waiting on a lease polls every 100 ms ([addendum](security/self-review.md#addendum-2026-10-08-legacy-contexts-egress-proxy-and-tenant-code)).
 
+## Operator console
+
+Done 8 October 2026. Guide: [operator console](operator-console.md); design: [decision 0027](decisions/0027-operator-console.md); threats: boundary B19 in the [threat model](security/threat-model.md).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Operator identity | `operators`, `operator_credentials`, `operator_enrolments`, `operator_challenges`, `operator_sessions`, `operator_sso_requests` (migration 00135), forced RLS with no direct access for the app role, reached through `taskiem_ops_*` definer functions owned by `taskiem_dispatch` | `engine/db/migrations/00135_operators.sql`, `engine/ops` |
+| Accounts (CLI only) | `taskiem operators [add\|enrol\|reset\|disable EMAIL]`: one-time enrolment links (hashed, 24 h by default, at most 7 days, token in the URL fragment); disable ends sessions and links at once; every change in the platform chain | `cmd/taskiem/operatorscmd.go` |
+| Sign-in | Passkeys (`engine/webauthn`, challenges and credentials apart from tenants'); optional OIDC from one issuer (`TASKIEM_OPS_OIDC_*`): existing operators only, verified email, subject pinned at the first sign-in, state, nonce, PKCE and a browser-binding cookie | `api/ops.go` |
+| Sessions | `tsk_ops_` tokens, hashed; `HttpOnly`, `SameSite=Strict` cookie on path `/v1/ops`; one hour by default (`TASKIEM_OPS_SESSION_TTL`, at most 8 h, held by a `CHECK`); CSRF header on writes; refused with any `Authorization` header; tenant routes ignore them | `api/ops.go`, `api/auth.go` |
+| Step-up | Every write carries a passkey assertion for a challenge bound to its operation and target (`ops.catalogue.review <id>/approve`, `ops.status.update <id>/<status>`, ...) | `api/ops.go` |
+| Console API | `/v1/ops`: review queue, a submission with its checks, lint, summary, history and checklist, review (the signed-in operator is the reviewer), revoke, publishers (verify, suspend, reinstate), reviewers (read-only), status incidents (open, update, resolve), tenants (read-only list and detail: plan, subscription state, limits, usage, pool), the platform chain (list, verify, export); out of the public OpenAPI document (`notInSpec`) | `api/ops_console.go` |
+| Checklist in the database | `taskiem_catalogue_review` refuses an approval without all eight checklist items, for the CLI too (migration 00136) | `engine/db/migrations/00136_operator_console.sql` |
+| Platform audit chain | The existing hash chain under the reserved id `ffffffff-ffff-ffff-ffff-ffffffffffff` (no tenant can take it), anchored, exported and verified like a tenant's; catalogue decisions also in the publisher's chain | `engine/ops`, migration 00135 |
+| Web | `/ops`: its own app and layout on the same design tokens; enrolment, passkey or SSO sign-in, review queue and submission page with the checklist, publishers, reviewers, status page, tenants, platform audit | `web/src/ops`, `web/src/lib/ops.ts` |
+| Tests | `TestOperatorSessionsAreSeparate` (enrolment once; operator sessions refused on tenant routes and tenant sessions, keys and passkeys on operator routes; challenges not shared; CSRF; disable), `TestOperatorConsoleWork` (four eyes and the checklist in the database, step-up bound to decision and operator, publishers, status, tenants, the platform chain verified and exported), `TestOperatorSSO`, `TestOperatorConsoleOff`, `TestOperatorsCLI`; the browser test `ops.spec.ts` enrols with a virtual authenticator and approves a submission | `api/ops_test.go`, `cmd/taskiem/operatorscmd_test.go`, `web/e2e/ops.spec.ts` |
+
+What is left: who gets accounts and the SSO issuer (P4-X1, P4-X2); the console does not change limits, plans, pools, the reviewer list or operator accounts (the CLI does); the CLI's catalogue and status commands still record where they did (the publisher's chain, the status tables), not in the platform chain; status tokens stay for automation; a network allow-list for `/ops` is left to the load balancer.
+
 ## P4-6: connector SDK and catalogue
 
 Done 7 October 2026. Developer guide: [connector SDK](connector-sdk.md); publisher, installer and reviewer guide with the review checklist: [connector submissions](connector-submissions.md); design: [decision 0020](decisions/0020-connector-catalogue.md); threats: boundary B18 in the [threat model](security/threat-model.md).
@@ -199,7 +219,7 @@ Done 7 October 2026. Developer guide: [connector SDK](connector-sdk.md); publish
 What is left in the ecosystem:
 
 - **People** (needs people P4-E1 to P4-E3): the publisher agreement and terms (liability, support, takedown, licensing of proprietary connectors), who reviews and how publishers are verified, and the review service level.
-- **An operator console**: reviews run from the CLI with database access and a reviewer identity asserted with `--as` (checked against the list and the publisher's members). A web console would need operator sign-in (SSO).
+- ~~An operator console~~: done ([operator console](#operator-console)); reviewers sign in as themselves instead of `--as`.
 - **A publisher web page**: publishers use the API and CLI; the web app has the installer's side.
 - **Hardening**: running submission checks in a separate worker rather than the API process; re-checking published versions when the lint tightens; Taskiem countersignatures for packages distributed outside the platform.
 - Paid connectors, ratings and usage statistics for publishers.

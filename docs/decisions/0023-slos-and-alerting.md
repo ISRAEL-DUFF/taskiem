@@ -31,3 +31,7 @@ Gate G4 needs 99.9% availability for 60 days before general availability, and sp
 - The status page shares the API's fate unless fronted by a CDN or mirrored by a hosted provider; documented.
 - Webhook 503s caused by a tenant revoking its own key (BYOK) burn the ingest budget. Rare, visible in logs, accepted for now.
 - `TASKIEM_SHUTDOWN_DELAY` defaults to 0 outside Kubernetes so local stops stay instant; the chart sets 10 s.
+
+## Amendment 2026-10-08
+
+Operators now have sign-in: the operator console ([decision 0027](0027-operator-console.md)) declares and updates incidents with a passkey step-up for each. The admin API's hashed tokens stay, for automation only.

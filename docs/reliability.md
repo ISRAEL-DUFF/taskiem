@@ -209,7 +209,7 @@ Every `api` pod serves a public status page. It needs no sign-in and shows no te
 
 **Caching.** Each pod computes the page at most every 15 seconds, and answers carry `Cache-Control: public, max-age=30, stale-while-revalidate=30, stale-if-error=86400` and an ETag, so a CDN in front can serve it during a flood and keep serving the last copy if Taskiem is down. If the database cannot be read, a pod serves the last page it has, marked stale.
 
-**Declaring.** Operators use the CLI (with database access) or the admin API. Both record who posted each update in append-only tables (migration 00123: no update or delete, even by the superuser); `taskiem status list` and `GET /v1/status/admin/incidents` show them. The public page never does.
+**Declaring.** Operators use the CLI (with database access), the [operator console](operator-console.md) (signed in with a passkey, which it asks for again for every declaration and update), or the admin API, which stays for automation. Both record who posted each update in append-only tables (migration 00123: no update or delete, even by the superuser); `taskiem status list` and `GET /v1/status/admin/incidents` show them. The public page never does.
 
 | CLI | Admin API |
 | --- | --- |

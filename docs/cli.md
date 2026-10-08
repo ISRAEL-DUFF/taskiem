@@ -26,7 +26,7 @@ Deploy publishes to every environment not gated on another; `promote` carries a 
 
 ## Connectors and the catalogue
 
-`taskiem connector init|build|validate|test|check|push` write, test and upload your own WebAssembly connectors; `keygen|package|verify|publisher|submit|submissions|publish|withdraw|revoke` take one through the public catalogue ([connector SDK](connector-sdk.md), [connector submissions](connector-submissions.md)). Operators review submissions, verify publishers and revoke versions with `taskiem catalogue reviewers|publishers|queue|show|review|revoke` (database access; audited). `taskiem connector` and `taskiem catalogue` without arguments print their usage.
+`taskiem connector init|build|validate|test|check|push` write, test and upload your own WebAssembly connectors; `keygen|package|verify|publisher|submit|submissions|publish|withdraw|revoke` take one through the public catalogue ([connector SDK](connector-sdk.md), [connector submissions](connector-submissions.md)). Operators review submissions, verify publishers and revoke versions with `taskiem catalogue reviewers|publishers|queue|show|review|revoke` (database access; audited), or from the [operator console](operator-console.md). `taskiem operators [add|enrol|reset|disable EMAIL]` makes the console's operator accounts and prints one-time passkey enrolment links. `taskiem connector` and `taskiem catalogue` without arguments print their usage.
 
 ## Local development
 

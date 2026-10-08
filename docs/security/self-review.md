@@ -215,3 +215,26 @@ The new code was reviewed against the same four areas before commit. What remain
 - **Evicted modules compile again.** A tenant calling more than 32 distinct connector versions in rotation pays a compile each time one comes back. Raise `MaxCompiled` if that shows up; there is no environment setting for it yet.
 - **The egress proxy sees only IPs.** A proxy that filters by host name cannot work with it; one that allows `CONNECT` only to port 443 blocks providers and databases on other ports. Credentials to an `http://` proxy cross the network in the clear.
 - **TOTP codes are not bound to an operation**, and **S22 masks known values only**, as above.
+
+- **K6** stays open, low, as above.
+
+## Addendum 2026-10-08: the operator console (boundary B19)
+
+The operator console adds an operator identity to the API for the first time ([decision 0027](../decisions/0027-operator-console.md), [operator console](../operator-console.md)). Before this, the self-review and decision 0020 listed the console as missing because operators had no identity outside the CLI. The new code was reviewed against the same four areas before commit:
+
+| Area | What was checked | Test |
+| --- | --- | --- |
+| Separation from tenants | Operator tokens (`tsk_ops_`) refused by the tenant middleware, as bearer or as the tenant cookie; tenant sessions, API keys and tokens refused on `/v1/ops` (any `Authorization` header is refused there, even with an operator cookie); the operator cookie's path keeps browsers from sending it to tenant routes; a tenant's passkey does not sign in an operator and an operator's does not sign in to a tenant; a tenant's sign-in challenge is not accepted on the operator side | `TestOperatorSessionsAreSeparate` |
+| Account creation | No API route creates, lists or changes operators; enrolment links are single-use and refused after disable; disabling ends sessions at once | `TestOperatorSessionsAreSeparate`, `TestOperatorsCLI` |
+| Writes | Every write refused without a passkey step-up, with one asked for another target (another slug, another decision, another status), and with another operator's passkey; an SSO session with no passkey cannot write | `TestOperatorConsoleWork`, `TestOperatorSSO` |
+| Four eyes and the checklist | The reviewer is the signed-in operator; an operator who is a member of the publisher is refused by the database; approving without every checklist item is refused by the database (for the CLI as well) | `TestOperatorConsoleWork`, `TestCatalogueSubmitReviewInstall` |
+| SSO | Only an existing operator by verified email; the subject pinned; a second subject with the same email refused; the browser binding cookie required | `TestOperatorSSO` |
+| Audit | Sign-ins, enrolments, writes and tenant views in the platform chain, which verifies and exports for `taskiem audit verify`; tenants cannot read it | `TestOperatorConsoleWork`, `TestOperatorSessionsAreSeparate` |
+
+What remains, carried to the next round:
+
+- **Enrolment links travel outside the platform.** Whoever opens a link first enrols a passkey on that account. The link is single-use and short-lived, and the enrolment is audited, but its delivery is a process (P4-X1).
+- **The console's reads are not rate limited per operator.** They are a handful of people behind passkeys; tenant views are audited.
+- **The CLI's own catalogue and status commands** still record where they did before (the publisher's chain, the status tables), not in the platform chain; the CLI's operator account changes are in it.
+- **Status tokens** remain long-lived bearer secrets for incidents only, as before (decision 0023).
+

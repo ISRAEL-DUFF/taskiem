@@ -30,7 +30,7 @@ var nav = []section{
 	{"Govern and secure", []string{"governance", "privacy", "compliance", "byok", "git"}},
 	{"Embed Taskiem", []string{"embedding"}},
 	{"Plans and billing", []string{"billing"}},
-	{"Run it yourself", []string{"operations", "kubernetes", "cloud", "reliability"}},
+	{"Run it yourself", []string{"operations", "kubernetes", "cloud", "reliability", "operator-console"}},
 	{"Contracts", []string{"contracts", "contracts/*"}},
 }
 

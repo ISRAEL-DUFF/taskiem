@@ -49,3 +49,7 @@ Phase 4 (P4-6, spec 6) opens connectors to third parties. Until now a tenant cou
 ## Provenance
 
 Package signing over a content digest follows our own audit anchors (spec 9.2). Namespaced publishers, review before publication and revocation are general software-distribution practice from public literature on package registries and supply-chain security; no other product's source was consulted.
+
+## Amendment 2026-10-08
+
+Reviewers can now work from the operator console ([decision 0027](0027-operator-console.md)), signed in as themselves with a passkey and asked for it again for each decision; there the reviewer is the signed-in operator, not an email given with `--as`. `taskiem_catalogue_review` now also refuses an approval unless every checklist item is confirmed (migration 00136), from the CLI as from the console.
