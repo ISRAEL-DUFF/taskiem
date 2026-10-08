@@ -132,4 +132,32 @@ Customers allow Taskiem's addresses on their firewalls and KMS (P4-K4), so outbo
 
 Some platform calls do use Go's default transport and therefore honour those variables: the billing providers (Paystack, Flutterwave), the platform KMS (OpenBao), Git providers and a self-hosted model endpoint. If you set `HTTPS_PROXY` for them, list in-cluster services in `NO_PROXY` (OpenBao above all), and remember that tenant traffic still leaves directly.
 
-If an explicit egress proxy is ever required (a customer's dedicated deployment that only allows its own proxy out), the design in [decision 0024](decisions/0024-production-cloud.md) keeps the guard in charge: the guard resolves and vets as now, then asks the proxy to `CONNECT` to the vetted IP and port, never to a name. It is not built.
+### An explicit egress proxy
+
+Some networks let nothing out except through their own proxy (a customer's dedicated deployment, say). For those, set an explicit egress proxy ([decision 0028](decisions/0028-explicit-egress-proxy.md)):
+
+```
+TASKIEM_EGRESS_PROXY=http://proxy.internal:3128      # or https://, port required
+TASKIEM_EGRESS_PROXY_USER=taskiem                    # optional, basic auth
+TASKIEM_EGRESS_PROXY_PASSWORD=...                    # from a Secret
+```
+
+Set them on every role (they all make tenant calls). With Helm, put `TASKIEM_EGRESS_PROXY` in `config` and the user and password in the Secret (`existingSecret`). The guard stays in charge:
+
+1. It checks the host against the tenant's allow-list and resolves it once.
+2. It refuses private, loopback, link-local and metadata addresses, as without a proxy.
+3. It asks the proxy to `CONNECT` to the vetted **IP and port**, never to a name, so the proxy cannot resolve the name again.
+4. TLS runs inside the tunnel and is verified against the original host name.
+5. Each redirect goes through steps 1 to 4 again.
+
+A badly set value stops the process at start: a bare `host:port`, a missing port, a scheme other than `http` or `https`, a path, credentials in the URL, or credentials without a proxy. `HTTPS_PROXY` never sets it. Logs show `via` with the proxy's address on each connection (never the credentials).
+
+What the proxy must allow:
+
+| Need | Why |
+| --- | --- |
+| `CONNECT` to IP addresses | It never sees host names, so rules by name cannot match |
+| The ports tenants use | 443 and 80 for most providers; tenants' databases and SFTP need their own ports |
+| A route to customers' private KMS | Only with `TASKIEM_BYOK_ALLOW_PRIVATE` on a dedicated deployment |
+
+A proxy that cannot be reached, or rejects the credentials, fails the call as not sent (steps retry). A proxy that answers `403` refuses the destination, which fails the step like a guard denial. Credentials to an `http://` proxy cross the network in the clear: keep the proxy on the private network, or use `https://`. An operator's loopback exception (a fake provider on the same machine, for tests) is dialled directly. Platform calls on Go's default transport (above) are not affected.

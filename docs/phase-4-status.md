@@ -19,6 +19,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Docs | P4-7 | Public docs site, API reference, connector SDK guide | — | **Done** (code; [what exists](#p4-7-docs)); domain, hosting and review owner need P4-D1–P4-D3 |
 | Trust | P4-8 | Bug bounty, security page, ISO 27001 and SOC 2 Type II preparation | 14.4 | Needs people |
 | Security | Self-review | The self-review's open findings before the pen test: step-up for key changes (K5); step-up bound to its operation, no session token in a browser sign-in's body, HSTS (S35); tenant code in the API process bounded and caches bounded (S34); personal data masked in error text (S22); embed preflights paced | 14.4 | **Done** (code; [what exists](#security-self-review-round)) |
+| Security | Residuals | K6 closed (first-context secrets pinned to where they were recorded); compiled tenant WebAssembly modules evicted safely; the tenant-code share across API replicas; the explicit egress proxy (decision 0028); a load-flaky sandbox test | 14.2, 14.4 | **Done** (code; [what exists](#security-residuals-and-the-egress-proxy)) |
 | Legal | P4-9 | Counsel IP review, trademark registration, terms of service, DPA under the NDPA | — | Needs people |
 
 ## P4-1: billing
@@ -89,7 +90,7 @@ What is left in the cloud:
 - **People** (needs people P4-C1 to P4-C6): the provider and region, the HA Postgres service and a real failover under load, PITR with a first restore drill, backup retention, the NAT addresses, and which tenants get dedicated pools.
 - **Dedicated container capacity**: the `container` queue runs only in the container worker pool, for every tenant.
 - **More replica reads**: run detail and history, reports and usage stay on the primary (a summary and history from different servers could disagree).
-- **An explicit egress proxy**: designed (the guard vets, then `CONNECT`s to the vetted IP), not built; NAT covers fixed addresses.
+- ~~**An explicit egress proxy**: designed (the guard vets, then `CONNECT`s to the vetted IP), not built; NAT covers fixed addresses.~~ Built: `TASKIEM_EGRESS_PROXY` ([below](#security-residuals-and-the-egress-proxy), decision 0028). NAT stays the recommended way to fixed addresses.
 - **Retries in the API and scheduler**: only the worker's outcome paths retry; API requests fail over to client retries with idempotency keys, and the scheduler waits for its next tick.
 
 ## P4-4: reliability
@@ -160,7 +161,22 @@ Done 7 October 2026. [Self-review addendum](security/self-review.md#addendum-202
 | Embed preflights | Paced per address before the origin lookup (burst 60, 20 a second) | `api/embed.go` |
 | Tests | `TestStepUpIsBoundToItsOperation`, `TestSignInTokenOnlyForBearerClients`, `TestHSTS`, `TestKeyOperationsNeedStepUp`, `TestEmbedPreflightIsPaced`, `TestCodeGateBoundsTenantsAndProcess`, `TestTenantCodeAnswers429And503`, `TestKnownPIIIsMaskedInErrorText`, `TestTaintRedactText`, `engine/lru` tests, `TestHSTSFromEnv`, `TestCodeLimitsFromEnv`, `web/e2e/keys.spec.ts` | `api/hardening_test.go`, `api/codegate_test.go`, `engine/runtime/pii_test.go`, `engine/pii/redact_test.go`, `engine/lru/lru_test.go`, `cmd/taskiem/hardening_test.go` |
 
-What is left: TOTP codes are not bound to an operation (passkeys are); the tenant-code gate is per replica; compiled tenant WebAssembly modules stay loaded; S22 masks only values the run holds; K6 (low) stays open ([addendum](security/self-review.md#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text)).
+What is left: TOTP codes are not bound to an operation (passkeys are); S22 masks only values the run holds ([addendum](security/self-review.md#addendum-2026-10-07-step-up-sessions-tenant-code-and-free-text)). The per-replica gate, loaded modules and K6 were closed in the [next round](#security-residuals-and-the-egress-proxy).
+
+## Security: residuals and the egress proxy
+
+Done 8 October 2026. [Self-review addendum](security/self-review.md#addendum-2026-10-08-legacy-contexts-egress-proxy-and-tenant-code) (K6 fixed, S34 residuals closed); design: [decision 0028](decisions/0028-explicit-egress-proxy.md) (amends 0024); threat model B5, B6 and B8 amended, no new boundary. Migrations 00140 and 00141. Operator guide: [cloud](cloud.md#an-explicit-egress-proxy).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| First-context secrets (K6) | `secret_legacy_bindings` records each first-context secret's environment and binding at migration 00140; the application role reads and deletes, never writes; reads and the key job accept such a secret only there (`ErrLegacyContext` otherwise, and the tenant's re-wrap stops with the reason); the record goes once the secret is upgraded | `engine/secrets/keys.go`, `engine/secrets/rewrap.go`, migration 00140 |
+| Compiled modules | An LRU of at most 32 compiled connector modules per runtime (`wasmconn.Limits.MaxCompiled`), reference-counted per call; evicted modules closed after their last call and compiled again on demand | `engine/wasmconn/wasmconn.go` |
+| Tenant-code share | The per-tenant share across API replicas: numbered slots leased in `tenant_code_leases` for two minutes, renewed while the work runs, deleted at the end; expired leases taken over; the per-replica share if the table cannot be reached; `TASKIEM_TENANT_CODE_SHARE=replica` | `api/codegate.go`, `cmd/taskiem/hardening.go`, migration 00141 |
+| Egress proxy | `TASKIEM_EGRESS_PROXY` (+ `_USER`, `_PASSWORD`), strict parsing, refused at start when badly set; the guard vets as before, then `CONNECT`s to the vetted IP and port; TLS to the destination verified against the original name; `https://` proxies verified against their own name; every guard in the process uses it (including the container-step proxy's upstream and the `taskiem tenants keys` CLI) | `engine/egress/upstream.go`, `engine/egress/egress.go`, `cmd/taskiem/hardening.go` |
+| Sandbox test | `TestPythonFailures` runs its cases one at a time with a generous deadline (the timeout case keeps its own) | `engine/sandbox/python_test.go` |
+| Tests | `TestLegacyContextIsPinned`, `TestCompiledModulesAreEvicted`, `TestRunningCallKeepsItsModule`, `TestInvalidModuleIsNotCached`, `TestCodeShareHoldsAcrossReplicas`, `TestCodeShareRenewsLongWork`, `TestCodeSharePerReplica`, `TestUpstream*` (an in-process `CONNECT` proxy: private and metadata addresses, DNS rebinding, redirects, TLS names, credentials, refusals, TLS proxies), `TestUpstreamFromEnv`, `TestEgressProxyMustBeExplicit`, `TestCodeLimitsFromEnv` | `engine/secrets/legacy_test.go`, `engine/wasmconn/evict_test.go`, `api/codegate_cluster_test.go`, `engine/egress/upstream_test.go`, `cmd/taskiem/hardening_test.go` |
+
+What is left: a proxy that filters by host name cannot be used (it sees only IPs); the chart has no dedicated values for the proxy (set it through `config` and the Secret); `MaxCompiled` has no environment setting; waiting on a lease polls every 100 ms ([addendum](security/self-review.md#addendum-2026-10-08-legacy-contexts-egress-proxy-and-tenant-code)).
 
 ## P4-6: connector SDK and catalogue
 
