@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
+	"github.com/israel-duff/taskiem/engine/lang"
 )
 
 // Collecting a workflow's inputs in chat (spec 11.1): field by field, each
@@ -109,26 +110,34 @@ func str(m map[string]any, k string) string {
 	return s
 }
 
-// Prompt asks for the field.
-func (f Field) Prompt() string {
+// Prompt asks for the field in English.
+func (f Field) Prompt() string { return f.PromptIn(lang.EN) }
+
+// PromptIn asks for the field in a language (engine/lang's wa.field.*
+// messages). The field's title, description and options are the
+// tenant's own words and stay as written.
+func (f Field) PromptIn(t lang.Tag) string {
 	label := f.Title
 	if label == "" {
 		label = f.Name
 	}
-	s := "Enter " + label
+	tr := lang.Default().Text
+	var s string
 	switch {
 	case len(f.Enum) > 0:
 		opts := make([]string, len(f.Enum))
 		for i, e := range f.Enum {
 			opts[i] = fmt.Sprint(e)
 		}
-		s += " (one of: " + strings.Join(opts, ", ") + ")"
+		s = tr(t, "wa.field.enter_one_of", "label", label, "options", strings.Join(opts, ", "))
 	case f.Type == "integer":
-		s += " (a whole number)"
+		s = tr(t, "wa.field.enter_whole", "label", label)
 	case f.Type == "number":
-		s += " (a number)"
+		s = tr(t, "wa.field.enter_number", "label", label)
 	case f.Type == "boolean":
-		s += " (yes or no)"
+		s = tr(t, "wa.field.enter_yes_no", "label", label)
+	default:
+		s = tr(t, "wa.field.enter", "label", label)
 	}
 	if f.Description != "" {
 		s += "\n" + f.Description
@@ -137,21 +146,26 @@ func (f Field) Prompt() string {
 }
 
 // Parse reads an answer as the field's type and checks it against the
-// field's schema; the error says what is wrong.
-func (f Field) Parse(text string) (any, error) {
+// field's schema; the error says what is wrong, in English.
+func (f Field) Parse(text string) (any, error) { return f.ParseIn(text, lang.EN) }
+
+// ParseIn is Parse for a person whose language is t: yes and no are also
+// taken from t's word lists, and the errors Taskiem writes are in t (a
+// schema's own refusals stay in English).
+func (f Field) ParseIn(text string, t lang.Tag) (any, error) {
 	text = strings.TrimSpace(text)
 	var v any
 	switch f.Type {
 	case "integer":
 		n, err := strconv.ParseInt(strings.ReplaceAll(text, ",", ""), 10, 64)
 		if err != nil {
-			return nil, errors.New("that is not a whole number")
+			return nil, errors.New(lang.Default().Text(t, "wa.field.not_whole"))
 		}
 		v = n
 	case "number":
 		n, err := strconv.ParseFloat(strings.ReplaceAll(text, ",", ""), 64)
 		if err != nil {
-			return nil, errors.New("that is not a number")
+			return nil, errors.New(lang.Default().Text(t, "wa.field.not_number"))
 		}
 		v = n
 	case "boolean":
@@ -161,7 +175,13 @@ func (f Field) Parse(text string) (any, error) {
 		case "no", "n", "false":
 			v = false
 		default:
-			return nil, errors.New("answer yes or no")
+			if t != lang.EN {
+				if m, ok := lang.MatchIntent(text, []lang.Tag{t}); ok && (m.Intent == lang.IntentYes || m.Intent == lang.IntentNo) {
+					v = m.Intent == lang.IntentYes
+					break
+				}
+			}
+			return nil, errors.New(lang.Default().Text(t, "wa.field.yes_no"))
 		}
 	default:
 		v = text

@@ -154,6 +154,36 @@
       "reviewed": true,
       "context": "USSD: no workflow serves the code"
     },
+    "ussd.language.back": {
+      "text": "Back",
+      "reviewed": true,
+      "context": "USSD: the language list's last line, after '0. '"
+    },
+    "ussd.language.choose": {
+      "text": "Choose your language:",
+      "reviewed": true,
+      "context": "USSD: heading of the language list (each language follows in its own name)"
+    },
+    "ussd.language.entry": {
+      "text": "Language",
+      "reviewed": true,
+      "context": "USSD: the opening screen's last line, after '0. '; opens the language list"
+    },
+    "ussd.language.invalid": {
+      "text": "Invalid choice. Try again.",
+      "reviewed": true,
+      "context": "USSD: above the language list after a wrong choice"
+    },
+    "ussd.language.set": {
+      "text": "Language: {language}",
+      "reviewed": true,
+      "context": "USSD: above the opening screen once a reviewed language is chosen; {language} in its own name"
+    },
+    "ussd.language.set_draft": {
+      "text": "Language: {language} (draft)",
+      "reviewed": true,
+      "context": "USSD: above the opening screen once a language still in draft is chosen"
+    },
     "ussd.not_taken": {
       "text": "Sorry, we could not take your request. Nothing was started. Please try again.",
       "reviewed": true,
@@ -488,6 +518,46 @@
       "text": "Reply *yes* to start {workflow}, or *cancel*.",
       "reviewed": true,
       "context": "Waiting for yes to start a run"
+    },
+    "wa.field.enter": {
+      "text": "Enter {label}",
+      "reviewed": true,
+      "context": "Asks for one input of a workflow in chat; {label} is the field's title, in the tenant's words"
+    },
+    "wa.field.enter_number": {
+      "text": "Enter {label} (a number)",
+      "reviewed": true,
+      "context": "Asks for an input that is a number"
+    },
+    "wa.field.enter_one_of": {
+      "text": "Enter {label} (one of: {options})",
+      "reviewed": true,
+      "context": "Asks for an input that has fixed options; {options} are the tenant's, comma-separated"
+    },
+    "wa.field.enter_whole": {
+      "text": "Enter {label} (a whole number)",
+      "reviewed": true,
+      "context": "Asks for an input that is a whole number"
+    },
+    "wa.field.enter_yes_no": {
+      "text": "Enter {label} (yes or no)",
+      "reviewed": true,
+      "context": "Asks for an input that is yes or no"
+    },
+    "wa.field.not_number": {
+      "text": "that is not a number",
+      "reviewed": true,
+      "context": "Why an answer was refused (fills {reason} in wa.run.does_not_fit)"
+    },
+    "wa.field.not_whole": {
+      "text": "that is not a whole number",
+      "reviewed": true,
+      "context": "Why an answer was refused (fills {reason} in wa.run.does_not_fit)"
+    },
+    "wa.field.yes_no": {
+      "text": "answer yes or no",
+      "reviewed": true,
+      "context": "Why an answer was refused (fills {reason} in wa.run.does_not_fit)"
     },
     "wa.form.gone": {
       "text": "That form is no longer needed. Send *run* and a workflow's name to start again.",
@@ -858,6 +928,346 @@
       "text": "This number is not linked to a Taskiem account. To use Taskiem here, sign in, open {where}, add this number under WhatsApp, then type or send back the code we send you.",
       "reviewed": true,
       "context": "A number linked to no one wrote"
+    },
+    "wd.alongside": {
+      "text": "Alongside: {name}",
+      "reviewed": true,
+      "context": "Read-back of a built workflow: a branch that runs alongside others; {name} is the tenant's"
+    },
+    "wd.and": {
+      "text": "{list} and {last}",
+      "reviewed": true,
+      "context": "Read-back: the last of a list of days; {list} is comma-separated"
+    },
+    "wd.approval": {
+      "text": "Wait for approval",
+      "reviewed": true,
+      "context": "Read-back: an approval step"
+    },
+    "wd.approval.policy": {
+      "text": "Get approval under the {policy} policy",
+      "reviewed": true,
+      "context": "Read-back: approval under a named policy; {policy} is the tenant's"
+    },
+    "wd.approval.role_many": {
+      "text": "Ask {count} people with the {role} role to approve",
+      "reviewed": true,
+      "context": "Read-back: approval by several people with a role"
+    },
+    "wd.approval.role_one": {
+      "text": "Ask a {role} to approve",
+      "reviewed": true,
+      "context": "Read-back: approval by one person with a role; {role} is the tenant's"
+    },
+    "wd.approval.timeout": {
+      "text": "{approval} (waits up to {duration})",
+      "reviewed": true,
+      "context": "Read-back: how long an approval waits; {approval} is the approval line"
+    },
+    "wd.branch": {
+      "text": "Decide what to do:",
+      "reviewed": true,
+      "context": "Read-back: a decision between paths"
+    },
+    "wd.code": {
+      "text": "Run custom code",
+      "reviewed": true,
+      "context": "Read-back: the tenant's own code"
+    },
+    "wd.code_language": {
+      "text": "Run custom {language} code",
+      "reviewed": true,
+      "context": "Read-back: the tenant's own code; {language} is a programming language"
+    },
+    "wd.connector": {
+      "text": "{action} with {connector}",
+      "reviewed": true,
+      "context": "Read-back: a connector step; {action} and {connector} are the connector's own names"
+    },
+    "wd.container": {
+      "text": "Run a container",
+      "reviewed": true,
+      "context": "Read-back: a container step"
+    },
+    "wd.container_named": {
+      "text": "Run the {image} container",
+      "reviewed": true,
+      "context": "Read-back: a container step; {image} is the image's name"
+    },
+    "wd.day.friday": {
+      "text": "Friday",
+      "reviewed": true,
+      "context": "A day of the week"
+    },
+    "wd.day.monday": {
+      "text": "Monday",
+      "reviewed": true,
+      "context": "A day of the week"
+    },
+    "wd.day.saturday": {
+      "text": "Saturday",
+      "reviewed": true,
+      "context": "A day of the week"
+    },
+    "wd.day.sunday": {
+      "text": "Sunday",
+      "reviewed": true,
+      "context": "A day of the week"
+    },
+    "wd.day.thursday": {
+      "text": "Thursday",
+      "reviewed": true,
+      "context": "A day of the week"
+    },
+    "wd.day.tuesday": {
+      "text": "Tuesday",
+      "reviewed": true,
+      "context": "A day of the week"
+    },
+    "wd.day.wednesday": {
+      "text": "Wednesday",
+      "reviewed": true,
+      "context": "A day of the week"
+    },
+    "wd.foreach": {
+      "text": "For each item in the list:",
+      "reviewed": true,
+      "context": "Read-back: steps repeated for each item"
+    },
+    "wd.foreach_limited": {
+      "text": "For each item in the list (at most {count} at a time):",
+      "reviewed": true,
+      "context": "Read-back: steps repeated for each item, {count} at a time at most"
+    },
+    "wd.http": {
+      "text": "Call an external service",
+      "reviewed": true,
+      "context": "Read-back: a call to a web service"
+    },
+    "wd.http_host": {
+      "text": "Call {host} ({method})",
+      "reviewed": true,
+      "context": "Read-back: a call to a web service; {host} and {method} are technical, keep them"
+    },
+    "wd.http_service": {
+      "text": "Call an external service ({method})",
+      "reviewed": true,
+      "context": "Read-back: a call to a web service whose address is worked out when it runs"
+    },
+    "wd.if": {
+      "text": "If {name}:",
+      "reviewed": true,
+      "context": "Read-back: one path of a decision; {name} is the tenant's"
+    },
+    "wd.on_error": {
+      "text": "If that step fails:",
+      "reviewed": true,
+      "context": "Read-back: steps run when the step above fails"
+    },
+    "wd.only_when": {
+      "text": "{step}, only when its condition holds",
+      "reviewed": true,
+      "context": "Read-back: a step that runs only when its condition holds; {step} says what it does"
+    },
+    "wd.or": {
+      "text": " or ",
+      "reviewed": true,
+      "context": "Read-back: joins event names (keep the spaces)"
+    },
+    "wd.otherwise": {
+      "text": "Otherwise:",
+      "reviewed": true,
+      "context": "Read-back: the path taken when no other applies"
+    },
+    "wd.parallel": {
+      "text": "Do these at the same time:",
+      "reviewed": true,
+      "context": "Read-back: branches run at the same time"
+    },
+    "wd.schedule.daily": {
+      "text": "Every day at {time} ({tz} time)",
+      "reviewed": true,
+      "context": "Read-back: a schedule; {time} is HH:MM and {tz} a time zone such as Africa/Lagos"
+    },
+    "wd.schedule.days": {
+      "text": "Every {days} at {time} ({tz} time)",
+      "reviewed": true,
+      "context": "Read-back: a schedule; {days} are day names (wd.day.*)"
+    },
+    "wd.schedule.hourly": {
+      "text": "Every hour, on the hour",
+      "reviewed": true,
+      "context": "Read-back: a schedule"
+    },
+    "wd.schedule.hourly_at": {
+      "text": "Every hour at {minute} minutes past",
+      "reviewed": true,
+      "context": "Read-back: a schedule; {minute} is minutes past the hour"
+    },
+    "wd.schedule.hours": {
+      "text": "Every {count} hours",
+      "reviewed": true,
+      "context": "Read-back: a schedule"
+    },
+    "wd.schedule.last_day": {
+      "text": "On the last day of every month at {time} ({tz} time)",
+      "reviewed": true,
+      "context": "Read-back: a schedule"
+    },
+    "wd.schedule.minutes": {
+      "text": "Every {count} minutes",
+      "reviewed": true,
+      "context": "Read-back: a schedule"
+    },
+    "wd.schedule.monthly": {
+      "text": "On the {day} of every month at {time} ({tz} time)",
+      "reviewed": true,
+      "context": "Read-back: a schedule; {day} is the day of the month: '25th' in English, the number alone in other languages"
+    },
+    "wd.schedule.raw": {
+      "text": "On the schedule {cron} ({tz})",
+      "reviewed": true,
+      "context": "Read-back: a schedule shown as written; {cron} is the expression"
+    },
+    "wd.schedule.raw_local": {
+      "text": "On the schedule {cron} ({tz} time)",
+      "reviewed": true,
+      "context": "Read-back: a schedule shown as written; {cron} is the expression"
+    },
+    "wd.schedule.weekdays": {
+      "text": "Every weekday (Monday to Friday) at {time} ({tz} time)",
+      "reviewed": true,
+      "context": "Read-back: a schedule"
+    },
+    "wd.signal": {
+      "text": "Wait for a signal",
+      "reviewed": true,
+      "context": "Read-back: waits for a signal"
+    },
+    "wd.signal_named": {
+      "text": "Wait for {event}",
+      "reviewed": true,
+      "context": "Read-back: waits for a named event; {event} is the tenant's"
+    },
+    "wd.transform": {
+      "text": "Prepare the data for the next steps",
+      "reviewed": true,
+      "context": "Read-back: a step that reshapes data"
+    },
+    "wd.trigger.database_change": {
+      "text": "When a database row changes",
+      "reviewed": true,
+      "context": "Read-back: started by a database change"
+    },
+    "wd.trigger.email": {
+      "text": "When an email arrives",
+      "reviewed": true,
+      "context": "Read-back: started by an email"
+    },
+    "wd.trigger.event": {
+      "text": "When {connector} sends an event ({trigger})",
+      "reviewed": true,
+      "context": "Read-back: started by a connector's event; {trigger} is its name"
+    },
+    "wd.trigger.event_reports": {
+      "text": "When {connector} reports {events}",
+      "reviewed": true,
+      "context": "Read-back: started by a connector's events; {connector} and {events} are names"
+    },
+    "wd.trigger.manual": {
+      "text": "When someone starts it",
+      "reviewed": true,
+      "context": "Read-back: started by a person"
+    },
+    "wd.trigger.other": {
+      "text": "When it is triggered ({type})",
+      "reviewed": true,
+      "context": "Read-back: started some other way; {type} is the trigger's type"
+    },
+    "wd.trigger.polling": {
+      "text": "Every {interval}, check {connector} ({action}) for new items",
+      "reviewed": true,
+      "context": "Read-back: checks a connector for new items every {interval}"
+    },
+    "wd.trigger.subflow": {
+      "text": "When another workflow calls it",
+      "reviewed": true,
+      "context": "Read-back: started by another workflow"
+    },
+    "wd.trigger.ussd": {
+      "text": "When someone dials the USSD code",
+      "reviewed": true,
+      "context": "Read-back: started by a USSD session"
+    },
+    "wd.trigger.webhook": {
+      "text": "When your system calls this workflow's web address",
+      "reviewed": true,
+      "context": "Read-back: what starts the workflow"
+    },
+    "wd.trigger.webhook_checked": {
+      "text": "When your system calls this workflow's web address (checked with {auth})",
+      "reviewed": true,
+      "context": "Read-back: what starts the workflow; {auth} is how calls are checked (hmac, bearer...)"
+    },
+    "wd.trigger.webhook_unsigned": {
+      "text": "When your system calls this workflow's web address (no signature check)",
+      "reviewed": true,
+      "context": "Read-back: what starts the workflow (calls are not signed)"
+    },
+    "wd.trigger.whatsapp": {
+      "text": "When a message arrives on WhatsApp",
+      "reviewed": true,
+      "context": "Read-back: started by a WhatsApp message"
+    },
+    "wd.unit.day_one": {
+      "text": "1 day",
+      "reviewed": true,
+      "context": "A duration of one day"
+    },
+    "wd.unit.days": {
+      "text": "{count} days",
+      "reviewed": true,
+      "context": "A duration in days"
+    },
+    "wd.unit.hour_one": {
+      "text": "1 hour",
+      "reviewed": true,
+      "context": "A duration of one hour"
+    },
+    "wd.unit.hours": {
+      "text": "{count} hours",
+      "reviewed": true,
+      "context": "A duration in hours"
+    },
+    "wd.unit.minute_one": {
+      "text": "1 minute",
+      "reviewed": true,
+      "context": "A duration of one minute"
+    },
+    "wd.unit.minutes": {
+      "text": "{count} minutes",
+      "reviewed": true,
+      "context": "A duration in minutes"
+    },
+    "wd.unit.second_one": {
+      "text": "1 second",
+      "reviewed": true,
+      "context": "A duration of one second"
+    },
+    "wd.unit.seconds": {
+      "text": "{count} seconds",
+      "reviewed": true,
+      "context": "A duration in seconds"
+    },
+    "wd.wait_for": {
+      "text": "Wait {duration}",
+      "reviewed": true,
+      "context": "Read-back: a pause; {duration} is read aloud (wd.unit.*)"
+    },
+    "wd.wait_until": {
+      "text": "Wait until the set time",
+      "reviewed": true,
+      "context": "Read-back: a pause until a set time"
     }
   }
 }

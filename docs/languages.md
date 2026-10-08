@@ -9,9 +9,11 @@ Taskiem can talk to people on [WhatsApp](whatsapp.md), [USSD](ussd.md) and SMS i
 | Covered | Not covered (English only) |
 | --- | --- |
 | Every reply in the WhatsApp conversation: help, status, run and its confirmation, inputs asked in chat (the wording around each field), builds, approvals by button, step-up hand-off and PIN messages, forms' messages and buttons, switching organisation, errors and rate limits; public menus on own numbers | Template messages outside the 24-hour window: Meta approves each template per language (`TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE`), so only the language they were approved in is sent |
-| How runs started from WhatsApp ended, inside the window | Field questions generated from a workflow's input schema, and its titles and descriptions: they are the tenant's own words |
-| Approval requests inside the window: their heading, expiry and buttons | The workflow steps read back after a build (`engine/wdtext`), and template parameter hints |
-| Taskiem's own USSD screens (busy, ended, expired, too many requests, not taken, not available) and the reconciliation SMS | USSD menus and their outcome SMS: the tenant writes them, in any language, within the plain-ASCII rule |
+| How runs started from WhatsApp ended, inside the window | A workflow's field titles, descriptions and options, and its step names: they are the tenant's own words |
+| Approval requests inside the window: their heading, expiry and buttons | Connector and action names in the read-back: they are the connector's own |
+| Field questions generated from a workflow's input schema (`Enter Amount (a whole number)`), and why an answer does not fit; yes and no to a yes-or-no field also in the person's language | Template parameter hints after a build |
+| The workflow steps read back after a build on WhatsApp (`engine/wdtext`): triggers, schedules, step kinds, durations, days | The template gallery's preview in the web app |
+| Taskiem's own USSD screens (busy, ended, expired, too many requests, not taken, not available), the USSD language list, and the reconciliation SMS | USSD menus and their outcome SMS: the tenant writes them, in any language, within the plain-ASCII rule |
 | | The web app, emails and the CLI |
 
 ## How it works
@@ -38,7 +40,7 @@ A number's language is the person's, not the tenant's (`channel_languages`, reac
 
 **When the word lists do not match.** In a language other than English, the message goes to the [model layer](ai.md) with its language named (`engine/ai/intent`). The model may only route: help, status, approvals, switch, run, build or language, with a short argument. It can never confirm, cancel or answer yes. What it returns is then handled exactly as the typed command, with the person's permissions, so `run` still ends in a summary and an explicit **yes**. The call is redacted, counts against the tenant's AI budget, is limited per number and is recorded in `ai_interactions` with kind `intent`. Without a model, or over budget, the message is simply not understood. A build goal in another language goes to the builder with its language named.
 
-**USSD and SMS.** USSD answers within two seconds and its input is digits, so callers get the tenant's default language. Taskiem's own SMS uses the caller's language when one is recorded. Both are folded to plain ASCII (accents and tone marks dropped, `ɗ` written `d`), because USSD screens and SMS carry the GSM 7-bit alphabet. A test keeps these texts within 160 characters.
+**USSD and SMS.** USSD answers within two seconds and its input is digits. When more than one language is on for the tenant and its menu starts with a menu screen, the session's opening screen ends with `0. Language` (0 is never an option there). It lists the languages on by their own names; the caller picks one by number, or `0` to go back. The choice is recorded for the number like `language <name>` on WhatsApp, the opening screen comes back with a line naming it (marked draft until reviewed), and the menu goes on from there: `0*2*1` is the language list, the second language, then option 1. A line is added only while the screen stays within the menu's size, and a menu that starts by asking for input gets no entry. Taskiem's own USSD screens and SMS use the caller's language when one is recorded, else the tenant's default. The tenant's menu is its own words and does not change. Both are folded to plain ASCII (accents and tone marks dropped, `ɗ` written `d`), because USSD screens and SMS carry the GSM 7-bit alphabet. A test keeps these texts within 160 characters.
 
 ## Turning languages on
 
@@ -93,6 +95,6 @@ Until a file is reviewed, a person who chooses the language is told: *"This tran
 ## Not yet
 
 - Templates in other languages (each needs Meta's approval per language).
-- Choosing a language on USSD itself, for example a language menu before the tenant's menu.
-- Field prompts from input schemas, the read-back of built workflows, and the web app.
+- The language entry on USSD menus that start by asking for input, or on screens after the first.
+- Template parameter hints after a build, the template gallery's preview, and the web app.
 - Streaming or longer recordings; video and documents.

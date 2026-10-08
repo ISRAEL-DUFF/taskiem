@@ -226,7 +226,7 @@ func plainSteps(doc []byte, s *Server, c *chat) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lines := wdtext.Describe(def, reg)
+	lines := wdtext.DescribeIn(def, reg, c.lang.Tag)
 	const maxLines = 25
 	extra := 0
 	if len(lines) > maxLines {

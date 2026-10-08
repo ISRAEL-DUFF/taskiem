@@ -124,6 +124,30 @@
       "text": "Oru a adighi.",
       "reviewed": false
     },
+    "ussd.language.back": {
+      "text": "Laghachi",
+      "reviewed": false
+    },
+    "ussd.language.choose": {
+      "text": "Horo asusu gi:",
+      "reviewed": false
+    },
+    "ussd.language.entry": {
+      "text": "Asusu",
+      "reviewed": false
+    },
+    "ussd.language.invalid": {
+      "text": "Nhoro ezighi ezi. Nwaa ozo.",
+      "reviewed": false
+    },
+    "ussd.language.set": {
+      "text": "Asusu: {language}",
+      "reviewed": false
+    },
+    "ussd.language.set_draft": {
+      "text": "Asusu: {language} (mbido)",
+      "reviewed": false
+    },
     "ussd.not_taken": {
       "text": "Ndo, anyi enweghi ike ina aririo gi. O dighi ihe malitere. Biko nwaa ozo.",
       "reviewed": false
@@ -390,6 +414,38 @@
     },
     "wa.confirm_reminder": {
       "text": "Zaa *yes* ka {workflow} malite, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.field.enter": {
+      "text": "Tinye {label}",
+      "reviewed": false
+    },
+    "wa.field.enter_number": {
+      "text": "Tinye {label} (nọmba)",
+      "reviewed": false
+    },
+    "wa.field.enter_one_of": {
+      "text": "Tinye {label} (otu n'ime: {options})",
+      "reviewed": false
+    },
+    "wa.field.enter_whole": {
+      "text": "Tinye {label} (nọmba zuru oke)",
+      "reviewed": false
+    },
+    "wa.field.enter_yes_no": {
+      "text": "Tinye {label} (ee ma ọ bụ mba)",
+      "reviewed": false
+    },
+    "wa.field.not_number": {
+      "text": "nke ahụ abụghị nọmba",
+      "reviewed": false
+    },
+    "wa.field.not_whole": {
+      "text": "nke ahụ abụghị nọmba zuru oke",
+      "reviewed": false
+    },
+    "wa.field.yes_no": {
+      "text": "zaa ee ma ọ bụ mba",
       "reviewed": false
     },
     "wa.form.gone": {
@@ -686,6 +742,278 @@
     },
     "wa.unbound": {
       "text": "Ejikọghị nọmba a na akaụntụ Taskiem ọ bụla. Iji Taskiem ebe a, banye, mepee {where}, tinye nọmba a n'okpuru WhatsApp, wee pịnye ma ọ bụ zighachi koodu anyị zitere gị.",
+      "reviewed": false
+    },
+    "wd.alongside": {
+      "text": "N'otu oge: {name}",
+      "reviewed": false
+    },
+    "wd.and": {
+      "text": "{list} na {last}",
+      "reviewed": false
+    },
+    "wd.approval": {
+      "text": "Chere nkwado",
+      "reviewed": false
+    },
+    "wd.approval.policy": {
+      "text": "Nweta nkwado n'okpuru iwu {policy}",
+      "reviewed": false
+    },
+    "wd.approval.role_many": {
+      "text": "Gwa mmadụ {count} nwere ọrụ {role} ka ha kwado",
+      "reviewed": false
+    },
+    "wd.approval.role_one": {
+      "text": "Gwa otu {role} ka ọ kwado",
+      "reviewed": false
+    },
+    "wd.approval.timeout": {
+      "text": "{approval} (ọ na-echere ruo {duration})",
+      "reviewed": false
+    },
+    "wd.branch": {
+      "text": "Kpebie ihe a ga-eme:",
+      "reviewed": false
+    },
+    "wd.code": {
+      "text": "Gbaa koodu nke gị",
+      "reviewed": false
+    },
+    "wd.code_language": {
+      "text": "Gbaa koodu {language} nke gị",
+      "reviewed": false
+    },
+    "wd.connector": {
+      "text": "{action} site na {connector}",
+      "reviewed": false
+    },
+    "wd.container": {
+      "text": "Gbaa akpa",
+      "reviewed": false
+    },
+    "wd.container_named": {
+      "text": "Gbaa akpa {image}",
+      "reviewed": false
+    },
+    "wd.day.friday": {
+      "text": "Fraịdee",
+      "reviewed": false
+    },
+    "wd.day.monday": {
+      "text": "Mọnde",
+      "reviewed": false
+    },
+    "wd.day.saturday": {
+      "text": "Satọdee",
+      "reviewed": false
+    },
+    "wd.day.sunday": {
+      "text": "Ụbọchị Ụka",
+      "reviewed": false
+    },
+    "wd.day.thursday": {
+      "text": "Tọọzdee",
+      "reviewed": false
+    },
+    "wd.day.tuesday": {
+      "text": "Tiuzdee",
+      "reviewed": false
+    },
+    "wd.day.wednesday": {
+      "text": "Wenezdee",
+      "reviewed": false
+    },
+    "wd.foreach": {
+      "text": "Maka ihe ọ bụla n'ime ndepụta:",
+      "reviewed": false
+    },
+    "wd.foreach_limited": {
+      "text": "Maka ihe ọ bụla n'ime ndepụta (ọ karịghị {count} n'otu oge):",
+      "reviewed": false
+    },
+    "wd.http": {
+      "text": "Kpọọ ọrụ mpụga",
+      "reviewed": false
+    },
+    "wd.http_host": {
+      "text": "Kpọọ {host} ({method})",
+      "reviewed": false
+    },
+    "wd.http_service": {
+      "text": "Kpọọ ọrụ mpụga ({method})",
+      "reviewed": false
+    },
+    "wd.if": {
+      "text": "Ọ bụrụ {name}:",
+      "reviewed": false
+    },
+    "wd.on_error": {
+      "text": "Ọ bụrụ na nzọụkwụ ahụ dara:",
+      "reviewed": false
+    },
+    "wd.only_when": {
+      "text": "{step}, naanị ma ọnọdụ ya ziri ezi",
+      "reviewed": false
+    },
+    "wd.or": {
+      "text": " ma ọ bụ ",
+      "reviewed": false
+    },
+    "wd.otherwise": {
+      "text": "Ma ọ bụghị ya:",
+      "reviewed": false
+    },
+    "wd.parallel": {
+      "text": "Mee ihe ndị a n'otu oge:",
+      "reviewed": false
+    },
+    "wd.schedule.daily": {
+      "text": "Kwa ụbọchị n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.days": {
+      "text": "Kwa {days} n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.hourly": {
+      "text": "Kwa awa, na mmalite awa",
+      "reviewed": false
+    },
+    "wd.schedule.hourly_at": {
+      "text": "Kwa awa, nkeji {minute} gafere",
+      "reviewed": false
+    },
+    "wd.schedule.hours": {
+      "text": "Kwa awa {count}",
+      "reviewed": false
+    },
+    "wd.schedule.last_day": {
+      "text": "N'ụbọchị ikpeazụ nke ọnwa ọ bụla n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.minutes": {
+      "text": "Kwa nkeji {count}",
+      "reviewed": false
+    },
+    "wd.schedule.monthly": {
+      "text": "N'ụbọchị {day} nke ọnwa ọ bụla n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw": {
+      "text": "Dịka usoro oge {cron} ({tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw_local": {
+      "text": "Dịka usoro oge {cron} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.weekdays": {
+      "text": "Kwa ụbọchị ọrụ (Mọnde ruo Fraịdee) n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.signal": {
+      "text": "Chere akara",
+      "reviewed": false
+    },
+    "wd.signal_named": {
+      "text": "Chere {event}",
+      "reviewed": false
+    },
+    "wd.transform": {
+      "text": "Kwadebe data maka nzọụkwụ ndị ọzọ",
+      "reviewed": false
+    },
+    "wd.trigger.database_change": {
+      "text": "Mgbe ahịrị n'ime ọdụ data gbanwere",
+      "reviewed": false
+    },
+    "wd.trigger.email": {
+      "text": "Mgbe ozi email bịarutere",
+      "reviewed": false
+    },
+    "wd.trigger.event": {
+      "text": "Mgbe {connector} zitere ihe omume ({trigger})",
+      "reviewed": false
+    },
+    "wd.trigger.event_reports": {
+      "text": "Mgbe {connector} kọrọ {events}",
+      "reviewed": false
+    },
+    "wd.trigger.manual": {
+      "text": "Mgbe mmadụ malitere ya",
+      "reviewed": false
+    },
+    "wd.trigger.other": {
+      "text": "Mgbe a malitere ya ({type})",
+      "reviewed": false
+    },
+    "wd.trigger.polling": {
+      "text": "Kwa {interval}, lelee {connector} ({action}) maka ihe ọhụrụ",
+      "reviewed": false
+    },
+    "wd.trigger.subflow": {
+      "text": "Mgbe usoro ọrụ ọzọ kpọrọ ya",
+      "reviewed": false
+    },
+    "wd.trigger.ussd": {
+      "text": "Mgbe mmadụ kpọrọ koodu USSD",
+      "reviewed": false
+    },
+    "wd.trigger.webhook": {
+      "text": "Mgbe sistemụ gị kpọrọ adreesị weebụ nke usoro ọrụ a",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_checked": {
+      "text": "Mgbe sistemụ gị kpọrọ adreesị weebụ nke usoro ọrụ a (a na-eji {auth} enyocha ya)",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_unsigned": {
+      "text": "Mgbe sistemụ gị kpọrọ adreesị weebụ nke usoro ọrụ a (enweghị nlele mbinye aka)",
+      "reviewed": false
+    },
+    "wd.trigger.whatsapp": {
+      "text": "Mgbe ozi bịarutere na WhatsApp",
+      "reviewed": false
+    },
+    "wd.unit.day_one": {
+      "text": "ụbọchị 1",
+      "reviewed": false
+    },
+    "wd.unit.days": {
+      "text": "ụbọchị {count}",
+      "reviewed": false
+    },
+    "wd.unit.hour_one": {
+      "text": "awa 1",
+      "reviewed": false
+    },
+    "wd.unit.hours": {
+      "text": "awa {count}",
+      "reviewed": false
+    },
+    "wd.unit.minute_one": {
+      "text": "nkeji 1",
+      "reviewed": false
+    },
+    "wd.unit.minutes": {
+      "text": "nkeji {count}",
+      "reviewed": false
+    },
+    "wd.unit.second_one": {
+      "text": "sekọnd 1",
+      "reviewed": false
+    },
+    "wd.unit.seconds": {
+      "text": "sekọnd {count}",
+      "reviewed": false
+    },
+    "wd.wait_for": {
+      "text": "Chere {duration}",
+      "reviewed": false
+    },
+    "wd.wait_until": {
+      "text": "Chere ruo oge e debere",
       "reviewed": false
     }
   }

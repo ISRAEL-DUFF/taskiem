@@ -754,7 +754,7 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 			return err
 		}
-		return c.say(ctx, s, c.t("wa.run.needs_inputs", "workflow", x.name, "count", strconv.Itoa(len(fields)), "prompt", fields[0].Prompt()))
+		return c.say(ctx, s, c.t("wa.run.needs_inputs", "workflow", x.name, "count", strconv.Itoa(len(fields)), "prompt", fields[0].PromptIn(c.lang.Tag)))
 	}
 	return s.waAskConfirm(ctx, c, data)
 }
@@ -798,15 +798,15 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 			return err
 		}
-		return c.say(ctx, s, c.t("wa.run.form_closed", "prompt", fields[0].Prompt()))
+		return c.say(ctx, s, c.t("wa.run.form_closed", "prompt", fields[0].PromptIn(c.lang.Tag)))
 	}
 	if c.data.Index >= len(fields) {
 		return s.waAskConfirm(ctx, c, c.data)
 	}
 	f := fields[c.data.Index]
-	v, perr := f.Parse(text)
+	v, perr := f.ParseIn(text, c.lang.Tag)
 	if perr != nil {
-		return c.say(ctx, s, c.t("wa.run.does_not_fit", "reason", perr.Error(), "prompt", f.Prompt()))
+		return c.say(ctx, s, c.t("wa.run.does_not_fit", "reason", perr.Error(), "prompt", f.PromptIn(c.lang.Tag)))
 	}
 	data := c.data
 	if data.Inputs == nil {
@@ -829,7 +829,7 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 			return err
 		}
-		return c.say(ctx, s, fields[data.Index].Prompt())
+		return c.say(ctx, s, fields[data.Index].PromptIn(c.lang.Tag))
 	}
 	return s.waAskConfirm(ctx, c, data)
 }

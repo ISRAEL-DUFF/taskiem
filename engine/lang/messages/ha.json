@@ -124,6 +124,30 @@
       "text": "Wannan sabis ba ya samuwa.",
       "reviewed": false
     },
+    "ussd.language.back": {
+      "text": "Koma",
+      "reviewed": false
+    },
+    "ussd.language.choose": {
+      "text": "Zabi harshenka:",
+      "reviewed": false
+    },
+    "ussd.language.entry": {
+      "text": "Harshe",
+      "reviewed": false
+    },
+    "ussd.language.invalid": {
+      "text": "Zabin bai dace ba. Sake gwadawa.",
+      "reviewed": false
+    },
+    "ussd.language.set": {
+      "text": "Harshe: {language}",
+      "reviewed": false
+    },
+    "ussd.language.set_draft": {
+      "text": "Harshe: {language} (daftari)",
+      "reviewed": false
+    },
     "ussd.not_taken": {
       "text": "Yi hakuri, ba mu iya karbar bukatarka ba. Ba a fara komai ba. Don Allah sake gwadawa.",
       "reviewed": false
@@ -390,6 +414,38 @@
     },
     "wa.confirm_reminder": {
       "text": "Ka amsa da *yes* don fara {workflow}, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.field.enter": {
+      "text": "Shigar da {label}",
+      "reviewed": false
+    },
+    "wa.field.enter_number": {
+      "text": "Shigar da {label} (lamba)",
+      "reviewed": false
+    },
+    "wa.field.enter_one_of": {
+      "text": "Shigar da {label} (ɗaya daga cikin: {options})",
+      "reviewed": false
+    },
+    "wa.field.enter_whole": {
+      "text": "Shigar da {label} (cikakkiyar lamba)",
+      "reviewed": false
+    },
+    "wa.field.enter_yes_no": {
+      "text": "Shigar da {label} (eh ko a'a)",
+      "reviewed": false
+    },
+    "wa.field.not_number": {
+      "text": "wannan ba lamba ba ce",
+      "reviewed": false
+    },
+    "wa.field.not_whole": {
+      "text": "wannan ba cikakkiyar lamba ba ce",
+      "reviewed": false
+    },
+    "wa.field.yes_no": {
+      "text": "amsa da eh ko a'a",
       "reviewed": false
     },
     "wa.form.gone": {
@@ -686,6 +742,278 @@
     },
     "wa.unbound": {
       "text": "Ba a haɗa wannan lamba da wani asusun Taskiem ba. Don amfani da Taskiem a nan, ka shiga, ka buɗe {where}, ka ƙara wannan lamba a ƙarƙashin WhatsApp, sannan ka rubuta ko ka mayar da lambar sirrin da muka aiko maka.",
+      "reviewed": false
+    },
+    "wd.alongside": {
+      "text": "A lokaci guda: {name}",
+      "reviewed": false
+    },
+    "wd.and": {
+      "text": "{list} da {last}",
+      "reviewed": false
+    },
+    "wd.approval": {
+      "text": "Jira amincewa",
+      "reviewed": false
+    },
+    "wd.approval.policy": {
+      "text": "Sami amincewa ƙarƙashin manufar {policy}",
+      "reviewed": false
+    },
+    "wd.approval.role_many": {
+      "text": "Nemi mutane {count} masu matsayin {role} su amince",
+      "reviewed": false
+    },
+    "wd.approval.role_one": {
+      "text": "Nemi {role} ya amince",
+      "reviewed": false
+    },
+    "wd.approval.timeout": {
+      "text": "{approval} (yana jira har zuwa {duration})",
+      "reviewed": false
+    },
+    "wd.branch": {
+      "text": "Yanke abin da za a yi:",
+      "reviewed": false
+    },
+    "wd.code": {
+      "text": "Gudanar da lamba ta musamman",
+      "reviewed": false
+    },
+    "wd.code_language": {
+      "text": "Gudanar da lambar {language} ta musamman",
+      "reviewed": false
+    },
+    "wd.connector": {
+      "text": "{action} da {connector}",
+      "reviewed": false
+    },
+    "wd.container": {
+      "text": "Gudanar da kwantena",
+      "reviewed": false
+    },
+    "wd.container_named": {
+      "text": "Gudanar da kwantenan {image}",
+      "reviewed": false
+    },
+    "wd.day.friday": {
+      "text": "Juma'a",
+      "reviewed": false
+    },
+    "wd.day.monday": {
+      "text": "Litinin",
+      "reviewed": false
+    },
+    "wd.day.saturday": {
+      "text": "Asabar",
+      "reviewed": false
+    },
+    "wd.day.sunday": {
+      "text": "Lahadi",
+      "reviewed": false
+    },
+    "wd.day.thursday": {
+      "text": "Alhamis",
+      "reviewed": false
+    },
+    "wd.day.tuesday": {
+      "text": "Talata",
+      "reviewed": false
+    },
+    "wd.day.wednesday": {
+      "text": "Laraba",
+      "reviewed": false
+    },
+    "wd.foreach": {
+      "text": "Ga kowane abu a cikin jerin:",
+      "reviewed": false
+    },
+    "wd.foreach_limited": {
+      "text": "Ga kowane abu a cikin jerin (ba fiye da {count} a lokaci guda ba):",
+      "reviewed": false
+    },
+    "wd.http": {
+      "text": "Kira sabis na waje",
+      "reviewed": false
+    },
+    "wd.http_host": {
+      "text": "Kira {host} ({method})",
+      "reviewed": false
+    },
+    "wd.http_service": {
+      "text": "Kira sabis na waje ({method})",
+      "reviewed": false
+    },
+    "wd.if": {
+      "text": "Idan {name}:",
+      "reviewed": false
+    },
+    "wd.on_error": {
+      "text": "Idan wannan matakin ya kasa:",
+      "reviewed": false
+    },
+    "wd.only_when": {
+      "text": "{step}, sai idan sharaɗinsa ya cika",
+      "reviewed": false
+    },
+    "wd.or": {
+      "text": " ko ",
+      "reviewed": false
+    },
+    "wd.otherwise": {
+      "text": "In ba haka ba:",
+      "reviewed": false
+    },
+    "wd.parallel": {
+      "text": "Yi waɗannan a lokaci guda:",
+      "reviewed": false
+    },
+    "wd.schedule.daily": {
+      "text": "Kowace rana da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.days": {
+      "text": "Kowace {days} da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.hourly": {
+      "text": "Kowace awa, a farkon awa",
+      "reviewed": false
+    },
+    "wd.schedule.hourly_at": {
+      "text": "Kowace awa da minti {minute} bayan awa",
+      "reviewed": false
+    },
+    "wd.schedule.hours": {
+      "text": "Kowane awa {count}",
+      "reviewed": false
+    },
+    "wd.schedule.last_day": {
+      "text": "A ranar ƙarshe ta kowane wata da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.minutes": {
+      "text": "Kowane minti {count}",
+      "reviewed": false
+    },
+    "wd.schedule.monthly": {
+      "text": "A rana ta {day} ga kowane wata da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw": {
+      "text": "Bisa jadawalin {cron} ({tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw_local": {
+      "text": "Bisa jadawalin {cron} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.weekdays": {
+      "text": "Kowace ranar aiki (Litinin zuwa Juma'a) da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.signal": {
+      "text": "Jira alama",
+      "reviewed": false
+    },
+    "wd.signal_named": {
+      "text": "Jira {event}",
+      "reviewed": false
+    },
+    "wd.transform": {
+      "text": "Shirya bayanai don matakai na gaba",
+      "reviewed": false
+    },
+    "wd.trigger.database_change": {
+      "text": "Lokacin da layi a cikin rumbun bayanai ya canja",
+      "reviewed": false
+    },
+    "wd.trigger.email": {
+      "text": "Lokacin da imel ya iso",
+      "reviewed": false
+    },
+    "wd.trigger.event": {
+      "text": "Lokacin da {connector} ya aiko da wani abu ({trigger})",
+      "reviewed": false
+    },
+    "wd.trigger.event_reports": {
+      "text": "Lokacin da {connector} ya ba da rahoton {events}",
+      "reviewed": false
+    },
+    "wd.trigger.manual": {
+      "text": "Lokacin da wani ya fara shi",
+      "reviewed": false
+    },
+    "wd.trigger.other": {
+      "text": "Lokacin da aka tayar da shi ({type})",
+      "reviewed": false
+    },
+    "wd.trigger.polling": {
+      "text": "Kowane {interval}, duba {connector} ({action}) don sababbin abubuwa",
+      "reviewed": false
+    },
+    "wd.trigger.subflow": {
+      "text": "Lokacin da wani aiki ya kira shi",
+      "reviewed": false
+    },
+    "wd.trigger.ussd": {
+      "text": "Lokacin da wani ya kira lambar USSD",
+      "reviewed": false
+    },
+    "wd.trigger.webhook": {
+      "text": "Lokacin da tsarinka ya kira adireshin yanar gizon wannan aiki",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_checked": {
+      "text": "Lokacin da tsarinka ya kira adireshin yanar gizon wannan aiki (ana dubawa da {auth})",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_unsigned": {
+      "text": "Lokacin da tsarinka ya kira adireshin yanar gizon wannan aiki (ba tare da duba sa hannu ba)",
+      "reviewed": false
+    },
+    "wd.trigger.whatsapp": {
+      "text": "Lokacin da saƙo ya iso a WhatsApp",
+      "reviewed": false
+    },
+    "wd.unit.day_one": {
+      "text": "kwana 1",
+      "reviewed": false
+    },
+    "wd.unit.days": {
+      "text": "kwana {count}",
+      "reviewed": false
+    },
+    "wd.unit.hour_one": {
+      "text": "awa 1",
+      "reviewed": false
+    },
+    "wd.unit.hours": {
+      "text": "awa {count}",
+      "reviewed": false
+    },
+    "wd.unit.minute_one": {
+      "text": "minti 1",
+      "reviewed": false
+    },
+    "wd.unit.minutes": {
+      "text": "minti {count}",
+      "reviewed": false
+    },
+    "wd.unit.second_one": {
+      "text": "daƙiƙa 1",
+      "reviewed": false
+    },
+    "wd.unit.seconds": {
+      "text": "daƙiƙa {count}",
+      "reviewed": false
+    },
+    "wd.wait_for": {
+      "text": "Jira {duration}",
+      "reviewed": false
+    },
+    "wd.wait_until": {
+      "text": "Jira har lokacin da aka sa",
       "reviewed": false
     }
   }

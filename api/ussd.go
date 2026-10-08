@@ -222,7 +222,7 @@ func (s *Server) ussdCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	end, text := s.ussdStep(ctx, tenant, provider, ad, ch, q)
-	ad.Reply(w, end, s.ussdLocal(ctx, tenant, text))
+	ad.Reply(w, end, s.ussdLocalFor(ctx, tenant, q.Phone, text)) // in the caller's language
 }
 
 // ussdStep walks the session one step and says what to answer.
@@ -260,9 +260,21 @@ func (s *Server) ussdStep(ctx context.Context, tenant uuid.UUID, provider string
 	if !ad.Incremental() {
 		path = ussd.SplitPath(q.Input)
 	}
+	// The language list, when more than one language is on (ussd_lang.go).
+	lm := s.ussdLangMenuFor(ctx, tenant, q.Phone, m.menu)
+	if lm != nil {
+		var done bool
+		var text string
+		if done, text, path = s.ussdLangWalk(tenant, q.Phone, lm, path); done {
+			return false, text
+		}
+	}
 	res := m.menu.Walk(path)
 	switch res.Kind {
 	case ussd.Continue:
+		if lm != nil && len(path) == 0 {
+			return false, lm.opening(m.menu, res.Text)
+		}
 		return false, res.Text
 	case ussd.End:
 		s.ussdBackground(func(ctx context.Context) {

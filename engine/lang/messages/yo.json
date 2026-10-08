@@ -124,6 +124,30 @@
       "text": "Ise yii ko si.",
       "reviewed": false
     },
+    "ussd.language.back": {
+      "text": "Pada",
+      "reviewed": false
+    },
+    "ussd.language.choose": {
+      "text": "Yan ede yin:",
+      "reviewed": false
+    },
+    "ussd.language.entry": {
+      "text": "Ede",
+      "reviewed": false
+    },
+    "ussd.language.invalid": {
+      "text": "Asayan ti ko to. E tun gbiyanju.",
+      "reviewed": false
+    },
+    "ussd.language.set": {
+      "text": "Ede: {language}",
+      "reviewed": false
+    },
+    "ussd.language.set_draft": {
+      "text": "Ede: {language} (akosile)",
+      "reviewed": false
+    },
     "ussd.not_taken": {
       "text": "E ma binu, a ko le gba ibeere yin. Ko si nkan to bere. E jowo e tun gbiyanju.",
       "reviewed": false
@@ -390,6 +414,38 @@
     },
     "wa.confirm_reminder": {
       "text": "Ẹ dáhùn *yes* láti bẹ̀rẹ̀ {workflow}, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.field.enter": {
+      "text": "Ẹ tẹ {label}",
+      "reviewed": false
+    },
+    "wa.field.enter_number": {
+      "text": "Ẹ tẹ {label} (nọ́mbà)",
+      "reviewed": false
+    },
+    "wa.field.enter_one_of": {
+      "text": "Ẹ tẹ {label} (ọ̀kan nínú: {options})",
+      "reviewed": false
+    },
+    "wa.field.enter_whole": {
+      "text": "Ẹ tẹ {label} (nọ́mbà odidi)",
+      "reviewed": false
+    },
+    "wa.field.enter_yes_no": {
+      "text": "Ẹ tẹ {label} (bẹ́ẹ̀ni tàbí bẹ́ẹ̀kọ́)",
+      "reviewed": false
+    },
+    "wa.field.not_number": {
+      "text": "ìyẹn kì í ṣe nọ́mbà",
+      "reviewed": false
+    },
+    "wa.field.not_whole": {
+      "text": "ìyẹn kì í ṣe nọ́mbà odidi",
+      "reviewed": false
+    },
+    "wa.field.yes_no": {
+      "text": "ẹ dáhùn bẹ́ẹ̀ni tàbí bẹ́ẹ̀kọ́",
       "reviewed": false
     },
     "wa.form.gone": {
@@ -686,6 +742,278 @@
     },
     "wa.unbound": {
       "text": "A kò tíì so nọ́mbà yìí mọ́ àkọọ́lẹ̀ Taskiem kankan. Láti lo Taskiem níbí, ẹ wọlé, ẹ ṣí {where}, ẹ fi nọ́mbà yìí kún un lábẹ́ WhatsApp, lẹ́yìn náà ẹ tẹ kóòdù tí a fi ránṣẹ́ sí yín tàbí kí ẹ dá a padà.",
+      "reviewed": false
+    },
+    "wd.alongside": {
+      "text": "Lẹ́gbẹ̀ẹ́ rẹ̀: {name}",
+      "reviewed": false
+    },
+    "wd.and": {
+      "text": "{list} àti {last}",
+      "reviewed": false
+    },
+    "wd.approval": {
+      "text": "Dúró de ìfọwọ́sí",
+      "reviewed": false
+    },
+    "wd.approval.policy": {
+      "text": "Gba ìfọwọ́sí lábẹ́ ìlànà {policy}",
+      "reviewed": false
+    },
+    "wd.approval.role_many": {
+      "text": "Bèèrè lọ́wọ́ ènìyàn {count} tí wọ́n ní ipa {role} láti fọwọ́ sí i",
+      "reviewed": false
+    },
+    "wd.approval.role_one": {
+      "text": "Bèèrè lọ́wọ́ {role} kan láti fọwọ́ sí i",
+      "reviewed": false
+    },
+    "wd.approval.timeout": {
+      "text": "{approval} (yóò dúró tó {duration})",
+      "reviewed": false
+    },
+    "wd.branch": {
+      "text": "Pinnu ohun tí a ó ṣe:",
+      "reviewed": false
+    },
+    "wd.code": {
+      "text": "Ṣiṣẹ́ kóòdù tirẹ̀",
+      "reviewed": false
+    },
+    "wd.code_language": {
+      "text": "Ṣiṣẹ́ kóòdù {language} tirẹ̀",
+      "reviewed": false
+    },
+    "wd.connector": {
+      "text": "{action} pẹ̀lú {connector}",
+      "reviewed": false
+    },
+    "wd.container": {
+      "text": "Ṣiṣẹ́ àpótí kan",
+      "reviewed": false
+    },
+    "wd.container_named": {
+      "text": "Ṣiṣẹ́ àpótí {image}",
+      "reviewed": false
+    },
+    "wd.day.friday": {
+      "text": "Ọjọ́ Ẹtì",
+      "reviewed": false
+    },
+    "wd.day.monday": {
+      "text": "Ọjọ́ Ajé",
+      "reviewed": false
+    },
+    "wd.day.saturday": {
+      "text": "Ọjọ́ Àbámẹ́ta",
+      "reviewed": false
+    },
+    "wd.day.sunday": {
+      "text": "Ọjọ́ Àìkú",
+      "reviewed": false
+    },
+    "wd.day.thursday": {
+      "text": "Ọjọ́bọ̀",
+      "reviewed": false
+    },
+    "wd.day.tuesday": {
+      "text": "Ọjọ́ Ìṣẹ́gun",
+      "reviewed": false
+    },
+    "wd.day.wednesday": {
+      "text": "Ọjọ́rú",
+      "reviewed": false
+    },
+    "wd.foreach": {
+      "text": "Fún ohun kọ̀ọ̀kan nínú àkójọ:",
+      "reviewed": false
+    },
+    "wd.foreach_limited": {
+      "text": "Fún ohun kọ̀ọ̀kan nínú àkójọ (kò ju {count} lẹ́ẹ̀kan):",
+      "reviewed": false
+    },
+    "wd.http": {
+      "text": "Pe iṣẹ́ ìta kan",
+      "reviewed": false
+    },
+    "wd.http_host": {
+      "text": "Pe {host} ({method})",
+      "reviewed": false
+    },
+    "wd.http_service": {
+      "text": "Pe iṣẹ́ ìta kan ({method})",
+      "reviewed": false
+    },
+    "wd.if": {
+      "text": "Bí {name}:",
+      "reviewed": false
+    },
+    "wd.on_error": {
+      "text": "Bí ìgbésẹ̀ yẹn bá kùnà:",
+      "reviewed": false
+    },
+    "wd.only_when": {
+      "text": "{step}, kìkì bí àdéhùn rẹ̀ bá ṣẹ",
+      "reviewed": false
+    },
+    "wd.or": {
+      "text": " tàbí ",
+      "reviewed": false
+    },
+    "wd.otherwise": {
+      "text": "Bí kò bá rí bẹ́ẹ̀:",
+      "reviewed": false
+    },
+    "wd.parallel": {
+      "text": "Ṣe àwọn wọ̀nyí ní àkókò kan náà:",
+      "reviewed": false
+    },
+    "wd.schedule.daily": {
+      "text": "Lójoojúmọ́ ní {time} (àkókò {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.days": {
+      "text": "Ní gbogbo {days} ní {time} (àkókò {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.hourly": {
+      "text": "Ní gbogbo wákàtí, ní ìbẹ̀rẹ̀ wákàtí",
+      "reviewed": false
+    },
+    "wd.schedule.hourly_at": {
+      "text": "Ní gbogbo wákàtí ní ìṣẹ́jú {minute} kọjá",
+      "reviewed": false
+    },
+    "wd.schedule.hours": {
+      "text": "Ní gbogbo wákàtí {count}",
+      "reviewed": false
+    },
+    "wd.schedule.last_day": {
+      "text": "Ní ọjọ́ tó kẹ́yìn oṣù kọ̀ọ̀kan ní {time} (àkókò {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.minutes": {
+      "text": "Ní gbogbo ìṣẹ́jú {count}",
+      "reviewed": false
+    },
+    "wd.schedule.monthly": {
+      "text": "Ní ọjọ́ {day} oṣù kọ̀ọ̀kan ní {time} (àkókò {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw": {
+      "text": "Lórí ètò {cron} ({tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw_local": {
+      "text": "Lórí ètò {cron} (àkókò {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.weekdays": {
+      "text": "Ní gbogbo ọjọ́ iṣẹ́ (Ajé sí Ẹtì) ní {time} (àkókò {tz})",
+      "reviewed": false
+    },
+    "wd.signal": {
+      "text": "Dúró de àmì kan",
+      "reviewed": false
+    },
+    "wd.signal_named": {
+      "text": "Dúró de {event}",
+      "reviewed": false
+    },
+    "wd.transform": {
+      "text": "Ṣètò dátà fún àwọn ìgbésẹ̀ tó kàn",
+      "reviewed": false
+    },
+    "wd.trigger.database_change": {
+      "text": "Nígbà tí ìlà kan nínú àkójọpọ̀ dátà bá yí padà",
+      "reviewed": false
+    },
+    "wd.trigger.email": {
+      "text": "Nígbà tí ímeèlì bá dé",
+      "reviewed": false
+    },
+    "wd.trigger.event": {
+      "text": "Nígbà tí {connector} bá fi ìṣẹ̀lẹ̀ kan ránṣẹ́ ({trigger})",
+      "reviewed": false
+    },
+    "wd.trigger.event_reports": {
+      "text": "Nígbà tí {connector} bá ròyìn {events}",
+      "reviewed": false
+    },
+    "wd.trigger.manual": {
+      "text": "Nígbà tí ẹnìkan bá bẹ̀rẹ̀ rẹ̀",
+      "reviewed": false
+    },
+    "wd.trigger.other": {
+      "text": "Nígbà tí wọ́n bá bẹ̀rẹ̀ rẹ̀ ({type})",
+      "reviewed": false
+    },
+    "wd.trigger.polling": {
+      "text": "Ní gbogbo {interval}, ṣàyẹ̀wò {connector} ({action}) fún àwọn nǹkan tuntun",
+      "reviewed": false
+    },
+    "wd.trigger.subflow": {
+      "text": "Nígbà tí iṣẹ́ míràn bá pè é",
+      "reviewed": false
+    },
+    "wd.trigger.ussd": {
+      "text": "Nígbà tí ẹnìkan bá tẹ kóòdù USSD",
+      "reviewed": false
+    },
+    "wd.trigger.webhook": {
+      "text": "Nígbà tí ẹ̀rọ yín bá pe àdírẹ́sì wẹ́ẹ̀bù iṣẹ́ yìí",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_checked": {
+      "text": "Nígbà tí ẹ̀rọ yín bá pe àdírẹ́sì wẹ́ẹ̀bù iṣẹ́ yìí (a ṣàyẹ̀wò rẹ̀ pẹ̀lú {auth})",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_unsigned": {
+      "text": "Nígbà tí ẹ̀rọ yín bá pe àdírẹ́sì wẹ́ẹ̀bù iṣẹ́ yìí (láìsí àyẹ̀wò ìbuwọ́lù)",
+      "reviewed": false
+    },
+    "wd.trigger.whatsapp": {
+      "text": "Nígbà tí ọ̀rọ̀ bá dé sí WhatsApp",
+      "reviewed": false
+    },
+    "wd.unit.day_one": {
+      "text": "ọjọ́ 1",
+      "reviewed": false
+    },
+    "wd.unit.days": {
+      "text": "ọjọ́ {count}",
+      "reviewed": false
+    },
+    "wd.unit.hour_one": {
+      "text": "wákàtí 1",
+      "reviewed": false
+    },
+    "wd.unit.hours": {
+      "text": "wákàtí {count}",
+      "reviewed": false
+    },
+    "wd.unit.minute_one": {
+      "text": "ìṣẹ́jú 1",
+      "reviewed": false
+    },
+    "wd.unit.minutes": {
+      "text": "ìṣẹ́jú {count}",
+      "reviewed": false
+    },
+    "wd.unit.second_one": {
+      "text": "ìṣẹ́jú-àáyá 1",
+      "reviewed": false
+    },
+    "wd.unit.seconds": {
+      "text": "ìṣẹ́jú-àáyá {count}",
+      "reviewed": false
+    },
+    "wd.wait_for": {
+      "text": "Dúró fún {duration}",
+      "reviewed": false
+    },
+    "wd.wait_until": {
+      "text": "Dúró títí àkókò tí a yàn",
       "reviewed": false
     }
   }

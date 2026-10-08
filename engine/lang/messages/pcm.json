@@ -124,6 +124,30 @@
       "text": "This service no dey available.",
       "reviewed": false
     },
+    "ussd.language.back": {
+      "text": "Back",
+      "reviewed": false
+    },
+    "ussd.language.choose": {
+      "text": "Choose your language:",
+      "reviewed": false
+    },
+    "ussd.language.entry": {
+      "text": "Language",
+      "reviewed": false
+    },
+    "ussd.language.invalid": {
+      "text": "That choice no correct. Try again.",
+      "reviewed": false
+    },
+    "ussd.language.set": {
+      "text": "Language: {language}",
+      "reviewed": false
+    },
+    "ussd.language.set_draft": {
+      "text": "Language: {language} (draft)",
+      "reviewed": false
+    },
     "ussd.not_taken": {
       "text": "Sorry, we no fit take your request. Nothing start. Abeg try again.",
       "reviewed": false
@@ -390,6 +414,38 @@
     },
     "wa.confirm_reminder": {
       "text": "Reply *yes* make {workflow} start, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.field.enter": {
+      "text": "Put {label}",
+      "reviewed": false
+    },
+    "wa.field.enter_number": {
+      "text": "Put {label} (number)",
+      "reviewed": false
+    },
+    "wa.field.enter_one_of": {
+      "text": "Put {label} (one of: {options})",
+      "reviewed": false
+    },
+    "wa.field.enter_whole": {
+      "text": "Put {label} (full number, no point)",
+      "reviewed": false
+    },
+    "wa.field.enter_yes_no": {
+      "text": "Put {label} (yes or no)",
+      "reviewed": false
+    },
+    "wa.field.not_number": {
+      "text": "that one no be number",
+      "reviewed": false
+    },
+    "wa.field.not_whole": {
+      "text": "that one no be full number",
+      "reviewed": false
+    },
+    "wa.field.yes_no": {
+      "text": "answer yes or no",
       "reviewed": false
     },
     "wa.form.gone": {
@@ -686,6 +742,278 @@
     },
     "wa.unbound": {
       "text": "This number never join any Taskiem account. To use Taskiem here, sign in, open {where}, add this number under WhatsApp, then type or send back the code wey we go send you.",
+      "reviewed": false
+    },
+    "wd.alongside": {
+      "text": "Same time: {name}",
+      "reviewed": false
+    },
+    "wd.and": {
+      "text": "{list} and {last}",
+      "reviewed": false
+    },
+    "wd.approval": {
+      "text": "Wait for approval",
+      "reviewed": false
+    },
+    "wd.approval.policy": {
+      "text": "Get approval under {policy} policy",
+      "reviewed": false
+    },
+    "wd.approval.role_many": {
+      "text": "Ask {count} people wey get {role} role make dem approve",
+      "reviewed": false
+    },
+    "wd.approval.role_one": {
+      "text": "Ask one {role} make e approve",
+      "reviewed": false
+    },
+    "wd.approval.timeout": {
+      "text": "{approval} (e go wait reach {duration})",
+      "reviewed": false
+    },
+    "wd.branch": {
+      "text": "Decide wetin to do:",
+      "reviewed": false
+    },
+    "wd.code": {
+      "text": "Run code wey una write",
+      "reviewed": false
+    },
+    "wd.code_language": {
+      "text": "Run {language} code wey una write",
+      "reviewed": false
+    },
+    "wd.connector": {
+      "text": "{action} with {connector}",
+      "reviewed": false
+    },
+    "wd.container": {
+      "text": "Run container",
+      "reviewed": false
+    },
+    "wd.container_named": {
+      "text": "Run the {image} container",
+      "reviewed": false
+    },
+    "wd.day.friday": {
+      "text": "Friday",
+      "reviewed": false
+    },
+    "wd.day.monday": {
+      "text": "Monday",
+      "reviewed": false
+    },
+    "wd.day.saturday": {
+      "text": "Saturday",
+      "reviewed": false
+    },
+    "wd.day.sunday": {
+      "text": "Sunday",
+      "reviewed": false
+    },
+    "wd.day.thursday": {
+      "text": "Thursday",
+      "reviewed": false
+    },
+    "wd.day.tuesday": {
+      "text": "Tuesday",
+      "reviewed": false
+    },
+    "wd.day.wednesday": {
+      "text": "Wednesday",
+      "reviewed": false
+    },
+    "wd.foreach": {
+      "text": "For each thing for the list:",
+      "reviewed": false
+    },
+    "wd.foreach_limited": {
+      "text": "For each thing for the list (no pass {count} at once):",
+      "reviewed": false
+    },
+    "wd.http": {
+      "text": "Call outside service",
+      "reviewed": false
+    },
+    "wd.http_host": {
+      "text": "Call {host} ({method})",
+      "reviewed": false
+    },
+    "wd.http_service": {
+      "text": "Call outside service ({method})",
+      "reviewed": false
+    },
+    "wd.if": {
+      "text": "If {name}:",
+      "reviewed": false
+    },
+    "wd.on_error": {
+      "text": "If that step fail:",
+      "reviewed": false
+    },
+    "wd.only_when": {
+      "text": "{step}, only if the condition correct",
+      "reviewed": false
+    },
+    "wd.or": {
+      "text": " or ",
+      "reviewed": false
+    },
+    "wd.otherwise": {
+      "text": "If e no be so:",
+      "reviewed": false
+    },
+    "wd.parallel": {
+      "text": "Do all these same time:",
+      "reviewed": false
+    },
+    "wd.schedule.daily": {
+      "text": "Every day by {time} ({tz} time)",
+      "reviewed": false
+    },
+    "wd.schedule.days": {
+      "text": "Every {days} by {time} ({tz} time)",
+      "reviewed": false
+    },
+    "wd.schedule.hourly": {
+      "text": "Every hour, as the hour reach",
+      "reviewed": false
+    },
+    "wd.schedule.hourly_at": {
+      "text": "Every hour, {minute} minutes after",
+      "reviewed": false
+    },
+    "wd.schedule.hours": {
+      "text": "Every {count} hours",
+      "reviewed": false
+    },
+    "wd.schedule.last_day": {
+      "text": "For the last day of every month by {time} ({tz} time)",
+      "reviewed": false
+    },
+    "wd.schedule.minutes": {
+      "text": "Every {count} minutes",
+      "reviewed": false
+    },
+    "wd.schedule.monthly": {
+      "text": "For day {day} of every month by {time} ({tz} time)",
+      "reviewed": false
+    },
+    "wd.schedule.raw": {
+      "text": "On the schedule {cron} ({tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw_local": {
+      "text": "On the schedule {cron} ({tz} time)",
+      "reviewed": false
+    },
+    "wd.schedule.weekdays": {
+      "text": "Every working day (Monday to Friday) by {time} ({tz} time)",
+      "reviewed": false
+    },
+    "wd.signal": {
+      "text": "Wait for signal",
+      "reviewed": false
+    },
+    "wd.signal_named": {
+      "text": "Wait for {event}",
+      "reviewed": false
+    },
+    "wd.transform": {
+      "text": "Arrange the data for the next steps",
+      "reviewed": false
+    },
+    "wd.trigger.database_change": {
+      "text": "When one row for database change",
+      "reviewed": false
+    },
+    "wd.trigger.email": {
+      "text": "When email land",
+      "reviewed": false
+    },
+    "wd.trigger.event": {
+      "text": "When {connector} send event ({trigger})",
+      "reviewed": false
+    },
+    "wd.trigger.event_reports": {
+      "text": "When {connector} report {events}",
+      "reviewed": false
+    },
+    "wd.trigger.manual": {
+      "text": "When person start am",
+      "reviewed": false
+    },
+    "wd.trigger.other": {
+      "text": "When e start ({type})",
+      "reviewed": false
+    },
+    "wd.trigger.polling": {
+      "text": "Every {interval}, check {connector} ({action}) for new things",
+      "reviewed": false
+    },
+    "wd.trigger.subflow": {
+      "text": "When another workflow call am",
+      "reviewed": false
+    },
+    "wd.trigger.ussd": {
+      "text": "When person dial the USSD code",
+      "reviewed": false
+    },
+    "wd.trigger.webhook": {
+      "text": "When your system call this workflow web address",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_checked": {
+      "text": "When your system call this workflow web address (we check am with {auth})",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_unsigned": {
+      "text": "When your system call this workflow web address (no signature check)",
+      "reviewed": false
+    },
+    "wd.trigger.whatsapp": {
+      "text": "When message land for WhatsApp",
+      "reviewed": false
+    },
+    "wd.unit.day_one": {
+      "text": "1 day",
+      "reviewed": false
+    },
+    "wd.unit.days": {
+      "text": "{count} days",
+      "reviewed": false
+    },
+    "wd.unit.hour_one": {
+      "text": "1 hour",
+      "reviewed": false
+    },
+    "wd.unit.hours": {
+      "text": "{count} hours",
+      "reviewed": false
+    },
+    "wd.unit.minute_one": {
+      "text": "1 minute",
+      "reviewed": false
+    },
+    "wd.unit.minutes": {
+      "text": "{count} minutes",
+      "reviewed": false
+    },
+    "wd.unit.second_one": {
+      "text": "1 second",
+      "reviewed": false
+    },
+    "wd.unit.seconds": {
+      "text": "{count} seconds",
+      "reviewed": false
+    },
+    "wd.wait_for": {
+      "text": "Wait {duration}",
+      "reviewed": false
+    },
+    "wd.wait_until": {
+      "text": "Wait reach the time wey dem set",
       "reviewed": false
     }
   }

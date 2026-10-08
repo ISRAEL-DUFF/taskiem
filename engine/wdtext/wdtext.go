@@ -4,6 +4,11 @@
 // preview. It reads names and descriptions where a definition has them
 // and otherwise says what each step does from its type and its
 // connector's manifest. It never prints expressions or values.
+//
+// The words around names come from engine/lang's wd.* messages, so the
+// WhatsApp read-back follows the person's language (DescribeIn). Names,
+// connector and action titles, and roles are the tenant's or the
+// connector's own words and stay as written.
 package wdtext
 
 import (
@@ -13,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -26,10 +32,15 @@ type Line struct {
 }
 
 // Describe returns the trigger as line 1 and each step after it, nested
-// steps indented under their parent. reg may be nil (connector refs are
-// then named as written).
+// steps indented under their parent, in English. reg may be nil
+// (connector refs are then named as written).
 func Describe(def *wd.Definition, reg connector.Lookup) []Line {
-	d := describer{reg: reg}
+	return DescribeIn(def, reg, lang.EN)
+}
+
+// DescribeIn is Describe in a language.
+func DescribeIn(def *wd.Definition, reg connector.Lookup, t lang.Tag) []Line {
+	d := describer{reg: reg, lang: t}
 	out := []Line{{Number: "1", Text: d.trigger(def.Trigger)}}
 	d.steps(&out, def.Steps, 0, "", 2)
 	return out
@@ -56,7 +67,13 @@ func Text(lines []Line) string {
 	return b.String()
 }
 
-type describer struct{ reg connector.Lookup }
+type describer struct {
+	reg  connector.Lookup
+	lang lang.Tag
+}
+
+// t is message id in the describer's language.
+func (d describer) t(id string, kv ...string) string { return lang.Default().Text(d.lang, id, kv...) }
 
 func (d describer) steps(out *[]Line, steps []*wd.Step, depth int, prefix string, first int) {
 	for i, st := range steps {
@@ -74,7 +91,7 @@ func (d describer) steps(out *[]Line, steps []*wd.Step, depth int, prefix string
 			if st.Parallel != nil {
 				for j, br := range st.Parallel.Branches {
 					bn := num + label(depth+1, j)
-					*out = append(*out, Line{Number: bn, Depth: depth + 1, Text: "Alongside: " + plain(br.Name)})
+					*out = append(*out, Line{Number: bn, Depth: depth + 1, Text: d.t("wd.alongside", "name", plain(br.Name))})
 					d.steps(out, br.Steps, depth+2, bn, 0)
 				}
 			}
@@ -84,18 +101,18 @@ func (d describer) steps(out *[]Line, steps []*wd.Step, depth int, prefix string
 				for _, p := range st.Branch.Paths {
 					bn := num + label(depth+1, n)
 					n++
-					*out = append(*out, Line{Number: bn, Depth: depth + 1, Text: "If " + plain(p.Name) + ":"})
+					*out = append(*out, Line{Number: bn, Depth: depth + 1, Text: d.t("wd.if", "name", plain(p.Name))})
 					d.steps(out, p.Steps, depth+2, bn, 0)
 				}
 				if st.Branch.Default != nil && len(st.Branch.Default.Steps) > 0 {
 					bn := num + label(depth+1, n)
-					*out = append(*out, Line{Number: bn, Depth: depth + 1, Text: "Otherwise:"})
+					*out = append(*out, Line{Number: bn, Depth: depth + 1, Text: d.t("wd.otherwise")})
 					d.steps(out, st.Branch.Default.Steps, depth+2, bn, 0)
 				}
 			}
 		}
 		if st.OnError != nil && len(st.OnError.Steps) > 0 {
-			*out = append(*out, Line{Depth: depth + 1, Text: "If that step fails:"})
+			*out = append(*out, Line{Depth: depth + 1, Text: d.t("wd.on_error")})
 			d.steps(out, st.OnError.Steps, depth+2, "•", 0)
 		}
 	}
@@ -160,16 +177,16 @@ func (d describer) trigger(t wd.Trigger) string {
 	str := func(k string) string { s, _ := cfg[k].(string); return s }
 	switch t.Type {
 	case "schedule":
-		return Schedule(str("cron"), str("timezone"))
+		return ScheduleIn(str("cron"), str("timezone"), d.lang)
 	case "webhook":
 		auth := str("auth")
 		switch auth {
 		case "none":
-			return "When your system calls this workflow's web address (no signature check)"
+			return d.t("wd.trigger.webhook_unsigned")
 		case "":
-			return "When your system calls this workflow's web address"
+			return d.t("wd.trigger.webhook")
 		}
-		return "When your system calls this workflow's web address (checked with " + auth + ")"
+		return d.t("wd.trigger.webhook_checked", "auth", auth)
 	case "connector_event":
 		name := d.connectorName(str("connector"))
 		var evs []string
@@ -181,25 +198,16 @@ func (d describer) trigger(t wd.Trigger) string {
 			}
 		}
 		if len(evs) > 0 {
-			return "When " + name + " reports " + strings.Join(evs, " or ")
+			return d.t("wd.trigger.event_reports", "connector", name, "events", strings.Join(evs, d.t("wd.or")))
 		}
-		return "When " + name + " sends an event (" + strings.ReplaceAll(str("trigger"), "_", " ") + ")"
+		return d.t("wd.trigger.event", "connector", name, "trigger", strings.ReplaceAll(str("trigger"), "_", " "))
 	case "polling":
-		return "Every " + Duration(str("interval")) + ", check " + d.connectorName(str("connector")) + " (" + d.actionTitle(str("connector"), str("action")) + ") for new items"
-	case "manual":
-		return "When someone starts it"
-	case "whatsapp":
-		return "When a message arrives on WhatsApp"
-	case "ussd":
-		return "When someone dials the USSD code"
-	case "email":
-		return "When an email arrives"
-	case "database_change":
-		return "When a database row changes"
-	case "subflow":
-		return "When another workflow calls it"
+		return d.t("wd.trigger.polling", "interval", DurationIn(str("interval"), d.lang), "connector", d.connectorName(str("connector")),
+			"action", d.actionTitle(str("connector"), str("action")))
+	case "manual", "whatsapp", "ussd", "email", "database_change", "subflow":
+		return d.t("wd.trigger." + t.Type)
 	}
-	return "When it is triggered (" + t.Type + ")"
+	return d.t("wd.trigger.other", "type", t.Type)
 }
 
 func (d describer) step(st *wd.Step) string {
@@ -213,7 +221,7 @@ func (d describer) step(st *wd.Step) string {
 	}
 	if st.When != "" && st.Type != "branch" {
 		colon := strings.HasSuffix(what, ":")
-		what = strings.TrimSuffix(what, ":") + ", only when its condition holds"
+		what = d.t("wd.only_when", "step", strings.TrimSuffix(what, ":"))
 		if colon {
 			what += ":"
 		}
@@ -224,72 +232,70 @@ func (d describer) step(st *wd.Step) string {
 func (d describer) what(st *wd.Step) string {
 	switch st.Type {
 	case "connector":
-		return d.actionTitle(st.Connector, st.Action) + " with " + d.connectorName(st.Connector)
+		return d.t("wd.connector", "action", d.actionTitle(st.Connector, st.Action), "connector", d.connectorName(st.Connector))
 	case "approval":
 		a := st.Approval
 		if a == nil {
-			return "Wait for approval"
+			return d.t("wd.approval")
 		}
 		var s string
 		switch {
 		case a.Policy != "":
-			s = "Get approval under the " + plain(a.Policy) + " policy"
+			s = d.t("wd.approval.policy", "policy", plain(a.Policy))
 		case a.Role != "":
 			n := max(a.Count, 1)
 			if n == 1 {
-				s = "Ask a " + plain(a.Role) + " to approve"
+				s = d.t("wd.approval.role_one", "role", plain(a.Role))
 			} else {
-				s = fmt.Sprintf("Ask %d people with the %s role to approve", n, plain(a.Role))
+				s = d.t("wd.approval.role_many", "count", strconv.Itoa(n), "role", plain(a.Role))
 			}
 		default:
-			s = "Wait for approval"
+			s = d.t("wd.approval")
 		}
 		if a.Timeout != "" {
-			s += " (waits up to " + Duration(a.Timeout) + ")"
+			s = d.t("wd.approval.timeout", "approval", s, "duration", DurationIn(a.Timeout, d.lang))
 		}
 		return s
 	case "foreach":
-		s := "For each item in the list"
 		if f := st.Foreach; f != nil && f.MaxConcurrency > 0 {
-			s += fmt.Sprintf(" (at most %d at a time)", f.MaxConcurrency)
+			return d.t("wd.foreach_limited", "count", strconv.Itoa(f.MaxConcurrency))
 		}
-		return s + ":"
+		return d.t("wd.foreach")
 	case "parallel":
-		return "Do these at the same time:"
+		return d.t("wd.parallel")
 	case "branch":
-		return "Decide what to do:"
+		return d.t("wd.branch")
 	case "wait":
 		if w := st.Wait; w != nil && w.Duration != "" {
-			return "Wait " + Duration(w.Duration)
+			return d.t("wd.wait_for", "duration", DurationIn(w.Duration, d.lang))
 		}
-		return "Wait until the set time"
+		return d.t("wd.wait_until")
 	case "signal":
 		if s := st.Signal; s != nil {
-			return "Wait for " + plain(s.Event)
+			return d.t("wd.signal_named", "event", plain(s.Event))
 		}
-		return "Wait for a signal"
+		return d.t("wd.signal")
 	case "transform":
-		return "Prepare the data for the next steps"
+		return d.t("wd.transform")
 	case "http":
 		if h := st.HTTP; h != nil {
-			where := "an external service"
 			if u, err := url.Parse(h.URL); err == nil && u.Host != "" && !strings.HasPrefix(h.URL, "=") {
-				where = u.Host
+				return d.t("wd.http_host", "host", u.Host, "method", h.Method)
 			}
-			return "Call " + where + " (" + h.Method + ")"
+			return d.t("wd.http_service", "method", h.Method)
 		}
-		return "Call an external service"
+		return d.t("wd.http")
 	case "code":
 		if c := st.Code; c != nil {
-			return "Run custom " + c.Language + " code"
+			return d.t("wd.code_language", "language", c.Language)
 		}
-		return "Run custom code"
+		return d.t("wd.code")
 	case "container":
 		if c := st.Container; c != nil {
 			repo, _, _ := strings.Cut(c.Image, "@")
-			return "Run the " + plain(repo[strings.LastIndex(repo, "/")+1:]) + " container"
+			return d.t("wd.container_named", "image", plain(repo[strings.LastIndex(repo, "/")+1:]))
 		}
-		return "Run a container"
+		return d.t("wd.container")
 	}
 	return strings.ReplaceAll(st.Type, "_", " ")
 }
@@ -310,7 +316,10 @@ func plain(s string) string {
 }
 
 // Duration reads a wd/v1 duration ("90s", "15m", "24h", "7d") aloud.
-func Duration(s string) string {
+func Duration(s string) string { return DurationIn(s, lang.EN) }
+
+// DurationIn is Duration in a language.
+func DurationIn(s string, t lang.Tag) string {
 	if len(s) < 2 {
 		return s
 	}
@@ -323,69 +332,72 @@ func Duration(s string) string {
 		return s
 	}
 	if n == 1 {
-		return "1 " + unit
+		return lang.Default().Text(t, "wd.unit."+unit+"_one")
 	}
-	return strconv.Itoa(n) + " " + unit + "s"
+	return lang.Default().Text(t, "wd.unit."+unit+"s", "count", strconv.Itoa(n))
 }
 
-var weekdays = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+var weekdays = []string{"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"}
 
 // Schedule reads a five-field cron expression aloud for the common
 // shapes and falls back to the expression itself.
-func Schedule(cron, tz string) string {
+func Schedule(cron, tz string) string { return ScheduleIn(cron, tz, lang.EN) }
+
+// ScheduleIn is Schedule in a language.
+func ScheduleIn(cron, tz string, t lang.Tag) string {
+	tr := func(id string, kv ...string) string { return lang.Default().Text(t, id, kv...) }
 	if tz == "" {
 		tz = "Africa/Lagos"
 	}
 	f := strings.Fields(cron)
 	if len(f) != 5 {
-		return "On the schedule " + cron + " (" + tz + ")"
+		return tr("wd.schedule.raw", "cron", cron, "tz", tz)
 	}
 	min, hour, dom, mon, dow := f[0], f[1], f[2], f[3], f[4]
 	at := ""
 	if h, err := strconv.Atoi(hour); err == nil {
 		if m, err := strconv.Atoi(min); err == nil {
-			at = fmt.Sprintf(" at %02d:%02d", h, m)
+			at = fmt.Sprintf("%02d:%02d", h, m)
 		}
 	}
-	suffix := " (" + tz + " time)"
 	switch {
 	case strings.HasPrefix(min, "*/") && hour == "*" && dom == "*" && mon == "*" && dow == "*":
-		return "Every " + strings.TrimPrefix(min, "*/") + " minutes"
+		return tr("wd.schedule.minutes", "count", strings.TrimPrefix(min, "*/"))
 	case hour == "*" && dom == "*" && mon == "*" && dow == "*":
 		if min == "0" {
-			return "Every hour, on the hour"
+			return tr("wd.schedule.hourly")
 		}
-		return "Every hour at " + min + " minutes past"
+		return tr("wd.schedule.hourly_at", "minute", min)
 	case strings.HasPrefix(hour, "*/") && dom == "*" && mon == "*" && dow == "*":
-		return "Every " + strings.TrimPrefix(hour, "*/") + " hours"
+		return tr("wd.schedule.hours", "count", strings.TrimPrefix(hour, "*/"))
 	case at == "":
 	case dom == "*" && mon == "*" && dow == "*":
-		return "Every day" + at + suffix
+		return tr("wd.schedule.daily", "time", at, "tz", tz)
 	case dom == "*" && mon == "*" && (dow == "1-5" || dow == "MON-FRI"):
-		return "Every weekday (Monday to Friday)" + at + suffix
+		return tr("wd.schedule.weekdays", "time", at, "tz", tz)
 	case dom == "*" && mon == "*":
-		if days := dayNames(dow); days != "" {
-			return "Every " + days + at + suffix
+		if days := dayNames(dow, t); days != "" {
+			return tr("wd.schedule.days", "days", days, "time", at, "tz", tz)
 		}
 	case mon == "*" && dow == "*":
 		if dom == "L" {
-			return "On the last day of every month" + at + suffix
+			return tr("wd.schedule.last_day", "time", at, "tz", tz)
 		}
 		if n, err := strconv.Atoi(dom); err == nil {
-			return "On the " + ordinal(n) + " of every month" + at + suffix
+			return tr("wd.schedule.monthly", "day", ordinal(n, t), "time", at, "tz", tz)
 		}
 	}
-	return "On the schedule " + cron + suffix
+	return tr("wd.schedule.raw_local", "cron", cron, "tz", tz)
 }
 
-func dayNames(dow string) string {
+func dayNames(dow string, t lang.Tag) string {
 	var names []string
 	for _, p := range strings.Split(dow, ",") {
 		n, err := strconv.Atoi(p)
 		if err != nil || n < 0 || n > 7 {
 			return ""
 		}
-		names = append(names, weekdays[n%7])
+		names = append(names, lang.Default().Text(t, "wd.day."+weekdays[n%7]))
 	}
 	switch len(names) {
 	case 0:
@@ -393,10 +405,15 @@ func dayNames(dow string) string {
 	case 1:
 		return names[0]
 	}
-	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+	return lang.Default().Text(t, "wd.and", "list", strings.Join(names[:len(names)-1], ", "), "last", names[len(names)-1])
 }
 
-func ordinal(n int) string {
+// ordinal is a day of the month: "25th" in English; the number alone in
+// other languages, whose messages place it.
+func ordinal(n int, t lang.Tag) string {
+	if t != lang.EN {
+		return strconv.Itoa(n)
+	}
 	suf := "th"
 	if n%100 < 11 || n%100 > 13 {
 		switch n % 10 {
