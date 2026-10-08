@@ -195,7 +195,10 @@ func TestEndUserTokens(t *testing.T) {
 	}
 	mint(400, base(map[string]any{"ttl": 3601}))
 	mint(403, base(map[string]any{"permissions": []string{"workflow.publish"}})) // not allowed by this app
-	mint(403, base(map[string]any{"permissions": []string{"secret.manage"}}))
+	// Outside the end-user permissions the document lists: refused like any
+	// permission beyond the app's.
+	p.key.must(403, "POST", "/v1/partner/embed-apps/"+app+"/tokens", base(map[string]any{"permissions": []string{"secret.manage"}}),
+		invalidBody("a permission end users never get, refused as beyond the app's")...)
 	mint(400, base(map[string]any{"origin": "https://evil.test"}))
 	mint(400, base(map[string]any{"end_user_id": "<script>"}))
 	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "headless": true, "end_user_permissions": []string{"member.manage"}})
