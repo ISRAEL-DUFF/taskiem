@@ -130,19 +130,25 @@ func OggDuration(data []byte) (time.Duration, bool) {
 	if len(data) < 27 || string(data[:4]) != "OggS" {
 		return 0, false
 	}
-	last := -1
-	for i := len(data) - 27; i >= 0; i-- {
-		if data[i] == 'O' && string(data[i:i+4]) == "OggS" && data[i+4] == 0 {
-			last = i
-			break
+	// The largest granule position of any page, not the last page's: a
+	// stream crafted to end on a page claiming one second, after pages of
+	// minutes, would otherwise pass the duration cap while the provider
+	// transcribes (and bills) all of it (security review R5). Every real
+	// page starts with the capture pattern, so a pattern inside packet data
+	// can only make the estimate longer, never shorter.
+	granule, found := uint64(0), false
+	for i := 0; i+27 <= len(data); i++ {
+		if data[i] != 'O' || string(data[i:i+4]) != "OggS" || data[i+4] != 0 {
+			continue
 		}
+		g := binary.LittleEndian.Uint64(data[i+6 : i+14])
+		if g == ^uint64(0) {
+			continue // a page with no packet ending on it
+		}
+		granule, found = max(granule, g), true
 	}
-	if last < 0 {
+	if !found {
 		return 0, false
-	}
-	granule := binary.LittleEndian.Uint64(data[last+6 : last+14])
-	if granule == ^uint64(0) {
-		return 0, false // a page with no packet ending on it
 	}
 	rate := uint64(48000)
 	var preSkip uint64
@@ -150,8 +156,8 @@ func OggDuration(data []byte) (time.Duration, bool) {
 		preSkip = uint64(binary.LittleEndian.Uint16(data[i+10 : i+12]))
 	} else if i := strings.Index(string(data[:min(len(data), 512)]), "\x01vorbis"); i >= 0 && i+16 <= len(data) {
 		rate = uint64(binary.LittleEndian.Uint32(data[i+12 : i+16]))
-		if rate == 0 {
-			return 0, false
+		if rate < 1000 || rate > 192000 {
+			return 0, false // not a sample rate audio uses: a rate this large would shrink the duration
 		}
 	}
 	if granule < preSkip {

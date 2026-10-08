@@ -2,6 +2,7 @@ package voice_test
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"net/http"
@@ -24,6 +25,31 @@ func TestOggDuration(t *testing.T) {
 		if _, ok := voice.OggDuration(bad); ok {
 			t.Errorf("%q read as Ogg", bad)
 		}
+	}
+	// A stream that ends on a page claiming one second, after two minutes
+	// of audio, is two minutes long (security review R5).
+	page := func(granule uint64) []byte {
+		h := make([]byte, 28)
+		copy(h, "OggS")
+		binary.LittleEndian.PutUint64(h[6:], granule)
+		h[26], h[27] = 1, 2
+		return append(h, 0xfc, 0xff)
+	}
+	short := append(voice.TestOgg(120, 0), page(48000+312)...)
+	if d, ok := voice.OggDuration(short); !ok || d != 120*time.Second {
+		t.Errorf("a short last page hid the length: %v %v", d, ok)
+	}
+	if _, err := voice.Check(voice.Audio{Data: short, MimeType: "audio/ogg"}, voice.Limits{MaxDuration: 60 * time.Second}); !errors.Is(err, voice.ErrTooLong) {
+		t.Errorf("a short last page passed the cap: %v", err)
+	}
+	// A Vorbis header claiming an absurd sample rate (which would shrink
+	// the duration) is not taken.
+	vorbis := make([]byte, 30)
+	copy(vorbis, "\x01vorbis")
+	binary.LittleEndian.PutUint32(vorbis[12:], 4_000_000_000)
+	odd := append(append(page(0)[:28], vorbis...), page(600*48000)...)
+	if d, ok := voice.OggDuration(odd); ok {
+		t.Errorf("an absurd sample rate read as %v", d)
 	}
 }
 
