@@ -4060,6 +4060,11 @@ paths:
         schema:
           type: string
         description: Passkey id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactorProof'
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
@@ -4194,6 +4199,19 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              properties:
+                code:
+                  type: string
+                  description: A current code from the authenticator.
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
@@ -13641,9 +13659,7 @@ components:
       additionalProperties: false
     GovernanceRequest:
       type: object
-      required:
-      - four_eyes_publish
-      - four_eyes_policies
+      description: Replaces every setting; one left out is off (`false`, or no default retention).
       properties:
         four_eyes_publish:
           type: boolean

@@ -79,7 +79,7 @@ func TestBillingAPI(t *testing.T) {
 	for _, c := range []struct{ method, path string }{
 		{"POST", "/v1/sso"}, {"PUT", "/v1/roles/clerk"}, {"PUT", "/v1/scim"}, {"GET", "/v1/partner/"},
 	} {
-		st, out := owner.do(c.method, c.path, map[string]any{})
+		st, out := owner.do(c.method, c.path, map[string]any{}, invalidBody("refused for the plan before the body is read")...)
 		if st != 402 || out["code"] != "plan_feature_required" {
 			t.Errorf("%s %s: %d %v", c.method, c.path, st, out)
 		}

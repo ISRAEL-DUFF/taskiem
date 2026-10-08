@@ -102,7 +102,7 @@ func TestInviteeSession(t *testing.T) {
 	}
 	for _, c := range []struct{ method, path string }{{"POST", "/v1/workflows"}, {"POST", "/v1/me/totp"}, {"POST", "/v1/me/passkeys/options"},
 		{"POST", "/v1/api-keys"}, {"POST", "/v1/me/password"}, {"POST", "/v1/members"}} {
-		if st, _ := inv.do(c.method, c.path, map[string]any{}); st != 403 {
+		if st, _ := inv.do(c.method, c.path, map[string]any{}, invalidBody("refused for the permission before the body is read")...); st != 403 {
 			t.Errorf("%s %s: %d", c.method, c.path, st)
 		}
 	}

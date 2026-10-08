@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"slices"
@@ -224,9 +225,33 @@ var (
 	specErr       error
 )
 
-// specCheck wraps the API so every answer the tests receive is checked
-// against the document's schema for its route and status. Failures are
-// reported when the test ends.
+// invalidHeader marks a request whose body a test sends invalid on purpose,
+// to check how it is refused; specCheck removes it before the API sees it.
+const invalidHeader = "X-Taskiem-Test-Invalid-Body"
+
+// invalidBody marks a request (client.do's headers) whose body breaks the
+// document on purpose, so specCheck does not check it. A request the API
+// refuses for its body (bodyRefused) needs no mark: those tests check the
+// refusal. Mark only invalid bodies the API answers otherwise, such as a
+// placeholder body sent to see a permission or plan refusal. Keep these
+// few.
+func invalidBody(why string) []string { return []string{invalidHeader, why} }
+
+// bodyRefused are the statuses that refuse a request for its body: its
+// mismatch with the document is what the test checks.
+var bodyRefused = map[int]bool{
+	http.StatusBadRequest:            true,
+	http.StatusRequestEntityTooLarge: true,
+	http.StatusUnsupportedMediaType:  true,
+	http.StatusUnprocessableEntity:   true,
+}
+
+// specRequestCap is the largest request body specCheck reads to check.
+const specRequestCap = 4 << 20
+
+// specCheck wraps the API so every request body the tests send, and every
+// answer they receive, is checked against the document's schemas for its
+// route (and status). Failures are reported when the test ends.
 func specCheck(t *testing.T, h http.Handler) http.Handler {
 	specOnce.Do(func() { specValidator, specErr = openapi.NewValidator() })
 	if specErr != nil {
@@ -239,10 +264,32 @@ func specCheck(t *testing.T, h http.Handler) http.Handler {
 		mu.Lock()
 		defer mu.Unlock()
 		for _, f := range failures {
-			t.Errorf("answer does not match api/openapi/openapi.yaml: %s", f)
+			t.Errorf("does not match api/openapi/openapi.yaml: %s", f)
 		}
 	})
+	fail := func(key, msg string) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !seen[key] {
+			seen[key] = true
+			failures = append(failures, msg)
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		checkBody := r.Header.Get(invalidHeader) == ""
+		r.Header.Del(invalidHeader)
+		var reqBody []byte
+		if checkBody && r.Body != nil {
+			var err error
+			if reqBody, err = io.ReadAll(io.LimitReader(r.Body, specRequestCap+1)); err != nil {
+				t.Errorf("reading the request body: %v", err)
+			}
+			r.Body = struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(bytes.NewReader(reqBody), r.Body), r.Body}
+			checkBody = len(reqBody) <= specRequestCap
+		}
 		rctx := chi.NewRouteContext()
 		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 		rec := &recorder{ResponseWriter: w}
@@ -260,14 +307,17 @@ func specCheck(t *testing.T, h http.Handler) http.Handler {
 		if status == 0 {
 			status = http.StatusOK
 		}
-		if err := specValidator.ValidateResponse(r.Method, pattern, status, rec.Header().Get("Content-Type"), rec.body.Bytes()); err != nil {
-			msg := err.Error()
-			mu.Lock()
-			if k := fmt.Sprintf("%s %s %d", r.Method, pattern, status); !seen[k] {
-				seen[k] = true
-				failures = append(failures, msg)
+		if checkBody && !bodyRefused[status] {
+			ct := r.Header.Get("Content-Type")
+			if ct == "" {
+				ct = "application/json" // handlers decode JSON whatever the header says
 			}
-			mu.Unlock()
+			if err := specValidator.ValidateRequest(r.Method, pattern, ct, reqBody); err != nil {
+				fail(err.Error(), err.Error()) // every distinct mismatch
+			}
+		}
+		if err := specValidator.ValidateResponse(r.Method, pattern, status, rec.Header().Get("Content-Type"), rec.body.Bytes()); err != nil {
+			fail(fmt.Sprintf("%s %s %d", r.Method, pattern, status), err.Error())
 		}
 	})
 }

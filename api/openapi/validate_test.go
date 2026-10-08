@@ -45,6 +45,37 @@ func TestValidateResponse(t *testing.T) {
 	}
 }
 
+func TestValidateRequest(t *testing.T) {
+	v, err := NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		method, path string
+		ctype, body  string
+		fails        string // "" passes
+	}{
+		{"POST", "/v1/environments", "application/json", `{"name":"staging"}`, ""},
+		{"POST", "/v1/environments", "application/json", `{"name":"Bad Name"}`, "does not match pattern"},
+		{"POST", "/v1/environments", "application/json", `{}`, "missing propert"},
+		{"POST", "/v1/environments", "application/json", ``, "requires a request body"},
+		{"POST", "/v1/environments", "text/plain", `name=x`, "media type"},
+		{"POST", "/v1/environments", "application/json", `{`, "not JSON"},
+		{"GET", "/v1/workflows", "application/json", `{}`, "declares no request body"},
+		{"GET", "/v1/workflows", "", ``, ""},
+		{"GET", "/v1/nowhere", "", ``, "path not in the document"},
+	}
+	for _, c := range cases {
+		err := v.ValidateRequest(c.method, c.path, c.ctype, []byte(c.body))
+		switch {
+		case c.fails == "" && err != nil:
+			t.Errorf("%s %s %s: %v", c.method, c.path, c.body, err)
+		case c.fails != "" && (err == nil || !strings.Contains(err.Error(), c.fails)):
+			t.Errorf("%s %s %s: error %v, want one containing %q", c.method, c.path, c.body, err, c.fails)
+		}
+	}
+}
+
 func TestDocumentShape(t *testing.T) {
 	d, err := Load()
 	if err != nil {
