@@ -22,7 +22,7 @@ interface Descriptor {
   id: string;
 }
 
-interface CreationJSON {
+export interface CreationJSON {
   challenge: string;
   rp: PublicKeyCredentialRpEntity;
   user: { id: string; name: string; displayName: string };
@@ -33,7 +33,7 @@ interface CreationJSON {
   timeout?: number;
 }
 
-interface RequestJSON {
+export interface RequestJSON {
   challenge: string;
   rpId?: string;
   allowCredentials?: Descriptor[];
@@ -75,6 +75,29 @@ export async function proof(factors: Me["factors"], typed: string, action: strin
   if (factors?.totp) return { totp: typed };
   if (factors?.password) return { password: typed };
   return {};
+}
+
+/** Creates a passkey from the server's creation options (base64url). */
+export async function createFrom(o: CreationJSON) {
+  const cred = (await navigator.credentials.create({
+    publicKey: {
+      ...o,
+      challenge: fromB64(o.challenge),
+      user: { ...o.user, id: fromB64(o.user.id) },
+      excludeCredentials: descriptors(o.excludeCredentials),
+    },
+  })) as PublicKeyCredential | null;
+  if (!cred) throw new Error("No passkey was created");
+  return credentialJSON(cred);
+}
+
+/** Asks for a passkey for the server's request options (base64url). */
+export async function assertFrom(o: RequestJSON) {
+  const cred = (await navigator.credentials.get({
+    publicKey: { ...o, challenge: fromB64(o.challenge), allowCredentials: descriptors(o.allowCredentials) },
+  })) as PublicKeyCredential | null;
+  if (!cred) throw new Error("No passkey was used");
+  return credentialJSON(cred);
 }
 
 /** Creates a passkey for the signed-in member. */
