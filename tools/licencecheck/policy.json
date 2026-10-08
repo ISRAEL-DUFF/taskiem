@@ -19,6 +19,10 @@
       "licence": "OFL-1.1",
       "reason": "The console's typeface (Inter), bundled as font files only, unmodified; approved by the founder on 2026-10-08. The SIL Open Font License allows bundling fonts with any software, places no terms on that software, and only requires the fonts keep their licence and are not sold on their own."
     },
+    "axe-core": {
+      "licence": "MPL-2.0",
+      "reason": "Dev-only: accessibility checks in browser tests; never bundled. MPL-2.0 is file-level copyleft and the code runs unmodified at test time. Approved by the founder on 2026-10-08."
+    },
     "lightningcss": {
       "licence": "MPL-2.0",
       "reason": "Dev-only: CSS tooling pulled in by vite/vitest. Runs at build/test time, unmodified; none of its code is bundled into shipped artefacts. MPL-2.0 is file-level copyleft. Revisit if it ever becomes a runtime dependency."

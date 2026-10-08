@@ -4,6 +4,7 @@ import "@fontsource-variable/inter";
 import "@xyflow/react/dist/style.css";
 import "./styles.css";
 import { App } from "./App";
+import { Skeleton } from "./ui";
 
 // The operator console (/ops) is its own app with its own session; it
 // never mounts the tenant console's providers (docs/operator-console.md).
@@ -13,7 +14,7 @@ const ops = window.location.pathname === "/ops" || window.location.pathname.star
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     {ops ? (
-      <Suspense fallback={<div className="empty">Loading…</div>}>
+      <Suspense fallback={<Skeleton />}>
         <OpsApp />
       </Suspense>
     ) : (

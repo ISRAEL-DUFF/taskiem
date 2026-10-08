@@ -2,7 +2,7 @@ import { useState } from "react";
 import { del, get, post } from "../api";
 import { useAuth } from "../auth";
 import { diffLines, major, newestPerMajor, writeLines, type CatalogueEntry, type CatalogueVersion, type Diff, type Install } from "../lib/catalogue";
-import { Badge, ErrorBox, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Modal, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 
 /** The public connector catalogue: connectors other organisations publish, reviewed by Taskiem (docs/connector-submissions.md). */
 export function Catalogue() {
@@ -16,7 +16,7 @@ export function Catalogue() {
   const reload = () => (catalogue.reload(), installs.reload());
   return (
     <>
-      <h1>Connector catalogue</h1>
+      <PageHeader title="Connector catalogue" description="Ready-made connectors to other services that you can install and use in your workflows." />
       <p className="hint">
         Connectors published by other organisations, each version checked automatically and reviewed by Taskiem before it appears here. Installed versions are pinned: nothing changes until you upgrade, and an upgrade that reaches new hosts or makes new kinds of change asks you again.
       </p>
@@ -32,7 +32,7 @@ export function Catalogue() {
                 <th>Version</th>
                 <th>State</th>
                 <th>Installed</th>
-                {manage && <th />}
+                {manage && <th><span className="sr-only">Actions</span></th>}
               </tr>
             </thead>
             <tbody>

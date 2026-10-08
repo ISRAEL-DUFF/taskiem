@@ -38,7 +38,7 @@ export function RunCanvas({
   const edges = graph.edges.map((e) => ({ ...e, animated: status[e.source] === "completed" && ["running", "retrying", "waiting", "scheduled"].includes(status[e.target] ?? "") }));
   if (doc.error) return <ErrorBox error={doc.error} />;
   return (
-    <div className="canvas run-canvas" aria-label="Run canvas">
+    <div className="canvas run-canvas" role="group" aria-label="Run canvas">
       <ReactFlow
         nodes={nodes}
         edges={edges}

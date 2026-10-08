@@ -64,7 +64,7 @@ export function Reports() {
       )}
       {data && data.rows.length === 0 && <div className="empty card">Nothing in this period.</div>}
       {data && data.rows.length > 0 && (
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto" }} tabIndex={0} role="region" aria-label="Report rows">
           <table data-testid="report-table">
             <thead>
               <tr>

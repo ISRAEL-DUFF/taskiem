@@ -196,7 +196,7 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
   return (
     <>
       {p.definition && (
-        <div className="canvas ai-preview" aria-label="Proposed workflow">
+        <div className="canvas ai-preview" role="group" aria-label="Proposed workflow">
           <ReactFlow
             nodes={nodes}
             edges={graph.edges}

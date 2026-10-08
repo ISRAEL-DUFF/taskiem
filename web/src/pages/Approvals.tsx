@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { passkeysSupported, stepUpAssert } from "../passkeys";
 import { ApiError, del, get, post, type Approval, type Delegation, type PublishRequest } from "../api";
 import { useAuth } from "../auth";
-import { ErrorBox, Field, Json, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Json, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 export function Approvals() {
   const { can } = useAuth();
@@ -11,13 +11,16 @@ export function Approvals() {
   const [deciding, setDeciding] = useState<{ a: Approval; decision: "approved" | "rejected" } | null>(null);
   return (
     <>
-      <h1>Approvals</h1>
+      <PageHeader title="Approvals" description="Decisions waiting for a role you hold, or one delegated to you." />
       <p className="hint">
-        Requests for a role you hold, or one delegated to you, that you have not decided. You cannot approve a run you started or a workflow version you
-        wrote or published, and with distinct approvers you approve one level of a request at most.
+        You cannot approve a run you started or a workflow version you wrote or published, and with distinct approvers you approve one level of a request
+        at most.
       </p>
       <ErrorBox error={error} />
-      {data && data.approvals.length === 0 && <div className="empty card">Nothing waiting for you.</div>}
+      {!data && !error && <Skeleton rows={2} />}
+      {data && data.approvals.length === 0 && (
+        <EmptyState icon="approvals">Nothing waiting for you. When a run reaches an approval step for one of your roles, it waits here for your decision.</EmptyState>
+      )}
       {data?.approvals.map((a) => (
         <div className="card" key={`${a.run_id}/${a.step_id}`} data-testid="approval">
           <div className="toolbar">
@@ -212,10 +215,10 @@ function Delegations() {
             });
           }}
         >
-          <input placeholder="colleague's email" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} required />
-          <input placeholder={`roles (${approvalRoles.join(", ")})`} value={form.roles} onChange={(e) => setForm({ ...form, roles: e.target.value })} required />
+          <input placeholder="colleague's email" aria-label="Colleague's email" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} required />
+          <input placeholder={`roles (${approvalRoles.join(", ")})`} aria-label="Roles to hand over" value={form.roles} onChange={(e) => setForm({ ...form, roles: e.target.value })} required />
           <input type="datetime-local" aria-label="Ends" value={form.ends} onChange={(e) => setForm({ ...form, ends: e.target.value })} required />
-          <input placeholder="reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required />
+          <input placeholder="reason" aria-label="Reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required />
           <button type="submit" style={{ flex: "0 0 auto" }} disabled={act.busy}>
             Delegate
           </button>

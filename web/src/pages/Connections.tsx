@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { get, post, upload, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
 import { useAuth } from "../auth";
 import { Help } from "../onboarding";
-import { Badge, ErrorBox, Field, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { Icon } from "../icons";
 
 interface Conn {
   id: string;
@@ -40,18 +41,31 @@ export function Connections() {
   const [adding, setAdding] = useState(false);
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          Connections
-        </h1>
-        <button className="primary" onClick={() => setAdding(true)}>
-          New connection
-        </button>
-      </div>
-      <p className="hint">Credentials are encrypted when saved and never shown again.</p>
+      <PageHeader
+        title="Connections"
+        description="The accounts your workflows use at other services, one per environment. Credentials are encrypted when saved and never shown again."
+        actions={
+          <button className="primary" onClick={() => setAdding(true)}>
+            <Icon name="plus" />
+            New connection
+          </button>
+        }
+      />
       <Help topic="connections" />
       <ErrorBox error={list.error} />
-      {list.data && list.data.connections.length === 0 && <div className="empty card">No connections yet.</div>}
+      {!list.data && !list.error && <Skeleton />}
+      {list.data && list.data.connections.length === 0 && (
+        <EmptyState
+          icon="connections"
+          action={
+            <button className="primary" onClick={() => setAdding(true)}>
+              Connect a service
+            </button>
+          }
+        >
+          A connection holds the credentials a workflow's steps use to reach a service, such as a bank or a messaging provider.
+        </EmptyState>
+      )}
       {list.data && list.data.connections.length > 0 && (
         <table>
           <thead>
@@ -112,7 +126,7 @@ function Drift() {
             <th>Seen</th>
             <th>Times</th>
             <th>Last</th>
-            <th />
+            <th><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -177,7 +191,7 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
               <th>Module</th>
               <th>Uploaded</th>
               <th>State</th>
-              {manage && <th />}
+              {manage && <th><span className="sr-only">Actions</span></th>}
             </tr>
           </thead>
           <tbody>

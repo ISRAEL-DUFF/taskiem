@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { get, post, put, type PolicyVersion } from "../api";
 import { useAuth } from "../auth";
-import { Badge, ErrorBox, Field, Json, JsonInput, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Field, Json, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 
 const example = {
   rules: [
@@ -27,7 +27,7 @@ export function Policies() {
   const manage = can("policy.manage");
   return (
     <>
-      <h1>Approval policies</h1>
+      <PageHeader title="Approval policies" description="Who must approve what, at which levels, and with which second factor." />
       <p className="hint">
         An approval step names a policy in its configuration. Runs keep the version that was active when they started. Conditions are CEL over the
         approval's <code>subject</code>. A rule's <code>step_up</code> is the weakest second factor it takes: <code>whatsapp_pin</code> (the

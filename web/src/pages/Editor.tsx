@@ -9,7 +9,7 @@ import { StepPanel } from "../canvas/StepPanel";
 import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph, type Layout } from "../lib/graph";
 import { merge } from "../lib/schema";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
-import { Badge, ErrorBox, Field, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Field, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { AIBuilder } from "./AIBuild";
 
 const nodeTypes = { step: StepNode };
@@ -199,7 +199,7 @@ export function Editor() {
     });
 
   if (wf.error || doc.error) return <ErrorBox error={wf.error ?? doc.error} />;
-  if (!wf.data || !def) return <div className="empty">Loading…</div>;
+  if (!wf.data || !def) return <Skeleton />;
   const current = wf.data.versions.find((v) => v.version === version);
   const sel = def.steps.find((s) => s.id === selected);
   const managed = wf.data.workflow.git_path;
@@ -278,7 +278,7 @@ export function Editor() {
       )}
       <div className="tabs" role="tablist">
         {(["canvas", "settings", "code", "json", "triggers"] as const).map((t) => (
-          <button key={t} role="tab" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
+          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
             {{ canvas: "Canvas", settings: "Trigger & settings", code: "Code", json: "JSON", triggers: "Endpoints" }[t]}
           </button>
         ))}

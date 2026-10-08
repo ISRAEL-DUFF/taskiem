@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ApiError, get, post } from "../api";
-import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import {
   blockerLines,
   featureNames,
@@ -33,7 +33,7 @@ export function Billing() {
   const [blockers, setBlockers] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const act = useAction();
-  if (!data) return error ? <ErrorBox error={error} /> : <div className="empty">Loading…</div>;
+  if (!data) return error ? <ErrorBox error={error} /> : <Skeleton />;
   const sub = data.subscription;
 
   const go = (url?: string) => {
@@ -74,11 +74,7 @@ export function Billing() {
 
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          Billing
-        </h1>
-      </div>
+      <PageHeader title="Billing" description="Your plan, what you have used this period, and your invoices." />
       {data.banner && <BillingBannerView banner={data.banner} />}
       <ErrorBox error={act.error} />
       {note && <p className="hint">{note}</p>}

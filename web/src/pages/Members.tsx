@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
-import { ErrorBox, Field, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { Icon } from "../icons";
 
 interface Permission {
   name: string;
@@ -61,7 +62,7 @@ function PendingInvitations({ refresh }: { refresh: unknown }) {
             <th>Email</th>
             <th>Roles offered</th>
             <th>Invited</th>
-            <th />
+            <th><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -101,16 +102,24 @@ export function Members() {
   const act = useAction();
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          Members
-        </h1>
-        <button className="primary" onClick={() => setAdding(true)}>
-          Add member
-        </button>
-      </div>
+      <PageHeader
+        title="Members"
+        description="The people in your organisation and what their roles let them do, plus the API keys other systems use."
+        actions={
+          <button className="primary" onClick={() => setAdding(true)}>
+            <Icon name="plus" />
+            Add member
+          </button>
+        }
+      />
       <ErrorBox error={members.error ?? act.error} />
-      {members.data && (
+      {!members.data && !members.error && <Skeleton rows={3} />}
+      {members.data && members.data.members.length <= 1 && (
+        <EmptyState icon="members" action={<button onClick={() => setAdding(true)}>Invite a colleague</button>}>
+          {members.data.members.length === 0 ? "No one is a member yet." : "You are the only member so far."} Add colleagues to build, approve and watch runs with you.
+        </EmptyState>
+      )}
+      {members.data && members.data.members.length > 0 && (
         <table>
           <thead>
             <tr>
@@ -160,7 +169,7 @@ export function Members() {
               <th>Role</th>
               <th>Permissions</th>
               <th>Members</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -194,7 +203,12 @@ export function Members() {
         <button onClick={() => setMinting(true)}>New API key</button>
       </div>
       <ErrorBox error={keys.error ?? act.error} />
-      {keys.data && (
+      {keys.data && keys.data.api_keys.length === 0 && (
+        <EmptyState icon="keys" action={<button onClick={() => setMinting(true)}>Make an API key</button>}>
+          API keys let your other systems start runs and read results. Each key holds only the permissions you give it.
+        </EmptyState>
+      )}
+      {keys.data && keys.data.api_keys.length > 0 && (
         <table>
           <thead>
             <tr>
@@ -203,7 +217,7 @@ export function Members() {
               <th>Permissions</th>
               <th>Expires</th>
               <th>Last used</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -487,7 +501,7 @@ function SingleSignOn() {
               <tr>
                 <th>Domain</th>
                 <th>Verification</th>
-                <th />
+                <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>

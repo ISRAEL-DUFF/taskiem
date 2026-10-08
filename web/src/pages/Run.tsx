@@ -5,7 +5,7 @@ import { useAuth } from "../auth";
 import { RunCanvas } from "../canvas/RunCanvas";
 import { RepairPanel } from "./RepairPanel";
 import { duration, timeline, type StepRow } from "../lib/timeline";
-import { Badge, ErrorBox, Field, Json, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Field, Json, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 interface RunDoc {
   run: RunSummary;
@@ -75,7 +75,7 @@ export function RunPage() {
     return [...data.events, ...streamed.filter((e) => !seen.has(e.seq))];
   }, [data, streamed]);
   if (error) return <ErrorBox error={error} />;
-  if (!data) return <div className="empty">Loading…</div>;
+  if (!data) return <Skeleton />;
   const r = data.run;
   const rows = timeline(events);
   const ended = events.find((e) => ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type));
@@ -155,10 +155,10 @@ export function RunPage() {
       <div className="toolbar">
         <h2 className="grow">Steps</h2>
         <div className="tabs" role="tablist">
-          <button role="tab" className={view === "canvas" ? "active" : ""} onClick={() => setView("canvas")}>
+          <button role="tab" aria-selected={view === "canvas"} className={view === "canvas" ? "active" : ""} onClick={() => setView("canvas")}>
             Canvas
           </button>
-          <button role="tab" className={view === "timeline" ? "active" : ""} onClick={() => setView("timeline")}>
+          <button role="tab" aria-selected={view === "timeline"} className={view === "timeline" ? "active" : ""} onClick={() => setView("timeline")}>
             Timeline
           </button>
         </div>

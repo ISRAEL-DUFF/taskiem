@@ -1,5 +1,6 @@
-// Line icons for the navigation (24-unit grid, drawn with currentColor).
-// Decorative only: the link's text is its accessible name.
+// Line icons for the navigation, empty states and icon buttons (24-unit
+// grid, drawn with currentColor). Decorative only: the link's or button's
+// text, or its aria-label, is its accessible name.
 const paths: Record<string, string> = {
   start: "M5 12l4 4L19 6",
   dashboard: "M4 13h6V4H4zm10 7h6V11h-6zM4 20h6v-4H4zm10-11h6V4h-6z",
@@ -17,13 +18,17 @@ const paths: Record<string, string> = {
   members: "M9 11a4 4 0 100-8 4 4 0 000 8zm-6 10a6 6 0 0112 0M17 11a3 3 0 100-6m4 16a5 5 0 00-4-5",
   billing: "M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2zm0 3h18M7 15h4",
   keys: "M15 7a4 4 0 11-3.9 5H3v3h3v3h3v-3h2.1A4 4 0 0115 7zm1 3h.01",
+  menu: "M4 6h16M4 12h16M4 18h16",
+  close: "M6 6l12 12M18 6L6 18",
+  search: "M11 18a7 7 0 100-14 7 7 0 000 14zm9 2l-4.3-4.3",
+  plus: "M12 5v14M5 12h14",
 };
 
-export function Icon({ name }: { name: string }) {
+export function Icon({ name, className }: { name: string; className?: string }) {
   const d = paths[name];
   if (!d) return null;
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className={className}>
       <path d={d} />
     </svg>
   );

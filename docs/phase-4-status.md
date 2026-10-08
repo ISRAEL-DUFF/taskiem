@@ -22,6 +22,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Security | Residuals | K6 closed (first-context secrets pinned to where they were recorded); compiled tenant WebAssembly modules evicted safely; the tenant-code share across API replicas; the explicit egress proxy (decision 0028); a load-flaky sandbox test | 14.2, 14.4 | **Done** (code; [what exists](#security-residuals-and-the-egress-proxy)) |
 | Operations | Operator console | A platform-level operator identity (CLI-made accounts, passkey enrolment and sign-in, optional OIDC SSO from one issuer, own short sessions on `/v1/ops`, a bound passkey step-up for every write), a platform audit chain, and a web console at `/ops`: catalogue review queue with the checklist, publishers, reviewers, status incidents and maintenance, read-only tenants | 13.2, 9.2 | **Done** (code; [what exists](#operator-console)); who gets accounts and the SSO issuer need P4-X1, P4-X2 |
 | Security | Phase 4 review | An independent review of billing, BYOK, the catalogue, remote triggers, signup, status, pools and the replica, step-up and sessions, the operator console, the egress proxy, languages and voice notes, and migrations 00090–00146: a payment taken twice never applied twice (R1), email alert channels behind email confirmation and paced tests (R2), the catalogue checker bounded (R3), verified publisher names fixed (R4), Ogg durations from every page (R5), the dispatch role narrowed on usage snapshots (R6) | 14.4 | **Done** (code; [what exists](#security-phase-4-review)); refunds of payments taken twice need P4-B7 |
+| Web | Console | Page header, empty states and loading skeletons on every list page; search and filters on Runs and Workflows; automated accessibility checks (axe) in the browser tests, in both themes and at phone width; a phone layout (menu drawer, card lists, stacked editor, sheet dialogs) | — | **Done** (code; [what exists](#console-pages-accessibility-and-mobile)) |
 | Legal | P4-9 | Counsel IP review, trademark registration, terms of service, DPA under the NDPA | — | Needs people |
 
 ## P4-1: billing
@@ -263,3 +264,22 @@ What is left in docs:
 - **People** (P4-D1–P4-D3): the domain and host, publishing from CI, who reviews docs, and confirming the public/internal split.
 - **Request schemas looser than their handlers** are not caught: a body the tests send is checked against the document, but a body the document allows and a handler refuses shows only when a test sends it.
 - A changelog for the API and versioned docs (one version, `v1`, today).
+
+## Console: pages, accessibility and mobile
+
+Done 8 October 2026. No API or database changes: the filters use the query parameters `GET /v1/runs` already had.
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Page header | Title, a one-line description of what the page is for, and its actions, on Workflows, Runs, Approvals, Connections, Alerts, Audit log, Members, Dashboard, Secrets & settings, Catalogue, Policies, Billing, Encryption keys and Account | `PageHeader` in `web/src/ui.tsx` |
+| Empty states | An icon, one sentence saying what goes in the list, and the action that adds the first one, on Workflows, Runs, Connections, Approvals, Alerts, Audit log and Members (and API keys); a filtered list that matches nothing says so and offers to clear the filters | `EmptyState` in `web/src/ui.tsx` |
+| Loading | Skeleton rows in the shape of a list instead of "Loading…", announced to screen readers | `Skeleton` in `web/src/ui.tsx` |
+| Runs filters | Search (workflow, run ID, who started it), status, workflow, environment, and a date range: status, workflow, environment and the end of the range go to the API (`before`); the search and the start of the range filter what it returned, and "Load older runs" stops once runs are older than the range. Kept in the URL | `web/src/pages/Runs.tsx`, `web/src/lib/lists.ts` |
+| Workflows filters | Search by name or key, and published or drafts only (the list API has no parameters, so this filters the list). Kept in the URL | `web/src/pages/Workflows.tsx`, `web/src/lib/lists.ts` |
+| Accessibility | Skip link; `main` landmark on every page, signed-out pages too; dialogs are `aria-modal`, named by their heading, keep Tab inside, close on Escape and give focus back to what opened them; tabs carry `aria-selected`; labels for fields that only had a placeholder; header cells for action columns; canvases are named groups; wide tables that scroll sideways take keyboard focus | `web/src/ui.tsx`, `web/src/App.tsx`, pages |
+| Phone layout (390 px) | The sidebar becomes a top bar with a menu button (`aria-expanded`, `aria-controls`) opening a drawer that traps focus, closes on Escape, on the scrim and on navigation, and makes the rest of the page inert; Runs and Workflows collapse to one card per row; other tables scroll inside themselves; the editor stacks canvas over the side panel; dialogs open as bottom sheets; no page scrolls sideways | `web/src/styles.css`, `web/src/App.tsx` |
+| Tests | `accessibility.spec.ts`: axe (WCAG 2.1 A and AA, 2.2 AA, best practices) on the sign-in page, 16 console pages, a dialog and the editor, in the light and the dark theme, with no violations; dialog focus trap and return; the phone drawer by keyboard, page widths and axe at 390 px. Unit tests for the list filters | `web/e2e/accessibility.spec.ts`, `web/e2e/a11y.ts`, `web/src/lib/lists.test.ts` |
+
+`axe-core` is MPL-2.0: it is a dev-only dependency of the browser tests, injected into the page under test and never bundled. Its licence exception (`tools/licencecheck/policy.json`) was approved by the founder on 8 October 2026, for dev and test use only.
+
+What is left: the operator console (`/ops`) and the embedded builder keep their own layouts (the operator sidebar still wraps on phones); axe cannot judge everything, so a pass with a real screen reader (VoiceOver, TalkBack, NVDA) is still worth doing; the date range's start is applied to the loaded pages because `GET /v1/runs` has no `after` parameter.

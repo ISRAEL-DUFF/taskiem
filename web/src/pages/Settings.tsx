@@ -2,7 +2,7 @@ import { useState } from "react";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
-import { ErrorBox, Field, JsonInput, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Field, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
 import { USSDChannels } from "./USSDChannels";
 import { Help } from "../onboarding";
@@ -26,12 +26,11 @@ export function Settings() {
   const [env, setEnv] = useState("prod");
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          Secrets &amp; settings
-        </h1>
-        <EnvSelect value={env} onChange={setEnv} />
-      </div>
+      <PageHeader
+        title="Secrets &amp; settings"
+        description="Your environments and the secrets and variables workflows read in each of them."
+        actions={<EnvSelect value={env} onChange={setEnv} />}
+      />
       <Environments editable={can("secret.manage")} />
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />

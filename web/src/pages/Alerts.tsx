@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { useEnvironments } from "../environments";
-import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 interface Channel {
   id: string;
@@ -53,8 +53,14 @@ export function Alerts() {
   const name = (id: string) => chans.find((c) => c.id === id)?.name ?? "deleted";
   return (
     <>
-      <h1>Alerts</h1>
+      <PageHeader title="Alerts" description="Tell your team when a run fails, an approval waits too long, or a credential is about to expire." />
       <ErrorBox error={channels.error ?? rules.error ?? recent.error ?? act.error} />
+      {!channels.data && !channels.error && <Skeleton rows={3} />}
+      {channels.data && chans.length === 0 && (
+        <EmptyState icon="alerts" action={<button className="primary" onClick={() => document.getElementById("new-channel-kind")?.focus()}>Add a channel</button>}>
+          Alerts go to channels: an email list, Slack, a webhook or members' WhatsApp. Add a channel, then the rules that send to it.
+        </EmptyState>
+      )}
       {notice && (
         <div className="notice" role="status">
           {notice}
@@ -63,13 +69,13 @@ export function Alerts() {
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Channels</h2>
         {channels.data && !channels.data.email_configured && <p className="hint">Email is not configured on this deployment (TASKIEM_SMTP_URL); email channels will show their deliveries as failing.</p>}
-        <table>
+        {chans.length > 0 && <table>
           <thead>
             <tr>
               <th>Name</th>
               <th>Kind</th>
               <th>Destination</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -93,19 +99,20 @@ export function Alerts() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>}
         <AddChannel onAdded={(key) => (channels.reload(), key && setNotice(`Signing key (shown once; verify the Taskiem-Signature header with it): ${key}`))} />
       </section>
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Rules</h2>
-        <table>
+        {(rules.data?.rules ?? []).length === 0 && <p className="hint">No rules yet. A rule says what to alert on and which channels hear about it.</p>}
+        {(rules.data?.rules ?? []).length > 0 && <table>
           <thead>
             <tr>
               <th>Name</th>
               <th>When</th>
               <th>Send to</th>
               <th>On</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -134,12 +141,12 @@ export function Alerts() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>}
         {chans.length > 0 ? <AddRule channels={chans} onAdded={rules.reload} /> : <p className="hint">Add a channel first.</p>}
       </section>
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Recent alerts</h2>
-        {(recent.data?.alerts ?? []).length === 0 && <p className="hint">Nothing yet.</p>}
+        {(recent.data?.alerts ?? []).length === 0 && <p className="hint">Nothing yet. Alerts your rules send show here with where each one went.</p>}
         {(recent.data?.alerts ?? []).map((a) => (
           <div key={a.id} className="alert-row">
             <div>
@@ -181,7 +188,7 @@ function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
       }}
     >
       <Field label="Kind">
-        <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+        <select id="new-channel-kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
           <option value="email">Email</option>
           <option value="slack">Slack</option>
           <option value="webhook">Webhook</option>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { get } from "../api";
 import { EnvSelect } from "../environments";
-import { ErrorBox, fmtTime, useLoad } from "../ui";
+import { ErrorBox, PageHeader, Skeleton, fmtTime, useLoad } from "../ui";
 
 interface Day {
   day: string;
@@ -40,19 +40,23 @@ export function Dashboard() {
   const { data, error } = useLoad(() => get<DashboardData>(`/v1/dashboard?environment=${encodeURIComponent(env)}&days=${days}&tz=${encodeURIComponent(tz)}`), [env, days], true);
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          Dashboard
-        </h1>
-        <EnvSelect value={env} onChange={setEnv} />
-        <select aria-label="Period" style={{ width: "auto" }} value={days} onChange={(e) => setDays(Number(e.target.value))}>
-          <option value={1}>24 hours</option>
-          <option value={7}>7 days</option>
-          <option value={30}>30 days</option>
-          <option value={90}>90 days</option>
-        </select>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="How your workflows are doing: success rate, volume, and what needs attention."
+        actions={
+          <>
+            <EnvSelect value={env} onChange={setEnv} />
+            <select aria-label="Period" style={{ width: "auto" }} value={days} onChange={(e) => setDays(Number(e.target.value))}>
+              <option value={1}>24 hours</option>
+              <option value={7}>7 days</option>
+              <option value={30}>30 days</option>
+              <option value={90}>90 days</option>
+            </select>
+          </>
+        }
+      />
       <ErrorBox error={error} />
+      {!data && !error && <Skeleton rows={4} />}
       {data && (
         <>
           <div className="tiles">

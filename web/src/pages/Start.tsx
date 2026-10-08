@@ -5,7 +5,7 @@ import { useAuth } from "../auth";
 import { Help, useOnboarding } from "../onboarding";
 import { CHECKLIST, formatDuration, sampleInput, starterTemplates } from "../lib/onboarding";
 import { initialValues, toParams, type Template } from "../lib/templates";
-import { Badge, ErrorBox, Field, JsonInput, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from "../ui";
 import { ParamField } from "./Templates";
 
 // Get started (docs/onboarding.md): the checklist, derived from what the
@@ -18,7 +18,7 @@ export function Start() {
   const act = useAction();
   const [sent, setSent] = useState<string | null>(null);
   const nav = useNavigate();
-  if (!data) return <div className="empty">Loading…</div>;
+  if (!data) return <Skeleton />;
   return (
     <>
       <div className="toolbar">

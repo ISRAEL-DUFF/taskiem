@@ -2,7 +2,7 @@ import { useState } from "react";
 import { del, get, post, put, type Invitation } from "../api";
 import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof } from "../passkeys";
-import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Field, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 import { ChangePassword } from "./Password";
 
 interface Passkey {
@@ -54,7 +54,7 @@ export function Passkeys({ onAdded }: { onAdded?: () => void }) {
               <th>Name</th>
               <th>Added</th>
               <th>Last used</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -299,7 +299,7 @@ export function Account() {
   const act = useAction();
   return (
     <>
-      <h1>Account</h1>
+      <PageHeader title="Account" description="Your sign-in methods, invitations and linked WhatsApp number." />
       <Invitations />
       <ChangePassword />
       <Passkeys />

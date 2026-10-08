@@ -2,7 +2,7 @@ import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { byokRequest, healthLine, missingFields, providerFields, providerNames, versionState, type FieldSpec, type KeysView, type Provider } from "../lib/keys";
 import { useStepUp, type StepUpProof } from "../stepup";
-import { Badge, ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 /** Sends a key change, asking for step-up when the server needs it. */
 type KeyRequest = <T>(title: string, send: (p: StepUpProof) => Promise<T>) => Promise<T>;
@@ -16,12 +16,12 @@ export function Keys() {
   const step = useStepUp();
   const [notice, setNotice] = useState("");
   const v = view.data;
-  if (!v) return view.error ? <ErrorBox error={view.error} /> : <div className="empty">Loading…</div>;
+  if (!v) return view.error ? <ErrorBox error={view.error} /> : <Skeleton />;
   const st = v.status;
   const run = (fn: () => Promise<string>) => void act.run(async () => (setNotice(await fn()), view.reload()));
   return (
     <div>
-      <h1>Encryption keys</h1>
+      <PageHeader title="Encryption keys" description="The keys that protect your secrets, credentials and personal data, and how to rotate them." />
       {step.modal}
       <p className="hint">
         Every secret, connection credential and piece of personal data is encrypted with its own data key, under your organisation's tenant key. The tenant

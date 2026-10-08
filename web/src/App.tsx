@@ -15,9 +15,9 @@ import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
 import { Policies } from "./pages/Policies";
 import { Account, Invitations, Passkeys } from "./pages/Account";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
-import { ErrorBox, useAction } from "./ui";
+import { EmptyState, ErrorBox, Skeleton, useAction, useFocusTrap, useScrollableTables } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
 import { Handoff } from "./pages/Handoff";
@@ -85,16 +85,18 @@ function InviteeHome() {
 function Shell() {
   const { me } = useAuth();
   const loc = useLocation();
+  // Signed-out pages are a single card; it is the page's main landmark.
+  const alone = (page: ReactNode) => <main className="signed-out">{page}</main>;
   // Password recovery works signed in or out.
-  if (loc.pathname === "/forgot-password") return <ForgotPassword />;
-  if (loc.pathname === "/reset-password") return <ResetPassword />;
-  if (me === undefined) return <div className="empty">Loading…</div>;
+  if (loc.pathname === "/forgot-password") return alone(<ForgotPassword />);
+  if (loc.pathname === "/reset-password") return alone(<ResetPassword />);
+  if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
-    if (loc.pathname === "/signup") return <Signup />;
-    return loc.pathname === "/login" ? <Login /> : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`} replace />;
+    if (loc.pathname === "/signup") return alone(<Signup />);
+    return loc.pathname === "/login" ? alone(<Login />) : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`} replace />;
   }
-  if (me.invitations_only) return <InviteeHome />;
-  if (me.enrol_passkey) return <EnrolPasskey />;
+  if (me.invitations_only) return alone(<InviteeHome />);
+  if (me.enrol_passkey) return alone(<EnrolPasskey />);
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || "/workflows"} replace />;
   if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
   return (
@@ -107,6 +109,22 @@ function Shell() {
 function SignedIn() {
   const { me, can, logout } = useAuth();
   const onboarding = useOnboarding().data;
+  // The drawer (narrow screens): closes on navigation and on Escape, keeps
+  // Tab inside while open, and gives focus back to the menu button.
+  const [drawer, setDrawer] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  useScrollableTables(mainRef);
+  const { pathname } = useLocation();
+  useEffect(() => setDrawer(false), [pathname]);
+  // Widening the window past the drawer's breakpoint closes it.
+  useEffect(() => {
+    const wide = window.matchMedia("(min-width: 861px)");
+    const close = () => wide.matches && setDrawer(false);
+    wide.addEventListener("change", close);
+    return () => wide.removeEventListener("change", close);
+  }, []);
+  useFocusTrap(navRef, drawer, () => setDrawer(false));
   if (!me) return null;
   // Grouped as the sidebar shows them; [path, label, icon, visible].
   const groups: [string, [string, string, string, boolean][]][] = [
@@ -152,12 +170,43 @@ function SignedIn() {
   const who = me.user?.email ?? "API key";
   return (
     <div className="shell">
-      <nav className="nav" aria-label="Main">
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+      {/* Narrow screens: a top bar whose menu button opens the sidebar as a drawer. */}
+      <header className="topbar" inert={drawer || undefined}>
+        <button
+          className="icon-button"
+          aria-label="Open menu"
+          aria-expanded={drawer}
+          aria-controls="main-nav"
+          onClick={() => setDrawer(true)}
+        >
+          <Icon name="menu" />
+        </button>
+        <span className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            T
+          </span>
+          Taskiem
+        </span>
+      </header>
+      {drawer && <div className="nav-scrim" aria-hidden="true" onClick={() => setDrawer(false)} />}
+      <nav
+        id="main-nav"
+        ref={navRef}
+        className={`nav drawer${drawer ? " open" : ""}`}
+        aria-label="Main"
+        tabIndex={-1}
+      >
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             T
           </span>
           Taskiem
+          <button className="icon-button nav-close" aria-label="Close menu" onClick={() => setDrawer(false)}>
+            <Icon name="close" />
+          </button>
         </div>
         {groups.map(([section, links]) => {
           const shown = links.filter(([, , , ok]) => ok);
@@ -190,7 +239,7 @@ function SignedIn() {
           Sign out
         </button>
       </nav>
-      <main className="main">
+      <main className="main" id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
         <Routes>
           <Route path="/" element={<Navigate to="/workflows" replace />} />
@@ -216,7 +265,7 @@ function SignedIn() {
           <Route path="/account" element={<Account />} />
           <Route path="/handoff" element={<Handoff />} />
           <Route path="/reports" element={<Reports />} />
-          <Route path="*" element={<div className="empty">Not found</div>} />
+          <Route path="*" element={<EmptyState icon="search">There is no page at this address.</EmptyState>} />
         </Routes>
       </main>
     </div>
