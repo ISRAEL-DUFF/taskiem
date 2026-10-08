@@ -120,11 +120,25 @@ func (s *Service) Advance(ctx context.Context, tenant uuid.UUID) (bool, error) {
 				if err != nil {
 					return err
 				}
-				pay, err := s.newPayment(ctx, tx, tenant, in, sub.Provider, "authorization", "billing")
-				if err != nil {
+				// A card charge of this invoice still in flight (the bank
+				// has not answered: an OTP, a processing charge) may yet
+				// succeed: charging the card again could take the money
+				// twice. The reminder still goes; reconciliation settles
+				// the pending charge (and a second success is recorded for
+				// a refund, never applied twice).
+				var inFlight bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM billing_payments WHERE tenant_id = $1 AND invoice_id = $2
+					AND method = 'authorization' AND status = 'pending')`,
+					tenant, in.ID).Scan(&inFlight); err != nil {
 					return err
 				}
-				chargeRef = pay.Reference
+				if !inFlight {
+					pay, err := s.newPayment(ctx, tx, tenant, in, sub.Provider, "authorization", "billing")
+					if err != nil {
+						return err
+					}
+					chargeRef = pay.Reference
+				}
 			}
 			note = &notice{kind: "past_due", ref: fmt.Sprintf("%s/%d", ref, sub.DunningAttempts), subject: "Taskiem: payment due for invoice " + ref,
 				body: fmt.Sprintf("We could not collect payment for invoice %s. Pay it on the Billing page by %s to keep starting new runs; after that, new runs are paused until it is paid (running work always continues).",

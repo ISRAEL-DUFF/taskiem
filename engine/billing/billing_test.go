@@ -978,3 +978,97 @@ func TestRetentionCappedByPlan(t *testing.T) {
 		t.Fatalf("retention: %.2f days", days)
 	}
 }
+
+// TestInvoicePaidTwice: two payments of one invoice both complete (two
+// checkouts in two tabs). The second is recorded for a refund and changes
+// nothing: it must not rewind a change scheduled after the first (security
+// review 2026-10-08, R1).
+func TestInvoicePaidTwice(t *testing.T) {
+	w := newWorld(t)
+	tenant := w.e.Tenant
+	if err := w.svc.Ensure(ctx, tenant, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.e.DB.Admin.Exec(ctx, `UPDATE subscriptions SET billing_email = 'finance@acme.test' WHERE tenant_id = $1`, tenant); err != nil {
+		t.Fatal(err)
+	}
+	w.clock.add(15 * 24 * time.Hour) // trial over, no card: past due
+	if err := w.svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	a, err := w.svc.Checkout(ctx, tenant, billing.CheckoutRequest{}, "user:u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := w.svc.Checkout(ctx, tenant, billing.CheckoutRequest{}, "user:u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Invoice.ID != b.Invoice.ID || a.Reference == b.Reference {
+		t.Fatalf("two checkouts of one invoice: %s %s", a.Reference, b.Reference)
+	}
+	pay := func(res billing.CheckoutResult) {
+		t.Helper()
+		w.pay.pay(res.Reference, res.Invoice.TotalKobo)
+		body := chargeSuccess(res.Reference, res.Invoice.TotalKobo)
+		if err := w.svc.HandleWebhook(ctx, "paystack", signed(body), body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pay(a)
+	if s := w.sub(t, tenant); s.Status != billing.StatusActive || s.PlanID != "growth" {
+		t.Fatalf("first payment: %+v", s)
+	}
+	// A downgrade scheduled for the period's end.
+	if res, err := w.svc.ChangePlan(ctx, tenant, "starter", "", "user:u1"); err != nil || res.Effective != "period_end" {
+		t.Fatalf("downgrade: %+v %v", res, err)
+	}
+	before := w.sub(t, tenant)
+	pay(b) // the second tab's payment completes
+	after := w.sub(t, tenant)
+	if after.PendingPlanID != "starter" || after.PlanID != before.PlanID || !after.PeriodEnd.Equal(before.PeriodEnd) || after.CreditKobo != before.CreditKobo {
+		t.Fatalf("second payment changed the subscription: before %+v, after %+v", before, after)
+	}
+	var paid, unapplied int
+	if err := w.e.DB.Admin.QueryRow(ctx, `SELECT count(*) FILTER (WHERE action = 'billing.invoice.paid'),
+		count(*) FILTER (WHERE action = 'billing.payment.unapplied' AND target = $2 AND detail->>'reason' = 'already_paid')
+		FROM audit_log WHERE tenant_id = $1`, tenant, b.Reference).Scan(&paid, &unapplied); err != nil {
+		t.Fatal(err)
+	}
+	if paid != 1 || unapplied != 1 {
+		t.Fatalf("audits: %d paid, %d unapplied (want 1 and 1)", paid, unapplied)
+	}
+	var st, ref string
+	if err := w.e.DB.Admin.QueryRow(ctx, `SELECT p.status, i.paid_reference FROM billing_payments p JOIN invoices i ON i.id = p.invoice_id WHERE p.reference = $1`,
+		b.Reference).Scan(&st, &ref); err != nil || st != "success" || ref != a.Reference {
+		t.Fatalf("second payment %s, invoice paid by %s (%v)", st, ref, err)
+	}
+}
+
+// TestDunningWaitsForPendingCharge: a renewal charge the bank has not
+// answered yet is not charged again by the next reminder (R1).
+func TestDunningWaitsForPendingCharge(t *testing.T) {
+	w := newWorld(t)
+	tenant := w.e.Tenant
+	w.checkoutAndPay(t, tenant, "growth") // saves the card
+	w.pay.charge = "send_otp"             // the renewal charge waits on the bank
+	w.clock.add(32 * 24 * time.Hour)
+	if err := w.svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if s := w.sub(t, tenant); s.Status != billing.StatusPastDue || w.pay.calls["charge"] != 1 {
+		t.Fatalf("renewal pending: %+v, %d charges", s, w.pay.calls["charge"])
+	}
+	for _, d := range []int{1, 3} {
+		w.clock.add(time.Duration(d) * 24 * time.Hour)
+		if err := w.svc.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := w.pay.calls["charge"]; n != 1 {
+		t.Fatalf("the card was charged %d times while the first charge was pending", n)
+	}
+	if w.mail.count("payment due") == 0 {
+		t.Fatal("no reminder while the charge was pending")
+	}
+}

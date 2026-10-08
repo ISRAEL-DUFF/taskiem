@@ -550,6 +550,16 @@ func (s *Service) settle(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref s
 		// refund by the operator; nothing else changes.
 		return false, audit(ctx, tx, tenant, "system", by, "billing.payment.unapplied", ref, map[string]any{"invoice": in.Number, "amount_kobo": t.AmountKobo})
 	}
+	if in.Status == "paid" && in.PaidReference != ref {
+		// A second payment of an invoice another payment already settled
+		// (two checkouts, or a card retry and a transfer, both completed):
+		// money taken twice. Applying it again would rewind the period, the
+		// plan or a scheduled change to the invoice's, so it is recorded
+		// for a refund by the operator and nothing else changes.
+		s.log().Error("billing: invoice paid twice", "tenant", tenant, "invoice", in.Number, "reference", ref, "paid_reference", in.PaidReference)
+		return false, audit(ctx, tx, tenant, "system", by, "billing.payment.unapplied", ref,
+			map[string]any{"invoice": in.Number, "amount_kobo": t.AmountKobo, "reason": "already_paid", "paid_reference": in.PaidReference})
+	}
 	if _, err := tx.Exec(ctx, `UPDATE invoices SET status = 'paid', paid_at = $2, paid_reference = $3 WHERE id = $1 AND status IN ('open', 'uncollectible')`, in.ID, now, ref); err != nil {
 		return false, err
 	}
