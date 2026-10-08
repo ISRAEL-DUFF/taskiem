@@ -11,6 +11,7 @@ package wasmconn
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -58,6 +59,10 @@ type Limits struct {
 	MaxResponse  int    // bytes of one provider response body; default 4 MiB
 	MaxHTTPCalls int    // per call; default 20
 	MaxLogs      int    // bytes of log lines kept per call; default 16 KiB
+	// MaxCompiled is how many compiled modules the runtime keeps; the
+	// least recently used beyond it are closed once no call uses them,
+	// and compiled again when next needed. Default 32.
+	MaxCompiled int
 }
 
 func (l Limits) withDefaults() Limits {
@@ -74,6 +79,7 @@ func (l Limits) withDefaults() Limits {
 	def(&l.MaxResponse, 4<<20)
 	def(&l.MaxHTTPCalls, 20)
 	def(&l.MaxLogs, 16<<10)
+	def(&l.MaxCompiled, 32)
 	return l
 }
 
@@ -83,7 +89,20 @@ type Runtime struct {
 	lim Limits
 
 	mu       sync.Mutex
-	compiled map[string]wazero.CompiledModule // by module digest
+	compiled map[string]*compiledModule // by module digest
+	lru      *list.List                 // of *compiledModule, most recently used first
+}
+
+// compiledModule is a cached compilation. A call holds a reference while
+// it runs; an entry evicted from the cache is closed when the last
+// reference goes, so a running call keeps its module.
+type compiledModule struct {
+	digest  string
+	cm      wazero.CompiledModule
+	refs    int
+	evicted bool
+	closed  bool
+	elem    *list.Element
 }
 
 // New starts a runtime.
@@ -104,7 +123,7 @@ func New(ctx context.Context, lim Limits) (*Runtime, error) {
 	if _, err := b.Instantiate(ctx); err != nil {
 		return nil, err
 	}
-	return &Runtime{rt: rt, lim: lim, compiled: map[string]wazero.CompiledModule{}}, nil
+	return &Runtime{rt: rt, lim: lim, compiled: map[string]*compiledModule{}, lru: list.New()}, nil
 }
 
 // Close releases every compiled module.
@@ -149,7 +168,8 @@ func (r *Runtime) load(ctx context.Context, manifest, module []byte, prefix, wha
 	if len(module) > r.lim.MaxModule {
 		return nil, fmt.Errorf("%w: module is %d bytes; the limit is %d", ErrInvalid, len(module), r.lim.MaxModule)
 	}
-	cm, err := r.compile(ctx, module)
+	digest := Digest(module)
+	cm, release, err := r.acquire(ctx, digest, module)
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +177,10 @@ func (r *Runtime) load(ctx context.Context, manifest, module []byte, prefix, wha
 	if _, ok := cm.ExportedFunctions()[reactorInit]; ok {
 		start = append(start, reactorInit)
 	}
+	release()
 	c := &connector.Connector{Manifest: m, Actions: map[string]connector.Action{}}
 	for name := range m.Actions {
-		c.Actions[name] = &action{r: r, cm: cm, start: start, manifest: m, name: name}
+		c.Actions[name] = &action{r: r, digest: digest, module: module, start: start, manifest: m, name: name}
 	}
 	return c, nil
 }
@@ -182,10 +203,11 @@ func (r *Runtime) Inspect(ctx context.Context, module []byte) (ModuleInfo, error
 	if len(module) > r.lim.MaxModule {
 		return info, fmt.Errorf("%w: module is %d bytes; the limit is %d", ErrInvalid, len(module), r.lim.MaxModule)
 	}
-	cm, err := r.compile(ctx, module)
+	cm, release, err := r.acquire(ctx, Digest(module), module)
 	if err != nil {
 		return info, err
 	}
+	defer release()
 	for _, f := range cm.ImportedFunctions() {
 		mod, name, _ := f.Import()
 		info.Imports = append(info.Imports, mod+"."+name)
@@ -207,14 +229,73 @@ func (r *Runtime) Inspect(ctx context.Context, module []byte) (ModuleInfo, error
 	return info, nil
 }
 
-func (r *Runtime) compile(ctx context.Context, module []byte) (wazero.CompiledModule, error) {
-	digest := Digest(module)
+// acquire returns the compiled module for digest (compiling module if it
+// is not cached) and a release the caller must call once it no longer
+// uses it.
+func (r *Runtime) acquire(ctx context.Context, digest string, module []byte) (wazero.CompiledModule, func(), error) {
 	r.mu.Lock()
-	cm, ok := r.compiled[digest]
-	r.mu.Unlock()
-	if ok {
-		return cm, nil
+	if e, ok := r.compiled[digest]; ok {
+		e.refs++
+		r.lru.MoveToFront(e.elem)
+		r.mu.Unlock()
+		return e.cm, r.releaser(e), nil
 	}
+	r.mu.Unlock()
+	cm, err := r.compile(ctx, module)
+	if err != nil {
+		return nil, nil, err
+	}
+	r.mu.Lock()
+	if e, ok := r.compiled[digest]; ok { // compiled meanwhile by another call
+		e.refs++
+		r.lru.MoveToFront(e.elem)
+		r.mu.Unlock()
+		_ = cm.Close(context.WithoutCancel(ctx))
+		return e.cm, r.releaser(e), nil
+	}
+	e := &compiledModule{digest: digest, cm: cm, refs: 1}
+	e.elem = r.lru.PushFront(e)
+	r.compiled[digest] = e
+	var closing []*compiledModule
+	for r.lru.Len() > r.lim.MaxCompiled {
+		old := r.lru.Remove(r.lru.Back()).(*compiledModule)
+		delete(r.compiled, old.digest)
+		old.evicted = true
+		if old.refs == 0 {
+			old.closed = true
+			closing = append(closing, old)
+		}
+	}
+	r.mu.Unlock()
+	for _, old := range closing {
+		_ = old.cm.Close(context.WithoutCancel(ctx))
+	}
+	return cm, r.releaser(e), nil
+}
+
+// releaser drops one reference to e, closing it if it was evicted and
+// this was the last.
+func (r *Runtime) releaser(e *compiledModule) func() {
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			r.mu.Lock()
+			e.refs--
+			closeIt := e.evicted && e.refs == 0 && !e.closed
+			if closeIt {
+				e.closed = true
+			}
+			r.mu.Unlock()
+			if closeIt {
+				_ = e.cm.Close(context.Background())
+			}
+		})
+	}
+}
+
+// compile compiles and checks a module: its imports are the host's and
+// it exports the ABI's entry point.
+func (r *Runtime) compile(ctx context.Context, module []byte) (wazero.CompiledModule, error) {
 	cm, err := r.rt.CompileModule(ctx, module)
 	if err != nil {
 		return nil, fmt.Errorf("%w: the module does not compile: %w", ErrInvalid, err)
@@ -232,13 +313,6 @@ func (r *Runtime) compile(ctx context.Context, module []byte) (wazero.CompiledMo
 		_ = cm.Close(ctx)
 		return nil, fmt.Errorf("%w: the module must export %s(i32) -> i64 (%s)", ErrInvalid, execExport, ABI)
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if prev, ok := r.compiled[digest]; ok {
-		_ = cm.Close(ctx)
-		return prev, nil
-	}
-	r.compiled[digest] = cm
 	return cm, nil
 }
 
@@ -249,7 +323,8 @@ func sameTypes(got []api.ValueType, want ...api.ValueType) bool {
 // action runs one manifest action in a fresh instance.
 type action struct {
 	r        *Runtime
-	cm       wazero.CompiledModule
+	digest   string
+	module   []byte // to compile again after eviction
 	start    []string
 	manifest *connector.Manifest
 	name     string
@@ -330,7 +405,13 @@ func (a *action) run(ctx context.Context, c *call) ([]byte, error) {
 	cfg := wazero.NewModuleConfig().WithName("").WithStartFunctions(a.start...).
 		WithSysWalltime().WithSysNanotime().WithRandSource(rand.Reader).
 		WithStdout(&logWriter{c: c}).WithStderr(&logWriter{c: c})
-	mod, err := a.r.rt.InstantiateModule(ctx, a.cm, cfg)
+	cm, release, err := a.r.acquire(ctx, a.digest, a.module)
+	if err != nil {
+		return nil, err
+	}
+	// Released after the instance closes (deferred first, runs last).
+	defer release()
+	mod, err := a.r.rt.InstantiateModule(ctx, cm, cfg)
 	if err != nil {
 		return nil, err
 	}
