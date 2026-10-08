@@ -24,6 +24,12 @@ import (
 
 var slackHookRe = regexp.MustCompile(`^https://hooks\.slack\.com/services/[A-Za-z0-9/_-]+$`)
 
+// Test messages: 10 at once per tenant, then one every 6 minutes.
+const (
+	alertTestEvery = 6 * time.Minute
+	alertTestBurst = 10
+)
+
 type alertChannel struct {
 	ID         uuid.UUID       `json:"id"`
 	Kind       string          `json:"kind"`
@@ -72,6 +78,13 @@ func (s *Server) createAlertChannel(w http.ResponseWriter, r *http.Request) {
 	secret := ""
 	switch req.Kind {
 	case "email":
+		// The platform's mail server writes to any address given here, so
+		// a self-serve tenant must confirm its email first, as for
+		// inviting people (security review R2).
+		if err := s.needVerified(r); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 		if len(req.To) == 0 || len(req.To) > 20 {
 			s.fail(w, r, fmt.Errorf("%w: give 1 to 20 recipients", errBadRequest))
 			return
@@ -200,6 +213,13 @@ func (s *Server) testAlertChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.Alerts == nil {
 		writeErr(w, http.StatusServiceUnavailable, "alerts are not configured on this server")
+		return
+	}
+	// A test message goes out on demand: paced per tenant, so the button
+	// cannot be used to flood a mailbox or a webhook (R2).
+	if !s.limiter("alert-test:"+principalFrom(r.Context()).TenantID.String(), alertTestEvery, alertTestBurst).Allow() {
+		w.Header().Set("Retry-After", "360")
+		writeErr(w, http.StatusTooManyRequests, "too many test messages: try again in a few minutes")
 		return
 	}
 	var kind string

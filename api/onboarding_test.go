@@ -175,6 +175,42 @@ func TestSignupVerifyEmail(t *testing.T) {
 	}
 }
 
+// TestUnconfirmedTenantCannotEmailStrangers: an email alert channel makes
+// the platform's mail server write to any address, so a self-serve tenant
+// confirms its email first; test messages are paced (security review R2).
+func TestUnconfirmedTenantCannotEmailStrangers(t *testing.T) {
+	w := newWorld(t)
+	mail := mailWorld(t, w)
+	anon := &client{t: t, base: w.base}
+	out := anon.must(201, "POST", "/v1/signup", signupBody("Spam Stores", "ada@spam.test"))
+	owner := &client{t: t, base: w.base, token: out["token"].(string)}
+	channel := map[string]any{"kind": "email", "name": "Your bank account is locked", "to": []string{"victim@elsewhere.test"}}
+	if st, out := owner.do("POST", "/v1/alerts/channels", channel); st != 403 || !strings.Contains(out["error"].(string), "confirm your email") {
+		t.Fatalf("email channel before confirming: %d %v", st, out)
+	}
+	// Channels that reach only the tenant's own members are not held back.
+	owner.must(201, "POST", "/v1/alerts/channels", map[string]any{"kind": "whatsapp", "name": "On call", "to": []string{"ada@spam.test"}})
+
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE users SET email_verified_at = now() WHERE email = 'ada@spam.test'`); err != nil {
+		t.Fatal(err)
+	}
+	ch := owner.must(201, "POST", "/v1/alerts/channels", channel)
+	id := ch["id"].(string)
+	w.srv.WaitBackground()
+	before := len(mail.all())
+	limited := 0
+	for range 12 {
+		if st, _ := owner.do("POST", "/v1/alerts/channels/"+id+"/test", nil); st == 429 {
+			limited++
+		} else if st != 200 {
+			t.Fatalf("test message: %d", st)
+		}
+	}
+	if limited != 2 || len(mail.all())-before != 10 {
+		t.Fatalf("%d test messages refused, %d sent; want 2 and 10", limited, len(mail.all())-before)
+	}
+}
+
 func TestResendVerification(t *testing.T) {
 	w := newWorld(t)
 	mail := mailWorld(t, w)
