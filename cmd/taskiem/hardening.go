@@ -56,6 +56,15 @@ func codeLimitsFromEnv(lookup func(string) (string, bool)) (api.CodeLimits, erro
 		}
 		*f.to = n
 	}
+	// The per-tenant share holds across API replicas (a lease table) unless
+	// TASKIEM_TENANT_CODE_SHARE=replica keeps it per process.
+	switch v, _ := lookup("TASKIEM_TENANT_CODE_SHARE"); strings.ToLower(strings.TrimSpace(v)) {
+	case "", "cluster":
+	case "replica":
+		l.PerReplica = true
+	default:
+		return l, fmt.Errorf("TASKIEM_TENANT_CODE_SHARE: %q is neither cluster nor replica", v)
+	}
 	return l, nil
 }
 

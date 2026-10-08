@@ -147,6 +147,7 @@ func (s *Server) Handler() http.Handler {
 	if s.Logger == nil {
 		s.Logger = slog.Default()
 	}
+	s.initCodeLeases() // the per-tenant code share across replicas (codegate.go)
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })

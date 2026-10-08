@@ -64,6 +64,12 @@ func TestCodeLimitsFromEnv(t *testing.T) {
 	if l, err := codeLimitsFromEnv(lookupFrom(nil)); err != nil || l.Concurrency != 0 || l.PerTenant != 0 {
 		t.Errorf("defaults: %+v %v", l, err)
 	}
+	if l, err := codeLimitsFromEnv(lookupFrom(map[string]string{"TASKIEM_TENANT_CODE_SHARE": "replica"})); err != nil || !l.PerReplica {
+		t.Errorf("per-replica share: %+v %v", l, err)
+	}
+	if _, err := codeLimitsFromEnv(lookupFrom(map[string]string{"TASKIEM_TENANT_CODE_SHARE": "everywhere"})); err == nil {
+		t.Error("an unknown share accepted")
+	}
 	for _, v := range []string{"0", "-1", "many"} {
 		if _, err := codeLimitsFromEnv(lookupFrom(map[string]string{"TASKIEM_TENANT_CODE_CONCURRENCY": v})); err == nil {
 			t.Errorf("%q accepted", v)
