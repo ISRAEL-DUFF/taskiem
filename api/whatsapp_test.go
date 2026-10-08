@@ -71,7 +71,7 @@ func newWAWorld(t *testing.T) *waWorld {
 	hooks := http.StripPrefix("/channels/whatsapp", srv.WhatsAppHooks())
 	mux.Handle("/channels/whatsapp", hooks)
 	mux.Handle("/channels/whatsapp/", hooks)
-	mux.Handle("/", srv.Handler())
+	mux.Handle("/", specCheck(t, srv.Handler())) // answers checked against the OpenAPI document
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return &waWorld{world: &world{env: e, base: ts.URL, srv: srv}, graph: g, wa: wa, hook: ts.URL + "/channels/whatsapp"}

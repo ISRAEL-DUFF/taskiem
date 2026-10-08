@@ -136,6 +136,10 @@ func TestBillingAPI(t *testing.T) {
 		t.Fatalf("unknown provider: %d", st)
 	}
 
+	// Cancelling, and taking it back.
+	owner.must(200, "POST", "/v1/billing/cancel", nil)
+	owner.must(200, "POST", "/v1/billing/cancel", map[string]any{"resume": true})
+
 	// Degraded: new runs answer 402; members without billing.manage cannot
 	// see invoices but see the banner.
 	wf := publishFlow(t, owner, `{"schema":"wd/v1","id":"wf_t","version":1,"name":"t","trigger":{"type":"manual"},"steps":[{"id":"t","type":"transform","config":{"output":{"x":1}}}]}`)

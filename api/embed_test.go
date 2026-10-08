@@ -629,4 +629,16 @@ func TestPartnerWebhooks(t *testing.T) {
 	if s2 := p.key.must(200, "POST", "/v1/partner/embed-apps/"+app+"/webhook-secret", nil)["webhook_secret"]; s2 == secret || s2 == "" {
 		t.Errorf("rotated secret %v", s2)
 	}
+	if apps := p.key.must(200, "GET", "/v1/partner/embed-apps", nil)["embed_apps"].([]any); len(apps) != 1 {
+		t.Errorf("apps: %v", apps)
+	}
+	// A delivery that gave up is sent again on request; a delivered one is not.
+	failed, done := events()["workflow.published"]["id"].(string), events()["run.completed"]["id"].(string)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE partner_webhook_deliveries SET status = 'failed' WHERE id = $1`, failed); err != nil {
+		t.Fatal(err)
+	}
+	if out := p.key.must(202, "POST", "/v1/partner/webhook-deliveries/"+failed+"/retry", nil); out["status"] != "pending" {
+		t.Errorf("retry: %v", out)
+	}
+	p.key.must(404, "POST", "/v1/partner/webhook-deliveries/"+done+"/retry", nil)
 }

@@ -236,6 +236,19 @@ func (s *site) typeHTML(sch map[string]any) template.HTML {
 		name := strings.TrimPrefix(ref, "#/components/schemas/")
 		return template.HTML(fmt.Sprintf(`<a href="%sapi/schemas#%s">%s</a>`, esc(s.cfg.Base), esc(name), esc(name))) //nolint:gosec // escaped
 	}
+	// Alternatives (a schema or null) and combinations.
+	for _, c := range [][2]string{{"anyOf", " or "}, {"oneOf", " or "}, {"allOf", " and "}} {
+		key, sep := c[0], c[1]
+		if alts, ok := sch[key].([]any); ok && len(alts) > 0 {
+			parts := make([]string, 0, len(alts))
+			for _, a := range alts {
+				if m, ok := a.(map[string]any); ok {
+					parts = append(parts, string(s.typeHTML(m)))
+				}
+			}
+			return template.HTML(strings.Join(parts, sep)) //nolint:gosec // each part escaped
+		}
+	}
 	var types []string
 	switch t := sch["type"].(type) {
 	case string:
@@ -264,6 +277,9 @@ func (s *site) typeHTML(sch map[string]any) template.HTML {
 	if e, ok := sch["enum"].([]any); ok {
 		var vals []string
 		for _, v := range e {
+			if v == nil {
+				v = "null"
+			}
 			vals = append(vals, "<code>"+esc(fmt.Sprint(v))+"</code>")
 		}
 		out += ": " + strings.Join(vals, ", ")

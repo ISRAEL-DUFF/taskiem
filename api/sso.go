@@ -246,7 +246,12 @@ func (s *Server) createSSO(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusCreated, s.describeSSO(id, req.Protocol))
+	// The connection as GET /v1/sso lists it, not zero values for the
+	// settings just saved.
+	out := s.describeSSO(id, req.Protocol)
+	out.Name, out.Config, out.DefaultRoles, out.GroupRoles = req.Name, cfg, nonNil(req.DefaultRoles), req.GroupRoles
+	out.JIT, out.Enforce, out.Domains = jit, req.Enforce, []ssoDomain{}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 func (s *Server) describeSSO(id uuid.UUID, protocol string) ssoConnection {

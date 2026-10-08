@@ -405,6 +405,12 @@ func TestRepairUnknownOutcome(t *testing.T) {
 	if st := rw.owner.must(200, "GET", "/v1/runs/"+run, nil)["run"].(map[string]any)["status"]; st != "needs_reconciliation" {
 		t.Errorf("the step was resolved: %v", st)
 	}
+	// A person settles it after checking with the provider.
+	rw.owner.must(400, "POST", "/v1/runs/"+run+"/steps/send/resolve", map[string]any{"resolution": "completed"})
+	if out := rw.owner.must(200, "POST", "/v1/runs/"+run+"/steps/send/resolve", map[string]any{"resolution": "completed", "output": map[string]any{"id": "s-1"},
+		"note": "the shop shows the order sent"}); out["step"] != "send" {
+		t.Errorf("resolve: %v", out)
+	}
 }
 
 // A provider's changed response (contract drift) starts a repair too; the
@@ -480,6 +486,9 @@ func TestRepairPermissionsAndIsolation(t *testing.T) {
 	viewer.must(403, "POST", "/v1/repairs/"+id+"/accept", nil)
 	viewer.must(403, "POST", "/v1/repairs/"+id+"/dismiss", nil)
 	viewer.must(403, "PUT", "/v1/repairs/settings", map[string]any{"enabled": false})
+	if s := viewer.must(200, "GET", "/v1/repairs/settings", nil); s["active"] != true {
+		t.Errorf("settings: %v", s)
+	}
 	// Resolving runs is not publishing: an operator cannot accept a patch.
 	operator.must(403, "POST", "/v1/repairs/"+id+"/accept", nil)
 

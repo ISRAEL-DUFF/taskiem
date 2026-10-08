@@ -201,6 +201,17 @@ func TestFourEyesOnPublishingAndPolicies(t *testing.T) {
 	if p := owner.must(200, "GET", "/v1/policies", nil)["policies"].([]any); len(p) != 1 || p[0].(map[string]any)["state"] != "active" {
 		t.Fatalf("policies: %v", p)
 	}
+	if g := owner.must(200, "GET", "/v1/governance", nil); g["four_eyes_policies"] != true {
+		t.Errorf("governance: %v", g)
+	}
+	// A second edit, rejected, leaves the first in force.
+	owner.must(201, "PUT", "/v1/policies/basic", map[string]any{"document": json.RawMessage(`{"rules":[{"levels":[{"role":"approver","count":2}]}]}`)})
+	if out := pat.must(200, "POST", "/v1/policies/basic/versions/2/reject", nil); out["state"] != "rejected" {
+		t.Errorf("reject: %v", out)
+	}
+	if v := owner.must(200, "GET", "/v1/policies/basic", nil)["versions"].([]any); len(v) != 2 || v[1].(map[string]any)["state"] != "active" {
+		t.Errorf("versions: %v", v)
+	}
 
 	// Ben writes a workflow; publishing waits for a second publisher.
 	wf := ben.must(201, "POST", "/v1/workflows", map[string]any{"name": "x", "definition": json.RawMessage(flowDoc("wf_x", "x", "=1"))})["id"].(string)
@@ -218,6 +229,12 @@ func TestFourEyesOnPublishingAndPolicies(t *testing.T) {
 	}
 	if v := owner.must(200, "GET", "/v1/workflows/"+wf, nil)["workflow"].(map[string]any)["active_version"]; v != float64(1) {
 		t.Errorf("active version: %v", v)
+	}
+	// A rejected request leaves the version a draft.
+	wf2 := ben.must(201, "POST", "/v1/workflows", map[string]any{"name": "y", "definition": json.RawMessage(flowDoc("wf_y", "y", "=1"))})["id"].(string)
+	pat.must(202, "POST", "/v1/workflows/"+wf2+"/versions/1/publish", nil)
+	if out := owner.must(200, "POST", "/v1/workflows/"+wf2+"/versions/1/publish/reject", map[string]any{"comment": "not yet"}); out["state"] != "draft" {
+		t.Errorf("reject: %v", out)
 	}
 	audit := toJSON(owner.must(200, "GET", "/v1/audit", nil))
 	for _, a := range []string{"governance.change", "policy.approve", "publish_request.create", "publish_request.approve"} {

@@ -120,7 +120,7 @@ func newUSSDRig(t *testing.T, edges int) *ussdRig {
 	logs := &syncBuffer{}
 	logger := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress, Logger: logger}
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(specCheck(t, srv.Handler()))
 	t.Cleanup(ts.Close)
 	w := &world{env: e, base: ts.URL, srv: srv}
 	r := &ussdRig{w: w, at: at, logs: logs}

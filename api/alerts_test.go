@@ -100,7 +100,9 @@ func TestAlerts(t *testing.T) {
 	owner.must(400, "POST", "/v1/alerts/rules", map[string]any{"name": "x", "kind": "run_failed", "channel_ids": []string{uuid.NewString()}})
 	owner.must(201, "POST", "/v1/alerts/rules", map[string]any{"name": "Prod failures", "kind": "run_failed", "config": map[string]any{"environment": "prod"},
 		"channel_ids": []string{email, sl, wh["id"].(string)}})
-	owner.must(201, "POST", "/v1/alerts/rules", map[string]any{"name": "Anchors", "kind": "audit_anchor", "channel_ids": []string{email}})
+	anchors := owner.must(201, "POST", "/v1/alerts/rules", map[string]any{"name": "Anchors", "kind": "audit_anchor", "channel_ids": []string{email}})["id"].(string)
+	owner.must(200, "PUT", "/v1/alerts/rules/"+anchors, map[string]any{"name": "Audit anchors", "kind": "audit_anchor", "channel_ids": []string{email}})
+	owner.must(404, "PUT", "/v1/alerts/rules/"+uuid.NewString(), map[string]any{"name": "x", "kind": "audit_anchor", "channel_ids": []string{email}})
 
 	wf := publishFlow(t, owner, loanFlow)
 	time.Sleep(10 * time.Millisecond)

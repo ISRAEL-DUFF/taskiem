@@ -317,6 +317,10 @@ func TestAdminAndErasure(t *testing.T) {
 		t.Errorf("secret list: %s", s)
 	}
 	owner.must(204, "PUT", "/v1/variables/prod/api_base", map[string]any{"value": "https://api.example"})
+	if s := toJSON(owner.must(200, "GET", "/v1/variables", nil)); !strings.Contains(s, "api_base") {
+		t.Errorf("variables: %s", s)
+	}
+	owner.must(200, "GET", "/v1/audit/anchors", nil)
 	owner.must(204, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "api.example.com"})
 	owner.must(400, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "http://bad"})
 	if s := toJSON(owner.must(200, "GET", "/v1/egress?environment=prod", nil)); !strings.Contains(s, "api.example.com") {

@@ -64,6 +64,13 @@ func TestCatalogueSubmitReviewInstall(t *testing.T) {
 	if pub["status"] != "pending" || pub["key_id"] == "" {
 		t.Fatalf("publisher: %v", pub)
 	}
+	if got := acme.must(200, "PUT", "/v1/catalogue/publisher", map[string]any{"name": "Acme", "public_key": pubB64}); got["name"] != "Acme" {
+		t.Errorf("publisher update: %v", got)
+	}
+	acme.must(200, "PUT", "/v1/catalogue/publisher", map[string]any{"name": "Acme Ltd", "public_key": pubB64})
+	if got := acme.must(200, "GET", "/v1/catalogue/publisher", nil); got["slug"] != "acme" {
+		t.Errorf("publisher: %v", got)
+	}
 	globex.must(409, "PUT", "/v1/catalogue/publisher", map[string]any{"slug": "acme", "name": "Not Acme", "public_key": pubB64})
 	acme.must(409, "PUT", "/v1/catalogue/publisher", map[string]any{"slug": "acme2", "name": "Acme Ltd", "public_key": pubB64})
 	v1 := cataloguetest.Package(t, "acme", "1.0.0", key, nil)
@@ -90,8 +97,13 @@ func TestCatalogueSubmitReviewInstall(t *testing.T) {
 	acme.must(409, "POST", "/v1/catalogue/submissions", v1)
 	bad := cataloguetest.Package(t, "acme", "1.0.1", key, nil)
 	bad.Licence = "GPL-3.0-only"
-	if got := acme.must(201, "POST", "/v1/catalogue/submissions", bad); got["state"] != "checks_failed" || !strings.Contains(toJSON(got), "signature") {
+	got := acme.must(201, "POST", "/v1/catalogue/submissions", bad)
+	if got["state"] != "checks_failed" || !strings.Contains(toJSON(got), "signature") {
 		t.Errorf("tampered: %s", toJSON(got))
+	}
+	// The publisher withdraws it.
+	if out := acme.must(200, "POST", "/v1/catalogue/submissions/"+got["id"].(string)+"/withdraw", nil); out["state"] != "withdrawn" {
+		t.Errorf("withdraw: %v", out)
 	}
 	acme.must(422, "POST", "/v1/catalogue/submissions", cataloguetest.Package(t, "globex", "1.0.0", key, nil))
 
@@ -139,7 +151,10 @@ func TestCatalogueSubmitReviewInstall(t *testing.T) {
 		t.Errorf("unpublished in the catalogue: %v", list)
 	}
 	acme.must(200, "POST", "/v1/catalogue/submissions/"+subID+"/publish", nil)
-	got := acme.must(200, "GET", "/v1/catalogue/submissions/"+subID, nil)
+	if v := globex.must(200, "GET", "/v1/catalogue/connectors/"+v1.ID+"/1.0.0", nil); v["state"] != "published" {
+		t.Errorf("version: %v", v)
+	}
+	got = acme.must(200, "GET", "/v1/catalogue/submissions/"+subID, nil)
 	var events []string
 	for _, e := range got["events"].([]any) {
 		events = append(events, e.(map[string]any)["event"].(string))
