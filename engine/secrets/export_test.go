@@ -27,6 +27,15 @@ func (v *Vault) PutLegacy(ctx context.Context, tenant uuid.UUID, env, name strin
 	})
 }
 
+// RecordLegacyBindings is the statement migration 00140 runs (as the
+// schema owner) to record where each first-context secret is.
+const RecordLegacyBindings = `INSERT INTO secret_legacy_bindings (secret_id, tenant_id, environment, binding)
+  SELECT s.id, s.tenant_id, s.environment,
+         COALESCE(s.name, 'connection:' || (SELECT c.id FROM connections c WHERE c.secret_ref = s.id LIMIT 1)::text, '')
+    FROM secrets s
+   WHERE s.aad_version < 2
+  ON CONFLICT (secret_id) DO NOTHING`
+
 // LegacySubjectID is a subject id as code before migration 00100 derived
 // it: keyed by tenant key version 1 directly.
 func (v *Vault) LegacySubjectID(ctx context.Context, tenant uuid.UUID, category string, value any) (string, error) {

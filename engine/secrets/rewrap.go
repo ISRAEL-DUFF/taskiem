@@ -172,6 +172,11 @@ func (v *Vault) rewrapSecrets(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		}
 		ct := it.ct
 		if it.aad < 2 {
+			// Upgrade only where the secret was recorded (K6): a renamed or
+			// moved row stops the job, with the reason, for an operator.
+			if err := checkLegacyBinding(ctx, tx, it.id, it.env, binding); err != nil {
+				return 0, err
+			}
 			value, err := open(dek, it.ct, secretAAD(it.aad, tenant, it.env, binding, it.id))
 			if err != nil {
 				return 0, fmt.Errorf("secret %s: %w", it.id, err)
@@ -186,6 +191,11 @@ func (v *Vault) rewrapSecrets(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		}
 		if _, err := tx.Exec(ctx, `UPDATE secrets SET ciphertext = $2, wrapped_key = $3, kek_version = $4, aad_version = 2 WHERE id = $1`, it.id, ct, wdek, cur); err != nil {
 			return 0, err
+		}
+		if it.aad < 2 {
+			if _, err := tx.Exec(ctx, `DELETE FROM secret_legacy_bindings WHERE secret_id = $1`, it.id); err != nil {
+				return 0, err
+			}
 		}
 	}
 	return len(items), nil

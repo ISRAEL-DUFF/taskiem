@@ -107,6 +107,9 @@ func TestBYOKLifecycle(t *testing.T) {
 	if err := v.PutLegacy(ctx, a.ID, "prod", "legacy_key", []byte("sk_legacy")); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := d.Admin.Exec(ctx, secrets.RecordLegacyBindings); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := v.Put(ctx, a.ID, "prod", "paystack_key", []byte("sk_live_A"), "u1"); err != nil {
 		t.Fatal(err)
 	}

@@ -301,6 +301,30 @@ func secretAAD(aadVersion int, tenant uuid.UUID, env, binding string, id uuid.UU
 	return []byte("taskiem/secret/v2\x00" + tenant.String() + "\x00" + env + "\x00" + binding + "\x00" + id.String())
 }
 
+// ErrLegacyContext refuses a secret on the first encryption context
+// (aad_version 1, bound to its id only) that is not where migration
+// 00140 recorded it: renamed, moved to another environment, read through
+// another connection, or never recorded (self-review K6).
+var ErrLegacyContext = errors.New("secret sealed under the first encryption context is not where it was recorded")
+
+// checkLegacyBinding allows a first-context secret only at the
+// environment and binding recorded for it in secret_legacy_bindings,
+// which the application role cannot write.
+func checkLegacyBinding(ctx context.Context, tx pgx.Tx, id uuid.UUID, env, binding string) error {
+	var wantEnv, wantBinding string
+	err := tx.QueryRow(ctx, `SELECT environment, binding FROM secret_legacy_bindings WHERE secret_id = $1`, id).Scan(&wantEnv, &wantBinding)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("secret %s: %w (no record)", id, ErrLegacyContext)
+	}
+	if err != nil {
+		return err
+	}
+	if wantEnv != env || wantBinding != binding {
+		return fmt.Errorf("secret %s: %w (recorded in %s as %q, found in %s as %q)", id, ErrLegacyContext, wantEnv, wantBinding, env, binding)
+	}
+	return nil
+}
+
 // connectionBinding is what a connection's credentials are bound to.
 func connectionBinding(conn uuid.UUID) string { return "connection:" + conn.String() }
 
@@ -324,6 +348,11 @@ func (v *Vault) encrypt(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, en
 }
 
 func (v *Vault) decrypt(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, env, binding string, aadVersion int, ct, wrappedDEK []byte, version int) ([]byte, error) {
+	if aadVersion < 2 {
+		if err := checkLegacyBinding(ctx, tx, id, env, binding); err != nil {
+			return nil, err
+		}
+	}
 	kek, err := v.kek(ctx, tx, tenant, version)
 	if err != nil {
 		return nil, err
