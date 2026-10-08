@@ -78,8 +78,22 @@ type Checker struct {
 	Blocked func(netip.Addr) bool
 	// Timeout bounds one conformance case; default 10s.
 	Timeout time.Duration
-	Now     func() time.Time
+	// Budget bounds the whole run (host lookups and every case);
+	// default DefaultBudget. A submission is checked inside an API
+	// request and holds one of the tenant-code slots while it runs.
+	Budget time.Duration
+	Now    func() time.Time
 }
+
+// Bounds on what one submission may ask the checker to do (security
+// review R3): without them, a suite of thousands of cases that each run
+// to their timeout, or thousands of declared hosts, kept a tenant-code
+// slot busy for hours.
+const (
+	DefaultBudget = 3 * time.Minute
+	MaxCases      = 200
+	MaxHosts      = 50
+)
 
 // Run checks a package from the publisher whose namespace is slug and
 // whose registered key is pub, against the versions it already published.
@@ -89,6 +103,12 @@ func (c *Checker) Run(ctx context.Context, p *connpkg.Package, slug string, pub 
 		now = c.Now
 	}
 	rep := &Report{CheckedAt: now().UTC()}
+	budget := c.Budget
+	if budget <= 0 {
+		budget = DefaultBudget
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
 	rt := c.Runtime
 	if rt == nil {
 		var err error
@@ -171,6 +191,8 @@ func (c *Checker) Run(ctx context.Context, p *connpkg.Package, slug string, pub 
 	switch {
 	case p.Conformance == nil || len(p.Conformance.Cases) == 0:
 		cErr = fmt.Errorf("the package has no conformance cases")
+	case len(p.Conformance.Cases) > MaxCases:
+		cErr = fmt.Errorf("the suite has %d cases; at most %d are run", len(p.Conformance.Cases), MaxCases)
 	case conn == nil:
 		cErr = fmt.Errorf("the module does not load")
 	default:
@@ -185,6 +207,9 @@ func (c *Checker) Run(ctx context.Context, p *connpkg.Package, slug string, pub 
 		}
 		if len(cr.KeyNotSent) > 0 {
 			probs = append(probs, "the idempotency key never reaches the provider in "+strings.Join(cr.KeyNotSent, ", ")+": the class claims a deduplication the module does not do")
+		}
+		if ctx.Err() != nil {
+			probs = append(probs, fmt.Sprintf("the checks took longer than %s", budget))
 		}
 		if len(probs) > 0 {
 			cErr = fmt.Errorf("%s", strings.Join(probs, "; "))
@@ -204,6 +229,9 @@ func (c *Checker) hosts(ctx context.Context, hosts []string, seen map[string][]s
 	blocked := c.Blocked
 	if blocked == nil {
 		blocked = egress.BlockedAddr
+	}
+	if len(hosts) > MaxHosts {
+		return fmt.Errorf("the manifest declares %d hosts; at most %d", len(hosts), MaxHosts)
 	}
 	var probs []string
 	for _, h := range hosts {

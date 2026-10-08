@@ -3,8 +3,10 @@ package catalogue_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/catalogue/cataloguetest"
@@ -202,4 +204,21 @@ func TestAutomatedChecks(t *testing.T) {
 	failed("module", junk, "acme", catalogue.Checker{}, "module")
 	// A module over the size limit.
 	failed("size", good, "acme", catalogue.Checker{Limits: wasmconn.Limits{MaxModule: 1024}}, "module")
+
+	// Bounds on the work one submission asks for (security review R3):
+	// more cases than are run, and a run past its budget, both fail.
+	many := cataloguetest.Package(t, "acme", "1.0.0", key, nil)
+	first := many.Conformance.Cases[0]
+	for i := len(many.Conformance.Cases); i <= catalogue.MaxCases; i++ {
+		c := first
+		c.Name = fmt.Sprintf("copy_%d", i)
+		many.Conformance.Cases = append(many.Conformance.Cases, c)
+	}
+	many.Sign(key)
+	started := time.Now()
+	failed("too many cases", many, "acme", catalogue.Checker{}, "conformance")
+	if d := time.Since(started); d > 30*time.Second {
+		t.Errorf("a suite over the limit still ran for %s", d)
+	}
+	failed("budget", good, "acme", catalogue.Checker{Budget: time.Millisecond}, "conformance")
 }
