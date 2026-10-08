@@ -21,6 +21,9 @@ const catalogueFlow = `{"schema":"wd/v1","id":"wf_pay","version":1,"name":"pay",
   "steps":[{"id":"pay","type":"connector","connector":"p_acme_ledger@1","action":"create_payment",
     "connection":"main","input":{"amount":"=trigger.body.amount","account_number":"=trigger.body.account_number"}}]}`
 
+// fullChecklist confirms every review checklist item (engine/catalogue).
+const fullChecklist = `{"identity": true, "classes": true, "hosts": true, "pii": true, "credentials": true, "conformance": true, "licence": true, "docs": true}`
+
 // TestCatalogueSubmitReviewInstall takes a connector from a publisher
 // through the automated checks, a four-eyes review and publication, to a
 // second tenant that installs it, pays through it (drift monitored),
@@ -103,7 +106,7 @@ func TestCatalogueSubmitReviewInstall(t *testing.T) {
 		t.Errorf("publisher approved its own: %v", err)
 	}
 	review := func(reviewer string, approve bool, note string) error {
-		_, err := pool.Exec(ctx, `SELECT taskiem_catalogue_review($1, $2, $3, $4, '{}')`, subID, reviewer, approve, note)
+		_, err := pool.Exec(ctx, `SELECT taskiem_catalogue_review($1, $2, $3, $4, $5)`, subID, reviewer, approve, note, fullChecklist)
 		return err
 	}
 	if err := review("reviewer@taskiem.test", true, "fine"); err == nil || !strings.Contains(err.Error(), "not a catalogue reviewer") {
@@ -119,6 +122,11 @@ func TestCatalogueSubmitReviewInstall(t *testing.T) {
 	}
 	if err := review("reviewer@taskiem.test", true, " "); err == nil {
 		t.Error("a review without a note")
+	}
+	// Approving needs every checklist item, in the database too.
+	if _, err := pool.Exec(ctx, `SELECT taskiem_catalogue_review($1, 'reviewer@taskiem.test', true, 'skimmed', '{"identity": true}')`, subID); err == nil ||
+		!strings.Contains(err.Error(), "confirm every checklist item") {
+		t.Errorf("approved without the checklist: %v", err)
 	}
 	if err := review("reviewer@taskiem.test", true, "Classes, hosts and fixtures checked"); err != nil {
 		t.Fatal(err)
@@ -208,7 +216,7 @@ func TestCatalogueSubmitReviewInstall(t *testing.T) {
 	if sub11["state"] != "in_review" {
 		t.Fatalf("1.1.0: %s", toJSON(sub11))
 	}
-	if _, err := pool.Exec(ctx, `SELECT taskiem_catalogue_review($1, 'reviewer@taskiem.test', true, 'new file host is the provider''s', '{}')`, sub11["id"]); err != nil {
+	if _, err := pool.Exec(ctx, `SELECT taskiem_catalogue_review($1, 'reviewer@taskiem.test', true, 'new file host is the provider''s', $2)`, sub11["id"], fullChecklist); err != nil {
 		t.Fatal(err)
 	}
 	acme.must(200, "POST", "/v1/catalogue/submissions/"+sub11["id"].(string)+"/publish", nil)

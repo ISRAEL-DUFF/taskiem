@@ -28,6 +28,7 @@ INSERT INTO catalogue_versions (id, publisher_tenant, publisher, connector_id, v
     'e2e', '\x01', 'Apache-2.0', '{}', '{"original_work": true, "contact": "dev@e2e.test"}', '{"passed": true}', 'in_review', 'seed'
   FROM seed;
 SELECT taskiem_catalogue_set_reviewer('reviewer@taskiem.test', true, 'seed');
-SELECT taskiem_catalogue_review(id, 'reviewer@taskiem.test', true, 'seeded for the browser tests', '{}') FROM catalogue_versions WHERE connector_id = 'p_e2e_ledger';
+SELECT taskiem_catalogue_review(id, 'reviewer@taskiem.test', true, 'seeded for the browser tests',
+  '{"identity": true, "classes": true, "hosts": true, "pii": true, "credentials": true, "conformance": true, "licence": true, "docs": true}') FROM catalogue_versions WHERE connector_id = 'p_e2e_ledger';
 UPDATE catalogue_versions SET state = 'published', published_at = now() WHERE connector_id = 'p_e2e_ledger';
 SQL

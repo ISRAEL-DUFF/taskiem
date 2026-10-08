@@ -87,6 +87,8 @@ Usage:
                                      list worker pools, or route a tenant or plan to a dedicated pool (audited)
   taskiem status show|list|open|maintenance|update|resolve|token
                                      declare incidents and maintenance on the public status page (operators; recorded)
+  taskiem operators [add|enrol|reset|disable EMAIL]
+                                     operator accounts for the operator console: passkey enrolment links (audited)
   taskiem canary setup|probe|run     set up and run the synthetic end-to-end probe (docs/reliability.md)
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
@@ -157,6 +159,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return catalogueCmd(context.Background(), args[1:], stdout)
 	case "status":
 		return statusCmd(context.Background(), args[1:], stdout)
+	case "operators":
+		return operatorsCmd(context.Background(), args[1:], stdout)
 	case "canary":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()

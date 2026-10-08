@@ -31,6 +31,7 @@ var notInSpec = []struct{ route, why string }{
 	{"/embed/", "the embedded builder's script and frame pages, not JSON (docs/embedding.md)"},
 	{"POST /v1/billing/webhooks/{provider}", "payment providers' callbacks, signed by them (docs/billing.md)"},
 	{"/v1/status/admin/", "the status page's operator API, with operator tokens rather than tenant credentials (docs/reliability.md#status-page)"},
+	{"/v1/ops/", "the operator console's API: Taskiem's own operators, with operator sessions rather than tenant credentials (docs/operator-console.md)"},
 	{"/*", "the web app's static files"},
 }
 

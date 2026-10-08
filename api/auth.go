@@ -220,7 +220,8 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 	} else if c, err := r.Cookie(sessionCookie); err == nil {
 		tok, viaCookie = c.Value, true
 	}
-	if tok == "" {
+	if tok == "" || strings.HasPrefix(tok, opsTokenPrefix) {
+		// An operator's session is never a tenant's (decision 0027).
 		return nil, nil
 	}
 	if strings.HasPrefix(tok, apiKeyPrefix) {

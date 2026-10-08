@@ -128,6 +128,9 @@ type Server struct {
 	// Status is the public status page and its admin API (status.go); nil
 	// turns both off.
 	Status *StatusSettings
+	// Ops is the operator console's API, /v1/ops (ops.go, decision 0027);
+	// nil turns it off.
+	Ops *OpsSettings
 	// Draining reports that the process is shutting down: /readyz answers
 	// 503 so load balancers stop sending requests, while those already
 	// sent are still served (docs/reliability.md#graceful-shutdown).
@@ -186,6 +189,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		r.Post("/billing/webhooks/{provider}", s.billingWebhook) // payment providers (billing.go)
 		r.Route("/status/admin", s.statusAdminRoutes)            // operators' incidents (status.go)
+		r.Route("/ops", s.opsRoutes)                             // the operator console: its own sessions (ops.go)
 		// End users of embed apps: their own tokens, CORS (embed.go).
 		r.Route("/embed/{app}", s.embedRoutes)
 		r.Group(func(r chi.Router) {

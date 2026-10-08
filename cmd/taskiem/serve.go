@@ -654,6 +654,9 @@ func serve(ctx context.Context, args []string) error {
 				srv.Status.Page = &status.Handler{Pool: e.pool, PublicURL: cfg.PublicURL, Logger: log, Options: status.Options{Canary: cfg.Status.Canary}}
 			}
 		}
+		if srv.Ops, err = opsSettings(); err != nil { // the operator console (operatorscmd.go)
+			return err
+		}
 		if *role == "all" {
 			srv.Ingest = e.hooks() // one listener for a small install
 		}
