@@ -88,10 +88,18 @@ func TestPythonFailures(t *testing.T) {
 	if err := InitPython(); err != nil {
 		t.Fatal(err)
 	}
+	// One at a time, and with a deadline generous enough for a loaded
+	// machine: each case starts CPython, and eleven at once under other
+	// work could miss DefaultLimits' 10 seconds before reaching the error
+	// the case checks. Only the timeout case is about the deadline, and it
+	// keeps its own.
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			_, err := runPy(t, c.src, map[string]any{}, Host{}, c.lim)
+			lim := c.lim
+			if !errors.Is(c.want, ErrTimeout) {
+				lim.Timeout = max(lim.Timeout, 2*time.Minute)
+			}
+			_, err := runPy(t, c.src, map[string]any{}, Host{}, lim)
 			if !errors.Is(err, c.want) || !strings.Contains(err.Error(), c.msg) {
 				t.Fatalf("got %v, want %v containing %q", err, c.want, c.msg)
 			}
