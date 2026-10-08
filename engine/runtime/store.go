@@ -255,7 +255,7 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 }
 
 // usageShards is how many rows a tenant's daily run count is spread over
-// (migration 00155), so concurrent starts rarely wait on each other's row.
+// (migration 00161), so concurrent starts rarely wait on each other's row.
 const usageShards = 16
 
 // countStart counts an accepted run toward the tenant's quotas. It is the

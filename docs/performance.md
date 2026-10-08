@@ -86,7 +86,7 @@ Three things stand out:
 | # | Bottleneck | Fix | Behaviour |
 | --- | --- | --- | --- |
 | 1 | Claimers woken for other queues' tasks | The worker's listener ignores notifications whose payload (the new task's queue, as `taskiem_notify_task` sends it) is another queue's (`engine/runtime/listen.go`, `worker.go`) | Unchanged: a claimer still wakes for its own queue, on reconnect, and polls every second |
-| 2 | One locked usage row per tenant per day | The day's count is kept in 16 shards; each start adds to a random one (migration **00155**, `countStart` in `engine/runtime/store.go`); every reader sums the rows (quotas, the limits page, partner caps already did; billing snapshots now do) | Unchanged counts and quotas; the down migration folds the shards back |
+| 2 | One locked usage row per tenant per day | The day's count is kept in 16 shards; each start adds to a random one (migration **00161**, `countStart` in `engine/runtime/store.go`); every reader sums the rows (quotas, the limits page, partner caps already did; billing snapshots now do) | Unchanged counts and quotas; the down migration folds the shards back |
 
 Tests: `TestListenWakesOnlyForWantedPayloads` (another queue's notification does not wake, its own does), `TestUsageShardsCountEveryStart` (40 concurrent starts all counted across shards, the limits page sees the sum, the quota still refuses at the limit), and the existing quota, billing, HA and replica tests.
 

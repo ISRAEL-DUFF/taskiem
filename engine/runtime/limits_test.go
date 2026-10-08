@@ -231,7 +231,7 @@ func TestQuotaRefusesAndAlerts(t *testing.T) {
 	startIn(t, e, e.Tenant, wf, false, "")
 }
 
-// Starts are counted in shards of the day's usage (migration 00155):
+// Starts are counted in shards of the day's usage (migration 00161):
 // concurrent starts are all counted, the limits page and the quota see
 // their sum, and the quota still refuses at the limit.
 func TestUsageShardsCountEveryStart(t *testing.T) {

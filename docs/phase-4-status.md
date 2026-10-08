@@ -122,7 +122,7 @@ What is left in reliability:
 
 ### Load and failure testing
 
-8 October 2026. Method, results, the knee, fixes and limits: [performance](performance.md). Migration 00155. No new decision or boundary (`TASKIEM_PPROF` serves the profiler on the internal metrics port only, off by default).
+8 October 2026. Method, results, the knee, fixes and limits: [performance](performance.md). Migration 00161. No new decision or boundary (`TASKIEM_PPROF` serves the profiler on the internal metrics port only, off by default).
 
 | Piece | What exists | Code |
 | --- | --- | --- |
@@ -130,7 +130,7 @@ What is left in reliability:
 | Failure scenarios | `kill-worker` (mid-call, idempotent and unsafe writes), `restart-orchestrator` (kill -9 and SIGTERM under load), `replica-lag` (a replica beyond the bound) | `tools/loadtest/chaos.go` (`-mode chaos`) |
 | Profiler | `TASKIEM_PPROF=true` serves `/debug/pprof/` on the metrics port | `cmd/taskiem/pprof.go` |
 | Fix: wake-ups | Workers ignore task notifications for other queues: claims per worker step halved (3.9 to 2.0), time in claims down 45% | `engine/runtime/listen.go`, `worker.go` |
-| Fix: usage row | A tenant's daily run count kept in 16 shards, so concurrent starts stop queueing on one locked row; readers sum | migration 00155, `engine/runtime/store.go`, `engine/billing/snapshot.go` |
+| Fix: usage row | A tenant's daily run count kept in 16 shards, so concurrent starts stop queueing on one locked row; readers sum | migration 00161, `engine/runtime/store.go`, `engine/billing/snapshot.go` |
 | Tests | Listener filter; concurrent starts all counted and the quota still enforced; the metrics parser and SLI arithmetic | `engine/runtime/listen_internal_test.go`, `engine/runtime/limits_test.go`, `tools/loadtest/prom_test.go` |
 
 Results, on a shared 4-CPU container with load averages of 4 to 28 from other work: the first SLO breach (step dispatch, 95% within 50 ms) at 20 runs/s (60 worker steps/s) before the fixes, between 20 and 30 runs/s after; webhook ingest and API latency within their SLOs at every rate; no duplicated transfer in about 37,000. Above about 40 runs/s throughput collapses on commit serialisation (`NOTIFY`'s commit lock and WAL flushes). These are not production numbers.
