@@ -13,7 +13,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Billing | P4-1 | Plans catalogue from a config file mapped onto every plan limit, features gated at the API, subscriptions (trial, active, past due with grace, degraded, cancelled, comped), plan changes with proration and downgrade blockers, immutable gapless invoices with VAT and pass-through overage, naira payments through Paystack (checkout, webhooks, saved cards, reconciliation) and Flutterwave, dunning, usage snapshots, billing API and page, operator CLI | 16, 13.1 | **Done** (code; [what exists](#p4-1-billing)); live payments need P4-B2, prices B1 |
 | Onboarding | P4-2 | Self-serve signup hardened for the public (email confirmation, limits, abuse checks, trial), getting-started checklist, guided first workflow over the template gallery, in-product help, signup-to-first-run measurement | — | **Done** (code; [what exists](#p4-2-onboarding)); going public needs P4-O1–P4-O4 |
 | Cloud | P4-3 | Nigeria-region production cloud: HA Postgres with synchronous standby, PITR, fixed egress IPs; workers split by queue, dedicated pools, read replicas | 2.3, 15.4 | **Done** (code; [what exists](#p4-3-cloud)); the infrastructure itself needs people (P4-C1 to P4-C6) |
-| Reliability | P4-4 | 99.9% SLO with on-call, status page, incident process | 15.3 | **Done** (code; [what exists](#p4-4-reliability)); on-call, paging, the status domain and the G4 measurement owner need people (P4-R1 to P4-R4) |
+| Reliability | P4-4 | 99.9% SLO with on-call, status page, incident process | 15.3 | **Done** (code; [what exists](#p4-4-reliability)); on-call, paging, the status domain and the G4 measurement owner need people (P4-R1 to P4-R4); load tested on a shared development machine ([performance](performance.md)), failure scenarios built but not yet run, target-hardware capacity and a failover drill need P4-R5 |
 | Enterprise | P4-5 | BYOK (tenant keys wrapped by the customer's own KMS key: OpenBao/Vault transit, AWS KMS, Google Cloud KMS, Azure Key Vault), background re-wrapping (S23) and secrets bound to environment and name (S33), fail closed with parked steps that resume, dedicated single-tenant deployments (Helm, documented), white-label tier (built in Phase 3, C2) | 13.4, 14.1 | **Done** (code; [what exists](#p4-5-enterprise)); a real customer KMS test and the revocation wording need people (P4-K1, P4-K2) |
 | Ecosystem | P4-6 | Public connector SDK and a submission review process for third-party connectors | 6 | **Done** (code; [what exists](#p4-6-connector-sdk-and-catalogue)); publisher agreement, reviewers and review SLA need people (P4-E1 to P4-E3) |
 | Docs | P4-7 | Public docs site, API reference, connector SDK guide | — | **Done** (code; [what exists](#p4-7-docs)); domain, hosting and review owner need P4-D1–P4-D3 |
@@ -119,6 +119,23 @@ What is left in reliability:
 - **Dispatch delay and tenant caps.** Time a task waits because its tenant is at its `worker_concurrency` cap counts as dispatch delay; separating it needs the claim to report why a task waited.
 - **Per-integration health** on the status page is declared by operators; deriving it from connector error rates is not built. Email subscriptions to the status page are not built (the Atom feed exists).
 - **Operator SSO** for the status admin API: tokens stay for automation; people use the [operator console](#operator-console).
+
+### Load and failure testing
+
+8 October 2026. Method, results, the knee, fixes and limits: [performance](performance.md). Migration 00155. No new decision or boundary (`TASKIEM_PPROF` serves the profiler on the internal metrics port only, off by default).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Cluster load test | The binary's roles as separate processes (api, edge, orchestrator, scheduler, two workers), tenants and workflows set up through the API, open-loop webhooks at a series of rates, a sandbox step and real Paystack/Termii connectors against a fake provider that records every effect; the SLIs of `engine/slo` computed from every process's `/metrics`; `pg_stat_activity` sampling, per-function stats (`track_functions`), table scans, per-process CPU and machine load per stage; CPU and heap profiles | `tools/loadtest` (`-mode cluster`) |
+| Failure scenarios | `kill-worker` (mid-call, idempotent and unsafe writes), `restart-orchestrator` (kill -9 and SIGTERM under load), `replica-lag` (a replica beyond the bound) | `tools/loadtest/chaos.go` (`-mode chaos`) |
+| Profiler | `TASKIEM_PPROF=true` serves `/debug/pprof/` on the metrics port | `cmd/taskiem/pprof.go` |
+| Fix: wake-ups | Workers ignore task notifications for other queues: claims per worker step halved (3.9 to 2.0), time in claims down 45% | `engine/runtime/listen.go`, `worker.go` |
+| Fix: usage row | A tenant's daily run count kept in 16 shards, so concurrent starts stop queueing on one locked row; readers sum | migration 00155, `engine/runtime/store.go`, `engine/billing/snapshot.go` |
+| Tests | Listener filter; concurrent starts all counted and the quota still enforced; the metrics parser and SLI arithmetic | `engine/runtime/listen_internal_test.go`, `engine/runtime/limits_test.go`, `tools/loadtest/prom_test.go` |
+
+Results, on a shared 4-CPU container with load averages of 4 to 28 from other work: the first SLO breach (step dispatch, 95% within 50 ms) at 20 runs/s (60 worker steps/s) before the fixes, between 20 and 30 runs/s after; webhook ingest and API latency within their SLOs at every rate; no duplicated transfer in about 37,000. Above about 40 runs/s throughput collapses on commit serialisation (`NOTIFY`'s commit lock and WAL flushes). These are not production numbers.
+
+What is left: the failure scenarios and a real standby promotion were not run (the machine restarted, and starting Postgres again and creating a scratch standby were refused by the agent harness); the `NOTIFY` commit serialisation and edge back-pressure need design decisions; capacity on target hardware (P4-R5). Details in [performance](performance.md#what-remains).
 
 ## P4-5: enterprise
 
