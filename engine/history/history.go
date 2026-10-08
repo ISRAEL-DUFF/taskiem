@@ -3,6 +3,8 @@
 package history
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
@@ -18,6 +20,7 @@ const (
 	StepCompleted         = "StepCompleted"
 	StepFailed            = "StepFailed"
 	StepSkipped           = "StepSkipped"
+	StepCancelled         = "StepCancelled" // a losing parallel branch's unfinished step
 	RetryScheduled        = "RetryScheduled"
 	TimerFired            = "TimerFired"
 	SignalReceived        = "SignalReceived"
@@ -63,6 +66,15 @@ type RunStartedPayload struct {
 	Trigger    any               `json:"trigger"`
 	Env        map[string]any    `json:"env,omitempty"`
 	Connectors map[string]string `json:"connectors,omitempty"` // "paystack@1" -> "1.4.0"
+	// Policies are the approval policies the workflow names, as active when
+	// the run started (spec 9.1).
+	Policies map[string]PolicySnapshot `json:"policies,omitempty"`
+}
+
+// PolicySnapshot is one approval policy version.
+type PolicySnapshot struct {
+	Version  int             `json:"version"`
+	Document json.RawMessage `json:"document"`
 }
 
 type RunInfo struct {
@@ -108,6 +120,26 @@ type Error struct {
 	// may still have taken effect. A step with such a failure parks instead
 	// of failing when its retries run out.
 	MaybeApplied bool `json:"maybe_applied,omitempty"`
+	// RetryAfterMS is how long the provider asked to wait (Retry-After) on
+	// a refusal; the next attempt waits at least this long.
+	RetryAfterMS int64 `json:"retry_after_ms,omitempty"`
+}
+
+// Failure kinds for a tenant key that could not be unwrapped (decision
+// 0019): the worker parks the step with KeyUnavailable; the key job
+// resumes it with KeyRestored (nothing was sent: retry) or
+// KeyRestoredReconcile (an earlier attempt may have been: reconcile).
+// A resumption never spends the step's retry budget.
+const (
+	KindKeyUnavailable       = "key_unavailable"
+	KindKeyRestored          = "key_restored"
+	KindKeyRestoredReconcile = "key_restored_reconcile"
+)
+
+// Resumed reports whether a failure is a resumption after a parked key
+// failure, which does not count against the retry budget.
+func (e Error) Resumed() bool {
+	return e.Kind == KindKeyRestored || e.Kind == KindKeyRestoredReconcile
 }
 
 type FailedPayload struct {
@@ -145,6 +177,24 @@ type ApprovalRequestedPayload struct {
 	Subject   map[string]any `json:"subject,omitempty"`
 	TimeoutAt string         `json:"timeout_at,omitempty"`
 	Escalated bool           `json:"escalated,omitempty"`
+	// From a policy: the levels approved in order (Role and Count are the
+	// first level's), the step-up required to vote, and the constraints.
+	PolicyVersion int                  `json:"policy_version,omitempty"`
+	Levels        []ApprovalLevel      `json:"levels,omitempty"`
+	StepUp        string               `json:"step_up,omitempty"`
+	Constraints   *ApprovalConstraints `json:"constraints,omitempty"`
+}
+
+// ApprovalLevel is one stage of a multi-level approval.
+type ApprovalLevel struct {
+	Role  string `json:"role"`
+	Count int    `json:"count"`
+}
+
+// ApprovalConstraints are a policy's separation-of-duties rules.
+type ApprovalConstraints struct {
+	ForbidSelfApproval bool `json:"forbid_self_approval"`
+	DistinctApprovers  bool `json:"distinct_approvers"`
 }
 
 type ApprovalDecidedPayload struct {
@@ -160,7 +210,10 @@ type SignalPayload struct {
 
 type ControlStartedPayload struct {
 	Path  *string `json:"path,omitempty"`  // branch
-	Count *int    `json:"count,omitempty"` // foreach
+	Count *int    `json:"count,omitempty"` // foreach and parallel (branches)
+	// Winner is recorded once by a parallel step with join "any", in a
+	// second StepStarted, when its first branch finishes.
+	Winner *string `json:"winner,omitempty"`
 }
 
 type RunFailedPayload struct {
@@ -187,3 +240,15 @@ const TimeFormat = time.RFC3339Nano
 func FormatTime(t time.Time) string { return t.UTC().Format(TimeFormat) }
 
 func ParseTime(s string) (time.Time, error) { return time.Parse(TimeFormat, s) }
+
+// InputDigest is how a resolved step input is compared across runs (a
+// fork and its parent, a shadow run and the recording): SHA-256 of its
+// JSON form, so 1, 1.0 and int64(1) agree.
+func InputDigest(v any) string {
+	raw, _ := json.Marshal(v)
+	var norm any
+	_ = json.Unmarshal(raw, &norm)
+	raw, _ = json.Marshal(norm)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}

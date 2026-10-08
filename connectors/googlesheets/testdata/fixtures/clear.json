@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Sheet1!A2:Z:clear",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+   "clearedRange": "Sheet1!A2:Z1000"
+  }
+ }
+}

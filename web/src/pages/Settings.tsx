@@ -1,13 +1,18 @@
 import { useState } from "react";
-import { del, get, post, put } from "../api";
+import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAuth } from "../auth";
-import { ErrorBox, Field, JsonInput, fmtTime, useAction, useLoad } from "../ui";
+import { EnvSelect, useEnvironments } from "../environments";
+import { ErrorBox, Field, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
+import { WhatsAppNumber } from "./WhatsAppNumber";
+import { USSDChannels } from "./USSDChannels";
+import { Help } from "../onboarding";
 
 interface Secret {
   environment: string;
   name: string;
   created_by: string;
   updated_at: string;
+  last_used_at: string | null;
 }
 interface Variable {
   environment: string;
@@ -21,19 +26,194 @@ export function Settings() {
   const [env, setEnv] = useState("prod");
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          Secrets &amp; settings
-        </h1>
-        <select aria-label="Environment" style={{ width: "auto" }} value={env} onChange={(e) => setEnv(e.target.value)}>
-          <option value="prod">prod</option>
-          <option value="dev">dev</option>
-        </select>
-      </div>
+      <PageHeader
+        title="Secrets &amp; settings"
+        description="Your environments and the secrets and variables workflows read in each of them."
+        actions={<EnvSelect value={env} onChange={setEnv} />}
+      />
+      <Environments editable={can("secret.manage")} />
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />
       {can("secret.manage") && <Egress env={env} />}
+      {can("git.manage") && <Git env={env} />}
+      {can("secret.manage") && <WhatsAppNumber />}
+      {can("secret.manage") && <USSDChannels />}
+      <Governance />
+      <PlanLimits />
     </>
+  );
+}
+
+interface LimitsView {
+  limits: Record<string, number>;
+  overrides: Record<string, number>;
+  usage: {
+    runs_today: number;
+    runs_this_month: number;
+    running_runs: number;
+    queued_runs: number;
+    workflows: number;
+    secrets: number;
+    connections: number;
+    whatsapp_templates_this_month?: { sent: number; by_category: Record<string, number>; overage: number; blocked: number };
+    container_seconds_this_month?: number;
+  };
+  recent_hits: { limit: string; day: string; hits: number }[];
+  help: Record<string, string>;
+}
+
+/** The plan's limits and what the tenant uses of them (read-only: operators set them). */
+function PlanLimits() {
+  const { data, error } = useLoad(() => get<LimitsView>("/v1/limits"), []);
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  const used: Record<string, number> = {
+    runs_per_day: data.usage.runs_today,
+    runs_per_month: data.usage.runs_this_month,
+    max_running_runs: data.usage.running_runs,
+    max_queued_runs: data.usage.queued_runs,
+    max_workflows: data.usage.workflows,
+    max_secrets: data.usage.secrets,
+    max_connections: data.usage.connections,
+    whatsapp_templates_monthly: data.usage.whatsapp_templates_this_month?.sent ?? 0,
+    container_minutes_monthly: Math.ceil((data.usage.container_seconds_this_month ?? 0) / 60),
+  };
+  const wt = data.usage.whatsapp_templates_this_month;
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Plan limits</h2>
+      <p className="hint">Set by your operator; 0 means no limit. Above the ingest rate deliveries are still accepted and their runs queued.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Limit</th>
+            <th>Value</th>
+            <th>In use</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.keys(data.help).sort().map((k) => (
+            <tr key={k}>
+              <td className="mono">{k}</td>
+              <td>
+                {data.limits[k]}
+                {k in data.overrides ? "" : " (default)"}
+              </td>
+              <td>{used[k] ?? ""}</td>
+              <td className="hint">{data.help[k]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {wt && wt.sent + wt.blocked > 0 && (
+        <p className="hint" data-testid="whatsapp-templates">
+          WhatsApp templates this month: {wt.sent} sent ({Object.entries(wt.by_category).map(([c, n]) => `${n} ${c}`).join(", ")}); {wt.overage} beyond the allowance, billed
+          through; {wt.blocked} marketing held back.
+        </p>
+      )}
+      {data.recent_hits.length > 0 && (
+        <>
+          <h2>Reached lately</h2>
+          <ul>
+            {data.recent_hits.map((h) => (
+              <li key={h.limit + h.day}>
+                {h.day}: <span className="mono">{h.limit}</span> ({h.hits}×)
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+function Environments({ editable }: { editable: boolean }) {
+  const envs = useEnvironments();
+  const [name, setName] = useState("");
+  const [gate, setGate] = useState("");
+  const act = useAction();
+  const list = envs.data?.environments ?? [];
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Environments</h2>
+      <p className="hint">
+        Each environment has its own secrets, connections, variables and triggers, and runs its own version of each workflow. Publishing deploys to every environment not gated on another; a gated environment runs only what was promoted from the one it names.
+      </p>
+      <ErrorBox error={envs.error ?? act.error} />
+      <table>
+        <thead>
+          <tr>
+            <th>Environment</th>
+            <th>Takes versions</th>
+            <th>Workflows</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((e) => (
+            <tr key={e.name}>
+              <td>{e.name}</td>
+              <td>
+                {editable && !e.git ? (
+                  <select
+                    aria-label={`Gate for ${e.name}`}
+                    value={e.promotion_from ?? ""}
+                    onChange={(ev) => void act.run(async () => (await put(`/v1/environments/${e.name}`, { promotion_from: ev.target.value }), envs.reload()))}
+                  >
+                    <option value="">when published</option>
+                    {list
+                      .filter((o) => o.name !== e.name)
+                      .map((o) => (
+                        <option key={o.name} value={o.name}>
+                          by promotion from {o.name}
+                        </option>
+                      ))}
+                  </select>
+                ) : e.git ? (
+                  "from Git"
+                ) : e.promotion_from ? (
+                  `by promotion from ${e.promotion_from}`
+                ) : (
+                  "when published"
+                )}
+              </td>
+              <td>{e.workflows}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {editable && (
+        <form
+          className="row"
+          style={{ alignItems: "flex-end" }}
+          onSubmit={(ev) => {
+            ev.preventDefault();
+            void act.run(async () => {
+              await post("/v1/environments", { name, promotion_from: gate });
+              setName("");
+              setGate("");
+              envs.reload();
+            });
+          }}
+        >
+          <Field label="New environment">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="staging" required />
+          </Field>
+          <Field label="Takes versions">
+            <select value={gate} onChange={(e) => setGate(e.target.value)}>
+              <option value="">when published</option>
+              {list.map((o) => (
+                <option key={o.name} value={o.name}>
+                  by promotion from {o.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <button type="submit" disabled={act.busy}>
+            Add
+          </button>
+        </form>
+      )}
+    </section>
   );
 }
 
@@ -59,6 +239,7 @@ function Secrets({ env }: { env: string }) {
                 <td className="hint">
                   updated {fmtTime(s.updated_at)} by {s.created_by}
                 </td>
+                <td className="hint">{s.last_used_at ? `last used ${fmtTime(s.last_used_at)}` : "never used"}</td>
                 <td style={{ textAlign: "right" }}>
                   <button className="danger" onClick={() => confirm(`Delete ${s.name}?`) && void act.run(async () => (await del(`/v1/secrets/${env}/${s.name}`), reload()))}>
                     Delete
@@ -101,6 +282,7 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Variables</h2>
       <p className="hint">Expressions read these as env.&lt;name&gt;. Each run keeps the values it started with.</p>
+      <Help topic="variables" />
       <ErrorBox error={error ?? act.error} />
       {rows.length > 0 && (
         <table style={{ marginBottom: 10 }}>
@@ -170,6 +352,184 @@ function Egress({ env }: { env: string }) {
           Allow host
         </button>
       </form>
+    </section>
+  );
+}
+
+/**
+ * The environment's Git repository (spec 10.3). Platform-led: publishing
+ * here opens a pull request. Git-led: pushes to the branch deploy once every
+ * workflow test passes, and the workflows the repository holds are
+ * read-only here.
+ */
+function Git({ env }: { env: string }) {
+  const { data, error, reload } = useLoad(() => get<{ connections: GitConnection[] }>("/v1/git"), []);
+  const conn = data?.connections.find((c) => c.environment === env);
+  const syncs = useLoad(() => (conn?.mode === "git_led" ? get<{ syncs: GitSync[] }>(`/v1/git/${env}/syncs`) : Promise.resolve({ syncs: [] })), [env, conn?.mode]);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [issued, setIssued] = useState<{ secret: string; url: string }>();
+  const act = useAction();
+  // The token and Bitbucket username are credentials: never shown again.
+  const v = (k: keyof GitConnection | "token" | "username", d = "") =>
+    form[k] ?? (conn && k !== "token" && k !== "username" ? String(conn[k] ?? "") : d);
+  const set = (k: string) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const bitbucket = v("provider", "github") === "bitbucket";
+  const save = () =>
+    act.run(async () => {
+      const body: Record<string, unknown> = {
+        provider: v("provider", "github"), api_url: v("api_url"), repo: v("repo"), branch: v("branch", "main"),
+        path: v("path", "flows"), tests_path: v("tests_path", "tests"), mode: v("mode", "platform_led"),
+      };
+      if (form.token) body.auth = { type: "token", token: form.token, ...(bitbucket && form.username ? { username: form.username } : {}) };
+      const r = await put<{ webhook_secret?: string; webhook_url: string }>(`/v1/git/${env}`, body);
+      if (r.webhook_secret) setIssued({ secret: r.webhook_secret, url: location.origin + r.webhook_url });
+      setForm({});
+      reload();
+    });
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Git</h2>
+      <p className="hint">
+        Platform-led: publishing here opens a pull request with the workflow's definition and code. Git-led: pushes to the branch deploy, after every
+        workflow test in the repository passes, and those workflows are read-only here.
+      </p>
+      <ErrorBox error={error ?? act.error ?? syncs.error} />
+      {issued && (
+        <div className="notice">
+          Add this webhook to the repository (push events). The secret is shown once.
+          <br />
+          URL <code>{issued.url}</code>
+          <br />
+          Secret <code>{issued.secret}</code>
+        </div>
+      )}
+      <div className="row">
+        <Field label="Host">
+          <select value={v("provider", "github")} onChange={set("provider")}>
+            <option value="github">GitHub</option>
+            <option value="gitlab">GitLab</option>
+            <option value="bitbucket">Bitbucket Cloud</option>
+          </select>
+        </Field>
+        <Field label="API URL" hint="Empty for github.com, gitlab.com or bitbucket.org">
+          <input value={v("api_url")} onChange={set("api_url")} placeholder="https://github.example.com/api/v3" />
+        </Field>
+        <Field label="Mode">
+          <select value={v("mode", "platform_led")} onChange={set("mode")}>
+            <option value="platform_led">Platform-led</option>
+            <option value="git_led">Git-led</option>
+          </select>
+        </Field>
+      </div>
+      <div className="row">
+        <Field label="Repository">
+          <input value={v("repo")} onChange={set("repo")} placeholder={bitbucket ? "workspace/repo_slug" : "owner/name"} />
+        </Field>
+        <Field label="Branch">
+          <input value={v("branch", "main")} onChange={set("branch")} />
+        </Field>
+        <Field label="Workflows directory">
+          <input value={v("path", "flows")} onChange={set("path")} />
+        </Field>
+        <Field label="Tests directory">
+          <input value={v("tests_path", "tests")} onChange={set("tests_path")} />
+        </Field>
+      </div>
+      <Field label={conn ? "Access token (leave empty to keep the current one)" : "Access token"} hint="Needs read access to contents, and write access to contents and pull requests for platform-led mode">
+        <input type="password" autoComplete="off" value={form.token ?? ""} onChange={set("token")} />
+      </Field>
+      {bitbucket && (
+        <Field label="Atlassian account email" hint="Only for an API token; leave empty for a repository, project or workspace access token">
+          <input type="email" autoComplete="off" value={form.username ?? ""} onChange={set("username")} />
+        </Field>
+      )}
+      <div className="row">
+        <button className="primary" disabled={act.busy} onClick={() => void save()}>
+          {conn ? "Save" : "Connect"}
+        </button>
+        {conn && (
+          <button className="danger" disabled={act.busy} onClick={() => confirm(`Disconnect ${conn.repo}?`) && void act.run(async () => (await del(`/v1/git/${env}`), reload()))}>
+            Disconnect
+          </button>
+        )}
+        {conn?.mode === "git_led" && (
+          <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/git/${env}/sync`), syncs.reload()))}>
+            Deploy from {conn.branch} now
+          </button>
+        )}
+      </div>
+      {conn?.mode === "git_led" && (syncs.data?.syncs.length ?? 0) > 0 && (
+        <table style={{ marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>Requested</th>
+              <th>Commit</th>
+              <th>Status</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {syncs.data?.syncs.map((s) => (
+              <tr key={s.id}>
+                <td>{fmtTime(s.requested_at)}</td>
+                <td>
+                  <code>{s.commit.slice(0, 10) || "head"}</code>
+                </td>
+                <td>{s.status}</td>
+                <td className="hint">
+                  {s.report?.error ??
+                    [
+                      s.report?.tests && `${s.report.tests.passed} tests passed, ${s.report.tests.failed} failed`,
+                      ...(s.report?.problems ?? []),
+                      ...(s.report?.tests?.failures ?? []),
+                      ...(s.report?.workflows ?? []).filter((w) => w.action !== "unchanged").map((w) => `${w.key} ${w.action} v${w.version}`),
+                    ]
+                      .filter(Boolean)
+                      .join("; ")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/** Four-eyes on change (spec 9.1); owners change it, everyone can see it. */
+function Governance() {
+  const { me } = useAuth();
+  const { data, error, reload } = useLoad(() => get<{ four_eyes_publish: boolean; four_eyes_policies: boolean; default_retention: string }>("/v1/governance"), []);
+  const [retention, setRetention] = useState<string>();
+  const act = useAction();
+  const owner = me?.roles.includes("owner") ?? false;
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  const set = (k: "four_eyes_publish" | "four_eyes_policies" | "default_retention", v: boolean | string) =>
+    act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()));
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Four-eyes</h2>
+      <p className="hint">Changes that need a second person. Only owners change these, and every change is audited.</p>
+      <ErrorBox error={act.error} />
+      <label>
+        <input type="checkbox" checked={data.four_eyes_publish} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_publish", e.target.checked)} /> Publishing a
+        workflow needs a second publisher
+      </label>
+      <br />
+      <label>
+        <input type="checkbox" checked={data.four_eyes_policies} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_policies", e.target.checked)} /> A new
+        approval policy version needs a second person
+      </label>
+      <h2>Retention</h2>
+      <p className="hint">How long run data is kept after a run ends, when its workflow sets no retention (default 90d). The audit log is kept regardless.</p>
+      <div className="row">
+        <input value={retention ?? data.default_retention} placeholder="90d" disabled={!owner} onChange={(e) => setRetention(e.target.value)} style={{ maxWidth: 160 }} />
+        {owner && (
+          <button disabled={act.busy || retention === undefined} onClick={() => void set("default_retention", retention ?? "").then(() => setRetention(undefined))}>
+            Save retention
+          </button>
+        )}
+      </div>
     </section>
   );
 }

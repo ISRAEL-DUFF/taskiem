@@ -20,3 +20,7 @@ A schema or database per tenant (operationally heavy at thousands of sub-tenants
 ## Provenance
 
 PostgreSQL documentation on row security policies and `SECURITY DEFINER` functions.
+
+## Amendment 2026-10-07: the partner scope is entered, not held
+
+[0015](0015-embedding-tenancy.md) refines the last bullet of the decision. No session or key ever has sub-tenant ids in its scope (`taskiem_auth_tenant_scope(user, true)` now refuses). The partner admin API reaches one sub-tenant per transaction through `taskiem_partner_enter`, a `SECURITY DEFINER` function that checks `parent_id`, writes the access to both audit chains, and narrows `app.tenant_scope` to that sub-tenant alone.

@@ -112,11 +112,15 @@ type Result struct {
 	Entries     int64
 	FirstBroken int64 // 0 when intact
 	Reason      string
+	Anchors     int // anchors matched, with VerifyWithAnchors
 }
 
 // Verify reads an export (JSON lines) and checks every link and hash, and
 // that the chain ends at the exported head.
-func Verify(r io.Reader) (Result, error) {
+func Verify(r io.Reader) (Result, error) { return verify(r, nil) }
+
+// verify is Verify, calling seen with each verified entry's hash.
+func verify(r io.Reader, seen func(seq int64, hash string)) (Result, error) {
 	var res Result
 	prev := make([]byte, 32)
 	expect := int64(1)
@@ -154,6 +158,9 @@ func Verify(r io.Reader) (Result, error) {
 			return fail(e.Seq, "hash does not match the entry's contents")
 		}
 		prev = sum[:]
+		if seen != nil {
+			seen(e.Seq, e.Hash)
+		}
 		expect++
 		res.Entries++
 	}

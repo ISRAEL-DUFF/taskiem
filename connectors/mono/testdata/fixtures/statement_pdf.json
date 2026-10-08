@@ -1,0 +1,25 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc/statement",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "query": {
+   "period": "last12months",
+   "output": "pdf"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Request was successfully completed",
+   "data": {
+    "id": "2ojHeRva4Bfk9vvIuCuO",
+    "status": "BUILDING",
+    "path": "https://api.withmono.com/statements/0XmnvkiJZ8dWOYQOF6tM.pdf"
+   }
+  }
+ }
+}

@@ -1,0 +1,87 @@
+{
+  "schema": "wd/v1",
+  "id": "wf_ussdAirtimeTopup",
+  "version": 1,
+  "name": "USSD airtime top-up",
+  "description": "A caller dials *384*123#, chooses their own or another number and an amount, and confirms; the run sends the airtime through Africa's Talking and the caller gets an SMS when it is done or has failed.",
+  "trigger": {
+    "type": "ussd",
+    "config": {
+      "service_code": "*384*123#",
+      "max_chars": 160,
+      "screens": [
+        {
+          "id": "main",
+          "type": "menu",
+          "text": "Acme airtime",
+          "input": "recipient",
+          "options": [
+            { "label": "Top up my number", "next": "amount", "value": "self" },
+            { "label": "Top up another number", "next": "number", "value": "other" },
+            { "label": "Help", "next": "help" }
+          ]
+        },
+        {
+          "id": "number",
+          "type": "input",
+          "text": "Enter the number, e.g. 08031234567",
+          "input": "phone_number",
+          "validate": { "pattern": "0[789][01][0-9]{8}" },
+          "error": "That is not an 11-digit mobile number.",
+          "next": "amount"
+        },
+        {
+          "id": "amount",
+          "type": "input",
+          "text": "Amount in naira (50 to 5000)",
+          "input": "amount",
+          "validate": { "type": "integer", "min": 50, "max": 5000 },
+          "error": "Enter a whole amount from 50 to 5000.",
+          "next": "confirm"
+        },
+        {
+          "id": "confirm",
+          "type": "confirm",
+          "text": "Send N{{amount}} airtime?",
+          "confirm_label": "Send",
+          "done": "Request received. Ref {{reference}}. We will send you an SMS."
+        },
+        { "id": "help", "type": "end", "text": "Dial *384*123# and follow the menu. Help: 0800 000 0000." }
+      ],
+      "notify": {
+        "sms": true,
+        "completed": "Your airtime top-up {{reference}} is done.",
+        "failed": "Your airtime top-up {{reference}} failed. You have not been charged."
+      }
+    }
+  },
+  "inputs": {
+    "schema": {
+      "type": "object",
+      "required": ["recipient", "amount"],
+      "properties": {
+        "recipient": { "type": "string", "enum": ["self", "other"] },
+        "phone_number": { "type": "string", "pattern": "^0[789][01][0-9]{8}$", "x-pii": "phone" },
+        "amount": { "type": "integer", "minimum": 50, "maximum": 5000 }
+      }
+    }
+  },
+  "steps": [
+    {
+      "id": "topup",
+      "type": "connector",
+      "connector": "africastalking@1",
+      "action": "send_airtime",
+      "input": {
+        "recipients": [
+          {
+            "phone_number": "=trigger.body.recipient == 'self' ? trigger.caller.phone_number : '+234' + trigger.body.phone_number.substring(1)",
+            "currency_code": "NGN",
+            "amount": "=trigger.body.amount * 100"
+          }
+        ]
+      }
+    }
+  ],
+  "settings": {}
+}

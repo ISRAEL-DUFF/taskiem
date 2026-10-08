@@ -1,0 +1,12 @@
+{
+  "note": "Shaped as PGDock's docs/webhooks.md publishes (payload, headers, signature); signed with the fixture secret at the fixture time.",
+  "secret": "whsec_fixture_not_a_real_secret",
+  "at": 1791320000,
+  "headers": {
+    "Content-Type": "application/json",
+    "PGDock-Event-Id": "evt_3f2a9c1b7d4e_43",
+    "PGDock-Webhook": "taskiem-0192f0c4-7b1e-7cc0-9a51-3c2f1d0e9b77",
+    "PGDock-Signature": "t=1791320000,v1=3da2281ce4d85c105ea5fc2ac508618a1b0a3297f13c746efabfa990092f4513"
+  },
+  "body": "{\"id\":\"evt_3f2a9c1b7d4e_43\",\"webhook\":\"taskiem-0192f0c4-7b1e-7cc0-9a51-3c2f1d0e9b77\",\"project\":\"p_k2f9a7bq3d\",\"table\":\"public.orders\",\"type\":\"DELETE\",\"record\":null,\"old_record\":{\"id\":7,\"status\":\"paid\"},\"committed_at\":\"2026-10-06T20:53:19Z\"}"
+}

@@ -9,7 +9,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,6 +37,10 @@ func (e *HTTPError) Error() string {
 
 func (e *HTTPError) Unwrap() error { return e.kind }
 
+// RetryAfterDelay is the provider's Retry-After; the engine waits at least
+// this long before the next attempt.
+func (e *HTTPError) RetryAfterDelay() time.Duration { return e.RetryAfter }
+
 // DoJSON sends a JSON request and decodes a JSON response into out. Errors
 // are classified for the engine: transport failures before sending are
 // not_sent, after sending unknown_outcome; 429 and 503 retryable; other 5xx
@@ -52,7 +58,7 @@ func DoJSON(ctx context.Context, client *http.Client, method, url string, header
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, rd)
 	if err != nil {
-		return fmt.Errorf("%w: %w", err, effects.ErrFatal)
+		return fmt.Errorf("%w: %w", RedactURLError(err), effects.ErrFatal)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -96,8 +102,45 @@ func DoJSON(ctx context.Context, client *http.Client, method, url string, header
 	return nil
 }
 
-// ClassifyTransport decides whether a transport error proves nothing was sent.
+// RedactURL drops what a URL may carry besides where it goes: user info,
+// query and fragment. Credentials passed in a query string (api_key=...)
+// would otherwise reach error messages and so run history.
+func RedactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "[url]"
+	}
+	return (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}).String()
+}
+
+// RedactURLError rewrites a *url.Error (what http.Client.Do returns) so its
+// message names only scheme, host and path. The underlying error, and so
+// errors.Is and errors.As, are unchanged.
+func RedactURLError(err error) error {
+	var ue *url.Error
+	if !errors.As(err, &ue) || ue.URL == RedactURL(ue.URL) {
+		return err
+	}
+	clean := &url.Error{Op: ue.Op, URL: RedactURL(ue.URL), Err: ue.Err}
+	if err == error(ue) { //nolint:errorlint // identity: err is the *url.Error itself, not wrapping it
+		return clean
+	}
+	// Wrapped further: keep the chain, but the message must not repeat the URL.
+	return &redacted{msg: strings.ReplaceAll(err.Error(), ue.URL, clean.URL), err: err}
+}
+
+type redacted struct {
+	msg string
+	err error
+}
+
+func (r *redacted) Error() string { return r.msg }
+func (r *redacted) Unwrap() error { return r.err }
+
+// ClassifyTransport decides whether a transport error proves nothing was
+// sent. URLs in the result carry no query string.
 func ClassifyTransport(err error) error {
+	err = RedactURLError(err)
 	var dnsErr *net.DNSError
 	var opErr *net.OpError
 	switch {

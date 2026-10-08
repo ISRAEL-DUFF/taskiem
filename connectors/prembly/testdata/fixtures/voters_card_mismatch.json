@@ -1,0 +1,33 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/voters_card",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "987F545AJ67890",
+   "last_name": "smith",
+   "dob": "1995-02-27",
+   "state": "lagos"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "detail": "Verification Successfull",
+   "data": {
+    "fullName": "JOHN DOE",
+    "vin": "987F545AJ67890",
+    "pollingUnit": "PU 001",
+    "gender": "Male"
+   },
+   "verification": {
+    "status": "NOT-VERIFIED",
+    "reference": "vc1"
+   }
+  }
+ }
+}

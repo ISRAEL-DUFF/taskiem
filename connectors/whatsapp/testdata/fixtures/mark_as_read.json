@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  },
+  "body": {
+   "messaging_product": "whatsapp",
+   "status": "read",
+   "message_id": "wamid.HBgLMTY1MDM4Nzk0MzkVAgARGBJDQjZCMzlEQUE4OTJBMTE4RTUA"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true
+  }
+ }
+}

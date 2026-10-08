@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/auth/login",
+  "headers": {
+   "Authorization": "Basic TUtfVEVTVF9UQVNLSUVNMDE6VFNLU0VDUkVUMDAwMDAwMDAwMDAwMDAwMDAwMDAwMQ=="
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": true,
+   "responseMessage": "success",
+   "responseCode": "0",
+   "responseBody": {
+    "accessToken": "tok-1",
+    "expiresIn": 3599
+   }
+  }
+ }
+}

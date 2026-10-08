@@ -1,0 +1,39 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Sheet1!A:C:append",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "query": {
+   "valueInputOption": "RAW",
+   "insertDataOption": "INSERT_ROWS"
+  },
+  "body": {
+   "majorDimension": "ROWS",
+   "values": [
+    [
+     "2026-10-06",
+     "=HYPERLINK(\"x\")",
+     100,
+     true,
+     null
+    ]
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+   "tableRange": "Sheet1!A1:C10",
+   "updates": {
+    "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+    "updatedRange": "Sheet1!A11:E11",
+    "updatedRows": 1,
+    "updatedColumns": 5,
+    "updatedCells": 5
+   }
+  }
+ }
+}

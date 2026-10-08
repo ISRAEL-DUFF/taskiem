@@ -1,0 +1,35 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/national_passport_v2",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "B50000947",
+   "dob": "1996-09-30"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "message": "Nigerian Passport verification successful",
+   "data": {
+    "firstName": "JUDAH",
+    "middleName": "OYIN",
+    "lastName": "KEN",
+    "gender": "FEMALE",
+    "dateOfBirth": "30-09-1996",
+    "countryOfBirth": "nigeria",
+    "successful": true,
+    "passportNumber": "B50000947"
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "033b3865"
+   }
+  }
+ }
+}

@@ -4,6 +4,7 @@
 # Postgres HA (docs/operations.md).
 #
 #   docker compose -f deploy/docker-compose.yml up -d --build
+#   (or --no-build with an image you built or pulled: TASKIEM_IMAGE=...)
 #   docker compose -f deploy/docker-compose.yml run --rm -e TASKIEM_BOOTSTRAP_PASSWORD='change me please' \
 #       taskiem bootstrap --tenant "My company" --email me@example.com
 #   open http://localhost:8080
@@ -16,6 +17,10 @@ x-taskiem-env: &taskiem-env
   TASKIEM_OPENBAO_TOKEN: dev
   TASKIEM_KMS_KEY: taskiem
   TASKIEM_ARCHIVE_DIR: /var/lib/taskiem/archive
+  # Daily signed audit-chain anchors (docs/operations.md). Set
+  # TASKIEM_ANCHOR_KEY in your shell or .env: openssl rand -base64 32
+  TASKIEM_ANCHOR_KEY: ${TASKIEM_ANCHOR_KEY:-}
+  TASKIEM_ANCHOR_DIR: /var/lib/taskiem/anchors
   TASKIEM_WEB_DIR: /web
   # Plain HTTP on localhost; set true behind TLS.
   TASKIEM_SECURE_COOKIES: "false"
@@ -53,6 +58,7 @@ services:
       openbao: { condition: service_healthy }
 
   migrate:
+    image: ${TASKIEM_IMAGE:-taskiem:dev}
     build: { context: .., args: { VERSION: dev } }
     command: ["migrate"]
     environment: *taskiem-env
@@ -60,11 +66,12 @@ services:
       postgres: { condition: service_healthy }
 
   taskiem:
+    image: ${TASKIEM_IMAGE:-taskiem:dev}
     build: { context: .., args: { VERSION: dev } }
     command: ["serve", "--role", "all"]
     environment: *taskiem-env
     ports: ["8080:8080", "9090:9090"]
-    volumes: [archive:/var/lib/taskiem/archive]
+    volumes: [archive:/var/lib/taskiem/archive, anchors:/var/lib/taskiem/anchors]
     depends_on:
       migrate: { condition: service_completed_successfully }
       openbao-init: { condition: service_completed_successfully }
@@ -85,3 +92,4 @@ volumes:
   pgdata: {}
   seaweed: {}
   archive: {}
+  anchors: {}

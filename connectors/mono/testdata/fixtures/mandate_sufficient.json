@@ -1,0 +1,29 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/balance-inquiry",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "query": {
+   "amount": "200000"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Sufficient balance available",
+   "data": {
+    "id": "mmc_682b9c5803c0b736078889a3",
+    "has_sufficient_balance": true,
+    "account_details": {
+     "bank_code": "035",
+     "account_name": "SAMUEL OLAMIDE",
+     "account_number": "0811111111",
+     "bank_name": "Access Bank"
+    }
+   }
+  }
+ }
+}

@@ -37,8 +37,8 @@ func environment(p *Principal, requested string) (string, error) {
 	return "prod", nil
 }
 
-// startRun starts a run of a workflow's published version (the active one
-// unless the request pins another). An Idempotency-Key header makes the
+// startRun starts a run of a workflow's published version (the one deployed
+// in the environment unless the request pins another). An Idempotency-Key header makes the
 // request safe to retry: the same key returns the same run.
 func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	wf, err := uuid.Parse(chi.URLParam(r, "wf"))
@@ -77,14 +77,31 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("%w: no environment %q", errBadRequest, env)
 		}
 		if version == 0 {
-			var active *int
-			if err := tx.QueryRow(ctx, `SELECT active_version FROM workflows WHERE id = $1`, wf).Scan(&active); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1`, wf).Scan(new(int)); err != nil {
 				return err
 			}
-			if active == nil {
-				return fmt.Errorf("%w: workflow has no published version", errConflict)
+			deployed, err := deployedVersion(ctx, tx, wf, env)
+			if err != nil {
+				return err
 			}
-			version = *active
+			if deployed == 0 {
+				return fmt.Errorf("%w: workflow has no version deployed in %s", errConflict, env)
+			}
+			version = deployed
+		} else {
+			// A gated environment runs only what was promoted to it.
+			var gated bool
+			if err := tx.QueryRow(ctx, `SELECT promotion_from IS NOT NULL FROM environments WHERE name = $1`, env).Scan(&gated); err != nil {
+				return err
+			}
+			if deployed, err := deployedVersion(ctx, tx, wf, env); err != nil {
+				return err
+			} else if gated && deployed != version {
+				return fmt.Errorf("%w: %s runs only the version promoted to it (%d)", errConflict, env, deployed)
+			} else if deployed != version && env != "dev" && !p.Can(PermWorkflowPublish) {
+				// Pinning another version outside dev is a deploy of sorts.
+				return fmt.Errorf("%w: %s runs version %d; running another takes %s", errForbidden, env, deployed, PermWorkflowPublish)
+			}
 		}
 		var state string
 		if err := tx.QueryRow(ctx, `SELECT state, definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, version).Scan(&state, &def); err != nil {
@@ -137,14 +154,14 @@ func (s *Server) inputProblems(wf uuid.UUID, version int, def, input []byte) []s
 // definitionFor parses a version's definition once; versions are immutable.
 func (s *Server) definitionFor(wf uuid.UUID, version int, doc []byte) (*wd.Definition, error) {
 	key := wf.String() + "/" + strconv.Itoa(version)
-	if d, ok := s.defs.Load(key); ok {
-		return d.(*wd.Definition), nil
+	if d, ok := s.defs.Get(key); ok {
+		return d, nil
 	}
 	d, err := wd.Load(doc)
 	if err != nil {
 		return nil, err
 	}
-	s.defs.Store(key, d)
+	s.defs.Put(key, d)
 	return d, nil
 }
 
@@ -196,7 +213,7 @@ func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
 		wf = &id
 	}
 	var out []runSummary
-	err = s.tx(r, func(tx pgx.Tx) error {
+	err = s.readTx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT `+runColumns+` FROM runs r JOIN workflows w ON w.id = r.workflow_id
 			WHERE r.started_at < $1 AND ($2::uuid IS NULL OR r.workflow_id = $2) AND ($3 = '' OR r.status = $3) AND ($4 = '' OR r.environment = $4)
 			ORDER BY r.started_at DESC LIMIT $5`, before, wf, q.Get("status"), env, limit)
@@ -262,7 +279,15 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal})
+	// What this run resumed (a fork from a failed run's step) and the runs
+	// that resumed it (docs/ai.md#repairing-failed-runs).
+	forks, err := s.Store.Forks(r.Context(), ref)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	forks.Children = nonNil(forks.Children)
+	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal, "forks": forks})
 }
 
 func (s *Server) cancelRun(w http.ResponseWriter, r *http.Request) {

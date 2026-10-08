@@ -14,5 +14,28 @@ export TASKIEM_DATABASE_URL="$dsn"
 export TASKIEM_LOCAL_KMS_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 bin/taskiem migrate >/dev/null
 TASKIEM_BOOTSTRAP_PASSWORD='correct horse battery' bin/taskiem bootstrap --tenant "E2E" --email owner@e2e.test --name Owner >/dev/null
+# The E2E tenant is also a partner (embed.spec.ts embeds the builder).
+tenant=$(psql "$dsn" -tAc "SELECT id FROM tenants WHERE name = 'E2E'")
+bin/taskiem tenants partner "$tenant" --capabilities white_label,custom_domains >/dev/null
+# It also publishes a connector in the public catalogue (catalogue.spec.ts).
+bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant"
+# An operator for ops.spec.ts: on the reviewer list, with a one-time link
+# to enrol a passkey (bin/ is not committed).
+TASKIEM_PUBLIC_URL=http://localhost:18080 bin/taskiem operators add ops@taskiem.test --name Ops | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-enrol.txt"
+bin/taskiem catalogue reviewers add ops@taskiem.test >/dev/null
 export TASKIEM_LISTEN=127.0.0.1:18080 TASKIEM_METRICS_LISTEN=127.0.0.1:19090 TASKIEM_WEB_DIR="$root/web/dist" TASKIEM_SECURE_COOKIES=false
+# Passkeys need a host name: the passkey test browses http://localhost:18080.
+export TASKIEM_PUBLIC_URL=http://localhost:18080 TASKIEM_REQUIRE_ADMIN_PASSKEYS=false
+# Email goes to the SMTP sink password.spec.ts listens on.
+export TASKIEM_SMTP_URL=smtp://127.0.0.1:12525 TASKIEM_ALERT_FROM=taskiem@e2e.test
+# The platform WhatsApp number talks to the fake Graph API whatsapp.spec.ts
+# runs (loopback is allowed only because the URL names it).
+export TASKIEM_WHATSAPP_PHONE_NUMBER_ID=106540352242922 TASKIEM_WHATSAPP_ACCESS_TOKEN=EAAe2e TASKIEM_WHATSAPP_APP_SECRET=e2e-app-secret \
+  TASKIEM_WHATSAPP_VERIFY_TOKEN=e2e-verify TASKIEM_WHATSAPP_TOKEN_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= \
+  TASKIEM_WHATSAPP_GRAPH_URL=http://127.0.0.1:12626/v25.0 TASKIEM_WHATSAPP_DISPLAY_NUMBER="+1 555 000 1111"
+# Every spec signs in from the same address.
+export TASKIEM_LOGIN_BURST=100
+# Self-serve signup, and Termii pointed at the fake onboarding.spec.ts runs
+# (loopback is allowed only because the URL names it).
+export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
 exec bin/taskiem serve --role all

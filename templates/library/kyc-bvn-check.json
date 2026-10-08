@@ -1,0 +1,43 @@
+{
+  "id": "kyc-bvn-check",
+  "title": "Check a new customer's BVN before onboarding",
+  "summary": "When a customer applies, look up their BVN with Dojah; welcome them if the name matches, otherwise flag it to you.",
+  "description": "Gives your application form a signed web address. Each applicant (first name, last name, phone, BVN) is checked against the BVN record with Dojah. If the last name matches, they get a welcome SMS; if not, the owner gets an email to review the application by hand. The BVN is personal data: it is sealed in run history and never shown in messages. The owner's email is the tenant variable owner_email.",
+  "category": "compliance",
+  "tags": ["kyc", "identity", "bvn", "onboarding", "compliance", "dojah", "sms", "email"],
+  "keywords": ["kyc", "bvn", "verify", "verification", "identity", "check", "onboard", "onboarding", "customer", "applicant", "know"],
+  "connectors": ["dojah@1", "termii@1", "gmail@1"],
+  "variables": [{"name": "owner_email", "why": "Where applications that need a manual review are sent."}],
+  "params": [
+    {"name": "business_name", "type": "string", "title": "Business name", "description": "Signs the welcome message.", "required": true, "example": "Ikenna Microfinance", "max_length": 60},
+    {"name": "path", "type": "string", "title": "Web address path", "description": "The path your application form calls.", "required": false, "default": "/applications/new", "example": "/applications/new", "pattern": "^/[A-Za-z0-9/_.-]{1,80}$"},
+    {"name": "dojah_connection", "type": "connection", "connector": "dojah", "title": "Dojah connection", "description": "The name of your Dojah connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "gmail_connection", "type": "connection", "connector": "gmail", "title": "Gmail connection", "description": "The mailbox the review email is sent from.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_kycBvnCheck",
+    "version": 1,
+    "name": "Check a new customer's BVN",
+    "trigger": {"type": "webhook", "config": {"path": "{{path}}", "auth": "hmac", "dedup": "=trigger.body.application_id"}},
+    "inputs": {"schema": {"type": "object", "required": ["application_id", "first_name", "last_name", "phone", "bvn"], "properties": {
+      "application_id": {"type": "string", "minLength": 1, "maxLength": 60},
+      "first_name": {"type": "string", "minLength": 1, "maxLength": 60, "x-pii": "name"}, "last_name": {"type": "string", "minLength": 1, "maxLength": 60, "x-pii": "name"},
+      "phone": {"type": "string", "pattern": "^[0-9]{10,15}$", "x-pii": "phone"}, "bvn": {"type": "string", "pattern": "^[0-9]{11}$", "x-pii": "bvn"}}}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your business name", "config": {"output": {"business_name": "{{business_name}}"}}},
+      {"id": "lookup_bvn", "type": "connector", "name": "Look up the BVN", "connector": "dojah@1", "action": "lookup_bvn", "connection": "{{dojah_connection}}",
+       "input": {"bvn": "=trigger.body.bvn"}},
+      {"id": "decide", "type": "branch", "name": "Does the name match?", "needs": ["settings", "lookup_bvn"], "config": {
+        "paths": [{"name": "name_matches", "when": "=has(steps.lookup_bvn.output.last_name) && string(steps.lookup_bvn.output.last_name).lowerAscii() == string(trigger.body.last_name).lowerAscii()", "steps": [
+          {"id": "welcome", "type": "connector", "name": "Text the customer a welcome", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}",
+           "input": {"to": "=trigger.body.phone", "sms": "='Welcome, ' + trigger.body.first_name + '! Your identity check with ' + steps.settings.output.business_name + ' is complete.'"}}]}],
+        "default": {"steps": [
+          {"id": "flag_review", "type": "connector", "name": "Email the owner to review the application", "connector": "gmail@1", "action": "send_message", "connection": "{{gmail_connection}}",
+           "input": {"to": ["=env.owner_email"], "subject": "='Application ' + trigger.body.application_id + ' needs a manual KYC review'",
+             "text": "='The name on application ' + trigger.body.application_id + ' does not match its BVN record. Review it in Taskiem before onboarding the customer.'"}}]}}}
+    ],
+    "settings": {"timeout": "30m"}
+  }
+}

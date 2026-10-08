@@ -92,6 +92,7 @@ type Step struct {
 	Input     map[string]any   `json:"-"`
 	HTTP      *HTTPConfig      `json:"-"`
 	Code      *CodeConfig      `json:"-"`
+	Container *ContainerConfig `json:"-"`
 	Branch    *BranchConfig    `json:"-"`
 	Parallel  *ParallelConfig  `json:"-"`
 	Foreach   *ForeachConfig   `json:"-"`
@@ -123,6 +124,13 @@ type CodeLimits struct {
 	MemoryMB int    `json:"memory_mb,omitempty"`
 	CPU      string `json:"cpu,omitempty"`
 }
+
+// The platform's ceilings on a code step's own limits: a definition may ask
+// for less, never more.
+const (
+	MaxCodeMemoryMB = 256
+	MaxCodeCPU      = 60 * time.Second
+)
 
 type BranchPath struct {
 	Name  string  `json:"name"`
@@ -250,6 +258,9 @@ func (s *Step) parse() error {
 	case "code":
 		s.Code = &CodeConfig{}
 		target = s.Code
+	case "container":
+		s.Container = &ContainerConfig{}
+		target = s.Container
 	case "branch":
 		s.Branch = &BranchConfig{}
 		target = s.Branch
@@ -334,6 +345,8 @@ func (s *Step) Queue() string {
 	switch s.Type {
 	case "code":
 		return "sandbox"
+	case "container":
+		return "container"
 	case "ai":
 		return "ai"
 	}

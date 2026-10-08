@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/payments/initiate",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": "failed",
+   "message": "Validation error",
+   "data": [
+    {
+     "field": "start_date",
+     "message": "The date should be at least today or later when mandate_type is emandate."
+    }
+   ]
+  }
+ }
+}

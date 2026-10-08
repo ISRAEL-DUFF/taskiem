@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/customers",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": "failed",
+   "message": "Customer already exists with similar credentials (email or names supplied)",
+   "data": null
+  }
+ }
+}

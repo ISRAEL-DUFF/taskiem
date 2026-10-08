@@ -1,0 +1,51 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/echannelsvc/merchant/api/paymentinit",
+  "headers": {
+   "Authorization": "remitaConsumerKey=2547916,remitaConsumerToken=7976bd16579a52ad6363183d27135feb08cee2d84671790323706a6b5252944602730feb1a17a2fd479d340270877a494919f7896cd9eb0e6ba4c02b3b0d9241"
+  },
+  "body": {
+   "serviceTypeId": "4430731",
+   "amount": "21000.50",
+   "orderId": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+   "payerName": "John Doe",
+   "payerEmail": "doe@example.com",
+   "payerPhone": "09062067384",
+   "description": "September fees",
+   "lineItems": [
+    {
+     "lineItemsId": "itemid1",
+     "beneficiaryName": "Alozie Michael",
+     "beneficiaryAccount": "6020067886",
+     "bankCode": "058",
+     "beneficiaryAmount": "20000",
+     "deductFeeFrom": "1"
+    },
+    {
+     "lineItemsId": "itemid2",
+     "beneficiaryName": "Folivi Joshua",
+     "beneficiaryAccount": "0360883515",
+     "bankCode": "058",
+     "beneficiaryAmount": "1000.50",
+     "deductFeeFrom": "0"
+    }
+   ],
+   "customFields": [
+    {
+     "name": "Student Number",
+     "value": "561561516",
+     "type": "ALL"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "statuscode": "025",
+   "RRR": "160007846369",
+   "status": "Payment Reference generated"
+  }
+ }
+}

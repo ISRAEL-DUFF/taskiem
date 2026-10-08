@@ -2,7 +2,7 @@
 TASKIEM_TEST_DATABASE_URL ?= postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: check lint test test-db validate licences ts web e2e build spike load up down db-up db-down
+.PHONY: check lint test test-db validate licences ts web e2e build spike load up down db-up db-down image chart docs docs-check
 
 check: lint test validate licences ts
 
@@ -58,3 +58,24 @@ db-up:
 
 db-down:
 	docker compose -f deploy/docker-compose.yml down
+
+image:
+	docker build --build-arg VERSION=$(VERSION) -t taskiem:$(VERSION) .
+
+# Lints the Helm chart and regenerates the plain manifests from it (docs/kubernetes.md).
+chart:
+	helm lint --strict deploy/helm/taskiem
+	{ echo "# Generated from deploy/helm/taskiem by: helm template taskiem deploy/helm/taskiem --namespace taskiem"; \
+	  echo "# Do not edit; change the chart and regenerate (docs/kubernetes.md). Create the taskiem Secret first."; \
+	  helm template taskiem deploy/helm/taskiem --namespace taskiem --set ingress.enabled=true; } > deploy/kubernetes/taskiem.yaml
+
+# The public docs site and API reference (CONTRIBUTING.md#docs-and-the-api-reference). Checks
+# every docs link first; the site is written to site/ (not committed).
+# DOCS_BASE is the path it is served under; DOCS_SOURCE links unpublished files.
+DOCS_BASE ?= /
+DOCS_SOURCE ?=
+docs:
+	go run ./tools/docsite -out site -base '$(DOCS_BASE)' -source '$(DOCS_SOURCE)'
+
+docs-check:
+	go run ./tools/docsite -check

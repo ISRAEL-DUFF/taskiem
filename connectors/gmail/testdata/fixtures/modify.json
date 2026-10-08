@@ -1,0 +1,28 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/users/me/messages/m1/modify",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "body": {
+   "addLabelIds": [
+    "Label_12"
+   ],
+   "removeLabelIds": [
+    "UNREAD",
+    "INBOX"
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "m1",
+   "threadId": "t1",
+   "labelIds": [
+    "Label_12"
+   ]
+  }
+ }
+}

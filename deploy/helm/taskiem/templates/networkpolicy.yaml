@@ -1,0 +1,31 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $root := . -}}
+{{- range $role := splitList " " (include "taskiem.roles" .) }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "taskiem.fullname" $root }}-{{ $role }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $role }}
+  policyTypes: [Ingress]
+  ingress:
+    {{- if or (eq $role "api") (eq $role "all") }}
+    - ports: [{ port: 8080 }]
+    {{- end }}
+    {{- if eq $role "edge" }}
+    - ports: [{ port: 8081 }]
+    {{- end }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $root.Values.networkPolicy.monitoringNamespace }}
+      ports: [{ port: 9090 }]
+{{- end }}
+{{- end }}

@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/payouts/customer-lookup",
+  "headers": {
+   "Authorization": "Bearer isw-tok-1"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "transactionReference": "tsk-lookup-x",
+   "recipientAccount": "0037320662",
+   "recipientBank": "TRP",
+   "recipientName": "JAMES MODUPE",
+   "responseCode": "00",
+   "responseDescription": "Approved or completed successfully"
+  }
+ }
+}

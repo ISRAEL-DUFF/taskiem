@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/trades/sell/assets/67063f653b4a1f6c7a60ec58/generate-address","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"},"body":{"label":"user-12345","bankId":"39","accountNumber":"3154021148","autoSettlement":true}},
+ "response":{"status":201,"body":{"message":"ok","success":true,"data":{"id":"6932dc98c2ceccdea367388a","address":"TV8dNYYBgL3xLbQcJLMBNavY4gYNqPF8Jv"},"meta":{}}}}

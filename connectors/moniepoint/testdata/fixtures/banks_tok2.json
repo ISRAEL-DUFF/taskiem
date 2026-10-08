@@ -1,0 +1,33 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/banks",
+  "headers": {
+   "Authorization": "Bearer tok-2"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": true,
+   "responseMessage": "success",
+   "responseCode": "0",
+   "responseBody": [
+    {
+     "name": "Access bank",
+     "code": "044",
+     "ussdTemplate": "*901*Amount*AccountNumber#",
+     "baseUssdCode": "*901#",
+     "transferUssdTemplate": "*901*AccountNumber#"
+    },
+    {
+     "name": "Moniepoint MFB",
+     "code": "50515",
+     "ussdTemplate": null,
+     "baseUssdCode": null,
+     "transferUssdTemplate": null
+    }
+   ]
+  }
+ }
+}

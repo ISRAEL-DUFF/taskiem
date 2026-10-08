@@ -1,0 +1,273 @@
+# Telegram Bot API. Built from Telegram's public documentation only:
+#   https://core.telegram.org/bots/api       (Bot API 10.3)
+#   https://core.telegram.org/bots/webhooks
+#   https://core.telegram.org/bots/faq
+# read 6 October 2026 (docs/integrations/telegram.md).
+manifest: connector/v1
+id: telegram
+version: 1.0.0
+name: Telegram
+description: Send and edit Telegram bot messages, answer button presses, manage the bot's webhook, and receive updates.
+category: messaging
+auth:
+  type: api_key
+  fields:
+    - { key: bot_token, label: Bot token from @BotFather, secret: true }
+    - { key: webhook_secret, label: "Webhook secret token: 1-256 characters of A-Z, a-z, 0-9, _ and - (needed to receive updates)", secret: true, required: false }
+  test: { action: get_me }
+# Telegram's FAQ: about 30 messages a second across chats, one a second per chat.
+rate_limit: { requests: 30, per: 1s, scope: connection }
+base_url: https://api.telegram.org
+egress_hosts: [api.telegram.org]
+actions:
+  get_me:
+    title: Get the bot
+    description: Checks the bot token and returns the bot's own user.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        id:         { type: string }
+        is_bot:     { type: boolean }
+        first_name: { type: string }
+        username:   { type: string }
+  get_chat:
+    title: Get a chat
+    class: read
+    input:
+      type: object
+      required: [chat_id]
+      properties:
+        chat_id: { type: [string, integer], description: Chat id, or @username of a channel or supergroup }
+    output:
+      type: object
+      properties:
+        id:         { type: string }
+        type:       { type: string, description: "private, group, supergroup or channel" }
+        title:      { type: string }
+        username:   { type: string }
+        first_name: { type: string }
+        last_name:  { type: string }
+        chat:       { type: object, description: Telegram's ChatFullInfo as returned }
+    pii:
+      - { field: output.username, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.chat, category: other }
+  send_message:
+    title: Send a message
+    description: >-
+      Telegram has no idempotency key, so a send whose outcome is unknown is
+      parked for a person, never repeated. A 429 (flood control) proves the
+      message was not sent and is retried.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [chat_id, text]
+      properties:
+        chat_id:                     { type: [string, integer], description: Chat id, or @username of a channel }
+        text:                        { type: string, minLength: 1, maxLength: 4096 }
+        parse_mode:                  { type: string, enum: [MarkdownV2, HTML, Markdown] }
+        reply_markup:                { type: object, description: "An InlineKeyboardMarkup ({inline_keyboard: [[{text, callback_data}]]}), ReplyKeyboardMarkup, ReplyKeyboardRemove or ForceReply, passed through" }
+        reply_to_message_id:         { type: integer, description: Message in the same chat to reply to }
+        allow_sending_without_reply: { type: boolean }
+        message_thread_id:           { type: integer, description: Forum topic }
+        disable_notification:        { type: boolean }
+        protect_content:             { type: boolean }
+        disable_link_preview:        { type: boolean }
+    output: { $ref: '#/actions/send_photo/output' }
+    pii:
+      - { field: text, category: other }
+      - { field: output.message, category: other }
+  send_photo:
+    title: Send a photo
+    description: By URL (Telegram fetches it; 5 MB) or by a file_id Telegram gave the bot. Not idempotent, like send_message.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [chat_id, photo]
+      properties:
+        chat_id:              { type: [string, integer] }
+        photo:                { type: string, description: HTTP URL or file_id }
+        caption:              { type: string, maxLength: 1024 }
+        parse_mode:           { type: string, enum: [MarkdownV2, HTML, Markdown] }
+        reply_markup:         { type: object }
+        reply_to_message_id:  { type: integer }
+        message_thread_id:    { type: integer }
+        disable_notification: { type: boolean }
+        protect_content:      { type: boolean }
+    output:
+      type: object
+      properties:
+        message_id: { type: integer }
+        chat_id:    { type: string, description: Correlation for replies and button presses on the update trigger }
+        date:       { type: integer, description: Unix seconds }
+        message:    { type: object, description: Telegram's Message as returned }
+    pii:
+      - { field: caption, category: other }
+      - { field: output.message, category: other }
+  send_document:
+    title: Send a document
+    description: >-
+      By URL (Telegram fetches it; only .PDF and .ZIP by URL, 20 MB) or by a
+      file_id. Not idempotent, like send_message.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [chat_id, document]
+      properties:
+        chat_id:              { type: [string, integer] }
+        document:             { type: string, description: HTTP URL or file_id }
+        caption:              { type: string, maxLength: 1024 }
+        parse_mode:           { type: string, enum: [MarkdownV2, HTML, Markdown] }
+        reply_markup:         { type: object }
+        reply_to_message_id:  { type: integer }
+        message_thread_id:    { type: integer }
+        disable_notification: { type: boolean }
+        protect_content:      { type: boolean }
+    output: { $ref: '#/actions/send_photo/output' }
+    pii:
+      - { field: caption, category: other }
+      - { field: output.message, category: other }
+  edit_message_text:
+    title: Edit a message's text
+    description: >-
+      Sets a sent message's text (and inline keyboard). Setting the same text
+      twice changes nothing, so a retry is safe; Telegram has no idempotency
+      key and the engine's key is not sent. An edit Telegram reports as
+      "message is not modified" succeeds with modified false.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [text]
+      properties:
+        chat_id:           { type: [string, integer], description: With message_id, or use inline_message_id }
+        message_id:        { type: integer }
+        inline_message_id: { type: string }
+        text:              { type: string, minLength: 1, maxLength: 4096 }
+        parse_mode:        { type: string, enum: [MarkdownV2, HTML, Markdown] }
+        reply_markup:      { type: object, description: An InlineKeyboardMarkup; omit to remove the keyboard }
+        disable_link_preview: { type: boolean }
+    output:
+      type: object
+      properties:
+        modified:   { type: boolean }
+        message_id: { type: integer }
+        chat_id:    { type: string }
+        message:    { type: object, description: The edited Message (absent for inline messages) }
+    pii:
+      - { field: text, category: other }
+      - { field: output.message, category: other }
+  answer_callback_query:
+    title: Answer a button press
+    description: >-
+      Stops the client's progress indicator after an inline keyboard button
+      press (a callback_query update), optionally with a notification.
+      Answering again changes nothing, so a retry is safe; the engine's key is
+      not sent.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [callback_query_id]
+      properties:
+        callback_query_id: { type: string, description: body.callback_query.id from the update }
+        text:              { type: string, maxLength: 200 }
+        show_alert:        { type: boolean }
+        url:               { type: string }
+        cache_time:        { type: integer, minimum: 0 }
+    output:
+      type: object
+      properties:
+        answered: { type: boolean }
+    pii:
+      - { field: text, category: other }
+  set_webhook:
+    title: Set the webhook
+    description: >-
+      Points the bot's updates at a URL (the update trigger's endpoint) and
+      always sets secret_token to the connection's webhook_secret, so every
+      delivery carries it. Setting the same webhook twice changes nothing; the
+      engine's key is not sent.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [url]
+      properties:
+        url:                  { type: string, description: "https://<public URL>/hooks/<tenant>/connectors/telegram@1/update?env=prod" }
+        allowed_updates:      { type: array, items: { type: string }, description: "Update types to receive, e.g. [message, callback_query]; empty for Telegram's default" }
+        drop_pending_updates: { type: boolean }
+        max_connections:      { type: integer, minimum: 1, maximum: 100 }
+        ip_address:           { type: string }
+    output:
+      type: object
+      properties:
+        set: { type: boolean }
+  delete_webhook:
+    title: Delete the webhook
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      properties:
+        drop_pending_updates: { type: boolean }
+    output:
+      type: object
+      properties:
+        deleted: { type: boolean }
+  get_webhook_info:
+    title: Get the webhook's status
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        url:                    { type: string, description: Empty when no webhook is set }
+        has_custom_certificate: { type: boolean }
+        pending_update_count:   { type: integer }
+        ip_address:             { type: string }
+        last_error_date:        { type: integer }
+        last_error_message:     { type: string }
+        max_connections:        { type: integer }
+        allowed_updates:        { type: array, items: { type: string } }
+triggers:
+  # Register with set_webhook. Telegram sends one Update per request; at most
+  # one of its optional fields is present, and that field is the event.
+  update:
+    type: webhook
+    verify: { scheme: header_secret, header: X-Telegram-Bot-Api-Secret-Token, secret_field: webhook_secret }
+    events: [message, edited_message, channel_post, edited_channel_post, business_connection, business_message,
+      edited_business_message, deleted_business_messages, guest_message, message_reaction, message_reaction_count,
+      inline_query, chosen_inline_result, callback_query, shipping_query, pre_checkout_query, purchased_paid_media,
+      poll, poll_answer, my_chat_member, chat_member, chat_join_request, chat_boost, removed_chat_boost, managed_bot,
+      subscription, stopped_message_generation]
+    event_type: '=body.filter(k, k != "update_id").size() > 0 ? body.filter(k, k != "update_id")[0] : "unknown"'
+    # Telegram: update_id lets you "ignore repeated updates".
+    dedup: =string(body.update_id)
+    # The chat the update belongs to: a reply, a new message or the chat of
+    # the message whose button was pressed. Updates without a chat (inline
+    # queries, poll answers) signal no run.
+    correlation: >-
+      =has(body.message) ? string(body.message.chat.id)
+      : has(body.edited_message) ? string(body.edited_message.chat.id)
+      : has(body.channel_post) ? string(body.channel_post.chat.id)
+      : has(body.edited_channel_post) ? string(body.edited_channel_post.chat.id)
+      : has(body.business_message) ? string(body.business_message.chat.id)
+      : has(body.edited_business_message) ? string(body.edited_business_message.chat.id)
+      : has(body.guest_message) ? string(body.guest_message.chat.id)
+      : has(body.callback_query) && has(body.callback_query.message) ? string(body.callback_query.message.chat.id)
+      : has(body.my_chat_member) ? string(body.my_chat_member.chat.id)
+      : has(body.chat_member) ? string(body.chat_member.chat.id)
+      : has(body.chat_join_request) ? string(body.chat_join_request.chat.id)
+      : has(body.message_reaction) ? string(body.message_reaction.chat.id)
+      : ""

@@ -1,0 +1,41 @@
+{
+  "id": "new-customer-welcome",
+  "title": "Welcome new customers by SMS",
+  "summary": "When a customer signs up, text them a welcome message and add them to your customer list.",
+  "description": "Gives your sign-up form or app a signed web address. Each new customer it sends (name and phone number) gets a welcome SMS from your business, and is added to your customer list in a Google Sheet at the same time. A sign-up sent twice is only welcomed once.",
+  "category": "customers",
+  "tags": ["customers", "onboarding", "welcome", "sms", "google sheets", "webhook"],
+  "keywords": ["welcome", "new", "customer", "signup", "sign", "register", "registration", "onboard", "onboarding", "joins"],
+  "connectors": ["termii@1", "googlesheets@1"],
+  "params": [
+    {"name": "business_name", "type": "string", "title": "Business name", "description": "Signs the welcome message.", "required": true, "example": "Femi Fitness", "max_length": 60},
+    {"name": "welcome_line", "type": "string", "title": "Welcome line", "description": "A line after the greeting, e.g. what to do next.", "required": false, "default": "Reply to this number any time you need help.", "example": "Your first class is free this week!", "max_length": 140},
+    {"name": "path", "type": "string", "title": "Web address path", "description": "The path your sign-up form calls.", "required": false, "default": "/customers/new", "example": "/customers/new", "pattern": "^/[A-Za-z0-9/_.-]{1,80}$"},
+    {"name": "spreadsheet_id", "type": "string", "title": "Customer list spreadsheet", "description": "The spreadsheet's id, from its link.", "required": true, "example": "1CuStOmErLiStShEeTiD0123456789abcd", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
+    {"name": "sheet_range", "type": "string", "title": "Sheet", "description": "The sheet and columns rows are added to.", "required": false, "default": "Customers!A:C", "example": "Customers!A:C"},
+    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_newCustomerWelcome",
+    "version": 1,
+    "name": "Welcome new customers by SMS",
+    "trigger": {"type": "webhook", "config": {"path": "{{path}}", "auth": "hmac", "dedup": "=trigger.body.phone"}},
+    "inputs": {"schema": {"type": "object", "required": ["name", "phone"], "properties": {
+      "name": {"type": "string", "minLength": 1, "maxLength": 100, "x-pii": "name"}, "phone": {"type": "string", "pattern": "^[0-9]{10,15}$", "x-pii": "phone"}}}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your business name and welcome line",
+       "config": {"output": {"business_name": "{{business_name}}", "welcome_line": "{{welcome_line}}"}}},
+      {"id": "welcome", "type": "parallel", "name": "Welcome them and add them to the list", "needs": ["settings"], "config": {"branches": [
+        {"name": "welcome_sms", "steps": [
+          {"id": "text_customer", "type": "connector", "name": "Text the customer a welcome", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}",
+           "input": {"to": "=trigger.body.phone", "sms": "='Welcome to ' + steps.settings.output.business_name + ', ' + trigger.body.name + '! ' + steps.settings.output.welcome_line"}}]},
+        {"name": "customer_list", "steps": [
+          {"id": "add_customer", "type": "connector", "name": "Add them to the customer list", "connector": "googlesheets@1", "action": "append_rows", "connection": "{{sheets_connection}}",
+           "input": {"spreadsheet_id": "{{spreadsheet_id}}", "range": "{{sheet_range}}", "value_input_option": "RAW", "values": [["=run.started_at", "=trigger.body.name", "=trigger.body.phone"]]}}]}
+      ]}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

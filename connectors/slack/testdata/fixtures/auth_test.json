@@ -1,0 +1,12 @@
+{
+ "status": 200,
+ "body": {
+  "ok": true,
+  "url": "https://subarachnoid.slack.com/",
+  "team": "Subarachnoid Workspace",
+  "user": "grace",
+  "team_id": "T12345678",
+  "user_id": "W12345678",
+  "bot_id": "B0123ABC"
+ }
+}

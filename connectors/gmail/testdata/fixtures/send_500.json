@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/users/me/messages/send"
+ },
+ "response": {
+  "status": 500,
+  "body": {
+   "error": {
+    "code": 500,
+    "message": "Backend Error",
+    "errors": [
+     {
+      "domain": "global",
+      "reason": "backendError",
+      "message": "Backend Error"
+     }
+    ]
+   }
+  }
+ }
+}

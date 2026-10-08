@@ -1,0 +1,38 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/vnin",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number_nin": "12345678901"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "message": "National Identity Number (NIN) verification successful",
+   "data": {
+    "birthdate": "22-05-1998",
+    "firstname": "CHIDERA",
+    "gender": "f",
+    "middlename": "ANITA",
+    "nin": "12345678901",
+    "nin_suspension_message": "NOT SUSPENDED",
+    "photo": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG",
+    "residence_address": "21 AJANAKU STREET",
+    "signature": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG",
+    "surname": "JOHNSON",
+    "telephoneno": "08092097506",
+    "nin_suspension_status": false
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "6701f915-1ac8-415b-a828-bc5eb397e75f"
+   }
+  }
+ }
+}

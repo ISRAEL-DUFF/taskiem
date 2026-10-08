@@ -2,14 +2,18 @@ package connector
 
 import (
 	"crypto/hmac"
+	"crypto/sha1" //nolint:gosec // some providers sign webhooks with HMAC-SHA1
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -21,12 +25,46 @@ var ErrBadSignature = errors.New("webhook signature invalid")
 
 // TriggerSpec is a manifest trigger's verification block.
 type TriggerSpec struct {
-	Type        string      `json:"type"`
-	Verify      *VerifySpec `json:"verify"`
-	Events      []string    `json:"events"`
-	EventType   string      `json:"event_type"`
-	Dedup       string      `json:"dedup"`
-	Correlation string      `json:"correlation"`
+	Type   string      `json:"type"`
+	Verify *VerifySpec `json:"verify"`
+	Events []string    `json:"events"`
+	// Split, when set, turns one delivery into several events: a list
+	// expression whose elements the other expressions see as item.
+	Split       string `json:"split"`
+	EventType   string `json:"event_type"`
+	Dedup       string `json:"dedup"`
+	Correlation string `json:"correlation"`
+	// Handshake answers a provider's endpoint check (Slack's
+	// url_verification, Meta's GET challenge).
+	Handshake *HandshakeSpec `json:"handshake"`
+	// Ack replaces the default 202 JSON answer to an accepted delivery.
+	Ack *AckSpec `json:"ack"`
+	// Registration remote: Taskiem creates, updates and deletes the
+	// provider's subscription itself (decision 0021), and verifies
+	// deliveries with the secret the provider returned, kept in the vault.
+	Registration string `json:"registration"`
+	// Options is the JSON Schema of the workflow trigger's options
+	// (tables, columns...), given to the registrar and the enricher.
+	Options json.RawMessage `json:"options"`
+	// TestEvent, an expression, marks a delivery the provider sends to
+	// test the endpoint: it is verified and acknowledged, and starts only
+	// workflows that subscribe to its event by name.
+	TestEvent string `json:"test_event"`
+}
+
+// Remote reports whether Taskiem registers this trigger at the provider.
+func (t TriggerSpec) Remote() bool { return t.Registration == "remote" }
+
+// HandshakeSpec is a trigger's endpoint check. GET: the query parameter
+// TokenQuery must equal the connection's SecretField, and Respond (over
+// query) is returned as text. POST: a delivery that passed verification
+// and for which When holds is answered with Respond instead of delivered.
+type HandshakeSpec struct {
+	Method      string `json:"method"`
+	When        string `json:"when"`
+	Respond     string `json:"respond"`
+	TokenQuery  string `json:"token_query"`
+	SecretField string `json:"secret_field"`
 }
 
 type VerifySpec struct {
@@ -35,6 +73,41 @@ type VerifySpec struct {
 	SecretField     string `json:"secret_field"`
 	TimestampHeader string `json:"timestamp_header"`
 	Tolerance       string `json:"tolerance"`
+	Encoding        string `json:"encoding"`       // hex (default), base64, base64_of_hex
+	KeyDerivation   string `json:"key_derivation"` // none (default), sha256_hex
+	// Query names the URL parameter carrying the secret (query_secret).
+	Query string `json:"query"`
+	// SignatureFormat t_v1 (hmac_sha256_timestamped): the header carries
+	// "t=<unix>,v1=<hex>[,v1=<hex>...]" instead of a timestamp header; any
+	// v1 value may match, so a provider can sign with an old and a new
+	// secret while it rotates.
+	SignatureFormat string `json:"signature_format"`
+}
+
+// AckSpec is the answer a provider expects to a delivery it made.
+type AckSpec struct {
+	Status      int    `json:"status"`
+	Body        string `json:"body"`
+	ContentType string `json:"content_type"`
+}
+
+// VerifyQuerySecret checks a query_secret delivery: the URL parameter
+// named by v.Query must equal the secret.
+func VerifyQuerySecret(v *VerifySpec, secret string, q url.Values) error {
+	got := q.Get(v.Query)
+	if v.Query == "" || secret == "" || got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(secret)) != 1 {
+		return ErrBadSignature
+	}
+	return nil
+}
+
+// VerifyPathSecret checks a path_secret delivery: the last segment of the
+// path form (/{env}/{connection}/{token}) must equal the secret.
+func VerifyPathSecret(secret, token string) error {
+	if secret == "" || token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(secret)) != 1 {
+		return ErrBadSignature
+	}
+	return nil
 }
 
 // DefaultTolerance is how far a timestamped signature may be from now.
@@ -56,6 +129,17 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 	case "hmac_sha256_timestamped":
 		mac = sha256.New
 		ts := strings.TrimSpace(h.Get(v.TimestampHeader))
+		if v.SignatureFormat == "t_v1" {
+			var sigs []string
+			ts, sigs = parseTV1(got)
+			if len(sigs) == 0 {
+				return fmt.Errorf("%w: no v1 signature in %s", ErrBadSignature, v.Header)
+			}
+			if err := checkTimestamp(v, ts); err != nil {
+				return err
+			}
+			return verifyAny(secret, append([]byte(ts+"."), body...), sigs)
+		}
 		sec, err := strconv.ParseInt(ts, 10, 64)
 		if err != nil {
 			return fmt.Errorf("%w: missing or bad %s", ErrBadSignature, v.TimestampHeader)
@@ -70,10 +154,35 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 			return fmt.Errorf("%w: timestamp outside %s", ErrBadSignature, tol)
 		}
 		signed = append([]byte(ts+"."), body...)
+	case "slack_v0":
+		mac = sha256.New
+		ts := strings.TrimSpace(h.Get(v.TimestampHeader))
+		sec, err := strconv.ParseInt(ts, 10, 64)
+		if err != nil {
+			return fmt.Errorf("%w: missing or bad %s", ErrBadSignature, v.TimestampHeader)
+		}
+		tol := DefaultTolerance
+		if v.Tolerance != "" {
+			if d, err := time.ParseDuration(v.Tolerance); err == nil {
+				tol = d
+			}
+		}
+		if skew := Now().Sub(time.Unix(sec, 0)); skew > tol || skew < -tol {
+			return fmt.Errorf("%w: timestamp outside %s", ErrBadSignature, tol)
+		}
+		signed = append([]byte("v0:"+ts+":"), body...)
+		got = strings.TrimPrefix(got, "v0=")
 	case "hmac_sha256":
 		mac = sha256.New
 	case "hmac_sha512":
 		mac = sha512.New
+	case "hmac_sha1":
+		mac = sha1.New
+	case "header_secret":
+		if secret == "" || got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(secret)) != 1 {
+			return ErrBadSignature
+		}
+		return nil
 	case "bearer":
 		want := "Bearer " + secret
 		if secret == "" || subtle.ConstantTimeCompare([]byte(h.Get("Authorization")), []byte(want)) != 1 {
@@ -82,17 +191,99 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 		return nil
 	case "none":
 		return nil
+	case "basic":
+		// The secret is "user:password", sent as HTTP Basic credentials.
+		want := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret))
+		if secret == "" || subtle.ConstantTimeCompare([]byte(h.Get("Authorization")), []byte(want)) != 1 {
+			return ErrBadSignature
+		}
+		return nil
+	case "query_secret", "path_secret":
+		return fmt.Errorf("%w: %s is checked against the URL", ErrBadSignature, v.Scheme)
+	case "connector":
+		return fmt.Errorf("%w: the connector verifies this trigger itself", ErrBadSignature)
 	default:
 		return fmt.Errorf("%w: unsupported scheme %q", ErrBadSignature, v.Scheme)
 	}
 	if secret == "" || got == "" {
 		return ErrBadSignature
 	}
-	m := hmac.New(mac, []byte(secret))
+	key := []byte(secret)
+	if v.KeyDerivation == "sha256_hex" {
+		sum := sha256.Sum256(key)
+		key = []byte(hex.EncodeToString(sum[:]))
+	}
+	m := hmac.New(mac, key)
 	m.Write(signed)
-	want := hex.EncodeToString(m.Sum(nil))
-	got = strings.TrimPrefix(strings.ToLower(got), "sha256=")
+	digest := m.Sum(nil)
+	var want string
+	switch v.Encoding {
+	case "base64":
+		want = base64.StdEncoding.EncodeToString(digest)
+	case "base64_of_hex":
+		want = base64.StdEncoding.EncodeToString([]byte(hex.EncodeToString(digest)))
+	default:
+		want = hex.EncodeToString(digest)
+		got = strings.TrimPrefix(strings.ToLower(got), "sha256=")
+	}
 	if subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+		return ErrBadSignature
+	}
+	return nil
+}
+
+// parseTV1 reads a "t=<unix>,v1=<hex>,v1=<hex>" signature header: the
+// timestamp and every v1 signature (several while the provider rotates its
+// secret). Unknown parts (other versions) are ignored.
+func parseTV1(header string) (ts string, sigs []string) {
+	for _, part := range strings.Split(header, ",") {
+		k, val, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "t":
+			ts = val
+		case "v1":
+			if val != "" {
+				sigs = append(sigs, strings.ToLower(val))
+			}
+		}
+	}
+	return ts, sigs
+}
+
+func checkTimestamp(v *VerifySpec, ts string) error {
+	sec, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return fmt.Errorf("%w: missing or bad timestamp", ErrBadSignature)
+	}
+	tol := DefaultTolerance
+	if v.Tolerance != "" {
+		if d, err := time.ParseDuration(v.Tolerance); err == nil {
+			tol = d
+		}
+	}
+	if skew := Now().Sub(time.Unix(sec, 0)); skew > tol || skew < -tol {
+		return fmt.Errorf("%w: timestamp outside %s", ErrBadSignature, tol)
+	}
+	return nil
+}
+
+// verifyAny accepts signed when any of sigs is its hex HMAC-SHA256 under
+// secret. Every candidate is compared, in constant time each.
+func verifyAny(secret string, signed []byte, sigs []string) error {
+	if secret == "" {
+		return ErrBadSignature
+	}
+	m := hmac.New(sha256.New, []byte(secret))
+	m.Write(signed)
+	want := []byte(hex.EncodeToString(m.Sum(nil)))
+	ok := 0
+	for _, s := range sigs {
+		ok |= subtle.ConstantTimeCompare([]byte(s), want)
+	}
+	if ok != 1 {
 		return ErrBadSignature
 	}
 	return nil

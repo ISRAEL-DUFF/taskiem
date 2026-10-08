@@ -1,0 +1,252 @@
+# Amazon S3 and S3-compatible object stores (Cloudflare R2, MinIO,
+# DigitalOcean Spaces, Wasabi). Built from AWS's public documentation, read
+# 6 October 2026 (docs/integrations/s3.md):
+#   https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html
+#   https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/API/API_Error.html (error codes)
+#   https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
+#   https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html
+# Signature Version 4 is implemented in this package (sigv4.go); no SDK.
+manifest: connector/v1
+id: s3
+version: 1.0.0
+name: Amazon S3
+description: Store, fetch, list, copy and delete objects in Amazon S3 or an S3-compatible store, and make presigned links.
+category: storage
+auth:
+  type: custom
+  fields:
+    - { key: access_key_id, label: Access key ID }
+    - { key: secret_access_key, label: Secret access key, secret: true }
+    - { key: session_token, label: Session token (temporary credentials only), secret: true, required: false }
+    - { key: region, label: "Region (default us-east-1; auto for Cloudflare R2)", required: false }
+    - { key: bucket, label: Default bucket (a step can name another), required: false }
+    - { key: host, label: "Endpoint host for an S3-compatible store, e.g. <account>.r2.cloudflarestorage.com (empty for AWS)", required: false }
+    - { key: port, label: Endpoint port (default 443), required: false }
+    - { key: path_style, label: "Path-style addressing on AWS: true or false (custom endpoints always use path style)", required: false }
+  test: { action: list_objects }
+egress_hosts: ["*.amazonaws.com", "*.amazonaws.com.cn", "${connection.host}"]
+actions:
+  put_object:
+    title: Put an object
+    description: >-
+      Writes the whole object in one request (at most 10 MiB after decoding).
+      Idempotent by key: sending the same body to the same key again leaves
+      the same object, so a retry after an unknown outcome is safe. In a
+      versioned bucket a retry can add an identical version.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 26
+      prefix: "tsk_"
+      limits: { charset: "a-z0-9_" }
+    compensate: null
+    input:
+      type: object
+      required: [key, body]
+      properties:
+        bucket:              { type: string, description: Defaults to the connection's bucket }
+        key:                 { type: string, minLength: 1, maxLength: 1024 }
+        body:                { type: string, description: The object's content, as text or base64 (see body_encoding) }
+        body_encoding:       { type: string, enum: [text, base64], default: text }
+        content_type:        { type: string, description: "Defaults to text/plain; charset=utf-8 for text and application/octet-stream for base64" }
+        cache_control:       { type: string }
+        content_disposition: { type: string }
+        metadata:            { type: object, additionalProperties: { type: string }, description: "User metadata (x-amz-meta-*); ASCII names and values" }
+        idempotency_key:     { type: string, description: Set by the engine; S3 needs no key, so it is only logged }
+    output:
+      type: object
+      properties:
+        bucket:     { type: string }
+        key:        { type: string }
+        etag:       { type: string }
+        version_id: { type: string }
+        size:       { type: integer }
+    pii:
+      - { field: body, category: other }
+  get_object:
+    title: Get an object
+    description: Returns the content as text or base64. An object larger than max_bytes is refused rather than cut short.
+    class: read
+    input:
+      type: object
+      required: [key]
+      properties:
+        bucket:     { type: string }
+        key:        { type: string, minLength: 1, maxLength: 1024 }
+        version_id: { type: string }
+        encoding:   { type: string, enum: [text, base64], default: text, description: text requires valid UTF-8 }
+        max_bytes:  { type: integer, minimum: 1, maximum: 10485760, default: 1048576 }
+    output:
+      type: object
+      properties:
+        bucket:              { type: string }
+        key:                 { type: string }
+        body:                { type: string }
+        encoding:            { type: string }
+        size:                { type: integer }
+        content_type:        { type: string }
+        etag:                { type: string }
+        last_modified:       { type: string }
+        version_id:          { type: string }
+        cache_control:       { type: string }
+        content_disposition: { type: string }
+        metadata:            { type: object }
+    pii:
+      - { field: output.body, category: other }
+      - { field: output.metadata, category: other }
+  head_object:
+    title: Get an object's details
+    description: Size, type, ETag and metadata without the content. A missing object returns exists=false instead of failing.
+    class: read
+    input:
+      type: object
+      required: [key]
+      properties:
+        bucket:     { type: string }
+        key:        { type: string, minLength: 1, maxLength: 1024 }
+        version_id: { type: string }
+    output:
+      type: object
+      properties:
+        exists:              { type: boolean }
+        bucket:              { type: string }
+        key:                 { type: string }
+        size:                { type: integer }
+        content_type:        { type: string }
+        etag:                { type: string }
+        last_modified:       { type: string }
+        version_id:          { type: string }
+        storage_class:       { type: string }
+        cache_control:       { type: string }
+        content_disposition: { type: string }
+        metadata:            { type: object }
+    pii:
+      - { field: output.metadata, category: other }
+  list_objects:
+    title: List objects
+    description: One page of keys (ListObjectsV2). Pass next_continuation_token back as continuation_token for the next page.
+    class: read
+    input:
+      type: object
+      properties:
+        bucket:             { type: string }
+        prefix:             { type: string }
+        delimiter:          { type: string, description: "Usually /; groups keys into common_prefixes" }
+        start_after:        { type: string }
+        continuation_token: { type: string }
+        max_keys:           { type: integer, minimum: 1, maximum: 1000, default: 1000 }
+    output:
+      type: object
+      properties:
+        objects:
+          type: array
+          items:
+            type: object
+            properties:
+              key:           { type: string }
+              size:          { type: integer }
+              etag:          { type: string }
+              last_modified: { type: string }
+              storage_class: { type: string }
+        common_prefixes:         { type: array, items: { type: string } }
+        is_truncated:            { type: boolean }
+        next_continuation_token: { type: string }
+        key_count:               { type: integer }
+  delete_object:
+    title: Delete an object
+    description: >-
+      Deleting a key that does not exist succeeds, so a retry is safe. In a
+      versioned bucket this adds a delete marker unless version_id names a
+      version to remove.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 26
+      prefix: "tsk_"
+      limits: { charset: "a-z0-9_" }
+    compensate: null
+    input:
+      type: object
+      required: [key]
+      properties:
+        bucket:          { type: string }
+        key:             { type: string, minLength: 1, maxLength: 1024 }
+        version_id:      { type: string }
+        idempotency_key: { type: string, description: Set by the engine; only logged }
+    output:
+      type: object
+      properties:
+        bucket:        { type: string }
+        key:           { type: string }
+        deleted:       { type: boolean }
+        version_id:    { type: string }
+        delete_marker: { type: boolean }
+  copy_object:
+    title: Copy an object
+    description: >-
+      Server-side copy (objects up to 5 GB). Copies metadata unless
+      content_type or metadata is given, which replaces it. Copying the same
+      source to the same key again gives the same object, so a retry is safe.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 26
+      prefix: "tsk_"
+      limits: { charset: "a-z0-9_" }
+    compensate: null
+    input:
+      type: object
+      required: [source_key, key]
+      properties:
+        source_bucket:     { type: string, description: Defaults to the connection's bucket }
+        source_key:        { type: string, minLength: 1, maxLength: 1024 }
+        source_version_id: { type: string }
+        bucket:            { type: string, description: Destination; defaults to the connection's bucket }
+        key:               { type: string, minLength: 1, maxLength: 1024 }
+        content_type:      { type: string }
+        metadata:          { type: object, additionalProperties: { type: string } }
+        idempotency_key:   { type: string, description: Set by the engine; only logged }
+    output:
+      type: object
+      properties:
+        bucket:        { type: string }
+        key:           { type: string }
+        etag:          { type: string }
+        last_modified: { type: string }
+        version_id:    { type: string }
+  presign_url:
+    title: Make a presigned link
+    description: >-
+      A time-limited URL that lets anyone holding it GET (download) or PUT
+      (upload) one object without credentials. Computed locally; nothing is
+      sent to S3. The link is stored in the run's history, so keep
+      expires_in short.
+    class: read
+    input:
+      type: object
+      required: [key]
+      properties:
+        bucket:       { type: string }
+        key:          { type: string, minLength: 1, maxLength: 1024 }
+        method:       { type: string, enum: [GET, PUT], default: GET }
+        expires_in:   { type: integer, minimum: 1, maximum: 604800, default: 3600, description: Seconds (at most 7 days; temporary credentials expire sooner) }
+        content_type: { type: string, description: "PUT only: the uploader must send exactly this Content-Type" }
+    output:
+      type: object
+      properties:
+        url:        { type: string }
+        method:     { type: string }
+        expires_at: { type: string }
+        headers:    { type: object, description: Headers the caller must send with the request }

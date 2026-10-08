@@ -1,0 +1,57 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "taskiem.fullname" . }}-migrate
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    # Before the new pods start: the schema only ever moves forward, and
+    # every release reads the schema of the one before it.
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "taskiem.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "taskiem.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "taskiem.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: [migrate]
+          securityContext:
+            {{- include "taskiem.containerSecurityContext" . | nindent 12 }}
+          # The Secret is read directly: a pre-install hook runs before the
+          # chart's ConfigMap exists.
+          env:
+            - name: TASKIEM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: TASKIEM_DATABASE_URL
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

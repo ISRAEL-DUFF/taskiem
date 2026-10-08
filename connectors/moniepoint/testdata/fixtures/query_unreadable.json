@@ -1,0 +1,48 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v2/merchant/transactions/query",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "query": {
+   "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": true,
+   "responseMessage": "success",
+   "responseCode": "0",
+   "responseBody": {
+    "transactionReference": "MNFY|20261006200044|000090",
+    "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "amountPaid": "1500.5O",
+    "totalPayable": "1500.50",
+    "settlementAmount": "1489.214",
+    "paidOn": "06/10/2026 09:38:13 AM",
+    "paymentStatus": "PAID",
+    "paymentDescription": "Order 17",
+    "currency": "NGN",
+    "paymentMethod": "ACCOUNT_TRANSFER",
+    "product": {
+     "type": "API_NOTIFICATION",
+     "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+    },
+    "cardDetails": null,
+    "accountDetails": {
+     "accountName": "ADA NGOZI OBI",
+     "accountNumber": "******7503",
+     "bankCode": "000001",
+     "amountPaid": "1500.5O"
+    },
+    "customer": {
+     "email": "ada@example.com",
+     "name": "Ada Obi"
+    },
+    "metaData": {}
+   }
+  }
+ }
+}

@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "error": {
+    "message": "(#131056) (Business Account, Consumer Account) pair rate limit hit",
+    "type": "OAuthException",
+    "code": 131056,
+    "error_data": {
+     "messaging_product": "whatsapp",
+     "details": "Message failed to send because there were too many messages sent from this phone number to the same phone number in a short period of time."
+    },
+    "fbtrace_id": "A1b2C3d4"
+   }
+  }
+ }
+}

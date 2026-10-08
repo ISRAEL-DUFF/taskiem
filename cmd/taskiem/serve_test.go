@@ -6,12 +6,15 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,10 +30,19 @@ func freeAddr(t *testing.T) string {
 	return l.Addr().String()
 }
 
-// TestServeAllSmoke runs the binary's own entry points end to end: bootstrap,
-// serve --role all, a webhook-started run through the sandbox worker,
-// metrics, an audit export verified offline, and a graceful stop.
-func TestServeAllSmoke(t *testing.T) {
+// server is a running `taskiem serve --role all` on a fresh database.
+type server struct {
+	base, metrics string
+	// stop sends the shutdown signal (it ends serve's context, as SIGTERM
+	// does); wait returns serve's result.
+	stop context.CancelFunc
+	wait func() error
+}
+
+// startServer bootstraps a tenant (admin@smoke.test) and serves every role
+// until the test ends.
+func startServer(t *testing.T) server {
+	t.Helper()
 	d := dbtest.New(t)
 	key := make([]byte, 32)
 	_, _ = rand.Read(key)
@@ -50,17 +62,24 @@ func TestServeAllSmoke(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- serve(ctx, []string{"--role", "all"}) }()
-	defer func() {
-		cancel()
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Errorf("serve: %v", err)
+	var once sync.Once
+	var result error
+	wait := func() error {
+		once.Do(func() {
+			select {
+			case result = <-done:
+			case <-time.After(40 * time.Second):
+				result = errors.New("serve did not stop")
 			}
-		case <-time.After(40 * time.Second):
-			t.Error("serve did not stop")
+		})
+		return result
+	}
+	t.Cleanup(func() {
+		cancel()
+		if err := wait(); err != nil {
+			t.Errorf("serve: %v", err)
 		}
-	}()
+	})
 	base := "http://" + apiAddr
 	deadline := time.Now().Add(15 * time.Second)
 	for {
@@ -76,28 +95,45 @@ func TestServeAllSmoke(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	return server{base: base, metrics: metricsAddr, stop: cancel, wait: wait}
+}
 
+// call makes an API request and decodes the JSON answer; it fails the test
+// on an error status.
+func (s server) call(t *testing.T, method, path, token string, body any) map[string]any {
+	t.Helper()
+	raw, _ := json.Marshal(body)
+	req, _ := http.NewRequest(method, s.base+path, bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(resp.Body)
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	if resp.StatusCode >= 300 {
+		t.Fatalf("%s %s: %d %s", method, path, resp.StatusCode, b)
+	}
+	return m
+}
+
+// TestServeAllSmoke runs the binary's own entry points end to end: bootstrap,
+// serve --role all, a webhook-started run through the sandbox worker,
+// metrics, an audit export verified offline, and a graceful stop.
+func TestServeAllSmoke(t *testing.T) {
+	srv := startServer(t)
+	base, metricsAddr := srv.base, srv.metrics
+	var out bytes.Buffer
 	call := func(method, path, token string, body any) map[string]any {
 		t.Helper()
-		raw, _ := json.Marshal(body)
-		req, _ := http.NewRequest(method, base+path, bytes.NewReader(raw))
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-		b, _ := io.ReadAll(resp.Body)
-		var m map[string]any
-		_ = json.Unmarshal(b, &m)
-		if resp.StatusCode >= 300 {
-			t.Fatalf("%s %s: %d %s", method, path, resp.StatusCode, b)
-		}
-		return m
+		return srv.call(t, method, path, token, body)
 	}
-	login := call("POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery"})
+	login := call("POST", "/v1/auth/login", "", map[string]any{"email": "admin@smoke.test", "password": "correct horse battery", "bearer": true})
 	tok, tenant := login["token"].(string), login["tenant_id"].(string)
 	wf := call("POST", "/v1/workflows", tok, map[string]any{"name": "smoke", "definition": json.RawMessage(`{"schema":"wd/v1","id":"wf_smoke","version":1,"name":"smoke",
 	  "trigger":{"type":"webhook","config":{"path":"/smoke","auth":"none"}},
@@ -129,6 +165,16 @@ func TestServeAllSmoke(t *testing.T) {
 		}
 	}
 
+	// Liveness on the metrics port, for roles that serve nothing else.
+	resp, err = http.Get("http://" + metricsAddr + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("metrics /healthz: %d", resp.StatusCode)
+	}
+
 	req, _ := http.NewRequest("GET", base+"/v1/audit/export", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	resp, err = http.DefaultClient.Do(req)
@@ -148,4 +194,19 @@ func TestServeAllSmoke(t *testing.T) {
 func toJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+func TestLogsAreRedacted(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{ReplaceAttr: redactAttr}))
+	log.Error("provider said account holder ada@example.ng has BVN 22212345678", "err", errors.New("rejected +2348031234567"), "amount", 5000)
+	out := buf.String()
+	for _, leak := range []string{"ada@example.ng", "22212345678", "+2348031234567"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("%s leaked: %s", leak, out)
+		}
+	}
+	if !strings.Contains(out, `"amount":5000`) {
+		t.Errorf("numbers are not personal: %s", out)
+	}
 }

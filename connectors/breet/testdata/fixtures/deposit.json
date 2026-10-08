@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/trades/transactions/692f91aa729255932afe9078","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"}},
+ "response":{"status":200,"body":{"message":"ok","success":true,"data":{"id":"692f91aa729255932afe9078","amountReceived":21.379427842514175,"cryptoReceived":"0.00025406","rate":1600,"status":"completed","currency":"ngn","feeAmount":1068.9713921257087,"txHash":"aa80","address":"6DKY","walletCredited":true},"meta":{}}}}

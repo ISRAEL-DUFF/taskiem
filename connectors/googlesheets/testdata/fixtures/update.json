@@ -1,0 +1,32 @@
+{
+ "request": {
+  "method": "PUT",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Sheet1!B2:C2",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "query": {
+   "valueInputOption": "USER_ENTERED"
+  },
+  "body": {
+   "range": "Sheet1!B2:C2",
+   "majorDimension": "ROWS",
+   "values": [
+    [
+     "paid",
+     "=B1*2"
+    ]
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+   "updatedRange": "Sheet1!B2:C2",
+   "updatedRows": 1,
+   "updatedColumns": 2,
+   "updatedCells": 2
+  }
+ }
+}

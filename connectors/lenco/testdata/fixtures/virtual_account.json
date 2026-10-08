@@ -1,0 +1,4 @@
+{"request":{"method":"POST","path":"/virtual-accounts","headers":{"Authorization":"Bearer lenco_test_token"},"body":{"accountName":"Acme / Order 1","transactionReference":"order-1","amount":1500.5}},
+ "response":{"status":200,"body":{"status":true,"message":"","data":{"id":"9e48b576-aecc-4e68-a033-1c6510c2f096","accountReference":"f0f1bcb4-ff82-4332-9521-2e5973089dfc",
+  "bankAccount":{"accountName":"LENCO(Acme / Order 1)","accountNumber":"9999000086","bank":{"code":"000023","name":"PROVIDUS BANK"}},
+  "type":"Dynamic Virtual Account","status":"active","createdAt":"2021-11-02T19:44:55.385Z","expiresAt":"2021-11-02T19:54:55.000Z","currency":"NGN"}}}}

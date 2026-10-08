@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/accounts/resolve","headers":{"Authorization":"Bearer FLWSECK_TEST-abc"},"body":{"account_number":"0690000032","account_bank":"044"}},
+ "response":{"status":200,"body":{"status":"success","message":"Account details fetched","data":{"account_number":"0690000032","account_name":"Pastor Bright"}}}}

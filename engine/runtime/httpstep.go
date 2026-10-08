@@ -26,7 +26,7 @@ func (w *Worker) doHTTP(ctx context.Context, p *plan, in any) (any, error) {
 	rawURL, _ := cfg["url"].(string)
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
-		return nil, fmt.Errorf("invalid url %q: %w", rawURL, effects.ErrFatal)
+		return nil, fmt.Errorf("invalid url %q: %w", connector.RedactURL(rawURL), effects.ErrFatal)
 	}
 	if q, ok := cfg["query"].(map[string]any); ok {
 		vals := u.Query()
@@ -45,7 +45,7 @@ func (w *Worker) doHTTP(ctx context.Context, p *plan, in any) (any, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", err, effects.ErrFatal)
+		return nil, fmt.Errorf("%w: %w", connector.RedactURLError(err), effects.ErrFatal)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

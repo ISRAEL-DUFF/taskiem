@@ -2,20 +2,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Background, Controls, ReactFlow, useReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
 import type { Step, WorkflowDefinition } from "@sdk/wd";
-import { ApiError, get, post, put, type ConnectorInfo, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
+import { ApiError, get, post, put, type ConnectorInfo, type MergeConflict, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
 import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
 import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph, type Layout } from "../lib/graph";
 import { merge } from "../lib/schema";
-import { Badge, ErrorBox, Field, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { EnvSelect, useEnvironments, type Deployment } from "../environments";
+import { Badge, ErrorBox, Field, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { AIBuilder } from "./AIBuild";
 
 const nodeTypes = { step: StepNode };
-const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "signal", "wait", "branch", "foreach"];
+const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "signal", "wait", "branch", "parallel", "foreach"];
 
 interface Loaded {
   workflow: WorkflowSummary;
   versions: VersionInfo[];
+  deployments: Deployment[];
 }
 interface VersionDoc {
   version: VersionInfo;
@@ -52,9 +55,11 @@ export function Editor() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [tab, setTab] = useState<"canvas" | "settings" | "json" | "triggers">("canvas");
+  const [tab, setTab] = useState<"canvas" | "settings" | "code" | "json" | "triggers">("canvas");
   const [notice, setNotice] = useState("");
   const [starting, setStarting] = useState(false);
+  const [merge, setMerge] = useState<{ conflicts: MergeConflict[]; latest: number }>();
+  const [ai, setAI] = useState(false);
   const act = useAction();
 
   useEffect(() => {
@@ -139,10 +144,23 @@ export function Editor() {
     setSelected(sid);
   };
 
-  const save = async (): Promise<number> => {
+  // A save names the version it started from; if someone saved since, the
+  // server merges the two edits, or reports conflicts to resolve.
+  const save = async (resolutions?: Record<string, "ours" | "theirs">): Promise<number> => {
     if (!def) return version;
     if (!dirty) return version;
-    const r = await post<{ version: number; problems: Problem[] }>(`/v1/workflows/${id}/versions`, { definition: def, layout });
+    let r: { version: number; problems: Problem[]; merged: boolean };
+    try {
+      r = await post(`/v1/workflows/${id}/versions`, { definition: def, layout, parent_digest: doc.data?.version.digest, resolutions });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && Array.isArray(e.body.conflicts)) {
+        setMerge({ conflicts: e.body.conflicts as MergeConflict[], latest: Number(e.body.latest_version) });
+        throw new Error(`Version ${String(e.body.latest_version)} was saved while you were editing, and changes the same parts. Choose which to keep.`, { cause: e });
+      }
+      throw e;
+    }
+    setMerge(undefined);
+    if (r.merged) setNotice(`Saved as version ${r.version}, merged with changes saved since you started.`);
     setProblems(r.problems);
     setDirty(false);
     setParams({ v: String(r.version) }, { replace: true });
@@ -160,21 +178,31 @@ export function Editor() {
   const publish = () =>
     act.run(async () => {
       const v = await save();
+      let r: { state: string; git?: Record<string, { url?: string; error?: string }> };
       try {
-        await post(`/v1/workflows/${id}/versions/${v}/publish`);
+        r = await post(`/v1/workflows/${id}/versions/${v}/publish`);
       } catch (e) {
         if (e instanceof ApiError && e.status === 422) setProblems(e.problems as Problem[]);
         throw e;
       }
-      setNotice(`Version ${v} is published; new runs use it.`);
+      if (r.state === "pending_approval") {
+        setNotice(`Version ${v} is waiting for a second person to publish it (Approvals → Publishing to review).`);
+        wf.reload();
+        return;
+      }
+      const git = Object.entries(r.git ?? {})
+        .map(([env, g]) => (g.url ? `Pull request for ${env}: ${g.url}` : `The pull request for ${env} could not be opened: ${g.error ?? "unknown error"}`))
+        .join(" ");
+      setNotice(`Version ${v} is published; new runs use it.${git ? " " + git : ""}`);
       wf.reload();
       doc.reload();
     });
 
   if (wf.error || doc.error) return <ErrorBox error={wf.error ?? doc.error} />;
-  if (!wf.data || !def) return <div className="empty">Loading…</div>;
+  if (!wf.data || !def) return <Skeleton />;
   const current = wf.data.versions.find((v) => v.version === version);
   const sel = def.steps.find((s) => s.id === selected);
+  const managed = wf.data.workflow.git_path;
 
   return (
     <>
@@ -199,17 +227,20 @@ export function Editor() {
         </select>
         {current && <Badge value={dirty ? "draft" : current.state} />}
         {dirty && <span className="hint">unsaved</span>}
-        {can("workflow.edit") && (
+        {can("workflow.edit") && !managed && (
           <>
             <button onClick={() => void validate()} disabled={act.busy}>
               Validate
             </button>
-            <button onClick={() => void act.run(save)} disabled={act.busy || !dirty}>
+            <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
               Save draft
+            </button>
+            <button onClick={() => setAI(true)} disabled={act.busy || dirty} title={dirty ? "Save your changes first" : undefined}>
+              Change with AI
             </button>
           </>
         )}
-        {can("workflow.publish") && (
+        {can("workflow.publish") && !managed && (
           <button className="primary" onClick={() => void publish()} disabled={act.busy || (!dirty && current?.state === "published")}>
             Publish
           </button>
@@ -221,6 +252,13 @@ export function Editor() {
         )}
       </div>
       <ErrorBox error={act.error} />
+      <Deployments workflow={id} deployments={wf.data.deployments} canPromote={can("workflow.publish")} onChange={wf.reload} />
+      {managed && (
+        <div className="notice" role="status">
+          This workflow is managed in Git (<code>{managed}</code>). Change it in the repository: a push to the connected branch deploys it once its
+          tests pass.
+        </div>
+      )}
       {notice && (
         <div className="notice" onClick={() => setNotice("")}>
           {notice}
@@ -239,9 +277,9 @@ export function Editor() {
         </div>
       )}
       <div className="tabs" role="tablist">
-        {(["canvas", "settings", "json", "triggers"] as const).map((t) => (
-          <button key={t} role="tab" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-            {{ canvas: "Canvas", settings: "Trigger & settings", json: "JSON", triggers: "Endpoints" }[t]}
+        {(["canvas", "settings", "code", "json", "triggers"] as const).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
+            {{ canvas: "Canvas", settings: "Trigger & settings", code: "Code", json: "JSON", triggers: "Endpoints" }[t]}
           </button>
         ))}
       </div>
@@ -305,6 +343,15 @@ export function Editor() {
         </div>
       )}
       {tab === "settings" && <SettingsTab def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} />}
+      {tab === "code" && (
+        <CodeTab
+          def={def}
+          onApply={(next, probs) => {
+            edit(next);
+            setProblems(probs);
+          }}
+        />
+      )}
       {tab === "json" && (
         <div className="card">
           <p className="hint">The whole definition (wd/v1). Edits apply as you type, once the JSON is valid.</p>
@@ -316,9 +363,46 @@ export function Editor() {
         <p className="hint">
           v{current.version} created {fmtTime(current.created_at)}
           {current.published_at && `, published ${fmtTime(current.published_at)}`} · digest <code>{current.digest.slice(0, 12)}</code>
+          {current.ai_build && " · drafted with AI"}
+          {current.git_commit && (
+            <>
+              {" "}
+              · from commit <code>{current.git_commit.slice(0, 10)}</code>
+            </>
+          )}
+          {current.git_request && (
+            <>
+              {" "}
+              ·{" "}
+              <a href={current.git_request} target="_blank" rel="noreferrer">
+                pull request
+              </a>
+            </>
+          )}
         </p>
       )}
       {starting && <StartRun workflow={id} onClose={() => setStarting(false)} onStarted={(run) => nav(`/runs/${run}`)} />}
+      {ai && (
+        <AIBuilder
+          workflow={id}
+          onClose={() => setAI(false)}
+          onSaved={(_, v) => {
+            setAI(false);
+            setNotice(`Saved the AI's proposal as draft version ${v}. Review it here, then publish as usual.`);
+            setParams({ v: String(v) });
+            wf.reload();
+          }}
+        />
+      )}
+      {merge && (
+        <MergeDialog
+          conflicts={merge.conflicts}
+          latest={merge.latest}
+          busy={act.busy}
+          onClose={() => setMerge(undefined)}
+          onResolve={(res) => void act.run(() => save(res))}
+        />
+      )}
     </>
   );
 }
@@ -480,7 +564,14 @@ function Endpoints({ workflow }: { workflow: string }) {
             <td>{t.environment}</td>
             <td>{t.type.replaceAll("_", " ")}</td>
             <td>
-              {t.url && <code>{window.location.origin + t.url}</code>}
+              {t.remote && (
+                <div>
+                  <Badge value={t.remote.health} /> Registered with the provider by Taskiem
+                  {(t.remote.status_reason || t.remote.last_error) && <div className="hint">{t.remote.status_reason ?? t.remote.last_error}</div>}
+                  {t.remote.health !== "ok" && t.remote.health !== "pending" && <div className="hint">Publish again to repair it.</div>}
+                </div>
+              )}
+              {t.url && !t.remote && <code>{window.location.origin + t.url}</code>}
               {t.secret_name && t.auth !== "none" && <div className="hint">Signed with the secret {t.secret_name} ({t.auth})</div>}
               {t.cron && (
                 <>
@@ -496,6 +587,45 @@ function Endpoints({ workflow }: { workflow: string }) {
   );
 }
 
+/** Which version each environment runs, and promotion into gated ones. */
+function Deployments({ workflow, deployments, canPromote, onChange }: { workflow: string; deployments: Deployment[]; canPromote: boolean; onChange: () => void }) {
+  const envs = useEnvironments();
+  const act = useAction();
+  const list = envs.data?.environments ?? [];
+  if (list.length === 0) return null;
+  const at = (env: string) => deployments.find((d) => d.environment === env);
+  return (
+    <div className="deployments hint" aria-label="Deployments">
+      {list.map((e) => {
+        const d = at(e.name);
+        const from = e.promotion_from ? at(e.promotion_from) : undefined;
+        const promotable = canPromote && !e.git && e.promotion_from && from && from.version !== d?.version;
+        return (
+          <span key={e.name} className="deployment">
+            <strong>{e.name}</strong> {d ? `v${d.version}` : "not deployed"}
+            {promotable && (
+              <button
+                className="small"
+                disabled={act.busy}
+                onClick={() =>
+                  void act.run(async () => {
+                    await post(`/v1/workflows/${workflow}/promote`, { from: e.promotion_from, to: e.name });
+                    onChange();
+                    envs.reload();
+                  })
+                }
+              >
+                Promote v{from.version} from {e.promotion_from}
+              </button>
+            )}
+          </span>
+        );
+      })}
+      <ErrorBox error={act.error} />
+    </div>
+  );
+}
+
 function StartRun({ workflow, onClose, onStarted }: { workflow: string; onClose: () => void; onStarted: (run: string) => void }) {
   const [input, setInput] = useState<unknown>({});
   const [env, setEnv] = useState("prod");
@@ -503,10 +633,7 @@ function StartRun({ workflow, onClose, onStarted }: { workflow: string; onClose:
   return (
     <Modal title="Start a run" onClose={onClose}>
       <Field label="Environment">
-        <select value={env} onChange={(e) => setEnv(e.target.value)}>
-          <option value="prod">prod</option>
-          <option value="dev">dev</option>
-        </select>
+        <EnvSelect value={env} onChange={setEnv} />
       </Field>
       <Field label="Input (trigger.body)">
         <JsonInput value={input} onChange={setInput} rows={8} />
@@ -524,6 +651,101 @@ function StartRun({ workflow, onClose, onStarted }: { workflow: string; onClose:
           }
         >
           Start
+        </button>
+        <button onClick={onClose}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * The workflow as code (spec 10.2): generated from the definition, editable,
+ * and applied back by compiling it on the server. Generated code always
+ * builds to the definition it came from.
+ */
+function CodeTab({ def, onApply }: { def: WorkflowDefinition; onApply: (def: WorkflowDefinition, problems: Problem[]) => void }) {
+  const [base, setBase] = useState<string>();
+  const [code, setCode] = useState("");
+  const gen = useAction();
+  const apply = useAction();
+  useEffect(() => {
+    void gen.run(async () => {
+      const r = await post<{ code: string }>("/v1/code/generate", { definition: def });
+      setBase(r.code);
+      setCode(r.code);
+    });
+  }, [def]);
+  const changed = base !== undefined && code !== base;
+  return (
+    <div className="card">
+      <p className="hint">
+        This workflow as TypeScript with <code>@taskiem/sdk</code>, the same code <code>taskiem codegen</code> writes. Edit it and apply: the code is
+        compiled to a definition, and the canvas shows the result. Expressions are arrow functions or CEL strings; logic belongs in code steps.
+      </p>
+      <ErrorBox error={gen.error ?? apply.error} />
+      <textarea className="mono" rows={32} value={code} spellCheck={false} onChange={(e) => setCode(e.target.value)} aria-label="Workflow code" />
+      <div className="row">
+        <button
+          className="primary"
+          disabled={!changed || apply.busy}
+          onClick={() =>
+            void apply.run(async () => {
+              const r = await post<{ definition: WorkflowDefinition; problems: Problem[] }>("/v1/code/compile", { source: code });
+              onApply(r.definition, r.problems);
+            })
+          }
+        >
+          {apply.busy ? "Compiling…" : "Apply to workflow"}
+        </button>
+        <button disabled={!changed} onClick={() => base !== undefined && setCode(base)}>
+          Discard changes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Lets an editor choose, for each conflict, their edit or the newer version's. */
+function MergeDialog({
+  conflicts,
+  latest,
+  busy,
+  onClose,
+  onResolve,
+}: {
+  conflicts: MergeConflict[];
+  latest: number;
+  busy: boolean;
+  onClose: () => void;
+  onResolve: (res: Record<string, "ours" | "theirs">) => void;
+}) {
+  const [choice, setChoice] = useState<Record<string, "ours" | "theirs">>({});
+  const show = (v: unknown) => (v === undefined ? "(removed)" : JSON.stringify(v, null, 2));
+  const label = (c: MergeConflict) => (c.path.startsWith("steps/") ? `Step ${c.path.slice(6)}` : `Workflow ${c.path}`);
+  return (
+    <Modal title="Resolve conflicting edits" onClose={onClose}>
+      <p className="hint">
+        Version {latest} changed these parts too. Everything else is merged. Choose which version of each to keep, then save.
+      </p>
+      {conflicts.map((c) => (
+        <fieldset key={c.path} className="card" data-testid={`conflict-${c.path}`}>
+          <legend>
+            {label(c)} {c.kind === "changed_and_deleted" && "(changed on one side, removed on the other)"}
+          </legend>
+          <div className="row">
+            {(["ours", "theirs"] as const).map((side) => (
+              <label key={side} className="grow">
+                <input type="radio" name={c.path} checked={choice[c.path] === side} onChange={() => setChoice({ ...choice, [c.path]: side })} />{" "}
+                {side === "ours" ? "Yours" : `Version ${latest}`}
+                <pre className="mono">{show(c[side])}</pre>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ))}
+      <div className="row">
+        <button className="primary" disabled={busy || conflicts.some((c) => !choice[c.path])} onClick={() => onResolve(choice)}>
+          Save merged version
         </button>
         <button onClick={onClose}>Cancel</button>
       </div>

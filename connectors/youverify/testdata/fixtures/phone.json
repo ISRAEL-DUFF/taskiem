@@ -1,0 +1,45 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/phone",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "mobile": "08036000000",
+   "isSubjectConsent": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "parentId": "612ce40ab8919f39faf7ae49",
+    "status": "found",
+    "dataValidation": false,
+    "selfieValidation": false,
+    "phoneDetails": [
+     {
+      "fullName": "EHICHIOYA FAMOUS PRIOR",
+      "dateOfBirth": "2000-01-01"
+     }
+    ],
+    "isConsent": true,
+    "idNumber": "08036000000",
+    "type": "phone",
+    "country": "NG",
+    "id": "61b934dfaab326675cdfaab326",
+    "requestedBy": {
+     "firstName": "API",
+     "lastName": "User",
+     "middleName": "",
+     "id": "62c2a4868d3193700828014e"
+    }
+   },
+   "links": []
+  }
+ }
+}

@@ -60,7 +60,30 @@ type Guard struct {
 	// Blocked decides whether an address is off limits. Defaults to
 	// BlockedAddr; tests can loosen it to reach httptest servers.
 	Blocked func(netip.Addr) bool
-	Timeout time.Duration
+	// Loopback lets one purpose reach loopback on one port: an operator
+	// pointing a connector at a fake provider on the same machine (browser
+	// tests; "connector:termii" -> "12727"). The policy's host allow-list
+	// still applies, and nothing else private becomes reachable.
+	Loopback map[string]string
+	Timeout  time.Duration
+	// Upstream is the explicit CONNECT proxy this guard's connections
+	// leave through; nil uses the process-wide one (SetUpstream), if any.
+	// Loopback exceptions are dialled directly.
+	Upstream *Upstream
+}
+
+func (g *Guard) upstream() *Upstream {
+	if g.Upstream != nil {
+		return g.Upstream
+	}
+	return defaultUpstream.Load()
+}
+
+// loopbackOK reports whether a is loopback and the purpose may reach it on
+// port.
+func (g *Guard) loopbackOK(p Policy, a netip.Addr, port string) bool {
+	want, ok := g.Loopback[p.Purpose]
+	return ok && want != "" && want == port && a.Unmap().IsLoopback()
 }
 
 func (g *Guard) resolver() Resolver {
@@ -92,6 +115,9 @@ var blockedPrefixes = func() []netip.Prefix {
 		"203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "255.255.255.255/32",
 		"::/128", "::1/128", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001:db8::/32", "fc00::/7", "fe80::/10", "ff00::/8",
 		"fd00:ec2::254/128", // AWS IMDS over IPv6
+		// IPv6 forms that carry an IPv4 address a relay or stack may route
+		// to: 6to4, Teredo, IPv4-compatible; and deprecated site-local.
+		"2002::/16", "2001::/32", "::/96", "fec0::/10",
 	} {
 		out = append(out, netip.MustParsePrefix(s))
 	}
@@ -142,7 +168,7 @@ func (g *Guard) DialContext(ctx context.Context, p Policy, network, addr string)
 		return nil, fmt.Errorf("resolve %s: no addresses: %w", host, effects.ErrNotSent)
 	}
 	for _, a := range addrs {
-		if g.blocked(a) {
+		if g.blocked(a) && !g.loopbackOK(p, a, port) {
 			return deny("resolves to non-public address " + a.String())
 		}
 	}
@@ -150,11 +176,31 @@ func (g *Guard) DialContext(ctx context.Context, p Policy, network, addr string)
 	if d.Timeout == 0 {
 		d.Timeout = 10 * time.Second
 	}
+	up := g.upstream()
+	if up != nil && !strings.HasPrefix(network, "tcp") {
+		return deny("only TCP can leave through the egress proxy")
+	}
 	var lastErr error
 	for _, a := range addrs {
-		conn, err := d.DialContext(ctx, network, net.JoinHostPort(a.String(), port))
+		target := net.JoinHostPort(a.String(), port)
+		var conn net.Conn
+		var err error
+		if up != nil && !g.loopbackOK(p, a, port) {
+			// The vetted address, never the name (decision 0028).
+			conn, err = up.dial(ctx, target, d.Timeout)
+			if errors.Is(err, ErrDenied) {
+				g.logger().Warn("egress denied", "tenant", p.Tenant, "purpose", p.Purpose, "host", host, "ip", a.String(), "port", port, "reason", "refused by the egress proxy")
+				return nil, err
+			}
+		} else {
+			conn, err = d.DialContext(ctx, network, target)
+		}
 		if err == nil {
-			g.logger().Info("egress", "tenant", p.Tenant, "purpose", p.Purpose, "host", host, "ip", a.String(), "port", port)
+			if up != nil {
+				g.logger().Info("egress", "tenant", p.Tenant, "purpose", p.Purpose, "host", host, "ip", a.String(), "port", port, "via", up.String())
+			} else {
+				g.logger().Info("egress", "tenant", p.Tenant, "purpose", p.Purpose, "host", host, "ip", a.String(), "port", port)
+			}
 			return conn, nil
 		}
 		lastErr = err

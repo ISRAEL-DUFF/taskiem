@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms:batchUpdate"
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "error": {
+    "code": 400,
+    "message": "Invalid requests[0].addSheet: A sheet with the name \"October\" already exists. Please enter another name.",
+    "status": "INVALID_ARGUMENT"
+   }
+  }
+ }
+}

@@ -1,0 +1,13 @@
+{
+ "status": 200,
+ "body": {
+  "ok": true,
+  "channel": "C123ABC456",
+  "ts": "1401383885.000061",
+  "text": "Updated text you carefully authored",
+  "message": {
+   "text": "Updated text you carefully authored",
+   "user": "U34567890"
+  }
+ }
+}

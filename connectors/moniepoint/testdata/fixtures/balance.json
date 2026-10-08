@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v2/disbursements/wallet-balance",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "query": {
+   "accountNumber": "8016472829"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": true,
+   "responseMessage": "success",
+   "responseCode": "0",
+   "responseBody": {
+    "availableBalance": 378.93,
+    "ledgerBalance": "400.5"
+   }
+  }
+ }
+}

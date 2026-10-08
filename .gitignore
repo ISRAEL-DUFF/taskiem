@@ -10,3 +10,16 @@ bao.log
 web/dist/
 web/test-results/
 web/playwright-report/
+.taskiem/
+connector.wasm
+
+# Agent worktrees (local only)
+.claude/worktrees/
+
+# Built binary (go build ./cmd/taskiem)
+/taskiem
+/taskiem-shim
+/cmd/taskiem/_conntest*/
+
+# Built docs site (make docs)
+/site/

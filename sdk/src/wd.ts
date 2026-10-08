@@ -53,6 +53,37 @@ export interface CodeStep extends StepBase {
     | { language: "wasm"; module: `sha256:${string}`; secrets?: string[]; limits?: { memory_mb?: number; cpu?: Duration } };
 }
 
+/** Container step limits; the platform clamps them and refuses more than its maxima. */
+export interface ContainerLimits {
+  /** CPU cores, as Kubernetes writes them: "500m", "1", "1.5" (at most 4). */
+  cpu?: string;
+  /** At most 4096. */
+  memory_mb?: number;
+  /** At most 30m. */
+  timeout?: Duration;
+  /** Largest output accepted, at most 1 MiB. */
+  output_bytes?: number;
+}
+
+/** A pinned image run in the container sandbox (docs/container-steps.md). */
+export interface ContainerStep extends StepBase {
+  type: "container";
+  input?: Values;
+  effect?: { idempotency_seed?: Expression };
+  config: {
+    /** registry/repository@sha256:<64 hex>; tags are refused. */
+    image: `${string}@sha256:${string}`;
+    command: string[];
+    args?: string[];
+    input_mode?: "stdin" | "file";
+    output_mode?: "stdout" | "file";
+    secrets?: string[];
+    secrets_mode?: "env" | "file";
+    class?: "read" | "idempotent_write" | "unsafe_write";
+    limits?: ContainerLimits;
+  } & ({ network?: "none"; hosts?: never } | { network: "egress"; hosts: string[] });
+}
+
 export interface HttpStep extends StepBase {
   type: "http";
   effect?: { idempotency_seed?: Expression };
@@ -116,7 +147,7 @@ export interface AiStep extends StepBase {
 }
 
 export type Step =
-  | ConnectorStep | CodeStep | HttpStep | BranchStep | ParallelStep | ForeachStep
+  | ConnectorStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
   | WaitStep | SignalStep | ApprovalStep | SubflowStep | TransformStep | AiStep;
 
 export type StepType = Step["type"];
@@ -124,6 +155,57 @@ export type StepType = Step["type"];
 export interface Trigger {
   type: "webhook" | "schedule" | "connector_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow";
   config?: Record<string, unknown>;
+}
+
+/** A screen id in a USSD menu. */
+export type UssdScreenId = string;
+
+/** A numbered choice on a USSD menu screen. */
+export interface UssdOption {
+  label: string;
+  next: UssdScreenId;
+  /** Stored under the screen's input when chosen (the label when absent). */
+  value?: string | number | boolean;
+  /** Shown only when true; CEL over trigger.body (the inputs so far). */
+  when?: Expression;
+}
+
+/** What a USSD input screen accepts. */
+export interface UssdValidate {
+  type?: "text" | "number" | "integer";
+  /** RE2, matched against the whole input. */
+  pattern?: string;
+  min?: number;
+  max?: number;
+  min_length?: number;
+  max_length?: number;
+  /** Must be true for the input to be accepted; CEL over trigger.body with the new value in place. */
+  when?: Expression;
+}
+
+/** One USSD screen (docs/ussd.md). Texts take {{input}} placeholders. */
+export interface UssdScreen {
+  id: UssdScreenId;
+  type: "menu" | "input" | "confirm" | "end";
+  text: string;
+  options?: UssdOption[];
+  input?: string;
+  next?: UssdScreenId;
+  validate?: UssdValidate;
+  error?: string;
+  confirm_label?: string;
+  cancel_label?: string;
+  /** The final message after confirmation; takes {{reference}}. */
+  done?: string;
+}
+
+/** A ussd trigger's config: the menu the edge walks. */
+export interface UssdMenu {
+  service_code: string;
+  start?: UssdScreenId;
+  max_chars?: number;
+  screens: UssdScreen[];
+  notify?: { sms: boolean; connection?: string; completed?: string; failed?: string };
 }
 
 export interface WorkflowDefinition {

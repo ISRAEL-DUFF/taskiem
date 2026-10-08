@@ -1,0 +1,29 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/version1/airtime/send",
+  "headers": {
+   "apiKey": "atsk_test_key",
+   "Accept": "application/json"
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "errorMessage": "None",
+   "numSent": 0,
+   "totalAmount": "0",
+   "totalDiscount": "0",
+   "responses": [
+    {
+     "phoneNumber": "+254711000001",
+     "errorMessage": "Insufficient Credit",
+     "amount": "KES 100.5000",
+     "status": "Failed",
+     "requestId": "None",
+     "discount": "0"
+    }
+   ]
+  }
+ }
+}

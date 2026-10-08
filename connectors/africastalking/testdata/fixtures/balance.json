@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/version1/user",
+  "headers": {
+   "apiKey": "atsk_test_key",
+   "Accept": "application/json"
+  },
+  "query": {
+   "username": "acme"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "UserData": {
+    "balance": "KES 1785.5050"
+   }
+  }
+ }
+}

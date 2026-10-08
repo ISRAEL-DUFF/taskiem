@@ -50,7 +50,7 @@ func Validate(doc []byte) []Problem {
 	if err != nil {
 		return []Problem{{Path: "/", Message: err.Error()}}
 	}
-	return checkExpressions(d)
+	return append(checkExpressions(d), checkUSSD(d)...)
 }
 
 type validator struct {
@@ -141,6 +141,23 @@ func (v *validator) children(p string, st map[string]any) {
 		}
 	case "foreach":
 		v.scope(p+"/config/steps", cfg["steps"].([]any))
+	case "code":
+		v.codeLimits(p+"/config/limits", cfg["limits"])
+	case "container":
+		v.containerConfig(p+"/config", cfg)
+	}
+}
+
+// codeLimits refuses limits above the platform's ceilings.
+func (v *validator) codeLimits(p string, raw any) {
+	lim, _ := raw.(map[string]any)
+	if mb, ok := lim["memory_mb"].(float64); ok && mb > MaxCodeMemoryMB {
+		v.add(p+"/memory_mb", "memory_mb %v is above the maximum of %d", mb, MaxCodeMemoryMB)
+	}
+	if cpu, ok := lim["cpu"].(string); ok {
+		if d, err := ParseDuration(cpu); err == nil && d > MaxCodeCPU {
+			v.add(p+"/cpu", "cpu %s is above the maximum of %s", cpu, MaxCodeCPU)
+		}
 	}
 }
 

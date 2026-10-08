@@ -1,0 +1,228 @@
+# OPay (Nigeria) merchant collections: Cashier payments, bank-transfer
+# payments, payment status, cancellation, refunds and payment callbacks.
+# Built from OPay's public documentation at documentation.opaycheckout.com
+# (getting-started, payment-authentication, api-signature, cashier-create,
+# bank-transfer, query-payment-status, cashier-close, payment-refund,
+# payment-refund-status, payment-notifications-callbacks, callback-signature,
+# error-codes, end-to-end-testing), read 6 October 2026
+# (docs/integrations/opay.md). OPay's transfer (payout), balance, bank-list
+# and name-enquiry APIs are not in its public documentation, so they are not
+# here.
+manifest: connector/v1
+id: opay
+version: 1.0.0
+name: OPay
+description: Cashier and bank-transfer collections, payment status, cancellation, refunds and payment callbacks on OPay merchant accounts (Nigeria).
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: merchant_id, label: Merchant id (MerchantId header), secret: false }
+    - { key: public_key, label: Public key (OPAYPUB…), secret: true }
+    - { key: secret_key, label: Secret key (OPAYPRV…); signs requests and verifies callbacks, secret: true }
+    - { key: environment, label: "Environment: live (default) or sandbox", secret: false, required: false }
+    - { key: callback_url, label: Default callback URL for refunds (OPay requires one per refund), secret: false, required: false }
+base_url: https://liveapi.opaycheckout.com/api/v1/international
+egress_hosts: [liveapi.opaycheckout.com, testapi.opaycheckout.com]
+actions:
+  create_cashier_payment:
+    title: Create a Cashier payment
+    description: >-
+      Creates an OPay Cashier order and returns the cashier_url to send the
+      payer to. The outcome arrives as a payment callback (correlation:
+      reference) or from get_payment. Amounts are kobo, as OPay takes them.
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk"
+      limits: { max_length: 64, charset: "a-z0-9" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, product_name, product_description, return_url]
+      properties:
+        amount:              { type: integer, minimum: 1, description: Kobo }
+        currency:            { type: string, default: NGN }
+        product_name:        { type: string }
+        product_description: { type: string }
+        return_url:          { type: string, description: Where the cashier returns the payer }
+        callback_url:        { type: string, description: Defaults to the webhook URL on the OPay dashboard }
+        cancel_url:          { type: string }
+        pay_method:          { type: string, description: "Preferred method, e.g. BankCard, BankTransfer, BankUssd, OpayWalletNg; all when empty" }
+        expire_minutes:      { type: integer, minimum: 1, description: OPay's default is 30 }
+        display_name:        { type: string, description: Sub-merchant name shown on the cashier page }
+        customer_id:         { type: string }
+        customer_name:       { type: string }
+        customer_mobile:     { type: string }
+        customer_email:      { type: string }
+        reference:           { type: string }
+    output: { $ref: '#/actions/get_payment/output' }
+    pii:
+      - { field: customer_name, category: name }
+      - { field: customer_mobile, category: phone }
+      - { field: customer_email, category: email }
+  create_bank_transfer_payment:
+    title: Create a bank-transfer payment
+    description: >-
+      Creates a payment the payer settles by bank transfer to the returned
+      account_number (it expires at expires_at). The outcome arrives as a
+      payment callback (correlation: reference) or from get_payment.
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk"
+      limits: { max_length: 64, charset: "a-z0-9" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, product_name]
+      properties:
+        amount:              { type: integer, minimum: 1, description: Kobo }
+        currency:            { type: string, default: NGN }
+        product_name:        { type: string }
+        product_description: { type: string }
+        callback_url:        { type: string }
+        expire_minutes:      { type: integer, minimum: 1 }
+        customer_name:       { type: string }
+        customer_phone:      { type: string }
+        customer_id:         { type: string }
+        customer_email:      { type: string }
+        reference:           { type: string }
+    output: { $ref: '#/actions/get_payment/output' }
+    pii:
+      - { field: customer_name, category: name }
+      - { field: customer_phone, category: phone }
+      - { field: customer_email, category: email }
+  get_payment:
+    title: Get payment status
+    description: Query by reference or OPay's order_no. Run it before acting on a callback.
+    class: read
+    input:
+      type: object
+      properties:
+        reference: { type: string }
+        order_no:  { type: string }
+    output:
+      type: object
+      properties:
+        reference:       { type: string }
+        order_no:        { type: string }
+        status:          { type: string, enum: [INITIAL, PENDING, SUCCESS, FAIL, CLOSE] }
+        amount:          { type: integer, description: Kobo }
+        vat:             { type: integer, description: Kobo }
+        currency:        { type: string }
+        cashier_url:     { type: string, description: create_cashier_payment only }
+        account_number:  { type: string, description: create_bank_transfer_payment only; the account to pay into }
+        bank_name:       { type: string }
+        expires_at:      { type: integer, description: Unix seconds; bank-transfer payments }
+        failure_code:    { type: string }
+        failure_reason:  { type: string }
+        voided:          { type: boolean }
+        created_at_ms:   { type: integer, description: OPay's createTime }
+  close_payment:
+    title: Cancel an unpaid payment
+    description: A paid payment cannot be cancelled; refund it instead. An unknown outcome parks the step.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      properties:
+        reference: { type: string }
+        order_no:  { type: string }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        order_no:  { type: string }
+        status:    { type: string }
+        amount:    { type: integer, description: Kobo }
+  refund_payment:
+    title: Refund a payment
+    description: >-
+      Refunds all or part of a paid payment. refund_way Original returns the
+      money the way it came (cards via bank account, per OPay); BankAccount
+      pays bank_code/bank_account_no. A refund OPay reports FAIL fails the
+      step with OPay's reason.
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk"
+      limits: { max_length: 64, charset: "a-z0-9" }
+    compensate: null
+    input:
+      type: object
+      required: [original_reference, amount]
+      properties:
+        original_reference: { type: string, description: The payment's reference }
+        amount:             { type: integer, minimum: 1, description: Kobo }
+        currency:           { type: string, default: NGN }
+        refund_way:         { type: string, enum: [Original, BankAccount], default: Original }
+        bank_code:          { type: string, description: BankAccount refunds }
+        bank_account_no:    { type: string }
+        callback_url:       { type: string, description: Defaults to the connection's callback_url }
+        refund_reason:      { type: string }
+        reference:          { type: string, description: The refund's own reference }
+    output: { $ref: '#/actions/get_refund/output' }
+    pii:
+      - { field: bank_account_no, category: account_number }
+  get_refund:
+    title: Get refund status
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string, description: The refund's reference }
+    output:
+      type: object
+      properties:
+        reference:          { type: string }
+        original_reference: { type: string }
+        order_no:           { type: string }
+        original_order_no:  { type: string }
+        status:             { type: string, enum: [INITIAL, PENDING, SUCCESS, FAIL] }
+        amount:             { type: integer, description: Kobo }
+        currency:           { type: string }
+        error_code:         { type: string }
+        error_message:      { type: string }
+  verify_callback:
+    title: Verify a payment callback's signature
+    description: >-
+      Checks a callback's sha512 (HMAC-SHA3-512 with the secret key, as OPay
+      documents) without calling OPay. Pass trigger.body.payload and
+      trigger.body.sha512; a mismatch fails the step.
+    class: read
+    input:
+      type: object
+      required: [payload, sha512]
+      properties:
+        payload: { type: object }
+        sha512:  { type: string }
+    output:
+      type: object
+      properties:
+        valid:          { type: boolean }
+        reference:      { type: string }
+        transaction_id: { type: string }
+        status:         { type: string }
+        refunded:       { type: boolean }
+triggers:
+  # OPay posts every status change to the callbackUrl of the payment or the
+  # dashboard's webhook URL. Its signature is an HMAC-SHA3-512 of fields
+  # inside the body (body.sha512), keyed with the secret key: the connector
+  # verifies it (CallbackSignature), so a forged delivery is refused.
+  payment:
+    type: webhook
+    verify: { scheme: connector, secret_field: secret_key }
+    events: [transaction-status]
+    event_type: =body.type
+    # The signature differs whenever any signed field (status, refunded…) does.
+    dedup: =body.sha512
+    correlation: =body.payload.reference

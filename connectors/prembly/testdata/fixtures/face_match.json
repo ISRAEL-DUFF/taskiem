@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/biometrics/face/comparison",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "image_one": "https://example.com/a.jpg",
+   "image_two": "https://example.com/b.jpg"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "message": "Fatch Match",
+   "confidence": 100
+  }
+ }
+}

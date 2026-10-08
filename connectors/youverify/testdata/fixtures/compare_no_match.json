@@ -1,0 +1,37 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/compare-image",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "image1": "https://cdn.youverify.co/a.jpg",
+   "image2": "https://cdn.youverify.co/b.jpg",
+   "isSubjectConsent": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "id": "62abcfcb4f9005b0ddaa4a7a",
+    "status": "completed",
+    "reason": "Provided image does not match ID image",
+    "selfieValidation": true,
+    "imageComparison": {
+     "confidenceLevel": 47,
+     "threshold": 80,
+     "match": false,
+     "image1": "https://cdn.youverify.co/a.jpg",
+     "image2": "https://cdn.youverify.co/b.jpg"
+    },
+    "type": "facial_compare"
+   },
+   "links": []
+  }
+ }
+}

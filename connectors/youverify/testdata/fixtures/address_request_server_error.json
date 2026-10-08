@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/addresses/individual/request",
+  "headers": {
+   "token": "yv_test_key"
+  }
+ },
+ "response": {
+  "status": 502,
+  "body": {
+   "success": false,
+   "statusCode": 502,
+   "message": "Bad gateway"
+  }
+ }
+}

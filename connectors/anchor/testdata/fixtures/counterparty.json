@@ -1,0 +1,3 @@
+{"request":{"method":"POST","path":"/counterparties","headers":{"x-anchor-key":"anc_test_key"},
+  "body":{"data":{"type":"CounterParty","attributes":{"bankCode":"000014","accountName":"Ada Obi","accountNumber":"0690000031","verifyName":true}}}},
+ "response":{"status":201,"body":{"data":{"id":"16942577770351-anc_cp","type":"CounterParty","attributes":{"bank":{"id":"16565854883910-anc_bk","name":"ACCESS BANK","nipCode":"000014"},"accountName":"OBI ADA NGOZI","accountNumber":"0690000031","status":"ACTIVE"}}}}}

@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "PATCH",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/cancel",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "success",
+   "response_code": "200",
+   "message": "This mandate is now cancelled and deleted, and can't be used again",
+   "timestamp": "2025-05-19T22:15:56.343Z",
+   "data": null
+  }
+ }
+}

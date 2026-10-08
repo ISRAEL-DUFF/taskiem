@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 500,
+  "body": {
+   "error": {
+    "message": "Something went wrong",
+    "type": "OAuthException",
+    "code": 131000,
+    "error_data": {
+     "messaging_product": "whatsapp",
+     "details": "Something went wrong"
+    },
+    "fbtrace_id": "A1b2C3d4"
+   }
+  }
+ }
+}

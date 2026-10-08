@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/passport/oauth/token",
+  "headers": {
+   "Authorization": "Basic SUtJQVRBU0tJRU0wMDAxOnRzay1pc3ctc2VjcmV0"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "error": "invalid_client",
+   "error_description": "Bad client credentials"
+  }
+ }
+}

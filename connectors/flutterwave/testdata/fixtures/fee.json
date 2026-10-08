@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/transfers/fee","query":{"amount":"5500.00","currency":"NGN","type":"account"},"headers":{"Authorization":"Bearer FLWSECK_TEST-abc"}},
+ "response":{"status":200,"body":{"status":"success","message":"Transfer fee fetched","data":[{"fee_type":"value","currency":"NGN","fee":26.875}]}}}

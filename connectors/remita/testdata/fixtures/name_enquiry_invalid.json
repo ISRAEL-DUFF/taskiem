@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/interbank/name/enquiry",
+  "headers": {
+   "secretKey": "rmt_sk_test"
+  },
+  "body": {
+   "destinationBankCode": "058",
+   "destinationAccountNumber": "0586957398"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "00",
+   "message": "Approved or completed successfully",
+   "meta": null,
+   "links": null,
+   "code": null,
+   "data": {
+    "status": "07",
+    "statusMessage": "Invalid Account",
+    "nameOnAccount": null,
+    "accountNumber": "0586957398",
+    "bankCode": "058",
+    "valid": false
+   }
+  }
+ }
+}

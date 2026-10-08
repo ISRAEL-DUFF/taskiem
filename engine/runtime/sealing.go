@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -37,33 +38,89 @@ func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, pa
 	if err != nil {
 		return nil, err
 	}
-	return pii.Seal(ctx, s.PII, tx, tenant, v, paths, taint)
+	if v, err = pii.Seal(ctx, s.PII, tx, tenant, v, paths, taint); err != nil {
+		return nil, err
+	}
+	return pii.SealDetected(ctx, s.PII, tx, tenant, v, taint)
+}
+
+// redactText masks personal data in the free text of a worker result:
+// a failure's message and a code step's log lines. Values the run already
+// holds as personal data (its sealed inputs and earlier outputs, in taint)
+// are masked where they appear exactly (S22); then the pattern masks catch
+// what looks like an email, phone number, BVN, NIN or card.
+func redactText(v any, taint pii.Taint) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return
+	}
+	if e, ok := m["error"].(map[string]any); ok {
+		if msg, ok := e["message"].(string); ok {
+			e["message"] = pii.Redact(taint.RedactText(msg))
+		}
+	}
+	if logs, ok := m["logs"].([]any); ok {
+		for i, l := range logs {
+			if s, ok := l.(string); ok {
+				logs[i] = pii.Redact(taint.RedactText(s))
+			}
+		}
+	}
 }
 
 // connectorPIIPaths are the input fields a connector action declares as PII.
-func (s *Store) connectorPIIPaths(p history.ScheduledPayload) []pii.Path {
+func (s *Store) connectorPIIPaths(ctx context.Context, tenant uuid.UUID, p history.ScheduledPayload) ([]pii.Path, error) {
 	if s.Registry == nil || p.Connector == "" {
-		return nil
+		return nil, nil
 	}
-	c, ok := s.Registry.Get(p.Connector)
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return nil, err // never write a payload whose personal fields are unknown
+	}
+	c, ok := reg.Get(p.Connector)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	var out []pii.Path
 	for _, f := range c.Manifest.Actions[p.Action].PII {
-		cat := f.Category
-		if cat == "" {
-			cat = "other"
+		if _, isOutput := connector.OutputPIIPath(f.Field); isOutput {
+			continue // sealed when the result is written (outputPIIPaths)
 		}
-		out = append(out, pii.Path{Segments: []string{"input", f.Field}, Category: cat})
+		out = append(out, pii.Path{Segments: append([]string{"input"}, connector.InputPIIPath(f.Field)...), Category: piiCategory(f.Category)})
+	}
+	return out, nil
+}
+
+// outputPIIPaths are the output places a connector action declares as PII,
+// as they sit in a StepCompleted payload.
+func outputPIIPaths(c *connector.Connector, action string) []pii.Path {
+	if c == nil {
+		return nil
+	}
+	var out []pii.Path
+	for _, f := range c.Manifest.Actions[action].PII {
+		if segs, ok := connector.OutputPIIPath(f.Field); ok {
+			out = append(out, pii.Path{Segments: append([]string{"output"}, segs...), Category: piiCategory(f.Category)})
+		}
 	}
 	return out
+}
+
+func piiCategory(c string) string {
+	if c == "" {
+		return "other"
+	}
+	return c
 }
 
 // openHistory decrypts sealed values for decide and the worker, inside the
 // transaction, and returns the personal values seen.
 func (s *Store) openHistory(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, hist []history.Event) ([]history.Event, pii.Taint, error) {
-	taint := pii.Taint{}
+	return s.openHistoryInto(ctx, tx, tenant, hist, pii.Taint{})
+}
+
+// openHistoryInto is openHistory adding what it opens to taint.
+func (s *Store) openHistoryInto(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, hist []history.Event, taint pii.Taint) ([]history.Event, pii.Taint, error) {
 	if s.PII == nil {
 		return hist, taint, nil
 	}
@@ -103,4 +160,21 @@ func (s *Store) OpenedHistory(ctx context.Context, ref RunRef) ([]history.Event,
 		return err
 	})
 	return h, err
+}
+
+// OpenedHistoryWithTaint is OpenedHistory also returning the personal
+// values it opened, so a caller (the repair service) can make sure none of
+// them leaves in text derived from the history.
+func (s *Store) OpenedHistoryWithTaint(ctx context.Context, ref RunRef) ([]history.Event, pii.Taint, error) {
+	var h []history.Event
+	var taint pii.Taint
+	err := dbTx(ctx, s, ref.TenantID, func(tx pgx.Tx) error {
+		raw, err := History(ctx, tx, ref.ID)
+		if err != nil {
+			return err
+		}
+		h, taint, err = s.openHistory(ctx, tx, ref.TenantID, raw)
+		return err
+	})
+	return h, taint, err
 }

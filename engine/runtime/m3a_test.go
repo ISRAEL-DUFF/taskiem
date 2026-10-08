@@ -123,6 +123,12 @@ func TestRetentionArchivesThenPurges(t *testing.T) {
 	if e.Status(t, long) != "completed" {
 		t.Error("run within retention was purged")
 	}
+	var purges int
+	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'run.purge' AND target = $2 AND actor_type = 'system'`,
+		e.Tenant, short.ID.String()).Scan(&purges)
+	if purges != 1 {
+		t.Errorf("%d run.purge audit entries, want 1", purges)
+	}
 	var left int
 	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM run_events WHERE run_id = $1`, short.ID).Scan(&left)
 	f, err := os.Open(filepath.Join(dir, e.Tenant.String(), short.ID.String()+".jsonl.gz"))
@@ -152,5 +158,29 @@ func TestRetentionPurgesApprovals(t *testing.T) {
 	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM approvals WHERE run_id = $1`, ref.ID).Scan(&left)
 	if left != 0 {
 		t.Errorf("%d approvals left", left)
+	}
+}
+
+// A tenant's default retention applies to workflows that set none; a
+// workflow's own setting still wins.
+func TestTenantDefaultRetention(t *testing.T) {
+	e := rt.New(t)
+	if _, err := e.DB.Admin.Exec(ctx, `INSERT INTO governance_settings (tenant_id, default_retention, updated_by) VALUES ($1, '30d', 'test')`, e.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	plain := e.Start(t, e.Publish(t, wfDoc(`{"id":"x","type":"transform","config":{"output":1}}`, "")), map[string]any{})
+	own := e.Start(t, e.Publish(t, wfDoc(`{"id":"x","type":"transform","config":{"output":1}}`, `{"retention":"7d"}`)), map[string]any{})
+	days := func(ref runtime.RunRef) float64 {
+		var d float64
+		if err := e.DB.Admin.QueryRow(ctx, `SELECT extract(epoch FROM retain_until - ended_at) / 86400 FROM runs WHERE id = $1`, ref.ID).Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	if d := days(plain); d < 29.9 || d > 30.1 {
+		t.Errorf("tenant default: %.1f days", d)
+	}
+	if d := days(own); d < 6.9 || d > 7.1 {
+		t.Errorf("workflow setting: %.1f days", d)
 	}
 }

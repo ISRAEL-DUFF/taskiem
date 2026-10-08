@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/audit"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -23,6 +25,29 @@ var nameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,62}$`)
 // caller's key scope.
 func envParam(r *http.Request, v string) (string, error) {
 	return environment(principalFrom(r.Context()), v)
+}
+
+// secretEnv is an environment the secrets API may touch: a tenant
+// environment in the caller's scope, never a reserved one (_identity, _git,
+// _alerts), which hold the platform's own secrets.
+func secretEnv(r *http.Request, v string) (string, error) {
+	env, err := envParam(r, v)
+	if err == nil && !envNameRe.MatchString(env) {
+		err = fmt.Errorf("%w: %q is not an environment secrets can be written to", errBadRequest, env)
+	}
+	return env, err
+}
+
+// tenantWide refuses API keys limited to one environment on routes whose
+// effect reaches every environment.
+func (s *Server) tenantWide(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p := principalFrom(r.Context()); p.Environment != "" {
+			writeErr(w, http.StatusForbidden, "this key is limited to "+p.Environment+"; this reaches every environment")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // --- connections ---
@@ -36,16 +61,27 @@ type connectionInfo struct {
 	Status      string     `json:"status"`
 	ExpiresAt   *time.Time `json:"expires_at"`
 	CreatedAt   time.Time  `json:"created_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"` // last recorded read of its credentials
+	// Remote is the state of the subscriptions Taskiem keeps at the
+	// provider through this connection (decision 0021), when there are any.
+	Remote *remoteSummary `json:"remote,omitempty" db:"-"`
 }
 
 func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	var out []connectionInfo
+	only := principalFrom(r.Context()).Environment // a key limited to one environment sees only it
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT id, environment, connector, name, auth_type, status, expires_at, created_at FROM connections ORDER BY environment, connector, name`)
+		rows, err := tx.Query(r.Context(), `SELECT c.id, c.environment, c.connector, c.name, c.auth_type, c.status, c.expires_at, c.created_at,
+			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = c.tenant_id AND sr.connection_id = c.id)
+			FROM connections c WHERE $1 = '' OR c.environment = $1 ORDER BY c.environment, c.connector, c.name`, only)
 		if err != nil {
 			return err
 		}
-		out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[connectionInfo])
+		if out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[connectionInfo]); err != nil {
+			return err
+		}
+		subs, err := remote.List(r.Context(), tx, `$1 = '' OR environment = $1`, only)
+		summarise(out, subs)
 		return err
 	})
 	if err != nil {
@@ -75,7 +111,12 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	c, ok := s.Registry.Get(req.Connector)
+	reg, err := s.Registry.For(r.Context(), principalFrom(r.Context()).TenantID.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	c, ok := reg.Get(req.Connector)
 	if !ok {
 		s.fail(w, r, fmt.Errorf("%w: connector %q is not available", errBadRequest, req.Connector))
 		return
@@ -83,21 +124,15 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		req.Name = "default"
 	}
-	known := map[string]bool{}
-	for _, f := range c.Manifest.Auth.Fields {
-		known[f.Key] = true
-		if (f.Required == nil || *f.Required) && req.Credentials[f.Key] == "" {
-			s.fail(w, r, fmt.Errorf("%w: credential %q is required", errBadRequest, f.Key))
-			return
-		}
-	}
-	for k := range req.Credentials {
-		if !known[k] {
-			s.fail(w, r, fmt.Errorf("%w: %s takes no credential %q", errBadRequest, req.Connector, k))
-			return
-		}
+	if err := checkCredentials(c, req.Credentials); err != nil {
+		s.fail(w, r, err)
+		return
 	}
 	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error { return s.checkCount(r.Context(), tx, p.TenantID, "max_connections") }); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	id, err := s.Vault.CreateConnection(r.Context(), p.TenantID, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, req.Credentials, p.Actor())
 	if err != nil {
 		var pgErr interface{ SQLState() string }
@@ -107,6 +142,11 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// Remote subscriptions that waited for a connection in this
+	// environment are tried again now (decision 0021).
+	if err := s.tx(r, func(tx pgx.Tx) error { return remote.Retry(r.Context(), tx, env, c.Ref()) }); err != nil {
+		s.Logger.Warn("remote subscriptions: retrying after a new connection", "err", err)
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name})
 }
 
@@ -114,14 +154,19 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listSecrets(w http.ResponseWriter, r *http.Request) {
 	type secret struct {
-		Environment string    `json:"environment"`
-		Name        string    `json:"name"`
-		CreatedBy   string    `json:"created_by"`
-		UpdatedAt   time.Time `json:"updated_at"`
+		Environment string     `json:"environment"`
+		Name        string     `json:"name"`
+		CreatedBy   string     `json:"created_by"`
+		UpdatedAt   time.Time  `json:"updated_at"`
+		LastUsedAt  *time.Time `json:"last_used_at"` // last recorded read for use
 	}
 	var out []secret
+	only := principalFrom(r.Context()).Environment
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT environment, name, created_by, updated_at FROM secrets WHERE name IS NOT NULL ORDER BY environment, name`)
+		rows, err := tx.Query(r.Context(), `SELECT s.environment, s.name, s.created_by, s.updated_at,
+			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = s.tenant_id AND sr.connection_id IS NULL AND sr.environment = s.environment AND sr.name = s.name)
+			FROM secrets s WHERE s.name IS NOT NULL AND s.environment NOT LIKE '\_%'
+			AND ($1 = '' OR s.environment = $1) ORDER BY s.environment, s.name`, only)
 		if err != nil {
 			return err
 		}
@@ -136,7 +181,7 @@ func (s *Server) listSecrets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
-	env, err := envParam(r, chi.URLParam(r, "env"))
+	env, err := secretEnv(r, chi.URLParam(r, "env"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -154,6 +199,16 @@ func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var exists bool
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM secrets WHERE environment = $1 AND name = $2)`, env, name).Scan(&exists); err != nil || exists {
+			return err
+		}
+		return s.checkCount(r.Context(), tx, p.TenantID, "max_secrets")
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if _, err := s.Vault.Put(r.Context(), p.TenantID, env, name, []byte(req.Value), p.Actor()); err != nil {
 		s.fail(w, r, err)
 		return
@@ -162,13 +217,18 @@ func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteSecret(w http.ResponseWriter, r *http.Request) {
-	env, err := envParam(r, chi.URLParam(r, "env"))
+	env, err := secretEnv(r, chi.URLParam(r, "env"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	name := chi.URLParam(r, "name")
+	if !nameRe.MatchString(name) {
+		s.fail(w, r, fmt.Errorf("%w: secret names are letters, digits and _", errBadRequest))
+		return
+	}
 	p := principalFrom(r.Context())
-	if err := s.Vault.Delete(r.Context(), p.TenantID, env, chi.URLParam(r, "name"), p.Actor()); err != nil {
+	if err := s.Vault.Delete(r.Context(), p.TenantID, env, name, p.Actor()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -185,8 +245,9 @@ func (s *Server) listVariables(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt   time.Time       `json:"updated_at"`
 	}
 	var out []variable
+	only := principalFrom(r.Context()).Environment
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT environment, name, value, updated_at FROM variables ORDER BY environment, name`)
+		rows, err := tx.Query(r.Context(), `SELECT environment, name, value, updated_at FROM variables WHERE $1 = '' OR environment = $1 ORDER BY environment, name`, only)
 		if err != nil {
 			return err
 		}
@@ -387,4 +448,26 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true})
+}
+
+// listAnchors returns the tenant's signed audit-chain anchors and the key
+// they verify with. With an export, they let an auditor show the chain was
+// not rewritten after each anchor: taskiem audit verify --anchors.
+func (s *Server) listAnchors(w http.ResponseWriter, r *http.Request) {
+	var out []audit.Anchor
+	err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		out, err = audit.ListAnchors(r.Context(), tx)
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	resp := map[string]any{"anchors": nonNil(out)}
+	if s.AnchorKey != nil {
+		resp["public_key"] = base64.StdEncoding.EncodeToString(s.AnchorKey)
+		resp["key_id"] = audit.KeyID(s.AnchorKey)
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

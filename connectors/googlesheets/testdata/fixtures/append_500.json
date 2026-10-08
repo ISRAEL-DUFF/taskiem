@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Sheet1!A:C:append"
+ },
+ "response": {
+  "status": 500,
+  "body": {
+   "error": {
+    "code": 500,
+    "message": "Internal error encountered.",
+    "status": "INTERNAL"
+   }
+  }
+ }
+}

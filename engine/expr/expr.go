@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"cel.dev/cel-go/cel"
@@ -16,6 +15,8 @@ import (
 	"cel.dev/cel-go/common/types/ref"
 	"cel.dev/cel-go/common/types/traits"
 	"cel.dev/cel-go/ext"
+
+	"github.com/israel-duff/taskiem/engine/lru"
 )
 
 // Roots are the variables an expression may reference (wd-v1 contract rule 10).
@@ -24,11 +25,15 @@ var Roots = []string{"trigger", "steps", "run", "env", "secrets", "item", "index
 // DefaultCostLimit bounds the work one expression may do.
 const DefaultCostLimit = 1_000_000
 
+// programCacheSize bounds an engine's compiled programs: expressions come
+// from tenants' workflows, so the cache must not grow with them.
+const programCacheSize = 8192
+
 // Engine compiles and caches expressions. It is safe for concurrent use.
 type Engine struct {
 	env       *cel.Env
 	costLimit uint64
-	cache     sync.Map // source -> cel.Program
+	cache     *lru.Cache[string, cel.Program] // source -> program; bounded (S34)
 }
 
 // New returns an engine with the standard roots and extensions.
@@ -45,7 +50,44 @@ func NewWithRoots(roots ...string) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{env: env, costLimit: DefaultCostLimit}, nil
+	return &Engine{env: env, costLimit: DefaultCostLimit, cache: lru.New[string, cel.Program](programCacheSize, 0)}, nil
+}
+
+// NewTriggerEngine returns an engine for connector trigger expressions:
+// NewWithRoots plus parseJSON(string), for providers that carry JSON inside
+// a form field (Slack's interaction payload). Workflow expressions do not
+// get it, so the SDK and codegen need not mirror it.
+func NewTriggerEngine(roots ...string) (*Engine, error) {
+	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(),
+		cel.Function("parseJSON", cel.Overload("parseJSON_string", []*cel.Type{cel.StringType}, cel.DynType,
+			cel.UnaryBinding(func(v ref.Val) ref.Val {
+				s, ok := v.(types.String)
+				if !ok {
+					return types.NewErr("parseJSON: not a string")
+				}
+				x, err := DecodeJSON([]byte(s))
+				if err != nil {
+					return types.NewErr("parseJSON: %v", err)
+				}
+				return types.DefaultTypeAdapter.NativeToValue(x)
+			})))}
+	for _, r := range roots {
+		opts = append(opts, cel.Variable(r, cel.DynType))
+	}
+	env, err := cel.NewEnv(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &Engine{env: env, costLimit: DefaultCostLimit, cache: lru.New[string, cel.Program](programCacheSize, 0)}, nil
+}
+
+// MustNewTriggerEngine is NewTriggerEngine for package-level engines.
+func MustNewTriggerEngine(roots ...string) *Engine {
+	e, err := NewTriggerEngine(roots...)
+	if err != nil {
+		panic(err)
+	}
+	return e
 }
 
 // MustNew is New for package-level engines.
@@ -82,8 +124,8 @@ func (e *Error) Error() string { return fmt.Sprintf("expression %q: %v", e.Expr,
 func (e *Error) Unwrap() error { return e.Err }
 
 func (e *Engine) program(src string) (cel.Program, error) {
-	if p, ok := e.cache.Load(src); ok {
-		return p.(cel.Program), nil
+	if p, ok := e.cache.Get(src); ok {
+		return p, nil
 	}
 	ast, iss := e.env.Compile(src)
 	if iss.Err() != nil {
@@ -93,8 +135,18 @@ func (e *Engine) program(src string) (cel.Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.cache.Store(src, p)
+	e.cache.Put(src, p)
 	return p, nil
+}
+
+// Check compiles an expression (with or without its leading "=") without
+// evaluating it: unknown variables and syntax errors are reported.
+func (e *Engine) Check(src string) error {
+	src = strings.TrimPrefix(src, "=")
+	if _, err := e.program(src); err != nil {
+		return &Error{Expr: src, Err: err}
+	}
+	return nil
 }
 
 // Eval evaluates one expression (with or without its leading "=") against

@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/account/056ffebf-812a-433a-83a0-9c67cd8c089c/balance","headers":{"Authorization":"Bearer lenco_test_token"}},
+ "response":{"status":200,"body":{"status":true,"message":"Success","data":{"availableBalance":"1250.50","currentBalance":"1300.00","currency":"NGN"}}}}

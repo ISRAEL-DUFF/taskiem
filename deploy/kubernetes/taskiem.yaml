@@ -1,0 +1,801 @@
+# Generated from deploy/helm/taskiem by: helm template taskiem deploy/helm/taskiem --namespace taskiem
+# Do not edit; change the chart and regenerate (docs/kubernetes.md). Create the taskiem Secret first.
+---
+# Source: taskiem/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: taskiem-api
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: api
+---
+# Source: taskiem/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: taskiem-edge
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: edge
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: edge
+---
+# Source: taskiem/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: taskiem-orchestrator
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: orchestrator
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: orchestrator
+---
+# Source: taskiem/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: taskiem-worker
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: worker
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: worker
+---
+# Source: taskiem/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: taskiem
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+# Taskiem never talks to the Kubernetes API.
+automountServiceAccountToken: false
+---
+# Source: taskiem/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskiem
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  TASKIEM_ALLOW_SIGNUP: "false"
+  TASKIEM_KMS: "openbao"
+  TASKIEM_KMS_KEY: "taskiem"
+  TASKIEM_SECURE_COOKIES: "true"
+  TASKIEM_TRUST_PROXY: "true"
+  TASKIEM_WASM_CACHE: /cache/wazero
+---
+# Source: taskiem/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: taskiem-data
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    # Archived runs and audit anchors outlive the release.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Source: taskiem/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskiem-api
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/component: api
+  ports:
+    - { name: http, port: 80, targetPort: http }
+    - { name: metrics, port: 9090, targetPort: metrics }
+---
+# Source: taskiem/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskiem-edge
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: edge
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/component: edge
+  ports:
+    - { name: edge, port: 80, targetPort: edge }
+    - { name: metrics, port: 9090, targetPort: metrics }
+---
+# Source: taskiem/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskiem-orchestrator
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: orchestrator
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/component: orchestrator
+  ports:
+    - { name: metrics, port: 9090, targetPort: metrics }
+---
+# Source: taskiem/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskiem-scheduler
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: scheduler
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/component: scheduler
+  ports:
+    - { name: metrics, port: 9090, targetPort: metrics }
+---
+# Source: taskiem/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskiem-worker
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: worker
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/component: worker
+  ports:
+    - { name: metrics, port: 9090, targetPort: metrics }
+---
+# Source: taskiem/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskiem-api
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskiem
+        app.kubernetes.io/instance: taskiem
+        app.kubernetes.io/component: api
+      annotations:
+        checksum/config: cbea356ffba17d8cbde3a9e207fe7ab50f6c93db0f6b9e29038905583f9fa4e5
+    spec:
+      serviceAccountName: taskiem
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: taskiem
+          image: ghcr.io/israel-duff/taskiem:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: [serve, --role, api]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: taskiem
+            - secretRef:
+                name: taskiem
+          env:
+            - name: TASKIEM_DATABASE_POOL
+              value: "20"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9090
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /cache }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # Compiled WebAssembly (the Python interpreter, connectors): rebuilt on start if empty.
+        - name: cache
+          emptyDir: {}
+---
+# Source: taskiem/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskiem-edge
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: edge
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: edge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskiem
+        app.kubernetes.io/instance: taskiem
+        app.kubernetes.io/component: edge
+      annotations:
+        checksum/config: cbea356ffba17d8cbde3a9e207fe7ab50f6c93db0f6b9e29038905583f9fa4e5
+    spec:
+      serviceAccountName: taskiem
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: taskiem
+          image: ghcr.io/israel-duff/taskiem:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: [serve, --role, edge]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: taskiem
+            - secretRef:
+                name: taskiem
+          env:
+            - name: TASKIEM_DATABASE_POOL
+              value: "10"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
+          ports:
+            - name: edge
+              containerPort: 8081
+            - name: metrics
+              containerPort: 9090
+          readinessProbe:
+            httpGet: { path: /readyz, port: edge }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: edge }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /cache }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # Compiled WebAssembly (the Python interpreter, connectors): rebuilt on start if empty.
+        - name: cache
+          emptyDir: {}
+---
+# Source: taskiem/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskiem-orchestrator
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: orchestrator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: orchestrator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskiem
+        app.kubernetes.io/instance: taskiem
+        app.kubernetes.io/component: orchestrator
+      annotations:
+        checksum/config: cbea356ffba17d8cbde3a9e207fe7ab50f6c93db0f6b9e29038905583f9fa4e5
+    spec:
+      serviceAccountName: taskiem
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: taskiem
+          image: ghcr.io/israel-duff/taskiem:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: [serve, --role, orchestrator]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: taskiem
+            - secretRef:
+                name: taskiem
+          env:
+            - name: TASKIEM_DATABASE_POOL
+              value: "20"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
+          ports:
+            - name: metrics
+              containerPort: 9090
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /cache }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # Compiled WebAssembly (the Python interpreter, connectors): rebuilt on start if empty.
+        - name: cache
+          emptyDir: {}
+---
+# Source: taskiem/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskiem-scheduler
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: scheduler
+spec:
+  replicas: 1
+  # The archive volume is ReadWriteOnce: never run two pods on it at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: scheduler
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskiem
+        app.kubernetes.io/instance: taskiem
+        app.kubernetes.io/component: scheduler
+      annotations:
+        checksum/config: cbea356ffba17d8cbde3a9e207fe7ab50f6c93db0f6b9e29038905583f9fa4e5
+    spec:
+      serviceAccountName: taskiem
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: taskiem
+          image: ghcr.io/israel-duff/taskiem:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: [serve, --role, scheduler]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: taskiem
+            - secretRef:
+                name: taskiem
+          env:
+            - name: TASKIEM_DATABASE_POOL
+              value: "10"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
+            - name: TASKIEM_ARCHIVE_DIR
+              value: /var/lib/taskiem/archive
+            - name: TASKIEM_ANCHOR_DIR
+              value: /var/lib/taskiem/anchors
+          ports:
+            - name: metrics
+              containerPort: 9090
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /cache }
+            - { name: data, mountPath: /var/lib/taskiem }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # Compiled WebAssembly (the Python interpreter, connectors): rebuilt on start if empty.
+        - name: cache
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: taskiem-data
+---
+# Source: taskiem/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskiem-worker
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskiem
+      app.kubernetes.io/instance: taskiem
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskiem
+        app.kubernetes.io/instance: taskiem
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/config: cbea356ffba17d8cbde3a9e207fe7ab50f6c93db0f6b9e29038905583f9fa4e5
+    spec:
+      serviceAccountName: taskiem
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM: not ready at once, serve for shutdown.delaySeconds, then
+      # finish in-flight steps (docs/reliability.md#graceful-shutdown).
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: taskiem
+          image: ghcr.io/israel-duff/taskiem:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: [serve, --role, worker]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: taskiem
+            - secretRef:
+                name: taskiem
+          env:
+            - name: TASKIEM_DATABASE_POOL
+              value: "20"
+            - name: TASKIEM_SHUTDOWN_DELAY
+              value: "10s"
+            - name: TASKIEM_WORKER_DRAIN
+              value: "30s"
+            - name: TASKIEM_WORKER_QUEUES
+              value: "connector,sandbox"
+          ports:
+            - name: metrics
+              containerPort: 9090
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            limits:
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /cache }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # Compiled WebAssembly (the Python interpreter, connectors): rebuilt on start if empty.
+        - name: cache
+          emptyDir: {}
+---
+# Source: taskiem/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: taskiem
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  tls:
+    - hosts: ["taskiem.example.com"]
+      secretName: taskiem-tls
+  rules:
+    - host: "taskiem.example.com"
+      http:
+        paths:
+          - path: /hooks/
+            pathType: Prefix
+            backend:
+              service:
+                name: taskiem-edge
+                port:
+                  name: edge
+          - path: /git-hooks/
+            pathType: Prefix
+            backend:
+              service:
+                name: taskiem-edge
+                port:
+                  name: edge
+          - path: /channels/
+            pathType: Prefix
+            backend:
+              service:
+                name: taskiem-edge
+                port:
+                  name: edge
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: taskiem-api
+                port:
+                  name: http
+---
+# Source: taskiem/templates/migrate-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: taskiem-migrate
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: migrate
+  annotations:
+    # Before the new pods start: the schema only ever moves forward, and
+    # every release reads the schema of the one before it.
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskiem
+        app.kubernetes.io/instance: taskiem
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ghcr.io/israel-duff/taskiem:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: [migrate]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          # The Secret is read directly: a pre-install hook runs before the
+          # chart's ConfigMap exists.
+          env:
+            - name: TASKIEM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: taskiem
+                  key: TASKIEM_DATABASE_URL
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi

@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/bvn",
+  "headers": {
+   "token": "yv_test_key"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "success": false,
+   "statusCode": 401,
+   "message": "Permission denied",
+   "name": "UnauthorizedError",
+   "data": {}
+  }
+ }
+}

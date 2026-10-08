@@ -1,0 +1,46 @@
+{
+  "id": "supplier-payment-approval",
+  "title": "Pay a supplier after approval",
+  "summary": "Enter a supplier invoice, get it approved, then pay it by Paystack transfer and text the owner the result.",
+  "description": "Start it with the supplier's name, Paystack transfer recipient code, the amount in naira and the invoice number. Someone with the approver role approves or rejects it; only an approved invoice is paid, once (the invoice number is the payment's idempotency key, so a retry never pays twice). The owner gets a text with the outcome; the owner's phone number is the tenant variable owner_phone.",
+  "category": "suppliers",
+  "tags": ["suppliers", "payments", "approval", "invoices", "paystack", "sms"],
+  "keywords": ["supplier", "suppliers", "vendor", "invoice", "pay", "payment", "approve", "approval", "transfer", "bill"],
+  "connectors": ["paystack@1", "termii@1"],
+  "variables": [{"name": "owner_phone", "why": "The owner's phone number in international format without +."}],
+  "params": [
+    {"name": "approver_role", "type": "string", "title": "Who approves", "description": "The role that approves supplier payments.", "required": false, "default": "owner", "example": "owner", "pattern": "^[a-z][a-z0-9_]{0,39}$"},
+    {"name": "max_amount", "type": "number", "title": "Largest payment (naira)", "description": "Invoices above this are refused when entered.", "required": false, "default": 5000000, "example": 5000000, "minimum": 1, "maximum": 1000000000},
+    {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack account suppliers are paid from.", "required": false, "default": "main", "example": "main"},
+    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_supplierPaymentApproval",
+    "version": 1,
+    "name": "Pay a supplier after approval",
+    "trigger": {"type": "manual"},
+    "inputs": {"schema": {"type": "object", "required": ["supplier", "recipient_code", "amount_naira", "invoice_number"], "additionalProperties": false, "properties": {
+      "supplier": {"type": "string", "minLength": 1, "maxLength": 100, "title": "Supplier"},
+      "recipient_code": {"type": "string", "minLength": 4, "maxLength": 60, "title": "Paystack recipient code (RCP_...)"},
+      "amount_naira": {"type": "number", "minimum": 1, "maximum": "{{max_amount}}", "title": "Amount (naira)"},
+      "invoice_number": {"type": "string", "minLength": 1, "maxLength": 60, "title": "Invoice number"}}}},
+    "steps": [
+      {"id": "approve_payment", "type": "approval", "name": "Get the payment approved",
+       "config": {"role": "{{approver_role}}", "count": 1, "timeout": "48h",
+         "subject": {"supplier": "=trigger.body.supplier", "amount_naira": "=trigger.body.amount_naira", "invoice": "=trigger.body.invoice_number"}}},
+      {"id": "pay_supplier", "type": "connector", "name": "Pay the supplier by Paystack transfer", "connector": "paystack@1", "action": "transfer", "connection": "{{paystack_connection}}", "needs": ["approve_payment"],
+       "when": "=steps.approve_payment.output.decision == 'approved'",
+       "input": {"amount": "=int(double(trigger.body.amount_naira) * 100.0)", "recipient": "=trigger.body.recipient_code", "reason": "='Invoice ' + trigger.body.invoice_number"},
+       "effect": {"idempotency_seed": "='supplier-invoice:' + trigger.body.invoice_number"}},
+      {"id": "text_paid", "type": "connector", "name": "Text the owner that the supplier was paid", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}", "needs": ["pay_supplier"],
+       "input": {"to": "=env.owner_phone",
+         "sms": "='Paystack transfer for invoice ' + trigger.body.invoice_number + ' to ' + trigger.body.supplier + ' (NGN ' + string(trigger.body.amount_naira) + '): ' + steps.pay_supplier.output.status"}},
+      {"id": "text_rejected", "type": "connector", "name": "Text the owner that nothing was paid", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}", "needs": ["approve_payment"],
+       "when": "=steps.approve_payment.output.decision != 'approved'",
+       "input": {"to": "=env.owner_phone",
+         "sms": "='Invoice ' + trigger.body.invoice_number + ' from ' + trigger.body.supplier + ' was not approved; nothing was paid.'"}}
+    ],
+    "settings": {"timeout": "72h"}
+  }
+}

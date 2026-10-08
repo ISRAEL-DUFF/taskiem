@@ -1,0 +1,43 @@
+{
+ "status": 200,
+ "body": {
+  "ok": true,
+  "channels": [
+   {
+    "id": "C012AB3CD",
+    "name": "general",
+    "is_channel": true,
+    "is_group": false,
+    "is_im": false,
+    "created": 1449252889,
+    "creator": "U012A3CDE",
+    "is_archived": false,
+    "is_general": true,
+    "name_normalized": "general",
+    "is_shared": false,
+    "is_member": true,
+    "is_private": false,
+    "is_mpim": false,
+    "topic": {
+     "value": "Company-wide announcements and work-based matters",
+     "creator": "",
+     "last_set": 0
+    },
+    "previous_names": [],
+    "num_members": 4
+   },
+   {
+    "id": "C061EG9T2",
+    "name": "random",
+    "is_channel": true,
+    "is_archived": false,
+    "is_member": true,
+    "is_private": false,
+    "num_members": 4
+   }
+  ],
+  "response_metadata": {
+   "next_cursor": "dGVhbTpDMDYxRkE1UEI="
+  }
+ }
+}

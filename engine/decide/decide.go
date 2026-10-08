@@ -19,6 +19,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -38,24 +39,11 @@ const MaxPasses = 10_000
 // Decide returns the events that follow from the history. A run that has
 // ended yields nothing.
 func Decide(def *wd.Definition, h []history.Event) ([]NewEvent, error) {
-	if len(h) == 0 || h[0].Type != history.RunStarted {
-		return nil, fmt.Errorf("decide: history must start with RunStarted")
-	}
-	d := &decider{def: def, facts: map[string]*facts{}}
-	if err := d.load(h); err != nil {
+	st, err := Fold(def, h)
+	if err != nil {
 		return nil, err
 	}
-	if d.terminal {
-		return nil, nil
-	}
-	for pass := 0; pass < MaxPasses; pass++ {
-		before := len(d.out)
-		d.run()
-		if len(d.out) == before || d.terminal {
-			return d.out, nil
-		}
-	}
-	return nil, fmt.Errorf("decide: no fixpoint after %d passes", MaxPasses)
+	return st.Decide()
 }
 
 // facts are what the history says about one step instance.
@@ -69,7 +57,10 @@ type facts struct {
 	completed     bool
 	output        any
 	skipped       bool
+	cancelled     bool
+	intents       map[int]bool // attempts that recorded EffectIntent
 	control       *history.ControlStartedPayload
+	winner        string
 	timerFired    []timerFact
 	signal        *history.SignalPayload
 	approvalReqs  []history.ApprovalRequestedPayload
@@ -95,6 +86,7 @@ type decider struct {
 	trigger               any
 	env                   map[string]any
 	runInfo               map[string]any
+	policies              map[string]snapshot
 	terminal              bool
 	runTimeout            bool
 	compStarted, compDone bool
@@ -106,7 +98,7 @@ type decider struct {
 func (d *decider) f(inst string) *facts {
 	f, ok := d.facts[inst]
 	if !ok {
-		f = &facts{scheduled: map[int]history.ScheduledPayload{}, outcome: map[int]string{}, failures: map[int]history.Error{}, retries: map[int]bool{}}
+		f = &facts{scheduled: map[int]history.ScheduledPayload{}, outcome: map[int]string{}, failures: map[int]history.Error{}, retries: map[int]bool{}, intents: map[int]bool{}}
 		d.facts[inst] = f
 		d.order = append(d.order, inst)
 	}
@@ -114,7 +106,6 @@ func (d *decider) f(inst string) *facts {
 }
 
 func (d *decider) load(h []history.Event) error {
-	d.complSeq = map[string]int64{}
 	for _, e := range h {
 		if err := d.apply(e.Type, e.StepID, e.Attempt, e.Payload, e.Seq); err != nil {
 			return fmt.Errorf("decide: event %d (%s): %w", e.Seq, e.Type, err)
@@ -144,6 +135,14 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 			d.env = map[string]any{}
 		}
 		d.runInfo, _ = m["run"].(map[string]any)
+		d.policies = map[string]snapshot{}
+		for name, ps := range d.started.Policies {
+			doc, err := policy.Parse(ps.Document)
+			if err != nil {
+				return fmt.Errorf("policy %s: %w", name, err)
+			}
+			d.policies[name] = snapshot{version: ps.Version, doc: doc}
+		}
 		return nil
 	case history.RunCompleted, history.RunFailed, history.RunCancelled:
 		d.terminal = true
@@ -186,9 +185,18 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 		}
 	case history.StepStarted:
 		var p history.ControlStartedPayload
-		if len(raw) > 0 && json.Unmarshal(raw, &p) == nil && (p.Path != nil || p.Count != nil) {
-			f.control = &p
+		if len(raw) > 0 && json.Unmarshal(raw, &p) == nil {
+			switch {
+			case p.Winner != nil:
+				f.winner = *p.Winner
+			case p.Path != nil || p.Count != nil:
+				f.control = &p
+			}
 		}
+	case history.EffectIntent:
+		f.intents[attempt] = true
+	case history.StepCancelled:
+		f.cancelled = true
 	case history.StepCompleted:
 		if f.completed {
 			return nil // a late duplicate after reconciliation; the first wins
@@ -390,7 +398,7 @@ func (d *decider) statusOf(sc scope, s *wd.Step, inst string, start bool) status
 	switch {
 	case f.completed:
 		return completed
-	case f.skipped:
+	case f.skipped, f.cancelled:
 		return skipped
 	}
 	if d.begun(s, f) {
@@ -444,7 +452,7 @@ func (d *decider) fail(inst, kind string, err error) {
 }
 
 func isTask(t string) bool {
-	return t == "connector" || t == "http" || t == "code" || t == "ai"
+	return t == "connector" || t == "http" || t == "code" || t == "container" || t == "ai"
 }
 
 // begin starts a ready step.
@@ -498,8 +506,14 @@ func (d *decider) begin(sc scope, s *wd.Step, inst string, act map[string]any) s
 		if m, ok := subj.(map[string]any); ok {
 			p.Subject = m
 		}
-		if s.Approval.Timeout != "" {
-			dur, _ := wd.ParseDuration(s.Approval.Timeout)
+		if name := s.Approval.Policy; name != "" {
+			if err := d.applyPolicy(name, subj, &p); err != nil {
+				d.emit(history.StepFailed, inst, 0, history.FailedPayload{Error: history.Error{Kind: "policy", Message: err.Error(), Next: "fail"}})
+				return d.onError(sc, s, inst, true)
+			}
+		}
+		if timeout, _ := d.approvalTimeout(s); timeout != "" {
+			dur, _ := wd.ParseDuration(timeout)
 			p.TimeoutAt = history.FormatTime(d.now.Add(dur))
 		}
 		d.emit(history.ApprovalRequested, inst, 0, p)
@@ -529,6 +543,10 @@ func (d *decider) begin(sc scope, s *wd.Step, inst string, act map[string]any) s
 			return d.onError(sc, s, inst, true)
 		}
 		n := len(items)
+		d.emit(history.StepStarted, inst, 0, history.ControlStartedPayload{Count: &n})
+		return d.progress(sc, s, inst, d.facts[inst], true)
+	case s.Type == "parallel":
+		n := len(s.Parallel.Branches)
 		d.emit(history.StepStarted, inst, 0, history.ControlStartedPayload{Count: &n})
 		return d.progress(sc, s, inst, d.facts[inst], true)
 	}
@@ -570,6 +588,8 @@ func (d *decider) progress(sc scope, s *wd.Step, inst string, f *facts, start bo
 		return d.branchProgress(sc, s, inst, f, start)
 	case s.Type == "foreach":
 		return d.foreachProgress(sc, s, inst, f, start)
+	case s.Type == "parallel":
+		return d.parallelProgress(sc, s, inst, f, start)
 	}
 	return failed
 }
@@ -591,11 +611,19 @@ func (d *decider) taskProgress(s *wd.Step, inst string, f *facts, start bool) st
 		return failed
 	}
 	r := retryPolicy(s)
-	if n > r.max {
+	// A step resumed after its tenant key returned (decision 0019) was
+	// parked, not retried: the time it waited is not the step's fault.
+	if n > r.max && !e.Resumed() {
 		return d.finalise(inst, f, e, fmt.Sprintf("gave up after %d attempts", n))
 	}
 	delay := backoff(r, n, d.runID(), inst)
-	if r.maxDuration > 0 && d.now.Add(delay).Sub(f.firstSchedAt) > r.maxDuration {
+	if ra := min(time.Duration(e.RetryAfterMS)*time.Millisecond, time.Hour); ra > delay {
+		delay = ra // the provider said when to come back (Retry-After), up to an hour
+	}
+	if e.Resumed() {
+		delay = 0
+	}
+	if r.maxDuration > 0 && d.now.Add(delay).Sub(f.firstSchedAt) > r.maxDuration && !e.Resumed() {
 		return d.finalise(inst, f, e, "retry budget exhausted")
 	}
 	if !start {
@@ -647,21 +675,67 @@ func (d *decider) approvalProgress(s *wd.Step, inst string, f *facts) status {
 	if !timedOut {
 		return running
 	}
-	switch on := s.Approval.OnTimeout; {
+	timeout, onTimeout := d.approvalTimeout(s)
+	switch on := onTimeout; {
 	case on == "fail":
-		d.fail(inst, "timeout", fmt.Errorf("approval timed out after %s", s.Approval.Timeout))
+		d.fail(inst, "timeout", fmt.Errorf("approval timed out after %s", timeout))
 		return failed
 	case strings.HasPrefix(on, "escalate:") && len(f.approvalReqs) == 1:
 		p := f.approvalReqs[0]
 		p.Role = strings.TrimPrefix(on, "escalate:")
+		p.Count = 1
+		if len(p.Levels) > 0 {
+			p.Levels = []history.ApprovalLevel{{Role: p.Role, Count: 1}}
+		}
 		p.Escalated = true
-		dur, _ := wd.ParseDuration(s.Approval.Timeout)
+		dur, _ := wd.ParseDuration(timeout)
 		p.TimeoutAt = history.FormatTime(d.now.Add(dur))
 		d.emit(history.ApprovalRequested, inst, 0, p)
 		return running
 	}
 	d.emit(history.StepCompleted, inst, 0, history.CompletedPayload{Output: map[string]any{"decision": "rejected", "reason": "timeout"}})
 	return completed
+}
+
+// snapshot is an approval policy as the run started with it.
+type snapshot struct {
+	version int
+	doc     *policy.Policy
+}
+
+// applyPolicy routes an approval by its policy: the first rule matching the
+// subject sets the levels, step-up and constraints.
+func (d *decider) applyPolicy(name string, subject any, p *history.ApprovalRequestedPayload) error {
+	ps, ok := d.policies[name]
+	if !ok {
+		return fmt.Errorf("approval policy %q was not active when the run started", name)
+	}
+	rule, err := ps.doc.Match(subject)
+	if err != nil {
+		return fmt.Errorf("approval policy %q: %w", name, err)
+	}
+	for _, l := range rule.Normalised() {
+		p.Levels = append(p.Levels, history.ApprovalLevel{Role: l.Role, Count: l.Count})
+	}
+	p.Role, p.Count = p.Levels[0].Role, p.Levels[0].Count
+	p.PolicyVersion, p.StepUp = ps.version, rule.StepUp
+	p.Constraints = &history.ApprovalConstraints{ForbidSelfApproval: ps.doc.Constraints.SelfApprovalForbidden(), DistinctApprovers: ps.doc.Constraints.Distinct()}
+	return nil
+}
+
+// approvalTimeout is the step's timeout and on_timeout, or its policy's
+// where the step sets none.
+func (d *decider) approvalTimeout(s *wd.Step) (timeout, onTimeout string) {
+	timeout, onTimeout = s.Approval.Timeout, s.Approval.OnTimeout
+	if ps, ok := d.policies[s.Approval.Policy]; ok && s.Approval.Policy != "" {
+		if timeout == "" {
+			timeout = ps.doc.Timeout
+		}
+		if onTimeout == "" {
+			onTimeout = ps.doc.OnTimeout
+		}
+	}
+	return timeout, onTimeout
 }
 
 func (d *decider) branchProgress(sc scope, s *wd.Step, inst string, f *facts, start bool) status {
@@ -728,8 +802,10 @@ func (d *decider) foreachProgress(sc scope, s *wd.Step, inst string, f *facts, s
 		}
 	}
 	if anyFailed {
-		if active > 0 {
-			return running
+		for i, it := range items {
+			if d.busy(scope{prefix: fmt.Sprintf("%s%s[%d].", sc.prefix, s.ID, i), steps: s.Foreach.Steps, iter: &iteration{item: it, index: i, parent: sc.iter}}) {
+				return running
+			}
 		}
 		d.failChild(inst, why)
 		return failed
@@ -743,6 +819,179 @@ func (d *decider) foreachProgress(sc scope, s *wd.Step, inst string, f *facts, s
 	}
 	d.emit(history.StepCompleted, inst, 0, history.CompletedPayload{Output: outs})
 	return completed
+}
+
+// parallelProgress runs a parallel step's branches side by side (spec 3.2).
+// With join "all" it completes when every branch has, and fails like a
+// foreach once a branch fails and the others' in-flight steps settle. With
+// join "any" the first branch to complete wins (definition order breaks a
+// tie within one decision); the others are cancelled and their committed
+// effects compensated. It fails only if every branch fails.
+func (d *decider) parallelProgress(sc scope, s *wd.Step, inst string, f *facts, start bool) status {
+	cfg := s.Parallel
+	joinAny := cfg.Join == "any"
+	if joinAny && f.winner != "" {
+		return d.parallelSettle(sc, s, inst, f.winner)
+	}
+	limit := cfg.MaxConcurrency
+	if limit <= 0 {
+		limit = len(cfg.Branches)
+	}
+	active, allDone, failures := 0, true, 0
+	var why *history.Error
+	for _, b := range cfg.Branches {
+		child := scope{prefix: sc.prefix, steps: b.Steps, iter: sc.iter}
+		begunB := d.iterationBegun(child)
+		canStartB := start && (joinAny || failures == 0) && (begunB || active < limit)
+		if !begunB && !canStartB {
+			allDone = false
+			continue
+		}
+		done, failedB, w := d.scope(child, canStartB)
+		switch {
+		case !done:
+			allDone = false
+			active++
+		case !d.iterationBegun(child):
+			allDone = false
+		case failedB:
+			failures++
+			if why == nil {
+				why = w
+			}
+		case joinAny && start:
+			name := b.Name
+			d.emit(history.StepStarted, inst, 0, history.ControlStartedPayload{Winner: &name})
+			return d.parallelSettle(sc, s, inst, name)
+		}
+	}
+	switch {
+	case joinAny && failures == len(cfg.Branches):
+		d.failChild(inst, why)
+		return failed
+	case joinAny:
+		return running
+	case failures > 0:
+		for _, b := range cfg.Branches {
+			if d.busy(scope{prefix: sc.prefix, steps: b.Steps, iter: sc.iter}) {
+				return running
+			}
+		}
+		d.failChild(inst, why)
+		return failed
+	case !allDone:
+		return running
+	}
+	out := map[string]any{}
+	for _, b := range cfg.Branches {
+		out[b.Name] = d.outputs(scope{prefix: sc.prefix, steps: b.Steps})
+	}
+	d.emit(history.StepCompleted, inst, 0, history.CompletedPayload{Output: out})
+	return completed
+}
+
+// parallelSettle finishes a join "any" parallel step once winner is known:
+// it cancels the losing branches' unfinished steps, waits for writes already
+// under way, compensates the losers' completed steps (newest first), then
+// completes with the winner's outputs.
+func (d *decider) parallelSettle(sc scope, s *wd.Step, inst, winner string) status {
+	var losers []string
+	waiting := false
+	for _, li := range append([]string(nil), d.order...) {
+		if !d.inLosingBranch(li, sc.prefix, s, winner) {
+			continue
+		}
+		lf := d.facts[li]
+		_, id := history.SplitInstance(li)
+		if lf.completed {
+			if d.def.Step(id).Compensate != nil {
+				losers = append(losers, li)
+			}
+			continue
+		}
+		if lf.skipped || lf.finalFailure != nil {
+			continue
+		}
+		if !lf.cancelled {
+			if !d.begun(d.def.Step(id), lf) {
+				continue
+			}
+			d.emit(history.StepCancelled, li, 0, map[string]any{"reason": "parallel " + inst + ": branch " + winner + " finished first"})
+		}
+		if cancelledPending(lf) {
+			waiting = true
+		}
+	}
+	if waiting {
+		return running
+	}
+	sort.SliceStable(losers, func(i, j int) bool { return d.complSeq[losers[i]] > d.complSeq[losers[j]] })
+	if !d.compensations(losers) {
+		return running
+	}
+	var steps []*wd.Step
+	for _, b := range s.Parallel.Branches {
+		if b.Name == winner {
+			steps = b.Steps
+		}
+	}
+	d.emit(history.StepCompleted, inst, 0, history.CompletedPayload{Output: map[string]any{
+		winner: d.outputs(scope{prefix: sc.prefix, steps: steps}),
+	}})
+	return completed
+}
+
+// cancelledPending reports whether a cancelled step may still take effect:
+// a write whose intent was recorded and whose outcome is not yet known, or
+// one parked for an operator.
+func cancelledPending(f *facts) bool {
+	if f.completed || f.finalFailure != nil {
+		return false
+	}
+	n := f.lastAttempt
+	if f.outcome[n] == "" {
+		return f.intents[n]
+	}
+	return f.failures[n].Next == "park"
+}
+
+// inLosingBranch reports whether instance li lives inside a branch other
+// than winner of the parallel step p, whose instances have prefix prefix.
+func (d *decider) inLosingBranch(li, prefix string, p *wd.Step, winner string) bool {
+	if strings.HasPrefix(li, history.CompensationPrefix) {
+		return false
+	}
+	lp, id := history.SplitInstance(li)
+	if !strings.HasPrefix(lp, prefix) {
+		return false
+	}
+	cur := id
+	for par := d.def.Parent(cur); par != nil; cur, par = par.ID, d.def.Parent(par.ID) {
+		if par.ID != p.ID {
+			continue
+		}
+		for _, b := range p.Parallel.Branches {
+			for _, bs := range b.Steps {
+				if bs.ID == cur {
+					return b.Name != winner
+				}
+			}
+		}
+		return false // in the parallel step's own on_error flow
+	}
+	return false
+}
+
+// busy reports whether a scope has a step in flight (running or parked).
+// A failing control step waits only for those: steps that have not started
+// never will.
+func (d *decider) busy(sc scope) bool {
+	for _, s := range sc.steps {
+		if st := d.status(sc, s, false); st == running || st == parked {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *decider) iterationBegun(child scope) bool {
@@ -803,6 +1052,9 @@ func (d *decider) outputs(sc scope) map[string]any {
 func (d *decider) inFlight() bool {
 	for _, inst := range d.order {
 		f := d.facts[inst]
+		if f.cancelled && !f.intents[f.lastAttempt] {
+			continue // its task was withdrawn before it could start
+		}
 		if len(f.scheduled) > 0 && f.outcome[f.lastAttempt] == "" && !f.completed {
 			if p := f.scheduled[f.lastAttempt]; p.Kind == history.KindTask {
 				return true
@@ -834,36 +1086,47 @@ func (d *decider) compensate(why *history.Error) {
 		if !d.compStarted {
 			d.emit(history.CompensationStarted, "", 0, map[string]any{"steps": todo})
 		}
-		for _, inst := range todo {
-			cinst := history.CompensationPrefix + inst
-			f := d.f(cinst)
-			if f.completed {
-				continue
-			}
-			if len(f.scheduled) == 0 {
-				_, id := history.SplitInstance(inst)
-				s := d.def.Step(id)
-				act := d.activationFor(inst)
-				in, err := engine.Resolve(s.Compensate.Input, act, true)
-				if err != nil {
-					d.fail(cinst, "expression", err)
-					return
-				}
-				d.emit(history.StepScheduled, cinst, 1, history.ScheduledPayload{
-					Kind: history.KindTask, Queue: "connector", Connector: s.Connector, Action: s.Compensate.Action,
-					Input: in, KeyStep: cinst, Compensates: inst, AvailableAt: history.FormatTime(d.now),
-				})
-				return
-			}
-			_, id := history.SplitInstance(inst)
-			st := d.taskProgress(d.def.Step(id), cinst, f, true)
-			if st != completed {
-				return // running, retrying, or parked: compensation waits
-			}
+		if !d.compensations(todo) {
+			return
 		}
 		d.emit(history.CompensationCompleted, "", 0, map[string]any{})
 	}
 	d.emit(history.RunFailed, "", 0, history.RunFailedPayload{Error: *why})
+}
+
+// compensations runs the compensating actions for insts, one at a time in
+// the order given, and reports whether all of them have completed. Actions
+// already completed (for example a losing parallel branch's, compensated
+// before the run failed) are not run again.
+func (d *decider) compensations(insts []string) bool {
+	for _, inst := range insts {
+		cinst := history.CompensationPrefix + inst
+		f := d.f(cinst)
+		if f.completed {
+			continue
+		}
+		if f.finalFailure != nil {
+			return false // parked for an operator
+		}
+		_, id := history.SplitInstance(inst)
+		s := d.def.Step(id)
+		if len(f.scheduled) == 0 {
+			in, err := engine.Resolve(s.Compensate.Input, d.activationFor(inst), true)
+			if err != nil {
+				d.fail(cinst, "expression", err)
+				return false
+			}
+			d.emit(history.StepScheduled, cinst, 1, history.ScheduledPayload{
+				Kind: history.KindTask, Queue: "connector", Connector: s.Connector, Action: s.Compensate.Action,
+				Input: in, KeyStep: cinst, Compensates: inst, AvailableAt: history.FormatTime(d.now),
+			})
+			return false
+		}
+		if d.taskProgress(s, cinst, f, true) != completed {
+			return false // running, retrying, or parked: compensation waits
+		}
+	}
+	return true
 }
 
 // activationFor builds the activation for the scope an instance lives in.

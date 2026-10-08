@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/disbursements/account/validate",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "query": {
+   "accountNumber": "0068687503",
+   "bankCode": "232"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Invalid account number",
+   "responseCode": "99"
+  }
+ }
+}

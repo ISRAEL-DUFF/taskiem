@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/payments/withdraw/address","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"},"body":{"amount":25.00,"token":"USDT","network":"SOL","walletAddress":"14grJpemFaf88c8tiVb77W7TYg2W3ir6pfkKz3YjhhZ5","pin":"1234","externalId":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}},
+ "response":{"status":200,"body":{"message":"ok","success":true,"data":{"id":"697251ed397a53d0cb7b228b"},"meta":{}}}}

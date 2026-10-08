@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v1/payments",
+    "query": {
+      "reference": "tsk_7w2xq4m6k3z8r5t1y9u0p2s4d6f8h1jl"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "pay_1",
+      "reference": "tsk_7w2xq4m6k3z8r5t1y9u0p2s4d6f8h1jl",
+      "status": "completed"
+    }
+  }
+}

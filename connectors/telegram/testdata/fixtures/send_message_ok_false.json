@@ -1,0 +1,13 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/sendMessage"
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": false,
+   "description": "something odd"
+  }
+ }
+}

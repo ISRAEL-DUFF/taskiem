@@ -1,0 +1,21 @@
+{
+  "language": "ha",
+  "reviewed": false,
+  "status": "DRAFT, NOT REVIEWED. Written without a native speaker; do not treat as accurate until reviewed (docs/languages.md).",
+  "phrases": {
+    "help": ["taimako", "ina son taimako", "me zan iya yi", "sannu", "ina kwana", "ina wuni"],
+    "status": ["me ya gaza yau", "me ya gaza", "yaya abubuwa suke", "matsayi"],
+    "approvals": ["amincewa", "me ke jira na"],
+    "cancel": ["soke", "fasa", "a fasa", "tsaya"],
+    "yes": ["eh", "na'am", "to", "yi shi"],
+    "no": ["a'a", "kada", "kar a yi"]
+  },
+  "prefixes": {
+    "switch": ["koma", "sauya zuwa"],
+    "run": ["fara", "gudanar"],
+    "build": ["gina", "kirkiro"],
+    "language": ["harshe", "canza harshe zuwa"]
+  },
+  "fillers": ["don allah", "dan allah"],
+  "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana"]
+}

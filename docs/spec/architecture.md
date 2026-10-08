@@ -220,6 +220,8 @@ Each run has an ordered event log in `run_events`. Events are immutable and sequ
 | `EffectIntent` | Just before a side-effecting call; records idempotency key and request digest |
 | `StepCompleted` | Worker reports success with output (or output reference) |
 | `StepFailed` | Worker reports a failure with error class |
+| `StepSkipped` | A step's `when` was false or a step it needs did not run |
+| `StepCancelled` | A step in a losing branch of a `join: any` parallel step is stopped before it finished |
 | `RetryScheduled` | Failure is retryable; records next attempt time |
 | `TimerFired` | A `wait` or timeout elapses |
 | `SignalReceived` | External event matched the run (webhook, WhatsApp reply) |
@@ -482,7 +484,7 @@ CREATE TABLE audit_chain_heads (
 ### 5.3 Isolation rules
 
 - Every transaction sets `SET LOCAL app.tenant_scope` at start: an array of tenant ids the caller may touch. RLS policies check `tenant_id = ANY(current_setting('app.tenant_scope')::uuid[])`. For an ordinary user or API key the scope is their own tenant only.
-- **Tenant hierarchy.** A partner's scope includes its sub-tenants only when the call comes through the partner admin API (section 13.4) with the `subtenant.read` or `subtenant.manage` permission. The API computes the scope from `tenants.parent_id` at authentication, and each cross-tenant access is written to both the partner's and the sub-tenant's audit log. Partner users acting in the partner's own workspace never get sub-tenant ids in scope, which keeps sub-tenant data isolated from them by default.
+- **Tenant hierarchy.** A partner reaches a sub-tenant only when the call comes through the partner admin API (section 13.4) with the `partner.read` or `partner.manage` permission. Each transaction enters one sub-tenant through a `SECURITY DEFINER` function that checks `tenants.parent_id`, writes the access to both the partner's and the sub-tenant's audit log, and narrows the scope to that sub-tenant alone (decision 0015). Partner users acting in the partner's own workspace never get sub-tenant ids in scope, which keeps sub-tenant data isolated from them by default.
 - The application role cannot bypass RLS. Only migrations and the platform-admin role can, and their use is itself audited.
 - **Dispatch path.** Workers, the orchestrator, and the scheduler must find work across all tenants. They do this only through a small set of `SECURITY DEFINER` functions owned by a `taskiem_dispatch` role: `claim_tasks(queue, worker_id, n)`, `claim_due_timers(n)`, `claim_runs_to_orchestrate(n)`, and `recover_expired_leases()`. Each function claims rows with `SKIP LOCKED`, returns only routing columns (ids, `tenant_id`, step id, lease epoch), and touches no payloads. The caller then opens a normal transaction with `app.tenant_scope` set to that row's single tenant before reading history, secrets, or payloads, so all data access stays under RLS. These functions are fixed in migrations, reviewed like security code, and covered by the RLS bypass tests.
 - `audit_log` and `run_events` grant `INSERT` and `SELECT` only; `UPDATE` and `DELETE` are revoked from every application role.

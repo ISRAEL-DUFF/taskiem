@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/transfers","query":{"reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"},"headers":{"Authorization":"Bearer FLWSECK_TEST-abc"}},
+ "response":{"status":200,"body":{"status":"success","message":"Transfers fetched","meta":{"page_info":{"total":0,"current_page":1,"total_pages":1}},"data":[]}}}

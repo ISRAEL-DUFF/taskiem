@@ -1,0 +1,33 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/drivers-license",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "id": "AAA00000AA00",
+   "isSubjectConsent": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "id": "62728ddd837f90413ed3d99c",
+    "status": "found",
+    "firstName": "John",
+    "middleName": null,
+    "lastName": "Doe",
+    "expiredDate": "2023-11-09T00:00:00.000Z",
+    "issuedDate": "2020-06-12T00:00:00.000Z",
+    "stateOfIssuance": "BENUE",
+    "image": "[base64_image_data]"
+   },
+   "links": []
+  }
+ }
+}

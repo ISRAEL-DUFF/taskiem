@@ -2,8 +2,10 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -28,6 +30,9 @@ func (c *client) do(method, path string, body any, hdr ...string) (int, map[stri
 		rd = bytes.NewReader(raw)
 	}
 	req, _ := http.NewRequest(method, c.base+path, rd)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
@@ -60,26 +65,42 @@ func (c *client) must(want int, method, path string, body any, hdr ...string) ma
 type world struct {
 	env  *rt.Env
 	base string
+	srv  *api.Server
+	txt  map[string][]string // DNS TXT records, for SSO domain checks
 }
 
 func newWorld(t *testing.T) *world {
 	e := rt.New(t)
-	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, AllowSignup: true}
-	ts := httptest.NewServer(srv.Handler())
+	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress, Logger: slog.New(slog.DiscardHandler),
+		SignupPerAddress: -1} // many tenants sign up from 127.0.0.1 here; onboarding_test.go tests the limit
+	// Every answer is checked against the OpenAPI document (openapi_test.go).
+	ts := httptest.NewServer(specCheck(t, srv.Handler()))
 	t.Cleanup(ts.Close)
-	return &world{env: e, base: ts.URL}
+	return &world{env: e, base: ts.URL, srv: srv}
 }
 
-// tenant signs up a new tenant and returns its owner's client.
+// tenant signs up a new tenant and returns its owner's client. The
+// owner's email counts as confirmed (onboarding_test.go tests confirming
+// it), so worlds that send email can invite people at once.
 func (w *world) tenant(t *testing.T, name, email string) *client {
 	anon := &client{t: t, base: w.base}
 	anon.must(201, "POST", "/v1/signup", map[string]any{"tenant": name, "email": email, "name": "Owner", "password": "correct horse battery"})
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE users SET email_verified_at = now() WHERE lower(email) = lower($1)`, email); err != nil {
+		t.Fatal(err)
+	}
+	// Nor does its confirmation email count among the emails tests expect.
+	if w.srv.Alerts != nil {
+		if m, ok := w.srv.Alerts.Mailer.(*fakeMail); ok {
+			w.srv.WaitBackground()
+			m.drop("Subject: Confirm your email for Taskiem")
+		}
+	}
 	return w.login(t, email, "correct horse battery")
 }
 
 func (w *world) login(t *testing.T, email, pw string) *client {
 	anon := &client{t: t, base: w.base}
-	out := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": email, "password": pw})
+	out := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": email, "password": pw, "bearer": true})
 	return &client{t: t, base: w.base, token: out["token"].(string)}
 }
 
@@ -296,6 +317,10 @@ func TestAdminAndErasure(t *testing.T) {
 		t.Errorf("secret list: %s", s)
 	}
 	owner.must(204, "PUT", "/v1/variables/prod/api_base", map[string]any{"value": "https://api.example"})
+	if s := toJSON(owner.must(200, "GET", "/v1/variables", nil)); !strings.Contains(s, "api_base") {
+		t.Errorf("variables: %s", s)
+	}
+	owner.must(200, "GET", "/v1/audit/anchors", nil)
 	owner.must(204, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "api.example.com"})
 	owner.must(400, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "http://bad"})
 	if s := toJSON(owner.must(200, "GET", "/v1/egress?environment=prod", nil)); !strings.Contains(s, "api.example.com") {
@@ -320,4 +345,15 @@ func TestAdminAndErasure(t *testing.T) {
 func toJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+// raw returns a successful response's body as text (CSV and the like).
+func (c *client) raw(t *testing.T, method, path string) string {
+	t.Helper()
+	status, out := c.do(method, path, nil)
+	if status != 200 {
+		t.Fatalf("%s %s: %d %v", method, path, status, out)
+	}
+	s, _ := out["raw"].(string)
+	return s
 }

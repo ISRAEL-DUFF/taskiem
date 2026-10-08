@@ -1,0 +1,289 @@
+# Slack Web API and Events API, with a bot token. Built from Slack's public
+# developer documentation, read 6 October 2026 (api.slack.com now redirects
+# to docs.slack.dev):
+#   https://docs.slack.dev/apis/web-api/
+#   https://docs.slack.dev/apis/web-api/rate-limits/
+#   https://docs.slack.dev/reference/methods/chat.postMessage/ (and chat.update,
+#     chat.postEphemeral, reactions.add, conversations.list, conversations.info,
+#     users.lookupByEmail, auth.test, files.getUploadURLExternal,
+#     files.completeUploadExternal)
+#   https://docs.slack.dev/authentication/verifying-requests-from-slack/
+#   https://docs.slack.dev/apis/events-api/
+#   https://docs.slack.dev/reference/events/url_verification/
+#   https://docs.slack.dev/interactivity/handling-user-interaction/
+#   https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
+# See docs/integrations/slack.md.
+manifest: connector/v1
+id: slack
+version: 1.0.0
+name: Slack
+description: Post, update and react to messages, upload files, look up channels and people, and start or resume workflows from Slack events and button clicks.
+category: messaging
+auth:
+  type: api_key
+  fields:
+    - { key: bot_token, label: Bot user OAuth token (xoxb-...), secret: true }
+    - { key: signing_secret, label: Signing secret (Basic Information page; needed for events and interactions), secret: true, required: false }
+  test: { action: auth_test }
+base_url: https://slack.com/api
+# files.slack.com receives the bytes of upload_file (the URL Slack returns
+# from files.getUploadURLExternal).
+egress_hosts: [slack.com, files.slack.com]
+actions:
+  auth_test:
+    title: Check the token
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        url:     { type: string }
+        team:    { type: string }
+        team_id: { type: string }
+        user:    { type: string }
+        user_id: { type: string }
+        bot_id:  { type: string }
+  post_message:
+    title: Post a message
+    description: >-
+      chat.postMessage. Slack has no idempotency key for messages, so a post
+      whose outcome is unknown (a dropped connection, a 5xx, internal_error)
+      is parked for a person rather than posted twice. Rate limits
+      (ratelimited) prove nothing was posted and are retried.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [channel]
+      properties:
+        channel:         { type: string, description: Channel id (C..., G..., D...) or a user id for a DM from the app }
+        text:            { type: string, description: The message, or the notification fallback when blocks are given }
+        blocks:          { type: array, items: { type: object }, description: Block Kit blocks }
+        thread_ts:       { type: string, description: Reply in the thread of this parent message }
+        reply_broadcast: { type: boolean }
+        unfurl_links:    { type: boolean }
+        unfurl_media:    { type: boolean }
+        mrkdwn:          { type: boolean }
+        metadata:        { type: object, description: "{event_type, event_payload}" }
+        username:        { type: string, description: Needs chat:write.customize }
+        icon_emoji:      { type: string, description: Needs chat:write.customize }
+        icon_url:        { type: string, description: Needs chat:write.customize }
+    output:
+      type: object
+      properties:
+        channel:     { type: string }
+        ts:          { type: string, description: The message's id within the channel }
+        message_key: { type: string, description: "<channel>:<ts>; the events trigger's correlation for reactions to this message" }
+        thread_key:  { type: string, description: "<channel>:<thread parent ts>; the events trigger's correlation for replies in its thread" }
+    pii:
+      - { field: text, category: other }
+      - { field: blocks, category: other }
+  update_message:
+    title: Update a message
+    description: >-
+      chat.update. Setting a message's content is repeatable: sending the
+      same update twice leaves the same message, so a retry is safe. Slack
+      has no key; request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [channel, ts]
+      properties:
+        channel:     { type: string, description: Channel id (for DMs the D... id) }
+        ts:          { type: string }
+        text:        { type: string }
+        blocks:      { type: array, items: { type: object }, description: "Replaces the blocks; [] removes them" }
+        metadata:    { type: object }
+        request_key: { type: string, description: Set by the engine; not sent to Slack }
+    output:
+      type: object
+      properties:
+        channel: { type: string }
+        ts:      { type: string }
+        text:    { type: string }
+    pii:
+      - { field: text, category: other }
+      - { field: blocks, category: other }
+      - { field: output.text, category: other }
+  post_ephemeral:
+    title: Post an ephemeral message
+    description: chat.postEphemeral, visible only to one user in the channel. Not idempotent.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [channel, user]
+      properties:
+        channel:   { type: string }
+        user:      { type: string, description: User id; must be in the channel }
+        text:      { type: string }
+        blocks:    { type: array, items: { type: object } }
+        thread_ts: { type: string }
+    output:
+      type: object
+      properties:
+        message_ts: { type: string }
+    pii:
+      - { field: text, category: other }
+      - { field: blocks, category: other }
+  add_reaction:
+    title: Add a reaction
+    description: >-
+      reactions.add. A repeat is answered already_reacted, which the
+      connector reports as success, so a retry is safe.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [channel, timestamp, name]
+      properties:
+        channel:     { type: string }
+        timestamp:   { type: string, description: The message's ts }
+        name:        { type: string, description: "Emoji name without colons, e.g. white_check_mark" }
+        request_key: { type: string, description: Set by the engine; not sent to Slack }
+    output:
+      type: object
+      properties:
+        already_reacted: { type: boolean }
+  list_conversations:
+    title: List channels
+    class: read
+    input:
+      type: object
+      properties:
+        types:            { type: string, description: "Comma-separated: public_channel (default), private_channel, mpim, im" }
+        exclude_archived: { type: boolean }
+        limit:            { type: integer, minimum: 1, maximum: 999, description: Page size (Slack's default 100) }
+        cursor:           { type: string, description: next_cursor from the previous page }
+        team_id:          { type: string, description: Required for org-wide apps }
+    output:
+      type: object
+      properties:
+        channels:
+          type: array
+          items:
+            type: object
+            properties:
+              id:          { type: string }
+              name:        { type: string }
+              is_private:  { type: boolean }
+              is_archived: { type: boolean }
+              is_member:   { type: boolean }
+              num_members: { type: integer }
+        next_cursor: { type: string, description: Empty on the last page }
+  get_conversation:
+    title: Get a channel
+    class: read
+    input:
+      type: object
+      required: [channel]
+      properties:
+        channel:             { type: string }
+        include_num_members: { type: boolean }
+    output:
+      type: object
+      properties:
+        channel: { type: object, description: Slack's conversation object }
+  lookup_user_by_email:
+    title: Find a user by email
+    description: users.lookupByEmail (needs users:read.email). An unknown or deactivated address returns found false.
+    class: read
+    input:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+    output:
+      type: object
+      properties:
+        found:        { type: boolean }
+        id:           { type: string }
+        team_id:      { type: string }
+        name:         { type: string }
+        real_name:    { type: string }
+        display_name: { type: string }
+        tz:           { type: string }
+        is_bot:       { type: boolean }
+    pii:
+      - { field: email, category: email }
+      - { field: output.name, category: name }
+      - { field: output.real_name, category: name }
+      - { field: output.display_name, category: name }
+  upload_file:
+    title: Upload a file
+    description: >-
+      files.getUploadURLExternal, the bytes to the returned URL, then
+      files.completeUploadExternal, which shares the file. Failures before the
+      last call share nothing and are retried; the last call is not
+      idempotent, so an unknown outcome there parks the step.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [filename]
+      properties:
+        filename:        { type: string }
+        content:         { type: string, description: Text content; or content_base64 }
+        content_base64:  { type: string, description: Binary content, standard base64 }
+        title:           { type: string }
+        channel_id:      { type: string, description: Share in this channel; without it the file stays private to the app }
+        thread_ts:       { type: string }
+        initial_comment: { type: string }
+        alt_text:        { type: string, description: Image description for screen readers }
+        snippet_type:    { type: string }
+    output:
+      type: object
+      properties:
+        file_id: { type: string }
+        title:   { type: string }
+    pii:
+      - { field: content, category: other }
+      - { field: content_base64, category: other }
+      - { field: initial_comment, category: other }
+triggers:
+  # Events API: one Request URL per app. Slack checks it with a signed
+  # url_verification POST, answered with the challenge; then it delivers
+  # event_callback envelopes, retrying up to three times (same event_id).
+  events:
+    type: webhook
+    verify: { scheme: slack_v0, header: X-Slack-Signature, timestamp_header: X-Slack-Request-Timestamp, secret_field: signing_secret }
+    handshake: { method: POST, when: '=has(body.type) && body.type == "url_verification"', respond: =body.challenge }
+    event_type: '=body.type == "event_callback" ? body.event.type : body.type'
+    dedup: >-
+      =has(body.event_id) ? body.event_id
+      : has(body.minute_rate_limited) ? body.type + ":" + string(int(body.minute_rate_limited))
+      : body.type + ":" + headers["x-slack-request-timestamp"]
+    # Replies in a thread: "<channel>:<thread_ts>" (post_message's
+    # thread_key). Reactions: "<item.channel>:<item.ts>" (its message_key).
+    correlation: >-
+      =!has(body.event) ? null
+      : has(body.event.thread_ts) && has(body.event.channel) ? dyn(body.event.channel + ":" + body.event.thread_ts)
+      : has(body.event.item) && has(body.event.item.ts) && has(body.event.item.channel) ? dyn(body.event.item.channel + ":" + body.event.item.ts)
+      : null
+  # Interactivity Request URL: block_actions, view_submission, shortcuts.
+  # Slack posts a form whose payload field is JSON; expressions cannot parse
+  # JSON, so the type is matched in the text and correlation is read from a
+  # marker the workflow puts in a button value, block_id or modal
+  # private_metadata: "taskiem-corr:<key>" (optionally "|<anything>").
+  # Repeats are dropped on the body's hash.
+  interactions:
+    type: webhook
+    verify: { scheme: slack_v0, header: X-Slack-Signature, timestamp_header: X-Slack-Request-Timestamp, secret_field: signing_secret }
+    # The interaction arrives as a form field holding JSON; parseJSON reads it.
+    event_type: '=!has(body.payload) ? "unknown" : string(parseJSON(body.payload).type)'
+    # Correlation: the workflow marks its buttons (value "taskiem-corr:<key>|<choice>")
+    # or modal (private_metadata "taskiem-corr:<key>"); the clicked action's
+    # key, so a run waiting on <key> wakes with the choice in the payload.
+    correlation: >-
+      =!has(body.payload) ? null
+      : parseJSON(body.payload).type == "block_actions" && has(parseJSON(body.payload).actions)
+        && size(parseJSON(body.payload).actions) > 0 && has(parseJSON(body.payload).actions[0].value)
+        && string(parseJSON(body.payload).actions[0].value).startsWith("taskiem-corr:")
+        ? dyn(string(parseJSON(body.payload).actions[0].value).substring(13).split("|")[0])
+      : parseJSON(body.payload).type == "view_submission" && has(parseJSON(body.payload).view.private_metadata)
+        && string(parseJSON(body.payload).view.private_metadata).startsWith("taskiem-corr:")
+        ? dyn(string(parseJSON(body.payload).view.private_metadata).substring(13).split("|")[0])
+      : null

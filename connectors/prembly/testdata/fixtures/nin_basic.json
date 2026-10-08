@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/vnin-basic",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "56182742701"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "message": "National Identity Number (NIN) - Basic verification successful",
+   "data": {
+    "nin_suspension_status": false,
+    "birthdate": "23-05-1999",
+    "firstname": "GRACE",
+    "surname": "AMANDA",
+    "middlename": "CHIMAMANDA",
+    "nin": "56182742701",
+    "telephoneno": "07082078516",
+    "residence_address": "21Z AGO PALACE EKENE",
+    "photo": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG"
+   }
+  }
+ }
+}

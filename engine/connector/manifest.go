@@ -6,7 +6,9 @@ package connector
 import (
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -21,14 +23,17 @@ var schema = schemacheck.New("https://schemas.taskiem.dev/connector/v1.json", sc
 
 // Manifest is the subset of a connector/v1 manifest the engine reads.
 type Manifest struct {
-	ID       string                 `json:"id"`
-	Version  string                 `json:"version"`
-	Name     string                 `json:"name"`
-	Auth     Auth                   `json:"auth"`
-	BaseURL  string                 `json:"base_url"`
-	Egress   []string               `json:"egress_hosts"`
-	Actions  map[string]ActionSpec  `json:"actions"`
-	Triggers map[string]TriggerSpec `json:"triggers"`
+	ID       string `json:"id"`
+	Version  string `json:"version"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	// Description is the manifest's own summary, shown to builders.
+	Description string                 `json:"description"`
+	Auth        Auth                   `json:"auth"`
+	BaseURL     string                 `json:"base_url"`
+	Egress      []string               `json:"egress_hosts"`
+	Actions     map[string]ActionSpec  `json:"actions"`
+	Triggers    map[string]TriggerSpec `json:"triggers"`
 }
 
 type Auth struct {
@@ -49,6 +54,7 @@ type AuthField struct {
 
 type ActionSpec struct {
 	Title       string          `json:"title"`
+	Description string          `json:"description"`
 	Class       effects.Class   `json:"class"`
 	Idempotency *effects.Spec   `json:"idempotency"`
 	Reconcile   string          `json:"reconcile"`
@@ -130,12 +136,39 @@ func (m *Manifest) check() []string {
 				add("%s/idempotency: %v", p, strings.TrimPrefix(err.Error(), "effects: "))
 			}
 		}
-		if len(a.PII) > 0 {
-			props := inputProperties(a.Input)
-			for _, f := range a.PII {
-				if !props[f.Field] {
-					add("%s/pii: %q is not an input property", p, f.Field)
+		for _, f := range a.PII {
+			if segs, ok := OutputPIIPath(f.Field); ok {
+				if !schemaHasPath(a.Output, segs) {
+					add("%s/pii: %q is not in the output schema", p, f.Field)
 				}
+			} else if !schemaHasPath(a.Input, InputPIIPath(f.Field)) {
+				add("%s/pii: %q is not in the input schema", p, f.Field)
+			}
+		}
+	}
+	tnames := make([]string, 0, len(m.Triggers))
+	for n := range m.Triggers {
+		tnames = append(tnames, n)
+	}
+	sort.Strings(tnames)
+	for _, name := range tnames {
+		// An ack is served from the hooks origin: never as a page.
+		if a := m.Triggers[name].Ack; a != nil && a.ContentType != "" {
+			if mt, _, err := mime.ParseMediaType(a.ContentType); err != nil || (mt != "text/plain" && mt != "application/json") {
+				add("/triggers/%s/ack/content_type: must be text/plain or application/json, not %q", name, a.ContentType)
+			}
+		}
+		// A remote trigger is verified with the secret the provider returned
+		// when Taskiem created the subscription, never a connection field.
+		if t := m.Triggers[name]; t.Remote() {
+			switch {
+			case t.Type != "webhook":
+				add("/triggers/%s/registration: only webhook triggers are registered remotely", name)
+			case t.Verify == nil:
+			case t.Verify.SecretField != "":
+				add("/triggers/%s/verify/secret_field: a remote trigger is verified with the secret the provider returned", name)
+			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer"}, t.Verify.Scheme):
+				add("/triggers/%s/verify/scheme: %s cannot verify a remotely registered trigger", name, t.Verify.Scheme)
 			}
 		}
 	}
@@ -149,16 +182,49 @@ func (m *Manifest) check() []string {
 	return out
 }
 
-func inputProperties(schema json.RawMessage) map[string]bool {
+// InputPIIPath reads a pii field naming a place in the action's input:
+// "<key>[.<key>|.*]...", optionally prefixed "input.", "*" standing for
+// every array element (transfers.*.account_name).
+func InputPIIPath(field string) []string {
+	return strings.Split(strings.TrimPrefix(field, "input."), ".")
+}
+
+// OutputPIIPath reads a pii field naming a place in the action's output:
+// "output.<key>[.<key>|.*]...", "*" standing for every array element.
+func OutputPIIPath(field string) ([]string, bool) {
+	rest, ok := strings.CutPrefix(field, "output.")
+	if !ok || rest == "" {
+		return nil, false
+	}
+	return strings.Split(rest, "."), true
+}
+
+// schemaHasPath reports whether a JSON Schema describes the path: object
+// keys through properties, "*" through items. A schema that leaves an
+// object open (no properties) accepts any key below it.
+func schemaHasPath(schema json.RawMessage, segs []string) bool {
 	var s struct {
 		Properties map[string]json.RawMessage `json:"properties"`
+		Items      json.RawMessage            `json:"items"`
+		Ref        string                     `json:"$ref"`
 	}
-	_ = json.Unmarshal(schema, &s)
-	out := make(map[string]bool, len(s.Properties))
-	for k := range s.Properties {
-		out[k] = true
+	if len(segs) == 0 {
+		return true
 	}
-	return out
+	if json.Unmarshal(schema, &s) != nil {
+		return false
+	}
+	if s.Ref != "" {
+		return true // a reference to another action's output: trust it
+	}
+	if segs[0] == "*" {
+		return len(s.Items) > 0 && schemaHasPath(s.Items, segs[1:])
+	}
+	if s.Properties == nil {
+		return len(s.Items) == 0 // an open object
+	}
+	sub, ok := s.Properties[segs[0]]
+	return ok && schemaHasPath(sub, segs[1:])
 }
 
 // MustParse parses a manifest or panics; for connectors compiled into the binary.
@@ -180,6 +246,26 @@ func (m *Manifest) Hosts() []string {
 		return []string{u.Hostname()}
 	}
 	return nil
+}
+
+// HostsFor are the hosts this connector may reach for a connection: Hosts,
+// with "${connection.<field>}" standing for the connection's field (a
+// database host, or the host of a server URL the tenant configured, such
+// as a self-hosted provider's). A field left empty adds nothing.
+func (m *Manifest) HostsFor(creds map[string]string) []string {
+	var out []string
+	for _, h := range m.Hosts() {
+		if f, ok := strings.CutPrefix(h, "${connection."); ok && strings.HasSuffix(f, "}") {
+			h = strings.TrimSpace(creds[strings.TrimSuffix(f, "}")])
+			if u, err := url.Parse(h); err == nil && u.Hostname() != "" && strings.Contains(h, "://") {
+				h = u.Hostname()
+			}
+		}
+		if h != "" && !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // OverrideBaseURL points the connector at another endpoint (a provider

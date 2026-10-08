@@ -1,9 +1,11 @@
 package runtime_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -85,5 +87,237 @@ func TestDeclaredPIIIsSealedEverywhere(t *testing.T) {
 	}
 	if !strings.Contains(string(after[0].Payload), pii.Erased) || !strings.Contains(string(after[0].Payload), phone) {
 		t.Errorf("after erasure the BVN reads %q and the phone (another subject) stays readable: %s", pii.Erased, after[0].Payload)
+	}
+}
+
+// Personal data no schema declared is recognised in what a step returns,
+// sealed before it is written, and still usable by later steps; log lines
+// are masked.
+func TestDetectedPIIIsSealed(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"lookup","type":"code","config":{"language":"typescript",
+	    "source":"export default () => { console.log('found BVN 22298765432 for 08031234567'); return { customer: { bvn: '22298765432', phone: '+2348031234567', email: 'ada@example.ng' }, amount: 5000 }; }"}},
+	  {"id":"use","type":"transform","needs":["lookup"],"config":{"output":{"contact":"=steps.lookup.output.customer.phone","amount":"=steps.lookup.output.amount"}}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	for _, ev := range events(t, e, ref) {
+		for _, leak := range []string{"22298765432", "8031234567", "ada@example.ng"} {
+			if strings.Contains(string(ev.Payload), leak) {
+				t.Errorf("plaintext %s in stored %s(%s): %s", leak, ev.Type, ev.StepID, ev.Payload)
+			}
+		}
+	}
+	opened, err := e.Store.OpenedHistory(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var use string
+	for _, ev := range opened {
+		if ev.Type == history.StepCompleted && ev.StepID == "use" {
+			use = string(ev.Payload)
+		}
+	}
+	if !strings.Contains(use, "+2348031234567") || !strings.Contains(use, `"amount":5000`) {
+		t.Errorf("a later step should see the value, and amounts stay plain: %s", use)
+	}
+	for _, ev := range opened {
+		if ev.Type == history.StepCompleted && ev.StepID == "lookup" && !strings.Contains(string(ev.Payload), "found BVN [bvn] for [phone]") {
+			t.Errorf("logs should be masked: %s", ev.Payload)
+		}
+	}
+}
+
+const kycManifest = `
+manifest: connector/v1
+id: kyc
+version: 1.0.0
+name: KYC test
+description: A lookup returning personal data.
+category: identity
+auth: { type: none, fields: [] }
+base_url: https://kyc.test
+egress_hosts: [kyc.test]
+actions:
+  lookup:
+    title: Look someone up
+    class: read
+    input: { type: object, properties: { id_number: { type: string } } }
+    output:
+      type: object
+      properties:
+        found: { type: boolean }
+        record:
+          type: object
+          properties:
+            first_name: { type: string }
+            date_of_birth: { type: string }
+            addresses: { type: array, items: { type: object, properties: { line: { type: string } } } }
+    pii:
+      - { field: id_number, category: other }
+      - { field: output.record.first_name, category: name }
+      - { field: output.record.date_of_birth, category: other }
+      - { field: output.record.addresses.*.line, category: address }
+`
+
+// What a KYC lookup returns about a person is sealed where the manifest
+// says, though no detector recognises names or dates; later steps still
+// read it.
+func TestDeclaredOutputPIIIsSealed(t *testing.T) {
+	e := rt.New(t)
+	m := connector.MustParse([]byte(kycManifest))
+	if err := e.Registry.Register(&connector.Connector{Manifest: m, Actions: map[string]connector.Action{
+		"lookup": connector.ActionFunc(func(context.Context, connector.Request) (connector.Response, error) {
+			return connector.Response{Output: map[string]any{"found": true, "record": map[string]any{
+				"first_name": "Adaeze", "date_of_birth": "1990-04-17", "addresses": []any{map[string]any{"line": "14 Bode Thomas Street"}}}}}, nil
+		})}}); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_lookup","version":1,"name":"lookup","trigger":{"type":"manual"},
+	  "steps":[{"id":"look","type":"connector","connector":"kyc@1","action":"lookup","input":{"id_number":"A123"}},
+	    {"id":"greet","type":"transform","needs":["look"],"config":{"output":{"found":"=steps.look.output.found","initial":"=steps.look.output.record.first_name.substring(0, 1)"}}}]}`)
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	for _, ev := range events(t, e, ref) {
+		for _, secret := range []string{"Adaeze", "1990-04-17", "Bode Thomas"} {
+			if strings.Contains(string(ev.Payload), secret) {
+				t.Errorf("plaintext %q in stored %s(%s): %s", secret, ev.Type, ev.StepID, ev.Payload)
+			}
+		}
+		if ev.Type == history.StepCompleted && ev.StepID == "look" && (!strings.Contains(string(ev.Payload), `"found": true`) && !strings.Contains(string(ev.Payload), `"found":true`)) {
+			t.Errorf("an undeclared field was sealed: %s", ev.Payload)
+		}
+	}
+	opened, err := e.Store.OpenedHistory(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok := false
+	for _, ev := range opened {
+		if ev.Type == history.StepCompleted && ev.StepID == "look" && strings.Contains(string(ev.Payload), "Adaeze") && strings.Contains(string(ev.Payload), "Bode Thomas") {
+			ok = true
+		}
+	}
+	if !ok {
+		t.Error("revealed history lacks the lookup's result")
+	}
+}
+
+// Orchestrators keep a run's folded history between decisions; an erasure
+// in between must not let the erased value reach new events from memory.
+func TestErasureReachesCachedDecisions(t *testing.T) {
+	e := rt.New(t)
+	// The tag derives from the BVN without equalling it, so only a fresh
+	// read of the history (not sealing) can keep the erased value out.
+	flow := strings.Replace(piiFlow, `"input":{"reference":"=steps.copy.output.who"}`, `"input":{"reference":"='ref-' + trigger.body.bvn"}`, 1)
+	wf := e.Publish(t, flow)
+	const bvn = "22298765432"
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"bvn": bvn, "amount": 1, "contacts": []any{map[string]any{"phone": "2348000000000"}}}})
+	subject, err := e.Vault.SubjectFor(ctx, e.Tenant, "bvn", bvn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Vault.Erase(ctx, e.Tenant, subject, "dpo"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Store.DecideApproval(ctx, ref, "ok", "approved", "checker", "web"); err != nil {
+		t.Fatal(err)
+	}
+	var scheduled bool
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.StepScheduled && ev.StepID == "check" {
+			scheduled = true
+			if strings.Contains(string(ev.Payload), bvn) {
+				t.Errorf("the step after erasure was given the erased BVN: %s", ev.Payload)
+			}
+		}
+	}
+	if !scheduled {
+		t.Error("check was not scheduled")
+	}
+}
+
+// Personal data deep in an input (a bulk transfer's account names) is
+// sealed when declared by path.
+func TestNestedInputPIIIsSealed(t *testing.T) {
+	e := rt.New(t)
+	m := connector.MustParse([]byte(`
+manifest: connector/v1
+id: bulk
+version: 1.0.0
+name: Bulk test
+description: A bulk transfer.
+category: payments
+auth: { type: none, fields: [] }
+base_url: https://bulk.test
+egress_hosts: [bulk.test]
+actions:
+  send:
+    title: Send
+    class: read
+    input: { type: object, properties: { transfers: { type: array, items: { type: object, properties: { account_name: { type: string }, amount: { type: integer } } } }, notify: { type: array, items: { type: string } } } }
+    output: { type: object }
+    pii: [{ field: input.transfers.*.account_name, category: name }, { field: notify, category: email }]
+`))
+	var got []any
+	if err := e.Registry.Register(&connector.Connector{Manifest: m, Actions: map[string]connector.Action{
+		"send": connector.ActionFunc(func(_ context.Context, req connector.Request) (connector.Response, error) {
+			got, _ = req.Input["transfers"].([]any)
+			return connector.Response{Output: map[string]any{"ok": true}}, nil
+		})}}); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_bulk","version":1,"name":"bulk","trigger":{"type":"manual"},
+	  "steps":[{"id":"pay","type":"connector","connector":"bulk@1","action":"send","input":{"transfers":[{"account_name":"Chiamaka Obi","amount":5000},{"account_name":"Tunde Bello","amount":7000}],"notify":["ops@payrolla.ng"]}}]}`)
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	for _, ev := range events(t, e, ref) {
+		for _, name := range []string{"Chiamaka", "Tunde", "ops@payrolla"} {
+			if strings.Contains(string(ev.Payload), name) {
+				t.Errorf("plaintext %q in stored %s(%s): %s", name, ev.Type, ev.StepID, ev.Payload)
+			}
+		}
+	}
+	if len(got) != 2 || got[0].(map[string]any)["account_name"] != "Chiamaka Obi" || got[1].(map[string]any)["amount"] == nil {
+		t.Errorf("the connector should get the plaintext input: %v", got)
+	}
+}
+
+const nameFlow = `{"schema":"wd/v1","id":"wf_lookup","version":1,"name":"lookup","trigger":{"type":"manual"},
+  "inputs":{"schema":{"type":"object","properties":{"full_name":{"type":"string","x-pii":"name"}}}},
+  "steps":[{"id":"find","type":"code","retry":{"max":0},"input":{"who":"=trigger.body.full_name"},
+    "config":{"language":"javascript","source":"export default (input) => { throw new Error('no customer named ' + input.who + ' at this bank') }"}}]}`
+
+// A personal value the run holds (here a declared input) is masked where a
+// failure's message repeats it, though no pattern recognises
+// a name (S22).
+func TestKnownPIIIsMaskedInErrorText(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, nameFlow)
+	const name = "Adaeze Okonkwo"
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"full_name": name}})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "failed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	var failed string
+	for _, ev := range events(t, e, ref) {
+		if strings.Contains(string(ev.Payload), name) {
+			t.Errorf("plaintext name in stored %s(%s): %s", ev.Type, ev.StepID, ev.Payload)
+		}
+		if ev.Type == history.StepFailed {
+			failed = string(ev.Payload)
+		}
+	}
+	if !strings.Contains(failed, "no customer named [name] at this bank") {
+		t.Errorf("the failure should keep its text with the name masked: %s", failed)
 	}
 }

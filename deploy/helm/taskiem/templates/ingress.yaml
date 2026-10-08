@@ -1,0 +1,84 @@
+{{- if .Values.ingress.enabled }}
+{{- $fullname := include "taskiem.fullname" . }}
+{{- $api := ternary (printf "%s-all" $fullname) (printf "%s-api" $fullname) (eq .Values.mode "all") }}
+{{- $edge := ternary (printf "%s-all" $fullname) (printf "%s-edge" $fullname) (eq .Values.mode "all") }}
+{{- $edgePort := ternary "http" "edge" (eq .Values.mode "all") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          {{- range $path := list "/hooks/" "/git-hooks/" "/channels/" }}
+          - path: {{ $path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $edge }}
+                port:
+                  name: {{ $edgePort }}
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $api }}
+                port:
+                  name: http
+{{- if .Values.ingress.embedHosts }}
+---
+# Partners' custom domains (docs/embedding.md#custom-domains): the embed
+# surface only, each host with its own certificate.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}-embed
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+  {{- with (merge (deepCopy .Values.ingress.embedAnnotations) .Values.ingress.annotations) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    {{- range .Values.ingress.embedHosts }}
+    - hosts: [{{ .host | quote }}]
+      secretName: {{ .secretName | default (printf "%s-tls" (.host | replace "." "-")) }}
+    {{- end }}
+  rules:
+    {{- range .Values.ingress.embedHosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range $path := list "/embed/" "/v1/embed/" }}
+          - path: {{ $path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $api }}
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

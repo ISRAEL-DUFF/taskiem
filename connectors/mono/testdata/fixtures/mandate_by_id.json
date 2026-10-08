@@ -1,0 +1,42 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "request completed successfully",
+   "data": {
+    "id": "mmc_682b9c5803c0b736078889a3",
+    "status": "approved",
+    "reference": "AbCdEfGhIjKlMnOpQrStUv",
+    "amount": 80030,
+    "balance": 80030,
+    "mandate_type": "emandate",
+    "debit_type": "variable",
+    "account_name": "SAMUEL OLAMIDE",
+    "account_number": "0123456789",
+    "live_mode": true,
+    "approved": true,
+    "ready_to_debit": false,
+    "nibss_code": "RC227914/1580/0008721216",
+    "institution": {
+     "bank_code": "672",
+     "nip_code": "090267",
+     "name": "Kuda Bank"
+    },
+    "customer": "682b96680a74b6af4de736ee",
+    "narration": "Subscriptions",
+    "redirect_url": "https://mono.co",
+    "start_date": "2025-05-21T00:00:00.000Z",
+    "end_date": "2026-08-04T22:59:59.999Z",
+    "date": "2025-05-19T21:02:16.342Z"
+   }
+  }
+ }
+}

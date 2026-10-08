@@ -1,0 +1,37 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/accounts/initiate",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "account": "661d759280dbf646242634cc",
+   "scope": "reauth",
+   "redirect_url": "https://mono.co"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Request was successfully completed",
+   "timestamp": "2025-05-21T13:51:40.920Z",
+   "data": {
+    "mono_url": "https://link.mono.co/ALH0IX10JO89",
+    "customer": "682fd53a74682beb490a0ed4",
+    "account": "661d759280dbf646242634cc",
+    "meta": {
+     "ref": "qazwsxtesting123"
+    },
+    "scope": "reauth",
+    "institution": {
+     "id": "5f2d08c060b92e288828770b"
+    },
+    "redirect_url": "https://mono.co",
+    "is_multi": false,
+    "created_at": "2025-05-21T13:51:40.912Z"
+   }
+  }
+ }
+}

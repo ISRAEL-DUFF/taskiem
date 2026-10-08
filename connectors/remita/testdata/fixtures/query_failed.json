@@ -1,0 +1,33 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/interbank/query-transaction/ab12cd34ef56ab12cd34ef56ab12cd34",
+  "headers": {
+   "secretKey": "rmt_sk_test"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "00",
+   "message": "Approved or completed successfully",
+   "meta": null,
+   "links": null,
+   "code": null,
+   "data": {
+    "amount": 2500.5,
+    "paymentIdentifier": "000078250820160031801468554954",
+    "narration": null,
+    "authorizationId": "d642b99a-093f-4d6d-922e-ace35bd2bae5",
+    "destinationAccount": "0586957398",
+    "transactionState": "FAILED",
+    "sourceAccountNumber": "0119288291",
+    "sourceBankCode": "011",
+    "responseCode": "51",
+    "responseMessage": "No sufficient funds",
+    "debitCompleted": false,
+    "reversed": false
+   }
+  }
+ }
+}

@@ -1,0 +1,37 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/addresses/candidates",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "firstName": "Famous",
+   "lastName": "Ehichioya",
+   "mobile": "08036000000",
+   "image": "https://cdn.youverify.co/p.jpg"
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "success": true,
+   "statusCode": 201,
+   "message": "Candidate created successfully!",
+   "data": {
+    "firstName": "Famous",
+    "middleName": "Prior",
+    "lastName": "Ehichioya",
+    "dateOfBirth": "2000-01-01",
+    "photo": null,
+    "email": "test@example.com",
+    "mobile": "08036000000",
+    "idNumber": null,
+    "type": "form",
+    "medium": "form",
+    "id": "618e539d540fb2e1d076427a"
+   },
+   "links": []
+  }
+ }
+}

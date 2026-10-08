@@ -1,0 +1,36 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/version1/messaging/bulk",
+  "headers": {
+   "apiKey": "atsk_test_key",
+   "Accept": "application/json"
+  },
+  "body": {
+   "username": "acme",
+   "phoneNumbers": [
+    "+254711000001"
+   ],
+   "message": "Hi",
+   "senderId": "OTHER",
+   "enqueue": 1
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "SMSMessageData": {
+    "Message": "Sent to 1/1 Total Cost: KES 0.8000",
+    "Recipients": [
+     {
+      "statusCode": 100,
+      "number": "+254711000001",
+      "status": "Processed",
+      "cost": "KES 0.8000",
+      "messageId": "ATXid_b1"
+     }
+    ]
+   }
+  }
+ }
+}

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"slices"
 	"strings"
@@ -38,17 +39,23 @@ const (
 	PermConnectionManage = "connection.manage"
 	PermMemberManage     = "member.manage"
 	PermAuditRead        = "audit.read"
+	PermGitManage        = "git.manage"
+	PermPolicyManage     = "policy.manage"
+	PermConnectorManage  = "connector.manage"
+	PermRoleManage       = "role.manage"
+	PermSCIM             = "scim.provision" // an identity provider's key
+	PermAlertManage      = "alert.manage"
 )
 
 var allPermissions = []string{PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel,
-	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead}
+	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage}
 
 // rolePermissions are the built-in roles (spec 13.3). Any other membership
 // role (e.g. "credit_officer") is a business role that only qualifies the
 // member for approval steps naming it, on top of approval.decide.
 var rolePermissions = map[string][]string{
 	"owner":    allPermissions,
-	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead},
+	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage},
 	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart},
 	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve},
 	"approver": {PermWorkflowRead, PermRunRead, PermApprovalDecide},
@@ -64,19 +71,51 @@ type Principal struct {
 	Roles       []string
 	Permissions map[string]bool
 	Environment string // API keys may be limited to one environment
-	viaCookie   bool
+	// KeyOwner is the person an API key belongs to: it acts within their
+	// current permissions, and counts as them for four-eyes.
+	KeyOwner uuid.UUID
+	// AuthMethod is how the session signed in: password, passkey or sso.
+	AuthMethod string
+	// EnrolOnly marks a password session of an administrator held to
+	// passkeys: it may only enrol one.
+	EnrolOnly bool
+	// EndUser is set for an embed app's end user (embed.go): a lightweight
+	// principal in a sub-tenant, with neither UserID nor KeyID.
+	EndUser *EndUser
+	// Invitee is a person with no membership signed in to answer their
+	// invitations (invitations.go): UserID only, no tenant, no permissions.
+	Invitee                   bool
+	inviteeEmail, inviteeName string
+	viaCookie                 bool
 }
 
 func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
 
 func (p *Principal) Actor() string {
+	if p.EndUser != nil {
+		return p.EndUser.Actor()
+	}
 	if p.KeyID != uuid.Nil {
 		return "key:" + p.KeyID.String()
 	}
 	return p.UserID.String()
 }
 
+// Human is the person behind the caller: the user, or an API key's owner.
+func (p *Principal) Human() uuid.UUID {
+	if p.EndUser != nil {
+		return p.EndUser.ID
+	}
+	if p.KeyID != uuid.Nil {
+		return p.KeyOwner
+	}
+	return p.UserID
+}
+
 func (p *Principal) ActorType() string {
+	if p.EndUser != nil {
+		return "end_user"
+	}
 	if p.KeyID != uuid.Nil {
 		return "api_key"
 	}
@@ -156,6 +195,14 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
+		if p.Invitee && !inviteeAllowed(r.Method, r.URL.Path) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "you belong to no organisation yet: accept an invitation first", "invitations_only": true})
+			return
+		}
+		if p.EnrolOnly && !enrolOnly[r.Method+" "+r.URL.Path] {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "administrators sign in with a passkey: add one to continue", "enrol_passkey": true})
+			return
+		}
 		// Cookie sessions must prove the request came from our own pages.
 		if p.viaCookie && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get(csrfHeader) == "" {
 			writeErr(w, http.StatusForbidden, "missing "+csrfHeader+" header")
@@ -173,21 +220,38 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 	} else if c, err := r.Cookie(sessionCookie); err == nil {
 		tok, viaCookie = c.Value, true
 	}
-	if tok == "" {
+	if tok == "" || strings.HasPrefix(tok, opsTokenPrefix) {
+		// An operator's session is never a tenant's (decision 0027).
 		return nil, nil
 	}
 	if strings.HasPrefix(tok, apiKeyPrefix) {
 		var p Principal
 		var perms []string
 		var env *string
-		err := s.Store.Pool.QueryRow(ctx, `SELECT key_id, tenant_id, permissions, environment FROM taskiem_auth_api_key($1)`, hashToken(tok)).
-			Scan(&p.KeyID, &p.TenantID, &perms, &env)
+		var owner *uuid.UUID
+		err := s.Store.Pool.QueryRow(ctx, `SELECT key_id, tenant_id, permissions, environment, owner_id FROM taskiem_auth_api_key($1)`, hashToken(tok)).
+			Scan(&p.KeyID, &p.TenantID, &perms, &env, &owner)
 		if err != nil {
 			return nil, err
 		}
+		if owner == nil {
+			return nil, errors.New("api key has no owner")
+		}
+		// A key acts within what its owner may do now: it loses whatever
+		// they lose, and stops when they leave the tenant.
+		p.KeyOwner = *owner
+		held := Principal{TenantID: p.TenantID, UserID: p.KeyOwner, Permissions: map[string]bool{}}
+		if err := s.loadRoles(ctx, &held); err != nil {
+			return nil, err
+		}
+		if len(held.Roles) == 0 || !s.userActive(ctx, p.TenantID, p.KeyOwner) {
+			return nil, errors.New("api key owner is no longer a member")
+		}
 		p.Permissions = map[string]bool{}
 		for _, x := range perms {
-			p.Permissions[x] = true
+			if held.Permissions[x] {
+				p.Permissions[x] = true
+			}
 		}
 		if env != nil {
 			p.Environment = *env
@@ -199,29 +263,59 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return &p, nil
 	}
 	p := Principal{viaCookie: viaCookie, Permissions: map[string]bool{}}
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID); err != nil {
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Perhaps someone with no membership answering invitations.
+			return s.resolveInvitee(r, tok, viaCookie)
+		}
 		return nil, err
 	}
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT role FROM memberships WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, p.UserID)
-		if err != nil {
-			return err
-		}
-		p.Roles, err = pgx.CollectRows(rows, pgx.RowTo[string])
-		return err
-	})
-	if err != nil {
+	if err := s.loadRoles(ctx, &p); err != nil {
 		return nil, err
-	}
-	for _, role := range p.Roles {
-		for _, perm := range rolePermissions[role] {
-			p.Permissions[perm] = true
-		}
 	}
 	if len(p.Roles) == 0 {
 		return nil, errors.New("no membership")
 	}
+	p.EnrolOnly = s.RequireAdminPasskeys && p.AuthMethod == "password" && isAdmin(p.Permissions)
 	return &p, nil
+}
+
+// userActive reports whether a member's account is enabled.
+func (s *Server) userActive(ctx context.Context, tenant, user uuid.UUID) bool {
+	var status string
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status FROM users WHERE id = $1`, user).Scan(&status)
+	})
+	return err == nil && status == "active"
+}
+
+// loadRoles fills a user principal's roles and permissions.
+func (s *Server) loadRoles(ctx context.Context, p *Principal) error {
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT m.role, r.permissions FROM memberships m
+			LEFT JOIN roles r ON r.tenant_id = m.tenant_id AND r.name = m.role
+			WHERE m.tenant_id = $1 AND m.user_id = $2 ORDER BY m.role`, p.TenantID, p.UserID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var role string
+			var custom []string
+			if err := rows.Scan(&role, &custom); err != nil {
+				return err
+			}
+			p.Roles = append(p.Roles, role)
+			perms, builtin := rolePermissions[role]
+			if !builtin {
+				perms = custom // a custom role, or none for a business role
+			}
+			for _, perm := range perms {
+				p.Permissions[perm] = true
+			}
+		}
+		return rows.Err()
+	})
 }
 
 func (s *Server) need(perm string) func(http.Handler) http.Handler {
@@ -242,16 +336,41 @@ type loginReq struct {
 	Email    string    `json:"email"`
 	Password string    `json:"password"`
 	TenantID uuid.UUID `json:"tenant_id,omitempty"`
+	// Bearer asks for the session token in the answer, for API and CLI
+	// clients; without it the session is a cookie the page cannot read
+	// (S35).
+	Bearer bool `json:"bearer,omitempty"`
+}
+
+// jsonOnly refuses a body that is not JSON. A cross-site page can POST a
+// form or text/plain without asking first, but not JSON, so a sign-in
+// endpoint that takes only JSON cannot be driven from another site to sign
+// the browser in to someone else's account.
+func jsonOnly(w http.ResponseWriter, r *http.Request) bool {
+	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+		writeErr(w, http.StatusUnsupportedMediaType, "send the body as application/json")
+		return false
+	}
+	return true
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	if !s.loginLimiter(clientIP(r)).Allow() {
+	if !jsonOnly(w, r) {
+		return
+	}
+	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
 	var req loginReq
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	// Per account too, so guesses spread over many addresses still meet a
+	// limit.
+	if !s.loginLimiter("login-email:" + strings.ToLower(strings.TrimSpace(req.Email))).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
 	ctx := r.Context()
@@ -268,36 +387,34 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
-	var tenants []uuid.UUID
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, userID).Scan(&tenants); err != nil || len(tenants) == 0 {
-		writeErr(w, http.StatusUnauthorized, "no active membership")
-		return
-	}
-	tenant := tenants[0]
-	if req.TenantID != uuid.Nil {
-		if !slices.Contains(tenants, req.TenantID) {
-			writeErr(w, http.StatusUnauthorized, "not a member of that tenant")
+	if s.RequireAdminPasskeys {
+		// An administrator with a passkey signs in with it, whichever tenant
+		// they ask for: the person and their passkeys are the same in all.
+		var has bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, userID).Scan(&has); err != nil {
+			s.fail(w, r, err)
 			return
 		}
-		tenant = req.TenantID
-	}
-	tok := newToken()
-	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO sessions (token_hash, user_id, tenant_id, expires_at, ip) VALUES ($1, $2, $3, now() + $4::interval, $5)`,
-			hashToken(tok), userID, tenant, sessionTTL.String(), clientIP(r)); err != nil {
-			return err
+		if has {
+			var tenants []uuid.UUID
+			if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, userID).Scan(&tenants); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			for _, t := range tenants {
+				p := Principal{TenantID: t, UserID: userID, Permissions: map[string]bool{}}
+				if err := s.loadRoles(ctx, &p); err != nil {
+					s.fail(w, r, err)
+					return
+				}
+				if isAdmin(p.Permissions) {
+					writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "administrators sign in with their passkey", "passkey_required": true})
+					return
+				}
+			}
 		}
-		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.login', $3, jsonb_build_object('ip', $4::text))`, tenant, userID.String(), userID.String(), clientIP(r))
-		return err
-	})
-	if err != nil {
-		s.fail(w, r, err)
-		return
 	}
-	//nolint:gosec // Secure is configuration: off only for plain-HTTP local development.
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: tok, Path: "/", HttpOnly: true, Secure: s.SecureCookies,
-		SameSite: http.SameSiteStrictMode, MaxAge: int(sessionTTL.Seconds())})
-	writeJSON(w, http.StatusOK, map[string]any{"token": tok, "tenant_id": tenant, "tenants": tenants, "user_id": userID})
+	s.startSession(w, r, userID, req.TenantID, "password", req.Bearer)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -305,10 +422,15 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		tok = c.Value
 	}
-	err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE token_hash = $1`, hashToken(tok))
-		return err
-	})
+	var err error
+	if principalFrom(r.Context()).Invitee {
+		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_invitee_end($1)`, hashToken(tok))
+	} else {
+		err = s.tx(r, func(tx pgx.Tx) error {
+			_, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE token_hash = $1`, hashToken(tok))
+			return err
+		})
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -319,52 +441,45 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
+	if p.Invitee {
+		writeJSON(w, http.StatusOK, map[string]any{"tenant_id": nil, "roles": []string{}, "permissions": []string{}, "auth_method": p.AuthMethod,
+			"invitations_only": true, "user": map[string]any{"id": p.UserID, "email": p.inviteeEmail, "name": p.inviteeName}})
+		return
+	}
 	perms := make([]string, 0, len(p.Permissions))
 	for k := range p.Permissions {
 		perms = append(perms, k)
 	}
 	slices.Sort(perms)
-	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms}
+	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms, "auth_method": p.AuthMethod, "enrol_passkey": p.EnrolOnly}
 	if p.UserID != uuid.Nil {
 		var email, name string
+		var verified bool
 		_ = s.tx(r, func(tx pgx.Tx) error {
-			return tx.QueryRow(r.Context(), `SELECT email, name FROM users WHERE id = $1`, p.UserID).Scan(&email, &name)
+			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified)
 		})
-		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name}
+		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified}
+		_ = s.tx(r, func(tx pgx.Tx) error {
+			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
+			return nil
+		})
+		// What the member proves themselves with to change their factors.
+		if f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID); err == nil {
+			out["factors"] = f
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-type signupReq struct {
-	Tenant   string `json:"tenant"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
-}
-
-// signup creates a tenant with its owner, a default workspace, and the dev
-// and prod environments.
-func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
-	if !s.loginLimiter(clientIP(r)).Allow() {
-		writeErr(w, http.StatusTooManyRequests, "too many attempts")
-		return
-	}
-	var req signupReq
-	if err := decodeBody(r, &req); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	tenant, user, err := CreateTenant(r.Context(), s.Store.Pool, req.Tenant, req.Email, req.Name, req.Password)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"tenant_id": tenant, "user_id": user})
 }
 
 // CreateTenant creates a tenant with its owner, a default workspace, and
 // the dev and prod environments (signup, and `taskiem bootstrap`).
 func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string) (tenant, user uuid.UUID, err error) {
+	return createTenant(ctx, pool, name, email, userName, password, nil)
+}
+
+// createTenant is CreateTenant; then, when given, runs in the same
+// transaction (signup records its onboarding and verification link).
+func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string, then func(tx pgx.Tx, tenant, user uuid.UUID) error) (tenant, user uuid.UUID, err error) {
 	if name == "" || !strings.Contains(email, "@") || len(password) < 12 {
 		return uuid.Nil, uuid.Nil, fmt.Errorf("%w: tenant, a valid email, and a password of at least 12 characters are required", errBadRequest)
 	}
@@ -392,9 +507,18 @@ func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName
 				return err
 			}
 		}
-		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'tenant.create', $3, '{}')`, tenant, user.String(), tenant.String())
-		return err
+		if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'tenant.create', $3, '{}')`, tenant, user.String(), tenant.String()); err != nil {
+			return err
+		}
+		if then != nil {
+			return then(tx, tenant, user)
+		}
+		return nil
 	})
+	var pgErr interface{ SQLState() string }
+	if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
+		err = fmt.Errorf("%w: email already registered", errConflict) // the same email signing up twice at once
+	}
 	return tenant, user, err
 }
 
@@ -431,11 +555,21 @@ func (s *Server) listMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"members": out})
 }
 
-// addMember creates (or finds) a user and grants roles. Only an owner may
-// grant owner.
+// addMember grants roles to a person by email. Someone new is created, with
+// the password given (or none, to sign in by SSO or not until they have
+// one). Someone who already has an account is a person, not the tenant's to
+// claim: unless they are already a member, or their email is on one of the
+// tenant's verified SSO domains (the tenant speaks for those addresses, as
+// with SSO and SCIM), they are invited, and the roles apply when they
+// accept. The answer is the same either way, so it does not tell whether an
+// email has an account. Only an owner may grant owner.
 func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 	var req memberReq
 	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.needVerified(r); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -444,24 +578,44 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: only an owner can grant owner", errForbidden))
 		return
 	}
+	if err := s.tx(r, func(tx pgx.Tx) error { return canGrant(r.Context(), tx, p, req.Roles) }); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if len(req.Roles) == 0 || !strings.Contains(req.Email, "@") {
 		s.fail(w, r, fmt.Errorf("%w: email and at least one role are required", errBadRequest))
 		return
+	}
+	if req.Password != "" && len(req.Password) < 12 {
+		s.fail(w, r, fmt.Errorf("%w: a password needs at least 12 characters", errBadRequest))
+		return
+	}
+	// Hashed whether or not it is used, so timing does not tell either.
+	var hash *string
+	if req.Password != "" {
+		h := hashPassword(req.Password)
+		hash = &h
 	}
 	var user uuid.UUID
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, req.Email).Scan(&user)
 		if errors.Is(err, pgx.ErrNoRows) {
-			if len(req.Password) < 12 {
-				return fmt.Errorf("%w: new users need a password of at least 12 characters", errBadRequest)
-			}
 			user = uuid.Must(uuid.NewV7())
-			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, user, req.Email, req.Name, hashPassword(req.Password)); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, user, req.Email, req.Name, hash); err != nil {
 				return err
 			}
 		} else if err != nil {
 			return err
+		} else if direct, err := joinsDirectly(ctx, tx, user, req.Email); err != nil {
+			return err
+		} else if !direct {
+			if _, err := tx.Exec(ctx, `INSERT INTO member_invitations (tenant_id, user_id, roles, invited_by) VALUES ($1, $2, $3, $4)
+				ON CONFLICT (tenant_id, user_id) DO UPDATE SET roles = ARRAY(SELECT DISTINCT unnest(member_invitations.roles || EXCLUDED.roles) ORDER BY 1),
+				invited_by = EXCLUDED.invited_by`, p.TenantID, user, req.Roles, p.Actor()); err != nil {
+				return err
+			}
+			return auditTx(r, tx, "member.invite", user.String(), map[string]any{"roles": req.Roles})
 		}
 		for _, role := range req.Roles {
 			if _, err := tx.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, p.TenantID, user, role); err != nil {
@@ -475,6 +629,116 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"user_id": user})
+}
+
+// joinsDirectly reports whether an existing person can be given roles in
+// the tx's tenant without accepting: they are already a member, or their
+// email is on one of its verified SSO domains.
+func joinsDirectly(ctx context.Context, tx pgx.Tx, user uuid.UUID, email string) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1)
+		OR EXISTS (SELECT 1 FROM sso_domains WHERE domain = lower(split_part($2, '@', 2)) AND verified_at IS NOT NULL)`, user, email).Scan(&ok)
+	return ok, err
+}
+
+type invitation struct {
+	TenantID  uuid.UUID `json:"tenant_id"`
+	Tenant    string    `json:"tenant"`
+	Roles     []string  `json:"roles"`
+	InvitedAt time.Time `json:"invited_at"`
+}
+
+// myInvitations lists the tenants that invite the signed-in person.
+func (s *Server) myInvitations(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	if p.UserID == uuid.Nil {
+		writeErr(w, http.StatusForbidden, "invitations are for people, not API keys")
+		return
+	}
+	var tenants []uuid.UUID
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_invited_tenants($1)`, p.UserID).Scan(&tenants); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	out := []invitation{}
+	if len(tenants) > 0 {
+		err := db.InTenantTx(ctx, s.Store.Pool, tenants, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `SELECT i.tenant_id, t.name, i.roles, i.created_at FROM member_invitations i JOIN tenants t ON t.id = i.tenant_id
+				WHERE i.user_id = $1 ORDER BY i.created_at`, p.UserID)
+			if err != nil {
+				return err
+			}
+			out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[invitation])
+			return err
+		})
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invitations": out})
+}
+
+// acceptInvitation makes the signed-in person a member of the tenant that
+// invited them, with the roles it offered (or, from SCIM, the roles its
+// provisioning gives).
+func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	tenant, err := uuid.Parse(chi.URLParam(r, "tenant"))
+	if err != nil || p.UserID == uuid.Nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var tenants []uuid.UUID
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_invited_tenants($1)`, p.UserID).Scan(&tenants); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !slices.Contains(tenants, tenant) {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var roles []string
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var source string
+		if err := tx.QueryRow(ctx, `DELETE FROM member_invitations WHERE user_id = $1 RETURNING roles, source`, p.UserID).Scan(&roles, &source); err != nil {
+			return err
+		}
+		for _, role := range roles {
+			if _, err := tx.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, tenant, p.UserID, role); err != nil {
+				return err
+			}
+		}
+		if source == "scim" {
+			ch, err := s.scimSync(ctx, tx, tenant, p.UserID)
+			if err != nil {
+				return err
+			}
+			roles = append(roles, ch.granted...)
+		}
+		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'member.invitation.accept', $2, jsonb_build_object('roles', $3::jsonb, 'ip', $4::text))`,
+			tenant, p.UserID.String(), toJSONB(roles), clientIP(r))
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	out := map[string]any{"tenant_id": tenant, "roles": nonNil(roles)}
+	if p.Invitee {
+		// Now a member: the invitee session becomes one in this tenant.
+		more, err := s.upgradeInvitee(w, r, p, tenant)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		for k, v := range more {
+			out[k] = v
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 type keyReq struct {
@@ -492,6 +756,10 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if err := s.needVerified(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	p := principalFrom(r.Context())
 	for _, perm := range req.Permissions {
 		if !p.Can(perm) {
@@ -503,16 +771,23 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: name and permissions are required", errBadRequest))
 		return
 	}
+	// A key made with a key limited to one environment is limited to it too.
+	env, err := keyEnvironment(p, req.Environment)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	req.Environment = env
 	days := req.ExpiresDays
 	if days <= 0 || days > 365 {
 		days = 90
 	}
 	key := apiKeyPrefix + newToken()
 	id := uuid.Must(uuid.NewV7())
-	err := s.tx(r, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(r.Context(), `INSERT INTO api_keys (id, tenant_id, name, key_hash, prefix, permissions, environment, created_by, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, now() + make_interval(days => $9))`,
-			id, p.TenantID, req.Name, hashToken(key), key[:len(apiKeyPrefix)+6], req.Permissions, req.Environment, p.Actor(), days); err != nil {
+	err = s.tx(r, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `INSERT INTO api_keys (id, tenant_id, name, key_hash, prefix, permissions, environment, created_by, owner_id, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, now() + make_interval(days => $10))`,
+			id, p.TenantID, req.Name, hashToken(key), key[:len(apiKeyPrefix)+6], req.Permissions, req.Environment, p.Actor(), p.Human(), days); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "api_key.create", id.String(), map[string]any{"permissions": req.Permissions, "environment": req.Environment})
@@ -522,6 +797,18 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "key": key, "expires_days": days})
+}
+
+// keyEnvironment is the environment a new key is limited to: a caller
+// limited to one environment cannot make a key reaching further.
+func keyEnvironment(p *Principal, requested string) (string, error) {
+	switch {
+	case p.Environment == "":
+		return requested, nil
+	case requested == "" || requested == p.Environment:
+		return p.Environment, nil
+	}
+	return "", fmt.Errorf("%w: this key is limited to %s", errForbidden, p.Environment)
 }
 
 func (s *Server) listKeys(w http.ResponseWriter, r *http.Request) {

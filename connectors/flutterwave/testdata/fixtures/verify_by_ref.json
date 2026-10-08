@@ -1,0 +1,3 @@
+{"request":{"method":"GET","path":"/transactions/verify_by_reference","query":{"tx_ref":"order-17"},"headers":{"Authorization":"Bearer FLWSECK_TEST-abc"}},
+ "response":{"status":200,"body":{"status":"success","message":"Transaction fetched successfully","data":{"id":285959875,"tx_ref":"order-17","flw_ref":"FLW270177170",
+  "amount":1500.5,"currency":"NGN","charged_amount":1521.5,"status":"successful","payment_type":"bank_transfer","customer":{"id":1,"name":"Ada Obi","email":"ada@example.com"}}}}}

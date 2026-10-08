@@ -1,0 +1,1020 @@
+{
+  "language": "ha",
+  "reviewed": false,
+  "status": "DRAFT, NOT REVIEWED. Machine-assisted draft written without a native speaker. Do not treat as accurate; shown only where an operator or tenant turns this language on. A native speaker reviews each entry and sets reviewed to true (docs/languages.md).",
+  "reviewers": [],
+  "messages": {
+    "approval.status.approved": {
+      "text": "amince",
+      "reviewed": false
+    },
+    "approval.status.cancelled": {
+      "text": "soke",
+      "reviewed": false
+    },
+    "approval.status.expired": {
+      "text": "ƙare",
+      "reviewed": false
+    },
+    "approval.status.open": {
+      "text": "a buɗe",
+      "reviewed": false
+    },
+    "approval.status.rejected": {
+      "text": "ƙi",
+      "reviewed": false
+    },
+    "button.approve": {
+      "text": "Amince",
+      "reviewed": false
+    },
+    "button.cancel": {
+      "text": "Soke",
+      "reviewed": false
+    },
+    "button.enter_pin": {
+      "text": "Shigar da PIN",
+      "reviewed": false
+    },
+    "button.fill_in": {
+      "text": "Cike",
+      "reviewed": false
+    },
+    "button.no": {
+      "text": "A'a",
+      "reviewed": false
+    },
+    "button.reject": {
+      "text": "Ƙi",
+      "reviewed": false
+    },
+    "button.yes_run": {
+      "text": "Eh, fara shi",
+      "reviewed": false
+    },
+    "button.yes_save": {
+      "text": "Eh, adana",
+      "reviewed": false
+    },
+    "lang.current": {
+      "text": "Ina rubuta maka da {language}. Harsunan da ke nan: {languages}. Aika *language* da suna don canzawa.",
+      "reviewed": false
+    },
+    "lang.detected": {
+      "text": "(Zan amsa da {language}. Aika *language english* don canzawa.)",
+      "reviewed": false
+    },
+    "lang.draft_note": {
+      "text": "Wannan fassarar daftari ce da masu jin Hausa a matsayin harshen uwa ba su duba ba tukuna. Aika *language english* don komawa Turanci.",
+      "reviewed": false
+    },
+    "lang.switched": {
+      "text": "Daga yanzu zan riƙa rubuta maka da {language}.",
+      "reviewed": false
+    },
+    "lang.unavailable": {
+      "text": "{name} ba ya samuwa a nan. Harsunan da ke nan: {languages}.",
+      "reviewed": false
+    },
+    "run.status.cancelled": {
+      "text": "an soke",
+      "reviewed": false
+    },
+    "run.status.completed": {
+      "text": "an kammala",
+      "reviewed": false
+    },
+    "run.status.failed": {
+      "text": "ya gaza",
+      "reviewed": false
+    },
+    "run.status.needs_reconciliation": {
+      "text": "yana buƙatar daidaitawa",
+      "reviewed": false
+    },
+    "run.status.queued": {
+      "text": "yana layi",
+      "reviewed": false
+    },
+    "run.status.running": {
+      "text": "yana gudana",
+      "reviewed": false
+    },
+    "run.status.waiting": {
+      "text": "yana jira",
+      "reviewed": false
+    },
+    "sms.reconcile": {
+      "text": "Ana duba bukatarka {reference}. Za mu sanar da kai.",
+      "reviewed": false
+    },
+    "ussd.busy": {
+      "text": "Wannan sabis yana da aiki. Don Allah sake gwadawa nan ba da jimawa ba.",
+      "reviewed": false
+    },
+    "ussd.ended": {
+      "text": "Wannan zama ya kare. Don Allah sake kira.",
+      "reviewed": false
+    },
+    "ussd.expired": {
+      "text": "Lokacinka ya kare. Don Allah sake kira.",
+      "reviewed": false
+    },
+    "ussd.gone": {
+      "text": "Wannan sabis ba ya samuwa.",
+      "reviewed": false
+    },
+    "ussd.language.back": {
+      "text": "Koma",
+      "reviewed": false
+    },
+    "ussd.language.choose": {
+      "text": "Zabi harshenka:",
+      "reviewed": false
+    },
+    "ussd.language.entry": {
+      "text": "Harshe",
+      "reviewed": false
+    },
+    "ussd.language.invalid": {
+      "text": "Zabin bai dace ba. Sake gwadawa.",
+      "reviewed": false
+    },
+    "ussd.language.set": {
+      "text": "Harshe: {language}",
+      "reviewed": false
+    },
+    "ussd.language.set_draft": {
+      "text": "Harshe: {language} (daftari)",
+      "reviewed": false
+    },
+    "ussd.not_taken": {
+      "text": "Yi hakuri, ba mu iya karbar bukatarka ba. Ba a fara komai ba. Don Allah sake gwadawa.",
+      "reviewed": false
+    },
+    "ussd.too_many": {
+      "text": "Bukatu sun yi yawa daga wannan lamba. Don Allah sake gwadawa daga baya.",
+      "reviewed": false
+    },
+    "voice.empty": {
+      "text": "Ban ji wata kalma a cikin wannan saƙon murya ba. Don Allah ka rubuta saƙonka.",
+      "reviewed": false
+    },
+    "voice.failed": {
+      "text": "Ban fahimci wannan saƙon murya ba. Don Allah ka rubuta saƙonka.",
+      "reviewed": false
+    },
+    "voice.heard": {
+      "text": "Saƙon murya yana cikin gwaji (beta), don haka don Allah ka duba wannan. Abin da na ji: \"{transcript}\"",
+      "reviewed": false
+    },
+    "voice.off": {
+      "text": "Saƙon murya ba ya aiki a nan tukuna. Don Allah ka rubuta saƙonka.",
+      "reviewed": false
+    },
+    "voice.too_large": {
+      "text": "Wannan saƙon murya ya yi girma. Don Allah ka aika gajere, ko ka rubuta saƙonka.",
+      "reviewed": false
+    },
+    "voice.too_long": {
+      "text": "Wannan saƙon murya ya fi daƙiƙa {seconds} tsawo. Don Allah ka aika gajere, ko ka rubuta saƙonka.",
+      "reviewed": false
+    },
+    "voice.too_many": {
+      "text": "Ka aika saƙonnin murya da yawa yanzu. Don Allah ka rubuta saƙonka.",
+      "reviewed": false
+    },
+    "voice.type_now": {
+      "text": "Don Allah ka rubuta amsarka: saƙon murya don fara sabon abu ne kawai.",
+      "reviewed": false
+    },
+    "voice.unsupported": {
+      "text": "Saƙon murya da sauti kawai zan iya saurara. Don Allah ka rubuta saƙonka.",
+      "reviewed": false
+    },
+    "wa.approval.already": {
+      "text": "Wannan buƙatar ta riga ta {status}.",
+      "reviewed": false
+    },
+    "wa.approval.already_decided": {
+      "text": "Ka riga ka yanke shawara kan wannan buƙatar.",
+      "reviewed": false
+    },
+    "wa.approval.answered": {
+      "text": "An riga an amsa wannan buƙatar daga wannan hira.",
+      "reviewed": false
+    },
+    "wa.approval.closed": {
+      "text": "An riga an rufe wannan buƙatar.",
+      "reviewed": false
+    },
+    "wa.approval.denied": {
+      "text": "Ba za ka iya yanke shawarar amincewa a {org} ba (yana buƙatar approval.decide).",
+      "reviewed": false
+    },
+    "wa.approval.expires": {
+      "text": "Wannan buƙatar za ta ƙare {time} UTC.",
+      "reviewed": false
+    },
+    "wa.approval.level": {
+      "text": "{env}, mataki {level} cikin {levels}",
+      "reviewed": false
+    },
+    "wa.approval.needed": {
+      "text": "Ana buƙatar amincewa: {title} ({where})",
+      "reviewed": false
+    },
+    "wa.approval.next_level": {
+      "text": "Wannan buƙatar ta koma mataki na gaba. Aika *approvals* don ganin abin da ke jiran ka.",
+      "reviewed": false
+    },
+    "wa.approval.not_recorded": {
+      "text": "Ba a rubuta ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.approval.other_person": {
+      "text": "An aika wannan buƙatar ga wani; ba za a iya yanke shawara a kanta daga wannan lamba ba.",
+      "reviewed": false
+    },
+    "wa.approval.recorded_approved": {
+      "text": "An rubuta: ka amince da {step}.",
+      "reviewed": false
+    },
+    "wa.approval.recorded_rejected": {
+      "text": "An rubuta: ka ƙi {step}.",
+      "reviewed": false
+    },
+    "wa.approval.result_approved": {
+      "text": "An amince da buƙatar kuma aikin yana ci gaba.",
+      "reviewed": false
+    },
+    "wa.approval.result_rejected": {
+      "text": "An ƙi buƙatar.",
+      "reviewed": false
+    },
+    "wa.approval.result_waiting": {
+      "text": "Yana jiran ƙarin amincewa.",
+      "reviewed": false
+    },
+    "wa.approval.stale": {
+      "text": "Wannan maɓallin ba shi da inganci kuma. Aika *approvals* don ganin abin da ke jiran ka.",
+      "reviewed": false
+    },
+    "wa.approvals.denied": {
+      "text": "Ba kai ne ke yanke shawarar amincewa a {org} ba.",
+      "reviewed": false
+    },
+    "wa.approvals.none": {
+      "text": "Babu abin da ke jiran ka.",
+      "reviewed": false
+    },
+    "wa.build.budget": {
+      "text": "Kasafin AI na wannan wata na {org} ya ƙare, don haka ba zan iya gina wannan yanzu ba. Har yanzu za ka iya gina ayyuka a manhajar yanar gizo.",
+      "reviewed": false
+    },
+    "wa.build.budget_ran_out": {
+      "text": "Kasafin AI na wannan wata ya ƙare kafin daftarin ya shirya. Har yanzu za ka iya gina ayyuka a manhajar yanar gizo.",
+      "reviewed": false
+    },
+    "wa.build.denied": {
+      "text": "Ba za ka iya gina ayyuka a {org} ba (yana buƙatar workflow.edit).",
+      "reviewed": false
+    },
+    "wa.build.denied_now": {
+      "text": "Ba za ka iya gina ayyuka a {org} ba kuma.",
+      "reviewed": false
+    },
+    "wa.build.denied_save": {
+      "text": "Ba za ka iya gina ayyuka a {org} ba kuma; ba a adana komai ba.",
+      "reviewed": false
+    },
+    "wa.build.details_invalid": {
+      "text": "Da waɗannan bayanai aikin bai wuce binciken Taskiem ba ({problem}). Gina shi a manhajar yanar gizo{link}.",
+      "reviewed": false
+    },
+    "wa.build.details_misfit": {
+      "text": "Waɗannan bayanai ba su dace da samfurin ba: {reason}. Sake aika *build* don farawa daga farko.",
+      "reviewed": false
+    },
+    "wa.build.failed": {
+      "text": "Ginin ya gaza. Sake gwadawa bayan ɗan lokaci, ko ka gina shi a manhajar yanar gizo{link}.",
+      "reviewed": false
+    },
+    "wa.build.gone": {
+      "text": "Wannan daftarin ba ya jiran adanawa kuma (an adana shi ko an maye gurbinsa a wani wuri).",
+      "reviewed": false
+    },
+    "wa.build.head": {
+      "text": "Ga aikin da na tsara:",
+      "reviewed": false
+    },
+    "wa.build.head_template": {
+      "text": "Ga aikin da na tsara, daga samfurin *{template}*:",
+      "reviewed": false
+    },
+    "wa.build.invalid": {
+      "text": "Ban iya tsara aikin da zai wuce binciken Taskiem ba. Gwada bayyana shi ta wata hanya (me ke fara shi, da me ya kamata ya faru), ko ka gina shi a manhajar yanar gizo{link}.",
+      "reviewed": false
+    },
+    "wa.build.limit": {
+      "text": "Ba a adana ba: {reason}",
+      "reviewed": false
+    },
+    "wa.build.more_steps": {
+      "text": "…da ƙarin matakai {count}; duba su a Taskiem.",
+      "reviewed": false
+    },
+    "wa.build.need_details": {
+      "text": "Ina buƙatar ƙarin bayanai {count} don kammala shi. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.build.not_saved": {
+      "text": "To, ba a adana komai ba.",
+      "reviewed": false
+    },
+    "wa.build.off": {
+      "text": "Ba a saita gini da AI a wannan Taskiem ba. Za ka iya gina ayyuka a manhajar yanar gizo.",
+      "reviewed": false
+    },
+    "wa.build.refused": {
+      "text": "Ba zan iya gina wannan ba. Gwada bayyana shi ta wata hanya.",
+      "reviewed": false
+    },
+    "wa.build.save_question": {
+      "text": "In adana wannan a matsayin daftarin aiki? Amsa da *yes* ko *no*. (Daftari ba ya gudana har sai an wallafa shi a Taskiem.)",
+      "reviewed": false
+    },
+    "wa.build.save_reminder": {
+      "text": "Amsa da *yes* don adana daftarin, ko *no*.",
+      "reviewed": false
+    },
+    "wa.build.saved": {
+      "text": "An adana *{name}* a matsayin daftari. Bai fara aiki ba tukuna: duba shi, saita haɗi da masu canji da yake buƙata, kuma ka wallafa shi a Taskiem{link}.",
+      "reviewed": false
+    },
+    "wa.build.still_drafting": {
+      "text": "Har yanzu ina tsara aikinka; zan aiko shi idan ya shirya. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.build.too_long": {
+      "text": "Wannan ya yi tsayi a gare ni; bayyana shi cikin ƙasa da haruffa {max}.",
+      "reviewed": false
+    },
+    "wa.build.too_many": {
+      "text": "Ka nemi gine-gine da yawa yanzu. Ka jira minti ɗaya, sannan ka sake gwadawa.",
+      "reviewed": false
+    },
+    "wa.build.unreadable": {
+      "text": "Ba a iya karanta daftarin ba. Gina shi a manhajar yanar gizo{link}.",
+      "reviewed": false
+    },
+    "wa.build.variables": {
+      "text": "Kafin ya gudana, saita waɗannan masu canji a Taskiem: {names}.",
+      "reviewed": false
+    },
+    "wa.build.warn_policy": {
+      "text": "Gargaɗi: wani mataki yana motsa kuɗi ba tare da amincewa kafin shi ba.",
+      "reviewed": false
+    },
+    "wa.build.warn_test": {
+      "text": "Gargaɗi: gwajin daftarin bai wuce ba; duba shi a Taskiem kafin wallafawa.",
+      "reviewed": false
+    },
+    "wa.build.what": {
+      "text": "Faɗa mini abin da za a sarrafa bayan *build*, misali:\n*build every Friday text my customers who owe me*",
+      "reviewed": false
+    },
+    "wa.build.with_details": {
+      "text": "Na gode. Da bayananka:\n\n{steps}\n\nIn adana wannan a matsayin daftarin aiki? Amsa da *yes* ko *no*.",
+      "reviewed": false
+    },
+    "wa.build.working": {
+      "text": "Ina aiki a kai: ina tsara aikin kuma zan aiko maka matakansa don ka duba. Wannan na iya ɗaukar minti ɗaya ko biyu. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.button_invalid": {
+      "text": "Wannan maɓallin ba shi da inganci.",
+      "reviewed": false
+    },
+    "wa.cancelled": {
+      "text": "An soke.",
+      "reviewed": false
+    },
+    "wa.cancelled_nothing_started": {
+      "text": "An soke. Ba a fara komai ba.",
+      "reviewed": false
+    },
+    "wa.cannot_act": {
+      "text": "Asusunka ba zai iya yin komai a {org} ba kuma.",
+      "reviewed": false
+    },
+    "wa.code_failed": {
+      "text": "Wannan lambar sirri ba ta haɗa wannan lamba ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.confirm_reminder": {
+      "text": "Ka amsa da *yes* don fara {workflow}, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.field.enter": {
+      "text": "Shigar da {label}",
+      "reviewed": false
+    },
+    "wa.field.enter_number": {
+      "text": "Shigar da {label} (lamba)",
+      "reviewed": false
+    },
+    "wa.field.enter_one_of": {
+      "text": "Shigar da {label} (ɗaya daga cikin: {options})",
+      "reviewed": false
+    },
+    "wa.field.enter_whole": {
+      "text": "Shigar da {label} (cikakkiyar lamba)",
+      "reviewed": false
+    },
+    "wa.field.enter_yes_no": {
+      "text": "Shigar da {label} (eh ko a'a)",
+      "reviewed": false
+    },
+    "wa.field.not_number": {
+      "text": "wannan ba lamba ba ce",
+      "reviewed": false
+    },
+    "wa.field.not_whole": {
+      "text": "wannan ba cikakkiyar lamba ba ce",
+      "reviewed": false
+    },
+    "wa.field.yes_no": {
+      "text": "amsa da eh ko a'a",
+      "reviewed": false
+    },
+    "wa.form.gone": {
+      "text": "Ba a buƙatar wannan fom kuma. Aika *run* da sunan aiki don sake farawa.",
+      "reviewed": false
+    },
+    "wa.form.inputs": {
+      "text": "{workflow} yana buƙatar bayanai {count}. Danna *{cta}* don shigar da su; za ka tabbatar kafin ya fara. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.form.invalid": {
+      "text": "Wannan fom ba shi da inganci kuma.",
+      "reviewed": false
+    },
+    "wa.form.not_confirmed": {
+      "text": "Ba a tabbatar da shawarar ba. Sake danna maɓallin, ko ka yanke shawara a Taskiem.",
+      "reviewed": false
+    },
+    "wa.form.pin_approve": {
+      "text": "Don amincewa da {step}, shigar da PIN ɗinka na WhatsApp cikin minti 10.",
+      "reviewed": false
+    },
+    "wa.form.pin_reject": {
+      "text": "Don ƙin {step}, shigar da PIN ɗinka na WhatsApp cikin minti 10.",
+      "reviewed": false
+    },
+    "wa.handoff.approve": {
+      "text": "Don amincewa da {step}, tabbatar da passkey ko lambar authenticator ɗinka a Taskiem cikin minti 10:\n{link}",
+      "reviewed": false
+    },
+    "wa.handoff.no_link": {
+      "text": "Wannan shawarar tana buƙatar passkey ko lambar authenticator ɗinka: yanke ta a manhajar yanar gizo ta Taskiem, ƙarƙashin Approvals.",
+      "reviewed": false
+    },
+    "wa.handoff.recorded": {
+      "text": "An rubuta da ƙarin tabbaci: shawararka kan {step} ({status}).",
+      "reviewed": false
+    },
+    "wa.handoff.reject": {
+      "text": "Don ƙin {step}, tabbatar da passkey ko lambar authenticator ɗinka a Taskiem cikin minti 10:\n{link}",
+      "reviewed": false
+    },
+    "wa.help.approvals": {
+      "text": "• *approvals*: buƙatun da ke jiran ka",
+      "reviewed": false
+    },
+    "wa.help.build": {
+      "text": "• *build* da abin da kake son a sarrafa kai tsaye, misali *build every Friday text my customers who owe me* (za a adana shi a matsayin daftari bayan ka tabbatar)",
+      "reviewed": false
+    },
+    "wa.help.cancel": {
+      "text": "• *cancel*: bar abin da ke gudana",
+      "reviewed": false
+    },
+    "wa.help.intro": {
+      "text": "Za ka iya aika:",
+      "reviewed": false
+    },
+    "wa.help.language": {
+      "text": "• *language* da sunan harshe: amsoshi da {languages}",
+      "reviewed": false
+    },
+    "wa.help.run": {
+      "text": "• *run* da sunan aiki: fara shi (za ka tabbatar da farko)",
+      "reviewed": false
+    },
+    "wa.help.status": {
+      "text": "• *status*: abin da ya gudana da abin da ya gaza yau",
+      "reviewed": false
+    },
+    "wa.help.switch": {
+      "text": "• *switch* da sunan ƙungiya: yi aiki a wata",
+      "reviewed": false
+    },
+    "wa.help.voice": {
+      "text": "• saƙon murya: zan yi ƙoƙarin rubuta shi (gwaji)",
+      "reviewed": false
+    },
+    "wa.link_at": {
+      "text": " a {url}",
+      "reviewed": false
+    },
+    "wa.linked": {
+      "text": "An haɗa wannan lamba da asusunka na Taskiem. Aika *help* don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "wa.no_org": {
+      "text": "Asusunka na Taskiem ba shi da wata ƙungiya mai aiki.",
+      "reviewed": false
+    },
+    "wa.not_member": {
+      "text": "Asusunka na Taskiem ba memba ba ne na wannan ƙungiya.",
+      "reviewed": false
+    },
+    "wa.not_understood": {
+      "text": "Yi haƙuri, ban fahimta ba.",
+      "reviewed": false
+    },
+    "wa.nothing_to_cancel": {
+      "text": "Babu abin da za a soke.",
+      "reviewed": false
+    },
+    "wa.outcome.body": {
+      "text": "Aikin da ka fara daga WhatsApp ya ƙare.",
+      "reviewed": false
+    },
+    "wa.outcome.cancelled": {
+      "text": "An soke {workflow} a {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.completed": {
+      "text": "{workflow} ya kammala a {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.failed": {
+      "text": "{workflow} ya gaza a {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.needs_reconciliation": {
+      "text": "{workflow} yana buƙatar daidaitawa a {env}.",
+      "reviewed": false
+    },
+    "wa.public.bad_details": {
+      "text": "Bayanan ba su dace ba: {problems}. Aika *menu* don sake farawa.",
+      "reviewed": false
+    },
+    "wa.public.busy": {
+      "text": "Wannan sabis yana da aiki yanzu. Sake gwadawa daga baya.",
+      "reviewed": false
+    },
+    "wa.public.cancelled": {
+      "text": "An soke. Aika *menu* don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "wa.public.changed": {
+      "text": "{label} ya canza ko ba ya samuwa kuma. Aika *menu* don sake farawa.",
+      "reviewed": false
+    },
+    "wa.public.confirm": {
+      "text": "{label}\n\nAmsa da *yes* don ci gaba, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.confirm_inputs": {
+      "text": "{label} da:\n{inputs}\n\nAmsa da *yes* don ci gaba, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.confirm_reminder": {
+      "text": "Amsa da *yes* don ci gaba, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.form": {
+      "text": "{label}: danna *{cta}* don shigar da bayanai. Za ka tabbatar kafin wani abu ya faru.",
+      "reviewed": false
+    },
+    "wa.public.form_failed": {
+      "text": "Ba a iya buɗe fom ɗin ba. Sake gwadawa daga baya.",
+      "reviewed": false
+    },
+    "wa.public.form_gone": {
+      "text": "Ba a buƙatar wannan fom kuma. Aika *menu* don sake farawa.",
+      "reviewed": false
+    },
+    "wa.public.menu": {
+      "text": "Me kake son yi? Amsa da lamba:\n{list}\n\nAika *cancel* a kowane lokaci.",
+      "reviewed": false
+    },
+    "wa.public.not_here": {
+      "text": "{label} ba ya samuwa a WhatsApp.",
+      "reviewed": false
+    },
+    "wa.public.started": {
+      "text": "An gama: {label} ya fara. Lambar shaidarka ita ce {reference}.",
+      "reviewed": false
+    },
+    "wa.public.too_many": {
+      "text": "Buƙatu sun yi yawa yanzu. Sake gwadawa daga baya.",
+      "reviewed": false
+    },
+    "wa.public.unavailable": {
+      "text": "{label} ba ya samuwa a yanzu.",
+      "reviewed": false
+    },
+    "wa.run.bad_inputs": {
+      "text": "Bayanan ba su dace da {workflow} ba: {problems}. Sake aika *run*.",
+      "reviewed": false
+    },
+    "wa.run.changed": {
+      "text": "{workflow} ya canza yayin da kake tabbatarwa. Sake aika *run*.",
+      "reviewed": false
+    },
+    "wa.run.confirm": {
+      "text": "In fara {workflow} (sigar {version}) a {env}?\n\nAmsa da *yes* don fara shi ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.run.confirm_inputs": {
+      "text": "In fara {workflow} (sigar {version}) a {env} da:\n{inputs}\n\nAmsa da *yes* don fara shi ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.run.denied": {
+      "text": "Ba za ka iya fara ayyuka a {org} ba (yana buƙatar run.start).",
+      "reviewed": false
+    },
+    "wa.run.denied_now": {
+      "text": "Ba za ka iya fara ayyuka a {org} ba kuma.",
+      "reviewed": false
+    },
+    "wa.run.does_not_fit": {
+      "text": "Wannan bai dace ba: {reason}.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.form_closed": {
+      "text": "An rufe fom ɗin; amsa a nan maimakon haka. Aika *cancel* don tsayawa.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.limit": {
+      "text": "Ba a fara ba: {reason}",
+      "reviewed": false
+    },
+    "wa.run.needs_inputs": {
+      "text": "{workflow} yana buƙatar bayanai {count}. Aika *cancel* don tsayawa.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.no_match": {
+      "text": "Babu aikin da aka tura a {env} da ya dace da {name}. Aika *run* da sunan aikin.",
+      "reviewed": false
+    },
+    "wa.run.started": {
+      "text": "An fara {workflow}. Zan sanar da kai idan ya ƙare.",
+      "reviewed": false
+    },
+    "wa.run.too_many": {
+      "text": "Ka fara ayyuka da yawa yanzu. Ka jira minti ɗaya, sannan ka sake gwadawa.",
+      "reviewed": false
+    },
+    "wa.run.unsupported_inputs": {
+      "text": "{workflow} yana buƙatar bayanan da ba za a iya shigarwa a nan ba tukuna. Fara shi a Taskiem.",
+      "reviewed": false
+    },
+    "wa.run.which": {
+      "text": "Wanne?\n{list}\nAika *run* da cikakken suna.",
+      "reviewed": false
+    },
+    "wa.status.denied": {
+      "text": "Ba za ka iya ganin ayyuka a {org} ba (yana buƙatar run.read).",
+      "reviewed": false
+    },
+    "wa.status.failed_head": {
+      "text": "Abin da ya gaza:",
+      "reviewed": false
+    },
+    "wa.status.failed_line": {
+      "text": "• {workflow} ({env}) {what} da ƙarfe {time} UTC",
+      "reviewed": false
+    },
+    "wa.status.none": {
+      "text": "Babu wani aiki a cikin awa 24 da suka wuce.",
+      "reviewed": false
+    },
+    "wa.status.nothing_failed": {
+      "text": "Babu abin da ya gaza.",
+      "reviewed": false
+    },
+    "wa.status.summary": {
+      "text": "Awa 24 da suka wuce: ayyuka {count} ({parts}).",
+      "reviewed": false
+    },
+    "wa.status.summary_one": {
+      "text": "Awa 24 da suka wuce: aiki {count} ({parts}).",
+      "reviewed": false
+    },
+    "wa.status.waiting": {
+      "text": "Amincewa {count} na jiran ka: aika *approvals*.",
+      "reviewed": false
+    },
+    "wa.stepup_waiting": {
+      "text": "Shawararka kan {step} tana jiran ka tabbatar da ita a Taskiem da mahaɗin da aka aiko maka. Aika *cancel* don barin ta.",
+      "reviewed": false
+    },
+    "wa.switch.current": {
+      "text": "Kana aiki a {org}. Ƙungiyoyinka:\n{list}\nAika *switch* da suna don canzawa.",
+      "reviewed": false
+    },
+    "wa.switch.done": {
+      "text": "Yanzu kana aiki a {org}.",
+      "reviewed": false
+    },
+    "wa.switch.which": {
+      "text": "Wace ƙungiya? Naka sune:\n{list}",
+      "reviewed": false
+    },
+    "wa.too_fast": {
+      "text": "Kana aika saƙonni da sauri. Ka jira minti ɗaya, sannan ka sake gwadawa.",
+      "reviewed": false
+    },
+    "wa.unbound": {
+      "text": "Ba a haɗa wannan lamba da wani asusun Taskiem ba. Don amfani da Taskiem a nan, ka shiga, ka buɗe {where}, ka ƙara wannan lamba a ƙarƙashin WhatsApp, sannan ka rubuta ko ka mayar da lambar sirrin da muka aiko maka.",
+      "reviewed": false
+    },
+    "wd.alongside": {
+      "text": "A lokaci guda: {name}",
+      "reviewed": false
+    },
+    "wd.and": {
+      "text": "{list} da {last}",
+      "reviewed": false
+    },
+    "wd.approval": {
+      "text": "Jira amincewa",
+      "reviewed": false
+    },
+    "wd.approval.policy": {
+      "text": "Sami amincewa ƙarƙashin manufar {policy}",
+      "reviewed": false
+    },
+    "wd.approval.role_many": {
+      "text": "Nemi mutane {count} masu matsayin {role} su amince",
+      "reviewed": false
+    },
+    "wd.approval.role_one": {
+      "text": "Nemi {role} ya amince",
+      "reviewed": false
+    },
+    "wd.approval.timeout": {
+      "text": "{approval} (yana jira har zuwa {duration})",
+      "reviewed": false
+    },
+    "wd.branch": {
+      "text": "Yanke abin da za a yi:",
+      "reviewed": false
+    },
+    "wd.code": {
+      "text": "Gudanar da lamba ta musamman",
+      "reviewed": false
+    },
+    "wd.code_language": {
+      "text": "Gudanar da lambar {language} ta musamman",
+      "reviewed": false
+    },
+    "wd.connector": {
+      "text": "{action} da {connector}",
+      "reviewed": false
+    },
+    "wd.container": {
+      "text": "Gudanar da kwantena",
+      "reviewed": false
+    },
+    "wd.container_named": {
+      "text": "Gudanar da kwantenan {image}",
+      "reviewed": false
+    },
+    "wd.day.friday": {
+      "text": "Juma'a",
+      "reviewed": false
+    },
+    "wd.day.monday": {
+      "text": "Litinin",
+      "reviewed": false
+    },
+    "wd.day.saturday": {
+      "text": "Asabar",
+      "reviewed": false
+    },
+    "wd.day.sunday": {
+      "text": "Lahadi",
+      "reviewed": false
+    },
+    "wd.day.thursday": {
+      "text": "Alhamis",
+      "reviewed": false
+    },
+    "wd.day.tuesday": {
+      "text": "Talata",
+      "reviewed": false
+    },
+    "wd.day.wednesday": {
+      "text": "Laraba",
+      "reviewed": false
+    },
+    "wd.foreach": {
+      "text": "Ga kowane abu a cikin jerin:",
+      "reviewed": false
+    },
+    "wd.foreach_limited": {
+      "text": "Ga kowane abu a cikin jerin (ba fiye da {count} a lokaci guda ba):",
+      "reviewed": false
+    },
+    "wd.http": {
+      "text": "Kira sabis na waje",
+      "reviewed": false
+    },
+    "wd.http_host": {
+      "text": "Kira {host} ({method})",
+      "reviewed": false
+    },
+    "wd.http_service": {
+      "text": "Kira sabis na waje ({method})",
+      "reviewed": false
+    },
+    "wd.if": {
+      "text": "Idan {name}:",
+      "reviewed": false
+    },
+    "wd.on_error": {
+      "text": "Idan wannan matakin ya kasa:",
+      "reviewed": false
+    },
+    "wd.only_when": {
+      "text": "{step}, sai idan sharaɗinsa ya cika",
+      "reviewed": false
+    },
+    "wd.or": {
+      "text": " ko ",
+      "reviewed": false
+    },
+    "wd.otherwise": {
+      "text": "In ba haka ba:",
+      "reviewed": false
+    },
+    "wd.parallel": {
+      "text": "Yi waɗannan a lokaci guda:",
+      "reviewed": false
+    },
+    "wd.schedule.daily": {
+      "text": "Kowace rana da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.days": {
+      "text": "Kowace {days} da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.hourly": {
+      "text": "Kowace awa, a farkon awa",
+      "reviewed": false
+    },
+    "wd.schedule.hourly_at": {
+      "text": "Kowace awa da minti {minute} bayan awa",
+      "reviewed": false
+    },
+    "wd.schedule.hours": {
+      "text": "Kowane awa {count}",
+      "reviewed": false
+    },
+    "wd.schedule.last_day": {
+      "text": "A ranar ƙarshe ta kowane wata da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.minutes": {
+      "text": "Kowane minti {count}",
+      "reviewed": false
+    },
+    "wd.schedule.monthly": {
+      "text": "A rana ta {day} ga kowane wata da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw": {
+      "text": "Bisa jadawalin {cron} ({tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw_local": {
+      "text": "Bisa jadawalin {cron} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.weekdays": {
+      "text": "Kowace ranar aiki (Litinin zuwa Juma'a) da ƙarfe {time} (lokacin {tz})",
+      "reviewed": false
+    },
+    "wd.signal": {
+      "text": "Jira alama",
+      "reviewed": false
+    },
+    "wd.signal_named": {
+      "text": "Jira {event}",
+      "reviewed": false
+    },
+    "wd.transform": {
+      "text": "Shirya bayanai don matakai na gaba",
+      "reviewed": false
+    },
+    "wd.trigger.database_change": {
+      "text": "Lokacin da layi a cikin rumbun bayanai ya canja",
+      "reviewed": false
+    },
+    "wd.trigger.email": {
+      "text": "Lokacin da imel ya iso",
+      "reviewed": false
+    },
+    "wd.trigger.event": {
+      "text": "Lokacin da {connector} ya aiko da wani abu ({trigger})",
+      "reviewed": false
+    },
+    "wd.trigger.event_reports": {
+      "text": "Lokacin da {connector} ya ba da rahoton {events}",
+      "reviewed": false
+    },
+    "wd.trigger.manual": {
+      "text": "Lokacin da wani ya fara shi",
+      "reviewed": false
+    },
+    "wd.trigger.other": {
+      "text": "Lokacin da aka tayar da shi ({type})",
+      "reviewed": false
+    },
+    "wd.trigger.polling": {
+      "text": "Kowane {interval}, duba {connector} ({action}) don sababbin abubuwa",
+      "reviewed": false
+    },
+    "wd.trigger.subflow": {
+      "text": "Lokacin da wani aiki ya kira shi",
+      "reviewed": false
+    },
+    "wd.trigger.ussd": {
+      "text": "Lokacin da wani ya kira lambar USSD",
+      "reviewed": false
+    },
+    "wd.trigger.webhook": {
+      "text": "Lokacin da tsarinka ya kira adireshin yanar gizon wannan aiki",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_checked": {
+      "text": "Lokacin da tsarinka ya kira adireshin yanar gizon wannan aiki (ana dubawa da {auth})",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_unsigned": {
+      "text": "Lokacin da tsarinka ya kira adireshin yanar gizon wannan aiki (ba tare da duba sa hannu ba)",
+      "reviewed": false
+    },
+    "wd.trigger.whatsapp": {
+      "text": "Lokacin da saƙo ya iso a WhatsApp",
+      "reviewed": false
+    },
+    "wd.unit.day_one": {
+      "text": "kwana 1",
+      "reviewed": false
+    },
+    "wd.unit.days": {
+      "text": "kwana {count}",
+      "reviewed": false
+    },
+    "wd.unit.hour_one": {
+      "text": "awa 1",
+      "reviewed": false
+    },
+    "wd.unit.hours": {
+      "text": "awa {count}",
+      "reviewed": false
+    },
+    "wd.unit.minute_one": {
+      "text": "minti 1",
+      "reviewed": false
+    },
+    "wd.unit.minutes": {
+      "text": "minti {count}",
+      "reviewed": false
+    },
+    "wd.unit.second_one": {
+      "text": "daƙiƙa 1",
+      "reviewed": false
+    },
+    "wd.unit.seconds": {
+      "text": "daƙiƙa {count}",
+      "reviewed": false
+    },
+    "wd.wait_for": {
+      "text": "Jira {duration}",
+      "reviewed": false
+    },
+    "wd.wait_until": {
+      "text": "Jira har lokacin da aka sa",
+      "reviewed": false
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/interbank/fund/transfer",
+  "headers": {
+   "secretKey": "rmt_sk_test"
+  },
+  "body": {
+   "destinationAccountNumber": "0586957398",
+   "destinationBankCode": "058",
+   "destinationAccountName": "Paul Reed",
+   "amount": 2500.5,
+   "transactionDescription": "Sept salary",
+   "paymentIdentifier": "ab12cd34ef56ab12cd34ef56ab12cd34",
+   "channel": "1",
+   "isApproval": false,
+   "payByTransfer": false,
+   "sourceAccountNumber": "0119288291",
+   "sourceBankCode": "011",
+   "sourceAccountName": "John Nomel"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "status": "401",
+   "message": "Invalid secret key"
+  }
+ }
+}

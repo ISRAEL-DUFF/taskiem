@@ -1,0 +1,57 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/spreadsheets",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "body": {
+   "properties": {
+    "title": "Payroll 2026-10",
+    "timeZone": "Africa/Lagos"
+   },
+   "sheets": [
+    {
+     "properties": {
+      "title": "Staff"
+     }
+    },
+    {
+     "properties": {
+      "title": "Payments"
+     }
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "spreadsheetId": "1NewSheetId",
+   "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1NewSheetId/edit",
+   "properties": {
+    "title": "Payroll 2026-10",
+    "locale": "en_GB",
+    "timeZone": "Africa/Lagos"
+   },
+   "sheets": [
+    {
+     "properties": {
+      "sheetId": 0,
+      "title": "Staff",
+      "index": 0,
+      "sheetType": "GRID"
+     }
+    },
+    {
+     "properties": {
+      "sheetId": 1290,
+      "title": "Payments",
+      "index": 1,
+      "sheetType": "GRID"
+     }
+    }
+   ]
+  }
+ }
+}

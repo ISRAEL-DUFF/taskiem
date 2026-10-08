@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/payouts/customer-lookup",
+  "headers": {
+   "Authorization": "Bearer isw-tok-1"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "responseCode": "25",
+   "responseDescription": "Unable to locate record"
+  }
+ }
+}

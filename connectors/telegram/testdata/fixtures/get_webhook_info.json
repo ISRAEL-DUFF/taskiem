@@ -1,0 +1,25 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/getWebhookInfo"
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": {
+    "url": "https://taskiem.example.com/hooks/7f0c/connectors/telegram@1/update?env=prod",
+    "has_custom_certificate": false,
+    "pending_update_count": 3,
+    "last_error_date": 1791319000,
+    "last_error_message": "Wrong response from the webhook: 401 Unauthorized",
+    "max_connections": 40,
+    "allowed_updates": [
+     "message",
+     "callback_query"
+    ],
+    "ip_address": "203.0.113.10"
+   }
+  }
+ }
+}

@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/payments/withdrawal/697251ed397a53d0cb7b228b","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"}},
+ "response":{"status":200,"body":{"message":"ok","success":true,"data":{"id":"697251ed397a53d0cb7b228b","amount":25,"originalAmount":25,"currency":"usd","status":"pending","reference":"697251ed397a53d0cb7b228b","externalId":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","fee":1.825,"cryptoAmount":23.175,"reason":"","meta":{"walletAddress":"14gr","network":"SOL","token":"USDT"}},"meta":{}}}}

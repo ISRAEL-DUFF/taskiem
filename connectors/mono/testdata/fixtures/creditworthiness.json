@@ -1,0 +1,25 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/accounts/661d759280dbf646242634cc/creditworthiness",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "bvn": "22000000012",
+   "principal": 30000000,
+   "interest_rate": 5,
+   "term": 12,
+   "run_credit_check": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "The creditworthiness of SAMUEL, OLAMIDE NOMO is currently being processed. Once completed, the data will be sent to your webhook.",
+   "timestamp": "2024-03-15T15:14:28.679Z",
+   "data": null
+  }
+ }
+}

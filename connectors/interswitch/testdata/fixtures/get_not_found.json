@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/payouts/tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+  "headers": {
+   "Authorization": "Bearer isw-tok-1"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "responseCode": "25",
+   "responseDescription": "Transaction not found"
+  }
+ }
+}

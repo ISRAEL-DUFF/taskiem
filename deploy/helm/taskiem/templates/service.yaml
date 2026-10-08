@@ -1,0 +1,24 @@
+{{- $root := . -}}
+{{- range $role := splitList " " (include "taskiem.roles" .) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "taskiem.fullname" $root }}-{{ $role }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  type: {{ if or (eq $role "api") (eq $role "edge") (eq $role "all") }}{{ $root.Values.service.type }}{{ else }}ClusterIP{{ end }}
+  selector:
+    {{- include "taskiem.selectorLabels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+  ports:
+    {{- if or (eq $role "api") (eq $role "all") }}
+    - { name: http, port: 80, targetPort: http }
+    {{- end }}
+    {{- if eq $role "edge" }}
+    - { name: edge, port: 80, targetPort: edge }
+    {{- end }}
+    - { name: metrics, port: 9090, targetPort: metrics }
+{{- end }}

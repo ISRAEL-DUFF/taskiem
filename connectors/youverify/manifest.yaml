@@ -1,0 +1,423 @@
+# Youverify (KYC, KYB, address verification, AML screening), API v2. Built
+# from Youverify's public documentation at doc.youverify.co (API reference
+# under https://doc.youverify.co/api-reference, webhooks under
+# https://doc.youverify.co/webhooks, index at https://doc.youverify.co/llms.txt),
+# read 6 October 2026 (docs/integrations/youverify.md).
+manifest: connector/v1
+id: youverify
+version: 1.0.0
+name: Youverify
+description: Nigerian identity checks (BVN, NIN, driver's licence, phone, bank account), face comparison, business (CAC) checks, physical address verification and AML screening.
+category: identity
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: secret_key, label: API secret key (also signs webhooks), secret: true }
+    - { key: environment, label: "Environment: live (default) or sandbox", required: false }
+base_url: https://api.youverify.co
+egress_hosts: [api.youverify.co, api.sandbox.youverify.co]
+actions:
+  # Lookups are reads: billed per call, no effect. "not_found" is a result
+  # (found: false). Every check needs the subject's consent, which the step
+  # must assert (subject_consent: true). Photos and signatures are dropped
+  # unless include_image is set.
+  verify_bvn:
+    title: Verify a BVN
+    description: >-
+      The BVN holder's record. With first_name, last_name or date_of_birth,
+      Youverify also says whether they match (all_validation_passed).
+    class: read
+    input:
+      type: object
+      required: [bvn, subject_consent]
+      properties:
+        bvn:             { type: string, pattern: "^[0-9]{11}$" }
+        subject_consent: { type: boolean, const: true, description: The subject has consented to this check }
+        premium:         { type: boolean, description: Premium BVN (adds gender, address and watch-list data) }
+        first_name:      { type: string, description: To validate }
+        last_name:       { type: string, description: To validate }
+        date_of_birth:   { type: string, description: "To validate, YYYY-MM-DD" }
+        include_image:   { type: boolean, default: false, description: The photo is large and personal; omitted unless asked for }
+    output:
+      type: object
+      properties:
+        found:                 { type: boolean }
+        status:                { type: string, enum: [found, not_found, pending], description: "pending: the source is down; the result arrives as identity.verification.completed (correlation: id)" }
+        id:                    { type: string, description: "Youverify's verification id" }
+        reason:                { type: string }
+        first_name:            { type: string }
+        middle_name:           { type: string }
+        last_name:             { type: string }
+        date_of_birth:         { type: string }
+        gender:                { type: string }
+        mobile:                { type: string }
+        email:                 { type: string }
+        address:               { type: string }
+        all_validation_passed: { type: boolean }
+        data_validation:       { type: boolean }
+        selfie_validation:     { type: boolean }
+        image:                 { type: string, description: Only with include_image }
+        record:                { type: object, description: "Youverify's record as returned, without images" }
+    pii:
+      - { field: bvn, category: bvn }
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
+      - { field: date_of_birth, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  verify_nin:
+    title: Verify a NIN
+    description: The NIN holder's record; optionally validates names and date of birth, and a selfie against the NIMC photo.
+    class: read
+    input:
+      type: object
+      required: [nin, subject_consent]
+      properties:
+        nin:             { type: string, pattern: "^[0-9]{11}$" }
+        subject_consent: { type: boolean, const: true }
+        premium:         { type: boolean }
+        first_name:      { type: string }
+        last_name:       { type: string }
+        date_of_birth:   { type: string }
+        selfie_image:    { type: string, description: Image URL or base64 to compare with the NIMC photo }
+        include_image:   { type: boolean, default: false }
+    output: { $ref: '#/actions/verify_bvn/output' }
+    pii:
+      - { field: nin, category: nin }
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
+      - { field: date_of_birth, category: other }
+      - { field: selfie_image, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  verify_drivers_license:
+    title: Verify a driver's licence
+    class: read
+    input:
+      type: object
+      required: [license_number, subject_consent]
+      properties:
+        license_number:  { type: string }
+        subject_consent: { type: boolean, const: true }
+        include_image:   { type: boolean, default: false }
+    output: { $ref: '#/actions/verify_bvn/output' }
+    pii:
+      - { field: license_number, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  verify_phone:
+    title: Verify a phone number's owner
+    description: Names and dates of birth registered to the number (record.phoneDetails).
+    class: read
+    input:
+      type: object
+      required: [phone, subject_consent]
+      properties:
+        phone:           { type: string }
+        subject_consent: { type: boolean, const: true }
+    output: { $ref: '#/actions/verify_bvn/output' }
+    pii:
+      - { field: phone, category: phone }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  search_phone:
+    title: Find the NIN record for a phone number
+    class: read
+    input:
+      type: object
+      required: [phone, subject_consent]
+      properties:
+        phone:           { type: string }
+        subject_consent: { type: boolean, const: true }
+        include_image:   { type: boolean, default: false }
+    output: { $ref: '#/actions/verify_bvn/output' }
+    pii:
+      - { field: phone, category: phone }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.mobile, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  resolve_bank_account:
+    title: Resolve a bank account name
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code, subject_consent]
+      properties:
+        account_number:  { type: string }
+        bank_code:       { type: string }
+        subject_consent: { type: boolean, const: true }
+    output:
+      type: object
+      properties:
+        found:          { type: boolean }
+        id:             { type: string }
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_name:      { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  compare_faces:
+    title: Compare two faces
+    description: Whether two images (URL or base64, up to 1MB each) show the same person. A non-match is a result (match false).
+    class: read
+    input:
+      type: object
+      required: [image1, image2, subject_consent]
+      properties:
+        image1:          { type: string }
+        image2:          { type: string }
+        subject_consent: { type: boolean, const: true }
+    output:
+      type: object
+      properties:
+        id:         { type: string }
+        match:      { type: boolean }
+        confidence: { type: number, description: 0 to 100 }
+        threshold:  { type: number }
+        reason:     { type: string }
+    pii:
+      - { field: image1, category: other }
+      - { field: image2, category: other }
+  verify_business:
+    title: Verify a Nigerian business (CAC)
+    description: By CAC registration number (RC..., BN...).
+    class: read
+    input:
+      type: object
+      required: [registration_number, subject_consent]
+      properties:
+        registration_number: { type: string }
+        subject_consent:     { type: boolean, const: true }
+    output:
+      type: object
+      properties:
+        found:               { type: boolean }
+        status:              { type: string }
+        id:                  { type: string, description: For get_business_details }
+        name:                { type: string }
+        registration_number: { type: string }
+        company_status:      { type: string }
+        type_of_entity:      { type: string }
+        registration_date:   { type: string }
+        nature_of_business:  { type: string }
+        record:              { type: object }
+    pii:
+      - { field: output.record, category: other }
+  search_businesses:
+    title: Search businesses by name
+    class: read
+    input:
+      type: object
+      required: [query]
+      properties:
+        query:        { type: string }
+        country_code: { type: string, description: "e.g. NG" }
+        limit:        { type: integer, minimum: 1, maximum: 100 }
+    output:
+      type: object
+      properties:
+        businesses:
+          type: array
+          items:
+            type: object
+            properties:
+              name:           { type: string }
+              company_number: { type: string }
+              country_code:   { type: string }
+              country_name:   { type: string }
+  get_business_details:
+    title: Get a business verification
+    description: The full company record (tax ids, address, key personnel) of an earlier business check.
+    class: read
+    input:
+      type: object
+      required: [verification_id]
+      properties:
+        verification_id: { type: string }
+    output: { $ref: '#/actions/verify_business/output' }
+    pii:
+      - { field: output.record, category: other }
+  screen_aml:
+    title: Screen a name for PEP, sanctions and adverse media
+    description: >-
+      Searches watch lists by name. status is Youverify's verdict (for
+      example review_required); hit counts per category are in
+      category_count, matches in record.
+    class: read
+    input:
+      type: object
+      required: [query, subject_consent]
+      properties:
+        query:           { type: string, description: Full name, alias or business name }
+        type:            { type: string, enum: [all, individual, business], default: individual }
+        subject_consent: { type: boolean, const: true }
+        strict:          { type: boolean, description: Match the query as given }
+        first_name:      { type: string }
+        last_name:       { type: string }
+        country:         { type: string }
+        gender:          { type: string }
+    output:
+      type: object
+      properties:
+        id:             { type: string, description: For get_aml_check }
+        status:         { type: string }
+        total_hits:     { type: integer }
+        category_count: { type: object }
+        record:         { type: object }
+    pii:
+      - { field: query, category: name }
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
+      - { field: output.record, category: other }
+  get_aml_check:
+    title: Get an AML screening
+    class: read
+    input:
+      type: object
+      required: [verification_id]
+      properties:
+        verification_id: { type: string }
+    output: { $ref: '#/actions/screen_aml/output' }
+    pii:
+      - { field: output.record, category: other }
+  create_address_candidate:
+    title: Create an address-verification candidate
+    description: The person whose address a field agent will verify. Not idempotent; an unknown outcome parks the step.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [first_name, last_name, mobile, image]
+      properties:
+        first_name:    { type: string }
+        middle_name:   { type: string }
+        last_name:     { type: string }
+        mobile:        { type: string }
+        date_of_birth: { type: string }
+        email:         { type: string }
+        image:         { type: string, description: Photo URL }
+    output:
+      type: object
+      properties:
+        candidate_id: { type: string }
+    pii:
+      - { field: first_name, category: name }
+      - { field: middle_name, category: name }
+      - { field: last_name, category: name }
+      - { field: mobile, category: phone }
+      - { field: date_of_birth, category: other }
+      - { field: email, category: email }
+      - { field: image, category: other }
+  request_address_verification:
+    title: Request a physical address verification
+    description: >-
+      Sends a field agent (billed). The report arrives as
+      address.verification.completed (correlation: reference_id), or poll
+      get_address_verification. Not idempotent: an unknown outcome parks the
+      step rather than sending a second agent.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [candidate_id, subject_consent, building_number, street, landmark, city, state]
+      properties:
+        candidate_id:    { type: string }
+        subject_consent: { type: boolean, const: true }
+        description:     { type: string, description: Notes for the agent }
+        flat_number:     { type: string }
+        building_name:   { type: string }
+        building_number: { type: string }
+        street:          { type: string }
+        sub_street:      { type: string }
+        landmark:        { type: string }
+        city:            { type: string }
+        lga:             { type: string }
+        state:           { type: string }
+        metadata:        { type: object }
+    output:
+      type: object
+      properties:
+        id:           { type: string, description: For get_address_verification }
+        reference_id: { type: string, description: Correlation for the completion event }
+        status:       { type: string }
+        task_status:  { type: string, description: "PENDING, then VERIFIED, NOT_VERIFIED or UNABLE_TO_VERIFY" }
+        flagged:      { type: boolean }
+        download_url: { type: string }
+        completed_at: { type: string }
+    pii:
+      - { field: flat_number, category: address }
+      - { field: building_name, category: address }
+      - { field: building_number, category: address }
+      - { field: street, category: address }
+      - { field: sub_street, category: address }
+      - { field: landmark, category: address }
+  get_address_verification:
+    title: Get an address verification
+    class: read
+    input:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+    output: { $ref: '#/actions/request_address_verification/output' }
+triggers:
+  # Youverify sends every event to the one callback URL in its dashboard.
+  event:
+    type: webhook
+    verify: { scheme: hmac_sha256, header: x-yv-signature, secret_field: secret_key }
+    # The provider retries anything but 200, so accepted (and ignored) deliveries get 200.
+    ack: { status: 200, body: ok }
+    events: [identity.verification.completed, address.verification.completed]
+    event_type: '=body.event'
+    # No event id is documented for KYC events: the verification, its
+    # status and its time identify a delivery.
+    dedup: >-
+      =body.event + ":" + body.?data.?id.orValue(body.?data.?referenceId.orValue("")) + ":"
+      + body.?data.?status.orValue("") + ":" + body.?data.?taskStatus.orValue("") + ":" + body.?data.?createdAt.orValue("")
+    # Identity: the verification id a pending lookup returned. Address: the
+    # reference_id request_address_verification returned.
+    correlation: >-
+      =body.event == "address.verification.completed" ? body.?data.?referenceId.orValue(body.?data.?verificationId.orValue(""))
+      : body.?data.?id.orValue("")

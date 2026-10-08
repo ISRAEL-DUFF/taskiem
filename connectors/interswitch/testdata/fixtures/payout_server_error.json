@@ -1,0 +1,32 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/payouts",
+  "headers": {
+   "Authorization": "Bearer isw-tok-1"
+  },
+  "body": {
+   "transactionReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "payoutChannel": "BANK_TRANSFER",
+   "currencyCode": "NGN",
+   "amount": 1500.5,
+   "narration": "Sept salary",
+   "walletDetails": {
+    "pin": "1234",
+    "walletId": "2700007687"
+   },
+   "recipient": {
+    "recipientAccount": "0037320662",
+    "recipientBank": "TRP",
+    "currencyCode": "NGN"
+   },
+   "singleCall": true
+  }
+ },
+ "response": {
+  "status": 500,
+  "body": {
+   "message": "Internal Server Error"
+  }
+ }
+}

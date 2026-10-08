@@ -1,0 +1,7 @@
+{
+ "status": 200,
+ "body": {
+  "ok": false,
+  "error": "channel_not_found"
+ }
+}

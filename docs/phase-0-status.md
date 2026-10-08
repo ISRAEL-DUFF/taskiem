@@ -2,6 +2,8 @@
 
 Phase 0 (build plan) runs about 4 weeks. Gate G0 must pass before Phase 1 starts. Last updated 2026-10-05.
 
+> Everything here that needs people (signatures, owners' confirmations, credentials, hardware, reviews, partners) is tracked in one place: [What needs people](needs-people.md).
+
 ## Scope
 
 | Item | Status | Where |

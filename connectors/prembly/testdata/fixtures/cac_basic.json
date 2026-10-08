@@ -1,0 +1,38 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/cac/basic",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "rc_number": "092932",
+   "company_type": "RC"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "detail": "Verification Successfull",
+   "response_code": "00",
+   "data": {
+    "rc_number": "092932",
+    "company_name": "TEST COMPANY",
+    "state": "DELTA State",
+    "company_address": "10 lekki phase 12",
+    "company_status": "Active",
+    "city": "Akure",
+    "registrationDate": "1986-06-04T00:00:00Z",
+    "directors": {},
+    "searchScore": "0",
+    "email_address": "test@test.com",
+    "company_type": "RC"
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "f332afdc"
+   }
+  }
+ }
+}

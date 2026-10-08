@@ -1,0 +1,8 @@
+apiVersion: v2
+name: taskiem
+description: Taskiem, the durable workflow engine, with each role as its own Deployment (spec 15.4).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+keywords: [workflow, durable-execution, payments]

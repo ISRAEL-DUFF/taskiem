@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/banks","headers":{"x-anchor-key":"anc_test_key"}},
+ "response":{"status":200,"body":{"data":[{"id":"16565854883910-anc_bk","type":"Bank","attributes":{"name":"ACCESS BANK","nipCode":"000014","cbnCode":"044"}}]}}}

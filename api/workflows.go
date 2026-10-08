@@ -2,7 +2,9 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,61 +18,38 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
-	"github.com/israel-duff/taskiem/engine/ingest"
-	"github.com/israel-duff/taskiem/engine/sandbox"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/engine/wdcheck"
+	"github.com/israel-duff/taskiem/engine/wdmerge"
 )
 
 // problem is one validation failure, as returned to builders.
-type problem struct {
-	Path    string `json:"path"`
-	Message string `json:"message"`
-}
+type problem = wdcheck.Problem
 
 // check validates a WD document against the contract and against this
 // platform: connectors and actions must exist, code must compile.
-func (s *Server) check(doc []byte) []problem {
-	var out []problem
-	for _, p := range wd.Validate(doc) {
-		out = append(out, problem{p.Path, p.Message})
-	}
-	if len(out) > 0 {
-		return out
-	}
-	def, err := wd.Load(doc)
+func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []problem {
+	reg, err := s.Registry.For(ctx, tenant.String())
 	if err != nil {
-		return []problem{{"/", err.Error()}}
+		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
 	}
-	var walk func(steps []*wd.Step)
-	walk = func(steps []*wd.Step) {
-		for _, st := range steps {
-			path := "/steps/" + st.ID
-			switch st.Type {
-			case "connector":
-				c, ok := s.Registry.Get(st.Connector)
-				switch {
-				case !ok:
-					out = append(out, problem{path, fmt.Sprintf("connector %q is not available", st.Connector)})
-				case !hasAction(c, st.Action):
-					out = append(out, problem{path, fmt.Sprintf("connector %q has no action %q", st.Connector, st.Action)})
-				}
-			case "code":
-				if st.Code != nil {
-					if _, err := sandbox.Compile(st.Code.Source, st.Code.Language); err != nil {
-						out = append(out, problem{path, "code: " + err.Error()})
-					}
-				}
-			}
-			for _, sub := range st.Children() {
-				walk(sub)
-			}
-		}
-	}
-	walk(def.Steps)
-	if err := ingest.Check(def, s.Registry); err != nil {
-		out = append(out, problem{"/trigger", err.Error()})
+	return s.checkWith(ctx, tenant, doc, reg)
+}
+
+// checkWith is wdcheck.Check holding a tenant-code slot: checking code
+// steps compiles them, and a Python check runs the interpreter.
+func (s *Server) checkWith(ctx context.Context, tenant uuid.UUID, doc []byte, reg connector.Lookup) []problem {
+	var out []problem
+	if err := s.withCodeSlot(ctx, tenant, func() { out = wdcheck.Check(doc, reg) }); err != nil {
+		return []problem{{Path: "/", Message: "the definition could not be checked: " + err.Error()}}
 	}
 	return out
+}
+
+// checkFor is check for the caller's tenant.
+func (s *Server) checkFor(r *http.Request, doc []byte) []problem {
+	return s.check(r.Context(), principalFrom(r.Context()).TenantID, doc)
 }
 
 // canonical compacts a JSON document; its SHA-256 is the version digest.
@@ -83,6 +62,9 @@ func canonical(doc json.RawMessage) ([]byte, error) {
 }
 
 func (p *Principal) id() uuid.UUID {
+	if p.EndUser != nil {
+		return p.EndUser.ID
+	}
 	if p.KeyID != uuid.Nil {
 		return p.KeyID
 	}
@@ -95,12 +77,20 @@ type workflowSummary struct {
 	ActiveVersion *int      `json:"active_version"`
 	LatestVersion int       `json:"latest_version"`
 	CreatedAt     time.Time `json:"created_at"`
+	// Key is the definition's own id (wf_...) in the latest version: what
+	// the CLI matches local files by.
+	Key string `json:"key"`
+	// GitPath is the file a Git-led repository keeps this workflow in; the
+	// workflow is then read-only here.
+	GitPath *string `json:"git_path"`
 }
+
+const latestKey = `COALESCE((SELECT definition->>'id' FROM workflow_versions WHERE workflow_id = w.id ORDER BY version DESC LIMIT 1), '')`
 
 func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
 	var out []workflowSummary
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at
+		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`, w.git_path
 			FROM workflows w LEFT JOIN workflow_versions v ON v.workflow_id = w.id GROUP BY w.id ORDER BY w.name`)
 		if err != nil {
 			return err
@@ -119,7 +109,23 @@ type versionReq struct {
 	Name       string          `json:"name,omitempty"`
 	Definition json.RawMessage `json:"definition"`
 	Layout     json.RawMessage `json:"layout,omitempty"`
+	// ParentDigest is the digest of the version this edit started from.
+	// When another version was saved since, the two edits are merged
+	// three ways (spec 10.2). Without it the definition is saved as is.
+	ParentDigest string `json:"parent_digest,omitempty"`
+	// Resolutions settle conflicts a previous attempt reported:
+	// conflict path -> "ours" | "theirs".
+	Resolutions map[string]wdmerge.Resolution `json:"resolutions,omitempty"`
 }
+
+// mergeConflict is a save whose edits conflict with a newer version.
+type mergeConflict struct {
+	conflicts []wdmerge.Conflict
+	latest    int
+	digest    string
+}
+
+func (m *mergeConflict) Error() string { return "edits conflict with a newer version" }
 
 // createWorkflow creates a workflow with its first draft. Drafts may be
 // incomplete; the response lists their problems. Only valid versions publish.
@@ -142,6 +148,9 @@ func (s *Server) createWorkflow(w http.ResponseWriter, r *http.Request) {
 	id := uuid.Must(uuid.NewV7())
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
+		if err := s.checkCount(ctx, tx, p.TenantID, "max_workflows"); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO workflows (id, tenant_id, name, created_by, workspace_id)
 			VALUES ($1, $2, $3, $4, (SELECT id FROM workspaces WHERE tenant_id = $2 ORDER BY created_at LIMIT 1))`, id, p.TenantID, req.Name, p.id()); err != nil {
 			return err
@@ -155,18 +164,25 @@ func (s *Server) createWorkflow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "version": 1, "problems": nonNil(s.check(doc))})
+	sum := sha256.Sum256(doc)
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "version": 1, "digest": hex.EncodeToString(sum[:]), "problems": nonNil(s.checkFor(r, doc))})
 }
 
 func insertVersion(r *http.Request, tx pgx.Tx, wf uuid.UUID, v int, doc []byte, layout json.RawMessage) error {
 	p := principalFrom(r.Context())
+	return insertVersionTx(r.Context(), tx, p.TenantID, wf, v, doc, layout, p.Actor(), "")
+}
+
+// insertVersionTx stores a new immutable version; commit is the Git commit
+// it came from, if any.
+func insertVersionTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, doc []byte, layout json.RawMessage, by, commit string) error {
 	sum := sha256.Sum256(doc)
 	var lay any
 	if len(layout) > 0 {
 		lay = layout
 	}
-	_, err := tx.Exec(r.Context(), `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`, wf, v, p.TenantID, doc, lay, sum[:], p.Actor())
+	_, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by, git_commit)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`, wf, v, tenant, doc, lay, sum[:], by, commit)
 	return err
 }
 
@@ -187,22 +203,59 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var v int
+	merged := false
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		// The row lock serialises version numbering per workflow.
 		if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM workflow_versions WHERE workflow_id = $1`, wf).Scan(&v); err != nil {
+		if err := s.refuseGitManaged(ctx, tx, wf); err != nil {
 			return err
+		}
+		var latest int
+		var latestDigest string
+		var latestDef []byte
+		if err := tx.QueryRow(ctx, `SELECT version, encode(digest, 'hex'), definition FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC LIMIT 1`, wf).
+			Scan(&latest, &latestDigest, &latestDef); err != nil {
+			return err
+		}
+		v = latest + 1
+		if req.ParentDigest != "" && req.ParentDigest != latestDigest {
+			var base []byte
+			err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND digest = decode($2, 'hex') ORDER BY version DESC LIMIT 1`,
+				wf, req.ParentDigest).Scan(&base)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("%w: parent_digest %s is not a version of this workflow", errConflict, req.ParentDigest)
+			}
+			if err != nil {
+				return err
+			}
+			out, conflicts, err := wdmerge.Merge(base, doc, latestDef, req.Resolutions)
+			if err != nil {
+				return fmt.Errorf("%w: %w", errBadRequest, err)
+			}
+			if len(conflicts) > 0 {
+				return &mergeConflict{conflicts: conflicts, latest: latest, digest: latestDigest}
+			}
+			if doc, err = canonical(out); err != nil {
+				return err
+			}
+			merged = true
 		}
 		return insertVersion(r, tx, wf, v, doc, req.Layout)
 	})
+	var mc *mergeConflict
+	if errors.As(err, &mc) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": mc.Error(), "conflicts": mc.conflicts, "latest_version": mc.latest, "latest_digest": mc.digest})
+		return
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": v, "problems": nonNil(s.check(doc))})
+	sum := sha256.Sum256(doc)
+	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": v, "digest": hex.EncodeToString(sum[:]), "merged": merged, "problems": nonNil(s.checkFor(r, doc))})
 }
 
 type versionInfo struct {
@@ -213,6 +266,11 @@ type versionInfo struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	PublishedBy *uuid.UUID `json:"published_by"`
 	PublishedAt *time.Time `json:"published_at"`
+	GitCommit   *string    `json:"git_commit"`  // the commit a Git-led sync deployed it from
+	GitRequest  *string    `json:"git_request"` // the pull or merge request a platform-led publish opened
+	// AIBuild is the AI build a version was saved from: the AI is its
+	// co-author, the person in created_by its author.
+	AIBuild *uuid.UUID `json:"ai_build"`
 }
 
 func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -223,25 +281,30 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	var sum workflowSummary
 	var versions []versionInfo
+	var deployments []deployment
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at
-			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path
+			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key, &sum.GitPath); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at
+		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id
 			FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC`, wf)
 		if err != nil {
 			return err
 		}
 		versions, err = pgx.CollectRows(rows, pgx.RowToStructByPos[versionInfo])
+		if err != nil {
+			return err
+		}
+		deployments, err = deploymentsOf(ctx, tx, wf)
 		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"workflow": sum, "versions": versions})
+	writeJSON(w, http.StatusOK, map[string]any{"workflow": sum, "versions": versions, "deployments": deployments})
 }
 
 func versionParams(r *http.Request) (uuid.UUID, int, error) {
@@ -265,15 +328,15 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	var info versionInfo
 	var def, layout []byte
 	err = s.tx(r, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, definition, layout
+		return tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id, definition, layout
 			FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
-			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &def, &layout)
+			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &info.AIBuild, &def, &layout)
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(s.check(def))}
+	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(s.checkFor(r, def))}
 	if layout != nil {
 		out["layout"] = json.RawMessage(layout)
 	}
@@ -307,7 +370,9 @@ func (s *Server) putLayout(w http.ResponseWriter, r *http.Request) {
 }
 
 // publish makes a valid version the one new runs use. The previously
-// published version is deprecated; its in-flight runs finish on it.
+// published version is deprecated; its in-flight runs finish on it. With a
+// platform-led Git connection, publishing also opens a pull request with
+// the definition and its code (spec 10.3).
 func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	wf, v, err := versionParams(r)
 	if err != nil {
@@ -316,46 +381,47 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var probs []problem
+	published, pending := false, false
 	err = s.tx(r, func(tx pgx.Tx) error {
-		ctx := r.Context()
-		if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
+		if err := s.refuseGitManaged(r.Context(), tx, wf); err != nil {
 			return err
 		}
-		var def []byte
-		var state, digest string
-		if err := tx.QueryRow(ctx, `SELECT definition, state, encode(digest, 'hex') FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
-			Scan(&def, &state, &digest); err != nil {
-			return err
-		}
-		if state == "published" {
-			return nil
-		}
-		if state != "draft" {
-			return fmt.Errorf("%w: version %d is %s", errConflict, v, state)
-		}
-		if probs = s.check(def); len(probs) > 0 {
-			return errInvalid
-		}
-		if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'deprecated' WHERE workflow_id = $1 AND state = 'published'`, wf); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'published', published_by = $3, published_at = now() WHERE workflow_id = $1 AND version = $2`,
-			wf, v, p.id()); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE workflows SET active_version = $2 WHERE id = $1`, wf, v); err != nil {
-			return err
-		}
-		d, err := wd.Load(def)
+		// Four-eyes: a publish waits for a second person.
+		g, err := governanceTx(r.Context(), tx)
 		if err != nil {
 			return err
 		}
-		if err := ingest.Sync(ctx, tx, p.TenantID, wf, v, d, s.Registry, time.Now()); err != nil {
-			var pgErr interface{ SQLState() string }
-			if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
-				return fmt.Errorf("%w: another workflow already uses this webhook path", errConflict)
+		if g.FourEyesPublish {
+			var state string
+			if err := tx.QueryRow(r.Context(), `SELECT state FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&state); err != nil {
+				return err
 			}
+			if state == "published" {
+				return nil
+			}
+			// A person asks, or an embed app's end user (docs/embedding.md):
+			// a platform person approves. API keys do not ask.
+			if p.UserID == uuid.Nil && p.EndUser == nil {
+				return fmt.Errorf("%w: with four-eyes publishing, a person asks to publish and another approves", errForbidden)
+			}
+			pending = true
+			if _, err := tx.Exec(r.Context(), `INSERT INTO publish_requests (tenant_id, workflow_id, version, requested_by) VALUES ($1, $2, $3, $4)
+				ON CONFLICT (workflow_id, version) DO UPDATE SET requested_by = EXCLUDED.requested_by, requested_at = now(), status = 'pending', decided_by = NULL, decided_at = NULL`,
+				p.TenantID, wf, v, p.Human()); err != nil {
+				return err
+			}
+			return auditTx(r, tx, "publish_request.create", fmt.Sprintf("%s/%d", wf, v), nil)
+		}
+		by := p.id()
+		var digest string
+		if probs, digest, published, err = s.publishTx(r.Context(), tx, p.TenantID, wf, v, &by, ""); err != nil {
 			return err
+		}
+		if !published {
+			// Publishing a published version again repairs its remote
+			// subscriptions (a webhook paused, broken or deleted at the
+			// provider).
+			return remote.Repair(r.Context(), tx, wf)
 		}
 		return auditTx(r, tx, "workflow.publish", fmt.Sprintf("%s/%d", wf, v), map[string]any{"digest": digest})
 	})
@@ -367,7 +433,99 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": wf, "version": v, "state": "published"})
+	if pending {
+		writeJSON(w, http.StatusAccepted, map[string]any{"id": wf, "version": v, "state": "pending_approval"})
+		return
+	}
+	out := map[string]any{"id": wf, "version": v, "state": "published"}
+	if published {
+		if g := s.proposeToGit(r, wf, v); g != nil {
+			out["git"] = g
+		}
+	}
+	if subs := s.applyRemote(r, wf); len(subs) > 0 {
+		out["remote_subscriptions"] = subs
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// publishTx publishes version v of wf: it checks the definition, deprecates
+// the version it replaces, and deploys it, with its triggers, to every
+// ungated environment, and to gitEnv when a Git sync for that environment
+// publishes. A version already published (and deployed to gitEnv) reports
+// published=false; one that fails its checks returns errInvalid with the
+// problems.
+func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, by *uuid.UUID, gitEnv string) (probs []problem, digest string, published bool, err error) {
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
+		return nil, "", false, err
+	}
+	var def []byte
+	var state string
+	if err := tx.QueryRow(ctx, `SELECT definition, state, encode(digest, 'hex') FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
+		Scan(&def, &state, &digest); err != nil {
+		return nil, "", false, err
+	}
+	if state == "published" {
+		if gitEnv == "" {
+			return nil, digest, false, nil
+		}
+		var at *int
+		if err := tx.QueryRow(ctx, `SELECT version FROM deployments WHERE workflow_id = $1 AND environment = $2`, wf, gitEnv).Scan(&at); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", false, err
+		}
+		if at != nil && *at == v {
+			return nil, digest, false, nil
+		}
+		d, err := wd.Load(def)
+		if err != nil {
+			return nil, "", false, err
+		}
+		return nil, digest, true, s.deployTx(ctx, tx, tenant, wf, gitEnv, v, d, deployer(by), "")
+	}
+	if state != "draft" {
+		return nil, "", false, fmt.Errorf("%w: version %d is %s", errConflict, v, state)
+	}
+	if probs = s.check(ctx, tenant, def); len(probs) > 0 {
+		return probs, "", false, errInvalid
+	}
+	if probs, err = missingPolicies(ctx, tx, def); err != nil || len(probs) > 0 {
+		if err == nil {
+			err = errInvalid
+		}
+		return probs, "", false, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'deprecated' WHERE workflow_id = $1 AND state = 'published'`, wf); err != nil {
+		return nil, "", false, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET state = 'published', published_by = $3, published_at = now() WHERE workflow_id = $1 AND version = $2`,
+		wf, v, by); err != nil {
+		return nil, "", false, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE workflows SET active_version = $2 WHERE id = $1`, wf, v); err != nil {
+		return nil, "", false, err
+	}
+	d, err := wd.Load(def)
+	if err != nil {
+		return nil, "", false, err
+	}
+	targets, err := deployTargets(ctx, tx, gitEnv)
+	if err != nil {
+		return nil, "", false, err
+	}
+	for _, env := range targets {
+		if err := s.deployTx(ctx, tx, tenant, wf, env, v, d, deployer(by), ""); err != nil {
+			return nil, "", false, err
+		}
+	}
+	return nil, digest, true, nil
+}
+
+func deployer(by *uuid.UUID) *string {
+	if by == nil {
+		return nil
+	}
+	s := by.String()
+	return &s
 }
 
 var errInvalid = errors.New("invalid definition")
@@ -381,7 +539,7 @@ func (s *Server) validate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	probs := s.check(req.Definition)
+	probs := s.checkFor(r, req.Definition)
 	writeJSON(w, http.StatusOK, map[string]any{"valid": len(probs) == 0, "problems": nonNil(probs)})
 }
 
@@ -404,9 +562,14 @@ type connectorAction struct {
 
 // listConnectors describes the connectors this deployment runs, for the
 // canvas palette and schema forms.
-func (s *Server) listConnectors(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {
+	reg, err := s.Registry.For(r.Context(), principalFrom(r.Context()).TenantID.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var out []connectorInfo
-	for _, c := range s.Registry.List() {
+	for _, c := range reg.List() {
 		m := c.Manifest
 		info := connectorInfo{Ref: c.Ref(), ID: m.ID, Version: m.Version, Name: m.Name, Auth: m.Auth, Actions: map[string]connectorAction{}, Triggers: []string{}}
 		for name, a := range m.Actions {
@@ -419,11 +582,6 @@ func (s *Server) listConnectors(w http.ResponseWriter, _ *http.Request) {
 		out = append(out, info)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connectors": nonNil(out)})
-}
-
-func hasAction(c *connector.Connector, action string) bool {
-	_, ok := c.Manifest.Actions[action]
-	return ok
 }
 
 func nonNil[T any](s []T) []T {
@@ -446,7 +604,12 @@ type triggerInfo struct {
 	Cron        *string    `json:"cron,omitempty"`
 	Timezone    *string    `json:"timezone,omitempty"`
 	NextFireAt  *time.Time `json:"next_fire_at,omitempty"`
+	ServiceCode *string    `json:"service_code,omitempty"` // ussd: the code the edge routes by
 	URL         string     `json:"url,omitempty"`
+	// Remote is the subscription Taskiem keeps at the provider for a
+	// remotely registered trigger (decision 0021); its URL is Taskiem's to
+	// manage.
+	Remote *remote.Status `json:"remote,omitempty"`
 }
 
 // listTriggers shows where a published workflow listens: webhook and
@@ -459,17 +622,22 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var out []triggerInfo
+	var subs []remote.Status
 	err = s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, next_fire_at
+		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, NULLIF(next_fire_at, 'infinity'), service_code
 			FROM triggers WHERE workflow_id = $1 ORDER BY environment`, wf)
 		if err != nil {
 			return err
 		}
 		out, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (triggerInfo, error) {
 			var t triggerInfo
-			err := row.Scan(&t.ID, &t.Environment, &t.Type, &t.Version, &t.Path, &t.Auth, &t.SecretName, &t.Connector, &t.Trigger, &t.Cron, &t.Timezone, &t.NextFireAt)
+			err := row.Scan(&t.ID, &t.Environment, &t.Type, &t.Version, &t.Path, &t.Auth, &t.SecretName, &t.Connector, &t.Trigger, &t.Cron, &t.Timezone, &t.NextFireAt, &t.ServiceCode)
 			return t, err
 		})
+		if err != nil {
+			return err
+		}
+		subs, err = remote.List(r.Context(), tx, `workflow_id = $1`, wf)
 		return err
 	})
 	if err != nil {
@@ -477,6 +645,11 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i, t := range out {
+		for j, sub := range subs {
+			if sub.Desired == "present" && sub.Environment == t.Environment && t.Connector != nil && sub.Connector == *t.Connector {
+				out[i].Remote = &subs[j]
+			}
+		}
 		base := "/hooks/" + p.TenantID.String()
 		switch {
 		case t.Path != nil:
@@ -485,5 +658,5 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 			out[i].URL = base + "/connectors/" + *t.Connector + "/" + *t.Trigger + "?env=" + t.Environment
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"triggers": nonNil(out)})
+	writeJSON(w, http.StatusOK, map[string]any{"triggers": nonNil(out), "remote_subscriptions": subs})
 }

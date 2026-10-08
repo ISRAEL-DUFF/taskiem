@@ -1,0 +1,14 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/sendMessage"
+ },
+ "response": {
+  "status": 502,
+  "body": {
+   "ok": false,
+   "error_code": 502,
+   "description": "Bad Gateway"
+  }
+ }
+}

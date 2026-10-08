@@ -20,6 +20,10 @@ interface Props {
 
 type Any = Record<string, unknown>;
 
+
+const JS_TEMPLATE = "export default (input: Record<string, unknown>) => {\n  return { ok: true };\n};\n";
+const PYTHON_TEMPLATE = "def main(input, host):\n    return {\"ok\": True}\n";
+
 export function StepPanel({ step, others, connectors, onChange, onRename, onDelete }: Props) {
   const [id, setId] = useState(step.id);
   const [idError, setIdError] = useState("");
@@ -113,12 +117,28 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       {step.type === "code" && (
         <>
           <Field label="Language">
-            <select value={String(cfg.language)} onChange={(e) => setCfg({ language: e.target.value })}>
+            <select
+              value={String(cfg.language)}
+              onChange={(e) => {
+                const language = e.target.value;
+                // Switching between JavaScript and Python starts from that language's template.
+                const swap = (language === "python") !== (cfg.language === "python");
+                setCfg(swap ? { language, source: language === "python" ? PYTHON_TEMPLATE : JS_TEMPLATE } : { language });
+              }}
+            >
               <option value="typescript">TypeScript</option>
               <option value="javascript">JavaScript</option>
+              <option value="python">Python</option>
             </select>
           </Field>
-          <Field label="Source" hint="Export a default function of the step input. host.log, host.secret, host.now and host.fetch are available.">
+          <Field
+            label="Source"
+            hint={
+              cfg.language === "python"
+                ? "Define main(input, host). print() goes to the logs; host.secret, host.now and host.fetch are available. Standard library only."
+                : "Export a default function of the step input. host.log, host.secret, host.now and host.fetch are available."
+            }
+          >
             <textarea className="mono" rows={12} spellCheck={false} value={String(cfg.source ?? "")} onChange={(e) => setCfg({ source: e.target.value })} />
           </Field>
           <Field label="Input (JSON)">

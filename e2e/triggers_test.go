@@ -84,7 +84,7 @@ func (s *stack) must(t *testing.T, want int, token, method, path string, body an
 }
 
 func (s *stack) login(t *testing.T, email string) string {
-	return s.must(t, 200, "", "POST", "/v1/auth/login", map[string]any{"email": email, "password": "correct horse battery"})["token"].(string)
+	return s.must(t, 200, "", "POST", "/v1/auth/login", map[string]any{"email": email, "password": "correct horse battery", "bearer": true})["token"].(string)
 }
 
 // publishFile creates and publishes a dogfood workflow through the API and

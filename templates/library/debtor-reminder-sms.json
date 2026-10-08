@@ -1,0 +1,41 @@
+{
+  "id": "debtor-reminder-sms",
+  "title": "Weekly SMS reminders to customers who owe you",
+  "summary": "Every week, text each customer on your debtors sheet how much they still owe.",
+  "description": "Once a week at the day and time you choose, reads your debtors list from a Google Sheet (columns: name, phone, amount_owed) and sends each customer who still owes money a polite SMS reminder with the amount and how to pay. Customers with nothing owed or no phone number are skipped. At most five messages go out at a time.",
+  "category": "collections",
+  "tags": ["collections", "debtors", "reminders", "sms", "schedule", "google sheets"],
+  "keywords": ["owe", "owing", "debt", "debtor", "credit", "remind", "reminder", "text", "customer", "outstanding", "unpaid", "weekly"],
+  "connectors": ["googlesheets@1", "termii@1"],
+  "params": [
+    {"name": "business_name", "type": "string", "title": "Business name", "description": "How your customers know you; it starts every message.", "required": true, "example": "Mama Nkechi Provisions", "max_length": 60},
+    {"name": "spreadsheet_id", "type": "string", "title": "Debtors spreadsheet", "description": "The spreadsheet's id, from its link (the long part between /d/ and /edit).", "required": true, "example": "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
+    {"name": "sheet_range", "type": "string", "title": "Sheet and columns", "description": "Where the list is, with a header row of name, phone and amount_owed.", "required": false, "default": "Debtors!A:C", "example": "Debtors!A:C"},
+    {"name": "day", "type": "weekday", "title": "Day", "description": "The day of the week the reminders go out.", "required": true, "default": "friday", "example": "friday"},
+    {"name": "send_time", "type": "time", "title": "Time", "description": "The time the reminders go out, Lagos time.", "required": true, "default": "10:00", "example": "10:00"},
+    {"name": "payment_details", "type": "string", "title": "How to pay", "description": "Added to each reminder, e.g. your account number and bank.", "required": true, "example": "Pay to 0123456789, GTBank. Thank you!", "max_length": 160},
+    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"},
+    {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_debtorReminderSms",
+    "version": 1,
+    "name": "Weekly SMS reminders to customers who owe",
+    "description": "Texts every customer on the debtors sheet who still owes money.",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * {{day:cron}}", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your business name and payment details",
+       "config": {"output": {"business_name": "{{business_name}}", "payment_details": "{{payment_details}}"}}},
+      {"id": "read_debtors", "type": "connector", "name": "Read the debtors sheet", "connector": "googlesheets@1", "action": "get_values", "connection": "{{sheets_connection}}",
+       "input": {"spreadsheet_id": "{{spreadsheet_id}}", "range": "{{sheet_range}}", "value_render_option": "UNFORMATTED_VALUE", "header_row": true}},
+      {"id": "remind_each", "type": "foreach", "name": "For each customer on the sheet", "needs": ["settings", "read_debtors"],
+       "config": {"items": "=has(steps.read_debtors.output.objects) ? steps.read_debtors.output.objects : []", "max_concurrency": 5, "max_items": 1000, "steps": [
+         {"id": "send_reminder", "type": "connector", "name": "Text the customer a reminder of what they owe", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}",
+          "when": "=has(item.phone) && item.phone != null && has(item.amount_owed) && item.amount_owed != null && double(item.amount_owed) > 0.0",
+          "input": {"to": "=string(item.phone)", "sms": "=steps.settings.output.business_name + ': Hello ' + (has(item.name) && item.name != null ? string(item.name) : 'there') + ', a friendly reminder that NGN ' + string(item.amount_owed) + ' is still outstanding. ' + steps.settings.output.payment_details"}}
+       ]}}
+    ],
+    "settings": {"timeout": "2h"}
+  }
+}

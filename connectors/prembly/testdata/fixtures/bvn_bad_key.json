@@ -1,0 +1,15 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bvn",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "detail": "Please provide a valid api-key in the request header."
+  }
+ }
+}

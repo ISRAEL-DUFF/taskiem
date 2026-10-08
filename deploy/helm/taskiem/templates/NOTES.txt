@@ -1,0 +1,22 @@
+Taskiem {{ .Chart.AppVersion }} is installed ({{ .Values.mode }} mode).
+
+{{- if .Values.migrations.enabled }}
+Migrations ran before the pods started (job {{ include "taskiem.fullname" . }}-migrate).
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+Open https://{{ .Values.ingress.host }} once the certificate is issued.
+{{- else }}
+Reach the web app with:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "taskiem.fullname" . }}-{{ ternary "all" "api" (eq .Values.mode "all") }} 8080:80
+{{- end }}
+
+Create the first tenant and its owner (once): add a TASKIEM_BOOTSTRAP_PASSWORD
+key (12+ characters) to the {{ .Values.existingSecret }} Secret, restart the pods, then
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "taskiem.fullname" . }}-{{ ternary "all" "api" (eq .Values.mode "all") }} -- taskiem bootstrap --tenant NAME --email you@example.com
+and remove the key again.
+
+{{- if not .Values.publicURL }}
+
+publicURL is unset: passkeys, single sign-on and SCIM stay off until it is.
+{{- end }}

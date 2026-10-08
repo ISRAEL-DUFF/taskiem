@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v1/payments",
+    "query": {
+      "reference": "tsk_unknown"
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "no such payment"
+    }
+  }
+}

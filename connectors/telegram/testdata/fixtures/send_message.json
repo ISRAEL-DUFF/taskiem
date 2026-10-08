@@ -1,0 +1,69 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/sendMessage",
+  "body": {
+   "chat_id": -1001234567890,
+   "text": "Approve payroll for October?",
+   "parse_mode": "HTML",
+   "reply_markup": {
+    "inline_keyboard": [
+     [
+      {
+       "text": "Approve",
+       "callback_data": "approve:run-17"
+      },
+      {
+       "text": "Reject",
+       "callback_data": "reject:run-17"
+      }
+     ]
+    ]
+   },
+   "reply_parameters": {
+    "message_id": 4200,
+    "allow_sending_without_reply": true
+   },
+   "disable_notification": true,
+   "link_preview_options": {
+    "is_disabled": true
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": {
+    "message_id": 4242,
+    "from": {
+     "id": 7000000001,
+     "is_bot": true,
+     "first_name": "Taskiem Ops",
+     "username": "taskiem_ops_bot"
+    },
+    "chat": {
+     "id": -1001234567890,
+     "title": "Ops approvals",
+     "type": "supergroup"
+    },
+    "date": 1791320000,
+    "text": "Approve payroll for October?",
+    "reply_markup": {
+     "inline_keyboard": [
+      [
+       {
+        "text": "Approve",
+        "callback_data": "approve:run-17"
+       },
+       {
+        "text": "Reject",
+        "callback_data": "reject:run-17"
+       }
+      ]
+     ]
+    }
+   }
+  }
+ }
+}

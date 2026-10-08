@@ -1,0 +1,188 @@
+# Interswitch (Quickteller Business): Payouts service, Web Checkout
+# transaction requery and webhooks. Built from Interswitch's public API
+# documentation at docs.interswitchgroup.com, read 6 October 2026:
+#   https://docs.interswitchgroup.com/docs/authentication
+#   https://docs.interswitchgroup.com/docs/payouts
+#   https://docs.interswitchgroup.com/docs/receiving-institutions
+#   https://docs.interswitchgroup.com/docs/payout-channels
+#   https://docs.interswitchgroup.com/docs/error-codes
+#   https://docs.interswitchgroup.com/docs/web-checkout
+#   https://docs.interswitchgroup.com/docs/payment-response-codes
+#   https://docs.interswitchgroup.com/docs/webhooks
+# (docs/integrations/interswitch.md).
+manifest: connector/v1
+id: interswitch
+version: 1.0.0
+name: Interswitch
+description: Bank payouts from a prefunded Quickteller Business wallet, bank list, name enquiry, and Web Checkout payment confirmation on Interswitch.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: client_id, label: Client ID (Quickteller Business → Developer tools), secret: false }
+    - { key: client_secret, label: Secret key, secret: true }
+    - { key: wallet_id, label: Payout wallet ID (Quickteller Business → Wallets), secret: false, required: false }
+    - { key: wallet_pin, label: Payout wallet PIN, secret: true, required: false }
+    - { key: merchant_code, label: "Merchant code (MX…) for Web Checkout requery", secret: false, required: false }
+    - { key: webhook_secret, label: Webhook secret key (Developer tools → Webhooks), secret: true, required: false }
+    - { key: environment, label: "Environment: live (default) or sandbox", secret: false, required: false }
+  test: { action: list_banks }
+base_url: https://payouts.interswitchng.com
+egress_hosts:
+  - payouts.interswitchng.com
+  - passport.interswitchng.com
+  - webpay.interswitchng.com
+  - payouts-sandbox.interswitchng.com
+  - passport-sandbox.interswitchng.com
+  - sandbox.interswitchng.com
+actions:
+  list_banks:
+    title: List receiving banks
+    class: read
+    input:
+      type: object
+      properties:
+        name: { type: string, description: Optional filter on the bank's name (e.g. GUA) }
+    output:
+      type: object
+      properties:
+        banks:
+          type: array
+          items:
+            type: object
+            properties:
+              code:     { type: string, description: Interswitch's three-letter code }
+              name:     { type: string }
+              nip_code: { type: string }
+              cbn_code: { type: string }
+  resolve_account:
+    title: Resolve account name
+    description: >-
+      Interswitch's payout customer lookup. Call before paying a new
+      account; a payout to the wrong valid account cannot be recovered.
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code]
+      properties:
+        account_number: { type: string }
+        bank_code:      { type: string, description: "From list_banks: Interswitch, CBN or NIP code" }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_code:      { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  transfer:
+    title: Pay out to a bank account
+    description: >-
+      NGN bank transfer from the payout wallet (lookup and payout in one
+      call). Usually answers PROCESSING; the outcome comes from get_transfer.
+      A payout Interswitch reports FAILED fails the step with its reason
+      (Interswitch reverses any debit).
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 64, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, account_number, bank_code, narration]
+      properties:
+        amount:                { type: integer, minimum: 1, description: Kobo }
+        account_number:        { type: string }
+        bank_code:             { type: string, description: "From list_banks: Interswitch, CBN or NIP code" }
+        narration:             { type: string }
+        source_account_name:   { type: string, description: Sender name shown to the recipient }
+        source_account_number: { type: string }
+        wallet_id:             { type: string, description: Defaults to the connection's }
+        reference:             { type: string }
+    output: { $ref: '#/actions/get_transfer/output' }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: source_account_name, category: name }
+      - { field: source_account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  get_transfer:
+    title: Get payout by reference
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output:
+      type: object
+      properties:
+        reference:             { type: string }
+        status:                { type: string, enum: [PROCESSING, SUCCESSFUL, FAILED] }
+        payout_id:             { type: string }
+        amount:                { type: integer, description: Kobo }
+        fee:                   { type: integer, description: Kobo }
+        account_name:          { type: string }
+        account_number:        { type: string }
+        bank_code:             { type: string }
+        response_code:         { type: string }
+        response_description:  { type: string }
+        processing_reference:  { type: string }
+        reversed:              { type: boolean }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  get_payment:
+    title: Confirm a Web Checkout payment
+    description: >-
+      Server-side requery of a Web Checkout transaction by your txn_ref.
+      Give value only when status is successful and amount_matches is true.
+      Interswitch keeps three months of transactions here.
+    class: read
+    input:
+      type: object
+      required: [reference, amount]
+      properties:
+        reference:     { type: string, description: The txn_ref you sent to checkout }
+        amount:        { type: integer, minimum: 1, description: Kobo you expected }
+        merchant_code: { type: string, description: Defaults to the connection's }
+    output:
+      type: object
+      properties:
+        reference:            { type: string }
+        status:               { type: string, enum: [successful, partial, pending, failed] }
+        amount:               { type: integer, description: Kobo Interswitch reports }
+        amount_matches:       { type: boolean }
+        response_code:        { type: string }
+        response_description: { type: string }
+        payment_reference:    { type: string }
+        retrieval_reference:  { type: string }
+        transaction_date:     { type: string }
+triggers:
+  # Quickteller Business sends the event types chosen under Developer tools
+  # → Webhooks to one URL.
+  event:
+    type: webhook
+    verify: { scheme: hmac_sha512, header: X-Interswitch-Signature, secret_field: webhook_secret }
+    events:
+      - TRANSACTION.CREATED
+      - TRANSACTION.UPDATED
+      - TRANSACTION.COMPLETED
+      - SUBSCRIPTION.CREATED
+      - SUBSCRIPTION.TRANSACTION_SUCCESSFUL
+      - SUBSCRIPTION.TRANSACTION_FAILURE
+      - SUBSCRIPTION.CANCELLED
+      - LINK.TRANSACTION_SUCCESSFUL
+      - LINK.TRANSACTION_FAILURE
+      - INVOICE.TRANSACTION_SUCCESSFUL
+      - INVOICE.TRANSACTION_FAILURE
+    event_type: =body.event
+    # One transaction is updated several times under one uuid.
+    dedup: '=body.event + ":" + body.uuid + ":" + (has(body.timestamp) ? string(body.timestamp) : "")'
+    # Checkout payments: your txn_ref (merchantReference); otherwise the uuid.
+    correlation: '=has(body.data) && has(body.data.merchantReference) && body.data.merchantReference != null ? body.data.merchantReference : body.uuid'

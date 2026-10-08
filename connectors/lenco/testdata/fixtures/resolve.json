@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/resolve","query":{"accountNumber":"8144374977","bankCode":"000014"},"headers":{"Authorization":"Bearer lenco_test_token"}},
+ "response":{"status":200,"body":{"status":true,"message":"Success","data":{"accountName":"Shalewa Elizabeth","accountNumber":"8144374977","bank":{"code":"000014","name":"ACCESS BANK"}}}}}

@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bvn",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": false,
+   "detail": "Verification failed",
+   "response_code": "02",
+   "message": "Verification can't be completed at this time. Kindly retry later",
+   "verification": {
+    "reference": ""
+   },
+   "session": {}
+  }
+ }
+}

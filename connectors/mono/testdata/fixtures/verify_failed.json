@@ -1,0 +1,49 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/payments/verify/AbCdEfGhIjKlMnOpQrStUv",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Payment retrieved successfully",
+   "timestamp": "2025-06-11T12:50:08.866Z",
+   "data": {
+    "id": "6836e6addc85c314cfbb400a",
+    "meta": null,
+    "instruments": [
+     "6836e6addc85c314cfbb400a"
+    ],
+    "channel": "mandate",
+    "fee": 5500,
+    "feeBearer": "business",
+    "type": "variable-debit",
+    "status": "failed",
+    "amount": 20000,
+    "currency": "NGN",
+    "description": "Ticket",
+    "reference": "AbCdEfGhIjKlMnOpQrStUv",
+    "liveMode": true,
+    "account": {
+     "name": "Samuel Olamide",
+     "accountNumber": "0123456789",
+     "currency": "NGN",
+     "type": "mandate_account",
+     "institution": {
+      "name": "ALAT by WEMA",
+      "bankCode": "035",
+      "type": "PERSONAL_BANKING"
+     }
+    },
+    "customer": "6836e648bcb53ec765cc2c51",
+    "refunded": false,
+    "created_at": "2025-05-31T11:43:00.061Z",
+    "updated_at": "2025-05-31T11:43:02.301Z"
+   }
+  }
+ }
+}

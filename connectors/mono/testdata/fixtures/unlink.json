@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/accounts/661d759280dbf646242634cc/unlink",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Request was successfully completed",
+   "timestamp": "2024-03-15T15:20:27.732Z"
+  }
+ }
+}

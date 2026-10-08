@@ -1,0 +1,42 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/drivers_license/advance/v2",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "ABC12345YZ00",
+   "first_name": "john",
+   "last_name": "doe"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "detail": "DL Verification Successful",
+   "response_code": "00",
+   "frsc_data": {
+    "driversLicense": "ABC12345YZ00",
+    "firstname": "JOHN",
+    "lastname": "DOE",
+    "birthdate": "01-01-1990",
+    "photo": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG",
+    "issued_date": "01-01-2024",
+    "expiry_date": "01-01-2029",
+    "state_of_issue": "ABUJA",
+    "gender": "Female",
+    "message": "Success",
+    "licenseNo": "ABC12345YZ00"
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "a59c9c"
+   },
+   "widget_info": {},
+   "session": {},
+   "endpoint_name": "Drivers License V2"
+  }
+ }
+}

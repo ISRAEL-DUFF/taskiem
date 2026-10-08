@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v1/balance",
+    "headers": {
+      "Authorization": "Bearer test-key"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "available": 125000,
+      "currency": "NGN"
+    }
+  }
+}

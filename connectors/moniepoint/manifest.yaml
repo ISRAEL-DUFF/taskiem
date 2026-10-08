@@ -1,0 +1,291 @@
+# Moniepoint's payment gateway, Monnify (collections and disbursements).
+# Built from Monnify's public developer documentation, read 6 October 2026:
+#   https://teamapt.atlassian.net/wiki/spaces/MON (Monnify Documentation:
+#   Authentication, Initiate Transfers, Get Transfer Status, Validate Bank
+#   Account, Get Banks, Get Wallet Balance, Reserve An Account (V2), Get
+#   Reserved Account Details - V2, Initialize Transaction, Get Status Of
+#   Transaction, Webhook Events and Request Structure, Computing Request
+#   Validation Hash)
+#   https://developers.monnify.com/docs/live (Going Live: the live host)
+# (docs/integrations/moniepoint.md).
+manifest: connector/v1
+id: moniepoint
+version: 1.0.0
+name: Moniepoint (Monnify)
+description: Bank transfers, wallet balance, name enquiry, reserved (virtual) accounts, checkout and payment status on Monnify, Moniepoint's payment gateway.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: api_key, label: API key (MK_TEST_… or MK_PROD_…), secret: false }
+    - { key: secret_key, label: Secret key (also signs webhooks), secret: true }
+    - { key: contract_code, label: Contract code (for reserved accounts and checkout), secret: false, required: false }
+    - { key: wallet_account_number, label: Disbursement wallet account number (to pay from), secret: false, required: false }
+    - { key: environment, label: "Environment: live (default) or sandbox", secret: false, required: false }
+  test: { action: list_banks }
+base_url: https://api.monnify.com
+egress_hosts: [api.monnify.com, sandbox.monnify.com]
+actions:
+  get_balance:
+    title: Get wallet balance
+    class: read
+    input:
+      type: object
+      properties:
+        wallet_account_number: { type: string, description: Defaults to the connection's wallet }
+    output:
+      type: object
+      properties:
+        wallet_account_number: { type: string }
+        available_balance:     { type: integer, description: Kobo }
+        ledger_balance:        { type: integer, description: Kobo }
+  list_banks:
+    title: List banks
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        banks:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              name: { type: string }
+  resolve_account:
+    title: Resolve account name
+    description: Call before paying a new account; a transfer to the wrong valid account cannot be recovered.
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code]
+      properties:
+        account_number: { type: string }
+        bank_code:      { type: string, description: From list_banks }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_code:      { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  transfer:
+    title: Transfer to a bank account
+    description: >-
+      NGN disbursement from the Monnify wallet. Monnify usually answers with
+      the final status; with async it answers PENDING and the outcome arrives
+      as a disbursement event (correlation: reference) or from get_transfer.
+      A transfer Monnify reports FAILED or REVERSED fails the step with its
+      reason. With two-factor authorisation on, the transfer waits as
+      PENDING_AUTHORIZATION until it is approved with the emailed OTP.
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 64, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, account_number, bank_code, narration]
+      properties:
+        amount:                { type: integer, minimum: 1, description: Kobo }
+        account_number:        { type: string }
+        bank_code:             { type: string, description: From list_banks }
+        account_name:          { type: string, description: "Beneficiary name; when given, Monnify skips its own name enquiry, so resolve it first" }
+        narration:             { type: string }
+        wallet_account_number: { type: string, description: Wallet to pay from; defaults to the connection's }
+        async:                 { type: boolean, description: Answer PENDING at once and settle later (default false) }
+        reference:             { type: string }
+    output: { $ref: '#/actions/get_transfer/output' }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: account_name, category: name }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  get_transfer:
+    title: Get transfer by reference
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output:
+      type: object
+      properties:
+        reference:              { type: string }
+        status:                 { type: string, description: "SUCCESS, COMPLETED, PENDING, IN_PROGRESS, AWAITING_PROCESSING, PENDING_AUTHORIZATION, OTP_EMAIL_DISPATCH_FAILED, FAILED, REVERSED" }
+        transaction_reference:  { type: string, description: Monnify's reference }
+        amount:                 { type: integer, description: Kobo }
+        fee:                    { type: integer, description: Kobo }
+        account_name:           { type: string }
+        account_number:         { type: string }
+        bank_code:              { type: string }
+        bank_name:              { type: string }
+        session_id:             { type: string }
+        reason:                 { type: string, description: Monnify's comment or description }
+        requires_authorization: { type: boolean, description: Waiting for the OTP Monnify emailed (two-factor authorisation) }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  create_reserved_account:
+    title: Reserve a bank account for a customer
+    description: >-
+      A permanent account number (Moniepoint MFB by default) that the
+      customer pays into by transfer. Payments arrive as
+      SUCCESSFUL_TRANSACTION events whose correlation is account_reference.
+      A repeat returns the account already reserved under the reference.
+    class: idempotent_write
+    idempotency:
+      field: account_reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 64, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [account_name, customer_email]
+      properties:
+        account_name:      { type: string, description: Shown when payers resolve the number }
+        customer_email:    { type: string }
+        customer_name:     { type: string }
+        bvn:               { type: string, description: BVN or NIN is required by Monnify depending on the account tier }
+        nin:               { type: string }
+        preferred_banks:   { type: array, items: { type: string }, description: Partner bank codes (e.g. "50515"); omit for all available banks }
+        account_reference: { type: string }
+    output: { $ref: '#/actions/get_reserved_account/output' }
+    pii:
+      - { field: account_name, category: name }
+      - { field: customer_email, category: email }
+      - { field: customer_name, category: name }
+      - { field: bvn, category: bvn }
+      - { field: nin, category: nin }
+      - { field: output.account_name, category: name }
+      - { field: output.customer_email, category: email }
+      - { field: output.accounts.*.account_name, category: name }
+      - { field: output.accounts.*.account_number, category: account_number }
+  get_reserved_account:
+    title: Get reserved account
+    class: read
+    input:
+      type: object
+      required: [account_reference]
+      properties: { account_reference: { type: string } }
+    output:
+      type: object
+      properties:
+        account_reference:     { type: string, description: Correlation for collection events }
+        reservation_reference: { type: string }
+        account_name:          { type: string }
+        customer_email:        { type: string }
+        status:                { type: string }
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              account_number: { type: string }
+              account_name:   { type: string }
+              bank_code:      { type: string }
+              bank_name:      { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.customer_email, category: email }
+      - { field: output.accounts.*.account_name, category: name }
+      - { field: output.accounts.*.account_number, category: account_number }
+  init_transaction:
+    title: Start a checkout payment
+    description: >-
+      Returns a checkout URL (valid 40 minutes) where the customer pays by
+      card or transfer. Confirm with get_transaction before giving value. A
+      repeat reports the transaction already started under the reference,
+      without its checkout URL.
+    class: idempotent_write
+    idempotency:
+      field: payment_reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 64, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, customer_name, customer_email, description]
+      properties:
+        amount:            { type: integer, minimum: 1, description: Kobo }
+        customer_name:     { type: string }
+        customer_email:    { type: string }
+        description:       { type: string }
+        redirect_url:      { type: string }
+        payment_methods:   { type: array, items: { type: string, enum: [CARD, ACCOUNT_TRANSFER, USSD, PHONE_NUMBER] } }
+        payment_reference: { type: string }
+    output:
+      type: object
+      properties:
+        payment_reference:     { type: string, description: Correlation for collection events }
+        transaction_reference: { type: string }
+        checkout_url:          { type: string, description: Empty when reporting an earlier start }
+        status:                { type: string, description: "PENDING for a new checkout, or the earlier transaction's paymentStatus" }
+    pii:
+      - { field: customer_email, category: email }
+      - { field: customer_name, category: name }
+  get_transaction:
+    title: Get payment status
+    description: >-
+      Confirms a collection by your payment_reference or Monnify's
+      transaction_reference. Give value only when status is PAID (or
+      OVERPAID) and amount_paid is what you expected.
+    class: read
+    input:
+      type: object
+      properties:
+        payment_reference:     { type: string }
+        transaction_reference: { type: string }
+    output:
+      type: object
+      properties:
+        payment_reference:     { type: string }
+        transaction_reference: { type: string }
+        status:                { type: string, description: "PAID, OVERPAID, PARTIALLY_PAID, PENDING, ABANDONED, CANCELLED, FAILED, REVERSED, EXPIRED" }
+        amount_paid:           { type: integer, description: Kobo }
+        total_payable:         { type: integer, description: Kobo }
+        settlement_amount:     { type: integer, description: Kobo }
+        currency:              { type: string }
+        payment_method:        { type: string }
+        paid_on:               { type: string }
+        product_type:          { type: string }
+        product_reference:     { type: string, description: "The reserved account's account_reference, or the checkout's payment_reference" }
+        customer_email:        { type: string }
+    pii:
+      - { field: output.customer_email, category: email }
+triggers:
+  # Monnify posts transaction, disbursement, refund and settlement events to
+  # the URLs set under Developer → Webhook URLs; all can point here.
+  event:
+    type: webhook
+    verify: { scheme: hmac_sha512, header: monnify-signature, secret_field: secret_key }
+    events: [SUCCESSFUL_TRANSACTION, REJECTED_PAYMENT, SUCCESSFUL_DISBURSEMENT, FAILED_DISBURSEMENT, REVERSED_DISBURSEMENT, SUCCESSFUL_REFUND, FAILED_REFUND, SETTLEMENT, MANDATE_UPDATE]
+    event_type: =body.eventType
+    dedup: >-
+      =body.eventType + ":" + (has(body.eventData.refundReference) ? body.eventData.refundReference
+      : has(body.eventData.transactionReference) ? body.eventData.transactionReference
+      : has(body.eventData.settlementReference) ? body.eventData.settlementReference
+      : has(body.eventData.mandateCode) ? body.eventData.mandateCode + ":" + body.eventData.mandateStatus
+      : "")
+    # Transfers: the transfer's reference. Reserved-account payments: the
+    # account_reference. Checkout payments: the payment_reference.
+    correlation: >-
+      =body.eventType.endsWith("_DISBURSEMENT") ? body.eventData.reference
+      : body.eventType == "SUCCESSFUL_TRANSACTION" ? (has(body.eventData.product) && body.eventData.product.type == "RESERVED_ACCOUNT" ? body.eventData.product.reference : body.eventData.paymentReference)
+      : body.eventType == "REJECTED_PAYMENT" ? body.eventData.paymentReference
+      : body.eventType.endsWith("_REFUND") ? body.eventData.refundReference
+      : body.eventType == "SETTLEMENT" ? body.eventData.settlementReference
+      : body.eventType == "MANDATE_UPDATE" ? body.eventData.externalMandateReference
+      : ""

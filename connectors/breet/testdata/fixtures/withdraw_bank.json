@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/payments/withdraw/bank/69737920df8b52679a8b198e","headers":{"x-app-id":"app-1","x-app-secret":"sec-1","X-Breet-Env":"sandbox"},"body":{"amount":5000.50,"pin":"1234","externalId":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","narration":"Payout"}},
+ "response":{"status":200,"body":{"message":"ok","success":true,"data":{"id":"697251ed397a53d0cb7b228b"},"meta":{}}}}

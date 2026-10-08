@@ -1,0 +1,54 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/interbank/bulk/fund-transfer",
+  "headers": {
+   "secretKey": "rmt_sk_test"
+  },
+  "body": {
+   "batchPaymentIdentifier": "11223344556677889900aabbccddeeff",
+   "totalAmount": 3500.25,
+   "currency": "NGN",
+   "sourceNarration": "October payroll",
+   "approval": false,
+   "payByTransfer": false,
+   "sourceAccount": "0119288291",
+   "sourceBankCode": "011",
+   "sourceAccountName": "John Nomel",
+   "transactions": [
+    {
+     "amount": 1000,
+     "paymentIdentifier": "dc68783eab5da3d2039f95a9004e455c",
+     "destinationAccount": "0037475942",
+     "destinationAccountName": "Sam Alkinson",
+     "destinationBankCode": "058",
+     "destinationNarration": "October payroll"
+    },
+    {
+     "amount": 2500.25,
+     "paymentIdentifier": "8b500d607843fcace79193a4668730e5",
+     "destinationAccount": "0702232975",
+     "destinationAccountName": "Ibrahim Lawal",
+     "destinationBankCode": "070",
+     "destinationNarration": "October payroll"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "00",
+   "message": "Approved or completed successfully",
+   "meta": null,
+   "links": null,
+   "code": null,
+   "data": {
+    "totalAmount": 3500.25,
+    "batchPaymentIdentifier": "3261112856",
+    "transactionState": "DEBIT_FAILED",
+    "totalTransactions": 2
+   }
+  }
+ }
+}

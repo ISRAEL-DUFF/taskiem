@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v2/disbursements/single/summary",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "query": {
+   "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Transaction does not exist",
+   "responseCode": "D02"
+  }
+ }
+}

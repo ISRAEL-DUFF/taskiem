@@ -1,0 +1,15 @@
+{
+  "action": "get_balance",
+  "credentials": {
+    "api_key": "test-key"
+  },
+  "exchanges": [
+    "balance"
+  ],
+  "expect": {
+    "output": {
+      "available": 125000,
+      "currency": "NGN"
+    }
+  }
+}

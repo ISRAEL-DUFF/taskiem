@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/collections/api/v1/gettransaction.json",
+  "headers": {},
+  "query": {
+   "merchantcode": "MX6072",
+   "transactionreference": "order-17",
+   "amount": "150050"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "Amount": 0,
+   "ResponseCode": "Z25",
+   "ResponseDescription": "Transaction not Found"
+  }
+ }
+}

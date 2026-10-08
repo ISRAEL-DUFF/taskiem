@@ -1,0 +1,49 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bvn_w_face",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "number": "22229512456",
+   "image": "https://example.com/face.jpg"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "response_code": "00",
+   "message": "BVN With Face Verification verification successful",
+   "data": {
+    "base64Image": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG",
+    "bvn": "22229512456",
+    "dateOfBirth": "11-May-1992",
+    "firstName": "RONALD",
+    "lastName": "EKPOMA",
+    "phoneNumber1": "07077781439",
+    "watchListed": "False",
+    "nin": "",
+    "face_data": {
+     "status": true,
+     "message": "Face Match",
+     "confidence": 99.9940414428711,
+     "response_code": "00",
+     "face_image_provided": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG"
+    }
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "03958383-15dc-471e-a87e-15657dd36ce8"
+   },
+   "face_data": {
+    "status": true,
+    "message": "Face Match",
+    "confidence": 99.9940414428711,
+    "response_code": "00",
+    "face_image_provided": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUG"
+   }
+  }
+ }
+}

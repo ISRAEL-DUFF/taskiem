@@ -1,0 +1,194 @@
+# Africa's Talking: SMS, airtime and their callbacks. Built from Africa's
+# Talking's public documentation only, read 6 October 2026
+# (docs/integrations/africastalking.md):
+#   https://developers.africastalking.com/docs/sms/sending/bulk
+#   https://developers.africastalking.com/docs/sms/sending/bulk_(legacy)
+#   https://developers.africastalking.com/docs/sms/fetch_messages
+#   https://developers.africastalking.com/docs/sms/notifications
+#   https://developers.africastalking.com/docs/airtime/sending
+#   https://developers.africastalking.com/docs/airtime/query/find_transaction_status
+#   https://developers.africastalking.com/docs/authentication
+#   https://help.africastalking.com/en/articles/16150386-messaging-error-codes
+#   https://help.africastalking.com/en/articles/742491-why-did-my-messages-fail
+#   https://help.africastalking.com/en/articles/6151516-what-is-the-flow-for-an-airtime-request
+#   https://help.africastalking.com/en/articles/513427-why-did-my-airtime-transaction-fail
+#   https://help.africastalking.com/en/articles/5947646-how-can-ensure-that-the-post-request-to-my-callback-url-is-coming-from-africa-s-talking-and-not-some-other-place
+# developers.africastalking.com refuses automated readers (a browser
+# challenge), so its pages were read through search-engine extracts of them;
+# what those did not show is listed under "To confirm" in the guide.
+manifest: connector/v1
+id: africastalking
+version: 1.0.0
+name: Africa's Talking
+description: Bulk SMS, the SMS inbox and airtime across Africa, with delivery reports, incoming SMS and airtime status callbacks.
+category: messaging
+regions: [KE, UG, TZ, RW, NG, MW, ZM, CI, ET, ZA]
+auth:
+  type: api_key
+  fields:
+    - { key: username, label: "Application username (sandbox for the sandbox)" }
+    - { key: api_key, label: API key, secret: true }
+    - { key: sender_id, label: Default sender ID or short code, required: false }
+    - { key: environment, label: "Environment: live (default) or sandbox", required: false }
+    - { key: callback_token, label: "Callback token: a long random value you add to each callback URL as ?token=", secret: true, required: false }
+  test: { action: fetch_messages }
+base_url: https://api.africastalking.com
+egress_hosts: [api.africastalking.com, api.sandbox.africastalking.com]
+actions:
+  send_sms:
+    title: Send SMS
+    description: >-
+      One message to one or more numbers in one call. Africa's Talking has no
+      idempotency key for SMS, so a send whose outcome is unknown is parked
+      for a person, never repeated. Recipients Africa's Talking refuses are
+      reported in the output; the step fails only if it refused them all.
+      Delivery arrives on the delivery_report trigger (correlation: each
+      recipient's message_id).
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [to, message]
+      properties:
+        to:        { type: array, minItems: 1, items: { type: string }, description: "Numbers in international format, e.g. [+254711000000]" }
+        message:   { type: string, minLength: 1 }
+        sender_id: { type: string, description: Registered sender ID or short code; defaults to the connection's }
+        enqueue:   { type: boolean, description: "Queue the messages and answer at once (for large sends)" }
+    output:
+      type: object
+      properties:
+        summary:  { type: string, description: "Africa's Talking's summary, e.g. Sent to 2/3 Total Cost: KES 1.6000" }
+        accepted: { type: integer }
+        rejected: { type: integer }
+        recipients:
+          type: array
+          items:
+            type: object
+            properties:
+              number:      { type: string }
+              status:      { type: string }
+              status_code: { type: integer, description: "100 Processed, 101 Sent, 102 Queued accept; 4xx and 5xx refuse" }
+              cost:        { type: string, description: "Currency and amount, e.g. KES 0.8000" }
+              message_id:  { type: string }
+    pii:
+      - { field: to, category: phone }
+      - { field: message, category: other }
+      - { field: output.recipients.*.number, category: phone }
+  fetch_messages:
+    title: Fetch incoming messages
+    description: Messages sent to your short codes, oldest first, after last_received_id.
+    class: read
+    input:
+      type: object
+      properties:
+        last_received_id: { type: [string, integer], description: Id of the last message already processed; 0 (default) for the start }
+    output:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              id:      { type: string }
+              from:    { type: string }
+              to:      { type: string }
+              text:    { type: string }
+              date:    { type: string }
+              link_id: { type: string }
+    pii:
+      - { field: output.messages.*.from, category: phone }
+      - { field: output.messages.*.text, category: other }
+  send_airtime:
+    title: Send airtime
+    description: >-
+      Tops up one or more numbers. The engine's key is sent as
+      Idempotency-Key, but Africa's Talking documents it only against repeats
+      within five minutes, so a send whose outcome is unknown is parked, never
+      repeated. Accepted top-ups report Sent; the final Success or Failed
+      arrives on the airtime_status trigger (correlation: request_id).
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [recipients]
+      properties:
+        recipients:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required: [phone_number, currency_code, amount]
+            properties:
+              phone_number:  { type: string, description: International format, e.g. +254711000000 }
+              currency_code: { type: string, description: "KES, UGX, TZS, NGN, ..." }
+              amount:        { type: integer, minimum: 1, description: "Hundredths of the currency unit (KES 100.50 is 10050)" }
+        max_num_retry: { type: integer, minimum: 0, description: Retries Africa's Talking makes if the telco is unavailable }
+    output:
+      type: object
+      properties:
+        num_sent:       { type: integer }
+        total_amount:   { type: string, description: "e.g. KES 1000.0000" }
+        total_discount: { type: string }
+        error_message:  { type: string }
+        responses:
+          type: array
+          items:
+            type: object
+            properties:
+              phone_number:  { type: string }
+              status:        { type: string, description: Sent when accepted }
+              request_id:    { type: string }
+              amount:        { type: string }
+              discount:      { type: string }
+              error_message: { type: string }
+    pii:
+      - { field: recipients.*.phone_number, category: phone }
+      - { field: output.responses.*.phone_number, category: phone }
+  get_airtime_status:
+    title: Get an airtime transaction's status
+    class: read
+    input:
+      type: object
+      required: [transaction_id]
+      properties:
+        transaction_id: { type: string, description: The request_id send_airtime returned }
+    output:
+      type: object
+      properties:
+        status: { type: string, description: "Queued, Sent, Success or Failed" }
+  get_balance:
+    title: Get the application balance
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        balance:  { type: string, description: "As Africa's Talking reports it, e.g. KES 1785.5000" }
+        currency: { type: string }
+        amount:   { type: integer, description: Hundredths of the currency unit, rounded down }
+triggers:
+  # Africa's Talking documents no signature on callbacks, so each callback
+  # URL carries the connection's callback_token as ?token=..., registered in
+  # the dashboard (SMS > Callback URLs); deliveries without it are refused,
+  # and the token never reaches a run. Still confirm anything that moves
+  # money with a read (get_airtime_status).
+  delivery_report:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    event_type: =body.status
+    dedup: =body.id + ":" + body.status
+    correlation: =body.id
+  incoming_sms:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    event_type: '="incoming_sms"'
+    dedup: =body.id
+    correlation: =body.from
+  airtime_status:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    event_type: =body.status
+    dedup: =body.requestId + ":" + body.status
+    correlation: =body.requestId

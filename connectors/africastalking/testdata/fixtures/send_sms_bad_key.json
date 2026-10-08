@@ -1,0 +1,14 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/version1/messaging/bulk",
+  "headers": {
+   "apiKey": "atsk_test_key",
+   "Accept": "application/json"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": "The supplied authentication is invalid"
+ }
+}

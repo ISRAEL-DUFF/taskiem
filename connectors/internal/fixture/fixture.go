@@ -13,28 +13,18 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/conntest"
 )
 
-// Exchange is one recorded request and its response.
-type Exchange struct {
-	Name     string   `json:"name"`
-	Request  Request  `json:"request"`
-	Response Response `json:"response"`
-}
+// Exchange is one recorded request and its response. The format is the
+// conformance kit's (engine/conntest), which third-party connectors use
+// for their own fixtures.
+type Exchange = conntest.Exchange
 
-type Request struct {
-	Method  string            `json:"method"`
-	Path    string            `json:"path"`
-	Query   map[string]string `json:"query,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"` // must be present with these values
-	Body    any               `json:"body,omitempty"`    // compared as JSON when set
-}
+type Request = conntest.Request
 
-type Response struct {
-	Status  int               `json:"status"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Body    any               `json:"body"`
-}
+type Response = conntest.Response
 
 // Load reads testdata/fixtures/<name>.json.
 func Load(t testing.TB, name string) Exchange {

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -104,6 +105,50 @@ func (t Taint) Add(v any, category string) {
 	}
 }
 
+// MinRedact is the shortest personal value RedactText looks for: shorter
+// strings ("Ada", a two-digit number) would mask unrelated text.
+const MinRedact = 5
+
+// RedactText replaces, in free text such as a provider's error message,
+// every exact occurrence of a personal value known in the run with its
+// category ("[name]", "[bvn]"). It matches whole values only, never parts
+// or look-alikes, so it never masks text that is not a known value; values
+// shorter than MinRedact are left to the pattern masks in Redact
+// (self-review S22).
+func (t Taint) RedactText(s string) string {
+	if len(t) == 0 || s == "" {
+		return s
+	}
+	type hit struct{ val, cat string }
+	var hits []hit
+	for k, cat := range t {
+		v := k[2:] // "s:" or "n:" and the canonical value
+		if len(v) < MinRedact || !strings.Contains(s, v) {
+			continue
+		}
+		hits = append(hits, hit{v, cat})
+	}
+	if len(hits) == 0 {
+		return s
+	}
+	// Longest first, so a value that contains another is masked whole.
+	sort.Slice(hits, func(i, j int) bool {
+		if len(hits[i].val) != len(hits[j].val) {
+			return len(hits[i].val) > len(hits[j].val)
+		}
+		return hits[i].val < hits[j].val
+	})
+	pairs := make([]string, 0, 2*len(hits))
+	for _, h := range hits {
+		cat := h.cat
+		if cat == "" {
+			cat = "personal data"
+		}
+		pairs = append(pairs, h.val, "["+cat+"]")
+	}
+	return strings.NewReplacer(pairs...).Replace(s)
+}
+
 // Seal replaces values at the declared paths, and anywhere a tainted value
 // appears, with envelopes. It returns the new value; v is not modified.
 func Seal(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, paths []Path, taint Taint) (any, error) {
@@ -128,6 +173,17 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 	if len(segs) == 0 {
 		if v == nil || IsEnvelope(v) {
 			return v, nil
+		}
+		if list, ok := v.([]any); ok {
+			// A declared list of values (recipients' numbers): each is sealed.
+			for i := range list {
+				s, err := sealAt(ctx, c, tx, tenant, list[i], nil, cat, taint)
+				if err != nil {
+					return nil, err
+				}
+				list[i] = s
+			}
+			return list, nil
 		}
 		if _, ok := scalarKey(v); !ok {
 			return v, nil // only scalars are sealed; objects keep their shape

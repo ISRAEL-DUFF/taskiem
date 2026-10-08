@@ -1,0 +1,36 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/payment/create",
+  "headers": {
+   "MerchantId": "256621051120756",
+   "Authorization": "Bearer 9055ce3ebb3c6f84319ff63c11f45ee896e0e3d06f948625e9088fce293587106a61dcf6e086c21e95c2924eb2dd00ed0269de0cae647cb6a80d3aea578d2c80"
+  },
+  "body": {
+   "amount": {
+    "currency": "NGN",
+    "total": 2300
+   },
+   "country": "NG",
+   "reference": "tskab12cd34ef56gh78ij90kl12mn34op5",
+   "payMethod": "BankTransfer",
+   "product": {
+    "name": "Invoice 9"
+   },
+   "callbackUrl": "https://hooks.example/opay",
+   "customerName": "Ada Obi",
+   "userPhone": "+2348011112222",
+   "userInfo": {
+    "userName": "Ada Obi",
+    "userMobile": "+2348011112222"
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": "02004",
+   "message": "the payment reference already exists."
+  }
+ }
+}

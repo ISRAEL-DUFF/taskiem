@@ -1,0 +1,40 @@
+{
+  "schema": "wd-test/v1",
+  "workflow": "../ispend-credit-exceptions.wd.json",
+  "env": { "ispend_api_url": "https://ispend.test/api" },
+  "cases": [
+    {
+      "name": "a rejected top-up is reported to iSpend and ops",
+      "trigger": { "event": "wallet.credit.rejected", "body": { "id": "evt_7", "wallet_id": "w_cust", "occurred_at": "2026-01-05T08:00:00Z",
+        "data": { "amount": 500000, "reason": "kyc_limit" } } },
+      "mocks": { "notify_ispend": { "output": { "status": 200 } }, "post_slack": { "output": { "status": 200 } } },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "notify_ispend": { "url": "https://ispend.test/api/internal/wallet-credit-exceptions", "idempotency_header": "Idempotency-Key",
+            "body": { "event_id": "evt_7", "kind": "rejected", "wallet_id": "w_cust", "amount_kobo": 500000, "iswallet": { "reason": "kyc_limit" } } }
+        },
+        "outputs": { "describe": { "text": "iSpend top-up rejected and refunded to the sender: wallet w_cust, 5000 NGN, event evt_7" } }
+      }
+    },
+    {
+      "name": "iSpend being down is retried until it answers",
+      "trigger": { "event": "wallet.credit.reversed", "body": { "id": "evt_8", "wallet_id": "w_cust", "occurred_at": "2026-01-05T08:00:00Z", "data": {} } },
+      "mocks": {
+        "notify_ispend": [ { "error": { "kind": "retryable" } }, { "error": { "kind": "unknown_outcome" } }, { "output": { "status": 200 } } ],
+        "post_slack": { "output": {} }
+      },
+      "expect": {
+        "status": "completed",
+        "calls": { "notify_ispend": 3 },
+        "outputs": { "describe": { "kind": "reversed", "amount_kobo": 0 } }
+      }
+    },
+    {
+      "name": "iSpend down for hours fails the run once retries run out",
+      "trigger": { "event": "wallet.credit.reversed", "body": { "id": "evt_9", "wallet_id": "w_cust", "occurred_at": "2026-01-05T08:00:00Z", "data": {} } },
+      "mocks": { "notify_ispend": { "error": { "kind": "retryable", "message": "503" } }, "post_slack": { "output": {} } },
+      "expect": { "status": "failed", "error": "notify_ispend", "calls": { "notify_ispend": 11 } }
+    }
+  ]
+}

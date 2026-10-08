@@ -1,0 +1,35 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/payment/refund/query",
+  "headers": {
+   "MerchantId": "256621051120756",
+   "Authorization": "Bearer 21754fc0c34379a09fab57b4a629b03380c05df0b1ce3faa880d4a18b769d8a482608910e82bba6e229f6e28af2884a008581bcf27a23a0708cf20e35be39395"
+  },
+  "body": {
+   "country": "NG",
+   "reference": "tskrf12cd34ef56gh78ij90kl12mn34op5"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": "00000",
+   "message": "SUCCESSFUL",
+   "data": {
+    "reference": "tskrf12cd34ef56gh78ij90kl12mn34op5",
+    "originalReference": "order-17",
+    "orderNo": "211003140885499643",
+    "originalOrderNo": "211003140885503763",
+    "country": "NG",
+    "amount": {
+     "currency": "NGN",
+     "total": 40000
+    },
+    "orderStatus": "FAIL",
+    "errorCode": "91",
+    "errorMsg": "refund error, please try again later"
+   }
+  }
+ }
+}

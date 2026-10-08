@@ -1,0 +1,34 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/bank-account-number/resolve",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "accountNumber": "1000000000",
+   "bankCode": "058",
+   "isSubjectConsent": true
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "id": "6284b245c1f36651d41dc6f3",
+    "status": "found",
+    "idNumber": "1000000000",
+    "bankDetails": {
+     "accountName": "MICHAEL JOHN DOE",
+     "accountNumber": "1000000000",
+     "bankName": "Guaranty Trust Bank"
+    },
+    "type": "bav"
+   },
+   "links": []
+  }
+ }
+}

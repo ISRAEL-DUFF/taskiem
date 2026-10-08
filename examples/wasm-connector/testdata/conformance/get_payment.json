@@ -1,0 +1,17 @@
+{
+  "action": "get_payment",
+  "input": {
+    "reference": "tsk_7w2xq4m6k3z8r5t1y9u0p2s4d6f8h1jl"
+  },
+  "credentials": {
+    "api_key": "test-key"
+  },
+  "exchanges": [
+    "payment_found"
+  ],
+  "expect": {
+    "output": {
+      "status": "completed"
+    }
+  }
+}

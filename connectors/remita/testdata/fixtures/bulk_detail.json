@@ -1,0 +1,37 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/interbank/bulk/transaction/detail/11223344556677889900aabbccddeeff",
+  "headers": {
+   "secretKey": "rmt_sk_test"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "00",
+   "message": "Approved or completed successfully",
+   "meta": null,
+   "links": null,
+   "code": null,
+   "data": {
+    "transactions": [
+     {
+      "paymentIdentifier": "dc68783eab5da3d2039f95a9004e455c",
+      "status": "CREDIT_SUCCESS"
+     },
+     {
+      "paymentIdentifier": "8b500d607843fcace79193a4668730e5",
+      "status": "CREDIT_FAILED"
+     }
+    ],
+    "pagination": {
+     "currentPage": 0,
+     "pageSize": 2,
+     "totalPages": 1,
+     "totalItems": 2
+    }
+   }
+  }
+ }
+}

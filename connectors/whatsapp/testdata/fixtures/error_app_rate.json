@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 429,
+  "body": {
+   "error": {
+    "message": "(#4) Application request limit reached",
+    "type": "OAuthException",
+    "code": 4,
+    "error_data": {
+     "messaging_product": "whatsapp",
+     "details": ""
+    },
+    "fbtrace_id": "A1b2C3d4"
+   }
+  }
+ }
+}

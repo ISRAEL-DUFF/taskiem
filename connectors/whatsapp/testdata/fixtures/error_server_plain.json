@@ -1,0 +1,13 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 502,
+  "body": "Bad Gateway"
+ }
+}

@@ -1,0 +1,49 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Class Data!A1:E",
+  "headers": {
+   "Authorization": "Bearer ya29.test-token"
+  },
+  "query": {
+   "valueRenderOption": "UNFORMATTED_VALUE",
+   "majorDimension": "ROWS"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "range": "'Class Data'!A1:E31",
+   "majorDimension": "ROWS",
+   "values": [
+    [
+     "Student Name",
+     "Gender",
+     "",
+     "Gender",
+     "Major"
+    ],
+    [
+     "Alexandra",
+     "Female",
+     "4. Senior",
+     "x",
+     "English"
+    ],
+    [
+     "Andrew",
+     "Male",
+     1
+    ],
+    [
+     "Anna",
+     "Female",
+     "1. Freshman",
+     "y",
+     "Art",
+     "extra"
+    ]
+   ]
+  }
+ }
+}

@@ -1,0 +1,12 @@
+{
+  "note": "Shaped as PGDock's docs/webhooks.md publishes (payload, headers, signature); signed with the fixture secret at the fixture time.",
+  "secret": "whsec_fixture_not_a_real_secret",
+  "at": 1791320000,
+  "headers": {
+    "Content-Type": "application/json",
+    "PGDock-Event-Id": "evt_3f2a9c1b7d4e_41",
+    "PGDock-Webhook": "taskiem-0192f0c4-7b1e-7cc0-9a51-3c2f1d0e9b77",
+    "PGDock-Signature": "t=1791320000,v1=dd8cde60d31d5e19048e2affa6794e1a974274f521ab5491dff49d520f27ca7b"
+  },
+  "body": "{\"id\":\"evt_3f2a9c1b7d4e_41\",\"webhook\":\"taskiem-0192f0c4-7b1e-7cc0-9a51-3c2f1d0e9b77\",\"project\":\"p_k2f9a7bq3d\",\"table\":\"public.orders\",\"type\":\"INSERT\",\"record\":{\"id\":7,\"customer\":\"Ada\",\"phone\":\"+2348012345678\",\"status\":\"new\",\"total\":250000},\"old_record\":null,\"committed_at\":\"2026-10-06T20:53:19Z\"}"
+}

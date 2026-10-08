@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1/payments"
+  },
+  "response": {
+    "status": 502,
+    "body": {
+      "error": "bad gateway"
+    }
+  }
+}

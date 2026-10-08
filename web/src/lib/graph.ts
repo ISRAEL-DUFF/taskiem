@@ -1,5 +1,5 @@
 // Converts between a workflow definition and the canvas graph. Only
-// top-level steps are nodes; steps nested in branch, foreach, or on_error
+// top-level steps are nodes; steps nested in branch, parallel, foreach, or on_error
 // are edited inside their parent step's panel.
 import type { Step, WorkflowDefinition } from "@sdk/wd";
 
@@ -115,9 +115,10 @@ export function freshId(steps: Step[], base: string): string {
   const walk = (list: Step[]) => {
     for (const s of list) {
       used.add(s.id);
-      const c = (s as { config?: { steps?: Step[]; paths?: { steps: Step[] }[]; default?: { steps: Step[] } } }).config;
+      const c = (s as { config?: { steps?: Step[]; paths?: { steps: Step[] }[]; branches?: { steps: Step[] }[]; default?: { steps: Step[] } } }).config;
       if (c?.steps) walk(c.steps);
       for (const p of c?.paths ?? []) walk(p.steps);
+      for (const b of c?.branches ?? []) walk(b.steps);
       if (c?.default) walk(c.default.steps);
       if (s.on_error) walk(s.on_error.steps);
     }
@@ -148,6 +149,8 @@ export function newStep(type: Step["type"], id: string): Step {
       return { id, type, config: { paths: [{ name: "yes", when: "=true", steps: [] }] } };
     case "foreach":
       return { id, type, config: { items: "=trigger.body.items", max_concurrency: 5, steps: [] } };
+    case "parallel":
+      return { id, type, config: { join: "all", branches: [{ name: "a", steps: [] }, { name: "b", steps: [] }] } };
     default:
       return { id, type: "transform", config: { output: null } };
   }

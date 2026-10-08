@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "status": "failed",
+   "message": "This account does not exist.",
+   "data": null
+  }
+ }
+}

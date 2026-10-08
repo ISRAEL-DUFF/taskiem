@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc/income",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "query": {
+   "period": "6"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "The income of SAMUEL OLAMIDE is currently being processed, and the data will be sent to you through your webhook",
+   "timestamp": "2024-05-21T10:38:02.376Z",
+   "data": null
+  }
+ }
+}

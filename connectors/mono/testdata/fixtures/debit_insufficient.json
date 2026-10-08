@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/debit",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": "failed",
+   "response_code": "51",
+   "message": "Insufficient funds",
+   "timestamp": "2024-03-18T01:51:45.315Z",
+   "documentation": "https://mono.co/docs/error-codes/51",
+   "data": null
+  }
+ }
+}

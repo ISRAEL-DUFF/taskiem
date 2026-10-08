@@ -1,7 +1,7 @@
 // Rebuilds per-step status from a run's events (spec 15.1, run inspector).
 import type { RunEvent } from "../api";
 
-export type StepStatus = "scheduled" | "running" | "completed" | "failed" | "skipped" | "waiting" | "retrying" | "parked";
+export type StepStatus = "scheduled" | "running" | "completed" | "failed" | "skipped" | "cancelled" | "waiting" | "retrying" | "parked";
 
 export interface StepRow {
   id: string; // step instance id, e.g. pay_all[2].pay_employee
@@ -70,6 +70,10 @@ export function timeline(events: RunEvent[]): StepRow[] {
       case "StepSkipped":
         r.status = "skipped";
         break;
+      case "StepCancelled":
+        r.status = "cancelled";
+        r.waitingFor = undefined;
+        break;
     }
   }
   return [...rows.values()].sort((a, b) => (a.events[0]?.seq ?? 0) - (b.events[0]?.seq ?? 0));
@@ -95,4 +99,26 @@ export function duration(from: string, to: string): string {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)} min`;
   return `${(ms / 3_600_000).toFixed(1)} h`;
+}
+
+// Status of each top-level step for the live canvas: a step's own row and
+// those of the instances nested in it (pay_all[2].pay, branch.path.step)
+// combine, the most pressing first.
+const PRIORITY: StepStatus[] = ["failed", "parked", "running", "retrying", "waiting", "scheduled", "completed", "cancelled", "skipped"];
+
+export function topLevelStatus(rows: StepRow[], ids: string[]): Record<string, StepStatus> {
+  const out: Record<string, StepStatus> = {};
+  for (const id of ids) {
+    const mine = rows.filter((r) => r.id === id || r.id.startsWith(id + "[") || r.id.startsWith(id + "."));
+    if (mine.length === 0) continue;
+    const own = mine.find((r) => r.id === id);
+    // A finished container step is what it says; while it runs, its
+    // children show what is happening inside it.
+    if (own && ["completed", "failed", "cancelled", "skipped"].includes(own.status)) {
+      out[id] = own.status;
+      continue;
+    }
+    out[id] = PRIORITY.find((p) => mine.some((r) => r.status === p)) ?? (mine[0] as StepRow).status;
+  }
+  return out;
 }

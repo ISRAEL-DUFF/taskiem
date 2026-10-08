@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/banks",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "requestSuccessful": false,
+   "responseMessage": "Access token expired",
+   "responseCode": "99"
+  }
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/payouts/receiving-institutions",
+  "headers": {
+   "Authorization": "Bearer isw-tok-1"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "error": "invalid_token",
+   "error_description": "Access token expired"
+  }
+ }
+}

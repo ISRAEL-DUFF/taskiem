@@ -16,12 +16,16 @@ import (
 
 func TestBlockedAddr(t *testing.T) {
 	for _, s := range []string{"127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0",
-		"::1", "fe80::1", "fc00::1", "fd00:ec2::254", "::ffff:127.0.0.1", "::ffff:169.254.169.254", "224.0.0.1", "198.18.0.1"} {
+		"::1", "fe80::1", "fc00::1", "fd00:ec2::254", "::ffff:127.0.0.1", "::ffff:169.254.169.254", "224.0.0.1", "198.18.0.1",
+		"2002:a9fe:a9fe::1", "2002:7f00:1::", // 6to4 around 169.254.169.254 and 127.0.0.1
+		"2001:0:4136:e378:8000:63bf:3fff:fdd2", // Teredo
+		"::7f00:1", "::a9fe:a9fe",              // IPv4-compatible 127.0.0.1, 169.254.169.254
+		"fec0::1"} {
 		if !BlockedAddr(netip.MustParseAddr(s)) {
 			t.Errorf("%s should be blocked", s)
 		}
 	}
-	for _, s := range []string{"8.8.8.8", "41.58.1.1", "2606:4700:4700::1111"} {
+	for _, s := range []string{"8.8.8.8", "41.58.1.1", "2606:4700:4700::1111", "2001:4860:4860::8888", "2a00:1450::1"} {
 		if BlockedAddr(netip.MustParseAddr(s)) {
 			t.Errorf("%s should be allowed", s)
 		}
@@ -122,4 +126,32 @@ func portOf(t *testing.T, raw string) string {
 		t.Fatal(err)
 	}
 	return u.Port()
+}
+
+// TestLoopbackForOnePurpose: an operator's fake provider on loopback is
+// reachable by that connector on that port only.
+func TestLoopbackForOnePurpose(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") }))
+	defer srv.Close()
+	host, port := hostOf(t, srv.URL), portOf(t, srv.URL)
+	g := &Guard{Loopback: map[string]string{"connector:termii": port}}
+	p := Policy{Hosts: []string{host}, Purpose: "connector:termii"}
+	conn, err := g.DialContext(context.Background(), p, "tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		t.Fatalf("termii to its fake: %v", err)
+	}
+	_ = conn.Close()
+	for name, tc := range map[string]struct {
+		p    Policy
+		addr string
+	}{
+		"other purpose":         {Policy{Hosts: []string{host}, Purpose: "http_step"}, net.JoinHostPort(host, port)},
+		"other port":            {p, net.JoinHostPort(host, "5432")},
+		"not allowed":           {Policy{Hosts: []string{"api.ng.termii.com"}, Purpose: "connector:termii"}, net.JoinHostPort(host, port)},
+		"private, not loopback": {Policy{Hosts: []string{"10.0.0.5"}, Purpose: "connector:termii"}, net.JoinHostPort("10.0.0.5", port)},
+	} {
+		if _, err := g.DialContext(context.Background(), tc.p, "tcp", tc.addr); !errors.Is(err, ErrDenied) {
+			t.Errorf("%s: want denial, got %v", name, err)
+		}
+	}
 }

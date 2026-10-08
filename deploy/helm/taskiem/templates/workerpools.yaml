@@ -1,0 +1,211 @@
+{{- /* Dedicated worker pools (decision 0024, docs/kubernetes.md#dedicated-worker-pools):
+one Deployment per entry of workerPools, serving its queues for the tenants
+an operator routes to it (taskiem pools assign). The shared pool is
+roles.worker. */ -}}
+{{- if and (eq .Values.mode "split") .Values.workerPools }}
+{{- $root := . -}}
+{{- $seen := dict }}
+{{- range $p := .Values.workerPools }}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$" (toString $p.name)) }}
+{{- fail (printf "workerPools: %q is not a pool name (lowercase letters, digits and dashes, up to 32)" (toString $p.name)) }}
+{{- end }}
+{{- if eq $p.name "shared" }}
+{{- fail "workerPools: \"shared\" is roles.worker; name dedicated pools something else" }}
+{{- end }}
+{{- if hasKey $seen $p.name }}
+{{- fail (printf "workerPools: %q is listed twice" $p.name) }}
+{{- end }}
+{{- $_ := set $seen $p.name true }}
+{{- $queues := default "connector,sandbox" $p.queues }}
+{{- if has "container" (splitList "," $queues) }}
+{{- fail (printf "workerPools: %q: the container queue runs only in the shared container worker pool (containerSteps)" $p.name) }}
+{{- end }}
+{{- $name := printf "%s-worker-%s" (include "taskiem.fullname" $root) $p.name | trunc 63 | trimSuffix "-" }}
+{{- $as := default dict $p.autoscaling }}
+{{- $replicas := default 2 $p.replicas }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: worker-pool
+    taskiem.io/worker-pool: {{ $p.name }}
+spec:
+  {{- if not $as.enabled }}
+  replicas: {{ $replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: worker-pool
+      taskiem.io/worker-pool: {{ $p.name }}
+  template:
+    metadata:
+      labels:
+        {{- include "taskiem.selectorLabels" $root | nindent 8 }}
+        app.kubernetes.io/component: worker-pool
+        taskiem.io/worker-pool: {{ $p.name }}
+        {{- with $root.Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        {{- with $root.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "taskiem.serviceAccountName" $root }}
+      automountServiceAccountToken: false
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "taskiem.podSecurityContext" $root | nindent 8 }}
+      # Runs finish their current step on SIGTERM; give them time.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: taskiem
+          image: {{ include "taskiem.image" $root }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          args: [serve, --role, worker]
+          securityContext:
+            {{- include "taskiem.containerSecurityContext" $root | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "taskiem.fullname" $root }}
+            - secretRef:
+                name: {{ $root.Values.existingSecret }}
+          env:
+            - name: TASKIEM_DATABASE_POOL
+              value: {{ default 10 $p.databasePool | quote }}
+            - name: TASKIEM_WORKER_QUEUES
+              value: {{ $queues | quote }}
+            - name: TASKIEM_WORKER_POOL
+              value: {{ $p.name | quote }}
+            {{- with $root.Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 9090
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            {{- toYaml (default $root.Values.roles.worker.resources $p.resources) | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /cache }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+      {{- with (default $root.Values.nodeSelector $p.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $root.Values.tolerations $p.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: worker-pool
+    taskiem.io/worker-pool: {{ $p.name }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "taskiem.selectorLabels" $root | nindent 4 }}
+    app.kubernetes.io/component: worker-pool
+    taskiem.io/worker-pool: {{ $p.name }}
+  ports:
+    - { name: metrics, port: 9090, targetPort: metrics }
+{{- if $as.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: worker-pool
+    taskiem.io/worker-pool: {{ $p.name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ default 2 $as.minReplicas }}
+  maxReplicas: {{ default 10 $as.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ default 70 $as.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- $min := $replicas }}
+{{- if $as.enabled }}{{ $min = default 2 $as.minReplicas }}{{ end }}
+{{- if and $root.Values.podDisruptionBudget.enabled (gt (int $min) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: worker-pool
+    taskiem.io/worker-pool: {{ $p.name }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: worker-pool
+      taskiem.io/worker-pool: {{ $p.name }}
+{{- end }}
+{{- if $root.Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: worker-pool
+    taskiem.io/worker-pool: {{ $p.name }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: worker-pool
+      taskiem.io/worker-pool: {{ $p.name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $root.Values.networkPolicy.monitoringNamespace }}
+      ports: [{ port: 9090 }]
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/payments/mandates/mmc_682b9c5803c0b736078889a3/debits/AbCdEfGhIjKlMnOpQrStUv",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "request completed successfully",
+   "data": {
+    "amount": 20000,
+    "currency": "NGN",
+    "type": "variable-debit",
+    "status": "successful",
+    "channel": "mandate",
+    "mandate": "mmc_682b9c5803c0b736078889a3",
+    "reference": "AbCdEfGhIjKlMnOpQrStUv",
+    "narration": "Subscription",
+    "live_mode": true,
+    "app": "67aa07d46d999626f9472b42",
+    "refunded": false,
+    "date": "2025-05-29T22:16:25.547Z",
+    "beneficiary": {}
+   }
+  }
+ }
+}

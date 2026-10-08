@@ -1,0 +1,36 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/cashier/create",
+  "headers": {
+   "MerchantId": "256621051120756",
+   "Authorization": "Bearer OPAYPUB_test"
+  },
+  "body": {
+   "amount": {
+    "currency": "NGN",
+    "total": 150000
+   },
+   "country": "NG",
+   "reference": "tskab12cd34ef56gh78ij90kl12mn34op5",
+   "returnUrl": "https://shop.example/return",
+   "callbackUrl": "https://hooks.example/opay",
+   "product": {
+    "description": "Order 17",
+    "name": "Shoes"
+   },
+   "payMethod": "BankCard",
+   "expireAt": 30,
+   "userInfo": {
+    "userEmail": "ada@example.com",
+    "userName": "Ada"
+   }
+  }
+ },
+ "response": {
+  "status": 502,
+  "body": {
+   "message": "Bad Gateway"
+  }
+ }
+}

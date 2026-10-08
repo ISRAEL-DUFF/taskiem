@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/accounts/balance/166012843397415-anc_acc","headers":{"x-anchor-key":"anc_test_key"}},
+ "response":{"status":200,"body":{"data":{"availableBalance":4950000,"ledgerBalance":5000000,"hold":50000,"pending":0}}}}

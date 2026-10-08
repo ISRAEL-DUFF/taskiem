@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/transfer/by-reference/tsk_ab12cd34ef56gh78ij90kl12mn34op56","headers":{"Authorization":"Bearer lenco_test_token"}},
+ "response":{"status":400,"body":{"status":false,"message":"Transaction was not found","data":[]}}}

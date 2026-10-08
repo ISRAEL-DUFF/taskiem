@@ -1,0 +1,34 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/bvn_with_phone_advance",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "phone_number": "0703000002"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "detail": "Verification successful",
+   "response_code": "00",
+   "data": {
+    "bvn": "22280005737",
+    "dateOfBirth": "21-Aug-1904",
+    "firstName": "JUITH",
+    "gender": "Female",
+    "lastName": "KTEBE",
+    "phoneNumber": "0703000002",
+    "photo": "",
+    "watchListed": "False"
+   },
+   "verification": {
+    "status": "VERIFIED",
+    "reference": "e2cfb3c"
+   }
+  }
+ }
+}

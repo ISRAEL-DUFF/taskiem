@@ -1,0 +1,1020 @@
+{
+  "language": "ig",
+  "reviewed": false,
+  "status": "DRAFT, NOT REVIEWED. Machine-assisted draft written without a native speaker. Do not treat as accurate; shown only where an operator or tenant turns this language on. A native speaker reviews each entry and sets reviewed to true (docs/languages.md).",
+  "reviewers": [],
+  "messages": {
+    "approval.status.approved": {
+      "text": "kwadoro",
+      "reviewed": false
+    },
+    "approval.status.cancelled": {
+      "text": "kagburu",
+      "reviewed": false
+    },
+    "approval.status.expired": {
+      "text": "gwụchara oge",
+      "reviewed": false
+    },
+    "approval.status.open": {
+      "text": "mepere emepe",
+      "reviewed": false
+    },
+    "approval.status.rejected": {
+      "text": "jụrụ",
+      "reviewed": false
+    },
+    "button.approve": {
+      "text": "Kwado",
+      "reviewed": false
+    },
+    "button.cancel": {
+      "text": "Kagbuo",
+      "reviewed": false
+    },
+    "button.enter_pin": {
+      "text": "Tinye PIN",
+      "reviewed": false
+    },
+    "button.fill_in": {
+      "text": "Dejupụta",
+      "reviewed": false
+    },
+    "button.no": {
+      "text": "Mba",
+      "reviewed": false
+    },
+    "button.reject": {
+      "text": "Jụ",
+      "reviewed": false
+    },
+    "button.yes_run": {
+      "text": "Ee, malite ya",
+      "reviewed": false
+    },
+    "button.yes_save": {
+      "text": "Ee, chekwaa ya",
+      "reviewed": false
+    },
+    "lang.current": {
+      "text": "Ana m edere gị n'asụsụ {language}. Asụsụ dị ebe a: {languages}. Ziga *language* na aha iji gbanwee.",
+      "reviewed": false
+    },
+    "lang.detected": {
+      "text": "(Aga m aza n'asụsụ {language}. Ziga *language english* iji gbanwee.)",
+      "reviewed": false
+    },
+    "lang.draft_note": {
+      "text": "Ntụgharị a bụ mbido ndị na-asụ Igbo dịka asụsụ obodo ha ka na-elebebeghị anya. Ziga *language english* ka ịlaghachi na Bekee.",
+      "reviewed": false
+    },
+    "lang.switched": {
+      "text": "Site ugbu a gaa n'ihu aga m na-edere gị n'asụsụ {language}.",
+      "reviewed": false
+    },
+    "lang.unavailable": {
+      "text": "{name} adịghị ebe a. Asụsụ dị ebe a: {languages}.",
+      "reviewed": false
+    },
+    "run.status.cancelled": {
+      "text": "akagbuola",
+      "reviewed": false
+    },
+    "run.status.completed": {
+      "text": "agwụla",
+      "reviewed": false
+    },
+    "run.status.failed": {
+      "text": "dara",
+      "reviewed": false
+    },
+    "run.status.needs_reconciliation": {
+      "text": "chọrọ nlele",
+      "reviewed": false
+    },
+    "run.status.queued": {
+      "text": "nọ n'ahịrị",
+      "reviewed": false
+    },
+    "run.status.running": {
+      "text": "na-arụ ọrụ",
+      "reviewed": false
+    },
+    "run.status.waiting": {
+      "text": "na-eche",
+      "reviewed": false
+    },
+    "sms.reconcile": {
+      "text": "Ana-enyocha aririo gi {reference}. Anyi ga-agwa gi.",
+      "reviewed": false
+    },
+    "ussd.busy": {
+      "text": "Oru a na-arusi ike. Biko nwaa ozo n'oge na-adighi anya.",
+      "reviewed": false
+    },
+    "ussd.ended": {
+      "text": "Oge a agwula. Biko kpoo ozo.",
+      "reviewed": false
+    },
+    "ussd.expired": {
+      "text": "Oge gi agwula. Biko kpoo ozo.",
+      "reviewed": false
+    },
+    "ussd.gone": {
+      "text": "Oru a adighi.",
+      "reviewed": false
+    },
+    "ussd.language.back": {
+      "text": "Laghachi",
+      "reviewed": false
+    },
+    "ussd.language.choose": {
+      "text": "Horo asusu gi:",
+      "reviewed": false
+    },
+    "ussd.language.entry": {
+      "text": "Asusu",
+      "reviewed": false
+    },
+    "ussd.language.invalid": {
+      "text": "Nhoro ezighi ezi. Nwaa ozo.",
+      "reviewed": false
+    },
+    "ussd.language.set": {
+      "text": "Asusu: {language}",
+      "reviewed": false
+    },
+    "ussd.language.set_draft": {
+      "text": "Asusu: {language} (mbido)",
+      "reviewed": false
+    },
+    "ussd.not_taken": {
+      "text": "Ndo, anyi enweghi ike ina aririo gi. O dighi ihe malitere. Biko nwaa ozo.",
+      "reviewed": false
+    },
+    "ussd.too_many": {
+      "text": "Arịrịo adịla otutu site na nomba a. Biko nwaa ozo ma emechaa.",
+      "reviewed": false
+    },
+    "voice.empty": {
+      "text": "Anụghị m okwu ọ bụla n'ozi olu ahụ. Biko pịnye ozi gị.",
+      "reviewed": false
+    },
+    "voice.failed": {
+      "text": "Aghọtaghị m ozi olu ahụ. Biko pịnye ozi gị.",
+      "reviewed": false
+    },
+    "voice.heard": {
+      "text": "Ozi olu ka nọ na nnwale (beta), ya mere biko lelee nke a. Ihe m nụrụ: \"{transcript}\"",
+      "reviewed": false
+    },
+    "voice.off": {
+      "text": "Ozi olu anaghị arụ ọrụ ebe a ugbu a. Biko pịnye ozi gị.",
+      "reviewed": false
+    },
+    "voice.too_large": {
+      "text": "Ozi olu ahụ buru oke ibu. Biko ziga nke dị mkpụmkpụ, ma ọ bụ pịnye ozi gị.",
+      "reviewed": false
+    },
+    "voice.too_long": {
+      "text": "Ozi olu ahụ karịrị sekọnd {seconds}. Biko ziga nke dị mkpụmkpụ, ma ọ bụ pịnye ozi gị.",
+      "reviewed": false
+    },
+    "voice.too_many": {
+      "text": "Ị zigala ọtụtụ ozi olu ugbu a. Biko pịnye ozi gị.",
+      "reviewed": false
+    },
+    "voice.type_now": {
+      "text": "Biko pịnye azịza gị: ozi olu bụ naanị maka ịmalite ihe ọhụrụ.",
+      "reviewed": false
+    },
+    "voice.unsupported": {
+      "text": "Naanị ozi olu na ụda ka m nwere ike ige ntị. Biko pịnye ozi gị.",
+      "reviewed": false
+    },
+    "wa.approval.already": {
+      "text": "Arịrịọ ahụ {status} ugbu a.",
+      "reviewed": false
+    },
+    "wa.approval.already_decided": {
+      "text": "Ị kpebiela arịrịọ a.",
+      "reviewed": false
+    },
+    "wa.approval.answered": {
+      "text": "Azaala arịrịọ ahụ site na nkata a.",
+      "reviewed": false
+    },
+    "wa.approval.closed": {
+      "text": "Emechiela arịrịọ ahụ.",
+      "reviewed": false
+    },
+    "wa.approval.denied": {
+      "text": "Ị pụghị ikpebi nkwado na {org} (ọ chọrọ approval.decide).",
+      "reviewed": false
+    },
+    "wa.approval.expires": {
+      "text": "Arịrịọ a ga-agwụ {time} UTC.",
+      "reviewed": false
+    },
+    "wa.approval.level": {
+      "text": "{env}, ọkwa {level} n'ime {levels}",
+      "reviewed": false
+    },
+    "wa.approval.needed": {
+      "text": "A chọrọ nkwado: {title} ({where})",
+      "reviewed": false
+    },
+    "wa.approval.next_level": {
+      "text": "Arịrịọ ahụ agaala n'ọkwa ọzọ. Ziga *approvals* ka ị hụ ihe na-eche gị.",
+      "reviewed": false
+    },
+    "wa.approval.not_recorded": {
+      "text": "Edeghị ya: {reason}.",
+      "reviewed": false
+    },
+    "wa.approval.other_person": {
+      "text": "E zigara onye ọzọ arịrịọ ahụ; enweghị ike ikpebi ya site na nọmba a.",
+      "reviewed": false
+    },
+    "wa.approval.recorded_approved": {
+      "text": "Edela ya: ị kwadoro {step}.",
+      "reviewed": false
+    },
+    "wa.approval.recorded_rejected": {
+      "text": "Edela ya: ị jụrụ {step}.",
+      "reviewed": false
+    },
+    "wa.approval.result_approved": {
+      "text": "Akwadoro arịrịọ ahụ, ọrụ ahụ na-aga n'ihu.",
+      "reviewed": false
+    },
+    "wa.approval.result_rejected": {
+      "text": "Ajụrụ arịrịọ ahụ.",
+      "reviewed": false
+    },
+    "wa.approval.result_waiting": {
+      "text": "Ọ na-eche nkwado ndị ọzọ.",
+      "reviewed": false
+    },
+    "wa.approval.stale": {
+      "text": "Bọtịnụ ahụ adịghịzi mma. Ziga *approvals* ka ị hụ ihe na-eche gị.",
+      "reviewed": false
+    },
+    "wa.approvals.denied": {
+      "text": "Ị naghị ekpebi nkwado na {org}.",
+      "reviewed": false
+    },
+    "wa.approvals.none": {
+      "text": "Ọ dịghị ihe na-eche gị.",
+      "reviewed": false
+    },
+    "wa.build.budget": {
+      "text": "Mmefu AI nke ọnwa a maka {org} agwụla, ya mere enweghị m ike iwu nke a ugbu a. Ị ka nwere ike iwu usoro ọrụ na ngwa weebụ.",
+      "reviewed": false
+    },
+    "wa.build.budget_ran_out": {
+      "text": "Mmefu AI nke ọnwa a gwụrụ tupu mbido ahụ adị njikere. Ị ka nwere ike iwu usoro ọrụ na ngwa weebụ.",
+      "reviewed": false
+    },
+    "wa.build.denied": {
+      "text": "Ị pụghị iwu usoro ọrụ na {org} (ọ chọrọ workflow.edit).",
+      "reviewed": false
+    },
+    "wa.build.denied_now": {
+      "text": "Ị pụghịzi iwu usoro ọrụ na {org}.",
+      "reviewed": false
+    },
+    "wa.build.denied_save": {
+      "text": "Ị pụghịzi iwu usoro ọrụ na {org}; a chekwaghị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.build.details_invalid": {
+      "text": "Na nkọwa ndị ahụ usoro ọrụ ahụ agafeghị nlele Taskiem ({problem}). Wuo ya na ngwa weebụ{link}.",
+      "reviewed": false
+    },
+    "wa.build.details_misfit": {
+      "text": "Nkọwa ndị ahụ adabaghị na ndebiri ahụ: {reason}. Ziga *build* ọzọ ka ịmalite ọhụrụ.",
+      "reviewed": false
+    },
+    "wa.build.failed": {
+      "text": "Iwu ahụ dara. Nwaa ọzọ mgbe oge ole na ole gasịrị, ma ọ bụ wuo ya na ngwa weebụ{link}.",
+      "reviewed": false
+    },
+    "wa.build.gone": {
+      "text": "Mbido ahụ anaghịzi echere ka echekwaa ya (echekwala ya ma ọ bụ dochie ya n'ebe ọzọ).",
+      "reviewed": false
+    },
+    "wa.build.head": {
+      "text": "Lee usoro ọrụ m dere:",
+      "reviewed": false
+    },
+    "wa.build.head_template": {
+      "text": "Lee usoro ọrụ m dere, malite na ndebiri *{template}*:",
+      "reviewed": false
+    },
+    "wa.build.invalid": {
+      "text": "Enweghị m ike ide usoro ọrụ maka nke ahụ gafere nlele Taskiem. Nwaa ịkọwa ya n'ụzọ ọzọ (ihe na-amalite ya, na ihe kwesịrị ime), ma ọ bụ wuo ya na ngwa weebụ{link}.",
+      "reviewed": false
+    },
+    "wa.build.limit": {
+      "text": "A chekwaghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.build.more_steps": {
+      "text": "…na nzọụkwụ {count} ọzọ; lee ha na Taskiem.",
+      "reviewed": false
+    },
+    "wa.build.need_details": {
+      "text": "Achọrọ m nkọwa {count} ọzọ iji mezue ya. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.build.not_saved": {
+      "text": "Ọ dị mma, a chekwaghị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.build.off": {
+      "text": "Edobeghị iwu site na AI na Taskiem a. Ị nwere ike iwu usoro ọrụ na ngwa weebụ.",
+      "reviewed": false
+    },
+    "wa.build.refused": {
+      "text": "Enweghị m ike iwu nke ahụ. Nwaa ịkọwa ya n'ụzọ ọzọ.",
+      "reviewed": false
+    },
+    "wa.build.save_question": {
+      "text": "Ka m chekwaa nke a dịka mbido usoro ọrụ? Zaa *yes* ma ọ bụ *no*. (Mbido anaghị arụ ọrụ ruo mgbe ebipụtara ya na Taskiem.)",
+      "reviewed": false
+    },
+    "wa.build.save_reminder": {
+      "text": "Zaa *yes* ka m chekwaa mbido ahụ, ma ọ bụ *no*.",
+      "reviewed": false
+    },
+    "wa.build.saved": {
+      "text": "Echekwala *{name}* dịka mbido. Ọ malitebeghị ọrụ: lelee ya, debe njikọ na mgbanwe ọ chọrọ, ma bipụta ya na Taskiem{link}.",
+      "reviewed": false
+    },
+    "wa.build.still_drafting": {
+      "text": "Ana m ede usoro ọrụ gị; aga m eziga ya mgbe ọ dị njikere. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.build.too_long": {
+      "text": "Nke ahụ dị ogologo nke ukwuu; kọwaa ya n'ihe na-erughị mkpụrụedemede {max}.",
+      "reviewed": false
+    },
+    "wa.build.too_many": {
+      "text": "Ị rịọla ọtụtụ iwu ugbu a. Chere otu nkeji, wee nwaa ọzọ.",
+      "reviewed": false
+    },
+    "wa.build.unreadable": {
+      "text": "Enweghị ike ịgụghachi mbido ahụ. Wuo ya na ngwa weebụ{link}.",
+      "reviewed": false
+    },
+    "wa.build.variables": {
+      "text": "Tupu ọ rụọ ọrụ, debe mgbanwe ndị a na Taskiem: {names}.",
+      "reviewed": false
+    },
+    "wa.build.warn_policy": {
+      "text": "Ịdọ aka na ntị: otu nzọụkwụ na-ebugharị ego na-enweghị nkwado tupu ya.",
+      "reviewed": false
+    },
+    "wa.build.warn_test": {
+      "text": "Ịdọ aka na ntị: nnwale mbido ahụ agafeghị; lelee ya na Taskiem tupu ibipụta ya.",
+      "reviewed": false
+    },
+    "wa.build.what": {
+      "text": "Gwa m ihe ị chọrọ ka ọ na-eme onwe ya mgbe *build* gasịrị, dịka:\n*build every Friday text my customers who owe me*",
+      "reviewed": false
+    },
+    "wa.build.with_details": {
+      "text": "Daalụ. Na nkọwa gị:\n\n{steps}\n\nKa m chekwaa nke a dịka mbido usoro ọrụ? Zaa *yes* ma ọ bụ *no*.",
+      "reviewed": false
+    },
+    "wa.build.working": {
+      "text": "Ana m arụ ya: ana m ede usoro ọrụ ahụ, aga m ezitere gị nzọụkwụ ya ka ị lelee. Nke a nwere ike were otu nkeji ma ọ bụ abụọ. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.button_invalid": {
+      "text": "Bọtịnụ ahụ adịghị mma.",
+      "reviewed": false
+    },
+    "wa.cancelled": {
+      "text": "Akagbuola ya.",
+      "reviewed": false
+    },
+    "wa.cancelled_nothing_started": {
+      "text": "Akagbuola ya. Ọ dịghị ihe malitere.",
+      "reviewed": false
+    },
+    "wa.cannot_act": {
+      "text": "Akaụntụ gị enweghịzi ike ime ihe ọ bụla na {org}.",
+      "reviewed": false
+    },
+    "wa.code_failed": {
+      "text": "Koodu ahụ ejikọghị nọmba a: {reason}.",
+      "reviewed": false
+    },
+    "wa.confirm_reminder": {
+      "text": "Zaa *yes* ka {workflow} malite, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.field.enter": {
+      "text": "Tinye {label}",
+      "reviewed": false
+    },
+    "wa.field.enter_number": {
+      "text": "Tinye {label} (nọmba)",
+      "reviewed": false
+    },
+    "wa.field.enter_one_of": {
+      "text": "Tinye {label} (otu n'ime: {options})",
+      "reviewed": false
+    },
+    "wa.field.enter_whole": {
+      "text": "Tinye {label} (nọmba zuru oke)",
+      "reviewed": false
+    },
+    "wa.field.enter_yes_no": {
+      "text": "Tinye {label} (ee ma ọ bụ mba)",
+      "reviewed": false
+    },
+    "wa.field.not_number": {
+      "text": "nke ahụ abụghị nọmba",
+      "reviewed": false
+    },
+    "wa.field.not_whole": {
+      "text": "nke ahụ abụghị nọmba zuru oke",
+      "reviewed": false
+    },
+    "wa.field.yes_no": {
+      "text": "zaa ee ma ọ bụ mba",
+      "reviewed": false
+    },
+    "wa.form.gone": {
+      "text": "A chọghịzi fọm ahụ. Ziga *run* na aha usoro ọrụ ka ịmalite ọzọ.",
+      "reviewed": false
+    },
+    "wa.form.inputs": {
+      "text": "{workflow} chọrọ ntinye {count}. Pịa *{cta}* ka itinye ha; ị ga-akwado tupu ọ malite. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.form.invalid": {
+      "text": "Fọm ahụ adịghịzi mma.",
+      "reviewed": false
+    },
+    "wa.form.not_confirmed": {
+      "text": "Akwadoghị mkpebi ahụ. Pịa bọtịnụ ahụ ọzọ, ma ọ bụ kpebie na Taskiem.",
+      "reviewed": false
+    },
+    "wa.form.pin_approve": {
+      "text": "Iji kwado {step}, tinye PIN WhatsApp gị n'ime nkeji 10.",
+      "reviewed": false
+    },
+    "wa.form.pin_reject": {
+      "text": "Iji jụ {step}, tinye PIN WhatsApp gị n'ime nkeji 10.",
+      "reviewed": false
+    },
+    "wa.handoff.approve": {
+      "text": "Iji kwado {step}, kwado ya site na passkey gị ma ọ bụ koodu authenticator na Taskiem n'ime nkeji 10:\n{link}",
+      "reviewed": false
+    },
+    "wa.handoff.no_link": {
+      "text": "Mkpebi a chọrọ passkey gị ma ọ bụ koodu authenticator: kpebie ya na ngwa weebụ Taskiem, n'okpuru Approvals.",
+      "reviewed": false
+    },
+    "wa.handoff.recorded": {
+      "text": "Edela ya site na nkwenye agbakwunyere: mkpebi gị gbasara {step} ({status}).",
+      "reviewed": false
+    },
+    "wa.handoff.reject": {
+      "text": "Iji jụ {step}, kwado ya site na passkey gị ma ọ bụ koodu authenticator na Taskiem n'ime nkeji 10:\n{link}",
+      "reviewed": false
+    },
+    "wa.help.approvals": {
+      "text": "• *approvals*: arịrịọ na-eche gị",
+      "reviewed": false
+    },
+    "wa.help.build": {
+      "text": "• *build* na ihe ị chọrọ ka ọ na-eme onwe ya, dịka *build every Friday text my customers who owe me* (a ga-echekwa ya dịka mbido mgbe ị kwadoro)",
+      "reviewed": false
+    },
+    "wa.help.cancel": {
+      "text": "• *cancel*: hapụ ihe na-aga n'ihu",
+      "reviewed": false
+    },
+    "wa.help.intro": {
+      "text": "Ị nwere ike iziga:",
+      "reviewed": false
+    },
+    "wa.help.language": {
+      "text": "• *language* na aha asụsụ: azịza n'asụsụ {languages}",
+      "reviewed": false
+    },
+    "wa.help.run": {
+      "text": "• *run* na aha usoro ọrụ: malite ya (ị ga-ebu ụzọ kwado)",
+      "reviewed": false
+    },
+    "wa.help.status": {
+      "text": "• *status*: ihe rụrụ ọrụ na ihe dara taa",
+      "reviewed": false
+    },
+    "wa.help.switch": {
+      "text": "• *switch* na aha nzukọ: rụọ ọrụ na nke ọzọ",
+      "reviewed": false
+    },
+    "wa.help.voice": {
+      "text": "• ozi olu: aga m anwa ide ya (nnwale)",
+      "reviewed": false
+    },
+    "wa.link_at": {
+      "text": " na {url}",
+      "reviewed": false
+    },
+    "wa.linked": {
+      "text": "Ejikọọla nọmba a na akaụntụ Taskiem gị. Ziga *help* ka ị hụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false
+    },
+    "wa.no_org": {
+      "text": "Akaụntụ Taskiem gị enweghị nzukọ ọ bụla na-arụ ọrụ.",
+      "reviewed": false
+    },
+    "wa.not_member": {
+      "text": "Akaụntụ Taskiem gị esoghị na nzukọ a.",
+      "reviewed": false
+    },
+    "wa.not_understood": {
+      "text": "Ndo, aghọtaghị m nke ahụ.",
+      "reviewed": false
+    },
+    "wa.nothing_to_cancel": {
+      "text": "Ọ dịghị ihe a ga-akagbu.",
+      "reviewed": false
+    },
+    "wa.outcome.body": {
+      "text": "Ọrụ ị malitere site na WhatsApp agwụla.",
+      "reviewed": false
+    },
+    "wa.outcome.cancelled": {
+      "text": "Akagburu {workflow} na {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.completed": {
+      "text": "{workflow} agwụla na {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.failed": {
+      "text": "{workflow} dara na {env}.",
+      "reviewed": false
+    },
+    "wa.outcome.needs_reconciliation": {
+      "text": "{workflow} chọrọ nlele na {env}.",
+      "reviewed": false
+    },
+    "wa.public.bad_details": {
+      "text": "Nkọwa ahụ adabaghị: {problems}. Ziga *menu* ka ịmalite ọzọ.",
+      "reviewed": false
+    },
+    "wa.public.busy": {
+      "text": "Ọrụ a nọ na-arụsi ike ugbu a. Nwaa ọzọ ma emechaa.",
+      "reviewed": false
+    },
+    "wa.public.cancelled": {
+      "text": "Akagbuola ya. Ziga *menu* ka ị hụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false
+    },
+    "wa.public.changed": {
+      "text": "{label} agbanweela ma ọ bụ adịghịzi. Ziga *menu* ka ịmalite ọzọ.",
+      "reviewed": false
+    },
+    "wa.public.confirm": {
+      "text": "{label}\n\nZaa *yes* ka anyị gaa n'ihu, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.confirm_inputs": {
+      "text": "{label} na:\n{inputs}\n\nZaa *yes* ka anyị gaa n'ihu, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.confirm_reminder": {
+      "text": "Zaa *yes* ka anyị gaa n'ihu, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.public.form": {
+      "text": "{label}: pịa *{cta}* ka itinye nkọwa. Ị ga-akwado tupu ihe ọ bụla emee.",
+      "reviewed": false
+    },
+    "wa.public.form_failed": {
+      "text": "Enweghị ike imepe fọm ahụ. Nwaa ọzọ ma emechaa.",
+      "reviewed": false
+    },
+    "wa.public.form_gone": {
+      "text": "A chọghịzi fọm ahụ. Ziga *menu* ka ịmalite ọzọ.",
+      "reviewed": false
+    },
+    "wa.public.menu": {
+      "text": "Gịnị ka ị chọrọ ime? Zaa na nọmba:\n{list}\n\nZiga *cancel* oge ọ bụla.",
+      "reviewed": false
+    },
+    "wa.public.not_here": {
+      "text": "{label} adịghị na WhatsApp.",
+      "reviewed": false
+    },
+    "wa.public.started": {
+      "text": "Emechaala: {label} amalitela. Nọmba ntụaka gị bụ {reference}.",
+      "reviewed": false
+    },
+    "wa.public.too_many": {
+      "text": "Arịrịọ adịla ọtụtụ ugbu a. Nwaa ọzọ ma emechaa.",
+      "reviewed": false
+    },
+    "wa.public.unavailable": {
+      "text": "{label} adịghị ugbu a.",
+      "reviewed": false
+    },
+    "wa.run.bad_inputs": {
+      "text": "Ntinye adabaghị {workflow}: {problems}. Ziga *run* ọzọ.",
+      "reviewed": false
+    },
+    "wa.run.changed": {
+      "text": "{workflow} gbanwere mgbe ị na-akwado. Ziga *run* ọzọ.",
+      "reviewed": false
+    },
+    "wa.run.confirm": {
+      "text": "Ka m malite {workflow} (ụdị {version}) na {env}?\n\nZaa *yes* ka ọ malite ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.run.confirm_inputs": {
+      "text": "Ka m malite {workflow} (ụdị {version}) na {env} na:\n{inputs}\n\nZaa *yes* ka ọ malite ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.run.denied": {
+      "text": "Ị pụghị ịmalite ọrụ na {org} (ọ chọrọ run.start).",
+      "reviewed": false
+    },
+    "wa.run.denied_now": {
+      "text": "Ị pụghịzi ịmalite ọrụ na {org}.",
+      "reviewed": false
+    },
+    "wa.run.does_not_fit": {
+      "text": "Nke ahụ adabaghị: {reason}.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.form_closed": {
+      "text": "Emechiela fọm ahụ; zaa ebe a kama. Ziga *cancel* ka ịkwụsị.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.limit": {
+      "text": "Amaliteghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.run.needs_inputs": {
+      "text": "{workflow} chọrọ ntinye {count}. Ziga *cancel* ka ịkwụsị.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.run.no_match": {
+      "text": "Enweghị usoro ọrụ dị na {env} kwekọrọ na {name}. Ziga *run* na aha usoro ọrụ ahụ.",
+      "reviewed": false
+    },
+    "wa.run.started": {
+      "text": "Amalitela {workflow}. Aga m agwa gị mgbe ọ gwụrụ.",
+      "reviewed": false
+    },
+    "wa.run.too_many": {
+      "text": "Ị malitela ọtụtụ ọrụ ugbu a. Chere otu nkeji, wee nwaa ọzọ.",
+      "reviewed": false
+    },
+    "wa.run.unsupported_inputs": {
+      "text": "{workflow} chọrọ ntinye a na-enweghị ike itinye ebe a ugbu a. Malite ya na Taskiem.",
+      "reviewed": false
+    },
+    "wa.run.which": {
+      "text": "Kedu nke?\n{list}\nZiga *run* na aha ya zuru oke.",
+      "reviewed": false
+    },
+    "wa.status.denied": {
+      "text": "Ị pụghị ịhụ ọrụ na {org} (ọ chọrọ run.read).",
+      "reviewed": false
+    },
+    "wa.status.failed_head": {
+      "text": "Ihe dara:",
+      "reviewed": false
+    },
+    "wa.status.failed_line": {
+      "text": "• {workflow} ({env}) {what} n'elekere {time} UTC",
+      "reviewed": false
+    },
+    "wa.status.none": {
+      "text": "Enweghị ọrụ ọ bụla n'ime awa 24 gara aga.",
+      "reviewed": false
+    },
+    "wa.status.nothing_failed": {
+      "text": "Ọ dịghị ihe dara.",
+      "reviewed": false
+    },
+    "wa.status.summary": {
+      "text": "Awa 24 gara aga: ọrụ {count} ({parts}).",
+      "reviewed": false
+    },
+    "wa.status.summary_one": {
+      "text": "Awa 24 gara aga: ọrụ {count} ({parts}).",
+      "reviewed": false
+    },
+    "wa.status.waiting": {
+      "text": "Nkwado {count} na-eche gị: ziga *approvals*.",
+      "reviewed": false
+    },
+    "wa.stepup_waiting": {
+      "text": "Mkpebi gị gbasara {step} na-eche ka ị kwado ya na Taskiem site na njikọ e zitere gị. Ziga *cancel* ka ịhapụ ya.",
+      "reviewed": false
+    },
+    "wa.switch.current": {
+      "text": "Ị na-arụ ọrụ na {org}. Nzukọ gị:\n{list}\nZiga *switch* na aha iji gbanwee.",
+      "reviewed": false
+    },
+    "wa.switch.done": {
+      "text": "Ugbu a ị na-arụ ọrụ na {org}.",
+      "reviewed": false
+    },
+    "wa.switch.which": {
+      "text": "Kedu nzukọ? Nke gị bụ:\n{list}",
+      "reviewed": false
+    },
+    "wa.too_fast": {
+      "text": "Ị na-ezite ozi ngwa ngwa. Chere otu nkeji, wee nwaa ọzọ.",
+      "reviewed": false
+    },
+    "wa.unbound": {
+      "text": "Ejikọghị nọmba a na akaụntụ Taskiem ọ bụla. Iji Taskiem ebe a, banye, mepee {where}, tinye nọmba a n'okpuru WhatsApp, wee pịnye ma ọ bụ zighachi koodu anyị zitere gị.",
+      "reviewed": false
+    },
+    "wd.alongside": {
+      "text": "N'otu oge: {name}",
+      "reviewed": false
+    },
+    "wd.and": {
+      "text": "{list} na {last}",
+      "reviewed": false
+    },
+    "wd.approval": {
+      "text": "Chere nkwado",
+      "reviewed": false
+    },
+    "wd.approval.policy": {
+      "text": "Nweta nkwado n'okpuru iwu {policy}",
+      "reviewed": false
+    },
+    "wd.approval.role_many": {
+      "text": "Gwa mmadụ {count} nwere ọrụ {role} ka ha kwado",
+      "reviewed": false
+    },
+    "wd.approval.role_one": {
+      "text": "Gwa otu {role} ka ọ kwado",
+      "reviewed": false
+    },
+    "wd.approval.timeout": {
+      "text": "{approval} (ọ na-echere ruo {duration})",
+      "reviewed": false
+    },
+    "wd.branch": {
+      "text": "Kpebie ihe a ga-eme:",
+      "reviewed": false
+    },
+    "wd.code": {
+      "text": "Gbaa koodu nke gị",
+      "reviewed": false
+    },
+    "wd.code_language": {
+      "text": "Gbaa koodu {language} nke gị",
+      "reviewed": false
+    },
+    "wd.connector": {
+      "text": "{action} site na {connector}",
+      "reviewed": false
+    },
+    "wd.container": {
+      "text": "Gbaa akpa",
+      "reviewed": false
+    },
+    "wd.container_named": {
+      "text": "Gbaa akpa {image}",
+      "reviewed": false
+    },
+    "wd.day.friday": {
+      "text": "Fraịdee",
+      "reviewed": false
+    },
+    "wd.day.monday": {
+      "text": "Mọnde",
+      "reviewed": false
+    },
+    "wd.day.saturday": {
+      "text": "Satọdee",
+      "reviewed": false
+    },
+    "wd.day.sunday": {
+      "text": "Ụbọchị Ụka",
+      "reviewed": false
+    },
+    "wd.day.thursday": {
+      "text": "Tọọzdee",
+      "reviewed": false
+    },
+    "wd.day.tuesday": {
+      "text": "Tiuzdee",
+      "reviewed": false
+    },
+    "wd.day.wednesday": {
+      "text": "Wenezdee",
+      "reviewed": false
+    },
+    "wd.foreach": {
+      "text": "Maka ihe ọ bụla n'ime ndepụta:",
+      "reviewed": false
+    },
+    "wd.foreach_limited": {
+      "text": "Maka ihe ọ bụla n'ime ndepụta (ọ karịghị {count} n'otu oge):",
+      "reviewed": false
+    },
+    "wd.http": {
+      "text": "Kpọọ ọrụ mpụga",
+      "reviewed": false
+    },
+    "wd.http_host": {
+      "text": "Kpọọ {host} ({method})",
+      "reviewed": false
+    },
+    "wd.http_service": {
+      "text": "Kpọọ ọrụ mpụga ({method})",
+      "reviewed": false
+    },
+    "wd.if": {
+      "text": "Ọ bụrụ {name}:",
+      "reviewed": false
+    },
+    "wd.on_error": {
+      "text": "Ọ bụrụ na nzọụkwụ ahụ dara:",
+      "reviewed": false
+    },
+    "wd.only_when": {
+      "text": "{step}, naanị ma ọnọdụ ya ziri ezi",
+      "reviewed": false
+    },
+    "wd.or": {
+      "text": " ma ọ bụ ",
+      "reviewed": false
+    },
+    "wd.otherwise": {
+      "text": "Ma ọ bụghị ya:",
+      "reviewed": false
+    },
+    "wd.parallel": {
+      "text": "Mee ihe ndị a n'otu oge:",
+      "reviewed": false
+    },
+    "wd.schedule.daily": {
+      "text": "Kwa ụbọchị n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.days": {
+      "text": "Kwa {days} n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.hourly": {
+      "text": "Kwa awa, na mmalite awa",
+      "reviewed": false
+    },
+    "wd.schedule.hourly_at": {
+      "text": "Kwa awa, nkeji {minute} gafere",
+      "reviewed": false
+    },
+    "wd.schedule.hours": {
+      "text": "Kwa awa {count}",
+      "reviewed": false
+    },
+    "wd.schedule.last_day": {
+      "text": "N'ụbọchị ikpeazụ nke ọnwa ọ bụla n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.minutes": {
+      "text": "Kwa nkeji {count}",
+      "reviewed": false
+    },
+    "wd.schedule.monthly": {
+      "text": "N'ụbọchị {day} nke ọnwa ọ bụla n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw": {
+      "text": "Dịka usoro oge {cron} ({tz})",
+      "reviewed": false
+    },
+    "wd.schedule.raw_local": {
+      "text": "Dịka usoro oge {cron} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.schedule.weekdays": {
+      "text": "Kwa ụbọchị ọrụ (Mọnde ruo Fraịdee) n'elekere {time} (oge {tz})",
+      "reviewed": false
+    },
+    "wd.signal": {
+      "text": "Chere akara",
+      "reviewed": false
+    },
+    "wd.signal_named": {
+      "text": "Chere {event}",
+      "reviewed": false
+    },
+    "wd.transform": {
+      "text": "Kwadebe data maka nzọụkwụ ndị ọzọ",
+      "reviewed": false
+    },
+    "wd.trigger.database_change": {
+      "text": "Mgbe ahịrị n'ime ọdụ data gbanwere",
+      "reviewed": false
+    },
+    "wd.trigger.email": {
+      "text": "Mgbe ozi email bịarutere",
+      "reviewed": false
+    },
+    "wd.trigger.event": {
+      "text": "Mgbe {connector} zitere ihe omume ({trigger})",
+      "reviewed": false
+    },
+    "wd.trigger.event_reports": {
+      "text": "Mgbe {connector} kọrọ {events}",
+      "reviewed": false
+    },
+    "wd.trigger.manual": {
+      "text": "Mgbe mmadụ malitere ya",
+      "reviewed": false
+    },
+    "wd.trigger.other": {
+      "text": "Mgbe a malitere ya ({type})",
+      "reviewed": false
+    },
+    "wd.trigger.polling": {
+      "text": "Kwa {interval}, lelee {connector} ({action}) maka ihe ọhụrụ",
+      "reviewed": false
+    },
+    "wd.trigger.subflow": {
+      "text": "Mgbe usoro ọrụ ọzọ kpọrọ ya",
+      "reviewed": false
+    },
+    "wd.trigger.ussd": {
+      "text": "Mgbe mmadụ kpọrọ koodu USSD",
+      "reviewed": false
+    },
+    "wd.trigger.webhook": {
+      "text": "Mgbe sistemụ gị kpọrọ adreesị weebụ nke usoro ọrụ a",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_checked": {
+      "text": "Mgbe sistemụ gị kpọrọ adreesị weebụ nke usoro ọrụ a (a na-eji {auth} enyocha ya)",
+      "reviewed": false
+    },
+    "wd.trigger.webhook_unsigned": {
+      "text": "Mgbe sistemụ gị kpọrọ adreesị weebụ nke usoro ọrụ a (enweghị nlele mbinye aka)",
+      "reviewed": false
+    },
+    "wd.trigger.whatsapp": {
+      "text": "Mgbe ozi bịarutere na WhatsApp",
+      "reviewed": false
+    },
+    "wd.unit.day_one": {
+      "text": "ụbọchị 1",
+      "reviewed": false
+    },
+    "wd.unit.days": {
+      "text": "ụbọchị {count}",
+      "reviewed": false
+    },
+    "wd.unit.hour_one": {
+      "text": "awa 1",
+      "reviewed": false
+    },
+    "wd.unit.hours": {
+      "text": "awa {count}",
+      "reviewed": false
+    },
+    "wd.unit.minute_one": {
+      "text": "nkeji 1",
+      "reviewed": false
+    },
+    "wd.unit.minutes": {
+      "text": "nkeji {count}",
+      "reviewed": false
+    },
+    "wd.unit.second_one": {
+      "text": "sekọnd 1",
+      "reviewed": false
+    },
+    "wd.unit.seconds": {
+      "text": "sekọnd {count}",
+      "reviewed": false
+    },
+    "wd.wait_for": {
+      "text": "Chere {duration}",
+      "reviewed": false
+    },
+    "wd.wait_until": {
+      "text": "Chere ruo oge e debere",
+      "reviewed": false
+    }
+  }
+}

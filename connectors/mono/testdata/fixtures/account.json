@@ -1,0 +1,47 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v2/accounts/661d759280dbf646242634cc",
+  "headers": {
+   "mono-sec-key": "test_sk_abc",
+   "x-realtime": "true"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Request was succesfully completed",
+   "timestamp": "2026-01-27T12:30:22.399Z",
+   "data": {
+    "account": {
+     "id": "661d759280dbf646242634cc",
+     "name": "Samuel Olamide",
+     "account_number": "1234567890",
+     "currency": "NGN",
+     "balance": 73573,
+     "type": "SAVINGS",
+     "bvn": "6115",
+     "institution": {
+      "name": "GTBank",
+      "bank_code": "058",
+      "type": "PERSONAL_BANKING"
+     }
+    },
+    "customer": {
+     "id": "682dd53a74682beb490a0ed4"
+    },
+    "meta": {
+     "data_status": "AVAILABLE",
+     "auth_method": "internet_banking",
+     "retrieved_data": [
+      "identity",
+      "balance",
+      "transactions"
+     ],
+     "ref": "4055877-T"
+    }
+   }
+  }
+ }
+}

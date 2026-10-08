@@ -1,0 +1,69 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/api/identity/ng/nin",
+  "headers": {
+   "token": "yv_test_key"
+  },
+  "body": {
+   "id": "11111111111",
+   "isSubjectConsent": true,
+   "validations": {
+    "data": {
+     "firstName": "Sarah",
+     "lastName": "Doe",
+     "dateOfBirth": "1988-04-04"
+    },
+    "selfie": {
+     "image": "https://cdn.example.com/s.jpg"
+    }
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "statusCode": 200,
+   "message": "success",
+   "data": {
+    "id": "6491edda239381d3be87a5fb",
+    "address": {
+     "town": "SULEJA",
+     "lga": "Suleja",
+     "state": "Niger",
+     "addressLine": "13B Fake Street, Ilupeju Niger State"
+    },
+    "parentId": null,
+    "status": "found",
+    "reason": null,
+    "dataValidation": true,
+    "selfieValidation": false,
+    "firstName": "Sarah",
+    "middleName": "Jane",
+    "lastName": "Doe",
+    "image": "data:image/jpg;base64,/9j/4AAQSkZJRg",
+    "signature": "data:image/jpg;base64,/9j/4AAQ",
+    "mobile": "08000000000",
+    "email": null,
+    "birthState": "Edo",
+    "dateOfBirth": "1988-04-04",
+    "isConsent": true,
+    "idNumber": "11111111111",
+    "type": "nin",
+    "allValidationPassed": true,
+    "gender": "f",
+    "country": "NG",
+    "createdAt": "2023-06-20T18:20:11.657Z",
+    "metadata": {},
+    "requestedBy": {
+     "firstName": "API",
+     "lastName": "User",
+     "middleName": "",
+     "id": "62c2a4868d3193700828014e"
+    }
+   },
+   "links": []
+  }
+ }
+}

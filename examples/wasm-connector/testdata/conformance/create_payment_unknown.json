@@ -1,0 +1,17 @@
+{
+  "action": "create_payment",
+  "input": {
+    "amount": 5000,
+    "account_number": "0123456789"
+  },
+  "credentials": {
+    "api_key": "test-key"
+  },
+  "idempotency_key": "tsk_7w2xq4m6k3z8r5t1y9u0p2s4d6f8h1jl",
+  "exchanges": [
+    "payment_server_error"
+  ],
+  "expect": {
+    "error": "unknown_outcome"
+  }
+}

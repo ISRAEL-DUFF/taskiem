@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/collections/api/v1/gettransaction.json",
+  "headers": {},
+  "query": {
+   "merchantcode": "MX6072",
+   "transactionreference": "order-17",
+   "amount": "150050"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "Amount": 0,
+   "SplitAccounts": [],
+   "TransactionDate": "0001-01-01T00:00:00",
+   "ResponseCode": "Z25",
+   "ResponseDescription": "Transaction not Found"
+  }
+ }
+}

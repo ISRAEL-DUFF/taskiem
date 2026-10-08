@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/payment/close",
+  "headers": {
+   "MerchantId": "256621051120756",
+   "Authorization": "Bearer ad982b92e8204e70895ee117203e0689b851499230916d3e8105e280677c9d95feae099583b60e255771ab9d7d07328d7d9ce7abe97c717f5019180ecc4bb669"
+  },
+  "body": {
+   "country": "NG",
+   "reference": "tskab12cd34ef56gh78ij90kl12mn34op5"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": "00000",
+   "message": "SUCCESSFUL",
+   "data": {
+    "reference": "tskab12cd34ef56gh78ij90kl12mn34op5",
+    "orderNo": "211018140366538753",
+    "country": "NG",
+    "amount": {
+     "total": 150000,
+     "currency": "NGN"
+    },
+    "orderStatus": "CLOSE"
+   }
+  }
+ }
+}

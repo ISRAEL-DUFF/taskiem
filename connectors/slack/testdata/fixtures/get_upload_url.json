@@ -1,0 +1,8 @@
+{
+ "status": 200,
+ "body": {
+  "ok": true,
+  "upload_url": "UPLOAD_URL",
+  "file_id": "F123ABC456"
+ }
+}

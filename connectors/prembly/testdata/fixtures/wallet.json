@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/wallet",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "data": {
+    "balance": "1500.00",
+    "currency": "NGN"
+   }
+  }
+ }
+}

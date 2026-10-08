@@ -1,0 +1,294 @@
+# Remita (SystemSpecs): invoice (RRR) generation, status and cancellation,
+# payment notifications, and Funds Transfer (single and bulk payments,
+# their status, bank list and name enquiry). Built from Remita's public API
+# documentation at api.remita.net (the published "Remita APIs" Postman
+# collection, sections Authentication, Accept Payments > Invoice Generation,
+# Funds Transfer > Rest Interface and Response Codes), read 6 October 2026
+# (docs/integrations/remita.md).
+manifest: connector/v1
+id: remita
+version: 1.0.0
+name: Remita
+description: Remita invoices (RRR) and their status, payment notifications, and Funds Transfer single and bulk payments with status, bank list and name enquiry.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: secret_key, label: "RemitaConnect secret key (Funds Transfer; secretKey header)", secret: true, required: false }
+    - { key: merchant_id, label: Remita merchant id (invoices), secret: false, required: false }
+    - { key: api_key, label: Remita API key (invoices; hashed into every invoice request), secret: true, required: false }
+    - { key: service_type_id, label: Default service type id for invoices, secret: false, required: false }
+    - { key: source_account_number, label: Account to pay transfers from (sent as sourceAccountNumber), secret: false, required: false }
+    - { key: source_bank_code, label: Its bank code, secret: false, required: false }
+    - { key: source_account_name, label: Its account name, secret: false, required: false }
+    - { key: environment, label: "Environment: live (default) or demo", secret: false, required: false }
+    - { key: callback_token, label: "Callback token: a long random value you add to the notification URL as ?token=", secret: true, required: false }
+  test: { action: list_banks }
+# Funds Transfer and the other new APIs. Invoice APIs use demo.remita.net
+# (and remitademo.net for cancellation) in the demo environment; Remita's
+# public documentation does not name their live host (see the guide).
+base_url: https://api-gateway.remita.net
+egress_hosts: [api-gateway.remita.net, api-demo.systemspecsng.com, demo.remita.net, remitademo.net]
+actions:
+  list_banks:
+    title: List banks
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        banks:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              name: { type: string }
+  resolve_account:
+    title: Resolve account name
+    description: Interbank name enquiry. Call before paying a new account; transfers send the account name.
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code]
+      properties:
+        account_number: { type: string }
+        bank_code:      { type: string, description: From list_banks }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_code:      { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  transfer:
+    title: Transfer to a bank account (single payment)
+    description: >-
+      One debit, one credit. Usually returns pending; get_transfer reports
+      the outcome. A transfer Remita reports failed (a documented failure
+      code) fails the step with Remita's reason; codes Remita does not list
+      are pending, as Remita advises. Amounts are kobo; Remita is sent naira.
+    class: idempotent_write
+    idempotency:
+      field: payment_identifier
+      encoding: hex_lower
+      length: 32
+      limits: { max_length: 50, charset: "0-9a-f" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, account_number, bank_code, account_name, narration]
+      properties:
+        amount:                { type: integer, minimum: 1, description: Kobo }
+        account_number:        { type: string }
+        bank_code:             { type: string, description: From list_banks }
+        account_name:          { type: string, description: From resolve_account }
+        narration:             { type: string }
+        source_account_number: { type: string, description: Defaults to the connection's }
+        source_bank_code:      { type: string }
+        source_account_name:   { type: string }
+        payment_identifier:    { type: string }
+    output: { $ref: '#/actions/get_transfer/output' }
+    pii:
+      - { field: source_account_name, category: name }
+      - { field: source_account_number, category: account_number }
+      - { field: account_number, category: account_number }
+      - { field: account_name, category: name }
+  get_transfer:
+    title: Get a single payment's status
+    class: read
+    input:
+      type: object
+      required: [payment_identifier]
+      properties:
+        payment_identifier: { type: string }
+    output:
+      type: object
+      properties:
+        payment_identifier:        { type: string, description: The reference sent }
+        remita_payment_identifier: { type: string, description: The paymentIdentifier Remita returned }
+        status:                    { type: string, enum: [pending, successful, failed] }
+        response_code:             { type: string }
+        response_message:          { type: string }
+        transaction_state:         { type: string }
+        amount:                    { type: integer, description: Kobo, as Remita reports it }
+        authorization_id:          { type: string }
+        debit_completed:           { type: boolean }
+        reversed:                  { type: boolean }
+  bulk_transfer:
+    title: Transfer to several bank accounts (bulk payment)
+    description: >-
+      One debit, many credits, in one batch. Each item's paymentIdentifier is
+      derived from the batch's, so a resend carries the same ones. The batch
+      starts INITIATED; get_bulk_transfer reports each credit.
+    class: idempotent_write
+    idempotency:
+      field: batch_payment_identifier
+      encoding: hex_lower
+      length: 32
+      limits: { max_length: 50, charset: "0-9a-f" }
+    compensate: null
+    input:
+      type: object
+      required: [transfers, narration]
+      properties:
+        transfers:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [amount, account_number, bank_code, account_name]
+            properties:
+              amount:         { type: integer, minimum: 1, description: Kobo }
+              account_number: { type: string }
+              bank_code:      { type: string }
+              account_name:   { type: string }
+              narration:      { type: string }
+        narration:                { type: string, description: The batch's narration }
+        custom_reference:         { type: string }
+        source_account_number:    { type: string }
+        source_bank_code:         { type: string }
+        source_account_name:      { type: string }
+        batch_payment_identifier: { type: string }
+    output: { $ref: '#/actions/get_bulk_transfer/output' }
+    pii:
+      - { field: output.transfers.*.account_number, category: account_number }
+  get_bulk_transfer:
+    title: Get a bulk payment's status
+    class: read
+    input:
+      type: object
+      required: [batch_payment_identifier]
+      properties:
+        batch_payment_identifier: { type: string }
+    output:
+      type: object
+      properties:
+        batch_payment_identifier:  { type: string }
+        remita_batch_identifier:   { type: string }
+        status:                    { type: string, description: "Remita's batch state (INITIATED, COMPLETED, FAILED…)" }
+        settled:                   { type: boolean, description: True once Remita reports a final batch state }
+        total_amount:              { type: integer, description: Kobo }
+        total_debit_amount:        { type: integer, description: Kobo }
+        total_credited_amount:     { type: integer, description: Kobo }
+        transaction_count:         { type: integer }
+        successful_transactions:   { type: integer }
+        failed_transactions:       { type: integer }
+        transfers:
+          type: array
+          items:
+            type: object
+            properties:
+              payment_identifier: { type: string }
+              status:             { type: string, description: Remita's state }
+              outcome:            { type: string, enum: [pending, successful, failed] }
+              account_number:     { type: string }
+              amount:             { type: integer, description: Kobo }
+        more_transfers:            { type: boolean, description: Remita has more items than its first page }
+    pii:
+      - { field: output.transfers.*.account_number, category: account_number }
+  generate_invoice:
+    title: Generate an invoice (RRR)
+    description: >-
+      Creates a Remita Retrieval Reference the payer can pay on any Remita
+      channel; optional line_items split it across beneficiary accounts.
+      Payment arrives as a notification (correlation: order_id) or from
+      get_invoice. Amounts are kobo; Remita is sent naira.
+    class: idempotent_write
+    idempotency:
+      field: order_id
+      encoding: hex_lower
+      length: 32
+      limits: { max_length: 50, charset: "0-9a-f" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, payer_name, payer_email, payer_phone, description]
+      properties:
+        amount:          { type: integer, minimum: 1, description: Kobo }
+        payer_name:      { type: string }
+        payer_email:     { type: string }
+        payer_phone:     { type: string }
+        description:     { type: string }
+        service_type_id: { type: string, description: Defaults to the connection's }
+        expiry_date:     { type: string, description: DD/MM/YYYY }
+        line_items:
+          type: array
+          items:
+            type: object
+            required: [id, beneficiary_name, beneficiary_account, bank_code, amount]
+            properties:
+              id:                  { type: string }
+              beneficiary_name:    { type: string }
+              beneficiary_account: { type: string }
+              bank_code:           { type: string }
+              amount:              { type: integer, minimum: 1, description: Kobo }
+              bears_fee:           { type: boolean, description: Exactly one line item bears Remita's fee }
+        custom_fields:
+          type: array
+          items:
+            type: object
+            required: [name, value]
+            properties:
+              name:  { type: string }
+              value: { type: string }
+              type:  { type: string, default: ALL }
+        order_id: { type: string }
+    output: { $ref: '#/actions/get_invoice/output' }
+    pii:
+      - { field: payer_name, category: name }
+      - { field: payer_email, category: email }
+      - { field: payer_phone, category: phone }
+  get_invoice:
+    title: Get an invoice's payment status
+    description: By rrr or order_id. Run it before acting on a payment notification.
+    class: read
+    input:
+      type: object
+      properties:
+        rrr:      { type: string }
+        order_id: { type: string }
+    output:
+      type: object
+      properties:
+        rrr:          { type: string }
+        order_id:     { type: string }
+        status:       { type: string, enum: [pending, paid, failed] }
+        status_code:  { type: string }
+        message:      { type: string }
+        amount:       { type: integer, description: Kobo }
+        payment_date: { type: string }
+  cancel_invoice:
+    title: Cancel an unpaid invoice
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [rrr]
+      properties:
+        rrr: { type: string }
+    output:
+      type: object
+      properties:
+        rrr:         { type: string }
+        status_code: { type: string }
+        message:     { type: string }
+triggers:
+  # Remita posts a JSON array of payments made in the merchant's favour to
+  # the URL configured on Remita, and expects "Ok" back. Remita documents no
+  # signature, so the URL carries the connection's callback_token as
+  # ?token=...; deliveries without it are refused. Each payment in the
+  # array is its own event. Run get_invoice before releasing value.
+  invoice_payment:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
+    ack: { status: 200, body: Ok, content_type: text/plain }
+    events: [payment_notification]
+    split: =body
+    event_type: '="payment_notification"'
+    dedup: =item.rrr
+    correlation: =item.orderId

@@ -1,0 +1,25 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/106540352242922",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "error": {
+    "message": "Error validating access token: Session has expired.",
+    "type": "OAuthException",
+    "code": 190,
+    "error_data": {
+     "messaging_product": "whatsapp",
+     "details": ""
+    },
+    "fbtrace_id": "A1b2C3d4",
+    "error_subcode": 463
+   }
+  }
+ }
+}

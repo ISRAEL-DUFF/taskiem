@@ -2,6 +2,8 @@
 
 Phase 1 (build plan) is about 20 weeks: engine, connectors, sandbox, approvals, UI, then dogfooding and a 4-week soak. Started 2026-10-05, while gate G0's people items were still open (clean-room signatures, trademark search, dogfood confirmation; see [Phase 0 status](phase-0-status.md)). Last updated 2026-10-05 (milestone 4, engineering part).
 
+> Everything here that needs people (signatures, owners' confirmations, credentials, hardware, reviews, partners) is tracked in one place: [What needs people](needs-people.md).
+
 ## Milestones
 
 | # | Weeks | Milestone | Status |
@@ -126,7 +128,7 @@ Dispatch latency is measured from the `StepScheduled` event to the moment a work
 - Code steps: Python and uploaded WASM modules (Phase 2); `Date.now()` is the real clock, `host.now()` the run's logical time.
 - Smile ID is not built (the plan allows Smile ID or Dojah).
 - Sign-in is password-only: no passkeys, SSO, step-up for approvals, or password reset yet; users are added by an admin.
-- Workers read secrets through the vault directly; per-secret read auditing (`secret.read`) is not recorded per use.
+- ~~Workers read secrets through the vault directly; per-secret read auditing (`secret.read`) is not recorded per use.~~ Done in Phase 2: every decryption for use is recorded ([compliance](compliance.md#secret-use)).
 - The web app edits nested steps as JSON, and has no live canvas view (Phase 2).
 - Webhook `mtls` and synchronous `respond` are refused at publish until the edge proxy exists.
 - The unsafe-write alert question from Phase 0 (`effect.duplicates: tolerable`) is still open; the ops alert parks on an unknown SMS or Slack outcome.

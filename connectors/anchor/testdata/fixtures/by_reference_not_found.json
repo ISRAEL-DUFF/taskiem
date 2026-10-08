@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/transfers/by-reference/tsk_ab12cd34ef56gh78ij90kl12mn34op56","headers":{"x-anchor-key":"anc_test_key"}},
+ "response":{"status":404,"body":{"errors":[{"title":"Not found","status":"404","detail":"Transfer was not found"}]}}}

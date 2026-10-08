@@ -1,0 +1,183 @@
+# Lenco (Nigerian business banking), API v1. Built from Lenco's public API
+# reference at lenco-api.readme.io, read 6 October 2026
+# (docs/integrations/lenco.md).
+manifest: connector/v1
+id: lenco
+version: 1.0.0
+name: Lenco
+description: Bank transfers, balances, name enquiry and virtual accounts on Lenco business accounts.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: api_token, label: API token, secret: true }
+    - { key: account_id, label: Default account id (36-character uuid to pay from), secret: false, required: false }
+    - { key: environment, label: "Environment: live (default) or sandbox", secret: false, required: false }
+  test: { action: list_banks }
+base_url: https://api.lenco.co/access/v1
+egress_hosts: [api.lenco.co, sandbox.lenco.co]
+actions:
+  list_accounts:
+    title: List accounts and balances
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:                { type: string }
+              name:              { type: string }
+              currency:          { type: string }
+              account_number:    { type: string }
+              bank_code:         { type: string }
+              status:            { type: string }
+              available_balance: { type: integer, description: Kobo }
+              current_balance:   { type: integer, description: Kobo }
+  get_balance:
+    title: Get account balance
+    class: read
+    input:
+      type: object
+      properties:
+        account_id: { type: string, description: Defaults to the connection's account }
+    output:
+      type: object
+      properties:
+        account_id:        { type: string }
+        currency:          { type: string }
+        available_balance: { type: integer, description: Kobo }
+        current_balance:   { type: integer, description: Kobo }
+  list_banks:
+    title: List banks
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        banks:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              name: { type: string }
+  resolve_account:
+    title: Resolve account name
+    description: Call before paying a new account; a transfer to the wrong valid account cannot be recovered.
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code]
+      properties:
+        account_number: { type: string }
+        bank_code:      { type: string, description: From list_banks (six digits) }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_code:      { type: string }
+        bank_name:      { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  transfer:
+    title: Transfer to a bank account
+    description: >-
+      NGN transfer. Usually returns pending; the outcome arrives as a
+      event (correlation: reference) or from get_transfer. A transfer
+      Lenco reports failed fails the step with Lenco's reason. Amounts are
+      kobo; Lenco is sent naira.
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 100, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, narration]
+      properties:
+        amount:         { type: integer, minimum: 1, description: Kobo }
+        account_number: { type: string, description: Ten-digit NUBAN; with bank_code, or use recipient_id }
+        bank_code:      { type: string }
+        recipient_id:   { type: string, description: A saved Lenco recipient instead of account_number and bank_code }
+        narration:      { type: string }
+        account_id:     { type: string, description: Account to pay from; defaults to the connection's }
+        reference:      { type: string }
+    output: { $ref: '#/actions/get_transfer/output' }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+  get_transfer:
+    title: Get transfer by reference
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output:
+      type: object
+      properties:
+        reference:          { type: string }
+        status:             { type: string, enum: [pending, successful, failed, declined] }
+        transaction_id:     { type: string, description: Empty until Lenco has created the transaction }
+        amount:             { type: integer, description: Kobo }
+        fee:                { type: integer, description: Kobo }
+        account_name:       { type: string }
+        nip_session_id:     { type: string }
+        reason_for_failure: { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+  create_virtual_account:
+    title: Create a virtual account
+    description: >-
+      A dynamic account (expires) or, with is_static and a BVN, a permanent
+      one. Not idempotent: a retry after an unknown outcome parks the step.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [account_name]
+      properties:
+        account_name:          { type: string, description: Shown when payers resolve the number }
+        is_static:             { type: boolean }
+        bvn:                   { type: string, description: Required for static accounts }
+        transaction_reference: { type: string, description: Returned with every transfer into the account }
+        amount:                { type: integer, description: Kobo; transfers of any other amount are rejected (dynamic only) }
+        min_amount:            { type: integer, description: Kobo; smaller transfers are rejected (dynamic only) }
+    output:
+      type: object
+      properties:
+        id:                { type: string }
+        account_reference: { type: string, description: Correlation for collection events }
+        account_number:    { type: string }
+        account_name:      { type: string }
+        bank_code:         { type: string }
+        bank_name:         { type: string }
+        type:              { type: string }
+        status:            { type: string }
+        expires_at:        { type: string }
+    pii:
+      - { field: account_name, category: name }
+      - { field: bvn, category: bvn }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+triggers:
+  # Lenco sends every event to the one URL registered with support.
+  event:
+    type: webhook
+    verify: { scheme: hmac_sha512, header: X-Lenco-Signature, key_derivation: sha256_hex, secret_field: api_token }
+    events: [transaction.successful, transaction.failed, virtual-account.transaction, virtual-account.transaction.settled, virtual-account.rejected-transaction]
+    event_type: =body.event
+    dedup: =body.event + ":" + body.data.id
+    # Transfers: the transfer's reference. Collections: the virtual account's account_reference.
+    correlation: '=body.event.startsWith("virtual-account.") ? body.data.accountReference : body.data.clientReference'

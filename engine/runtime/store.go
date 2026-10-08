@@ -11,6 +11,7 @@ import (
 	"hash/fnv"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,7 +22,9 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -33,13 +36,32 @@ type Store struct {
 	// PII seals declared personal data before it is written (spec 4.9);
 	// nil stores it in plaintext (development without a vault).
 	PII pii.Cipher
+	// Defaults are the platform's plan limits (TASKIEM_DEFAULT_*), which
+	// tenant_limits overrides per tenant; nil uses DefaultLimits.
+	Defaults *Limits
+	// Billing bases each tenant's limits on its plan (TASKIEM_BILLING=on,
+	// spec 16): a subscription's plan limits, overlaid by tenant_limits, and
+	// new runs refused while the subscription is degraded or cancelled.
+	// Off, every tenant is on the internal plan (the defaults).
+	Billing bool
+	// Read is the optional read replica for staleness-tolerant reads
+	// (ReadTx); nil reads from Pool (decision 0024).
+	Read *db.Replica
 
-	defs sync.Map // "workflow_id/version" -> *wd.Definition; versions are immutable
+	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
+	folds    decideCache
+	limits   sync.Map // tenant -> cachedLimits
+	hits     sync.Map // "tenant/limit" -> time recorded
+	hitCount atomic.Int64
 }
 
 // maxInlineRounds bounds decide -> effects -> decide loops in one transaction
 // (a buffered signal consumed by a new wait triggers another round).
 const maxInlineRounds = 16
+
+// maxForkRounds bounds the rounds of a forked run, whose replayed outcomes
+// each take one.
+const maxForkRounds = 4096
 
 // RunRef identifies a run.
 type RunRef struct {
@@ -57,20 +79,73 @@ type StartRequest struct {
 	StartedBy   string         // user, API key, or trigger that started the run (separation of duties)
 	TriggerID   string         // with DedupKey, makes starting idempotent (spec 8.2)
 	DedupKey    string
+	// Throttled marks a delivery above its tenant's soft ingest rate: the
+	// run is recorded but queued, and the scheduler admits it at the
+	// tenant's rate (spec 8.3).
+	Throttled bool
+	// Fork makes the run continue a failed one (fork.go): its trigger and
+	// variables are the parent's, and what the parent completed is replayed.
+	Fork *Fork
 }
 
 // ErrNotFound is returned when a run, step, or workflow is not visible.
 var ErrNotFound = errors.New("not found")
 
+// ErrTenantSuspended: the tenant is suspended, so it starts no runs
+// (docs/governance.md#suspended-tenants).
+var ErrTenantSuspended = errors.New("the organisation is suspended")
+
+// tenantActive reports whether the tx's tenant may do new work.
+func tenantActive(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (bool, error) {
+	var status string
+	if err := tx.QueryRow(ctx, `SELECT status FROM tenants WHERE id = $1`, tenant).Scan(&status); err != nil {
+		return false, err
+	}
+	return status == "active", nil
+}
+
+// Started is the outcome of a start.
+type Started struct {
+	Ref     RunRef
+	Created bool // false: a repeated (TriggerID, DedupKey) returned the original run
+	Queued  bool // the new run waits for admission
+	// HeldBy names the tenant limit that queued it, if one did.
+	HeldBy string
+}
+
 // StartRun records RunStarted and the first decision in one transaction.
 // A repeated (TriggerID, DedupKey) returns the original run.
 func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, error) {
+	st, err := s.Start(ctx, req)
+	return st.Ref, st.Created, err
+}
+
+// Start is StartRun reporting whether the run was queued. A start beyond
+// the tenant's quota or backlog fails with a *LimitError and records
+// nothing; a duplicate is recognised before any limit applies.
+func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 	ref := RunRef{ID: uuid.Must(uuid.NewV7()), TenantID: req.TenantID}
-	created := true
+	out := Started{Created: true}
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{req.TenantID}, func(tx pgx.Tx) error {
+		out = Started{Created: true}
+		if ok, err := tenantActive(ctx, tx, req.TenantID); err != nil {
+			return err
+		} else if !ok {
+			return ErrTenantSuspended
+		}
 		def, err := s.definition(ctx, tx, req.WorkflowID, req.Version)
 		if err != nil {
 			return err
+		}
+		var fork *forkPlan
+		if req.Fork != nil {
+			if fork, err = s.planFork(ctx, tx, req.TenantID, req.Fork.Parent); err != nil {
+				return err
+			}
+			req.Trigger, req.Env = fork.trigger, fork.env
+			if req.Env == nil {
+				req.Env = map[string]any{}
+			}
 		}
 		if req.DedupKey != "" {
 			tag, err := tx.Exec(ctx, `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
@@ -79,15 +154,41 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 				return err
 			}
 			if tag.RowsAffected() == 0 {
-				created = false
+				out.Created = false
 				return tx.QueryRow(ctx, `SELECT run_id FROM trigger_receipts WHERE tenant_id = $1 AND trigger_id = $2 AND dedup_key = $3`,
 					req.TenantID, req.TriggerID, req.DedupKey).Scan(&ref.ID)
+			}
+		}
+		lim, err := s.limitsTx(ctx, tx, req.TenantID)
+		if err != nil {
+			return err
+		}
+		if req.Fork == nil && lim.BillingRefusesRuns() {
+			// Unpaid past the grace period, or cancelled: no new runs. Forks
+			// finish work already started, and running runs continue.
+			return &LimitError{Limit: "billing", Code: "billing_degraded",
+				Message: "this tenant's subscription is unpaid or cancelled, so new runs are refused; running runs, approvals and reconciliation continue. Pay the open invoice on the Billing page to resume"}
+		}
+		if err := checkQuota(ctx, tx, req.TenantID, lim); err != nil {
+			return err
+		}
+		if out.HeldBy, err = tenantHold(ctx, tx, req, lim); err != nil {
+			return err
+		}
+		if out.HeldBy != "" {
+			if err := checkBacklog(ctx, tx, req.TenantID, lim); err != nil {
+				return err
 			}
 		}
 		var startedAt time.Time
 		if err := tx.QueryRow(ctx, `INSERT INTO runs (id, tenant_id, workflow_id, version, environment, started_at, started_by) VALUES ($1, $2, $3, $4, $5, now(), NULLIF($6, '')) RETURNING started_at`,
 			ref.ID, req.TenantID, req.WorkflowID, req.Version, req.Environment, req.StartedBy).Scan(&startedAt); err != nil {
 			return err
+		}
+		if fork != nil {
+			if err := recordFork(ctx, tx, req.TenantID, ref.ID, fork); err != nil {
+				return err
+			}
 		}
 		if req.Env == nil {
 			if req.Env, err = variables(ctx, tx, req.TenantID, req.Environment); err != nil {
@@ -96,12 +197,20 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 		}
 		pins := map[string]string{}
 		if s.Registry != nil {
-			pins = s.Registry.Pins()
+			reg, err := s.Registry.For(ctx, req.TenantID.String())
+			if err != nil {
+				return err
+			}
+			pins = reg.Pins()
+		}
+		policies, err := policySnapshots(ctx, tx, def)
+		if err != nil {
+			return err
 		}
 		payload := history.RunStartedPayload{
 			Run: history.RunInfo{ID: ref.ID.String(), TenantID: req.TenantID.String(), WorkflowID: req.WorkflowID.String(),
 				Version: req.Version, Environment: req.Environment, StartedAt: history.FormatTime(startedAt)},
-			Trigger: req.Trigger, Env: req.Env, Connectors: pins,
+			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
 		sealed, err := s.sealPayload(ctx, tx, req.TenantID, payload, triggerPaths(def), pii.Taint{})
 		if err != nil {
@@ -110,13 +219,70 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 		if _, err := appendEvent(ctx, tx, ref.ID, history.RunStarted, "", 0, sealed, history.OriginIngest); err != nil {
 			return err
 		}
-		admitted, err := s.admit(ctx, tx, ref, req.WorkflowID, def, payload)
-		if err != nil || !admitted {
+		if out.HeldBy != "" {
+			// Waits for the scheduler to admit it at the tenant's rate; its
+			// workflow's concurrency is checked then.
+			key, err := concurrencyKey(def, payload)
+			if err != nil {
+				return err
+			}
+			out.Queued = true
+			if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'queued', queue_reason = 'tenant', concurrency_key = NULLIF($2, '') WHERE id = $1`, ref.ID, key); err != nil {
+				return err
+			}
+			return countStart(ctx, tx, req.TenantID)
+		}
+		admitted, err := s.admit(ctx, tx, ref, req.WorkflowID, def, payload, lim)
+		if err != nil {
 			return err
 		}
-		return s.start(ctx, tx, ref, def, startedAt)
+		if admitted {
+			if err := s.start(ctx, tx, ref, def, startedAt); err != nil {
+				return err
+			}
+		}
+		out.Queued = !admitted
+		return countStart(ctx, tx, req.TenantID)
 	})
-	return ref, created, err
+	out.Ref = ref
+	if le, ok := IsLimit(err); ok {
+		s.LimitHit(ctx, req.TenantID, le.Limit)
+	} else if err == nil && out.HeldBy != "" && out.HeldBy != "backlog" {
+		s.LimitHit(ctx, req.TenantID, out.HeldBy)
+	}
+	return out, err
+}
+
+// countStart counts an accepted run toward the tenant's quotas. It is the
+// transaction's last write, so the usage row stays locked only briefly.
+func countStart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	_, err := tx.Exec(ctx, `INSERT INTO tenant_usage (tenant_id, day, runs_started) VALUES ($1, (now() AT TIME ZONE 'UTC')::date, 1)
+		ON CONFLICT (tenant_id, day) DO UPDATE SET runs_started = tenant_usage.runs_started + 1`, tenant)
+	return err
+}
+
+// tenantHold says which tenant limit, if any, holds a new run back: the
+// soft ingest rate, runs already waiting (they keep their order), or the
+// cap on running runs.
+func tenantHold(ctx context.Context, tx pgx.Tx, req StartRequest, l Limits) (string, error) {
+	if req.Throttled {
+		return "ingest_rate", nil
+	}
+	var waiting bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM runs WHERE tenant_id = $1 AND status = 'queued' AND queue_reason = 'tenant')`, req.TenantID).Scan(&waiting); err != nil {
+		return "", err
+	}
+	if waiting {
+		return "backlog", nil
+	}
+	n, err := countUpTo(ctx, tx, `runs WHERE tenant_id = $1 AND status = 'running'`, l.MaxRunningRuns, req.TenantID)
+	if err != nil {
+		return "", err
+	}
+	if l.MaxRunningRuns > 0 && n >= l.MaxRunningRuns {
+		return "max_running_runs", nil
+	}
+	return "", nil
 }
 
 // Definition returns a stored workflow version's parsed definition.
@@ -132,8 +298,8 @@ func (s *Store) Definition(ctx context.Context, tenant, workflowID uuid.UUID, ve
 
 func (s *Store) definition(ctx context.Context, tx pgx.Tx, workflowID uuid.UUID, version int) (*wd.Definition, error) {
 	key := workflowID.String() + "/" + strconv.Itoa(version)
-	if d, ok := s.defs.Load(key); ok {
-		return d.(*wd.Definition), nil
+	if d, ok := s.defs.Get(key); ok {
+		return d, nil
 	}
 	var raw []byte
 	err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, workflowID, version).Scan(&raw)
@@ -147,7 +313,7 @@ func (s *Store) definition(ctx context.Context, tx pgx.Tx, workflowID uuid.UUID,
 	if err != nil {
 		return nil, err
 	}
-	s.defs.Store(key, d)
+	s.defs.Put(key, d)
 	return d, nil
 }
 
@@ -172,12 +338,13 @@ type runRow struct {
 	version    int
 	status     string
 	env        string
+	forked     bool // continues a failed run (fork.go)
 }
 
 func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 	r := runRow{ref: RunRef{ID: id}}
-	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment FROM runs WHERE id = $1 FOR UPDATE`, id).
-		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env)
+	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment, parent_run_id IS NOT NULL FROM runs WHERE id = $1 FOR UPDATE`, id).
+		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env, &r.forked)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, fmt.Errorf("run %s: %w", id, ErrNotFound)
 	}
@@ -186,8 +353,12 @@ func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 
 // History loads a run's events in order.
 func History(ctx context.Context, tx pgx.Tx, runID uuid.UUID) ([]history.Event, error) {
-	rows, err := tx.Query(ctx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
+	return queryHistory(ctx, tx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
 		FROM run_events WHERE run_id = $1 ORDER BY seq`, runID)
+}
+
+func queryHistory(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]history.Event, error) {
+	rows, err := tx.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -242,17 +413,35 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 		_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL WHERE id = $1`, ref.ID)
 		return err
 	}
-	for round := 0; round < maxInlineRounds; round++ {
-		raw, err := History(ctx, tx, ref.ID)
-		if err != nil {
-			return err
+	// The history folded so far: from the cache, then only what each round
+	// appends is read and folded in.
+	st, taint, err := s.foldRun(ctx, tx, run)
+	if err != nil {
+		return err
+	}
+	scheduled := 0 // steps this decision scheduled, for max_steps_per_run
+	rounds := maxInlineRounds
+	if run.forked {
+		rounds = maxForkRounds // each replayed outcome takes a round
+	}
+	for round := 0; round < rounds; round++ {
+		if round > 0 {
+			raw, err := HistoryAfter(ctx, tx, ref.ID, st.Seq())
+			if err != nil {
+				return err
+			}
+			hist, _, err := s.openHistoryInto(ctx, tx, ref.TenantID, raw, taint)
+			if err != nil {
+				return err
+			}
+			if err := st.Extend(hist); err != nil {
+				s.folds.drop(ref.ID)
+				return err
+			}
 		}
-		hist, taint, err := s.openHistory(ctx, tx, ref.TenantID, raw)
+		evs, err := st.Decide()
 		if err != nil {
-			return err
-		}
-		evs, err := decide.Decide(def, hist)
-		if err != nil {
+			s.folds.drop(ref.ID)
 			return err
 		}
 		// Events that effects cause (a buffered signal delivered to a new
@@ -260,9 +449,14 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 		// contiguous and replayable.
 		var deferred []func() error
 		for _, ev := range evs {
+			if ev.Type == history.StepScheduled {
+				scheduled++
+			}
 			var paths []pii.Path
 			if p, ok := ev.Payload.(history.ScheduledPayload); ok {
-				paths = s.connectorPIIPaths(p)
+				if paths, err = s.connectorPIIPaths(ctx, ref.TenantID, p); err != nil {
+					return err
+				}
 			}
 			sealed, err := s.sealPayload(ctx, tx, ref.TenantID, ev.Payload, paths, taint)
 			if err != nil {
@@ -285,11 +479,46 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			}
 		}
 		if len(deferred) == 0 {
+			if scheduled > 0 {
+				return s.countSteps(ctx, tx, run, def, scheduled)
+			}
 			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL WHERE id = $1`, ref.ID)
 			return err
 		}
 	}
-	return fmt.Errorf("run %s: decision did not settle after %d rounds", ref.ID, maxInlineRounds)
+	return fmt.Errorf("run %s: decision did not settle after %d rounds", ref.ID, rounds)
+}
+
+// countSteps records a decision's scheduled steps and fails the run when
+// they take it past its tenant's max_steps_per_run (a runaway foreach or
+// retry loop). The failure is appended after decide's batch, as a
+// cancellation is, and ends the run in the same transaction, so no step
+// beyond the cap ever reaches a worker.
+func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int) error {
+	var total int
+	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2
+		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, scheduled).Scan(&total); err != nil {
+		return err
+	}
+	lim, err := s.limitsTx(ctx, tx, run.ref.TenantID)
+	if err != nil || lim.MaxStepsPerRun <= 0 || total <= lim.MaxStepsPerRun {
+		return err
+	}
+	s.folds.drop(run.ref.ID)
+	msg := fmt.Sprintf("the run scheduled %d steps, more than its plan allows one run (max_steps_per_run %d)", total, lim.MaxStepsPerRun)
+	if _, err := appendEvent(ctx, tx, run.ref.ID, history.RunFailed, "", 0,
+		history.RunFailedPayload{Error: history.Error{Kind: "limit", Message: msg, Next: "fail"}}, history.OriginScheduler); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq WHERE id = $1`, run.ref.ID); err != nil {
+		return err
+	}
+	telemetry.LimitHits.WithLabelValues("max_steps_per_run").Inc()
+	if _, err := tx.Exec(ctx, `INSERT INTO tenant_limit_hits (tenant_id, limit_name, day) VALUES ($1, 'max_steps_per_run', (now() AT TIME ZONE 'UTC')::date)
+		ON CONFLICT (tenant_id, limit_name, day) DO UPDATE SET hits = tenant_limit_hits.hits + 1, last_at = now()`, run.ref.TenantID); err != nil {
+		return err
+	}
+	return s.endRun(ctx, tx, run, def, "failed")
 }
 
 // applyEffects performs the side effects an event implies: tasks, timers,
@@ -302,6 +531,11 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		p := ev.Payload.(history.ScheduledPayload)
 		switch p.Kind {
 		case history.KindTask:
+			if run.forked {
+				if then, ok, err := s.replayTask(ctx, tx, run, ev, p); err != nil || ok {
+					return then, err
+				}
+			}
 			at, err := history.ParseTime(p.AvailableAt)
 			if err != nil {
 				return nil, err
@@ -314,8 +548,22 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			if err != nil {
 				return nil, err
 			}
+			if run.forked {
+				done, err := s.replayTimer(ctx, tx, run, ev)
+				if err != nil {
+					return nil, err
+				}
+				if done {
+					at = time.Now() // the parent already waited
+				}
+			}
 			return nil, insertTimer(ctx, tx, tenant, run.ref.ID, ev.StepID, "wait", at)
 		case history.KindSignal:
+			if run.forked {
+				if then, ok, err := s.replaySignal(ctx, tx, run, ev); err != nil || ok {
+					return then, err
+				}
+			}
 			if p.TimeoutAt != "" {
 				at, err := history.ParseTime(p.TimeoutAt)
 				if err != nil {
@@ -325,7 +573,7 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 					return nil, err
 				}
 			}
-			return s.registerWait(ctx, tx, run.ref, ev.StepID, p.Event, p.Correlation)
+			return s.registerWait(ctx, tx, run.ref, run.env, ev.StepID, p.Event, p.Correlation)
 		}
 	case history.ApprovalRequested:
 		p := ev.Payload.(history.ApprovalRequestedPayload)
@@ -346,10 +594,19 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			}
 			timeoutAt = &t
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO approvals (tenant_id, run_id, step_id, role, policy, required, subject, timeout_at)
-			VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8)
-			ON CONFLICT (run_id, step_id) DO UPDATE SET role = EXCLUDED.role, timeout_at = EXCLUDED.timeout_at, status = 'open', requested_at = now()`,
-			tenant, run.ref.ID, ev.StepID, p.Role, p.Policy, required, subj, timeoutAt); err != nil {
+		var levels, constraints []byte
+		if len(p.Levels) > 0 {
+			levels, _ = json.Marshal(p.Levels)
+		}
+		if p.Constraints != nil {
+			constraints, _ = json.Marshal(p.Constraints)
+		}
+		// An escalation re-opens the step at its first level with new approvers.
+		if _, err := tx.Exec(ctx, `INSERT INTO approvals (tenant_id, run_id, step_id, role, policy, required, subject, timeout_at, levels, level, step_up, constraints, policy_version)
+			VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8, $9, 0, NULLIF($10, ''), $11, NULLIF($12, 0))
+			ON CONFLICT (run_id, step_id) DO UPDATE SET role = EXCLUDED.role, required = EXCLUDED.required, timeout_at = EXCLUDED.timeout_at,
+			  levels = EXCLUDED.levels, level = 0, status = 'open', requested_at = now()`,
+			tenant, run.ref.ID, ev.StepID, p.Role, p.Policy, required, subj, timeoutAt, levels, p.StepUp, constraints, p.PolicyVersion); err != nil {
 			return nil, err
 		}
 		if p.TimeoutAt != "" {
@@ -379,6 +636,20 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			_, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID)
 			return nil, err
 		}
+	case history.StepCancelled:
+		// A task a worker already holds is left to it: the worker checks for
+		// cancellation before recording intent, and decide waits for a write
+		// already under way.
+		for _, q := range []string{
+			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND lease_owner IS NULL`,
+			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
+			`DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`,
+			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
+		} {
+			if _, err := tx.Exec(ctx, q, run.ref.ID, ev.StepID); err != nil {
+				return nil, err
+			}
+		}
 	case history.RunCompleted:
 		return nil, s.endRun(ctx, tx, run, def, "completed")
 	case history.RunFailed:
@@ -401,6 +672,43 @@ func insertTimer(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, step, ki
 	return err
 }
 
+// policySnapshots loads the active versions of the approval policies a
+// definition names. A missing one is left out: the approval step fails with
+// the reason when it is reached.
+func policySnapshots(ctx context.Context, tx pgx.Tx, def *wd.Definition) (map[string]history.PolicySnapshot, error) {
+	var names []string
+	var walk func([]*wd.Step)
+	walk = func(steps []*wd.Step) {
+		for _, st := range steps {
+			if st.Approval != nil && st.Approval.Policy != "" {
+				names = append(names, st.Approval.Policy)
+			}
+			for _, sub := range st.Children() {
+				walk(sub)
+			}
+		}
+	}
+	walk(def.Steps)
+	if len(names) == 0 {
+		return nil, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT name, version, document FROM approval_policies WHERE state = 'active' AND name = ANY ($1)`, names)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]history.PolicySnapshot{}
+	for rows.Next() {
+		var name string
+		var ps history.PolicySnapshot
+		if err := rows.Scan(&name, &ps.Version, &ps.Document); err != nil {
+			return nil, err
+		}
+		out[name] = ps
+	}
+	return out, rows.Err()
+}
+
 // DefaultRetention applies when a workflow sets no settings.retention.
 const DefaultRetention = 90 * 24 * time.Hour
 
@@ -410,12 +718,32 @@ const DefaultRetention = 90 * 24 * time.Hour
 func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
 	run := r.ref.ID
 	retention := DefaultRetention
+	var tenantDefault string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(default_retention, '') FROM governance_settings WHERE tenant_id = $1`, r.ref.TenantID).Scan(&tenantDefault); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if d, err := wd.ParseDuration(tenantDefault); err == nil && d > 0 {
+		retention = d
+	}
 	if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
 		retention = d
+	}
+	// The plan caps retention (spec 16.2).
+	lim, err := s.limitsTx(ctx, tx, r.ref.TenantID)
+	if err != nil {
+		return err
+	}
+	if c := time.Duration(lim.MaxRetentionDays) * 24 * time.Hour; c > 0 && retention > c {
+		retention = c
 	}
 	if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now(), retain_until = now() + $3::interval WHERE id = $1`,
 		run, status, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {
 		return err
+	}
+	if status == "completed" {
+		if err := recordFirstRun(ctx, tx, r.ref.TenantID, run); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM concurrency_slots WHERE run_id = $1`, run); err != nil {
 		return err
@@ -436,29 +764,49 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	return s.promote(ctx, tx, r.ref.TenantID, r.workflowID)
 }
 
-// signalLock serialises waiting and delivery for one (tenant, event,
-// correlation), so a signal can never slip between the two.
-func signalLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, event, correlation string) error {
+// recordFirstRun stamps a self-serve tenant's first successful run (gate
+// G4: signup to first successful run in under 15 minutes) and observes the
+// time it took. Tenants that did not sign themselves up have no row, and
+// later runs find the stamp set: either way nothing is written.
+func recordFirstRun(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID) error {
+	var secs float64
+	err := tx.QueryRow(ctx, `UPDATE tenant_onboarding SET first_run_at = now(), first_run_id = $2
+		WHERE tenant_id = $1 AND first_run_at IS NULL AND source = 'signup'
+		RETURNING extract(epoch FROM first_run_at - signed_up_at)::float8`, tenant, run).Scan(&secs)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	telemetry.FirstRunSeconds.Observe(max(secs, 0))
+	return nil
+}
+
+// signalLock serialises waiting and delivery for one (tenant, environment,
+// event, correlation), so a signal can never slip between the two.
+func signalLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, event, correlation string) error {
 	h := fnv.New64a()
-	_, _ = h.Write([]byte(tenant.String() + "\x00" + event + "\x00" + correlation))
+	_, _ = h.Write([]byte(tenant.String() + "\x00" + env + "\x00" + event + "\x00" + correlation))
 	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(h.Sum64())) //nolint:gosec // bit-for-bit reinterpretation as a lock key
 	return err
 }
 
 // registerWait records that a step waits for a signal, or delivers a
-// buffered one immediately.
-func (s *Store) registerWait(ctx context.Context, tx pgx.Tx, ref RunRef, step, event, correlation string) (func() error, error) {
-	if err := signalLock(ctx, tx, ref.TenantID, event, correlation); err != nil {
+// buffered one immediately. Only signals delivered to the run's own
+// environment match.
+func (s *Store) registerWait(ctx context.Context, tx pgx.Tx, ref RunRef, env, step, event, correlation string) (func() error, error) {
+	if err := signalLock(ctx, tx, ref.TenantID, env, event, correlation); err != nil {
 		return nil, err
 	}
 	var id uuid.UUID
 	var payload []byte
 	err := tx.QueryRow(ctx, `DELETE FROM signals WHERE id = (
-		SELECT id FROM signals WHERE tenant_id = $1 AND event = $2 AND correlation = $3 AND expires_at > now()
-		 ORDER BY received_at LIMIT 1) RETURNING id, payload`, ref.TenantID, event, correlation).Scan(&id, &payload)
+		SELECT id FROM signals WHERE tenant_id = $1 AND environment = $2 AND event = $3 AND correlation = $4 AND expires_at > now()
+		 ORDER BY received_at LIMIT 1) RETURNING id, payload`, ref.TenantID, env, event, correlation).Scan(&id, &payload)
 	if errors.Is(err, pgx.ErrNoRows) {
-		_, err := tx.Exec(ctx, `INSERT INTO signal_waits (tenant_id, run_id, step_id, event, correlation) VALUES ($1, $2, $3, $4, $5)`,
-			ref.TenantID, ref.ID, step, event, correlation)
+		_, err := tx.Exec(ctx, `INSERT INTO signal_waits (tenant_id, run_id, step_id, environment, event, correlation) VALUES ($1, $2, $3, $4, $5, $6)`,
+			ref.TenantID, ref.ID, step, env, event, correlation)
 		return nil, err
 	}
 	if err != nil {
@@ -481,21 +829,25 @@ func signalPayload(event string, payload []byte) map[string]any {
 // SignalTTL is how long an unmatched signal stays buffered.
 const SignalTTL = 7 * 24 * time.Hour
 
-// DeliverSignal hands an external event to every run waiting for it, or
-// buffers it. It returns the runs it woke.
-func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, event, correlation string, payload any) ([]uuid.UUID, error) {
-	woke, _, err := s.deliverSignal(ctx, tenant, event, correlation, "", payload)
+// DeliverSignal hands an external event to every run in the environment
+// waiting for it, or buffers it there. It returns the runs it woke.
+func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation string, payload any) ([]uuid.UUID, error) {
+	woke, _, err := s.deliverSignal(ctx, tenant, env, event, correlation, "", payload)
 	return woke, err
 }
 
 // DeliverSignalOnce is DeliverSignal for provider deliveries that may
-// repeat: a dedupKey already received for this event is ignored, in the
-// same transaction that delivers it. It reports whether it was new.
-func (s *Store) DeliverSignalOnce(ctx context.Context, tenant uuid.UUID, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
-	return s.deliverSignal(ctx, tenant, event, correlation, dedupKey, payload)
+// repeat: a dedupKey already received for this event in this environment
+// is ignored, in the same transaction that delivers it. It reports whether
+// it was new.
+func (s *Store) DeliverSignalOnce(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+	return s.deliverSignal(ctx, tenant, env, event, correlation, dedupKey, payload)
 }
 
-func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+	if env == "" {
+		return nil, false, errors.New("signal: no environment")
+	}
 	fresh := true
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -507,7 +859,7 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, corr
 		if dedupKey != "" {
 			// The receipt marks the delivery as seen; no run is started (uuid.Nil).
 			tag, err := tx.Exec(ctx, `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-				tenant, "signal/"+event, dedupKey, uuid.Nil)
+				tenant, "signal/"+env+"/"+event, dedupKey, uuid.Nil)
 			if err != nil {
 				return err
 			}
@@ -516,11 +868,11 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, corr
 				return nil
 			}
 		}
-		if err := signalLock(ctx, tx, tenant, event, correlation); err != nil {
+		if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND event = $2 AND correlation = $3 RETURNING run_id, step_id`,
-			tenant, event, correlation)
+		rows, err := tx.Query(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND environment = $2 AND event = $3 AND correlation = $4 RETURNING run_id, step_id`,
+			tenant, env, event, correlation)
 		if err != nil {
 			return err
 		}
@@ -540,8 +892,8 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, event, corr
 			return err
 		}
 		if len(waits) == 0 {
-			_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, now() + $6::interval)`,
-				uuid.Must(uuid.NewV7()), tenant, event, correlation, raw, SignalTTL.String())
+			_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
+				uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
 			return err
 		}
 		for _, w := range waits {
@@ -642,6 +994,31 @@ func (s *Store) RunHistory(ctx context.Context, ref RunRef) ([]history.Event, er
 		return err
 	})
 	return h, err
+}
+
+// HistoryAfter returns up to limit events after seq, sealed as RunHistory
+// returns them, for streaming a run as it goes.
+func (s *Store) HistoryAfter(ctx context.Context, ref RunRef, after int64, limit int) ([]history.Event, error) {
+	var out []history.Event
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
+			FROM run_events WHERE run_id = $1 AND seq > $2 ORDER BY seq LIMIT $3`, ref.ID, after, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var e history.Event
+			var payload []byte
+			if err := rows.Scan(&e.Seq, &e.Type, &e.StepID, &e.Attempt, &payload, &e.RecordedAt, &e.Origin); err != nil {
+				return err
+			}
+			e.Payload = payload
+			out = append(out, e)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error) error {

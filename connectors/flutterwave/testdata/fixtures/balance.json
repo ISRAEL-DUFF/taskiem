@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/balances/NGN","headers":{"Authorization":"Bearer FLWSECK_TEST-abc"}},
+ "response":{"status":200,"body":{"status":"success","message":"Wallet balance fetched","data":{"currency":"NGN","available_balance":2367840,"ledger_balance":253125.82}}}}

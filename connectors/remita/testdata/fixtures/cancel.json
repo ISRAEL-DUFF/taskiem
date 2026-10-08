@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/echannelsvc/v2/api/deactivate.json",
+  "body": {
+   "rrr": "140008260136",
+   "merchantId": "2547916",
+   "hash": "7cbc7ffa3a6a220d96f081742192301b2156cc815902163293df7bfc3003d180cac62db28d190cbc73927b04e95b639e46d66063789439da42b2afcef933f333"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "statuscode": "00",
+   "status": "Successful"
+  }
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/users/me/messages/send"
+ },
+ "response": {
+  "status": 429,
+  "headers": {
+   "Retry-After": "60"
+  },
+  "body": {
+   "error": {
+    "code": 429,
+    "message": "Too many requests: User-rate limit exceeded (Mail sending)",
+    "status": "RESOURCE_EXHAUSTED"
+   }
+  }
+ }
+}

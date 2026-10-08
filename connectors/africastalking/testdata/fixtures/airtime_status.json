@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/query/transaction/find",
+  "headers": {
+   "apiKey": "atsk_test_key",
+   "Accept": "application/json"
+  },
+  "query": {
+   "username": "acme",
+   "transactionId": "ATQid_1be914ac47845eef1a1dab5d89ec50ff"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "Success"
+  }
+ }
+}

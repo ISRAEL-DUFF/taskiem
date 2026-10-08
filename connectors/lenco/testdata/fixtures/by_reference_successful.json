@@ -1,0 +1,5 @@
+{"request":{"method":"GET","path":"/transfer/by-reference/tsk_ab12cd34ef56gh78ij90kl12mn34op56","headers":{"Authorization":"Bearer lenco_test_token"}},
+ "response":{"status":200,"body":{"status":true,"message":"","data":{"request":{"accountId":"056ffebf-812a-433a-83a0-9c67cd8c089c","recipientId":null,"accountNumber":"8144374977","bankCode":"000014","amount":"2000.00","narration":"Sept salary","reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","status":"created"},
+  "transaction":{"id":"46ce8b2d-457c-4d0f-a3bb-5fbfd0a230fa","amount":"2000.00","fee":"10.75","narration":"Sept salary","type":"debit","initiatedAt":null,"completedAt":null,"accountId":"056ffebf-812a-433a-83a0-9c67cd8c089c",
+   "details":{"accountName":"Shalewa Elizabeth","accountNumber":"8144374977","bank":{"code":"000014","name":"ACCESS BANK"}},
+   "status":"successful","failedAt":null,"reasonForFailure":null,"clientReference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","transactionReference":"276fc62654","nipSessionId":"000000000000000000134034230445"}}}}}

@@ -1,0 +1,42 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/v1/merchant/transactions/init-transaction",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "body": {
+   "amount": 1500.5,
+   "customerName": "Ada Obi",
+   "customerEmail": "ada@example.com",
+   "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "paymentDescription": "Order 17",
+   "currencyCode": "NGN",
+   "contractCode": "8389328412",
+   "redirectUrl": "https://shop.example.com/done",
+   "paymentMethods": [
+    "CARD",
+    "ACCOUNT_TRANSFER"
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "requestSuccessful": true,
+   "responseMessage": "success",
+   "responseCode": "0",
+   "responseBody": {
+    "transactionReference": "MNFY|20261006200044|000090",
+    "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "merchantName": "Acme Limited",
+    "apiKey": "MK_TEST_TASKIEM01",
+    "enabledPaymentMethod": [
+     "ACCOUNT_TRANSFER",
+     "CARD"
+    ],
+    "checkoutUrl": "https://sandbox.sdk.monnify.com/checkout/MNFY|20261006200044|000090"
+   }
+  }
+ }
+}

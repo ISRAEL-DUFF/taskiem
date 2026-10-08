@@ -1,0 +1,8 @@
+{
+  "_source": "MTN documents callback bodies as 'similar to the response returned by the status check API'; these are the status examples MTN publishes for RequesttoPayTransactionStatus and GetTransferStatus (momodeveloper.mtn.com developer API, read 7 October 2026), numbers as MTN shows them.",
+  "rtp_successful": {"amount": 100, "currency": "UGX", "financialTransactionId": 23503452, "externalId": 947354, "payer": {"partyIdType": "MSISDN", "partyId": 4656473839}, "status": "SUCCESSFUL"},
+  "rtp_payer_not_found": {"amount": 100, "currency": "UGX", "externalId": 947354, "payer": {"partyIdType": "MSISDN", "partyId": 4656473839}, "status": "FAILED", "reason": {"code": "PAYER_NOT_FOUND", "message": "Payee does not exist"}},
+  "transfer_successful": {"amount": 100, "currency": "UGX", "financialTransactionId": 363440463, "externalId": 83453, "payee": {"partyIdType": "MSISDN", "partyId": 4609274685}, "status": "SUCCESSFUL"},
+  "transfer_payer_limit": {"amount": 100, "currency": "UGX", "externalId": 83453, "payee": {"partyIdType": "MSISDN", "partyId": 4609274685}, "status": "FAILED", "reason": {"code": "PAYER_LIMIT_REACHED", "message": "The payer's limit has been breached."}},
+  "transfer_not_enough_funds": {"amount": 100, "currency": "UGX", "externalId": 83453, "payee": {"partyIdType": "MSISDN", "partyId": 4609274685}, "status": "FAILED", "reason": {"code": "NOT_ENOUGH_FUNDS", "message": "The payer does not have enough funds."}}
+}

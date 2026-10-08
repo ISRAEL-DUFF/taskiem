@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Taskiem docs</title>
+<link rel="stylesheet" href="{{.Base}}style.css">
+<script defer src="{{.Base}}search.js" data-base="{{.Base}}"></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="{{.Base}}">Taskiem docs</a>
+  <div class="search" role="search">
+    <input id="q" type="search" placeholder="Search the docs" autocomplete="off" aria-label="Search the docs" aria-controls="results">
+    <ol id="results" hidden></ol>
+  </div>
+</header>
+<div class="wrap">
+  <details class="side" open>
+    <summary>Contents</summary>
+    <nav aria-label="Contents">
+    {{- range .Nav}}
+      <h2>{{.Title}}</h2>
+      <ul>
+      {{- range .Items}}
+        <li><a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a></li>
+      {{- end}}
+      </ul>
+    {{- end}}
+    </nav>
+  </details>
+  <main class="content">
+{{.Content}}
+{{- if .Source}}
+    <p class="source"><a href="{{.Source}}">View this page's source</a></p>
+{{- end}}
+  </main>
+</div>
+</body>
+</html>

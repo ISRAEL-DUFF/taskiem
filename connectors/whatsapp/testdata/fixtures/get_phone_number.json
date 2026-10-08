@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/106540352242922",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code_verification_status": "VERIFIED",
+   "display_phone_number": "+234 801 000 0000",
+   "id": "106540352242922",
+   "quality_rating": "GREEN",
+   "verified_name": "Acme Payroll"
+  }
+ }
+}

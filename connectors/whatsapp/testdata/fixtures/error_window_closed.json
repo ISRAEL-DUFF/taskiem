@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/106540352242922/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "error": {
+    "message": "Re-engagement message",
+    "type": "OAuthException",
+    "code": 131047,
+    "error_data": {
+     "messaging_product": "whatsapp",
+     "details": "Message failed to send because more than 24 hours have passed since the customer last replied to this number."
+    },
+    "fbtrace_id": "A1b2C3d4"
+   }
+  }
+ }
+}

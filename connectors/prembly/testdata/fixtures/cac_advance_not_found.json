@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/verification/cac/advance",
+  "headers": {
+   "x-api-key": "sk_test_prembly"
+  },
+  "body": {
+   "rc_number": "000000",
+   "company_type": "BN"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": false,
+   "response_code": "01",
+   "message": "Record not found",
+   "verification": {
+    "reference": "cac01"
+   }
+  }
+ }
+}

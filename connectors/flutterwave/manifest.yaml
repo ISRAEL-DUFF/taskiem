@@ -1,0 +1,183 @@
+# Flutterwave, API v3 (the stable version; v4 is in public beta and an
+# account uses one or the other). Built from Flutterwave's public
+# documentation at developer.flutterwave.com, read 6 October 2026
+# (docs/integrations/flutterwave.md).
+manifest: connector/v1
+id: flutterwave
+version: 1.0.0
+name: Flutterwave
+description: Bank payouts, balances, name enquiry, fee quotes and payment verification on Flutterwave (API v3).
+category: payments
+regions: [NG, GH, KE, ZA, UG, TZ, RW]
+auth:
+  type: api_key
+  fields:
+    - { key: secret_key, label: Secret key (FLWSECK-… or FLWSECK_TEST-…), secret: true }
+    - { key: webhook_hash, label: Webhook secret hash (Settings → Webhooks), secret: true, required: false }
+  test: { action: list_banks }
+# "Bearer" keys select test or live mode; one host serves both.
+base_url: https://api.flutterwave.com/v3
+actions:
+  get_balance:
+    title: Get wallet balance
+    class: read
+    input:
+      type: object
+      properties:
+        currency: { type: string, default: NGN }
+    output:
+      type: object
+      properties:
+        currency:          { type: string }
+        available_balance: { type: integer, description: Minor units (kobo for NGN) }
+        ledger_balance:    { type: integer, description: Minor units }
+        scale:             { type: integer, description: Decimal places of the minor unit }
+  list_banks:
+    title: List banks
+    class: read
+    input:
+      type: object
+      properties:
+        country: { type: string, default: NG }
+    output:
+      type: object
+      properties:
+        banks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:   { type: integer }
+              code: { type: string }
+              name: { type: string }
+  resolve_account:
+    title: Resolve account name
+    description: Call before paying a new account; a payout to the wrong valid account cannot be recovered.
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code]
+      properties:
+        account_number: { type: string }
+        bank_code:      { type: string, description: From list_banks }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  get_transfer_fee:
+    title: Quote a transfer fee
+    class: read
+    input:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: integer, minimum: 100, description: Kobo }
+    output:
+      type: object
+      properties:
+        fee:      { type: integer, description: Kobo }
+        currency: { type: string }
+  transfer:
+    title: Pay out to a Nigerian bank account
+    description: >-
+      Queues an NGN payout (status NEW); the outcome arrives as a
+      event (correlation: reference) or from get_transfer. Flutterwave
+      takes whole naira, so amount must be a multiple of 100 kobo. A payout
+      Flutterwave reports FAILED fails the step with its message.
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 100, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, account_number, bank_code]
+      properties:
+        amount:           { type: integer, minimum: 100, description: Kobo, a multiple of 100 }
+        account_number:   { type: string }
+        bank_code:        { type: string, description: From list_banks }
+        narration:        { type: string }
+        beneficiary_name: { type: string }
+        reference:        { type: string }
+    output: { $ref: '#/actions/get_transfer/output' }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: beneficiary_name, category: name }
+      - { field: output.account_name, category: name }
+  get_transfer:
+    title: Get transfer
+    class: read
+    input:
+      type: object
+      required: [transfer_id]
+      properties: { transfer_id: { type: integer } }
+    output:
+      type: object
+      properties:
+        transfer_id:      { type: integer }
+        reference:        { type: string }
+        status:           { type: string, enum: [NEW, PENDING, SUCCESSFUL, FAILED] }
+        amount:           { type: integer, description: Kobo }
+        fee:              { type: integer, description: Kobo }
+        currency:         { type: string }
+        account_name:     { type: string }
+        bank_name:        { type: string }
+        complete_message: { type: string }
+        requires_approval: { type: boolean, description: Waiting for approval in the Flutterwave dashboard }
+    pii:
+      - { field: output.account_name, category: name }
+  get_transfer_by_reference:
+    title: Get transfer by reference
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output: { $ref: '#/actions/get_transfer/output' }
+    pii:
+      - { field: output.account_name, category: name }
+  verify_payment:
+    title: Verify a payment
+    description: >-
+      Confirms a collection by Flutterwave's transaction id or your tx_ref.
+      Give value only when status is successful and amount and currency are
+      what you expected.
+    class: read
+    input:
+      type: object
+      properties:
+        transaction_id: { type: integer }
+        tx_ref:         { type: string }
+    output:
+      type: object
+      properties:
+        transaction_id:  { type: integer }
+        tx_ref:          { type: string }
+        flw_ref:         { type: string }
+        status:          { type: string }
+        amount:          { type: integer, description: Minor units }
+        charged_amount:  { type: integer, description: Minor units }
+        currency:        { type: string }
+        payment_type:    { type: string }
+        customer_email:  { type: string }
+    pii:
+      - { field: tx_ref, category: other }
+      - { field: output.customer_email, category: email }
+triggers:
+  # One webhook URL per Flutterwave account receives every event.
+  event:
+    type: webhook
+    verify: { scheme: header_secret, header: verif-hash, secret_field: webhook_hash }
+    events: [transfer.completed, charge.completed]
+    event_type: =body.event
+    dedup: '=body.event + ":" + string(body.data.id) + ":" + body.data.status'
+    # Payouts: the payout's reference. Charges: your tx_ref.
+    correlation: '=body.event == "transfer.completed" ? body.data.reference : body.data.tx_ref'

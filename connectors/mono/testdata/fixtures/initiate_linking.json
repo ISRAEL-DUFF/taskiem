@@ -1,0 +1,40 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v2/accounts/initiate",
+  "headers": {
+   "mono-sec-key": "test_sk_abc"
+  },
+  "body": {
+   "customer": {
+    "name": "Samuel Olamide",
+    "email": "samuel@neem.com"
+   },
+   "meta": {
+    "ref": "99008877TEST"
+   },
+   "scope": "auth",
+   "redirect_url": "https://mono.co"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "successful",
+   "message": "Request was successfully completed",
+   "timestamp": "2024-03-18T11:51:41.624Z",
+   "data": {
+    "mono_url": "https://link.mono.co/ALGSTO222222WE",
+    "customer": "65f82acd00000003aa9028d",
+    "meta": {
+     "ref": "99008877TEST"
+    },
+    "scope": "auth",
+    "institution": {},
+    "redirect_url": "https://mono.co",
+    "is_multi": false,
+    "created_at": "2024-03-18T11:51:41.605Z"
+   }
+  }
+ }
+}

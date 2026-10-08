@@ -1,0 +1,24 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- $root := . -}}
+{{- range $role := splitList " " (include "taskiem.roles" .) }}
+{{- $r := index $root.Values.roles $role }}
+{{- $min := $r.replicas }}
+{{- if and (eq $role "worker") $r.autoscaling.enabled }}{{ $min = $r.autoscaling.minReplicas }}{{ end }}
+{{- if gt (int $min) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "taskiem.fullname" $root }}-{{ $role }}
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $role }}
+{{- end }}
+{{- end }}
+{{- end }}

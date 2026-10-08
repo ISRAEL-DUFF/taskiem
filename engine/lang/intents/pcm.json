@@ -1,0 +1,21 @@
+{
+  "language": "pcm",
+  "reviewed": false,
+  "status": "DRAFT, NOT REVIEWED. Written without a native speaker; do not treat as accurate until reviewed (docs/languages.md).",
+  "phrases": {
+    "help": ["wetin i fit do", "wetin i fit send", "abeg help me", "how far", "oya"],
+    "status": ["wetin fail today", "wetin don fail", "wetin fail", "how tins dey", "how everytin dey"],
+    "approvals": ["wetin dey wait for me", "approval dem", "wetin i go approve"],
+    "cancel": ["comot am", "leave am", "forget am", "no do am again"],
+    "yes": ["yes o", "na so", "do am", "oya do am", "e dey ok", "ehen"],
+    "no": ["no o", "no do am", "abeg no", "no be so"]
+  },
+  "prefixes": {
+    "switch": ["change go", "switch go"],
+    "run": ["run am", "start am", "make e run", "abeg run"],
+    "build": ["build am", "abeg build", "make una build", "help me build"],
+    "language": ["change language"]
+  },
+  "fillers": ["abeg", "abeg o", "please"],
+  "markers": ["abeg", "wetin", "dey", "una", "wahala", "comot", "sabi", "oya", "abi", "sef", "wan", "pikin", "chop", "dem", "wey", "make i", "how far", "no be", "na im", "e don", "go dey", "fit", "dis", "dat"]
+}

@@ -1,0 +1,204 @@
+# SFTP (SSH File Transfer Protocol version 3, as OpenSSH serves it).
+# Built from public specifications, read 6 October 2026
+# (docs/integrations/sftp.md):
+#   https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02 (SFTP v3)
+#   https://datatracker.ietf.org/doc/html/rfc4251 (SSH architecture, host keys)
+#   https://datatracker.ietf.org/doc/html/rfc4252 (SSH authentication)
+#   https://datatracker.ietf.org/doc/html/rfc4253 (SSH transport)
+#   https://datatracker.ietf.org/doc/html/rfc4256 (keyboard-interactive)
+#   https://man.openbsd.org/sshd.8#SSH_KNOWN_HOSTS_FILE_FORMAT
+#   https://github.com/openssh/openssh-portable/blob/master/PROTOCOL (posix-rename@openssh.com)
+# Protocol code: golang.org/x/crypto/ssh and github.com/pkg/sftp (BSD).
+manifest: connector/v1
+id: sftp
+version: 1.0.0
+name: SFTP
+description: Upload, download, list, move and delete files on an SFTP server, with the server's host key pinned.
+category: storage
+auth:
+  type: custom
+  fields:
+    - { key: host, label: Host }
+    - { key: port, label: Port (default 22), required: false }
+    - { key: username, label: Username }
+    - { key: password, label: Password, secret: true, required: false }
+    - { key: private_key, label: Private key (PEM or OpenSSH format), secret: true, required: false }
+    - { key: private_key_passphrase, label: Private key passphrase, secret: true, required: false }
+    - { key: host_key, label: "Server host key: a known_hosts or authorized_keys line, a base64 key, or a SHA256: fingerprint. Required; leave empty once to be shown the server's", required: false }
+  test: { action: stat }
+egress_hosts: ["${connection.host}"]
+actions:
+  upload_file:
+    title: Upload a file
+    description: >-
+      Writes to a temporary name in the same directory, then renames it into
+      place, so readers never see half a file. Repeating an upload of the same
+      content to the same path is safe. At most 10 MiB after decoding.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 26
+      prefix: "tsk_"
+      limits: { charset: "a-z0-9_" }
+    compensate: null
+    input:
+      type: object
+      required: [path, content]
+      properties:
+        path:            { type: string, minLength: 1, description: Server path; relative paths start at the login directory }
+        content:         { type: string }
+        encoding:        { type: string, enum: [text, base64], default: text }
+        create_dirs:     { type: boolean, default: false, description: Create missing parent directories (mkdir -p) }
+        overwrite:       { type: boolean, default: true, description: When false an existing file with different content fails the step }
+        mode:            { type: string, pattern: "^0?[0-7]{3,4}$", description: "Permissions, e.g. 0640" }
+        idempotency_key: { type: string, description: Set by the engine; names the temporary file }
+    output:
+      type: object
+      properties:
+        path:      { type: string }
+        size:      { type: integer }
+        sha256:    { type: string }
+        atomic:    { type: boolean, description: False when the server lacked posix-rename and an existing file was replaced by delete then rename }
+        unchanged: { type: boolean, description: The file already had this content (overwrite false) }
+    pii:
+      - { field: content, category: other }
+  download_file:
+    title: Download a file
+    description: Returns the content as text or base64. A file larger than max_bytes is refused rather than cut short.
+    class: read
+    input:
+      type: object
+      required: [path]
+      properties:
+        path:      { type: string, minLength: 1 }
+        encoding:  { type: string, enum: [text, base64], default: text, description: text requires valid UTF-8 }
+        max_bytes: { type: integer, minimum: 1, maximum: 10485760, default: 1048576 }
+    output:
+      type: object
+      properties:
+        path:     { type: string }
+        content:  { type: string }
+        encoding: { type: string }
+        size:     { type: integer }
+        sha256:   { type: string }
+        modified: { type: string }
+        mode:     { type: string }
+    pii:
+      - { field: output.content, category: other }
+  list_directory:
+    title: List a directory
+    class: read
+    input:
+      type: object
+      properties:
+        path:        { type: string, default: ".", description: Defaults to the login directory }
+        max_entries: { type: integer, minimum: 1, maximum: 10000, default: 1000 }
+    output:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              name:     { type: string }
+              path:     { type: string }
+              type:     { type: string, enum: [file, directory, symlink, other] }
+              size:     { type: integer }
+              mode:     { type: string }
+              modified: { type: string }
+        count:     { type: integer }
+        truncated: { type: boolean }
+  stat:
+    title: Get file details
+    description: A missing path returns exists=false instead of failing. Also the connection test (on the login directory).
+    class: read
+    input:
+      type: object
+      properties:
+        path: { type: string, default: "." }
+    output:
+      type: object
+      properties:
+        exists:   { type: boolean }
+        path:     { type: string }
+        type:     { type: string, enum: [file, directory, symlink, other] }
+        size:     { type: integer }
+        mode:     { type: string }
+        modified: { type: string }
+  rename:
+    title: Rename or move a file
+    description: >-
+      Without overwrite an existing destination fails the step. A retry after
+      a lost reply finds the source gone and the destination present, and
+      reports already_done.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 26
+      prefix: "tsk_"
+      limits: { charset: "a-z0-9_" }
+    compensate: null
+    input:
+      type: object
+      required: [from, to]
+      properties:
+        from:            { type: string, minLength: 1 }
+        to:              { type: string, minLength: 1 }
+        overwrite:       { type: boolean, default: false }
+        create_dirs:     { type: boolean, default: false }
+        idempotency_key: { type: string, description: Set by the engine; only logged }
+    output:
+      type: object
+      properties:
+        from:         { type: string }
+        to:           { type: string }
+        already_done: { type: boolean }
+        atomic:       { type: boolean }
+  delete:
+    title: Delete a file or empty directory
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 26
+      prefix: "tsk_"
+      limits: { charset: "a-z0-9_" }
+    compensate: null
+    input:
+      type: object
+      required: [path]
+      properties:
+        path:            { type: string, minLength: 1 }
+        missing_ok:      { type: boolean, default: true, description: When false a missing path fails the step }
+        idempotency_key: { type: string, description: Set by the engine; only logged }
+    output:
+      type: object
+      properties:
+        path:    { type: string }
+        deleted: { type: boolean, description: False when the path did not exist }
+  mkdir:
+    title: Create a directory
+    description: An existing directory is not an error.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 26
+      prefix: "tsk_"
+      limits: { charset: "a-z0-9_" }
+    compensate: null
+    input:
+      type: object
+      required: [path]
+      properties:
+        path:            { type: string, minLength: 1 }
+        parents:         { type: boolean, default: true, description: Create missing parents too (mkdir -p) }
+        idempotency_key: { type: string, description: Set by the engine; only logged }
+    output:
+      type: object
+      properties:
+        path:    { type: string }
+        created: { type: boolean }

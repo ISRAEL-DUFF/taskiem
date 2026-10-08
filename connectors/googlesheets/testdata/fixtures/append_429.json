@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Sheet1!A:C:append"
+ },
+ "response": {
+  "status": 429,
+  "body": {
+   "error": {
+    "code": 429,
+    "message": "Quota exceeded for quota metric 'Write requests'",
+    "status": "RESOURCE_EXHAUSTED"
+   }
+  }
+ }
+}

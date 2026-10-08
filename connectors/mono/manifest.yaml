@@ -1,0 +1,770 @@
+# Mono (Nigerian open banking, DirectPay and Direct Debit). Built from Mono's
+# public documentation at docs.mono.co (API reference under
+# https://docs.mono.co/api, guides under https://docs.mono.co/docs, index at
+# https://docs.mono.co/llms.txt), read 6 October 2026
+# (docs/integrations/mono.md).
+manifest: connector/v1
+id: mono
+version: 1.0.0
+name: Mono
+description: Bank account linking, account data (balance, transactions, statements, identity, income, creditworthiness), DirectPay and Direct Debit mandates.
+category: open_banking
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    # Sandbox and live share one host; the key decides the environment.
+    - { key: secret_key, label: "Secret key (test_sk_... or live_sk_...)", secret: true }
+    - { key: webhook_secret, label: Webhook secret (from the app's webhook settings), secret: true, required: false }
+  test: { action: list_banks }
+base_url: https://api.withmono.com
+egress_hosts: [api.withmono.com]
+actions:
+  # ---- Account linking (Connect) ----
+  initiate_account_linking:
+    title: Start linking a bank account
+    description: >-
+      Returns a Mono link (mono_url) for the customer to log in to their bank.
+      Linking ends with mono.events.account_connected (the account id) on the
+      event trigger; exchange_token is for the widget flow instead.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [redirect_url]
+      properties:
+        customer_name:  { type: string, description: Required unless customer_id is given }
+        customer_email: { type: string, description: Required unless customer_id is given }
+        customer_id:    { type: string, description: An existing Mono customer }
+        institution_id: { type: string, description: Preselect a bank (Mono institution id) }
+        auth_method:    { type: string, enum: [internet_banking, mobile_banking] }
+        ref:            { type: string, minLength: 10, description: Your unique reference (meta.ref), returned on events }
+        redirect_url:   { type: string, description: "https:// URL the customer returns to" }
+    output:
+      type: object
+      properties:
+        mono_url:    { type: string }
+        customer_id: { type: string }
+        ref:         { type: string }
+        created_at:  { type: string }
+    pii:
+      - { field: customer_name, category: name }
+      - { field: customer_email, category: email }
+  initiate_reauthorisation:
+    title: Start re-authorising a linked account
+    description: For banks that need the customer to log in again before fresh data can be pulled.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [account_id, redirect_url]
+      properties:
+        account_id:   { type: string }
+        ref:          { type: string, minLength: 10 }
+        redirect_url: { type: string }
+    output:
+      type: object
+      properties:
+        mono_url:    { type: string }
+        account_id:  { type: string }
+        customer_id: { type: string }
+        created_at:  { type: string }
+  exchange_token:
+    title: Exchange a Connect code for an account id
+    description: >-
+      Completes linking from the Mono Connect widget. Mono does not document
+      whether a code can be exchanged twice, so an unknown outcome parks the
+      step rather than resending.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+    output:
+      type: object
+      properties:
+        account_id: { type: string }
+  unlink_account:
+    title: Unlink an account
+    description: Revokes your access to a linked account (mono.events.account_unlinked follows).
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [account_id]
+      properties:
+        account_id: { type: string }
+    output:
+      type: object
+      properties:
+        account_id: { type: string }
+        unlinked:   { type: boolean }
+  # ---- Account data ----
+  get_account:
+    title: Get account details
+    class: read
+    input:
+      type: object
+      required: [account_id]
+      properties:
+        account_id: { type: string }
+        realtime:   { type: boolean, description: Ask the bank for a fresh balance (x-realtime) }
+    output:
+      type: object
+      properties:
+        account_id:       { type: string }
+        name:             { type: string }
+        account_number:   { type: string }
+        currency:         { type: string }
+        balance:          { type: integer, description: Kobo }
+        type:             { type: string }
+        bvn_last4:        { type: string, description: Mono returns only the last four digits here; get_identity has the full BVN }
+        institution_name: { type: string }
+        bank_code:        { type: string }
+        institution_type: { type: string }
+        customer_id:      { type: string }
+        data_status:      { type: string, enum: [AVAILABLE, PARTIAL, UNAVAILABLE, FAILED, PROCESSING] }
+        auth_method:      { type: string }
+        retrieved_data:   { type: array, items: { type: string } }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.account_number, category: account_number }
+      - { field: output.bvn_last4, category: bvn }
+  get_balance:
+    title: Get account balance
+    class: read
+    input:
+      type: object
+      required: [account_id]
+      properties:
+        account_id: { type: string }
+        realtime:   { type: boolean }
+    output:
+      type: object
+      properties:
+        account_id:     { type: string }
+        name:           { type: string }
+        account_number: { type: string }
+        balance:        { type: integer, description: Kobo }
+        currency:       { type: string }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.account_number, category: account_number }
+  get_identity:
+    title: Get the account holder's identity
+    description: The bank's KYC record for the account holder, including the full BVN.
+    class: read
+    input:
+      type: object
+      required: [account_id]
+      properties:
+        account_id: { type: string }
+    output:
+      type: object
+      properties:
+        full_name:       { type: string }
+        bvn:             { type: string }
+        phone:           { type: string }
+        email:           { type: string }
+        gender:          { type: string }
+        date_of_birth:   { type: string }
+        address:         { type: string }
+        state_of_origin: { type: string }
+        lga_of_origin:   { type: string }
+        marital_status:  { type: string }
+        verified:        { type: boolean }
+    pii:
+      - { field: output.full_name, category: name }
+      - { field: output.bvn, category: bvn }
+      - { field: output.phone, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.gender, category: other }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.address, category: address }
+      - { field: output.state_of_origin, category: other }
+      - { field: output.lga_of_origin, category: other }
+      - { field: output.marital_status, category: other }
+  list_transactions:
+    title: List account transactions
+    description: Newest first; one page per call (page, has_more). Dates are DD-MM-YYYY.
+    class: read
+    input:
+      type: object
+      required: [account_id]
+      properties:
+        account_id: { type: string }
+        start:      { type: string, pattern: "^[0-9]{2}-[0-9]{2}-[0-9]{4}$", description: "DD-MM-YYYY; needs end" }
+        end:        { type: string, pattern: "^[0-9]{2}-[0-9]{2}-[0-9]{4}$" }
+        narration:  { type: string }
+        type:       { type: string, enum: [debit, credit] }
+        limit:      { type: integer, minimum: 1 }
+        page:       { type: integer, minimum: 1 }
+        realtime:   { type: boolean }
+    output:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:        { type: string }
+              type:      { type: string, enum: [debit, credit] }
+              amount:    { type: integer, description: Kobo }
+              balance:   { type: integer, description: Kobo after the transaction; 0 when the bank does not say }
+              narration: { type: string }
+              date:      { type: string }
+              category:  { type: string }
+        total:    { type: integer }
+        page:     { type: integer }
+        has_more: { type: boolean }
+    pii:
+      - { field: output.transactions.*.narration, category: other }
+  get_statement:
+    title: Get a bank statement
+    description: >-
+      One to twelve months. As JSON the transactions come back at once; as PDF
+      Mono builds the file in the background: poll get_statement_pdf with the
+      job_id until status is BUILT.
+    class: read
+    input:
+      type: object
+      required: [account_id, months]
+      properties:
+        account_id: { type: string }
+        months:     { type: integer, minimum: 1, maximum: 12 }
+        output:     { type: string, enum: [json, pdf], default: json }
+        realtime:   { type: boolean }
+    output:
+      type: object
+      properties:
+        transactions: { $ref: '#/actions/list_transactions/output/properties/transactions' }
+        job_id:       { type: string, description: PDF only }
+        status:       { type: string, description: "PDF only: BUILDING or BUILT" }
+        pdf_url:      { type: string, description: PDF only }
+    pii:
+      - { field: output.transactions.*.narration, category: other }
+  get_statement_pdf:
+    title: Get a PDF statement's status
+    class: read
+    input:
+      type: object
+      required: [account_id, job_id]
+      properties:
+        account_id: { type: string }
+        job_id:     { type: string }
+    output:
+      type: object
+      properties:
+        job_id:  { type: string }
+        status:  { type: string }
+        pdf_url: { type: string }
+  request_income:
+    title: Request an income analysis
+    description: >-
+      Mono analyses the account in the background and delivers the report as
+      mono.events.account_income (correlation: the account id). get_income_records
+      reads earlier reports.
+    class: read
+    input:
+      type: object
+      required: [account_id]
+      properties:
+        account_id: { type: string }
+        months:     { type: integer, minimum: 1, description: Months to analyse; the account's whole history when omitted }
+    output:
+      type: object
+      properties:
+        accepted: { type: boolean }
+        message:  { type: string }
+  get_income_records:
+    title: Get income reports
+    description: Reports from earlier request_income calls, newest first, as Mono returns them (amounts in kobo, averages may carry fractions).
+    class: read
+    input:
+      type: object
+      required: [account_id]
+      properties:
+        account_id: { type: string }
+        page:       { type: integer, minimum: 1 }
+    output:
+      type: object
+      properties:
+        records:  { type: array, items: { type: object } }
+        total:    { type: integer }
+        has_more: { type: boolean }
+    pii:
+      - { field: output.records, category: other }
+  request_creditworthiness:
+    title: Request a creditworthiness assessment
+    description: >-
+      Whether the account holder can afford a loan (principal in kobo,
+      monthly interest rate, term in months). The report arrives as
+      mono.events.account_credit_worthiness (correlation: the account id).
+      run_credit_check also consults the credit bureau.
+    class: read
+    input:
+      type: object
+      required: [account_id, bvn, principal, interest_rate, term, run_credit_check]
+      properties:
+        account_id:       { type: string }
+        bvn:              { type: string, pattern: "^[0-9]{11}$" }
+        principal:        { type: integer, minimum: 1, description: Kobo }
+        interest_rate:    { type: number, description: "Percent, e.g. 5" }
+        term:             { type: integer, minimum: 1, description: Months }
+        run_credit_check: { type: boolean }
+        existing_loans:   { type: array, items: { type: object }, description: "Loans you know of, in Mono's existing_loans shape (amounts in kobo)" }
+    output:
+      type: object
+      properties:
+        accepted: { type: boolean }
+        message:  { type: string }
+    pii:
+      - { field: bvn, category: bvn }
+  list_banks:
+    title: List banks
+    description: Bank and NIP codes, and which banks support Direct Debit. Also the connection test.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        banks:
+          type: array
+          items:
+            type: object
+            properties:
+              name:         { type: string }
+              bank_code:    { type: string }
+              nip_code:     { type: string }
+              direct_debit: { type: boolean }
+  # ---- DirectPay (one-time) ----
+  initiate_payment:
+    title: Start a one-time DirectPay payment
+    description: >-
+      Returns a checkout link (mono_url); the customer authorises the payment
+      there. Give value only after verify_payment (or the
+      direct_debit.payment_successful event, correlation: reference) says
+      successful. Amounts are kobo; Mono's minimum is NGN 200.
+    class: reconcilable_write
+    idempotency:
+      field: reference
+      encoding: base64url
+      length: 22
+      limits: { min_length: 10, max_length: 24, charset: "A-Za-z0-9_-" }
+    reconcile: verify_payment
+    compensate: null
+    input:
+      type: object
+      required: [amount, description, reference]
+      properties:
+        amount:           { type: integer, minimum: 20000, description: Kobo }
+        description:      { type: string }
+        reference:        { type: string }
+        method:           { type: string, enum: [account, transfer, whatsapp], default: account }
+        account_id:       { type: string, description: A linked account to pay from }
+        institution_id:   { type: string }
+        auth_method:      { type: string, enum: [internet_banking, mobile_banking] }
+        redirect_url:     { type: string }
+        customer_name:    { type: string }
+        customer_email:   { type: string }
+        customer_phone:   { type: string }
+        customer_address: { type: string }
+        customer_bvn:     { type: string, pattern: "^[0-9]{11}$" }
+        meta:             { type: object }
+    output:
+      type: object
+      properties:
+        id:          { type: string }
+        mono_url:    { type: string }
+        reference:   { type: string }
+        amount:      { type: integer, description: Kobo }
+        status:      { type: string, description: "initiated on creation; a reconciled step reports verify_payment's status" }
+        customer_id: { type: string }
+    pii:
+      - { field: customer_name, category: name }
+      - { field: customer_email, category: email }
+      - { field: customer_phone, category: phone }
+      - { field: customer_address, category: address }
+      - { field: customer_bvn, category: bvn }
+  verify_payment:
+    title: Verify a payment by reference
+    description: >-
+      DirectPay payments and mandate debits. Statuses: successful, pending,
+      processing, failed, cancelled, abandoned. Give value only on
+      successful. A reference Mono does not know fails the step (not_found).
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        id:             { type: string }
+        reference:      { type: string }
+        status:         { type: string }
+        amount:         { type: integer, description: Kobo }
+        fee:            { type: integer, description: Kobo }
+        currency:       { type: string }
+        type:           { type: string }
+        channel:        { type: string }
+        description:    { type: string }
+        account_name:   { type: string }
+        account_number: { type: string }
+        bank_code:      { type: string }
+        bank_name:      { type: string }
+        customer_id:    { type: string }
+        refunded:       { type: boolean }
+        created_at:     { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  # ---- Direct Debit ----
+  create_customer:
+    title: Create a customer
+    description: An individual customer, needed before a mandate. Mono refuses a customer whose email or names it already has.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [first_name, last_name, email, phone, address, bvn]
+      properties:
+        first_name: { type: string }
+        last_name:  { type: string }
+        email:      { type: string }
+        phone:      { type: string }
+        address:    { type: string, maxLength: 100 }
+        bvn:        { type: string, pattern: "^[0-9]{11}$" }
+    output:
+      type: object
+      properties:
+        id:    { type: string }
+        name:  { type: string }
+        email: { type: string }
+    pii:
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
+      - { field: email, category: email }
+      - { field: phone, category: phone }
+      - { field: address, category: address }
+      - { field: bvn, category: bvn }
+      - { field: output.name, category: name }
+      - { field: output.email, category: email }
+  create_mandate:
+    title: Create a Direct Debit mandate
+    description: >-
+      Your own mandate flow (create, then the customer authorises by a NGN 50
+      transfer or a selfie check). Variable mandates are debited with
+      debit_mandate once events.mandates.ready arrives (correlation: the
+      mandate id). amount is the mandate's total (variable) or each debit
+      (fixed), in kobo.
+    class: reconcilable_write
+    idempotency:
+      field: reference
+      encoding: base64url
+      length: 22
+      limits: { min_length: 10, max_length: 24, charset: "A-Za-z0-9_-" }
+    reconcile: get_mandate
+    compensate: cancel_mandate
+    input:
+      type: object
+      required: [customer_id, mandate_type, debit_type, amount, reference, description, start_date, end_date]
+      properties:
+        customer_id:          { type: string }
+        mandate_type:         { type: string, enum: [emandate, sweep] }
+        debit_type:           { type: string, enum: [variable, fixed] }
+        amount:               { type: integer, minimum: 1, description: Kobo }
+        reference:            { type: string }
+        account_number:       { type: string, description: With bank_code, or use account_id }
+        bank_code:            { type: string, description: From list_banks }
+        account_id:           { type: string, description: A linked Mono account instead of account_number and bank_code }
+        description:          { type: string }
+        start_date:           { type: string, description: YYYY-MM-DD }
+        end_date:             { type: string, description: YYYY-MM-DD }
+        fee_bearer:           { type: string, enum: [business, customer] }
+        verification_method:  { type: string, enum: [transfer_verification, selfie_verification] }
+        frequency:            { type: string, description: "Fixed mandates: daily, weekly, monthly, yearly, or days/weeks/months with interval" }
+        interval:             { type: integer, minimum: 1 }
+        retrial_frequency:    { type: integer, minimum: 1, maximum: 6 }
+        grace_period:         { type: integer, minimum: 1, maximum: 10 }
+        minimum_due:          { type: integer, minimum: 0, description: Kobo }
+        initial_debit_date:   { type: string }
+        initial_debit_amount: { type: integer, minimum: 0, description: Kobo }
+        meta:                 { type: object }
+    output: { $ref: '#/actions/get_mandate/output' }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  initiate_mandate:
+    title: Start a Mono-hosted mandate authorisation
+    description: >-
+      Returns a link (mono_url) where the customer sets up the mandate on
+      Mono's pages; an alternative to create_mandate. Amount in kobo.
+    class: reconcilable_write
+    idempotency:
+      field: reference
+      encoding: base64url
+      length: 22
+      limits: { min_length: 10, max_length: 24, charset: "A-Za-z0-9_-" }
+    reconcile: get_mandate
+    compensate: null
+    input:
+      type: object
+      required: [customer_id, mandate_type, debit_type, amount, reference, description, start_date, end_date]
+      properties:
+        customer_id:         { type: string }
+        mandate_type:        { type: string, enum: [emandate, sweep] }
+        debit_type:          { type: string, enum: [variable, fixed] }
+        amount:              { type: integer, minimum: 20000, description: Kobo }
+        reference:           { type: string }
+        description:         { type: string }
+        start_date:          { type: string }
+        end_date:            { type: string }
+        account_number:      { type: string }
+        bank_code:           { type: string }
+        redirect_url:        { type: string }
+        allow_partial_sweep: { type: boolean }
+        frequency:           { type: string }
+        interval:            { type: integer, minimum: 1 }
+        retrial_frequency:   { type: integer, minimum: 1, maximum: 6 }
+        grace_period:        { type: integer, minimum: 1, maximum: 10 }
+        minimum_due:         { type: integer, minimum: 0 }
+        initial_debit_date:  { type: string }
+        meta:                { type: object }
+    output: { $ref: '#/actions/get_mandate/output' }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  get_mandate:
+    title: Get a mandate
+    description: By mandate id (mmc_...) or by the reference it was created with.
+    class: read
+    input:
+      type: object
+      properties:
+        mandate_id: { type: string }
+        reference:  { type: string }
+    output:
+      type: object
+      properties:
+        id:                    { type: string }
+        reference:             { type: string }
+        status:                { type: string, description: "initiated, approved, rejected, paused, cancelled, expired, ..." }
+        approved:              { type: boolean }
+        ready_to_debit:        { type: boolean }
+        mandate_type:          { type: string }
+        debit_type:            { type: string }
+        amount:                { type: integer, description: Kobo }
+        balance:               { type: integer, description: Kobo left to debit on a variable mandate }
+        account_name:          { type: string }
+        account_number:        { type: string }
+        bank_name:             { type: string }
+        bank_code:             { type: string }
+        customer_id:           { type: string }
+        mono_url:              { type: string, description: Where the customer authorises (selfie or hosted flows) }
+        nibss_code:            { type: string }
+        start_date:            { type: string }
+        end_date:              { type: string }
+        message:               { type: string, description: "Mono's instruction, e.g. the NGN 50 authorisation transfer" }
+        transfer_destinations:
+          type: array
+          items:
+            type: object
+            properties:
+              bank_name:      { type: string }
+              account_number: { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  pause_mandate:
+    title: Pause a mandate
+    description: No debits or balance enquiries until reinstated. A mandate already paused counts as done.
+    class: unsafe_write
+    compensate: reinstate_mandate
+    input:
+      type: object
+      required: [mandate_id]
+      properties:
+        mandate_id: { type: string }
+    output: { $ref: '#/actions/cancel_mandate/output' }
+  reinstate_mandate:
+    title: Reinstate a paused mandate
+    class: unsafe_write
+    compensate: pause_mandate
+    input:
+      type: object
+      required: [mandate_id]
+      properties:
+        mandate_id: { type: string }
+    output: { $ref: '#/actions/cancel_mandate/output' }
+  cancel_mandate:
+    title: Cancel a mandate
+    description: Final; the mandate can never be debited again. A mandate already cancelled counts as done.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [mandate_id]
+      properties:
+        mandate_id: { type: string }
+    output:
+      type: object
+      properties:
+        mandate_id: { type: string }
+        status:     { type: string, enum: [paused, active, cancelled] }
+        message:    { type: string }
+  check_mandate_balance:
+    title: Check a mandated account's balance
+    description: >-
+      Without amount, the balance (Mono charges NGN 50). With amount (kobo),
+      only whether it is covered (NGN 10). NIBSS reports balances under
+      NGN 1,000 as zero.
+    class: read
+    input:
+      type: object
+      required: [mandate_id]
+      properties:
+        mandate_id: { type: string }
+        amount:     { type: integer, minimum: 20000, description: Kobo }
+    output:
+      type: object
+      properties:
+        mandate_id:             { type: string }
+        balance:                { type: integer, description: "Kobo, rounded down; absent when amount was given" }
+        has_sufficient_balance: { type: boolean, description: Only when amount was given }
+        account_name:           { type: string }
+        account_number:         { type: string }
+        bank_code:              { type: string }
+        bank_name:              { type: string }
+    pii:
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  debit_mandate:
+    title: Debit an account under a mandate
+    description: >-
+      Variable mandates only. Returns successful, or processing when Mono is
+      still waiting on the bank (the outcome then arrives as
+      events.mandates.debit.successful or .failed, correlation: reference). A
+      debit Mono refuses (insufficient funds, a mandate not ready, the
+      same-day lockout) fails the step with Mono's response code; no money
+      moved.
+    class: reconcilable_write
+    idempotency:
+      field: reference
+      encoding: base64url
+      length: 22
+      limits: { min_length: 10, max_length: 24, charset: "A-Za-z0-9_-" }
+    reconcile: verify_payment
+    compensate: null
+    input:
+      type: object
+      required: [mandate_id, amount, narration, reference]
+      properties:
+        mandate_id:                 { type: string }
+        amount:                     { type: integer, minimum: 20000, description: Kobo }
+        narration:                  { type: string }
+        reference:                  { type: string }
+        fee_bearer:                 { type: string, enum: [business, customer] }
+        beneficiary_account_number: { type: string, description: Settle straight to this NUBAN (Mono enables this on request) }
+        beneficiary_nip_code:       { type: string }
+        meta:                       { type: object }
+    output:
+      type: object
+      properties:
+        reference:        { type: string }
+        status:           { type: string, enum: [successful, processing] }
+        amount:           { type: integer, description: Kobo }
+        fee:              { type: integer, description: Kobo }
+        mandate_id:       { type: string }
+        reference_number: { type: string, description: Mono's reference for the debit }
+        session_id:       { type: string, description: NIP session id }
+        response_code:    { type: string }
+        account_name:     { type: string }
+        account_number:   { type: string }
+        bank_name:        { type: string }
+        date:             { type: string }
+        message:          { type: string }
+    pii:
+      - { field: beneficiary_account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  get_debit:
+    title: Get a mandate debit
+    class: read
+    input:
+      type: object
+      required: [mandate_id, reference]
+      properties:
+        mandate_id: { type: string }
+        reference:  { type: string }
+    output:
+      type: object
+      properties:
+        reference:  { type: string }
+        status:     { type: string }
+        amount:     { type: integer, description: Kobo }
+        currency:   { type: string }
+        type:       { type: string }
+        mandate_id: { type: string }
+        narration:  { type: string }
+        refunded:   { type: boolean }
+        date:       { type: string }
+    pii:
+      - { field: output.narration, category: other }
+triggers:
+  # Mono sends every event for an app to the one webhook URL set on the app.
+  event:
+    type: webhook
+    verify: { scheme: header_secret, header: mono-webhook-secret, secret_field: webhook_secret }
+    # The provider retries anything but 200, so accepted (and ignored) deliveries get 200.
+    ack: { status: 200, body: ok }
+    events:
+      - mono.events.account_connected
+      - mono.events.account_updated
+      - mono.events.account_unlinked
+      - mono.events.account_income
+      - mono.events.account_credit_worthiness
+      - direct_debit.payment_successful
+      - direct_debit.payment_failed
+      - direct_debit.payment_cancelled
+      - direct_debit.payment_abandoned
+      - events.mandates.created
+      - events.mandates.approved
+      - events.mandates.rejected
+      - events.mandates.ready
+      - events.mandates.expired
+      - events.mandate.action.pause
+      - events.mandate.action.cancel
+      - events.mandate.action.reinstate
+      - events.mandates.debit.processing
+      - events.mandates.debit.successful
+      - events.mandates.debit.failed
+      - events.mandates.debit_attempt.successful
+      - events.mandates.debit.partial_debit_successful
+      - mono.transaction.dispute_initiated
+      - mono.transaction.reversal_completed
+    # Dispute events nest the whole event one level down, under data.
+    event_type: '=body.?event.orValue(body.?data.?event.orValue(""))'
+    # event_id is the same on every retry of an event; the few events
+    # documented without one fall back to the event, its subject (account,
+    # mandate or debit) and its timestamp.
+    dedup: >-
+      =body.?event_id.orValue(body.?data.?event_id.orValue(body.?event.orValue("") + ":"
+      + (body.?data.?account.hasValue() ? (type(body.data.account) == string ? body.data.account : body.data.account.?_id.orValue(body.data.account.?id.orValue(""))) : body.?data.?id.orValue(body.?data.?reference_number.orValue("")))
+      + ":" + body.?timestamp.orValue("")))
+    # Payments: the payment reference. Debits: the debit reference. Mandate
+    # lifecycle and actions: the mandate id. Account events: the account id.
+    # Disputes: the disputed transaction's reference.
+    correlation: >-
+      =body.?event.orValue("").startsWith("direct_debit.") ? body.data.object.reference
+      : body.?event.orValue("").startsWith("events.mandates.debit") ? body.data.reference_number
+      : body.?event.orValue("").startsWith("events.mandate.action.") ? body.data.mandate
+      : body.?event.orValue("").startsWith("events.mandates.") ? body.data.id
+      : body.?event.orValue("").startsWith("mono.events.") ? (body.?data.?account.hasValue() ? (type(body.data.account) == string ? body.data.account : body.data.account.?_id.orValue(body.data.account.?id.orValue(""))) : body.?data.?id.orValue(""))
+      : body.?data.?data.?reference.orValue("")

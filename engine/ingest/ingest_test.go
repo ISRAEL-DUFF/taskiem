@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/connectors/paystack"
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -281,6 +283,7 @@ func TestCheckRejectsUnavailableTriggers(t *testing.T) {
 		`{"type":"webhook","config":{"path":"/a","auth":"mtls"}}`:                                                               false,
 		`{"type":"webhook","config":{"path":"/connectors/x","auth":"none"}}`:                                                    false,
 		`{"type":"schedule","config":{"cron":"not a cron"}}`:                                                                    false,
+		`{"type":"schedule","config":{"cron":"0 0 30 2 *"}}`:                                                                    false,
 		`{"type":"schedule","config":{"cron":"0 9 * * 1-5","timezone":"Mars/Olympus"}}`:                                         false,
 		`{"type":"connector_event","config":{"connector":"paystack@1","trigger":"nope"}}`:                                       false,
 		`{"type":"connector_event","config":{"connector":"paystack@1","trigger":"transfer_event","events":["charge.success"]}}`: false,
@@ -302,4 +305,208 @@ func TestCheckRejectsUnavailableTriggers(t *testing.T) {
 
 func refOf(w *world, out map[string]any) runtime.RunRef {
 	return runtime.RunRef{ID: uuid.MustParse(out["run_id"].(string)), TenantID: w.Tenant}
+}
+
+// handshakeConnector has a Meta-style GET check and a Slack-style POST one.
+var handshakeManifest = []byte(`
+manifest: connector/v1
+id: shake
+version: 1.0.0
+name: Handshake test
+description: Endpoint checks.
+category: messaging
+auth:
+  type: api_key
+  fields:
+    - { key: secret, label: Secret, secret: true }
+    - { key: verify_token, label: Verify token, secret: true }
+base_url: https://shake.test
+egress_hosts: [shake.test]
+actions:
+  noop: { title: No-op, class: read, input: { type: object, properties: {} }, output: { type: object, properties: {} } }
+triggers:
+  meta:
+    type: webhook
+    verify: { scheme: header_secret, header: X-Secret, secret_field: secret }
+    handshake: { method: GET, token_query: hub.verify_token, secret_field: verify_token, respond: '=query["hub.challenge"]' }
+    event_type: =body.kind
+  batch:
+    type: webhook
+    verify: { scheme: header_secret, header: X-Secret, secret_field: secret }
+    split: =body.items
+    event_type: =item.kind
+    dedup: =item.id
+    correlation: =item.ref
+  tokened:
+    type: webhook
+    verify: { scheme: query_secret, query: token, secret_field: secret }
+    ack: { body: Ok }
+    event_type: '=has(query.token) ? "leaked" : "clean"'
+  custom:
+    type: webhook
+    verify: { scheme: connector, secret_field: secret }
+    event_type: =body.kind
+  pathed:
+    type: webhook
+    verify: { scheme: path_secret, secret_field: secret }
+    ack: { status: 200 }
+    event_type: '=size(query) == 0 ? body.kind : "leaked"'
+  slack:
+    type: webhook
+    verify: { scheme: header_secret, header: X-Secret, secret_field: secret }
+    handshake: { method: POST, when: '=has(body.type) && body.type == "url_verification"', respond: =body.challenge }
+    event_type: =body.type
+`)
+
+func TestConnectorHandshakes(t *testing.T) {
+	w := newWorld(t)
+	c := connector.MustParse(handshakeManifest)
+	if err := w.Registry.Register(&connector.Connector{Manifest: c, Actions: map[string]connector.Action{"noop": connector.ActionFunc(func(context.Context, connector.Request) (connector.Response, error) {
+		return connector.Response{}, nil
+	})}, Verifiers: map[string]connector.WebhookVerifier{"custom": func(secret string, _ http.Header, body []byte) error {
+		if !bytes.Contains(body, []byte(`"sig":"`+secret+`"`)) {
+			return connector.ErrBadSignature
+		}
+		return nil
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Vault.CreateConnection(ctx, w.Tenant, "prod", "shake", "main", "api_key", map[string]string{"secret": "s1", "verify_token": "vt"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	get := func(q string) (int, string) {
+		resp, err := http.Get(w.srv.URL + "/hooks/" + w.Tenant.String() + "/connectors/shake@1/meta?" + q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if st, body := get("hub.mode=subscribe&hub.verify_token=vt&hub.challenge=12345"); st != 200 || body != "12345" {
+		t.Errorf("GET challenge: %d %q", st, body)
+	}
+	if st, _ := get("hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=12345"); st != 403 {
+		t.Errorf("wrong token: %d", st)
+	}
+
+	post := func(body string, secret string) (int, string) {
+		req, _ := http.NewRequest("POST", w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/slack", bytes.NewReader([]byte(body)))
+		req.Header.Set("X-Secret", secret)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if st, body := post(`{"type":"url_verification","challenge":"abc"}`, "s1"); st != 200 || body != "abc" {
+		t.Errorf("POST challenge: %d %q", st, body)
+	}
+	if st, _ := post(`{"type":"url_verification","challenge":"abc"}`, "nope"); st != 401 {
+		t.Errorf("unverified challenge answered: %d", st)
+	}
+	if st, body := post(`{"type":"event_callback"}`, "s1"); st != 202 || !bytes.Contains([]byte(body), []byte(`"event":"event_callback"`)) {
+		t.Errorf("delivery: %d %s", st, body)
+	}
+
+	// A URL token authenticates; it never reaches expressions or runs, and
+	// the provider gets the answer it expects.
+	tokened := func(q string) (int, string) {
+		resp, err := http.Post(w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/tokened?"+q, "application/json", bytes.NewReader([]byte(`{}`)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if st, body := tokened("env=prod&token=s1"); st != 200 || body != "Ok" {
+		t.Errorf("tokened: %d %q", st, body)
+	}
+	if st, _ := tokened("env=prod&token=nope"); st != 401 {
+		t.Errorf("wrong token: %d", st)
+	}
+	if st, _ := tokened("env=prod"); st != 401 {
+		t.Errorf("no token: %d", st)
+	}
+
+	// The path form: env, connection and token in the path (no query
+	// string), as PUT or POST; only for path_secret triggers.
+	pathed := func(method, trigger, tail string) int {
+		req, _ := http.NewRequest(method, w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/"+trigger+tail, bytes.NewReader([]byte(`{"kind":"paid"}`)))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	for _, c := range []struct {
+		method, trigger, tail string
+		want                  int
+	}{
+		{"PUT", "pathed", "/prod/main/s1", 200},
+		{"POST", "pathed", "/prod/main/s1", 200},
+		{"PUT", "pathed", "/prod/main/nope", 401},
+		{"PUT", "pathed", "/prod/other/s1", 401},  // no such connection
+		{"POST", "pathed", "", 401},               // no token at all
+		{"POST", "tokened", "/prod/main/s1", 404}, // the path form is only for path_secret
+	} {
+		if st := pathed(c.method, c.trigger, c.tail); st != c.want {
+			t.Errorf("%s %s%s: %d, want %d", c.method, c.trigger, c.tail, st, c.want)
+		}
+	}
+
+	// A connector-verified trigger: the connector's own check decides.
+	custom := func(body string) int {
+		resp, err := http.Post(w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/custom", "application/json", bytes.NewReader([]byte(body)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	if st := custom(`{"kind":"paid","sig":"s1"}`); st != 202 {
+		t.Errorf("verified by the connector: %d", st)
+	}
+	if st := custom(`{"kind":"paid","sig":"forged"}`); st != 401 {
+		t.Errorf("forged delivery: %d", st)
+	}
+
+	// A batch is split into one event per item, each deduplicated alone.
+	batch := func(body string) (int, string) {
+		req, _ := http.NewRequest("POST", w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/batch", bytes.NewReader([]byte(body)))
+		req.Header.Set("X-Secret", "s1")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	st, out := batch(`{"items":[{"kind":"sent","id":"a","ref":"r1"},{"kind":"read","id":"b","ref":"r1"}]}`)
+	if st != 202 || !strings.Contains(out, `"event":"sent"`) || !strings.Contains(out, `"event":"read"`) || strings.Contains(out, `"duplicate":true`) {
+		t.Errorf("batch: %d %s", st, out)
+	}
+	st, out = batch(`{"items":[{"kind":"read","id":"b","ref":"r1"},{"kind":"failed","id":"c","ref":"r2"}]}`)
+	if st != 202 || strings.Count(out, `"duplicate":true`) != 1 || !strings.Contains(out, `"event":"failed"`) {
+		t.Errorf("redelivered batch: %d %s", st, out)
+	}
+
+	// Form-encoded deliveries arrive as fields.
+	req, _ := http.NewRequest("POST", w.srv.URL+"/hooks/"+w.Tenant.String()+"/connectors/shake@1/slack", bytes.NewReader([]byte("type=delivery&id=7")))
+	req.Header.Set("X-Secret", "s1")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != 202 || !bytes.Contains(b, []byte(`"event":"delivery"`)) {
+		t.Errorf("form delivery: %d %s", resp.StatusCode, b)
+	}
 }

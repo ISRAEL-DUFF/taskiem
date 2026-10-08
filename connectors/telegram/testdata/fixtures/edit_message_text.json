@@ -1,0 +1,37 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/editMessageText",
+  "body": {
+   "chat_id": -1001234567890,
+   "message_id": 4242,
+   "text": "Payroll approved by Ada",
+   "reply_markup": {
+    "inline_keyboard": []
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": {
+    "message_id": 4242,
+    "from": {
+     "id": 7000000001,
+     "is_bot": true,
+     "first_name": "Taskiem Ops",
+     "username": "taskiem_ops_bot"
+    },
+    "chat": {
+     "id": -1001234567890,
+     "title": "Ops approvals",
+     "type": "supergroup"
+    },
+    "date": 1791320000,
+    "text": "Payroll approved by Ada",
+    "edit_date": 1791320100
+   }
+  }
+ }
+}

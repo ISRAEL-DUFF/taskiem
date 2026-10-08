@@ -1,0 +1,35 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/interbank/transaction/bank/list",
+  "headers": {
+   "secretKey": "rmt_sk_test"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": "00",
+   "message": "Approved or completed successfully",
+   "meta": null,
+   "links": null,
+   "data": {
+    "banks": [
+     {
+      "bankCode": "044",
+      "bankName": "Access Bank Nigeria Plc"
+     },
+     {
+      "bankCode": "058",
+      "bankName": "GTBank"
+     },
+     {
+      "bankCode": "515150400",
+      "bankName": "Opay Digital Services Limited"
+     }
+    ],
+    "totalBanks": 3
+   }
+  }
+ }
+}

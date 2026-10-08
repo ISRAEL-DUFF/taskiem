@@ -1,0 +1,473 @@
+# Prembly IdentityPass (identity verification), Prembly 2.0 API. Built from
+# Prembly's public documentation at docs.prembly.com (API reference pages
+# under https://docs.prembly.com/reference, guides under
+# https://docs.prembly.com/docs, index at https://docs.prembly.com/llms.txt),
+# read 6 October 2026 (docs/integrations/prembly.md).
+manifest: connector/v1
+id: prembly
+version: 1.0.0
+name: Prembly
+description: Nigerian identity checks (BVN, NIN, phone, driver's licence, passport, voter's card, CAC, bank account) and face match and liveness.
+category: identity
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    # Sandbox and live share one host; the key decides the environment.
+    - { key: api_key, label: Secret key (x-api-key), secret: true }
+    - { key: public_key, label: Public key (verifies Prembly's webhook signatures), secret: true, required: false }
+  test: { action: get_wallet_balance }
+base_url: https://api.prembly.com
+egress_hosts: [api.prembly.com]
+actions:
+  # Every lookup is a read: billed per call, no effect. "No record" is a
+  # normal result (found: false), not a failure. Photos and signatures are
+  # dropped unless include_image is set.
+  lookup_bvn:
+    title: Look up a BVN (advanced)
+    description: Full BVN record, including the watch-list flag.
+    class: read
+    input:
+      type: object
+      required: [bvn]
+      properties:
+        bvn:           { type: string, pattern: "^[0-9]{11}$" }
+        include_image: { type: boolean, default: false, description: The photo is large and personal; omitted unless asked for }
+    output:
+      type: object
+      properties:
+        found:               { type: boolean, description: "false when Prembly has no record (response code 01) or the ID is blocked (07)" }
+        verified:            { type: boolean, description: "Prembly's verification status is VERIFIED" }
+        verification_status: { type: string, enum: [VERIFIED, NOT-VERIFIED, PENDING, ""] }
+        blocked:             { type: boolean, description: Blocked or watch-listed BVN, or suspended NIN (response code 07) }
+        message:             { type: string }
+        reference:           { type: string, description: "Prembly's verification reference; correlation for webhook results" }
+        first_name:          { type: string }
+        middle_name:         { type: string }
+        last_name:           { type: string }
+        date_of_birth:       { type: string }
+        gender:              { type: string }
+        phone_number:        { type: string }
+        email:               { type: string }
+        address:             { type: string }
+        bvn:                 { type: string }
+        nin:                 { type: string }
+        watchlisted:         { type: boolean }
+        face_match:          { type: boolean, description: Face-validated lookups only }
+        face_confidence:     { type: number, description: "Face-validated lookups only: 0 to 100" }
+        image:               { type: string, description: Only with include_image }
+        record:              { type: object, description: "Prembly's record as returned, without images" }
+    pii:
+      - { field: bvn, category: bvn }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  lookup_bvn_basic:
+    title: Validate a BVN (basic)
+    description: Names, date of birth and phone number for a BVN.
+    class: read
+    input:
+      type: object
+      required: [bvn]
+      properties:
+        bvn: { type: string, pattern: "^[0-9]{11}$" }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: bvn, category: bvn }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  verify_bvn_with_face:
+    title: Verify a BVN against a face
+    description: The BVN record plus whether the face matches the BVN photo.
+    class: read
+    input:
+      type: object
+      required: [bvn, image]
+      properties:
+        bvn:           { type: string, pattern: "^[0-9]{11}$" }
+        image:         { type: string, description: Image URL or base64 }
+        include_image: { type: boolean, default: false }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: bvn, category: bvn }
+      - { field: image, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  lookup_bvn_by_phone:
+    title: Find a BVN by phone number
+    class: read
+    input:
+      type: object
+      required: [phone_number]
+      properties:
+        phone_number:  { type: string }
+        include_image: { type: boolean, default: false }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: phone_number, category: phone }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  lookup_nin:
+    title: Look up a NIN (advanced)
+    description: Full NIMC record. A NIN NIMC has suspended is found false, blocked true.
+    class: read
+    input:
+      type: object
+      required: [nin]
+      properties:
+        nin:           { type: string, pattern: "^[0-9]{11}$" }
+        include_image: { type: boolean, default: false }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: nin, category: nin }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  lookup_nin_basic:
+    title: Look up a NIN (basic)
+    class: read
+    input:
+      type: object
+      required: [nin]
+      properties:
+        nin:           { type: string, pattern: "^[0-9]{11}$" }
+        include_image: { type: boolean, default: false }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: nin, category: nin }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  verify_nin_with_face:
+    title: Verify a NIN against a face
+    class: read
+    input:
+      type: object
+      required: [nin, image]
+      properties:
+        nin:           { type: string, pattern: "^[0-9]{11}$" }
+        image:         { type: string, description: Image URL or base64 }
+        date_of_birth: { type: string, description: YYYY-MM-DD }
+        include_image: { type: boolean, default: false }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: nin, category: nin }
+      - { field: image, category: other }
+      - { field: date_of_birth, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  lookup_phone:
+    title: Look up a phone number (advanced)
+    description: The NIN record registered to a phone number.
+    class: read
+    input:
+      type: object
+      required: [phone_number]
+      properties:
+        phone_number:  { type: string }
+        include_image: { type: boolean, default: false }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: phone_number, category: phone }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  lookup_phone_basic:
+    title: Look up a phone number (basic)
+    class: read
+    input:
+      type: object
+      required: [phone_number]
+      properties:
+        phone_number: { type: string }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: phone_number, category: phone }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  verify_drivers_license:
+    title: Verify a driver's licence
+    description: FRSC record for the licence; verified is false when the names do not match.
+    class: read
+    input:
+      type: object
+      required: [license_number, first_name, last_name]
+      properties:
+        license_number: { type: string }
+        first_name:     { type: string }
+        last_name:      { type: string }
+        include_image:  { type: boolean, default: false }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: license_number, category: other }
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  verify_passport:
+    title: Verify a Nigerian passport
+    class: read
+    input:
+      type: object
+      required: [passport_number, date_of_birth]
+      properties:
+        passport_number: { type: string }
+        date_of_birth:   { type: string, description: YYYY-MM-DD }
+        nin:             { type: string, pattern: "^[0-9]{11}$" }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: passport_number, category: other }
+      - { field: date_of_birth, category: other }
+      - { field: nin, category: nin }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  verify_voters_card:
+    title: Verify a voter's card
+    class: read
+    input:
+      type: object
+      required: [vin, last_name, date_of_birth, state]
+      properties:
+        vin:           { type: string, description: Voter identification number }
+        last_name:     { type: string }
+        date_of_birth: { type: string, description: YYYY-MM-DD }
+        state:         { type: string }
+        lga:           { type: string }
+    output: { $ref: '#/actions/lookup_bvn/output' }
+    pii:
+      - { field: vin, category: other }
+      - { field: last_name, category: name }
+      - { field: date_of_birth, category: other }
+      - { field: output.first_name, category: name }
+      - { field: output.middle_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.gender, category: other }
+      - { field: output.phone_number, category: phone }
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.bvn, category: bvn }
+      - { field: output.nin, category: nin }
+      - { field: output.image, category: other }
+      - { field: output.record, category: other }
+  lookup_cac:
+    title: Look up a company (CAC)
+    description: >-
+      Corporate Affairs Commission record by registration number. advanced
+      adds directors and shareholders (names, addresses, phone numbers).
+    class: read
+    input:
+      type: object
+      required: [rc_number]
+      properties:
+        rc_number:    { type: string }
+        company_type: { type: string, enum: [RC, BN, IT, LP, LLP], default: RC }
+        company_name: { type: string }
+        advanced:     { type: boolean, default: false }
+    output:
+      type: object
+      properties:
+        found:               { type: boolean }
+        verified:            { type: boolean }
+        verification_status: { type: string }
+        message:             { type: string }
+        reference:           { type: string }
+        company_name:        { type: string }
+        rc_number:           { type: string }
+        company_type:        { type: string }
+        company_status:      { type: string }
+        registration_date:   { type: string }
+        address:             { type: string }
+        email:               { type: string }
+        record:              { type: object, description: "Prembly's record as returned (directors included when advanced)" }
+    pii:
+      - { field: output.email, category: email }
+      - { field: output.address, category: address }
+      - { field: output.record, category: other }
+  resolve_bank_account:
+    title: Resolve a bank account name
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code]
+      properties:
+        account_number: { type: string }
+        bank_code:      { type: string, description: CBN bank code }
+    output:
+      type: object
+      properties:
+        found:          { type: boolean }
+        account_number: { type: string }
+        account_name:   { type: string }
+        message:        { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_number, category: account_number }
+      - { field: output.account_name, category: name }
+  compare_faces:
+    title: Compare two faces
+    description: Whether two images show the same person. A non-match is a normal result (match false).
+    class: read
+    input:
+      type: object
+      required: [image_one, image_two]
+      properties:
+        image_one: { type: string, description: Image URL or base64 }
+        image_two: { type: string, description: Image URL or base64 }
+    output:
+      type: object
+      properties:
+        match:      { type: boolean }
+        confidence: { type: number, description: 0 to 100 }
+        message:    { type: string }
+    pii:
+      - { field: image_one, category: other }
+      - { field: image_two, category: other }
+  check_liveness:
+    title: Check a face for liveness
+    description: Whether an image shows a live person rather than a photo, screen or synthetic face.
+    class: read
+    input:
+      type: object
+      required: [image]
+      properties:
+        image: { type: string, description: Image URL or base64 }
+    output:
+      type: object
+      properties:
+        live:       { type: boolean }
+        confidence: { type: number, description: 0 to 100 }
+        message:    { type: string }
+        reference:  { type: string }
+    pii:
+      - { field: image, category: other }
+  get_wallet_balance:
+    title: Get wallet balance
+    description: "Prembly's wallet as returned (the documentation shows no fields). Also the connection test."
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        wallet: { type: object }
+triggers:
+  # Results Prembly sends to the webhook URL set in its dashboard: SDK
+  # (widget) verifications, and API checks that finish later (PENDING).
+  verification:
+    type: webhook
+    verify: { scheme: hmac_sha256, header: x-prembly-signature, encoding: base64, secret_field: public_key }
+    events: [VERIFIED, NOT-VERIFIED, PENDING, UNSPECIFIED]
+    event_type: '=body.?verification.?status.orValue("UNSPECIFIED")'
+    # From the signed body only (a header is not signed, so a replay could
+    # change it): the verification's reference and status. Without a
+    # reference, the engine falls back to a hash of the body.
+    dedup: '=body.?verification.?reference.orValue("") == "" ? "" : string(body.verification.reference) + ":" + string(body.?verification.?status.orValue(""))'
+    # SDK sessions: the user_ref you gave the widget. API checks: the
+    # reference the lookup returned.
+    correlation: '=body.?data.?widget_info.?user_ref.orValue(body.?verification.?reference.orValue(""))'

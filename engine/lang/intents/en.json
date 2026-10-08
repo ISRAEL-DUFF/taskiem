@@ -1,0 +1,22 @@
+{
+  "language": "en",
+  "reviewed": true,
+  "status": "Source. The commands documented in docs/whatsapp.md.",
+  "phrases": {
+    "help": ["help", "menu", "hi", "hello", "start"],
+    "status": ["status", "what failed today", "what failed", "failed", "failures"],
+    "approvals": ["approvals"],
+    "cancel": ["cancel", "stop"],
+    "yes": ["yes", "y", "confirm", "run it", "go"],
+    "no": ["no", "n"],
+    "switch": ["organisations", "organizations", "tenants"]
+  },
+  "prefixes": {
+    "switch": ["switch"],
+    "run": ["run", "start"],
+    "build": ["build", "create"],
+    "language": ["language", "lang"]
+  },
+  "fillers": ["please", "pls", "kindly"],
+  "markers": []
+}

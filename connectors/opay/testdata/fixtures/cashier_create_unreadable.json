@@ -1,0 +1,50 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/cashier/create",
+  "headers": {
+   "MerchantId": "256621051120756",
+   "Authorization": "Bearer OPAYPUB_test"
+  },
+  "body": {
+   "amount": {
+    "currency": "NGN",
+    "total": 150000
+   },
+   "country": "NG",
+   "reference": "tskab12cd34ef56gh78ij90kl12mn34op5",
+   "returnUrl": "https://shop.example/return",
+   "callbackUrl": "https://hooks.example/opay",
+   "product": {
+    "description": "Order 17",
+    "name": "Shoes"
+   },
+   "payMethod": "BankCard",
+   "expireAt": 30,
+   "userInfo": {
+    "userEmail": "ada@example.com",
+    "userName": "Ada"
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": "00000",
+   "message": "SUCCESSFUL",
+   "data": {
+    "reference": "tskab12cd34ef56gh78ij90kl12mn34op5",
+    "orderNo": "211009140896553163",
+    "status": "INITIAL",
+    "amount": {
+     "total": "1500.5",
+     "currency": "NGN"
+    },
+    "vat": {
+     "total": 0,
+     "currency": "NGN"
+    }
+   }
+  }
+ }
+}

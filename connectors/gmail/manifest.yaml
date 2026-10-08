@@ -1,0 +1,222 @@
+# Gmail API v1. Built from Google's public documentation, read 6 October
+# 2026:
+#   https://developers.google.com/gmail/api/reference/rest/v1/users.messages
+#     (send, list, get, modify), users.drafts/create, users/getProfile,
+#     users.labels/list, users.messages.attachments (MessagePartBody)
+#   https://developers.google.com/gmail/api/guides/sending
+#   https://developers.google.com/gmail/api/guides/handle-errors
+#   https://developers.google.com/gmail/api/auth/scopes
+#   https://developers.google.com/identity/protocols/oauth2/service-account
+#   https://developers.google.com/identity/protocols/oauth2/web-server
+#     (refreshing an access token)
+# See docs/integrations/gmail.md.
+manifest: connector/v1
+id: gmail
+version: 1.0.0
+name: Gmail
+description: Send and draft email, search and read messages, and label them, as a Google Workspace or Gmail user.
+category: productivity
+auth:
+  type: custom
+  fields:
+    - { key: service_account_json, label: "Service account key (JSON); needs domain-wide delegation and a subject", secret: true, required: false }
+    - { key: subject, label: "Mailbox to act as (service accounts), e.g. ops@yourcompany.com", required: false }
+    - { key: client_id, label: OAuth client id (refresh-token connections), required: false }
+    - { key: client_secret, label: OAuth client secret, secret: true, required: false }
+    - { key: refresh_token, label: OAuth refresh token, secret: true, required: false }
+    - { key: scopes, label: "Scopes for service accounts (default https://www.googleapis.com/auth/gmail.modify)", required: false }
+    - { key: user_id, label: "Mailbox in API paths (default me: the subject or the consenting user)", required: false }
+  test: { action: get_profile }
+base_url: https://gmail.googleapis.com/gmail/v1
+egress_hosts: [gmail.googleapis.com, oauth2.googleapis.com]
+actions:
+  get_profile:
+    title: Get the mailbox profile
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        email_address:  { type: string }
+        messages_total: { type: integer }
+        threads_total:  { type: integer }
+        history_id:     { type: string }
+    pii:
+      - { field: output.email_address, category: email }
+  send_message:
+    title: Send an email
+    description: >-
+      users.messages.send with an RFC 5322 message the connector builds.
+      Gmail has no idempotency key for messages, so a send whose outcome is
+      unknown (a dropped connection, a 500) is parked for a person rather
+      than sent twice. Quota refusals (429, rate-limit 403s) prove nothing
+      was sent and are retried.
+    class: unsafe_write
+    pii: [{ field: to, category: email }, { field: cc, category: email }, { field: bcc, category: email }]
+    compensate: null
+    input: &email
+      type: object
+      properties:
+        to:          { type: array, items: { type: string }, description: "Addresses, e.g. Ada <ada@example.com>" }
+        cc:          { type: array, items: { type: string } }
+        bcc:         { type: array, items: { type: string } }
+        from:        { type: string, description: Must be the mailbox or one of its verified send-as aliases }
+        reply_to:    { type: string }
+        subject:     { type: string }
+        text:        { type: string, description: Plain-text body }
+        html:        { type: string, description: HTML body; with text, sent as alternatives }
+        thread_id:   { type: string, description: Gmail thread to add the message to (with in_reply_to/references and the same subject) }
+        in_reply_to: { type: string, description: "<message-id> of the message replied to" }
+        references:  { type: string, description: "<message-id> list" }
+        attachments:
+          type: array
+          items:
+            type: object
+            required: [filename]
+            properties:
+              filename:       { type: string }
+              content_type:   { type: string, description: Default application/octet-stream }
+              content_base64: { type: string, description: Standard or URL-safe base64 }
+              content:        { type: string, description: Text content instead of content_base64 }
+    output:
+      type: object
+      properties:
+        id:        { type: string }
+        thread_id: { type: string }
+        label_ids: { type: array, items: { type: string } }
+    pii: &emailpii
+      - { field: to, category: email }
+      - { field: cc, category: email }
+      - { field: bcc, category: email }
+      - { field: from, category: email }
+      - { field: reply_to, category: email }
+      - { field: subject, category: other }
+      - { field: text, category: other }
+      - { field: html, category: other }
+      - { field: attachments, category: other }
+  create_draft:
+    title: Create a draft
+    description: users.drafts.create. Not idempotent (a repeat makes a second draft).
+    class: unsafe_write
+    pii: [{ field: to, category: email }, { field: cc, category: email }, { field: bcc, category: email }]
+    compensate: null
+    input: *email
+    output:
+      type: object
+      properties:
+        draft_id:   { type: string }
+        message_id: { type: string }
+        thread_id:  { type: string }
+    pii: *emailpii
+  list_messages:
+    title: Search messages
+    class: read
+    input:
+      type: object
+      properties:
+        q:                  { type: string, description: "Gmail search, e.g. from:billing@example.com is:unread newer_than:1d" }
+        label_ids:          { type: array, items: { type: string }, description: Messages with all of these labels }
+        max_results:        { type: integer, minimum: 1, maximum: 500, description: Default 100 }
+        page_token:         { type: string }
+        include_spam_trash: { type: boolean }
+    output:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              id:        { type: string }
+              thread_id: { type: string }
+        next_page_token:      { type: string, description: Empty on the last page }
+        result_size_estimate: { type: integer }
+    pii:
+      - { field: q, category: other }
+  get_message:
+    title: Get a message
+    description: >-
+      users.messages.get. metadata returns headers and labels; full also
+      decodes the text and HTML bodies and lists attachments.
+    class: read
+    input:
+      type: object
+      required: [id]
+      properties:
+        id:               { type: string }
+        format:           { type: string, enum: [metadata, full, minimal], default: full }
+        metadata_headers: { type: array, items: { type: string }, description: "metadata only: headers to include, e.g. [From, Subject]" }
+    output:
+      type: object
+      properties:
+        id:            { type: string }
+        thread_id:     { type: string }
+        label_ids:     { type: array, items: { type: string } }
+        snippet:       { type: string }
+        internal_date: { type: string, description: Epoch milliseconds }
+        headers:       { type: object, description: "Header name (lower case) to value; the first of repeated headers" }
+        from:          { type: string }
+        to:            { type: string }
+        subject:       { type: string }
+        date:          { type: string }
+        message_id:    { type: string, description: The RFC 5322 Message-ID, for in_reply_to }
+        text:          { type: string }
+        html:          { type: string }
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              filename:      { type: string }
+              mime_type:     { type: string }
+              size:          { type: integer }
+              attachment_id: { type: string }
+    pii:
+      - { field: output.snippet, category: other }
+      - { field: output.headers, category: other }
+      - { field: output.from, category: email }
+      - { field: output.to, category: email }
+      - { field: output.subject, category: other }
+      - { field: output.text, category: other }
+      - { field: output.html, category: other }
+      - { field: output.attachments.*.filename, category: other }
+  modify_labels:
+    title: Add or remove labels
+    description: >-
+      users.messages.modify. Adding a label a message has, or removing one it
+      lacks, changes nothing, so a retry is safe. request_key is the
+      engine's and is not sent. Mark read by removing UNREAD; archive by
+      removing INBOX.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [id]
+      properties:
+        id:               { type: string }
+        add_label_ids:    { type: array, items: { type: string }, maxItems: 100 }
+        remove_label_ids: { type: array, items: { type: string }, maxItems: 100 }
+        request_key:      { type: string, description: Set by the engine; not sent to Gmail }
+    output:
+      type: object
+      properties:
+        id:        { type: string }
+        thread_id: { type: string }
+        label_ids: { type: array, items: { type: string } }
+  list_labels:
+    title: List labels
+    description: Label ids for modify_labels and list_messages (user labels have ids like Label_12).
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        labels:
+          type: array
+          items:
+            type: object
+            properties:
+              id:   { type: string }
+              name: { type: string }
+              type: { type: string, description: system or user }

@@ -12,6 +12,8 @@ export function summary(s: Step): string {
       return `${s.config.method} ${s.config.url}`;
     case "code":
       return s.config.language;
+    case "container":
+      return `${s.config.image.split("@")[0]?.split("/").pop() ?? "container"} · ${s.config.network === "egress" ? "egress" : "no network"}`;
     case "wait":
       return "duration" in s.config ? `wait ${s.config.duration}` : `until ${s.config.until}`;
     case "signal":
@@ -22,6 +24,8 @@ export function summary(s: Step): string {
       return `each of ${s.config.items} · ${s.config.steps.length} steps`;
     case "branch":
       return `${s.config.paths.length} paths${s.config.default ? " + default" : ""}`;
+    case "parallel":
+      return `${s.config.branches.length} branches · join ${s.config.join ?? "all"}`;
     default:
       return s.when ? `when ${s.when}` : "";
   }
@@ -30,7 +34,7 @@ export function summary(s: Step): string {
 export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
   const s = data.step;
   return (
-    <div className={`step-node${selected ? " selected" : ""}${data.invalid ? " invalid" : ""}`} data-testid={`node-${s.id}`}>
+    <div className={`step-node${selected ? " selected" : ""}${data.invalid ? " invalid" : ""}${data.status ? ` status-${data.status}` : ""}`} data-testid={`node-${s.id}`} data-status={data.status}>
       <Handle type="target" position={Position.Left} />
       <div className="type">
         {s.type}

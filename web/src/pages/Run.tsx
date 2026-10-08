@@ -1,47 +1,100 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { get, post, type RunEvent, type RunSummary } from "../api";
 import { useAuth } from "../auth";
+import { RunCanvas } from "../canvas/RunCanvas";
+import { RepairPanel } from "./RepairPanel";
 import { duration, timeline, type StepRow } from "../lib/timeline";
-import { Badge, ErrorBox, Field, Json, JsonInput, Modal, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Field, Json, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 interface RunDoc {
   run: RunSummary;
   events: RunEvent[];
   revealed: boolean;
+  /** The run this one resumed from a failed step, and the runs that resumed it. */
+  forks?: { parent_run_id: string | null; resumed_step: string | null; resumed_by: string[] };
 }
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
+
+/** A recorded decryption of a secret or connection credential (GET /v1/secrets/reads). */
+interface SecretRead {
+  id: string;
+  at: string;
+  kind: string;
+  environment: string;
+  name: string;
+  connector?: string;
+  purpose: string;
+  step_id?: string;
+  attempt?: number;
+}
 
 export function RunPage() {
   const { id = "" } = useParams();
   const { can } = useAuth();
   const [reveal, setReveal] = useState(false);
   const [live, setLive] = useState(true);
-  const { data, error, reload } = useLoad(() => get<RunDoc>(`/v1/runs/${id}${reveal ? "?reveal=true" : ""}`), [id, reveal], live);
+  // Revealed history is fetched (each fetch is audited); sealed history
+  // streams as it is recorded (spec 15.1, live view).
+  const { data, error, reload } = useLoad(() => get<RunDoc>(`/v1/runs/${id}${reveal ? "?reveal=true" : ""}`), [id, reveal], live && reveal);
+  const [streamed, setStreamed] = useState<RunEvent[]>([]);
+  const [view, setView] = useState<"canvas" | "timeline">("canvas");
   const [resolving, setResolving] = useState<string | null>(null);
   const act = useAction();
   const status = data?.run.status;
+  // Which secrets and connections each step decrypted (audit.read only).
+  const reads = useLoad(
+    () => (can("audit.read") ? get<{ reads: SecretRead[] }>(`/v1/secrets/reads?run=${id}&limit=1000`) : Promise.resolve({ reads: [] as SecretRead[] })),
+    [id, status],
+  );
+  const readsByStep = useMemo(() => {
+    const m = new Map<string, SecretRead[]>();
+    for (const r of reads.data?.reads ?? []) {
+      if (!r.step_id) continue;
+      m.set(r.step_id, [...(m.get(r.step_id) ?? []), r]);
+    }
+    return m;
+  }, [reads.data]);
   useEffect(() => {
     if (status && TERMINAL.has(status)) setLive(false);
   }, [status]);
+  useEffect(() => {
+    setStreamed([]);
+    if (!data || reveal || TERMINAL.has(data.run.status) || typeof EventSource === "undefined") return;
+    const es = new EventSource(`/v1/runs/${id}/stream?after=${data.events.at(-1)?.seq ?? 0}`);
+    es.addEventListener("run_event", (m) => setStreamed((prev) => [...prev, JSON.parse((m as MessageEvent<string>).data) as RunEvent]));
+    es.addEventListener("end", () => {
+      es.close();
+      reload();
+    });
+    return () => es.close();
+  }, [data, id, reveal, reload]);
+  const events = useMemo(() => {
+    if (!data) return [];
+    const seen = new Set(data.events.map((e) => e.seq));
+    return [...data.events, ...streamed.filter((e) => !seen.has(e.seq))];
+  }, [data, streamed]);
   if (error) return <ErrorBox error={error} />;
-  if (!data) return <div className="empty">Loading…</div>;
+  if (!data) return <Skeleton />;
   const r = data.run;
-  const rows = timeline(data.events);
-  const ended = data.events.find((e) => ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type));
+  const rows = timeline(events);
+  const ended = events.find((e) => ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type));
+  const ENDED: Record<string, string> = { RunCompleted: "completed", RunFailed: "failed", RunCancelled: "cancelled" };
+  const shownStatus = (ended && ENDED[ended.type]) || r.status;
   return (
     <>
       <div className="toolbar">
         <h1 className="grow" style={{ margin: 0 }}>
           <Link to={`/workflows/${r.workflow_id}?v=${r.version}`}>{r.workflow}</Link> <span className="hint">run</span>
         </h1>
-        <Badge value={r.status} />
+        <Badge value={shownStatus} />
+        {!reveal && !TERMINAL.has(shownStatus) && <span className="hint live-dot">live</span>}
         {can("pii.reveal") && (
           <label className="inline" title="Decrypt personal data for this view; the access is audited">
             <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
           </label>
         )}
-        {can("run.cancel") && !TERMINAL.has(r.status) && (
+        {can("run.cancel") && !TERMINAL.has(shownStatus) && (
           <button
             className="danger"
             disabled={act.busy}
@@ -68,6 +121,29 @@ export function RunPage() {
           </dd>
           <dt>Ended</dt>
           <dd>{r.ended_at ? `${fmtTime(r.ended_at)} (${duration(r.started_at, r.ended_at)})` : "—"}</dd>
+          {data.forks?.parent_run_id && (
+            <>
+              <dt>Resumed from</dt>
+              <dd data-testid="resumed-from">
+                <Link to={`/runs/${data.forks.parent_run_id}`}>
+                  <code>{data.forks.parent_run_id}</code>
+                </Link>
+                {data.forks.resumed_step && <span className="hint"> at step {data.forks.resumed_step}</span>}
+              </dd>
+            </>
+          )}
+          {(data.forks?.resumed_by.length ?? 0) > 0 && (
+            <>
+              <dt>Resumed as</dt>
+              <dd data-testid="resumed-as">
+                {data.forks?.resumed_by.map((c) => (
+                  <Link key={c} to={`/runs/${c}`} style={{ marginRight: 10 }}>
+                    <code>{c}</code>
+                  </Link>
+                ))}
+              </dd>
+            </>
+          )}
         </dl>
         {r.status === "needs_reconciliation" && (
           <div className="notice">
@@ -75,11 +151,23 @@ export function RunPage() {
           </div>
         )}
       </div>
-      <h2>Steps</h2>
-      <div className="timeline">
+      <RepairPanel run={id} status={shownStatus} />
+      <div className="toolbar">
+        <h2 className="grow">Steps</h2>
+        <div className="tabs" role="tablist">
+          <button role="tab" aria-selected={view === "canvas"} className={view === "canvas" ? "active" : ""} onClick={() => setView("canvas")}>
+            Canvas
+          </button>
+          <button role="tab" aria-selected={view === "timeline"} className={view === "timeline" ? "active" : ""} onClick={() => setView("timeline")}>
+            Timeline
+          </button>
+        </div>
+      </div>
+      {view === "canvas" && <RunCanvas workflow={r.workflow_id} version={r.version} rows={rows} ended={TERMINAL.has(shownStatus)} onSelect={(step) => (setView("timeline"), setTimeout(() => document.querySelector(`[data-testid="step-${CSS.escape(step)}"]`)?.scrollIntoView({ block: "center" }), 0))} />}
+      <div className="timeline" hidden={view !== "timeline"}>
         {rows.length === 0 && <div className="empty">No steps yet.</div>}
         {rows.map((s) => (
-          <StepCard key={s.id} row={s} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
+          <StepCard key={s.id} row={s} reads={readsByStep.get(s.id) ?? []} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
         ))}
       </div>
       {ended && ended.type === "RunFailed" && (
@@ -89,7 +177,7 @@ export function RunPage() {
         </>
       )}
       <details style={{ marginTop: 16 }}>
-        <summary>All {data.events.length} events</summary>
+        <summary>All {events.length} events</summary>
         <table>
           <thead>
             <tr>
@@ -101,7 +189,7 @@ export function RunPage() {
             </tr>
           </thead>
           <tbody>
-            {data.events.map((e) => (
+            {events.map((e) => (
               <tr key={e.seq}>
                 <td>{e.seq}</td>
                 <td>
@@ -129,7 +217,7 @@ export function RunPage() {
   );
 }
 
-function StepCard({ row, canResolve, onResolve }: { row: StepRow; canResolve: boolean; onResolve: () => void }) {
+function StepCard({ row, reads, canResolve, onResolve }: { row: StepRow; reads: SecretRead[]; canResolve: boolean; onResolve: () => void }) {
   return (
     <div className={`step ${row.status}`} data-testid={`step-${row.id}`}>
       <div className="toolbar" style={{ marginBottom: 2 }}>
@@ -165,6 +253,24 @@ function StepCard({ row, canResolve, onResolve }: { row: StepRow; canResolve: bo
         <details>
           <summary>logs</summary>
           <Json value={row.logs} />
+        </details>
+      )}
+      {reads.length > 0 && (
+        <details>
+          <summary>secrets used ({reads.length})</summary>
+          <table>
+            <tbody>
+              {reads.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <code>{r.connector ? `${r.connector}/${r.name}` : r.name}</code> <span className="hint">{r.kind}</span>
+                  </td>
+                  <td className="hint">attempt {r.attempt}</td>
+                  <td className="hint">{fmtTime(r.at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </details>
       )}
     </div>

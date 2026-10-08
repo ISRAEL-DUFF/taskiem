@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bot123456:TEST-token/answerCallbackQuery",
+  "body": {
+   "callback_query_id": "4382bfdwdsb323b2d9",
+   "text": "Approved",
+   "show_alert": false
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "ok": true,
+   "result": true
+  }
+ }
+}
