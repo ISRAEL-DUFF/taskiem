@@ -43,6 +43,10 @@ In order of priority:
 | Egress | HTTP steps, connectors, and alert webhooks, tested as SSRF from a tenant's point of view |
 | Customer keys (BYOK, B17) | `/v1/keys`: changing keys without step-up or with a step-up made for something else (rotate, bring, replace credentials and remove need a passkey asked for that operation, or an authenticator code), a tenant-supplied KMS address as SSRF, recovering or moving another tenant's key credentials, keeping access after a customer revokes its key (beyond the documented cache bound), and making a revocation lose data or send a payment twice ([BYOK](../byok.md)). Use the testers' own OpenBao or cloud KMS |
 | Operator console (B19) | `/v1/ops/*` and `/ops`: reaching it with a tenant's session, API key or passkey, or reaching tenant routes with an operator's session; creating or escalating an operator account through the API; writing without a passkey step-up, or with one made for another operation, target or operator; enrolment links replayed; SSO from another issuer or subject; reading tenant data beyond plan, subscription state, limits, usage and pool; acting without a trace in the platform audit chain. Testers get one operator account, enrolled through `taskiem operators add`, and one on the reviewer list ([operator console](../operator-console.md)) |
+| Billing (B14) | `/v1/billing/*` and the payment webhooks `/v1/billing/webhooks/{paystack,flutterwave}`, against the providers' test modes only: forged, replayed or edited webhooks; a smaller payment or another currency settling an invoice; paying one invoice twice (two checkouts, a card charge pending at the bank and the dunning retry) and whether the second is applied or only recorded for a refund (`billing.payment.unapplied`); raising a plan or limits without a verified payment ([billing](../billing.md)) |
+| Self-serve signup (B1) | `/v1/signup` with signup turned on: the per-address limit across replicas, throwaway domains, names carrying links, and what an organisation that has not confirmed its email can make the platform send to strangers (invitations, API keys and email alert channels are held back; alert tests are paced) ([onboarding](../onboarding.md)) |
+| Connector catalogue (B18) | `/v1/catalogue/*` as a publisher (the testers get a verified namespace): packages that exhaust the checker (cases, hosts, module time and memory; bounded per submission), a verified publisher renaming itself or squatting a namespace, a version changed after review, reading another tenant's submissions, installs or modules ([connector submissions](../connector-submissions.md)) |
+| Remote triggers and voice notes (B16, B10) | PGDock deliveries to `/hooks/{tenant}/connectors/pgdock@1/row_changed?subscription=` (forged, replayed, aimed at another tenant's or workflow's subscription), against a PGDock test organisation; WhatsApp voice notes from a bound test number (oversized, overlong, malformed Ogg, a media URL elsewhere) with a self-hosted transcription server |
 | Deployment | The Helm chart's defaults (`deploy/helm/taskiem`): pod security, network policy, the metrics port, the migration job. White-box review of the chart is welcome. |
 | Source code | The full repository, for white-box testing. Testers get read access. |
 
@@ -94,3 +98,13 @@ A dedicated deployment, isolated from production and from design partners. It ne
 - [governance.md](../governance.md) covers roles, approvals, four-eyes, passkeys, SSO and SCIM. [privacy.md](../privacy.md) covers personal data.
 - The contracts are in `docs/contracts/`: wd/v1 for workflows, connector/v1, and wd-test/v1.
 - `make up` runs the whole stack on one machine with Docker Compose, for local exploration before the window opens.
+
+## Focus from the 2026-10-08 review
+
+The [independent review of the Phase 4 work](self-review.md#addendum-2026-10-08-independent-review-of-the-phase-4-work) fixed R1 to R6. Testers should try to break those fixes, and look hardest at:
+
+- **Money flows in billing.** Any way to pay once and get two periods or a higher plan, to be charged twice without the second payment showing as unapplied, or to reach `settle` with a body the provider did not verify.
+- **What an unconfirmed signup can reach.** Every path from a fresh self-serve tenant to an email, SMS or WhatsApp message to someone outside it, sent by the platform.
+- **The checker as a target.** Submissions built to hold the API's tenant-code slots, or to make the checker resolve or reach internal addresses.
+- **Removing work without four eyes (R7, open).** What one person with `workflow.publish` can stop in a gated environment by undeploying.
+- **The dispatch role and definer functions.** With the application role's database credentials, anything beyond routing columns of another tenant through `taskiem_dispatch`-owned functions.

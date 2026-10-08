@@ -44,9 +44,10 @@ When the deployment can send email, signup sends a link to `/verify-email#token=
 Until the person who signed up confirms their email, their organisation can build, publish and run, but cannot:
 
 - invite or add members (`POST /v1/members`), which sends email to other people;
-- create API keys (`POST /v1/api-keys`), which lets automation act outside the browser.
+- create API keys (`POST /v1/api-keys`), which lets automation act outside the browser;
+- create email alert channels (`POST /v1/alerts/channels` with `kind: email`), which make the platform's mail server write to any address.
 
-Both answer `403` with "confirm your email address first". Tenants created by `taskiem bootstrap` or before this release are not held back.
+All three answer `403` with "confirm your email address first". Tenants created by `taskiem bootstrap` or before this release are not held back.
 
 ## Getting started
 

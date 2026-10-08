@@ -22,7 +22,7 @@ taskiem connector keygen -o publisher.key           # keep publisher.key secret
 taskiem connector publisher --slug acme --name "Acme Ltd" --public-key <public key printed by keygen>
 ```
 
-The namespace starts **pending**. Taskiem verifies the publisher (who you are, a contact that answers, that the name is yours to use) before you can submit; until then submissions are refused. The same command with a new `--public-key` rotates the signing key (audited); packages signed with the old key no longer verify. You need `connector.manage`, and an API key not limited to one environment.
+The namespace starts **pending**. Taskiem verifies the publisher (who you are, a contact that answers, that the name is yours to use) before you can submit; until then submissions are refused. The same command with a new `--public-key` rotates the signing key (audited); packages signed with the old key no longer verify. The name can change while the namespace is pending; once verified it is the name Taskiem checked, and only Taskiem changes it. You need `connector.manage`, and an API key not limited to one environment.
 
 ### 2. Package and submit
 
@@ -42,9 +42,9 @@ taskiem connector submit ./ledger/p_acme_ledger-1.0.0.tcpkg
 | `module` | Under 32 MiB; imports only WASI and the host functions `input_read`, `http_request`, `http_response_read`, `log`; exports `taskiem_execute_v1`; defines its own memory, starting within the cap (128 MiB); loads with the manifest |
 | `licence` | On the [accepted list](#licences) |
 | `attestation` | `--original` given, and a contact email address |
-| `hosts` | Every declared host resolves, and only to public addresses (no private, loopback, link-local, metadata or documentation ranges) |
+| `hosts` | At most 50; every declared host resolves, and only to public addresses (no private, loopback, link-local, metadata or documentation ranges) |
 | `semver` | The version is newer than every published version of its major, and does not remove actions, input or output fields, or change a class within the major ([rule 11](contracts/connector-v1.md)) |
-| `conformance` | Every case passes in the sandbox, every action has a case, and every idempotent write's key reaches the provider |
+| `conformance` | At most 200 cases; every case passes in the sandbox, every action has a case, and every idempotent write's key reaches the provider. All the checks together have 3 minutes |
 
 A package that fails is kept as `checks_failed` with the reasons (`taskiem connector submissions`, or `GET /v1/catalogue/submissions/{id}`); fix it and submit again, under the same version if you like. One that passes is `in_review`. A version that is in review, approved, published or revoked can never be submitted again: raise the version.
 

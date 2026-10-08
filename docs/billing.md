@@ -65,7 +65,7 @@ A grant forgives open invoices (voided) and is audited (`billing.grant`) in the 
 
 The scheduler role runs the billing job every minute: trials and periods that ended are invoiced (and charged to a saved card), past-due tenants are reminded on the dunning days and degraded after the grace period, cancellations take effect at period end, payments pending over two minutes are verified with the provider (a lost webhook, a bank transfer) and abandoned after a day, and usage is snapshotted hourly. Every transition is audited (`billing.renew`, `billing.dun`, `billing.degrade`, `billing.cancel`, `billing.invoice.issue`, `billing.invoice.paid`, `billing.payment.mismatch`, ...).
 
-A payment whose verified amount or currency differs from its invoice is recorded as `mismatch`, logged as an error, and leaves the invoice open: find it with `SELECT * FROM billing_payments WHERE status = 'mismatch'` and refund or settle it by hand. A payment that arrives for a voided invoice is audited as `billing.payment.unapplied` for a refund.
+A payment whose verified amount or currency differs from its invoice is recorded as `mismatch`, logged as an error, and leaves the invoice open: find it with `SELECT * FROM billing_payments WHERE status = 'mismatch'` and refund or settle it by hand. A payment that arrives for a voided invoice, or for an invoice another payment already paid (two checkouts both completed), is audited as `billing.payment.unapplied` (reason `already_paid` for the second) and logged as an error for a refund; it changes nothing else. While a card charge of an invoice is still pending at the bank, dunning sends its reminder but does not charge the card again.
 
 ## For tenants
 

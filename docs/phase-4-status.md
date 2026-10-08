@@ -21,6 +21,7 @@ The PGDock integration runs as a separate parallel plan ([PGDock integration](pg
 | Security | Self-review | The self-review's open findings before the pen test: step-up for key changes (K5); step-up bound to its operation, no session token in a browser sign-in's body, HSTS (S35); tenant code in the API process bounded and caches bounded (S34); personal data masked in error text (S22); embed preflights paced | 14.4 | **Done** (code; [what exists](#security-self-review-round)) |
 | Security | Residuals | K6 closed (first-context secrets pinned to where they were recorded); compiled tenant WebAssembly modules evicted safely; the tenant-code share across API replicas; the explicit egress proxy (decision 0028); a load-flaky sandbox test | 14.2, 14.4 | **Done** (code; [what exists](#security-residuals-and-the-egress-proxy)) |
 | Operations | Operator console | A platform-level operator identity (CLI-made accounts, passkey enrolment and sign-in, optional OIDC SSO from one issuer, own short sessions on `/v1/ops`, a bound passkey step-up for every write), a platform audit chain, and a web console at `/ops`: catalogue review queue with the checklist, publishers, reviewers, status incidents and maintenance, read-only tenants | 13.2, 9.2 | **Done** (code; [what exists](#operator-console)); who gets accounts and the SSO issuer need P4-X1, P4-X2 |
+| Security | Phase 4 review | An independent review of billing, BYOK, the catalogue, remote triggers, signup, status, pools and the replica, step-up and sessions, the operator console, the egress proxy, languages and voice notes, and migrations 00090–00146: a payment taken twice never applied twice (R1), email alert channels behind email confirmation and paced tests (R2), the catalogue checker bounded (R3), verified publisher names fixed (R4), Ogg durations from every page (R5), the dispatch role narrowed on usage snapshots (R6) | 14.4 | **Done** (code; [what exists](#security-phase-4-review)); refunds of payments taken twice need P4-B7 |
 | Legal | P4-9 | Counsel IP review, trademark registration, terms of service, DPA under the NDPA | — | Needs people |
 
 ## P4-1: billing
@@ -197,6 +198,22 @@ Done 8 October 2026. Guide: [operator console](operator-console.md); design: [de
 | Tests | `TestOperatorSessionsAreSeparate` (enrolment once; operator sessions refused on tenant routes and tenant sessions, keys and passkeys on operator routes; challenges not shared; CSRF; disable), `TestOperatorConsoleWork` (four eyes and the checklist in the database, step-up bound to decision and operator, publishers, status, tenants, the platform chain verified and exported), `TestOperatorSSO`, `TestOperatorConsoleOff`, `TestOperatorsCLI`; the browser test `ops.spec.ts` enrols with a virtual authenticator and approves a submission | `api/ops_test.go`, `cmd/taskiem/operatorscmd_test.go`, `web/e2e/ops.spec.ts` |
 
 What is left: who gets accounts and the SSO issuer (P4-X1, P4-X2); the console does not change limits, plans, pools, the reviewer list or operator accounts (the CLI does); the CLI's catalogue and status commands still record where they did (the publisher's chain, the status tables), not in the platform chain; status tokens stay for automation; a network allow-list for `/ops` is left to the load balancer.
+
+## Security: Phase 4 review
+
+Done 8 October 2026. [Self-review addendum](security/self-review.md#addendum-2026-10-08-independent-review-of-the-phase-4-work) (R1 to R6 fixed, R7 to R10 open or accepted); threat model B1, B7, B10, B14 and B18 amended; [pen-test scope](security/pen-test-scope.md#focus-from-the-2026-10-08-review) extended. Migration 00160.
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Payments taken twice (R1) | A success on an invoice another payment already paid is audited `billing.payment.unapplied` (`already_paid`) and changes nothing; dunning does not charge the card while an earlier card charge of the invoice is pending | `engine/billing/service.go`, `engine/billing/job.go` |
+| Unconfirmed signups (R2) | Email alert channels need the signer's confirmed email; alert test messages paced per tenant (10, then one every 6 minutes) | `api/alerts.go` |
+| Catalogue checker (R3) | At most 200 conformance cases and 50 declared hosts, and a 3-minute budget for a submission's checks | `engine/catalogue/checks.go` |
+| Publisher names (R4) | A verified or suspended publisher's name changes only through Taskiem: 409 from the API, a trigger for the application role | `api/catalogue.go`, migration 00160 |
+| Voice notes (R5) | Ogg length from the largest granule position of any page; absurd Vorbis sample rates refused | `engine/voice/voice.go` |
+| Dispatch role (R6) | `usage_snapshots` narrowed to `tenant_id` and `day`; the payload test covers the Phase 4 tables | migration 00160 |
+| Tests | `TestInvoicePaidTwice`, `TestDunningWaitsForPendingCharge`, `TestUnconfirmedTenantCannotEmailStrangers`, `TestAutomatedChecks`, `TestCatalogueSubmitReviewInstall`, `TestOggDuration`, `TestCheckLimits`, `TestDispatchRoleCannotReadPayloads` | `engine/billing/billing_test.go`, `api/onboarding_test.go`, `engine/catalogue/catalogue_test.go`, `api/catalogue_test.go`, `engine/voice/voice_test.go`, `engine/db/db_test.go` |
+
+What is left: undeploying from a gated environment needs no second person (R7); the `ai` feature does not gate repairs or WhatsApp building (R9); refunds of payments taken twice are by hand (P4-B7); the checker still runs in the API process ([addendum](security/self-review.md#addendum-2026-10-08-independent-review-of-the-phase-4-work)).
 
 ## P4-6: connector SDK and catalogue
 
