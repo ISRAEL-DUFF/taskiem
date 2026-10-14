@@ -5,8 +5,10 @@
 // Duplicate protection on iswallet has two layers: for 24 hours a repeated
 // Idempotency-Key replays the original response; after that the repeat is
 // refused by a constraint, but reported as a 500. So this connector never
-// resends a key more than ReplayWindow after it was first sent: it parks
-// the step for an operator instead (effects.ErrIndeterminate).
+// resends a key more than ReplayWindow after it was first sent without
+// first asking iswallet what became of it (GET /v1/requests/{key}, shipped
+// 12 October 2026): a request found there is answered from the record, and
+// only one iswallet has no record of is sent again.
 package iswallet
 
 import (
@@ -18,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -123,10 +126,6 @@ func (c *client) do(ctx context.Context, req connector.Request, method, path str
 	write := method == http.MethodPost && req.IdempotencyKey != ""
 	if write {
 		headers["Idempotency-Key"] = req.IdempotencyKey
-		if req.Attempt > 1 && !req.KeyFirstSent.IsZero() && c.now().Sub(req.KeyFirstSent) > ReplayWindow {
-			return fmt.Errorf("iswallet: this request was first sent %s ago; past iswallet's 24-hour replay window a resend cannot tell whether it already happened. Check the wallet's ledger, then resolve the step: %w",
-				c.now().Sub(req.KeyFirstSent).Round(time.Minute), effects.ErrIndeterminate)
-		}
 	}
 	err := connector.DoJSON(ctx, req.HTTP, method, c.base+path, headers, body, out)
 	var he *connector.HTTPError
@@ -139,21 +138,83 @@ func (c *client) do(ctx context.Context, req connector.Request, method, path str
 	desc := fmt.Sprintf("iswallet %d %s: %s (request %s)", he.Status, code, msg, ae.Error.RequestID)
 	switch {
 	case retryable[code] || he.Status == http.StatusTooManyRequests || he.Status == http.StatusServiceUnavailable:
-		return fmt.Errorf("%s: %w", desc, effects.ErrRetryable)
+		return waitError{fmt.Errorf("%s: %w", desc, effects.ErrRetryable), c.retryWait(he)}
 	case code == "IDEMPOTENCY_KEY_REUSED":
 		// This key was already used for a request: the payment it carried
 		// may have happened. Only a ledger check can say.
 		return fmt.Errorf("%s: %w", desc, effects.ErrIndeterminate)
 	case he.Status >= 500:
-		if write && !req.KeyFirstSent.IsZero() && c.now().Sub(req.KeyFirstSent) > ReplayWindow {
-			// After 24 hours a 500 on a repeated key means "already done".
-			return fmt.Errorf("%s: %w", desc, effects.ErrIndeterminate)
-		}
+		// Within the replay window the same key is resent; past it, the
+		// next attempt looks the key up first (settle).
 		return fmt.Errorf("%s: %w", desc, effects.ErrUnknownOutcome)
-	case he.Status == http.StatusNotFound && (code == "OUTFLOW_NOT_FOUND" || code == "WALLET_NOT_FOUND"):
+	case he.Status == http.StatusNotFound && (code == "OUTFLOW_NOT_FOUND" || code == "WALLET_NOT_FOUND" || code == "IDEMPOTENCY_KEY_NOT_FOUND"):
 		return fmt.Errorf("%s: %w: %w", desc, connector.ErrNotFound, effects.ErrFatal)
 	}
 	return fmt.Errorf("%s: %w", desc, effects.ErrFatal)
+}
+
+// retryWait is how long to wait before sending again. iswallet sends no
+// Retry-After; X-RateLimit-Reset, on every response, is when its
+// one-minute window reopens (unix seconds).
+func (c *client) retryWait(he *connector.HTTPError) time.Duration {
+	if he.RetryAfter > 0 {
+		return he.RetryAfter
+	}
+	n, err := strconv.ParseInt(he.Header.Get("X-RateLimit-Reset"), 10, 64)
+	if err != nil {
+		return 0
+	}
+	// A reset more than two windows away is a clock disagreement; the
+	// engine's own backoff applies instead.
+	if d := time.Unix(n, 0).Sub(c.now()); d > 0 && d <= 2*time.Minute {
+		return d + time.Second
+	}
+	return 0
+}
+
+// waitError carries how long the engine should wait before the next attempt.
+type waitError struct {
+	err  error
+	wait time.Duration
+}
+
+func (e waitError) Error() string                  { return e.err.Error() }
+func (e waitError) Unwrap() error                  { return e.err }
+func (e waitError) RetryAfterDelay() time.Duration { return e.wait }
+
+// requestRecord is what iswallet recorded under one of our idempotency keys.
+type requestRecord struct {
+	Kind       string `json:"kind"`
+	ResourceID string `json:"resource_id"`
+	Status     string `json:"status"`
+	Terminal   bool   `json:"terminal"`
+	WalletID   string `json:"wallet_id"`
+	Amount     int64  `json:"amount"`
+	Currency   string `json:"currency"`
+}
+
+// settle asks iswallet what became of a write that is about to be resent
+// more than ReplayWindow after it was first sent, when a resend would no
+// longer be answered from iswallet's replay cache. nil and no error means
+// iswallet has no record of the key: nothing was posted (iswallet records
+// the key in the same transaction as the first ledger entry), so sending
+// it again is safe.
+func (c *client) settle(ctx context.Context, req connector.Request, kind string) (*requestRecord, error) {
+	if req.IdempotencyKey == "" || req.Attempt <= 1 || req.KeyFirstSent.IsZero() || c.now().Sub(req.KeyFirstSent) <= ReplayWindow {
+		return nil, nil
+	}
+	var rec requestRecord
+	err := c.do(ctx, req, http.MethodGet, "/v1/requests/"+url.PathEscape(req.IdempotencyKey), nil, &rec)
+	if errors.Is(err, connector.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("iswallet: looking up this request, first sent %s ago, before sending it again: %w", c.now().Sub(req.KeyFirstSent).Round(time.Minute), err)
+	}
+	if rec.Kind != kind {
+		return nil, fmt.Errorf("iswallet: this request's key is recorded for a %q, not a %s; check the wallet's ledger, then resolve the step: %w", rec.Kind, kind, effects.ErrIndeterminate)
+	}
+	return &rec, nil
 }
 
 func str(in map[string]any, k string) string {
@@ -201,6 +262,18 @@ func (c *client) transfer(ctx context.Context, req connector.Request) (connector
 	if n := str(in, "narration"); n != "" {
 		body["narration"] = n
 	}
+	rec, err := c.settle(ctx, req, "transfer")
+	if err != nil {
+		return connector.Response{}, err
+	}
+	if rec != nil {
+		// A transfer is synchronous, so a record not yet terminal is
+		// still being posted: wait for it rather than send again.
+		if !rec.Terminal {
+			return connector.Response{}, fmt.Errorf("iswallet: transfer %s is still %s: %w", rec.ResourceID, rec.Status, effects.ErrRetryable)
+		}
+		return connector.Response{Output: map[string]any{"transfer_id": rec.ResourceID, "status": rec.Status, "amount": rec.Amount, "currency": rec.Currency}}, nil
+	}
 	var r map[string]any
 	if err := c.do(ctx, req, http.MethodPost, "/v1/transfers", body, &r); err != nil {
 		return connector.Response{}, err
@@ -226,6 +299,15 @@ func (c *client) payout(ctx context.Context, req connector.Request) (connector.R
 	}
 	if m, ok := in["metadata"].(map[string]any); ok {
 		body["metadata"] = m
+	}
+	rec, err := c.settle(ctx, req, "outflow")
+	if err != nil {
+		return connector.Response{}, err
+	}
+	if rec != nil {
+		// The payout was accepted when first sent; its outcome with the
+		// bank follows as for any payout (get_payout, outflow_event).
+		return connector.Response{Output: map[string]any{"outflow_id": rec.ResourceID, "status": rec.Status, "amount": rec.Amount, "idempotency_key": req.IdempotencyKey}}, nil
 	}
 	var r map[string]any
 	if err := c.do(ctx, req, http.MethodPost, "/v1/outflows", body, &r); err != nil {

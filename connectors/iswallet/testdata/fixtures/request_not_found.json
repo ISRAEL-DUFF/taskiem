@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/v1/requests/tsk_ab12cd34ef56gh78ij90kl12mn34op56","headers":{"Authorization":"Bearer isw_test_key"}},
+ "response":{"status": 404, "body": {"error": {"code": "IDEMPOTENCY_KEY_NOT_FOUND", "message": "no request recorded under this key", "request_id": "req_nf"}}}}

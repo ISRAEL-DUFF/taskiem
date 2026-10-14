@@ -24,7 +24,10 @@ type HTTPError struct {
 	Status     int
 	Body       []byte
 	RetryAfter time.Duration
-	kind       error
+	// Header is the response's headers, for providers that say when to
+	// retry some other way than Retry-After.
+	Header http.Header
+	kind   error
 }
 
 func (e *HTTPError) Error() string {
@@ -77,7 +80,7 @@ func DoJSON(ctx context.Context, client *http.Client, method, url string, header
 		return fmt.Errorf("read response: %w: %w", err, effects.ErrUnknownOutcome)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		he := &HTTPError{Status: resp.StatusCode, Body: raw, kind: effects.ErrFatal}
+		he := &HTTPError{Status: resp.StatusCode, Body: raw, Header: resp.Header, kind: effects.ErrFatal}
 		switch {
 		case resp.StatusCode == http.StatusTooManyRequests, resp.StatusCode == http.StatusServiceUnavailable:
 			// Refused before processing: safe to send again.

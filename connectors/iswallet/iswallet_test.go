@@ -15,6 +15,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/internal/fixture"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/expr"
 )
 
 const key = "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
@@ -108,20 +109,77 @@ func TestPayoutErrorClassification(t *testing.T) {
 	}
 }
 
-func TestNoResendPastTheReplayWindow(t *testing.T) {
-	// No exchange is expected: the connector must not call iswallet at all.
-	_, err := call(t, "payout", payoutIn, write(3, now.Add(-25*time.Hour)))
-	if effects.Classify(err) != effects.KindIndeterminate {
-		t.Fatalf("resend after 25h: %v", err)
+func TestPastTheReplayWindowLooksTheKeyUpFirst(t *testing.T) {
+	old := write(3, now.Add(-25*time.Hour))
+	// Recorded: answered from the record, nothing is sent again.
+	r, err := call(t, "payout", payoutIn, old, "request_outflow_pending")
+	if err != nil {
+		t.Fatal(err)
 	}
-	// A first attempt with an old key is not a resend (fresh plans use now).
+	if out := r.Output.(map[string]any); out["outflow_id"] != "8d3f" || out["status"] != "pending" || out["idempotency_key"] != key {
+		t.Errorf("recorded payout: %v", out)
+	}
+	// Not recorded: nothing was posted, so the same key is sent again.
+	if _, err := call(t, "payout", payoutIn, old, "request_not_found", "payout_pending"); err != nil {
+		t.Errorf("unrecorded payout: %v", err)
+	}
+	transferIn := map[string]any{"from_wallet_id": "6f1e", "to_wallet_id": "9c2a", "amount": 4500000}
+	r, err = call(t, "transfer", transferIn, old, "request_transfer_completed")
+	if err != nil || r.Output.(map[string]any)["transfer_id"] != "tr_1" || r.Output.(map[string]any)["status"] != "completed" {
+		t.Errorf("recorded transfer: %v %v", r.Output, err)
+	}
+	// Not yet terminal: wait, never resend.
+	if _, err := call(t, "transfer", transferIn, old, "request_transfer_pending"); effects.Classify(err) != effects.KindRetryable {
+		t.Errorf("pending transfer: %v", err)
+	}
+	// A key recorded for another kind of request is for a person to check.
+	if _, err := call(t, "transfer", transferIn, old, "request_outflow_pending"); effects.Classify(err) != effects.KindIndeterminate {
+		t.Errorf("kind mismatch: %v", err)
+	}
+	// A first attempt, or a resend within the window, is sent as it is.
 	if _, err := call(t, "payout", payoutIn, write(1, now.Add(-25*time.Hour)), "payout_pending"); err != nil {
 		t.Errorf("first attempt: %v", err)
 	}
-	// A 500 near the window's edge is not trusted either.
-	_, err = call(t, "payout", payoutIn, write(1, now.Add(-24*time.Hour)), "payout_internal_error")
-	if effects.Classify(err) != effects.KindIndeterminate {
-		t.Errorf("500 after 24h: %v", err)
+	if _, err := call(t, "payout", payoutIn, write(2, now.Add(-time.Hour)), "payout_pending"); err != nil {
+		t.Errorf("resend within the window: %v", err)
+	}
+	// A 500 is an unknown outcome; the next attempt looks the key up.
+	if _, err := call(t, "payout", payoutIn, write(3, now.Add(-25*time.Hour)), "request_not_found", "payout_internal_error"); effects.Classify(err) != effects.KindUnknownOutcome {
+		t.Errorf("500 after lookup: %v", err)
+	}
+}
+
+func TestRateLimitWaitsForTheWindowReset(t *testing.T) {
+	_, err := call(t, "payout", payoutIn, write(1, now), "payout_rate_limited")
+	var ra interface{ RetryAfterDelay() time.Duration }
+	if !errors.As(err, &ra) || ra.RetryAfterDelay() != 31*time.Second {
+		t.Fatalf("rate limited: %v", err)
+	}
+}
+
+func TestEventDedupKeepsBothSidesOfATransfer(t *testing.T) {
+	m := New(Options{}).Manifest
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
+	dedup := func(trigger, body string) string {
+		t.Helper()
+		b, err := expr.DecodeJSON([]byte(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := e.Eval(m.Triggers[trigger].Dedup, map[string]any{"body": b, "headers": map[string]any{}, "query": map[string]any{}})
+		if err != nil {
+			t.Fatalf("%s: %v", trigger, err)
+		}
+		return v.(string)
+	}
+	sender := dedup("transfer_event", `{"id":"evt_1","event_type":"wallet.transfer.completed","wallet_id":"6f1e","data":{"wallet_id":"6f1e","txn_id":"txn_1"}}`)
+	receiver := dedup("transfer_event", `{"id":"evt_2","event_type":"wallet.transfer.completed","wallet_id":"9c2a","data":{"wallet_id":"9c2a","txn_id":"txn_1"}}`)
+	redelivered := dedup("transfer_event", `{"id":"evt_3","event_type":"wallet.transfer.completed","wallet_id":"6f1e","data":{"wallet_id":"6f1e","txn_id":"txn_1"}}`)
+	if sender == receiver || sender != redelivered {
+		t.Errorf("sender %q receiver %q redelivered %q", sender, receiver, redelivered)
+	}
+	if got := dedup("credit_event", `{"id":"evt_4","event_type":"wallet.credit.rejected","wallet_id":"6f1e","data":{}}`); got != "evt_4" {
+		t.Errorf("no txn_id: %q", got)
 	}
 }
 

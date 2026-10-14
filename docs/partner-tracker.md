@@ -1,6 +1,6 @@
 # Partner tracker: what is still needed
 
-Last updated 14 October 2026. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
+Last updated 14 October 2026, after iswallet's answers to PGDock. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
 
 The request pages sent to partners:
 
@@ -31,28 +31,28 @@ Known from Payrolla's reply: report base URL `https://synledger.name.ng/payrolle
 
 ## iswallet (and iSpend)
 
-The connector is built on iswallet's answers of 5 October ([iswallet](integrations/iswallet.md), [answers](integrations/iswallet-answers-2026-10-05.md)).
+The connector is built on iswallet's answers of 5 October ([iswallet](integrations/iswallet.md), [answers](integrations/iswallet-answers-2026-10-05.md)). Their answers to PGDock of 12–13 October ([kept here](integrations/iswallet-answers-2026-10-12-pgdock.md)) were passed to us on 14 October: they do not answer our request page, but they settle H1, P4 and most of W4, and the connector now uses the lookup by key, `X-RateLimit-Reset` and per-side transfer dedup. Their FX, consent and billing questions are PGDock's.
 
 | Id | Needed from iswallet | When | Status |
 | --- | --- | --- | --- |
-| W1 | Sandbox clients `payrolla` and `ispend` provisioned (Payrolla: ₦10m funded company wallet and 10 employee wallets; iSpend: a funded wallet with a virtual account) | Now | [ ] |
+| W1 | Sandbox clients `payrolla` and `ispend` provisioned (Payrolla: ₦10m funded company wallet and 10 employee wallets; iSpend: a funded wallet with a virtual account) | Now | [ ] They provision in one call (`POST /v1/admin/clients/{client}/sandbox/provision`); we have to ask. iSpend's virtual account needs a director's BVN on a business wallet |
 | W2 | Sandbox client keys, delivered securely | Now | [ ] |
 | W3 | Sandbox webhook subscriptions for our URLs (one per product), signing secrets delivered securely | Now, once our staging is up | [ ] |
-| W4 | How to force each sandbox outcome: payout confirmed, failed, reversed after confirmation, unresolved; credit rejected and reversed | Now | [ ] |
-| H1 | Lookup by our idempotency key | Before production | [ ] |
-| H2 | Typed duplicate error instead of the 500, and the replay window | Before production | [ ] |
-| H3 | `Retry-After` on 429; higher rate limit for `payrolla` (needs N1) | Before production | [ ] |
-| H6 | Error catalogue per endpoint, with retryability | Before production | [ ] |
+| W4 | How to force each sandbox outcome: payout confirmed, failed, reversed after confirmation, unresolved; credit rejected and reversed | Now | [~] Simulators for deposit, payout confirmed/failed/reversed and credit clawback; failed debits are real refusals. Still open: payout `unresolved`, credit `rejected` |
+| H1 | Lookup by our idempotency key | Before production | [x] Shipped 12 October (`GET /v1/requests/{key}`); used by the connector |
+| H2 | Typed duplicate error instead of the 500, and the replay window | Before production | [ ] Now their top item; no longer blocks us (the lookup comes first) |
+| H3 | `Retry-After` on 429; higher rate limit for `payrolla` (needs N1) | Before production | [~] No `Retry-After` yet (on their list); we use `X-RateLimit-Reset`. Limit raise still needs N1 |
+| H6 | Error catalogue per endpoint, with retryability | Before production | [~] Debit codes given to PGDock match our handling; a full catalogue per endpoint still open |
 | H8 | `POST /v1/outflows` in the OpenAPI spec; multispend path fix | Before production | [ ] |
 | H4, H5, H7, H9 | Bulk payouts, structured transfer metadata, parked-credit signal, non-NGN limits | Later | [ ] |
 | P1 | KYC tier raised for the pilot company's wallet, limits confirmed by compliance (needs N1) | Before production | [ ] |
 | P2, P3 | Production client keys; production webhook subscriptions and secrets | Before production | [ ] |
-| P4 | Allow-list our egress IPs, if they allow-list callers | Before production | [ ] Waiting on our IPs |
-| P5 | On-call contact for payout incidents | Before production | [ ] |
+| P4 | Allow-list our egress IPs, if they allow-list callers | Before production | [x] Not needed: no allow-list today. They want our IPs for incident forensics |
+| P5 | On-call contact for payout incidents | Before production | [ ] They will name a technical contact and escalation path |
 | M1, M2 | Wallet-scoped keys; per-wallet webhook subscriptions (nice to have; our guard does not depend on them) | Later | [ ] |
-| M3 | Confirm every outflow, credit and transfer event carries the `wallet_id` it concerns, and which side for transfers | Before production | [ ] |
+| M3 | Confirm every outflow, credit and transfer event carries the `wallet_id` it concerns, and which side for transfers | Before production | [~] Credit and transfer confirmed (envelope `wallet_id`; one transfer event per side). Outflow events to confirm |
 | M4 | KYC tier per company wallet as each Payrolla company is onboarded: process and lead time | Before production | [ ] |
-| Q1–Q4 | `wallet.credit.reversed`/`rejected` examples; when H1 and H2 ship; reversal timing after confirmation; maintenance windows | Answer | [ ] |
+| Q1–Q4 | `wallet.credit.reversed`/`rejected` examples; when H1 and H2 ship; reversal timing after confirmation; maintenance windows | Answer | [~] H1 shipped, H2 next. The rest open |
 
 | Id | Needed from iSpend engineering | When | Status |
 | --- | --- | --- | --- |
@@ -84,7 +84,7 @@ Phase 1 is built from PGDock's published contracts ([plan](pgdock-integration.md
 | A Taskiem staging deployment with a public URL | Everyone: webhook URLs for Payrolla, iswallet subscriptions, PGDock testing | Infrastructure ([needs people](needs-people.md) D5, P4-C1) |
 | Payrolla's partner tenant and partner API key | Payrolla onboarding (N4) | Staging |
 | Webhook URLs per product and environment | iswallet W3, P3; Payrolla per company | Staging, then production |
-| Fixed egress IPs | iswallet P4, PGDock (if they allow-list) | Cloud provider and NAT (P4-C1, P4-C5) |
+| Fixed egress IPs | PGDock (if they allow-list); iswallet for forensics only | Cloud provider and NAT (P4-C1, P4-C5) |
 | Passing Payrolla's payroll figures to iswallet | iswallet H3, P1 | N1 from Payrolla |
 | A sending domain for invitation emails | Company people joining their sub-tenants | P4-O1 |
 | Running the sandbox tests with each partner | Payrolla T1, iswallet W4, PGDock S1 | Staging and the sandbox items above |

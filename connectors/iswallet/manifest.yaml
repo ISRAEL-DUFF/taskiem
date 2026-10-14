@@ -1,9 +1,9 @@
 # iswallet (iSpend's wallet platform): the wallet and payment provider for
 # Payrolla and iSpend. Built from iswallet engineering's answers of
-# 5 October 2026 (docs/integrations/iswallet.md).
+# 5 and 12 October 2026 (docs/integrations/iswallet.md).
 manifest: connector/v1
 id: iswallet
-version: 1.1.0
+version: 1.2.0
 name: iswallet
 description: Wallet-to-wallet transfers, bank payouts, balances and wallet events on iswallet.
 category: payments
@@ -176,7 +176,9 @@ triggers:
     verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
     events: [wallet.credit.posted, wallet.credit.reversed, wallet.credit.rejected]
     event_type: =body.event_type
-    dedup: =body.id
+    # By movement rather than envelope, as iswallet advises (12 October
+    # 2026): two events for one movement are then one event here.
+    dedup: '=has(body.data) && has(body.data.txn_id) ? body.event_type + ":" + body.data.txn_id + ":" + body.wallet_id : body.id'
     correlation: =body.wallet_id
     route: { key: =body.wallet_id, field: wallet_ids }
   transfer_event:
@@ -184,7 +186,9 @@ triggers:
     verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
     events: [wallet.transfer.completed, wallet.transfer.failed]
     event_type: =body.event_type
-    dedup: =body.id
+    # A completed transfer fires once per side, both with the same txn_id:
+    # the wallet is part of the key, or one side's event would be dropped.
+    dedup: '=has(body.data) && has(body.data.txn_id) ? body.event_type + ":" + body.data.txn_id + ":" + body.wallet_id : body.id'
     correlation: =body.wallet_id
     # Fires once per side, each with its own wallet_id: each side reaches
     # the sub-tenant that holds that wallet.
