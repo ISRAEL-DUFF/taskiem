@@ -2,7 +2,7 @@
 
 A **partner** puts Taskiem inside its own product so that its customers automate their work without signing up to Taskiem (spec 13.1, 13.4). Each of the partner's customers is a **sub-tenant**: a tenant of its own, with its own workflows, runs, audit chain and keys, isolated from the partner's other customers and from the partner's own staff. The people who use it are **end users**: the partner's users, known to Taskiem only by the id the partner gives them, acting through short-lived tokens the partner's server mints.
 
-This page covers sub-tenants, the partner admin API, embed apps, end-user tokens, headless use of the API and partner webhooks (milestone C1); the embedded builder as an element or an iframe, theming, custom domains and white-label (C2); and the partner connector bridge, your own API as a pre-authenticated connector (C3). The design is in [decision 0015](decisions/0015-embedding-tenancy.md).
+This page covers sub-tenants, the partner admin API, embed apps, end-user tokens, headless use of the API and partner webhooks (milestone C1); the embedded builder as an element or an iframe, theming, custom domains and white-label (C2); and the partner connector bridge, your own API as a pre-authenticated connector (C3); and one provider account shared by all your customers, with its events routed to the right sub-tenant. The design is in [decision 0015](decisions/0015-embedding-tenancy.md) and, for shared provider accounts, [decision 0031](decisions/0031-shared-provider-clients.md).
 
 ## Overview
 
@@ -364,6 +364,28 @@ Your sub-tenants' end users can use your own product from their automations, alr
 
 Credentials are write-only everywhere: no route returns them, to you, to the sub-tenant or to its end users (who have no connection routes at all). A run decrypts them only inside the sub-tenant that holds them, so one customer's credentials can never run in another's workflows. End users name the connection in a step (`"connection": "main"`) or, with one connection per connector and environment, leave it out.
 
+**One provider account for all your customers.** If a provider gives you one client for every customer (iswallet: Payrolla's client holds every company's wallets), the key you provision into each sub-tenant reaches the other customers' accounts too. Provision it with the connector's allow-list (iswallet: `"shared_client": "true"` and that customer's `wallet_ids`, refused without them), so the connector refuses any other account before a request is sent ([iswallet](integrations/iswallet.md#one-client-shared-by-many-customers), [decision 0031](decisions/0031-shared-provider-clients.md)).
+
+## 13. Routing provider events to sub-tenants
+
+A provider that subscribes webhooks per client sends all your customers' events to one URL. Point it at **your own tenant**, and Taskiem delivers each event into the sub-tenants it is about.
+
+1. In your own tenant, create the provider's connection with the subscription's signing secret (iswallet: `webhook_secret`), and optionally list your own accounts in it (`wallet_ids`: the funding wallet). Register your tenant's URL with the provider (`/hooks/{your tenant}/connectors/iswallet@1/outflow_event?env=prod&connection=main`, one per trigger).
+2. Provision each sub-tenant's connection with its accounts (above).
+3. Each delivery is verified with your secret and processed in your tenant as usual (your own subscribed workflows run). Then, for a connector trigger that declares a `route` ([connector/v1](contracts/connector-v1.md), rule 7), it is delivered into **every one of your sub-tenants whose connection in that environment lists the event's key** (iswallet: the envelope's `wallet_id`), as if it had arrived at that sub-tenant's own URL: the same dedup key (iswallet: the envelope `id`), the same signal and correlation (`iswallet@1:outflow_event` on `outflow_id`), the sub-tenant's own subscribed workflows, its own ingest limits, and `423` while it is suspended (the provider retries).
+
+| Case | What happens |
+| --- | --- |
+| The key is listed by one or more of your sub-tenants | Delivered into each. Recorded in your tenant (`partner_event_routes`) and audited as `partner.event.route` in your chain and in each sub-tenant's (actor `partner:<you>/ingest:<connector>/<trigger>`), once per event and sub-tenant |
+| The same event again (a provider retry) | The sub-tenants recorded the first time, deduplicated there; nothing audited again |
+| The key is listed by none, nor by your own connections | Delivered to you only, recorded as `unrouted`, audited (`partner.event.unrouted`) and alerted to your alert channels (`event_unrouted`, once a day per key) |
+| The key is listed only by your own connection | Yours; nothing recorded |
+| Any sub-tenant's delivery fails (database, its ceiling, suspended) | The whole delivery is refused (`503`, `429` or `423`), so the provider sends it again; what already happened is deduplicated |
+
+`GET /v1/partner/event-routes` (`partner.read`; filters `status` = `routed` or `unrouted`, `sub_tenant`, `before`, `limit`) lists where events went: ids, the event type, the dedup key, the key, the sub-tenant and its connection. Never the event's body. The answer to the provider carries only counts (`"routed": 2`).
+
+Routing never crosses partners: only the sub-tenants of the tenant the delivery was verified for are considered, through `taskiem_partner_route_event`, a definer function that refuses any scope but exactly one active partner. An event the provider sends to a sub-tenant's own URL is still delivered there, and not routed. An event that arrived before its key was listed is not redelivered when you list it: the provider already had a 2xx.
+
 ## Security model
 
 - **Isolation.** A sub-tenant is a tenant: row-level security keeps its data from every other tenant. No membership puts a sub-tenant in a session's scope, including the partner's owners. The only way from a partner to a sub-tenant is `taskiem_partner_enter`, a reviewed `SECURITY DEFINER` function that checks the sub-tenant's `parent_id` against the partner the transaction is scoped to, writes the access to both audit chains, and narrows the transaction to that one sub-tenant. A tenant's parent can never change.
@@ -374,6 +396,7 @@ Credentials are write-only everywhere: no route returns them, to you, to the sub
 - **Framing.** Only the frame page may be framed, only by the app's origins; tokens reach it by origin-checked `postMessage`, never in a URL.
 - **Custom domains** map to an app only after DNS verification, are exclusive once verified, and serve the embed surface alone.
 - **Bridge credentials** are written into the sub-tenant's own vault through the audited partner path and are never readable through any API.
+- **Routed events** cross from the partner to a sub-tenant only through `taskiem_partner_route_event`: the partner in scope, its own non-deleted sub-tenants, the key listed by the sub-tenant's connection, recorded and audited in both chains in the same transaction. The delivery itself then runs in the sub-tenant's own scope, as at its own URL. Shared provider keys are limited per sub-tenant by the connector's allow-list.
 - **Redaction.** The partner sees outcomes, not data: run statuses and error kinds, never inputs, outputs or messages, in the API and in webhooks.
 
 The threat model's boundary B11 covers this ([threat model](security/threat-model.md)).

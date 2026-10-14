@@ -279,6 +279,8 @@ A bank payout iswallet confirmed can, rarely, be **reversed** days later by the 
 
 **From iswallet:** Payrolla's iswallet client, with a sandbox provisioned with a funded company wallet and test employee wallets. Employees paid by wallet transfer must have wallets under the same Payrolla client, in NGN.
 
+**One Taskiem sub-tenant per company.** Payrolla's one iswallet key reaches every company's wallets, so each company's iswallet connection is provisioned with `"shared_client": "true"` and that company's own `wallet_ids`: Taskiem then refuses any payment from another company's wallet before it reaches iswallet. Payrolla's iswallet webhook subscription points at Payrolla's own tenant, and Taskiem delivers each event to the company whose connection lists its wallet. See [iswallet: one client shared by many customers](iswallet.md#one-client-shared-by-many-customers).
+
 ## 4. Testing in the sandbox
 
 Use `env=dev`. In iswallet's sandbox, the bank code decides a payout's fate: **`000`** confirms at once and **`999`** fails at once.
