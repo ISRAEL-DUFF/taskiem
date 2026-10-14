@@ -5664,6 +5664,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: Five invitations to this address in the last ten minutes; nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/partner/sub-tenants/{sub}/invitations/{user}:
@@ -6291,7 +6297,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationError'
+                $ref: '#/components/schemas/Error'
         '429':
           description: The sub-tenant's max_workflows.
           content:

@@ -99,6 +99,11 @@ func (s *Server) inviteToSubTenant(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	ctx := r.Context()
+	// Each invitation emails the address: five, then one every ten minutes.
+	if s.mailOn() && !s.limiter("invite-email:"+strings.ToLower(req.Email), 10*time.Minute, 5).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many invitations to this address lately; try again in a few minutes")
+		return
+	}
 	// The person, if they have an account; a new one is created (with no
 	// way to sign in) in the same transaction as the invitation.
 	user, existing := uuid.Must(uuid.NewV7()), true
@@ -177,9 +182,16 @@ func (s *Server) partnerName(r *http.Request) string {
 // accept.
 func (s *Server) sendInvitation(ctx context.Context, email, tenant, partner string, roles []string, linked bool, token string) {
 	base := strings.TrimRight(s.PublicURL, "/")
+	// The partner names both; a name that reads as a link or an address
+	// stays out of an email from Taskiem.
 	via := ""
-	if partner != "" {
-		via = " through " + partner
+	if name, ok := plainName(partner, 2, 200); ok {
+		via = " through " + name
+	}
+	if name, ok := plainName(tenant, 2, 200); ok {
+		tenant = name
+	} else {
+		tenant = "an organisation"
 	}
 	var how string
 	if linked {

@@ -225,6 +225,17 @@ func TestInvitationLinkGuards(t *testing.T) {
 	if toJSON(out["roles"]) != `["operator","viewer"]` {
 		t.Errorf("roles: %v", out["roles"])
 	}
+	// A name that reads as a link stays out of Taskiem's email; an address
+	// gets five invitations, then waits.
+	phish := p.sub(t, "Verify your salary at evil.example", nil)
+	before = len(mail.all())
+	for range 5 {
+		p.key.must(201, "POST", "/v1/partner/sub-tenants/"+phish+"/invitations", map[string]any{"email": "d@company.test", "roles": []string{"viewer"}})
+	}
+	p.key.must(429, "POST", "/v1/partner/sub-tenants/"+phish+"/invitations", map[string]any{"email": "d@company.test", "roles": []string{"viewer"}})
+	if sent := sentTo(t, w, mail, before, "d@company.test"); len(sent) != 5 || strings.Contains(sent[0], "evil.example") || !strings.Contains(sent[0], "invited to an organisation") {
+		t.Errorf("emails: %d %v", len(sent), sent)
+	}
 	// A suspended sub-tenant's link does not work.
 	p.key.must(201, "POST", "/v1/partner/sub-tenants/"+sub+"/invitations", map[string]any{"email": "c@company.test", "roles": []string{"viewer"}})
 	tokC := invitationLink.FindStringSubmatch(sentTo(t, w, mail, before, "c@company.test")[0])[1]
