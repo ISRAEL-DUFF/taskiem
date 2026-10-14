@@ -24,6 +24,7 @@ Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](p
 | D6 | [ ] Production iswallet credentials entered (Connections and Secrets pages) | iswallet account holder | Connector built against iswallet's answers | G1 |
 | D7 | [ ] Webhook URLs and signing secrets generated in Taskiem and registered with iswallet and Payrolla | Ops, with iswallet and Payrolla | Ingest and signature checks ready | G1 |
 | D8 | [ ] Four consecutive weeks of the three dogfood workflows in production | Everyone above | — | G1 |
+| D9 | [ ] Payrolla builds `POST /payrolls/{payroll_id}/reversal-notice` (same token and `Idempotency-Key` rules as the report) and accepts the report's new `totals`; Payrolla and iswallet confirm a 35-day watch is long enough (how late a NIP return or recall can come), or choose another (`payrolla_reversal_watch_days`, 1 to 60) | Payrolla engineering, with iswallet | Built and tested against fakes ([guide](integrations/payrolla.md#reversal-notices)) | Reversal notices in production |
 
 ## Production infrastructure and security (gates G1 and G2)
 

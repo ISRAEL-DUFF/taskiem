@@ -122,12 +122,17 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	iswallet := httptest.NewServer(isw)
 	defer iswallet.Close()
 	var mu sync.Mutex
-	var reports []map[string]any
+	var reports, notices []map[string]any
 	payrolla := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		mu.Lock()
-		reports = append(reports, map[string]any{"path": r.URL.Path, "auth": r.Header.Get("Authorization"), "key": r.Header.Get("Idempotency-Key"), "body": in})
+		got := map[string]any{"path": r.URL.Path, "auth": r.Header.Get("Authorization"), "key": r.Header.Get("Idempotency-Key"), "body": in}
+		if strings.HasSuffix(r.URL.Path, "/reversal-notice") {
+			notices = append(notices, got)
+		} else {
+			reports = append(reports, got)
+		}
 		mu.Unlock()
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
@@ -204,9 +209,8 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	if st, _ := s.call(t, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", forged, fh...); st != 401 {
 		t.Errorf("forged webhook: %d", st)
 	}
-	// Ada's transfer retries with the same key and is answered from the replay cache.
-	rt.WaitFor(t, 30*time.Second, "payroll run", func() bool { s.Drain(t); return s.Status(t, ref) != "running" })
-	if st := s.Status(t, ref); st != "completed" {
+	dump := func(st string) {
+		t.Helper()
 		h, _ := s.Store.RunHistory(ctx, ref)
 		var b strings.Builder
 		for _, ev := range h {
@@ -214,7 +218,25 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 		}
 		t.Fatalf("status %s:\n%s", st, b.String())
 	}
+	// Ada's transfer retries with the same key and is answered from the replay cache.
+	rt.WaitFor(t, 30*time.Second, "payroll report", func() bool {
+		s.Drain(t)
+		mu.Lock()
+		defer mu.Unlock()
+		return len(reports) > 0 || s.Status(t, ref) != "running"
+	})
+	// After the report the run stays open, watching Bola's confirmed payout
+	// for a reversal.
+	if st := s.Status(t, ref); st != "running" {
+		dump(st)
+	}
+	if !strings.Contains(toJSON(s.must(t, 200, owner, "GET", "/v1/runs/"+run, nil)), "watching_for_reversals") {
+		t.Error("the run does not say it is watching for reversals")
+	}
 	isw.mu.Lock()
+	if o["narration"] != "Salary September 2026 PR-2026-09 E2" {
+		t.Errorf("payout narration %q", o["narration"])
+	}
 	for k, n := range isw.moves {
 		if n != 1 {
 			t.Errorf("key %s moved money %d times", k, n)
@@ -237,7 +259,53 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	if rb["paid"] != float64(3) || rb["failed"] != float64(1) || !strings.Contains(toJSON(rb["results"]), `"employee_id":"E4"`) || !strings.Contains(toJSON(rb["results"]), "EXCEEDS_SINGLE_TXN_LIMIT") {
 		t.Errorf("report body: %s", toJSON(rb))
 	}
+	if got := toJSON(rb["totals"]); got != `{"bank_fees_kobo":5350,"failed_at_bank":0,"paid_kobo":90000000,"paid_to_bank":1,"paid_to_wallet":2,"refused":1,"unconfirmed":0}` {
+		t.Errorf("report totals: %s", got)
+	}
+	reportKey := reports[0]["key"]
 	mu.Unlock()
+
+	// A reversal of a payout this run did not make wakes nothing; Bola's
+	// reversal becomes a notice to Payrolla, and the run ends.
+	stray := map[string]any{"outflow_id": "out_999", "operation_id": "out_999", "wallet_id": "w_company", "amount": int64(100000), "fee": 5350,
+		"currency": "NGN", "idempotency_key": "tsk_other", "provider_reference": "tsk_other"}
+	body, hdr = isw.event(stray, "wallet.outflow.reversed", "whsec_payrolla")
+	if out := s.must(t, 202, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", body, hdr...); out["signalled"] != float64(0) {
+		t.Fatalf("unknown reversal: %v", out)
+	}
+	s.Drain(t)
+	if st := s.Status(t, ref); st != "running" {
+		dump(st)
+	}
+	body, hdr = isw.event(o, "wallet.outflow.reversed", "whsec_payrolla")
+	if out := s.must(t, 202, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", body, hdr...); out["signalled"] != float64(1) {
+		t.Fatalf("reversal: %v", out)
+	}
+	rt.WaitFor(t, 30*time.Second, "reversal notice", func() bool { s.Drain(t); return s.Status(t, ref) != "running" })
+	if st := s.Status(t, ref); st != "completed" {
+		dump(st)
+	}
+	mu.Lock()
+	if len(reports) != 1 || len(notices) != 1 {
+		t.Fatalf("reports %v, notices %v", reports, notices)
+	}
+	n := notices[0]
+	if os.Getenv("TASKIEM_DUMP_REPORT") != "" {
+		raw, _ := json.MarshalIndent(map[string]any{"headers": map[string]any{"Authorization": n["auth"], "Idempotency-Key": n["key"]}, "body": n["body"]}, "", "  ")
+		t.Logf("reversal notice:\n%s", raw)
+	}
+	nb := n["body"].(map[string]any)
+	if n["path"] != "/payrolls/PR-2026-09/reversal-notice" || n["auth"] != "Bearer pr_token" || n["key"] == "" || n["key"] == reportKey ||
+		nb["payroll_id"] != "PR-2026-09" || nb["employee_id"] != "E2" || nb["outflow_id"] != o["outflow_id"] || nb["amount_kobo"] != float64(35000000) ||
+		nb["fee_kobo"] != float64(5350) || nb["reversed_at"] != "2026-10-09T08:30:00Z" || nb["iswallet"].(map[string]any)["total_reversed"] != float64(35005350) {
+		t.Errorf("notice: %s", toJSON(n))
+	}
+	mu.Unlock()
+	isw.mu.Lock()
+	if len(isw.moves) != 3 {
+		t.Errorf("the watch moved money: %v", isw.moves)
+	}
+	isw.mu.Unlock()
 
 	// Personal data stays sealed at rest; replay holds over the opened history.
 	sealed := s.must(t, 200, owner, "GET", "/v1/runs/"+run, nil)

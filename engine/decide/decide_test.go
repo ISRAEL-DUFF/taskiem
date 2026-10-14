@@ -378,8 +378,21 @@ func TestPayrollaDogfoodEndToEnd(t *testing.T) {
 		t.Errorf("failure record %v", failure)
 	}
 	s.complete("report", map[string]any{"status": 200})
-	if s.last().Type != history.RunCompleted {
-		t.Errorf("payroll run should complete: %s", s.types())
+	// After the report the run watches e2's confirmed payout for a reversal
+	// until 35 days after the payroll arrived, then ends.
+	if c := s.payload(history.StepScheduled, "watch[0].watch_lane[0].reversal_event")["correlation"]; c != "out_2" {
+		t.Fatalf("reversal watch correlation %v: %s", c, s.types())
+	}
+	if at := s.payload(history.StepScheduled, "watch[0].watch_lane[0].watch_ends")["fire_at"]; at != "2026-11-09T09:00:00Z" {
+		t.Errorf("watch ends at %v", at)
+	}
+	if s.last().Type == history.RunCompleted {
+		t.Fatal("run ended before the watch")
+	}
+	s.advance(35 * 24 * time.Hour)
+	s.fire("watch[0].watch_lane[0].watch_ends", "wait")
+	if s.last().Type != history.RunCompleted || !s.has(history.StepCancelled, "watch[0].watch_lane[0].reversal_event") {
+		t.Errorf("payroll run should complete after the watch: %s", s.types())
 	}
 }
 

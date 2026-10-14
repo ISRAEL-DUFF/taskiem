@@ -4,27 +4,30 @@
 **From:** Taskiem  
 **Status:** ready to build against the iswallet sandbox
 
-When a payroll is approved in Payrolla, Payrolla sends it to Taskiem. A Taskiem approver then releases the money, Taskiem pays every employee from Payrolla's company wallet on iswallet, and it reports each outcome back to Payrolla.
+Once a payroll is approved and **locked** in Payrolla, someone at the company presses **Send to Taskiem** and Payrolla sends it to Taskiem. A Taskiem approver then releases the money, Taskiem pays every employee from the company's wallet on iswallet, and it reports each outcome back to Payrolla.
 
-Payrolla builds two things:
+Payrolla builds three things:
 
-1. **Send** each approved payroll to a Taskiem webhook.
+1. **Send** each locked payroll to a Taskiem webhook.
 2. **Receive** one report per payroll on an endpoint of yours.
+3. **Receive** a reversal notice when a bank payout Taskiem reported as paid is later reversed.
 
 ## How a payroll moves
 
-1. Payrolla sends the approved payroll to Taskiem. Taskiem answers `202 Accepted` at once.
+1. The payroll is approved and locked in Payrolla, and **Send to Taskiem** sends it. Taskiem answers `202 Accepted` at once.
 2. Taskiem reads the company wallet's balance and asks a **payroll approver** to release the money. The approver sees the total, the headcount, how many people are paid to banks, and the balance. **This is the only approval before money moves**: iswallet has no second check. Whoever wrote the workflow cannot approve it. If nobody approves within **24 hours**, or the approver rejects it, nothing is paid.
 3. Taskiem pays each employee, five at a time:
    - **with an iswallet wallet:** a wallet-to-wallet transfer, final at once, no fee.
    - **without one:** a bank payout through iswallet. Taskiem waits up to 72 hours for iswallet to confirm it. The bank fee is charged to the company wallet on top of the salary.
-4. Taskiem sends Payrolla **one report** with every employee's outcome. A rejected or expired approval also gets a report.
+4. Taskiem sends Payrolla **one report** with every employee's outcome and the payroll's totals. A rejected or expired approval also gets a report.
+5. Taskiem then watches each bank payout it reported as paid for a **reversal**, for 35 days from when the payroll reached it. Each reversal becomes a reversal notice to Payrolla. Nothing more is paid.
 
 **Guarantees.**
 
 - No employee is paid twice for the same payroll, even if you send it twice or a server crashes mid-payment. Each payment is keyed on `payroll_id` + `employee_id`.
 - Nothing is paid before approval.
 - One failed payment does not stop the others; it is listed in the report.
+- Watching for reversals starts only after the report is sent: it never delays or changes the report, and it never pays anyone.
 
 ## 1. Sending a payroll
 
@@ -94,7 +97,7 @@ curl -sS -X POST "$URL" -H 'Content-Type: application/json' -H "X-Taskiem-Signat
 | Field | Type | Rules |
 | --- | --- | --- |
 | `payroll_id` | string | **Unique per payroll, forever.** Taskiem treats a repeat as the same payroll (see below) |
-| `period` | string | Shown to the approver and in transfer narrations, e.g. `September 2026` |
+| `period` | string | Shown to the approver and in payment narrations, e.g. `September 2026` |
 | `funding_wallet_id` | string | Payrolla's company wallet on iswallet |
 | `total_kobo` | integer | Sum of `net_pay_kobo`, shown to the approver |
 | `employees` | array | Up to 5,000 per payroll |
@@ -103,7 +106,11 @@ curl -sS -X POST "$URL" -H 'Content-Type: application/json' -H "X-Taskiem-Signat
 | `employees[].wallet_id` | string | The employee's iswallet wallet, under the Payrolla iswallet client. When present, the employee is paid by wallet transfer |
 | `employees[].bank_code`, `account_number`, `account_name` | strings | Required when there is no `wallet_id`. Use iswallet's bank codes, and resolve the name with iswallet's name enquiry when the employee adds the account: a payout to a valid account number belonging to someone else cannot be recovered |
 
-Every amount is an integer in kobo, never a decimal or a string. The whole body must be under 1 MB.
+Every amount is an integer in kobo, never a decimal or a string.
+
+**Size.** The body may be **up to 4 MB for Payrolla companies** (Taskiem's default is 1 MB; it is raised for each Payrolla company's tenant). Send a payroll as one `payroll_id`, however large: do not split it into several. Each `payroll_id` needs its own approval in Taskiem and gets its own report.
+
+**Narrations.** Each payment's narration is `Salary <period> <payroll_id> <employee_id>`, on wallet transfers and bank payouts alike, cut to iswallet's 255-character limit. Keep ids short so the employee id is never cut off.
 
 Account numbers and names are encrypted per employee inside Taskiem and can be erased on request (NDPA).
 
@@ -115,7 +122,7 @@ Account numbers and names are encrypted per employee inside Taskiem and can be e
 | `202` with `"duplicate": true` | Taskiem already has this `payroll_id` | Nothing; you get the original `run_id` |
 | `401` | Signature missing or wrong | Check the secret and that you signed the exact bytes sent |
 | `404` | Wrong URL | Check the tenant id, path and `env` |
-| `413` | Body over 1 MB | Contact us |
+| `413` | Body over the limit (4 MB for Payrolla companies) | Contact us; do not split the payroll |
 | `422` | The payload breaks a rule above. Body: `{"error": "…", "problems": ["…"]}` | Fix the payload. Nothing was recorded |
 | `429` | Too many requests | Retry after `Retry-After` seconds |
 | `503` | Not recorded | Retry after `Retry-After` seconds |
@@ -136,7 +143,7 @@ Idempotency-Key: tsk_…
 Content-Type: application/json
 ```
 
-Tell us `payrolla_api_url` for each environment and issue Taskiem a token. We store both encrypted.
+Each company's Taskiem tenant holds `payrolla_api_url` and the token (see Setting up, below); the token is stored encrypted. The same URL base, token and rules serve [reversal notices](#reversal-notices).
 
 **Idempotency.** Taskiem may send the same report more than once if a response is lost. Every retry of one report carries the **same** `Idempotency-Key`. Store reports by that key, and answer a repeat with the same `2xx` as the first time.
 
@@ -144,17 +151,29 @@ Tell us `payrolla_api_url` for each environment and issue Taskiem a token. We st
 
 ### Completed payroll
 
-`status` is `completed` once every payment has finished, paid or failed. `results` has **one entry per employee, in payroll order**. Each entry always has `employee.employee_id`, plus exactly one of these outcomes:
+`status` is `completed` once every payment has finished, paid or failed. `results` has **one entry per employee, in payroll order**. Each entry always has `employee.employee_id` and `employee.net_pay_kobo` (the amount from your payroll), plus exactly one of these outcomes:
 
-| Entry contains | Outcome |
+| Entry contains | Outcome | Counted in `totals` as |
+| --- | --- | --- |
+| `to_wallet` with `status: "completed"` | **Paid** to the employee's wallet. `txn_id` is iswallet's ledger reference | `paid_to_wallet` |
+| `to_bank` and `settle` with `settle.event: "wallet.outflow.confirmed"` | **Paid** to the bank account. `to_bank.outflow_id` is iswallet's reference; `to_bank.fee` was charged to the company wallet | `paid_to_bank` |
+| `to_bank` and `settle` with any other `settle.event` (`wallet.outflow.failed`, or rarely `wallet.outflow.reversed`) | **Failed** at the bank; iswallet returned the money to the company wallet | `failed_at_bank` |
+| `wallet_failed` or `bank_failed` | **Failed**: iswallet refused the payment. `error.message` carries iswallet's code, e.g. `EXCEEDS_SINGLE_TXN_LIMIT`, `INSUFFICIENT_FUNDS`, `OUTFLOW_REJECTED` | `refused` |
+| `bank_unconfirmed` | **Unknown after 72 hours**: iswallet never confirmed the bank payout. Do not pay this employee again until Taskiem's operators confirm what happened | `unconfirmed` |
+
+**`settle` is the source of truth for a bank payout.** `to_bank` is iswallet's first answer to the payout request, so `to_bank.status` is always `"pending"`, even for a payout that was then confirmed. Read the outcome from `settle.event`, never from `to_bank.status`. `to_bank.fee` is the bank fee iswallet charged on top of the salary; a payout that failed at the bank has its fee returned with it.
+
+`paid` and `failed` count the entries. `totals` adds up the payroll:
+
+| Field | Meaning |
 | --- | --- |
-| `to_wallet` with `status: "completed"` | **Paid** to the employee's wallet. `txn_id` is iswallet's ledger reference |
-| `to_bank` and `settle` with `settle.event: "wallet.outflow.confirmed"` | **Paid** to the bank account. `to_bank.outflow_id` is iswallet's reference; `to_bank.fee` was charged to the company wallet |
-| `to_bank` and `settle` with `settle.event: "wallet.outflow.failed"` | **Failed** at the bank; iswallet returned the money to the company wallet |
-| `wallet_failed` or `bank_failed` | **Failed**: iswallet refused the payment. `error.message` carries iswallet's code, e.g. `EXCEEDS_SINGLE_TXN_LIMIT`, `INSUFFICIENT_FUNDS`, `OUTFLOW_REJECTED` |
-| `bank_unconfirmed` | **Unknown after 72 hours**: iswallet never confirmed the bank payout. Do not pay this employee again until Taskiem's operators confirm what happened |
+| `paid_kobo` | Total paid to employees, in kobo: the `net_pay_kobo` of every paid entry |
+| `bank_fees_kobo` | Total bank fees charged to the company wallet, in kobo: the `to_bank.fee` of every confirmed bank payout. Wallet transfers are free |
+| `paid_to_wallet`, `paid_to_bank`, `refused`, `failed_at_bank`, `unconfirmed` | How many entries had each outcome (table above). The first two add up to `paid`, the other three to `failed` |
 
-`paid` and `failed` count the entries. An example, from the integration test (one wallet payment, one bank payment, one more wallet payment, and one payment refused for exceeding a limit):
+The company wallet was debited `paid_kobo + bank_fees_kobo` for this payroll. New fields may be added to the report over time; ignore fields you do not know.
+
+An example, from the integration test (one wallet payment, one bank payment, one more wallet payment, and one payment refused for exceeding a limit):
 
 ```json
 {
@@ -164,7 +183,8 @@ Tell us `payrolla_api_url` for each environment and issue Taskiem a token. We st
   "results": [
     {
       "employee": {
-        "employee_id": "E1"
+        "employee_id": "E1",
+        "net_pay_kobo": 30000000
       },
       "to_wallet": {
         "amount": 30000000,
@@ -177,7 +197,8 @@ Tell us `payrolla_api_url` for each environment and issue Taskiem a token. We st
     },
     {
       "employee": {
-        "employee_id": "E2"
+        "employee_id": "E2",
+        "net_pay_kobo": 35000000
       },
       "settle": {
         "body": {
@@ -211,7 +232,8 @@ Tell us `payrolla_api_url` for each environment and issue Taskiem a token. We st
     },
     {
       "employee": {
-        "employee_id": "E3"
+        "employee_id": "E3",
+        "net_pay_kobo": 25000000
       },
       "to_wallet": {
         "amount": 25000000,
@@ -224,7 +246,8 @@ Tell us `payrolla_api_url` for each environment and issue Taskiem a token. We st
     },
     {
       "employee": {
-        "employee_id": "E4"
+        "employee_id": "E4",
+        "net_pay_kobo": 45000000
       },
       "wallet_failed": {
         "employee_id": "E4",
@@ -236,7 +259,16 @@ Tell us `payrolla_api_url` for each environment and issue Taskiem a token. We st
       }
     }
   ],
-  "status": "completed"
+  "status": "completed",
+  "totals": {
+    "bank_fees_kobo": 5350,
+    "failed_at_bank": 0,
+    "paid_kobo": 90000000,
+    "paid_to_bank": 1,
+    "paid_to_wallet": 2,
+    "refused": 1,
+    "unconfirmed": 0
+  }
 }
 ```
 
@@ -248,7 +280,9 @@ If the approver rejects the payroll, or nobody approves it within 24 hours, noth
 
 ```json
 { "payroll_id": "PR-2026-09", "status": "rejected", "reason": "rejected_by_approver",
-  "paid": 0, "failed": 0, "results": [] }
+  "paid": 0, "failed": 0, "results": [],
+  "totals": { "paid_kobo": 0, "bank_fees_kobo": 0, "paid_to_wallet": 0, "paid_to_bank": 0,
+              "refused": 0, "failed_at_bank": 0, "unconfirmed": 0 } }
 ```
 
 `reason` is `rejected_by_approver` or `approval_timed_out`.
@@ -258,24 +292,75 @@ If the approver rejects the payroll, or nobody approves it within 24 hours, noth
 - A wallet-only payroll reports within minutes of approval.
 - A payroll with bank payouts reports once the last payout settles, normally within minutes, at most 72 hours.
 - Rarely, iswallet does not answer a payment request clearly, and Taskiem cannot tell whether that payment went through. Taskiem then holds the payroll for an operator to check iswallet's ledger, and the report waits until they have. This protects against paying anyone twice.
+- Reversal notices can come at any time in the 35 days after Taskiem received the payroll, always after the report.
 
-### After the report
+### Reversal notices
 
-A bank payout iswallet confirmed can, rarely, be **reversed** days later by the receiving bank. Taskiem alerts its operators when that happens, and they will tell you. An automatic reversal notice to Payrolla is not built yet; tell us if you need it.
+A bank payout iswallet confirmed can, rarely, be **reversed** days later by the receiving bank (a NIP return or a recall). The money comes back to the company wallet, and the employee who was reported as paid has not been paid. For each such reversal Taskiem calls:
+
+```
+POST {payrolla_api_url}/payrolls/{payroll_id}/reversal-notice
+Authorization: Bearer <token you issue to Taskiem>
+Idempotency-Key: tsk_…
+Content-Type: application/json
+```
+
+The token, the `Idempotency-Key` rules and the response rules are those of the report: store the notice by its key and answer a repeat with the same `2xx`. Each notice has its own key, different from the report's. Taskiem retries `429`, `5xx`, timeouts and network errors up to 10 times over about four hours; any other `4xx` stops the retries and is shown to Taskiem's operators.
+
+```json
+{
+  "payroll_id": "PR-2026-09",
+  "employee_id": "E2",
+  "outflow_id": "out_2",
+  "amount_kobo": 35000000,
+  "fee_kobo": 5350,
+  "reversed_at": "2026-10-09T08:30:00Z",
+  "event_id": "evt_out_2_wallet.outflow.reversed",
+  "iswallet": {
+    "amount": 35000000,
+    "currency": "NGN",
+    "fee": 5350,
+    "idempotency_key": "tsk_dptbusyh5cmrw2o3x4jyp2wrcjsp3cct",
+    "operation_id": "out_2",
+    "outflow_id": "out_2",
+    "provider_reference": "tsk_dptbusyh5cmrw2o3x4jyp2wrcjsp3cct",
+    "reversed_at": "2026-10-09T08:30:00Z",
+    "total_reversed": 35005350,
+    "wallet_id": "w_company"
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `payroll_id`, `employee_id` | The payroll and employee of the reversed payout, as in the report |
+| `outflow_id` | iswallet's payout reference, the report's `to_bank.outflow_id` |
+| `amount_kobo`, `fee_kobo` | The salary and the bank fee, in kobo, from iswallet's event (from the report when iswallet leaves them out) |
+| `reversed_at` | When iswallet says the payout was reversed |
+| `event_id` | iswallet's event id |
+| `iswallet` | iswallet's event data as it was sent, including `total_reversed` |
+
+**What to do.** Mark the employee unpaid for that payroll. To pay them, send a new payroll containing only them under a new `payroll_id`, after checking their bank details: a reversal often means the account is closed or wrong.
+
+**How long Taskiem watches.** From the report until 35 days after Taskiem received the payroll: every confirmed payout is watched for at least 30 days after iswallet confirmed it. A reversal after that is not sent to Payrolla. The period can be changed for a company (1 to 60 days, counted from when the payroll reached Taskiem) with the `payrolla_reversal_watch_days` variable; tell us if you need a longer one.
+
+A reversal that is reported before the report is sent (iswallet does not promise to deliver events in order) shows in the report itself: that entry's `settle.event` is `wallet.outflow.reversed` and it counts as failed. No notice follows for it.
 
 ## 3. Setting up
 
-**Taskiem gives Payrolla:**
+Each Payrolla customer company is its own Taskiem tenant (a sub-tenant of Payrolla's), so every value below is **per company**.
 
-- the webhook URL for `dev` and `prod`;
-- a signing secret for each.
+**Taskiem gives Payrolla, per company:**
 
-**Payrolla gives Taskiem:**
+- the tenant id and the webhook URL for `dev` and `prod`;
+- a signing secret for each environment.
 
-- the report base URL (`payrolla_api_url`) for each environment;
-- a bearer token for Taskiem to call it;
-- the company `funding_wallet_id` in each environment;
-- the names of the people who will approve payrolls in Taskiem (they get the `payroll_approver` role).
+**Per company, in that company's Taskiem tenant:**
+
+- the report base URL (`payrolla_api_url`) for each environment, which Payrolla tells us;
+- the bearer token Taskiem uses to call Payrolla for that company: Payrolla issues it to the company's account holder, who enters it as `payrolla_api_token` on Taskiem's **Secrets** page, so nobody else sees it;
+- the company's own funding wallet (`funding_wallet_id`, sent in each payroll);
+- the approvers: the company's own people who release payrolls in Taskiem (they get the `payroll_approver` role). Nobody at Payrolla or Taskiem approves a company's payroll.
 
 **From iswallet:** Payrolla's iswallet client, with a sandbox provisioned with a funded company wallet and test employee wallets. Employees paid by wallet transfer must have wallets under the same Payrolla client, in NGN.
 
@@ -287,7 +372,8 @@ Use `env=dev`. In iswallet's sandbox, the bank code decides a payout's fate: **`
 
 | Test | Send | Expect |
 | --- | --- | --- |
-| Happy path | 2 employees with wallets, 1 with bank code `000`; approve in Taskiem | Report `completed`, `paid: 3`, `failed: 0` |
+| Happy path | 2 employees with wallets, 1 with bank code `000`; approve in Taskiem | Report `completed`, `paid: 3`, `failed: 0`; `totals.paid_kobo` is the three salaries, `totals.bank_fees_kobo` the one payout's fee |
+| Reversal | After the happy path's report, reverse the bank payout with iswallet's sandbox control (`POST /v1/sandbox/simulate/outflow` with `outcome: "reversed"`; Taskiem can do it for you) | One reversal notice for that employee; nobody is paid again |
 | Bank failure | 1 employee with bank code `999` | Report entry with `settle.event: "wallet.outflow.failed"`, `failed: 1` |
 | Refused payment | 1 employee whose `wallet_id` belongs to another iswallet client | `wallet_failed` entry; the others are paid |
 | Duplicate | Send the same payroll twice | Second `202` has `"duplicate": true`; one report; everyone paid once |

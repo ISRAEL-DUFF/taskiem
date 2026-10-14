@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -42,7 +43,7 @@ func New() (*Engine, error) { return NewWithRoots(Roots...) }
 // NewWithRoots returns an engine whose expressions may reference only the
 // given variables (connector manifests evaluate over "body" and "headers").
 func NewWithRoots(roots ...string) (*Engine, error) {
-	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes()}
+	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(), sumFunction}
 	for _, r := range roots {
 		opts = append(opts, cel.Variable(r, cel.DynType))
 	}
@@ -58,7 +59,7 @@ func NewWithRoots(roots ...string) (*Engine, error) {
 // a form field (Slack's interaction payload). Workflow expressions do not
 // get it, so the SDK and codegen need not mirror it.
 func NewTriggerEngine(roots ...string) (*Engine, error) {
-	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(),
+	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(), sumFunction,
 		cel.Function("parseJSON", cel.Overload("parseJSON_string", []*cel.Type{cel.StringType}, cel.DynType,
 			cel.UnaryBinding(func(v ref.Val) ref.Val {
 				s, ok := v.(types.String)
@@ -80,6 +81,41 @@ func NewTriggerEngine(roots ...string) (*Engine, error) {
 	}
 	return &Engine{env: env, costLimit: DefaultCostLimit, cache: lru.New[string, cel.Program](programCacheSize, 0)}, nil
 }
+
+// sumFunction is sum(list): the total of a list of numbers, an int when
+// every element is an int and a double otherwise; 0 for an empty list. CEL
+// has no fold, and workflows need totals (a payroll's amounts and fees).
+// Integer overflow is an error, never a wrapped total.
+var sumFunction = cel.Function("sum", cel.Overload("sum_list", []*cel.Type{cel.ListType(cel.DynType)}, cel.DynType,
+	cel.UnaryBinding(func(v ref.Val) ref.Val {
+		l, ok := v.(traits.Lister)
+		if !ok {
+			return types.NewErr("sum: not a list")
+		}
+		var total int64
+		var dtotal float64
+		isDouble := false
+		for it := l.Iterator(); it.HasNext() == types.True; {
+			switch x := it.Next().(type) {
+			case types.Int:
+				n := int64(x)
+				if (n > 0 && total > math.MaxInt64-n) || (n < 0 && total < math.MinInt64-n) {
+					return types.NewErr("sum: integer overflow")
+				}
+				total += n
+				dtotal += float64(n)
+			case types.Double:
+				isDouble = true
+				dtotal += float64(x)
+			default:
+				return types.NewErr("sum: %s is not a number", x.Type().TypeName())
+			}
+		}
+		if isDouble {
+			return types.Double(dtotal)
+		}
+		return types.Int(total)
+	})))
 
 // MustNewTriggerEngine is NewTriggerEngine for package-level engines.
 func MustNewTriggerEngine(roots ...string) *Engine {

@@ -65,11 +65,11 @@ iswallet has no lookup by our key yet (§0.1), and its replay cache lasts 24 hou
 - **`IDEMPOTENCY_KEY_REUSED`** parks the step too: the key was used before, so the payment may have happened.
 - A write whose retries run out after any unknown outcome **parks rather than fails**, because "failed" would invite someone to pay again (engine-wide since this integration).
 - `RATE_LIMITED`, `CUSTODY_UNAVAILABLE`, `SUBACCOUNT_SYNCING`, `LIQUIDITY_EXHAUSTED` and 503 are retried; limits, insufficient funds, `OUTFLOW_REJECTED` and other 4xx fail the step with iswallet's code and request id.
-- A payout iswallet marks `unresolved` sends no event; the waiting step times out (72 hours in the Payrolla flow) and the run fails for an operator. `reversed` can arrive days after `confirmed`; the ops alert workflow listens for it.
+- A payout iswallet marks `unresolved` sends no event; the waiting step times out (72 hours in the Payrolla flow) and the run fails for an operator. `reversed` can arrive days after `confirmed`; the ops alert workflow listens for it, and the Payrolla flow keeps watching each confirmed payout's `outflow_id` after its report and sends Payrolla a reversal notice ([guide](payrolla.md#reversal-notices)).
 
 ## Workflows using it
 
-- `flows/dogfood/payrolla-salary-disbursement.wd.json`: transfers and payouts, waiting on `outflow_event`.
+- `flows/dogfood/payrolla-salary-disbursement.wd.json`: transfers and payouts, waiting on `outflow_event` for confirmation and, after the report, for reversals.
 - `flows/dogfood/ops-payout-failure-alert.wd.json`: `outflow_event` (failed, reversed).
 - `flows/dogfood/ispend-credit-exceptions.wd.json`: `credit_event` (rejected, reversed).
 

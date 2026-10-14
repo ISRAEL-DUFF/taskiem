@@ -97,6 +97,7 @@ func (f *fakeIswallet) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				rec[k] = v
 			}
 			rec["idempotency_key"] = key
+			rec["narration"], rec["metadata"] = in["narration"], in["metadata"]
 			f.outflows[id] = rec
 			status = 202
 		}
@@ -134,8 +135,14 @@ func (f *fakeIswallet) event(o map[string]any, eventType, secret string) (body [
 	for _, k := range []string{"outflow_id", "operation_id", "wallet_id", "amount", "fee", "currency", "idempotency_key", "provider_reference"} {
 		data[k] = o[k]
 	}
-	if eventType == "wallet.outflow.failed" {
+	switch eventType {
+	case "wallet.outflow.failed":
 		data["failure_reason"] = "beneficiary account closed"
+	case "wallet.outflow.reversed":
+		amount, _ := o["amount"].(int64)
+		fee, _ := o["fee"].(int)
+		data["total_reversed"] = amount + int64(fee)
+		data["reversed_at"] = "2026-10-09T08:30:00Z"
 	}
 	body, _ = json.Marshal(map[string]any{"id": "evt_" + fmt.Sprint(o["outflow_id"]) + "_" + eventType, "event_type": eventType,
 		"schema_version": "v1", "occurred_at": time.Now().UTC().Format(time.RFC3339), "wallet_id": o["wallet_id"], "data": data})

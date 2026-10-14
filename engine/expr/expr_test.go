@@ -20,18 +20,22 @@ func act() map[string]any {
 
 func TestEval(t *testing.T) {
 	cases := map[string]any{
-		"=trigger.body.amount_kobo":                                  int64(5000000),
-		"=trigger.body.amount_kobo >= 50000000":                      false,
-		"=steps.verify.output.amount == trigger.body.amount_kobo":    true,
-		"=size(trigger.body.items)":                                  int64(3),
-		"=env.api + '/topups/' + run.id":                             "https://x/topups/r1",
-		"=trigger.body.items.map(i, i * 2)":                          []any{int64(2), int64(4), int64(6)},
-		"={'a': 1, 'b': [true, null]}":                               map[string]any{"a": int64(1), "b": []any{true, nil}},
-		"=trigger.body.rate * 2.0":                                   3.0,
-		"=has(trigger.body.missing) ? 'yes' : 'no'":                  "no",
-		"=steps.verify.output.status in ['success', 'reversed']":     true,
-		"='Salary ' + 'Oct'.upperAscii()":                            "Salary OCT",
-		"=string(double(trigger.body.amount_kobo) / 100.0) + ' NGN'": "50000 NGN",
+		"=trigger.body.amount_kobo":                                     int64(5000000),
+		"=trigger.body.amount_kobo >= 50000000":                         false,
+		"=steps.verify.output.amount == trigger.body.amount_kobo":       true,
+		"=size(trigger.body.items)":                                     int64(3),
+		"=env.api + '/topups/' + run.id":                                "https://x/topups/r1",
+		"=trigger.body.items.map(i, i * 2)":                             []any{int64(2), int64(4), int64(6)},
+		"={'a': 1, 'b': [true, null]}":                                  map[string]any{"a": int64(1), "b": []any{true, nil}},
+		"=trigger.body.rate * 2.0":                                      3.0,
+		"=has(trigger.body.missing) ? 'yes' : 'no'":                     "no",
+		"=steps.verify.output.status in ['success', 'reversed']":        true,
+		"='Salary ' + 'Oct'.upperAscii()":                               "Salary OCT",
+		"=string(double(trigger.body.amount_kobo) / 100.0) + ' NGN'":    "50000 NGN",
+		"=sum(trigger.body.items)":                                      int64(6),
+		"=sum([])":                                                      int64(0),
+		"=sum(trigger.body.items.map(i, i * trigger.body.amount_kobo))": int64(30000000),
+		"=sum([1, 2.5])":                                                3.5,
 	}
 	for src, want := range cases {
 		got, err := e.Eval(src, act())
@@ -51,6 +55,8 @@ func TestEvalErrors(t *testing.T) {
 		"=unknown_root.x",             // undeclared
 		"=trigger.body.amount_kobo +", // syntax
 		"=[1,2,3].map(x, [1,2,3].map(y, [1,2,3].map(z, x*y*z)))[0][0][0] / 0", // division by zero
+		"=sum(['1', 2])",                 // not a number
+		"=sum([9223372036854775807, 1])", // overflow
 	} {
 		if _, err := e.Eval(src, act()); err == nil {
 			t.Errorf("%s: expected error", src)
