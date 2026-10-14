@@ -831,6 +831,99 @@ paths:
                 $ref: '#/components/schemas/AuditVerification'
         default:
           $ref: '#/components/responses/Error'
+  /v1/auth/invitation/accept:
+    post:
+      operationId: acceptInvitationLink
+      tags:
+      - Authentication
+      summary: Accept an invitation with a new passkey
+      description: For someone with no account yet, from the link a partner's invitation emailed them. Registers
+        the passkey (for the challenge from `POST /v1/auth/invitation/options`), makes them a member of the inviting
+        organisation with the roles offered, and signs them in, all at once. The link then stops working.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationLinkAccept'
+        required: true
+      responses:
+        '200':
+          description: A member now, and signed in (unless the organisation requires single sign-on, `sign_in`
+            `sso_required`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationLinkAccepted'
+        '400':
+          description: The link is not valid (unknown, used, expired, withdrawn, or the account was set up since),
+            or the passkey response is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: The passkey response is not valid for this link's challenge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many attempts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          description: Passkeys are not configured on this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/invitation/options:
+    post:
+      operationId: invitationLinkOptions
+      tags:
+      - Authentication
+      summary: Start accepting an invitation link
+      description: Shows what an emailed invitation link invites to and returns WebAuthn creation options for the
+        passkey that will accept it. Wrong tokens count toward locking the link.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationLinkToken'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationLinkOptions'
+        '400':
+          description: The link is not valid (unknown, used, expired, withdrawn, or the account was set up since).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many attempts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          description: Passkeys are not configured on this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/auth/login:
     post:
       operationId: login
@@ -5446,6 +5539,171 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/partner/sub-tenants/{sub}/installs:
+    get:
+      operationId: listPackageInstalls
+      tags:
+      - Partner
+      summary: List the workflow packages installed in a sub-tenant
+      description: Each installed package's workflow in the sub-tenant, the package version last installed, the
+        versions there, and the webhook URLs it listens on now. Never secrets.
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.read
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: sub
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Sub-tenant id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageInstallList'
+        '404':
+          description: No such sub-tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/partner/sub-tenants/{sub}/invitations:
+    get:
+      operationId: listSubTenantInvitations
+      tags:
+      - Partner
+      summary: List the partner's pending invitations in a sub-tenant
+      description: Only the invitations the partner made; those the sub-tenant's own admins made are theirs.
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.read
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: sub
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Sub-tenant id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerInvitationList'
+        '404':
+          description: No such sub-tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: inviteToSubTenant
+      tags:
+      - Partner
+      summary: Invite a person into a sub-tenant
+      description: The person accepts with their own credentials and becomes a member of this sub-tenant only.
+        Someone with no account gets a single-use link by email to create a passkey and accept; the link and any
+        credential go only to them. The answer is the same whether or not the email has an account. `owner` only
+        for a sub-tenant's first owner.
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.manage
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: sub
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Sub-tenant id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerInvitationRequest'
+        required: true
+      responses:
+        '201':
+          description: Invited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerInvitationCreated'
+        '400':
+          description: No email, no roles, or a role that is neither built in nor one of the sub-tenant's.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such sub-tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: '`owner` for a sub-tenant that has an owner (or one invited), or a person its identity provider
+            invited.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/partner/sub-tenants/{sub}/invitations/{user}:
+    delete:
+      operationId: cancelSubTenantInvitation
+      tags:
+      - Partner
+      summary: Withdraw an invitation in a sub-tenant
+      description: One of the partner's own pending invitations; its emailed link stops working.
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.manage
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: sub
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Sub-tenant id
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The invited person's user id
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '404':
+          description: No such sub-tenant, or no pending invitation of the partner's for that person.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/partner/sub-tenants/{sub}/limits:
     put:
       operationId: putSubTenantLimits
@@ -5694,6 +5952,113 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/partner/sub-tenants/{sub}/roles:
+    get:
+      operationId: listSubTenantRoles
+      tags:
+      - Partner
+      summary: List a sub-tenant's roles
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.read
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: sub
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Sub-tenant id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleList'
+        '404':
+          description: No such sub-tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/partner/sub-tenants/{sub}/roles/{name}:
+    put:
+      operationId: putSubTenantRole
+      tags:
+      - Partner
+      summary: Create or change a custom role in a sub-tenant
+      description: Creates a role, or changes one the partner created. Roles the sub-tenant's own people created,
+        and names its members already hold, are theirs (409). Any permission but the partner API's. Needs the
+        custom roles plan feature (402 without).
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.manage
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: sub
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Sub-tenant id
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Role name
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+        required: true
+      responses:
+        '200':
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          description: A bad name, a built-in role, no permissions, or one a sub-tenant's role cannot carry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '402':
+          description: The plan does not include custom roles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such sub-tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The sub-tenant's own people created the role, or its members hold the name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/partner/sub-tenants/{sub}/runs:
     get:
       operationId: listSubTenantRuns
@@ -5859,6 +6224,82 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+    post:
+      operationId: installPackage
+      tags:
+      - Partner
+      summary: Install a workflow package into a sub-tenant
+      description: Installs a version of one of the partner's shared workflows as the sub-tenant's own workflow,
+        with values for the variables it reads and the custom roles it needs, and publishes it to the given ungated
+        environments (or opens a publish request under four-eyes). Where an earlier version of the package is installed,
+        adds the new one as a draft instead; production does not change until the sub-tenant's people publish it.
+        Answers the webhook URLs and which secrets the sub-tenant's people still have to set, never a secret.
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.manage
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: sub
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Sub-tenant id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PackageInstallRequest'
+        required: true
+      responses:
+        '200':
+          description: An earlier version was installed; this one is a new draft (or `unchanged`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageInstallResult'
+        '201':
+          description: Installed (published, or waiting for approval under four-eyes).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageInstallResult'
+        '400':
+          description: No such shared workflow or version, a variable the workflow does not read, an unknown or
+            gated environment, or a bad role.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such sub-tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The sub-tenant's copy is managed in Git, or another install of the package is under way.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: The definition is not valid in the sub-tenant (for example a connector it cannot use); nothing
+            was installed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '429':
+          description: The sub-tenant's max_workflows.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/partner/webhook-deliveries:
     get:
       operationId: listWebhookDeliveries
@@ -5942,6 +6383,95 @@ paths:
                 $ref: '#/components/schemas/DeliveryRetried'
         '404':
           description: No such delivery, or it was delivered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/partner/workflows:
+    get:
+      operationId: listSharedWorkflows
+      tags:
+      - Partner
+      summary: List workflows shared as packages
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.read
+      x-taskiem-plan-feature:
+      - embedded
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedWorkflowList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/partner/workflows/{wf}/share:
+    put:
+      operationId: shareWorkflowApprove
+      tags:
+      - Partner
+      summary: Share a workflow as a package
+      description: Any version of one of the partner's own workflows can then be installed into its sub-tenants.
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.manage
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The partner's workflow id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowShare'
+        '404':
+          description: No such workflow.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: shareWorkflowReject
+      tags:
+      - Partner
+      summary: Stop sharing a workflow
+      description: Stops new installs. Installed copies belong to the sub-tenants and stay.
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.manage
+      x-taskiem-plan-feature:
+      - embedded
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The partner's workflow id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowShare'
+        '404':
+          description: The workflow is not shared.
           content:
             application/json:
               schema:
@@ -8226,6 +8756,62 @@ paths:
                 $ref: '#/components/schemas/RunStarted'
         default:
           $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/signing-secret:
+    post:
+      operationId: newSigningSecret
+      tags:
+      - Workflows
+      summary: Make a new webhook signing secret
+      description: Generates a random secret for the workflow's webhook in one environment, stores it under the
+        name the trigger checks (`webhook_<WD id>`) and shows it once. It replaces the previous one at once. The
+        Endpoints page's "New signing secret".
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SigningSecretRequest'
+        required: true
+      responses:
+        '201':
+          description: The new secret, shown this once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningSecret'
+        '400':
+          description: No environment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: The key is limited to another environment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: No webhook with a secret is deployed in that environment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/triggers:
     get:
       operationId: listTriggers
@@ -9623,63 +10209,65 @@ components:
       - publicKey
       properties:
         publicKey:
+          $ref: '#/components/schemas/PasskeyCreationOptions'
+      additionalProperties: false
+    PasskeyCreationOptions:
+      type: object
+      description: Pass to `navigator.credentials.create()` (decode `challenge` and `user.id` from base64url).
+      required:
+      - challenge
+      - rp
+      - user
+      - pubKeyCredParams
+      - authenticatorSelection
+      - attestation
+      - excludeCredentials
+      - timeout
+      properties:
+        challenge:
+          type: string
+        rp:
           type: object
-          description: Pass to `navigator.credentials.create()` (decode `challenge` and `user.id` from base64url).
-          required:
-          - challenge
-          - rp
-          - user
-          - pubKeyCredParams
-          - authenticatorSelection
-          - attestation
-          - excludeCredentials
-          - timeout
           properties:
-            challenge:
+            id:
               type: string
-            rp:
-              type: object
-              properties:
-                id:
-                  type: string
-                name:
-                  type: string
-            user:
-              type: object
-              properties:
-                id:
-                  type: string
-                name:
-                  type: string
-                displayName:
-                  type: string
-            pubKeyCredParams:
-              type: array
-              items:
-                type: object
-                properties:
-                  type:
-                    type: string
-                  alg:
-                    type: integer
-            authenticatorSelection:
-              type: object
-              properties:
-                residentKey:
-                  type: string
-                userVerification:
-                  type: string
-            attestation:
+            name:
               type: string
-              enum:
-              - none
-            excludeCredentials:
-              type: array
-              items:
-                $ref: '#/components/schemas/PasskeyDescriptor'
-            timeout:
-              type: integer
-          additionalProperties: false
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            displayName:
+              type: string
+        pubKeyCredParams:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              alg:
+                type: integer
+        authenticatorSelection:
+          type: object
+          properties:
+            residentKey:
+              type: string
+            userVerification:
+              type: string
+        attestation:
+          type: string
+          enum:
+          - none
+        excludeCredentials:
+          type: array
+          items:
+            $ref: '#/components/schemas/PasskeyDescriptor'
+        timeout:
+          type: integer
       additionalProperties: false
     PasskeyRegisterRequest:
       type: object
@@ -14210,6 +14798,7 @@ components:
                 enum:
                 - manual
                 - scim
+                - partner
               invited_by:
                 type: string
               invited_at:
@@ -16149,4 +16738,450 @@ components:
           type: string
         status:
           $ref: '#/components/schemas/RunStatusValue'
+      additionalProperties: false
+    InvitationLinkToken:
+      type: object
+      required:
+      - token
+      properties:
+        token:
+          type: string
+          description: The `token` from the link's fragment (`/accept-invitation#token=…`).
+      additionalProperties: false
+    InvitationLinkOptions:
+      type: object
+      required:
+      - tenant_id
+      - tenant
+      - roles
+      - email
+      - publicKey
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        tenant:
+          type: string
+          description: The inviting organisation's name.
+        roles:
+          type: array
+          items:
+            type: string
+        email:
+          type: string
+        publicKey:
+          $ref: '#/components/schemas/PasskeyCreationOptions'
+      additionalProperties: false
+    InvitationLinkAccept:
+      type: object
+      required:
+      - token
+      - credential
+      properties:
+        token:
+          type: string
+        credential:
+          $ref: '#/components/schemas/PasskeyCredential'
+        name:
+          type: string
+          description: The person's name, as others in the organisation see it.
+        passkey_name:
+          type: string
+          description: A label for the passkey; `Passkey` when empty.
+        bearer:
+          type: boolean
+          description: Answer with the session token instead of setting the cookie.
+      additionalProperties: false
+    InvitationLinkAccepted:
+      type: object
+      required:
+      - tenant_id
+      - user_id
+      - roles
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+        tenants:
+          type: array
+          items:
+            type: string
+            format: uuid
+        token:
+          type: string
+          description: 'The session token, only with `"bearer": true`; otherwise the session is the cookie.'
+        sign_in:
+          type: string
+          enum:
+          - sso_required
+          description: The organisation requires single sign-on; the person is a member and signs in that way.
+      additionalProperties: false
+    SigningSecretRequest:
+      type: object
+      required:
+      - environment
+      properties:
+        environment:
+          type: string
+      additionalProperties: false
+    SigningSecret:
+      type: object
+      required:
+      - environment
+      - secret_name
+      - auth
+      - secret
+      properties:
+        environment:
+          type: string
+        secret_name:
+          type: string
+          description: The secret's name in the vault, `webhook_<WD id>`.
+        auth:
+          type: string
+          enum:
+          - hmac
+          - bearer
+        secret:
+          type: string
+          description: The new secret. Shown this once.
+      additionalProperties: false
+    PartnerInvitationRequest:
+      type: object
+      required:
+      - email
+      - roles
+      properties:
+        email:
+          type: string
+        name:
+          type: string
+          description: The person's name, used only if they have no account yet.
+        roles:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+          description: Built-in roles and the sub-tenant's custom roles. `owner` only while the sub-tenant has no
+            owner and none is invited.
+      additionalProperties: false
+    PartnerInvitationCreated:
+      type: object
+      required:
+      - user_id
+      - email
+      - roles
+      - status
+      - delivery
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum:
+          - pending
+        delivery:
+          type: string
+          enum:
+          - email
+          - none
+          description: '`email`: an email goes to the person (a passkey link, or a note to sign in and accept). `none`:
+            this deployment cannot send email, so nothing was sent.'
+      additionalProperties: false
+    PartnerInvitationList:
+      type: object
+      required:
+      - invitations
+      properties:
+        invitations:
+          type: array
+          items:
+            type: object
+            required:
+            - user_id
+            - email
+            - roles
+            - invited_by
+            - invited_at
+            properties:
+              user_id:
+                type: string
+                format: uuid
+              email:
+                type: string
+              roles:
+                type: array
+                items:
+                  type: string
+              invited_by:
+                type: string
+              invited_at:
+                $ref: '#/components/schemas/Timestamp'
+            additionalProperties: false
+      additionalProperties: false
+    SharedWorkflowList:
+      type: object
+      required:
+      - workflows
+      properties:
+        workflows:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - name
+            - latest_version
+            - shared_by
+            - shared_at
+            properties:
+              id:
+                type: string
+                format: uuid
+                description: The package id (the partner's workflow id).
+              name:
+                type: string
+              latest_version:
+                type: integer
+              shared_by:
+                type: string
+              shared_at:
+                $ref: '#/components/schemas/Timestamp'
+            additionalProperties: false
+      additionalProperties: false
+    WorkflowShare:
+      type: object
+      required:
+      - id
+      - shared
+      properties:
+        id:
+          type: string
+          format: uuid
+        shared:
+          type: boolean
+      additionalProperties: false
+    PackageInstallRequest:
+      type: object
+      required:
+      - package
+      properties:
+        package:
+          type: string
+          format: uuid
+          description: A shared workflow's id.
+        version:
+          type: integer
+          minimum: 0
+          description: The partner's version to install; the latest when 0 or left out.
+        environments:
+          type: array
+          items:
+            type: string
+          description: Ungated environments to publish to on a first install; every ungated one when left out.
+        variables:
+          type: object
+          description: 'Values of the variables the workflow reads (`env.<name>`), per environment, e.g. `{"prod":
+            {"payrolla_api_url": "https://api.payrolla.com"}}`. Not secrets.'
+          additionalProperties:
+            type: object
+            additionalProperties: true
+        roles:
+          type: array
+          description: Custom roles the workflow needs. Missing ones are created; existing ones are kept as they
+            are.
+          items:
+            type: object
+            required:
+            - name
+            - permissions
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              permissions:
+                type: array
+                minItems: 1
+                items:
+                  type: string
+            additionalProperties: false
+      additionalProperties: false
+    PackageEndpoint:
+      type: object
+      required:
+      - environment
+      - type
+      - url
+      - auth
+      - deployed_version
+      properties:
+        environment:
+          type: string
+        type:
+          type: string
+          enum:
+          - webhook
+        url:
+          type: string
+          description: Relative to the Taskiem host, `/hooks/<sub-tenant>/<path>?env=<environment>`.
+        auth:
+          type: string
+          description: How senders authenticate (`hmac`, `bearer`, `none`).
+        secret_name:
+          type: string
+          description: The vault secret the webhook checks; the sub-tenant's people make it on the workflow's Endpoints
+            page. Never its value.
+        deployed_version:
+          type:
+          - integer
+          - 'null'
+          description: The version that environment runs; null until it is published there.
+      additionalProperties: false
+    PackageInstallResult:
+      type: object
+      required:
+      - workflow_id
+      - package
+      - package_version
+      - version
+      - state
+      - environments
+      - endpoints
+      - roles_created
+      - roles_kept
+      - variables_missing
+      - secrets
+      - problems
+      properties:
+        workflow_id:
+          type: string
+          format: uuid
+          description: The sub-tenant's own workflow.
+        package:
+          type: string
+          format: uuid
+        package_version:
+          type: integer
+        version:
+          type: integer
+          description: The version number in the sub-tenant.
+        state:
+          type: string
+          enum:
+          - published
+          - pending_approval
+          - draft
+          - unchanged
+        environments:
+          type: array
+          items:
+            type: string
+        endpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/PackageEndpoint'
+        roles_created:
+          type: array
+          items:
+            type: string
+        roles_kept:
+          type: array
+          items:
+            type: string
+        variables_missing:
+          type: array
+          description: Variables the workflow reads that have no value in an environment.
+          items:
+            type: object
+            required:
+            - environment
+            - name
+            properties:
+              environment:
+                type: string
+              name:
+                type: string
+            additionalProperties: false
+        secrets:
+          type: array
+          description: Secrets the workflow needs, and whether each is set (never its value). The sub-tenant's people
+            set them.
+          items:
+            type: object
+            required:
+            - environment
+            - name
+            - set
+            properties:
+              environment:
+                type: string
+              name:
+                type: string
+              set:
+                type: boolean
+            additionalProperties: false
+        problems:
+          $ref: '#/components/schemas/Problems'
+      additionalProperties: false
+    PackageInstallList:
+      type: object
+      required:
+      - installs
+      properties:
+        installs:
+          type: array
+          items:
+            type: object
+            required:
+            - workflow_id
+            - name
+            - package
+            - package_version
+            - latest_version
+            - active_version
+            - installed_at
+            - updated_at
+            - endpoints
+            properties:
+              workflow_id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              package:
+                type: string
+                format: uuid
+              package_version:
+                type: integer
+              latest_version:
+                type: integer
+              active_version:
+                type:
+                - integer
+                - 'null'
+              installed_at:
+                $ref: '#/components/schemas/Timestamp'
+              updated_at:
+                $ref: '#/components/schemas/Timestamp'
+              endpoints:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PackageEndpoint'
+            additionalProperties: false
       additionalProperties: false

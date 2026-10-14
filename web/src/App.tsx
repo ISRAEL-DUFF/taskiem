@@ -20,6 +20,7 @@ import { Icon } from "./icons";
 import { EmptyState, ErrorBox, Skeleton, useAction, useFocusTrap, useScrollableTables } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
+import { AcceptInvitation } from "./pages/AcceptInvitation";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
 import { Billing, BillingBanner } from "./pages/Billing";
@@ -90,6 +91,8 @@ function Shell() {
   // Password recovery works signed in or out.
   if (loc.pathname === "/forgot-password") return alone(<ForgotPassword />);
   if (loc.pathname === "/reset-password") return alone(<ResetPassword />);
+  // An emailed invitation link, for someone with no account yet.
+  if (loc.pathname === "/accept-invitation") return alone(<AcceptInvitation />);
   if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);

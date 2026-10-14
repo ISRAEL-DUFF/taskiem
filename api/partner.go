@@ -39,7 +39,7 @@ func init() {
 	allPermissions = append(allPermissions, PermPartnerRead, PermPartnerManage)
 	rolePermissions["owner"] = allPermissions
 	permissionInfo[PermPartnerRead] = "Partner API: see sub-tenants, their workflows, runs and usage, embed apps and webhook deliveries (audited in both tenants)"
-	permissionInfo[PermPartnerManage] = "Partner API: create and suspend sub-tenants, manage embed apps, mint and revoke end-user tokens"
+	permissionInfo[PermPartnerManage] = "Partner API: create and suspend sub-tenants, invite their people, install workflow packages, manage embed apps, mint and revoke end-user tokens"
 }
 
 // partnerRoutes mounts /v1/partner, inside the authenticated group.
@@ -53,6 +53,16 @@ func (s *Server) partnerRoutes(r chi.Router) {
 	r.With(manage).Post("/sub-tenants/{sub}/suspend", s.setSubTenantStatus("suspended"))
 	r.With(manage).Post("/sub-tenants/{sub}/resume", s.setSubTenantStatus("active"))
 	r.With(read).Get("/sub-tenants/{sub}/workflows", s.listSubTenantWorkflows)
+	r.With(manage).Post("/sub-tenants/{sub}/workflows", s.installPackage)
+	r.With(read).Get("/sub-tenants/{sub}/installs", s.listPackageInstalls)
+	r.With(read).Get("/sub-tenants/{sub}/invitations", s.listSubTenantInvitations)
+	r.With(manage).Post("/sub-tenants/{sub}/invitations", s.inviteToSubTenant)
+	r.With(manage).Delete("/sub-tenants/{sub}/invitations/{user}", s.cancelSubTenantInvitation)
+	r.With(read).Get("/sub-tenants/{sub}/roles", s.listSubTenantRoles)
+	r.With(manage).Put("/sub-tenants/{sub}/roles/{name}", s.putSubTenantRole)
+	r.With(read).Get("/workflows", s.listSharedWorkflows)
+	r.With(manage).Put("/workflows/{wf}/share", s.shareWorkflow(true))
+	r.With(manage).Delete("/workflows/{wf}/share", s.shareWorkflow(false))
 	r.With(read).Get("/sub-tenants/{sub}/runs", s.listSubTenantRuns)
 	r.With(read).Get("/sub-tenants/{sub}/usage", s.subTenantUsage)
 	r.With(read).Get("/sub-tenants/{sub}/publish-requests", s.listSubTenantPublishRequests)

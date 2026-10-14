@@ -40,7 +40,7 @@ interface PendingInvitation {
   email: string;
   name: string;
   roles: string[];
-  source: "manual" | "scim";
+  source: "manual" | "scim" | "partner";
   invited_by: string;
   invited_at: string;
 }
@@ -72,7 +72,7 @@ function PendingInvitations({ refresh }: { refresh: unknown }) {
               <td>{i.roles.join(", ")}</td>
               <td className="hint">
                 {fmtTime(i.invited_at)}
-                {i.source === "scim" ? " by SCIM" : ""}
+                {i.source === "scim" ? " by SCIM" : i.source === "partner" ? " by your platform partner" : ""}
               </td>
               <td style={{ textAlign: "right" }}>
                 <button

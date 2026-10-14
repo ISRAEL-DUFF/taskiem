@@ -543,47 +543,83 @@ function SettingsTab({ def, onChange, connectors }: { def: WorkflowDefinition; o
   );
 }
 
+interface SigningSecret {
+  environment: string;
+  secret_name: string;
+  auth: string;
+  secret: string;
+}
+
 function Endpoints({ workflow }: { workflow: string }) {
+  const { can } = useAuth();
   const { data, error } = useLoad(() => get<{ triggers: TriggerInfo[] }>(`/v1/workflows/${workflow}/triggers`), [workflow]);
+  const act = useAction();
+  const [made, setMade] = useState<SigningSecret | null>(null);
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
   if (data.triggers.length === 0) return <div className="empty card">The published version is started manually or through the API: POST /v1/workflows/{workflow}/runs.</div>;
+  const newSecret = (env: string) =>
+    confirm(`Make a new signing secret for ${env}? It replaces the current one at once: whoever sends to this webhook must switch to the new one.`) &&
+    void act.run(async () => setMade(await post<SigningSecret>(`/v1/workflows/${workflow}/signing-secret`, { environment: env })));
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Environment</th>
-          <th>Type</th>
-          <th>Endpoint or schedule</th>
-          <th>Version</th>
-        </tr>
-      </thead>
-      <tbody>
-        {data.triggers.map((t) => (
-          <tr key={t.id}>
-            <td>{t.environment}</td>
-            <td>{t.type.replaceAll("_", " ")}</td>
-            <td>
-              {t.remote && (
-                <div>
-                  <Badge value={t.remote.health} /> Registered with the provider by Taskiem
-                  {(t.remote.status_reason || t.remote.last_error) && <div className="hint">{t.remote.status_reason ?? t.remote.last_error}</div>}
-                  {t.remote.health !== "ok" && t.remote.health !== "pending" && <div className="hint">Publish again to repair it.</div>}
-                </div>
-              )}
-              {t.url && !t.remote && <code>{window.location.origin + t.url}</code>}
-              {t.secret_name && t.auth !== "none" && <div className="hint">Signed with the secret {t.secret_name} ({t.auth})</div>}
-              {t.cron && (
-                <>
-                  <code>{t.cron}</code> ({t.timezone}) · next {fmtTime(t.next_fire_at)}
-                </>
-              )}
-            </td>
-            <td>v{t.version}</td>
+    <>
+      {made && (
+        <div className="card" role="status">
+          <p>
+            The new {made.auth === "bearer" ? "token" : "signing secret"} for {made.environment}. Copy it now and give it to the sender: it is not shown again.
+          </p>
+          <pre className="secret-once">{made.secret}</pre>
+          <p>
+            <button onClick={() => void navigator.clipboard?.writeText(made.secret)}>Copy</button> <button onClick={() => setMade(null)}>Done</button>
+          </p>
+        </div>
+      )}
+      <ErrorBox error={act.error} />
+      <table>
+        <thead>
+          <tr>
+            <th>Environment</th>
+            <th>Type</th>
+            <th>Endpoint or schedule</th>
+            <th>Version</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {data.triggers.map((t) => (
+            <tr key={t.id}>
+              <td>{t.environment}</td>
+              <td>{t.type.replaceAll("_", " ")}</td>
+              <td>
+                {t.remote && (
+                  <div>
+                    <Badge value={t.remote.health} /> Registered with the provider by Taskiem
+                    {(t.remote.status_reason || t.remote.last_error) && <div className="hint">{t.remote.status_reason ?? t.remote.last_error}</div>}
+                    {t.remote.health !== "ok" && t.remote.health !== "pending" && <div className="hint">Publish again to repair it.</div>}
+                  </div>
+                )}
+                {t.url && !t.remote && <code>{window.location.origin + t.url}</code>}
+                {t.secret_name && t.auth !== "none" && (
+                  <div className="hint">
+                    Signed with the secret {t.secret_name} ({t.auth}){" "}
+                    {t.type === "webhook" && can("secret.manage") && (
+                      <button disabled={act.busy} onClick={() => newSecret(t.environment)}>
+                        New signing secret
+                      </button>
+                    )}
+                  </div>
+                )}
+                {t.cron && (
+                  <>
+                    <code>{t.cron}</code> ({t.timezone}) · next {fmtTime(t.next_fire_at)}
+                  </>
+                )}
+              </td>
+              <td>v{t.version}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }
 
