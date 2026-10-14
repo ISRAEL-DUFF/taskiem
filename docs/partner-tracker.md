@@ -1,0 +1,90 @@
+# Partner tracker: what is still needed
+
+Last updated 14 October 2026. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
+
+The request pages sent to partners:
+
+| Partner | Page | Last sent |
+| --- | --- | --- |
+| Payrolla | [Payrolla integration: our answers, what's left, and the guide](https://claude.ai/artifact/QqY5U7DNXwAYVXq2hWZGDt) | 14 October 2026, answering Payrolla's reply |
+| iswallet (and iSpend) | [What Taskiem needs from iswallet to go live](https://claude.ai/artifact/QkzDpSN1V75TozwWs73Tpo) | 9 October 2026, plus section 3a on 14 October |
+| PGDock | [What Taskiem needs from PGDock](https://claude.ai/artifact/KjzURqhiLmdUsBttbXk7to) | 9 October 2026 |
+
+Keys, tokens and signing secrets never travel in email, chat, tickets or these pages: the holder enters them on Taskiem's Connections or Secrets page, or we agree a one-time password-manager share.
+
+## Payrolla
+
+Payrolla's side is built and tested against a stub of our webhook. Its reply of October 2026 agreed one Taskiem sub-tenant per customer company; we built onboarding by API, the shared-client guard, reversal notices and report totals ([guide](integrations/payrolla.md), decisions 0030 and 0031).
+
+| Id | Needed from Payrolla | When | Status |
+| --- | --- | --- | --- |
+| N1 | Pilot company's payroll: headcount, total net value, how many paid to bank accounts, run dates; and Payrolla's largest payroll across customers. iswallet needs these for the wallet tier and rate limit | Now | [ ] Blank in Payrolla's reply (R5) |
+| N2 | Peter Chuks's full email (the reply says "eazidefi"); approvers so far: Peter Chuks, John Chuks (eazidefi+approver@gmail.com) | Now | [ ] |
+| N3 | Each onboarded company's iswallet wallets it pays from (at least its funding wallet), for its connection's `wallet_ids`; for sandbox, the test company's wallets | Now | [ ] |
+| N4 | Who at Payrolla receives Taskiem's partner API key | Now | [ ] |
+| N5 | Build `POST {payrolla_api_url}/payrolls/{payroll_id}/reversal-notice` to the payload in the guide | Now | [ ] |
+| N6 | Pilot company's production `funding_wallet_id` (R6), its name (Chuks Electronics?), start date, on-call contact for payroll days (T2) | Before production | [ ] |
+| N7 | Confirm 35 days of watching for reversals is enough (settable per company, 1–60) | Confirm | [ ] |
+| E1 | Embedding the builder: after the payroll pilot | Later | Deferred by Payrolla |
+
+Known from Payrolla's reply: report base URL `https://synledger.name.ng/payroller/api/v1/integrations/taskiem` (sandbox) and `https://ispend.name.ng/payroller/api/v1/integrations/taskiem` (production), one bearer token per company issued in Payrolla and entered by the company's account holder; re-sends use `{run_id}-r2`, `-r3`; payrolls are sent once locked.
+
+## iswallet (and iSpend)
+
+The connector is built on iswallet's answers of 5 October ([iswallet](integrations/iswallet.md), [answers](integrations/iswallet-answers-2026-10-05.md)).
+
+| Id | Needed from iswallet | When | Status |
+| --- | --- | --- | --- |
+| W1 | Sandbox clients `payrolla` and `ispend` provisioned (Payrolla: ₦10m funded company wallet and 10 employee wallets; iSpend: a funded wallet with a virtual account) | Now | [ ] |
+| W2 | Sandbox client keys, delivered securely | Now | [ ] |
+| W3 | Sandbox webhook subscriptions for our URLs (one per product), signing secrets delivered securely | Now, once our staging is up | [ ] |
+| W4 | How to force each sandbox outcome: payout confirmed, failed, reversed after confirmation, unresolved; credit rejected and reversed | Now | [ ] |
+| H1 | Lookup by our idempotency key | Before production | [ ] |
+| H2 | Typed duplicate error instead of the 500, and the replay window | Before production | [ ] |
+| H3 | `Retry-After` on 429; higher rate limit for `payrolla` (needs N1) | Before production | [ ] |
+| H6 | Error catalogue per endpoint, with retryability | Before production | [ ] |
+| H8 | `POST /v1/outflows` in the OpenAPI spec; multispend path fix | Before production | [ ] |
+| H4, H5, H7, H9 | Bulk payouts, structured transfer metadata, parked-credit signal, non-NGN limits | Later | [ ] |
+| P1 | KYC tier raised for the pilot company's wallet, limits confirmed by compliance (needs N1) | Before production | [ ] |
+| P2, P3 | Production client keys; production webhook subscriptions and secrets | Before production | [ ] |
+| P4 | Allow-list our egress IPs, if they allow-list callers | Before production | [ ] Waiting on our IPs |
+| P5 | On-call contact for payout incidents | Before production | [ ] |
+| M1, M2 | Wallet-scoped keys; per-wallet webhook subscriptions (nice to have; our guard does not depend on them) | Later | [ ] |
+| M3 | Confirm every outflow, credit and transfer event carries the `wallet_id` it concerns, and which side for transfers | Before production | [ ] |
+| M4 | KYC tier per company wallet as each Payrolla company is onboarded: process and lead time | Before production | [ ] |
+| Q1–Q4 | `wallet.credit.reversed`/`rejected` examples; when H1 and H2 ship; reversal timing after confirmation; maintenance windows | Answer | [ ] |
+
+| Id | Needed from iSpend engineering | When | Status |
+| --- | --- | --- | --- |
+| S1 | Build `POST {ispend_api_url}/internal/wallet-credit-exceptions` honouring `Idempotency-Key` | Now | [ ] |
+| S2 | `ispend_api_url` (sandbox and production) and a bearer token, delivered securely | Now | [ ] |
+| S3 | Confirm the credit-exception workflow | Now | [ ] |
+
+## PGDock
+
+Phase 1 is built from PGDock's published contracts ([plan](pgdock-integration.md), [guide](integrations/pgdock.md)). Write actions wait on P1-G1.
+
+| Id | Needed from PGDock | When | Status |
+| --- | --- | --- | --- |
+| S1 | Sandbox organisation, project-restricted token (read and write), cloud API base URL | Now | [ ] |
+| S2 | Signed sample deliveries (insert, update, delete, test, truncated) | Now | [ ] |
+| S3 | A contact for contract questions | Now | [ ] |
+| P1-G1 | Parameterised SQL or row-write endpoints | Needed for write actions | [ ] |
+| P1-G3 | Webhook management API frozen as a versioned contract | Needed | [ ] |
+| P1-G4 | Error code list with retryability | Needed | [ ] |
+| P1-G2 | `Idempotency-Key` on writes | Wanted | [ ] |
+| C1 | Publish the V3 and V4 contracts (data API, auth, storage, billing events) | Needed for phases 2–4 | [ ] |
+| Q7–Q28 | Thirteen questions on the request page, section 3 | Answer | [ ] |
+| P2-G1, P3-G1/G2, P4 | OAuth consent, data API, project creation by token, contract tests in their CI | Later | [ ] |
+
+## What partners are waiting on from us
+
+| Item | For | Blocked by |
+| --- | --- | --- |
+| A Taskiem staging deployment with a public URL | Everyone: webhook URLs for Payrolla, iswallet subscriptions, PGDock testing | Infrastructure ([needs people](needs-people.md) D5, P4-C1) |
+| Payrolla's partner tenant and partner API key | Payrolla onboarding (N4) | Staging |
+| Webhook URLs per product and environment | iswallet W3, P3; Payrolla per company | Staging, then production |
+| Fixed egress IPs | iswallet P4, PGDock (if they allow-list) | Cloud provider and NAT (P4-C1, P4-C5) |
+| Passing Payrolla's payroll figures to iswallet | iswallet H3, P1 | N1 from Payrolla |
+| A sending domain for invitation emails | Company people joining their sub-tenants | P4-O1 |
+| Running the sandbox tests with each partner | Payrolla T1, iswallet W4, PGDock S1 | Staging and the sandbox items above |
