@@ -220,7 +220,8 @@ func (w *Worker) Run(ctx context.Context) error {
 			}
 		}()
 	}
-	wake, stop, err := listen(ctx, w.Store, "taskiem_tasks")
+	// The notification's payload is the new task's queue (00004_execution).
+	wake, stop, err := listen(ctx, w.Store, "taskiem_tasks", func(queue string) bool { return queue == w.Queue || queue == "" })
 	if err != nil {
 		return err
 	}

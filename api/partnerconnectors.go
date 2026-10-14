@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -112,8 +113,26 @@ func checkCredentials(c *connector.Connector, creds map[string]string) error {
 			return fmt.Errorf("%w: %s takes no credential %q", errBadRequest, c.Manifest.ID, k)
 		}
 	}
+	for field, keys := range c.Manifest.RouteKeys(creds) {
+		if len(keys) > maxRouteKeys {
+			return fmt.Errorf("%w: %s lists %d values; at most %d", errBadRequest, field, len(keys), maxRouteKeys)
+		}
+		for _, k := range keys {
+			if len(k) > 255 {
+				return fmt.Errorf("%w: a value in %s is longer than 255 characters", errBadRequest, field)
+			}
+		}
+	}
+	if c.CheckCredentials != nil {
+		if err := c.CheckCredentials(creds); err != nil {
+			return fmt.Errorf("%w: %w", errBadRequest, err)
+		}
+	}
 	return nil
 }
+
+// maxRouteKeys bounds a connection's routing list (wallet_ids).
+const maxRouteKeys = 1000
 
 // partnerActor is how the vault records the partner's key inside a
 // sub-tenant, as taskiem_partner_enter does.
@@ -237,7 +256,10 @@ func (s *Server) createSubTenantConnection(w http.ResponseWriter, r *http.Reques
 			return fmt.Errorf("%w: a %s connection named %q already exists in %s (replace its credentials instead)", errConflict, c.Manifest.ID, req.Name, env)
 		}
 		id = created
-		return err
+		if err != nil {
+			return err
+		}
+		return secrets.SetRouteKeysTx(r.Context(), tx, sub, id, c.Manifest.RouteKeys(req.Credentials))
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -305,7 +327,10 @@ func (s *Server) replaceSubTenantConnection(w http.ResponseWriter, r *http.Reque
 		if err := checkCredentials(c, req.Credentials); err != nil {
 			return err
 		}
-		return s.Vault.ReplaceCredentialsTx(r.Context(), tx, sub, conn, req.Credentials, partnerActor(p))
+		if err := s.Vault.ReplaceCredentialsTx(r.Context(), tx, sub, conn, req.Credentials, partnerActor(p)); err != nil {
+			return err
+		}
+		return secrets.SetRouteKeysTx(r.Context(), tx, sub, conn, c.Manifest.RouteKeys(req.Credentials))
 	})
 	if errors.Is(err, secrets.ErrNotFound) {
 		err = pgx.ErrNoRows
@@ -350,4 +375,69 @@ func (s *Server) deleteSubTenantConnection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type eventRoute struct {
+	ID          uuid.UUID  `json:"id"`
+	Environment string     `json:"environment"`
+	Connector   string     `json:"connector"`
+	Trigger     string     `json:"trigger"`
+	Event       string     `json:"event"`
+	Dedup       string     `json:"dedup"`
+	RouteKey    string     `json:"route_key"`
+	SubTenantID *uuid.UUID `json:"sub_tenant_id"`
+	Connection  *string    `json:"connection"`
+	Status      string     `json:"status"`
+	ReceivedAt  time.Time  `json:"received_at"`
+}
+
+// listEventRoutes is where provider events the partner received were
+// routed (decision 0031), newest first: one entry per event and
+// sub-tenant, or an unrouted entry when no sub-tenant lists its key.
+// Filters: status, sub_tenant; paging with before and limit. Ids only,
+// never the event's body.
+func (s *Server) listEventRoutes(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	status := q.Get("status")
+	if status != "" && status != "routed" && status != "unrouted" {
+		s.fail(w, r, fmt.Errorf("%w: status is routed or unrouted", errBadRequest))
+		return
+	}
+	var sub *uuid.UUID
+	if v := q.Get("sub_tenant"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			s.fail(w, r, fmt.Errorf("%w: bad sub_tenant id", errBadRequest))
+			return
+		}
+		sub = &id
+	}
+	before := time.Now().Add(time.Hour)
+	if b := q.Get("before"); b != "" {
+		var err error
+		if before, err = time.Parse(time.RFC3339Nano, b); err != nil {
+			s.fail(w, r, fmt.Errorf("%w: before must be an RFC 3339 time", errBadRequest))
+			return
+		}
+	}
+	var out []eventRoute
+	err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT id, environment, connector, trigger_name, event, dedup, route_key, sub_tenant, connection, status, received_at
+			FROM partner_event_routes WHERE received_at < $1 AND ($2 = '' OR status = $2) AND ($3::uuid IS NULL OR sub_tenant = $3)
+			ORDER BY received_at DESC, id LIMIT $4`, before, status, sub, limit)
+		if err != nil {
+			return err
+		}
+		out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[eventRoute])
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"routes": nonNil(out)})
 }

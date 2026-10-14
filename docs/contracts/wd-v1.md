@@ -57,6 +57,10 @@ A `ussd` trigger requires `config`, a menu (`$defs/ussdMenu`): `service_code` (`
 
 The run started by a confirmation has `trigger.body` (the inputs), `trigger.caller.phone_number` (sealed) and `trigger.ussd` (`reference`, `service_code`, `provider`, `network`). See [USSD](../ussd.md).
 
+## Expressions
+
+CEL with the standard library and cel-go's strings, math, lists and optional-types extensions, plus `sum(list)`: the total of a list of numbers (an int when every element is an int, a double otherwise, 0 for an empty list; integer overflow is an error). Code written with the SDK uses it as a CEL string (`"=sum(steps.pay.output.map(r, r.amount))"`).
+
 ## Durations
 
 `<n><unit>` repeated, units `ms`, `s`, `m`, `h`, `d`; for example `90s`, `1h30m`, `7d`.

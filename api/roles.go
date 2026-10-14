@@ -68,42 +68,54 @@ func (s *Server) listPermissions(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) listRoles(w http.ResponseWriter, r *http.Request) {
-	counts := map[string]int{}
-	var custom []roleInfo
+	var out []roleInfo
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT role, count(*) FROM memberships GROUP BY role`)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			var role string
-			var n int
-			if err := rows.Scan(&role, &n); err != nil {
-				rows.Close()
-				return err
-			}
-			counts[role] = n
-		}
-		rows.Close()
-		rows, err = tx.Query(r.Context(), `SELECT name, description, permissions, updated_at FROM roles ORDER BY name`)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var ri roleInfo
-			var at time.Time
-			if err := rows.Scan(&ri.Name, &ri.Description, &ri.Permissions, &at); err != nil {
-				return err
-			}
-			ri.UpdatedAt = &at
-			custom = append(custom, ri)
-		}
-		return rows.Err()
+		var err error
+		out, err = rolesTx(r.Context(), tx)
+		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"roles": out})
+}
+
+// rolesTx lists the built-in roles, then the tenant's custom roles, with
+// how many members hold each.
+func rolesTx(ctx context.Context, tx pgx.Tx) ([]roleInfo, error) {
+	counts := map[string]int{}
+	var custom []roleInfo
+	rows, err := tx.Query(ctx, `SELECT role, count(*) FROM memberships GROUP BY role`)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var role string
+		var n int
+		if err := rows.Scan(&role, &n); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		counts[role] = n
+	}
+	rows.Close()
+	rows, err = tx.Query(ctx, `SELECT name, description, permissions, updated_at FROM roles ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ri roleInfo
+		var at time.Time
+		if err := rows.Scan(&ri.Name, &ri.Description, &ri.Permissions, &at); err != nil {
+			return nil, err
+		}
+		ri.UpdatedAt = &at
+		custom = append(custom, ri)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	var out []roleInfo
 	names := make([]string, 0, len(rolePermissions))
@@ -118,7 +130,7 @@ func (s *Server) listRoles(w http.ResponseWriter, r *http.Request) {
 		c.Members = counts[c.Name]
 		out = append(out, c)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"roles": out})
+	return out, nil
 }
 
 // putRole creates or replaces a custom role.

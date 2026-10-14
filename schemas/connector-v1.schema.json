@@ -225,7 +225,17 @@
         "correlation": { "$ref": "#/$defs/expr" },
         "registration": { "enum": ["manual", "remote"], "description": "manual (default): the provider is pointed at Taskiem's ingest URL by hand. remote: Taskiem creates, updates and deletes the provider's subscription as workflows using the trigger are deployed and removed, and verifies deliveries with the secret the provider returned (decision 0021); the connector supplies a registrar." },
         "options": { "$ref": "#/$defs/jsonSchema", "description": "JSON Schema of the workflow trigger's options (trigger.config.options in wd/v1): what to subscribe to at the provider, and how to complete events." },
-        "test_event": { "$ref": "#/$defs/expr", "description": "Marks a delivery the provider sends to test the endpoint: it is verified and acknowledged, and starts only workflows that list its event by name." }
+        "test_event": { "$ref": "#/$defs/expr", "description": "Marks a delivery the provider sends to test the endpoint: it is verified and acknowledged, and starts only workflows that list its event by name." },
+        "route": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "field"],
+          "description": "Routes a delivery a partner receives into its sub-tenants whose connection lists the event's key in field (decision 0031): key is an expression naming the account the event is about; field a non-secret auth field holding a comma-separated list.",
+          "properties": {
+            "key": { "$ref": "#/$defs/expr" },
+            "field": { "$ref": "#/$defs/name" }
+          }
+        }
       },
       "allOf": [
         { "if": { "properties": { "type": { "const": "webhook" } } }, "then": { "required": ["verify"] } }

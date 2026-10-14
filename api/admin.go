@@ -133,7 +133,14 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	id, err := s.Vault.CreateConnection(r.Context(), p.TenantID, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, req.Credentials, p.Actor())
+	var id uuid.UUID
+	err = s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		if id, err = s.Vault.CreateConnectionTx(r.Context(), tx, p.TenantID, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, req.Credentials, p.Actor(), ""); err != nil {
+			return err
+		}
+		return secrets.SetRouteKeysTx(r.Context(), tx, p.TenantID, id, c.Manifest.RouteKeys(req.Credentials))
+	})
 	if err != nil {
 		var pgErr interface{ SQLState() string }
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {

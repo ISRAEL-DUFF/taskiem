@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/v1/requests/tsk_ab12cd34ef56gh78ij90kl12mn34op56","headers":{"Authorization":"Bearer isw_test_key"}},
+ "response":{"status": 200, "body": {"idempotency_key": "tsk_ab12cd34ef56gh78ij90kl12mn34op56", "kind": "transfer", "resource_id": "tr_1", "status": "completed", "terminal": true, "wallet_id": "6f1e", "amount": 4500000, "currency": "NGN", "created_at": "2026-10-04T08:00:00Z"}}}

@@ -11,6 +11,7 @@ Gate G4 needs 99.9% availability for 60 days before general availability ([build
 | Synthetic canary | `engine/canary`, `taskiem canary` |
 | Status page | `engine/status`, `/status`, `taskiem status` |
 | Graceful shutdown | `cmd/taskiem/serve.go`, `engine/runtime` |
+| Load and failure tests, the knee, bottlenecks fixed and left | [performance](performance.md), `tools/loadtest -mode cluster` and `-mode chaos` |
 
 The rules, their tests and the dashboard are generated: change `engine/slo/slo.go`, then run `go generate ./engine/slo`. A test fails if the committed files are stale, if an alert has no runbook section below, or if a rule reads a metric the engine does not export. With `promtool` on the path (or `TASKIEM_PROMTOOL`), `go test ./engine/slo` also runs `promtool check rules` and the rule tests.
 

@@ -99,6 +99,27 @@ func (v *Vault) ReplaceCredentialsTx(ctx context.Context, tx pgx.Tx, tenant, con
 	return audit(ctx, tx, tenant, by, "connection.credentials_replace", connector+"/"+name, map[string]any{"connection_id": conn, "environment": env})
 }
 
+// SetRouteKeysTx replaces the routing keys indexed for a connection (the
+// wallets an iswallet connection lists, by field), in a transaction whose
+// scope is tenant (decision 0031). Keys are not secrets: they are stored in
+// the clear so a partner's events can be routed to the sub-tenant holding
+// them. Called whenever a connection's credentials are written.
+func SetRouteKeysTx(ctx context.Context, tx pgx.Tx, tenant, conn uuid.UUID, keys map[string][]string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM connection_route_keys WHERE tenant_id = $1 AND connection_id = $2`, tenant, conn); err != nil {
+		return err
+	}
+	for field, vs := range keys {
+		for _, k := range vs {
+			if _, err := tx.Exec(ctx, `INSERT INTO connection_route_keys (tenant_id, connection_id, environment, connector, connection, field, route_key)
+				SELECT tenant_id, id, environment, connector, name, $3, $4 FROM connections WHERE tenant_id = $1 AND id = $2
+				ON CONFLICT DO NOTHING`, tenant, conn, field, k); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Credentials returns a connection's decrypted credential fields. An empty
 // name selects the only active connection for the connector. The decryption
 // is recorded in secret_reads with the Use attached to ctx; a connection

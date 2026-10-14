@@ -456,6 +456,12 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 // published=false; one that fails its checks returns errInvalid with the
 // problems.
 func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, by *uuid.UUID, gitEnv string) (probs []problem, digest string, published bool, err error) {
+	return s.publishToTx(ctx, tx, tenant, wf, v, by, gitEnv, nil)
+}
+
+// publishToTx is publishTx deploying to the environments in only (which
+// must be ungated) rather than every ungated one, when only is not nil.
+func (s *Server) publishToTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, by *uuid.UUID, gitEnv string, only []string) (probs []problem, digest string, published bool, err error) {
 	if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
 		return nil, "", false, err
 	}
@@ -511,6 +517,9 @@ func (s *Server) publishTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID,
 	targets, err := deployTargets(ctx, tx, gitEnv)
 	if err != nil {
 		return nil, "", false, err
+	}
+	if only != nil {
+		targets = slices.DeleteFunc(targets, func(env string) bool { return !slices.Contains(only, env) })
 	}
 	for _, env := range targets {
 		if err := s.deployTx(ctx, tx, tenant, wf, env, v, d, deployer(by), ""); err != nil {

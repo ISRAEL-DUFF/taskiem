@@ -3,7 +3,7 @@
   "id": "wf_payrollaSalaryDisbursement",
   "version": 1,
   "name": "Payrolla: disburse approved payroll",
-  "description": "Pays every employee in an approved Payrolla payroll from the company's iswallet wallet, after maker-checker approval: by wallet transfer to employees with an iswallet wallet, by bank payout otherwise. A refused payment does not stop the others; every outcome, paid or failed, is reported to Payrolla, and so is a rejected or expired approval.",
+  "description": "Pays every employee in an approved Payrolla payroll from the company's iswallet wallet, after maker-checker approval: by wallet transfer to employees with an iswallet wallet, by bank payout otherwise. A refused payment does not stop the others; every outcome, paid or failed, is reported to Payrolla with the payroll's totals, and so is a rejected or expired approval. After the report, the run watches each confirmed bank payout for a reversal (35 days from the payroll's arrival by default) and sends Payrolla a reversal notice for each one; nothing more is paid.",
   "trigger": {
     "type": "webhook",
     "config": {
@@ -82,21 +82,22 @@
             "type": "transform",
             "config": {
               "output": {
-                "employee_id": "=item.employee_id"
+                "employee_id": "=item.employee_id",
+                "net_pay_kobo": "=item.net_pay_kobo"
               }
             }
           },
           {
             "id": "to_wallet",
             "type": "connector",
+            "when": "=has(item.wallet_id)",
             "connector": "iswallet@1",
             "action": "transfer",
-            "when": "=has(item.wallet_id)",
             "input": {
               "from_wallet_id": "=trigger.body.funding_wallet_id",
               "to_wallet_id": "=item.wallet_id",
               "amount": "=item.net_pay_kobo",
-              "narration": "='Salary ' + trigger.body.period + ' ' + trigger.body.payroll_id + ' ' + item.employee_id"
+              "narration": "=('Salary ' + trigger.body.period + ' ' + trigger.body.payroll_id + ' ' + item.employee_id).substring(0, math.least(255, size('Salary ' + trigger.body.period + ' ' + trigger.body.payroll_id + ' ' + item.employee_id)))"
             },
             "effect": {
               "idempotency_seed": "=trigger.body.payroll_id + ':' + item.employee_id"
@@ -127,16 +128,16 @@
           {
             "id": "to_bank",
             "type": "connector",
+            "when": "=!has(item.wallet_id)",
             "connector": "iswallet@1",
             "action": "payout",
-            "when": "=!has(item.wallet_id)",
             "input": {
               "wallet_id": "=trigger.body.funding_wallet_id",
               "amount": "=item.net_pay_kobo",
               "bank_code": "=item.bank_code",
               "account_number": "=item.account_number",
               "account_name": "=item.account_name",
-              "narration": "='Salary ' + trigger.body.period",
+              "narration": "=('Salary ' + trigger.body.period + ' ' + trigger.body.payroll_id + ' ' + item.employee_id).substring(0, math.least(255, size('Salary ' + trigger.body.period + ' ' + trigger.body.payroll_id + ' ' + item.employee_id)))",
               "metadata": {
                 "payroll_id": "=trigger.body.payroll_id",
                 "employee_id": "=item.employee_id"
@@ -208,7 +209,16 @@
       "config": {
         "output": {
           "paid": "=size(steps.pay_all.output.filter(r, has(r.to_wallet) || (has(r.settle) && r.settle.event == 'wallet.outflow.confirmed')))",
-          "failed": "=size(steps.pay_all.output.filter(r, has(r.wallet_failed) || has(r.bank_failed) || has(r.bank_unconfirmed) || (has(r.settle) && r.settle.event != 'wallet.outflow.confirmed')))"
+          "failed": "=size(steps.pay_all.output.filter(r, has(r.wallet_failed) || has(r.bank_failed) || has(r.bank_unconfirmed) || (has(r.settle) && r.settle.event != 'wallet.outflow.confirmed')))",
+          "totals": {
+            "paid_kobo": "=sum(steps.pay_all.output.filter(r, has(r.to_wallet) || (has(r.settle) && r.settle.event == 'wallet.outflow.confirmed')).map(r, r.employee.net_pay_kobo))",
+            "bank_fees_kobo": "=sum(steps.pay_all.output.filter(r, has(r.settle) && r.settle.event == 'wallet.outflow.confirmed' && has(r.to_bank.fee)).map(r, r.to_bank.fee))",
+            "paid_to_wallet": "=size(steps.pay_all.output.filter(r, has(r.to_wallet)))",
+            "paid_to_bank": "=size(steps.pay_all.output.filter(r, has(r.settle) && r.settle.event == 'wallet.outflow.confirmed'))",
+            "refused": "=size(steps.pay_all.output.filter(r, has(r.wallet_failed) || has(r.bank_failed)))",
+            "failed_at_bank": "=size(steps.pay_all.output.filter(r, has(r.settle) && r.settle.event != 'wallet.outflow.confirmed'))",
+            "unconfirmed": "=size(steps.pay_all.output.filter(r, has(r.bank_unconfirmed)))"
+          }
         }
       }
     },
@@ -230,6 +240,7 @@
           "status": "completed",
           "paid": "=steps.summary.output.paid",
           "failed": "=steps.summary.output.failed",
+          "totals": "=steps.summary.output.totals",
           "results": "=steps.pay_all.output"
         },
         "class": "idempotent_write",
@@ -239,6 +250,141 @@
         "max": 5,
         "backoff": "exponential",
         "initial": "2s"
+      }
+    },
+    {
+      "id": "watching_for_reversals",
+      "name": "Watching for reversals (report sent)",
+      "description": "The report has been sent and nothing more is paid. Each confirmed bank payout is watched for a reversal until watch_until: by default 35 days after the payroll arrived, so at least 30 days after the last confirmation (approval 24h, payments 6h, settlement 72h). The variable payrolla_reversal_watch_days changes it (1 to 60). The watch only waits and posts reversal notices to Payrolla; it never calls iswallet.",
+      "type": "transform",
+      "needs": [
+        "report"
+      ],
+      "config": {
+        "output": {
+          "note": "Report sent; nothing more is paid. Each confirmed bank payout is watched for a reversal until watch_until, then the run ends.",
+          "watch_until": "=string(timestamp(run.started_at) + duration(string(24 * math.least(60, math.greatest(1, has(env.payrolla_reversal_watch_days) && string(env.payrolla_reversal_watch_days).matches('^[0-9]{1,3}$') ? int(string(env.payrolla_reversal_watch_days)) : 35))) + 'h'))",
+          "payouts": "=size(steps.pay_all.output.filter(r, has(r.settle) && r.settle.event == 'wallet.outflow.confirmed'))",
+          "outflow_ids": "=steps.pay_all.output.filter(r, has(r.settle) && r.settle.event == 'wallet.outflow.confirmed').map(r, r.to_bank.outflow_id)"
+        }
+      }
+    },
+    {
+      "id": "watch",
+      "type": "foreach",
+      "needs": [
+        "watching_for_reversals"
+      ],
+      "config": {
+        "items": "=[0, 1, 2, 3, 4].filter(l, l * 1000 < steps.watching_for_reversals.output.payouts)",
+        "max_concurrency": 5,
+        "max_items": 5,
+        "steps": [
+          {
+            "id": "watch_lane",
+            "type": "foreach",
+            "config": {
+              "items": "=steps.pay_all.output.filter(r, has(r.settle) && r.settle.event == 'wallet.outflow.confirmed').slice(item * 1000, math.least((item + 1) * 1000, steps.watching_for_reversals.output.payouts))",
+              "max_concurrency": 1000,
+              "max_items": 1000,
+              "steps": [
+                {
+                  "id": "watch_payout",
+                  "description": "A reversal of this payout races the end of the watch. The notice comes after the race, so the deadline can never cancel a notice being sent.",
+                  "type": "parallel",
+                  "config": {
+                    "branches": [
+                      {
+                        "name": "reversed",
+                        "steps": [
+                          {
+                            "id": "reversal_event",
+                            "type": "signal",
+                            "config": {
+                              "event": "iswallet@1:outflow_event",
+                              "correlation": "=item.to_bank.outflow_id"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "name": "deadline",
+                        "steps": [
+                          {
+                            "id": "watch_ends",
+                            "type": "wait",
+                            "config": {
+                              "until": "=steps.watching_for_reversals.output.watch_until"
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "join": "any"
+                  }
+                },
+                {
+                  "id": "reversal",
+                  "type": "transform",
+                  "needs": [
+                    "watch_payout"
+                  ],
+                  "when": "=has(steps.watch_payout.output.reversed) && steps.watch_payout.output.reversed.reversal_event.event == 'wallet.outflow.reversed' && steps.watch_payout.output.reversed.reversal_event.body.data.outflow_id == item.to_bank.outflow_id",
+                  "config": {
+                    "output": {
+                      "payroll_id": "=trigger.body.payroll_id",
+                      "employee_id": "=item.employee.employee_id",
+                      "outflow_id": "=item.to_bank.outflow_id",
+                      "amount_kobo": "=has(steps.watch_payout.output.reversed.reversal_event.body.data.amount) ? steps.watch_payout.output.reversed.reversal_event.body.data.amount : item.employee.net_pay_kobo",
+                      "fee_kobo": "=has(steps.watch_payout.output.reversed.reversal_event.body.data.fee) ? steps.watch_payout.output.reversed.reversal_event.body.data.fee : has(item.to_bank.fee) ? item.to_bank.fee : 0",
+                      "reversed_at": "=has(steps.watch_payout.output.reversed.reversal_event.body.data.reversed_at) ? steps.watch_payout.output.reversed.reversal_event.body.data.reversed_at : has(steps.watch_payout.output.reversed.reversal_event.body.occurred_at) ? steps.watch_payout.output.reversed.reversal_event.body.occurred_at : null",
+                      "event_id": "=has(steps.watch_payout.output.reversed.reversal_event.body.id) ? steps.watch_payout.output.reversed.reversal_event.body.id : null",
+                      "iswallet": "=steps.watch_payout.output.reversed.reversal_event.body.data"
+                    }
+                  }
+                },
+                {
+                  "id": "reversal_notice",
+                  "type": "http",
+                  "needs": [
+                    "reversal"
+                  ],
+                  "config": {
+                    "method": "POST",
+                    "url": "=env.payrolla_api_url + '/payrolls/' + trigger.body.payroll_id + '/reversal-notice'",
+                    "headers": {
+                      "Authorization": "='Bearer ' + secrets.payrolla_api_token"
+                    },
+                    "body": "=steps.reversal.output",
+                    "class": "idempotent_write",
+                    "idempotency_header": "Idempotency-Key"
+                  },
+                  "retry": {
+                    "max": 10,
+                    "backoff": "exponential",
+                    "initial": "30s",
+                    "max_delay": "1h"
+                  },
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "notice_failed",
+                        "type": "transform",
+                        "config": {
+                          "output": {
+                            "employee_id": "=item.employee.employee_id",
+                            "outflow_id": "=item.to_bank.outflow_id",
+                            "error": "=steps.reversal_notice.error"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -260,6 +406,15 @@
           "reason": "=has(steps.approve.output.reason) && steps.approve.output.reason == 'timeout' ? 'approval_timed_out' : 'rejected_by_approver'",
           "paid": 0,
           "failed": 0,
+          "totals": {
+            "paid_kobo": 0,
+            "bank_fees_kobo": 0,
+            "paid_to_wallet": 0,
+            "paid_to_bank": 0,
+            "refused": 0,
+            "failed_at_bank": 0,
+            "unconfirmed": 0
+          },
           "results": []
         },
         "class": "idempotent_write",
@@ -349,7 +504,7 @@
     }
   },
   "settings": {
-    "timeout": "96h",
+    "timeout": "70d",
     "concurrency_key": "=trigger.body.payroll_id"
   }
 }

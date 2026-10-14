@@ -172,11 +172,61 @@ func (m *Manifest) check() []string {
 			}
 		}
 	}
+	for _, name := range tnames {
+		rt := m.Triggers[name].Route
+		if rt == nil {
+			continue
+		}
+		if m.Triggers[name].Remote() {
+			add("/triggers/%s/route: a remotely registered trigger belongs to one workflow and cannot be routed", name)
+		}
+		i := slices.IndexFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == rt.Field })
+		switch {
+		case i < 0:
+			add("/triggers/%s/route/field: %q is not an auth field", name, rt.Field)
+		case m.Auth.Fields[i].Secret:
+			add("/triggers/%s/route/field: %q is secret; routing keys are stored in the clear", name, rt.Field)
+		}
+	}
 	if m.Auth.Test != nil {
 		if a, ok := m.Actions[m.Auth.Test.Action]; !ok {
 			add("/auth/test: unknown action %q", m.Auth.Test.Action)
 		} else if a.Class != effects.Read {
 			add("/auth/test: %q must be a read action", m.Auth.Test.Action)
+		}
+	}
+	return out
+}
+
+// ListValues reads a connection field holding a list: values separated by
+// commas or white space, empty ones dropped, duplicates removed, in order.
+func ListValues(s string) []string {
+	var out []string
+	for _, v := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' || r == '\r' }) {
+		if !slices.Contains(out, v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// RouteKeys returns, for each connection field a trigger routes by, the
+// keys a connection's credentials list in it (decision 0031). Nil when
+// the connector routes nothing or the connection lists no keys.
+func (m *Manifest) RouteKeys(creds map[string]string) map[string][]string {
+	var out map[string][]string
+	for _, t := range m.Triggers {
+		if t.Route == nil {
+			continue
+		}
+		if _, done := out[t.Route.Field]; done {
+			continue
+		}
+		if vs := ListValues(creds[t.Route.Field]); len(vs) > 0 {
+			if out == nil {
+				out = map[string][]string{}
+			}
+			out[t.Route.Field] = vs
 		}
 	}
 	return out

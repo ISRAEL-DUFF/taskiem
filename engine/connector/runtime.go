@@ -65,6 +65,10 @@ type Connector struct {
 	// Enrichers complete a verified delivery before its runs start (a
 	// record the provider left out). Keyed by trigger; optional.
 	Enrichers map[string]Enricher
+	// CheckCredentials, when set, refuses a connection's credentials
+	// before they are saved (a combination of fields the connector cannot
+	// use safely). Its error is shown to whoever saves them.
+	CheckCredentials func(creds map[string]string) error
 }
 
 // WebhookVerifier checks one delivery; secret is the connection credential

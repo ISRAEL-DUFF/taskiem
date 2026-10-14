@@ -802,6 +802,7 @@ func serve(ctx context.Context, args []string) error {
 	metrics.Handle("/metrics", promhttp.Handler())
 	metrics.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	metrics.HandleFunc("/readyz", ready)
+	profiling(metrics, log) // TASKIEM_PPROF (pprof.go)
 	tasks = append(tasks, httpTask("metrics", cfg.MetricsListen, metrics, log))
 
 	log.Info("taskiem starting")

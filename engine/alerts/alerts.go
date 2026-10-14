@@ -312,6 +312,11 @@ func Notify(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, al Alert) (bool, e
 // connector version it installed is revoked (Notify).
 const ConnectorRevoked = "connector_revoked"
 
+// EventUnrouted is the kind of the alert a partner gets when a provider
+// event it received names an account (a wallet) that none of its
+// sub-tenants' connections lists (decision 0031); once a day per account.
+const EventUnrouted = "event_unrouted"
+
 func nonNil(m map[string]any) map[string]any {
 	if m == nil {
 		return map[string]any{}

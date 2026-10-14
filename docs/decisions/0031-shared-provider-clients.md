@@ -1,0 +1,40 @@
+# 0031 — Shared provider clients: a wallet allow-list per connection, and partner events routed to sub-tenants
+
+Date: 2026-10-14 · Status: Accepted (iswallet's own wallet-scoped keys and per-wallet subscriptions asked for, P4-W1; Taskiem does not depend on them)
+
+## Context
+
+Payrolla, a Taskiem partner ([decision 0015](0015-embedding-tenancy.md)), will have one sub-tenant per customer company. iswallet gives Payrolla one client: every company's wallets and every employee's wallet sit under it, and iswallet's API keys are client-scoped ([iswallet answers](../integrations/iswallet-answers-2026-10-05.md), §A2). So the key Payrolla provisions into each company's iswallet connection can move money out of any wallet of any company. A workflow in company A's sub-tenant (or a bad expression, or an end user who edits it) could name company B's wallet, and iswallet would pay.
+
+iswallet also sends webhooks per subscription, and a subscription belongs to a client (§E5). The outcome of company A's payouts (`wallet.outflow.confirmed`, `.failed`, `.reversed`) arrives at the same subscription as company B's, while the runs waiting for them live in different sub-tenants. Today an event reaches only the tenant whose URL it came to.
+
+Every envelope carries the wallet it is about (`wallet_id`, §E1), and payout events carry the payout's `outflow_id`, which waiting runs correlate on.
+
+## Decision
+
+1. **Wallet allow-list on the connection.** An iswallet connection may list `wallet_ids` (comma-separated). When it does, the connector refuses, as a fatal step error with code `WALLET_NOT_ALLOWED` and before any request leaves Taskiem, a `transfer` whose `from_wallet_id`, a `payout` whose `wallet_id`, or a `get_balance` whose `wallet_id` is not in it; and a `get_payout` whose answer names a wallet not in it (the payout's details are withheld). A transfer's destination is not limited: paying an employee's wallet is the point. The guard is in Taskiem's connector and does not depend on iswallet.
+2. **A shared client must say so.** `shared_client: true` marks a key that also reaches other customers' wallets. Such a connection is refused at save (`WALLET_ALLOW_LIST_MISSING`, on create and on rotation, for partners and tenants alike) without `wallet_ids`, and the connector refuses every wallet call if one is stored anyway. Partners provisioning a shared client's key always set both. A connector checks credentials this way through an optional `Connector.CheckCredentials`.
+3. **Routing is declared by the trigger, not coded for iswallet.** A connector/v1 trigger may declare `route: {key, field}`: `key` is an expression naming the account the event is about (`=body.wallet_id`), `field` a non-secret connection field holding a list (`wallet_ids`). The manifest check refuses a secret field, an unknown field, or a remotely registered trigger. When credentials are written, the values of route fields are indexed in `connection_route_keys` (the tenant's own rows, under RLS), and dropped with the connection.
+4. **The partner holds the subscription.** The partner's own tenant has an iswallet connection with the subscription's `webhook_secret`, and iswallet posts to the partner's URL. Delivery there is verified and processed exactly as today (signals, the partner's own subscribed workflows).
+5. **Then each event is delivered into the sub-tenants it is about.** For a trigger with `route`, after the partner's own delivery, the edge calls `taskiem_partner_route_event`, a `SECURITY DEFINER` function owned by the dispatch role. It does nothing unless the transaction's scope is exactly one active partner; it finds that partner's own sub-tenants (`parent_id`, never another partner's, never a deleted one) whose connection in the same environment lists the key; it records each target in the partner's `partner_event_routes` and appends `partner.event.route` to **both** audit chains, once per event and sub-tenant; and it returns the targets. The edge then delivers the event into each target in the target's own scope, as a delivery to the target's own URL would be: the same signal name (`iswallet@1:outflow_event`), the same correlation (`outflow_id`), the same dedup key (the envelope id), the target's own subscribed workflows, its own connection name for their filters, its own ingest gate, and 423 while it is suspended (so iswallet retries).
+6. **Replays reach the same places once.** A repeated event (same environment, trigger and dedup key) gets the targets recorded the first time, so a change to an allow-list in between does not split an event's fate. Nothing is audited twice; signals and runs are deduplicated in each sub-tenant as at its own URL. If any target's delivery fails, the whole delivery is refused (503, 429 or 423) and iswallet retries.
+7. **Nothing is dropped silently.** An event whose key no sub-tenant lists, and none of the partner's own connections lists either, is recorded as `unrouted` in `partner_event_routes`, audited in the partner's chain (`partner.event.unrouted`) and alerted to the partner (`event_unrouted`, once a day per key, to every alert channel). It is still delivered to the partner itself. `GET /v1/partner/event-routes` lists routed and unrouted events (ids and the key only, never the body). An event whose key one of the partner's own connections lists (Payrolla's funding wallet) is the partner's own and is not recorded.
+
+## Alternatives considered
+
+- **Trust the workflow.** Rejected: a sub-tenant's workflows are edited by end users and by AI proposals; one expression naming another company's wallet would move its money.
+- **Wait for wallet-scoped keys from iswallet.** Asked for (P4-W1), but Taskiem's guard must not depend on a provider feature that may never come, or that Payrolla may not use.
+- **One iswallet subscription per company.** iswallet subscriptions are per client and deliver every wallet's events (§E5), so each company's subscription would receive every other company's events. Per-wallet subscriptions are asked for (P4-W1) and would reduce, not remove, the need to route.
+- **Let the partner's own workflow re-post events to sub-tenants.** Rejected: the partner would need a signing secret per sub-tenant and a hop through its own servers, and the events would no longer be verified by Taskiem against the provider's signature.
+- **Grant the edge read access to every tenant's connections.** Rejected: the lookup crosses tenants, so it is a narrow definer function like the rest of the partner machinery, reading routing columns only.
+- **Audit only in the partner's chain.** Rejected: the sub-tenant's chain must show that something outside it put data into it, as every other partner access does. The cost is two audit rows per event and sub-tenant.
+
+## Consequences
+
+- One provider client can serve many customers safely: a company's connection moves money only from its own wallets, and its runs hear only about its own wallets.
+- A wallet listed by two sub-tenants receives each event in both. Allow-lists should not overlap; Taskiem does not refuse overlaps, because a wallet may legitimately be shared (a group treasury).
+- `wallet.transfer.completed` fires once per side, each with its own `wallet_id`, so each side of a transfer between two companies reaches its own company.
+- `partner_event_routes` and `connection_route_keys` hold no secret and no event body. `partner_event_routes` grows with every routed event, like `trigger_receipts`; there is no retention sweep yet.
+- An event whose wallet was not yet listed when it arrived stays unrouted: listing the wallet later does not redeliver it, since iswallet has already had a 2xx. The waiting run times out; the partner sees the alert and the listing.
+- The edge does one more transaction per routed event, plus one per target; the gate of each target is applied, so a sub-tenant over its ingest ceiling holds back that event for everyone (iswallet retries).
+- Migration 00170. The trigger field and the credential check are generic; iswallet is the first connector to use them.
