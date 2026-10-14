@@ -348,7 +348,7 @@ A reversal that is reported before the report is sent (iswallet does not promise
 
 ## 3. Setting up
 
-Each Payrolla customer company is its own Taskiem tenant (a sub-tenant of Payrolla's), so every value below is **per company**.
+Each Payrolla customer company is its own Taskiem tenant (a sub-tenant of Payrolla's), so every value below is **per company**. Payrolla sets each company up by API ([below](#one-sub-tenant-per-company)), and each company's own people set its secrets.
 
 **Taskiem gives Payrolla, per company:**
 
@@ -363,6 +363,29 @@ Each Payrolla customer company is its own Taskiem tenant (a sub-tenant of Payrol
 - the approvers: the company's own people who release payrolls in Taskiem (they get the `payroll_approver` role). Nobody at Payrolla or Taskiem approves a company's payroll.
 
 **From iswallet:** Payrolla's iswallet client, with a sandbox provisioned with a funded company wallet and test employee wallets. Employees paid by wallet transfer must have wallets under the same Payrolla client, in NGN.
+
+## One sub-tenant per company
+
+Each Payrolla customer company gets its own space in Taskiem, a **sub-tenant**: its own people, approvers, webhook URL and signing secret, report token and payrolls, kept apart from every other company and from Payrolla's own staff. Payrolla sets one up by API when the company turns Taskiem on; nobody at Taskiem has to do anything. The calls use Payrolla's partner API key from Payrolla's servers ([partner guide](../embedding.md#14-people-in-a-sub-tenant)).
+
+**Once, in Payrolla's own Taskiem tenant:** keep the payroll workflow there and share it: `PUT /v1/partner/workflows/{wf}/share`.
+
+**For each company that turns Taskiem on:**
+
+1. **Create its sub-tenant**: `POST /v1/partner/sub-tenants` with `{"name": "Company name"}`. Keep the `id`.
+2. **Install the payroll workflow** into it: `POST /v1/partner/sub-tenants/{id}/workflows` with the workflow's id as `package`, `"environments": ["dev", "prod"]`, the report base URL for each environment as `variables` (`{"dev": {"payrolla_api_url": "…"}, "prod": {"payrolla_api_url": "…"}}`), and the approver role as `roles` (`[{"name": "payroll_approver", "permissions": ["approval.decide", "run.read", "workflow.read"]}]`). The answer gives the company's **webhook URL for each environment**: store them with the company and send its payrolls there. The company's funding wallet comes in each payroll's `funding_wallet_id`, so it needs no setting.
+3. **Connect iswallet** for it: `POST /v1/partner/sub-tenants/{id}/connections` with `{"environment": "prod", "connector": "iswallet", "credentials": {"api_key": "…", "shared_client": "true", "wallet_ids": "<that company's wallet ids>"}}` (and `dev` with the sandbox key and wallets). The wallet list is required: see below. This needs one of Payrolla's embed apps to allow `iswallet`; a headless app is enough.
+4. **Invite the account holder**: `POST /v1/partner/sub-tenants/{id}/invitations` with their email and `"roles": ["owner"]`. Taskiem emails them a link to create a passkey and join. Payrolla never sees the link or their sign-in.
+5. **Invite the payroll approvers** the same way, with `"roles": ["payroll_approver"]`. The account holder can also invite them from Taskiem's Members page.
+
+**What the company's account holder does in Taskiem**, once, after joining:
+
+- on the Secrets page, sets `payrolla_api_token` (the bearer token Payrolla issues for that company) in each environment, and adds Payrolla's report host to the egress allow-list;
+- on the workflow's Endpoints page, presses **New signing secret** for each environment and enters it in Payrolla's settings for the company. Taskiem shows it once; Payrolla's servers never receive it from Taskiem.
+
+`GET /v1/partner/sub-tenants/{id}/installs` shows the webhook URLs again, and the install answer's `secrets` list shows which of these the company has set (never their values). A new version of the payroll workflow, installed the same way, arrives in each company as a draft: nothing changes in production until someone there publishes it.
+
+**Payroll size.** A sub-tenant accepts webhook bodies up to 1 MiB by default, and a 5,000-employee payroll is close to that. Ask Taskiem's operators to raise Payrolla's limit, then raise each company's with `PUT /v1/partner/sub-tenants/{id}/limits` (`{"max_payload_bytes": 2097152}`).
 
 **One Taskiem sub-tenant per company.** Payrolla's one iswallet key reaches every company's wallets, so each company's iswallet connection is provisioned with `"shared_client": "true"` and that company's own `wallet_ids`: Taskiem then refuses any payment from another company's wallet before it reaches iswallet. Payrolla's iswallet webhook subscription points at Payrolla's own tenant, and Taskiem delivers each event to the company whose connection lists its wallet. See [iswallet: one client shared by many customers](iswallet.md#one-client-shared-by-many-customers).
 

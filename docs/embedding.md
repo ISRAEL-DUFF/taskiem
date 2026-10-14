@@ -2,7 +2,7 @@
 
 A **partner** puts Taskiem inside its own product so that its customers automate their work without signing up to Taskiem (spec 13.1, 13.4). Each of the partner's customers is a **sub-tenant**: a tenant of its own, with its own workflows, runs, audit chain and keys, isolated from the partner's other customers and from the partner's own staff. The people who use it are **end users**: the partner's users, known to Taskiem only by the id the partner gives them, acting through short-lived tokens the partner's server mints.
 
-This page covers sub-tenants, the partner admin API, embed apps, end-user tokens, headless use of the API and partner webhooks (milestone C1); the embedded builder as an element or an iframe, theming, custom domains and white-label (C2); and the partner connector bridge, your own API as a pre-authenticated connector (C3); and one provider account shared by all your customers, with its events routed to the right sub-tenant. The design is in [decision 0015](decisions/0015-embedding-tenancy.md) and, for shared provider accounts, [decision 0031](decisions/0031-shared-provider-clients.md).
+This page covers sub-tenants, the partner admin API, embed apps, end-user tokens, headless use of the API and partner webhooks (milestone C1); the embedded builder as an element or an iframe, theming, custom domains and white-label (C2); and the partner connector bridge, your own API as a pre-authenticated connector (C3); and one provider account shared by all your customers, with its events routed to the right sub-tenant. The design is in [decision 0015](decisions/0015-embedding-tenancy.md) and, for shared provider accounts, [decision 0031](decisions/0031-shared-provider-clients.md); and onboarding a customer with no step by Taskiem staff: inviting its people into its sub-tenant and installing your workflows there (C4). The design is in [decision 0015](decisions/0015-embedding-tenancy.md) and, for onboarding, [decision 0030](decisions/0030-partner-onboarding.md).
 
 ## Overview
 
@@ -43,8 +43,8 @@ curl -X POST $TASKIEM_URL/v1/api-keys -H "Authorization: Bearer $SESSION" \
 
 | Permission | Allows |
 | --- | --- |
-| `partner.read` | List sub-tenants; read a sub-tenant's workflows, runs (redacted) and usage; list embed apps and webhook deliveries |
-| `partner.manage` | Create, suspend and resume sub-tenants and set their limits; register and change embed apps; rotate webhook secrets; mint and revoke end-user tokens; retry deliveries |
+| `partner.read` | List sub-tenants; read a sub-tenant's workflows, runs (redacted), usage, roles, installed packages and your pending invitations; list embed apps, shared workflows and webhook deliveries |
+| `partner.manage` | Create, suspend and resume sub-tenants and set their limits; invite people into them and define their custom roles; share workflows and install them into sub-tenants; register and change embed apps; rotate webhook secrets; mint and revoke end-user tokens; retry deliveries |
 
 The partner API accepts only API keys that reach every environment: not sessions, and not environment-limited keys.
 
@@ -65,12 +65,28 @@ A sub-tenant gets a default workspace and the `dev` and `prod` environments. It 
 | `GET /v1/partner` | read | The partner's caps, its sub-tenants' total usage today and this month, and the ceiling of their limits |
 | `GET /v1/partner/sub-tenants` | read | Sub-tenants: id, name, region, status |
 | `POST /v1/partner/sub-tenants` | manage | Create one (above) |
-| `PUT /v1/partner/sub-tenants/{sub}/limits` | manage | Change its limits, within the partner's: `{"runs_per_day": 100, "max_workflows": null}` |
+| `PUT /v1/partner/sub-tenants/{sub}/limits` | manage | Change its limits, within the partner's: `{"runs_per_day": 100, "max_workflows": null}`. `max_payload_bytes` too ([payload size](#payload-size)) |
 | `POST /v1/partner/sub-tenants/{sub}/suspend`, `/resume` | manage | Suspend or resume it. Suspended, it does no new work: no sign-in or tokens, no schedules, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resumed, schedules continue from now without catching up ([suspended tenants](governance.md#suspended-tenants)) |
 | `GET /v1/partner/sub-tenants/{sub}/workflows` | read | Its workflows: names and versions, not definitions |
 | `GET /v1/partner/sub-tenants/{sub}/runs` | read | Its runs, redacted to their outcome: workflow, version, environment, status, who started them, timing, and for a failure the error's kind. Never inputs, outputs, step data or error messages. Filters: `status`, `before`, `limit` |
 | `GET /v1/partner/sub-tenants/{sub}/usage` | read | Its effective limits, usage and recent limit hits |
 | `GET /v1/partner/sub-tenants/{sub}/publish-requests`; `POST …/publish-requests/{wf}/{v}/approve`, `/reject` | read; manage | Its end users' pending publish requests under four-eyes, and deciding them as the key's owner ([end users and four-eyes](#end-users-and-four-eyes)) |
+
+### Payload size
+
+A sub-tenant's largest webhook body is its `max_payload_bytes` (1 MiB by default; larger deliveries get 413). You can raise it with `PUT /v1/partner/sub-tenants/{sub}/limits` up to your own value, which is also 1 MiB unless an operator raised it; no tenant can have more than 10 MiB. A payroll of 5,000 employees is close to 1 MB, so ask your Taskiem operator to raise yours first:
+
+```sh
+taskiem tenants limits <partner-tenant-id> --set max_payload_bytes=4194304   # operator: 4 MiB for the partner
+```
+
+```http
+PUT /v1/partner/sub-tenants/{sub}/limits
+{"max_payload_bytes": 2097152}
+→ 200 {"id": "...", "limits": {..., "max_payload_bytes": 2097152}}
+```
+
+A value above yours, or above 10 MiB, is refused with 400.
 
 **Suspending** a sub-tenant stops at once every end-user token and session in it, revokes its outstanding tokens (resuming does not revive them: mint new ones), and refuses new tokens with 409. The partner can still read it, and resume it. While suspended it does no new work: its schedules do not fire, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resuming continues its schedules from now, without catching up fires missed meanwhile ([suspended tenants](governance.md#suspended-tenants)).
 
@@ -386,6 +402,92 @@ A provider that subscribes webhooks per client sends all your customers' events 
 
 Routing never crosses partners: only the sub-tenants of the tenant the delivery was verified for are considered, through `taskiem_partner_route_event`, a definer function that refuses any scope but exactly one active partner. An event the provider sends to a sub-tenant's own URL is still delivered there, and not routed. An event that arrived before its key was listed is not redelivered when you list it: the provider already had a 2xx.
 
+## 14. People in a sub-tenant
+
+A sub-tenant can have its own people: members with ordinary Taskiem accounts and roles, who sign in to the console (not the embedded builder) to decide approvals, set secrets and run their part of the automation. They are your customer's staff, not yours. You invite them from your server; each person accepts with their own passkey and becomes a member of that sub-tenant only. You never get their credentials, an invitation link, or a session.
+
+```http
+POST /v1/partner/sub-tenants/{sub}/invitations
+{"email": "ada@company1042.ng", "name": "Ada Obi", "roles": ["owner"]}
+→ 201 {"user_id": "…", "email": "ada@company1042.ng", "roles": ["owner"], "status": "pending", "delivery": "email"}
+```
+
+- **Someone new** gets an email with a link (`/accept-invitation#token=…`) that works once, for seven days. It opens a page where they create a passkey and join, signed in, in one step. The link goes only to their address.
+- **Someone with a Taskiem account** gets an email asking them to sign in and accept (Account > Invitations); a link never adds a passkey to an account someone already uses.
+- The answer is the same either way. `delivery` is `email`, or `none` when this deployment cannot send email (then nothing was sent, and someone new cannot set up an account; ask your operator to configure email).
+- **Roles** are the built-in ones (`owner`, `admin`, `builder`, `operator`, `approver`, `auditor`, `viewer`) and the sub-tenant's custom roles. A role nobody defined is refused: create it first (below).
+- **Owner.** You may make a sub-tenant's first owner (its account holder), and only that one: once it has an owner, or one is invited, `owner` is refused with 409 and its owners make more. The owner runs the sub-tenant like any organisation: invites colleagues, sets secrets, changes governance.
+- Inviting the same person again adds the roles to the pending invitation and sends a new link (the old one stops).
+
+| Endpoint | Permission | Does |
+| --- | --- | --- |
+| `POST /v1/partner/sub-tenants/{sub}/invitations` | manage | Invite (above) |
+| `GET /v1/partner/sub-tenants/{sub}/invitations` | read | Your pending invitations there: user id, email, roles, when. Not those its own admins made |
+| `DELETE /v1/partner/sub-tenants/{sub}/invitations/{user}` | manage | Withdraw one of yours; its link stops working |
+| `GET /v1/partner/sub-tenants/{sub}/roles` | read | Its roles, built-in and custom, with how many members hold each |
+| `PUT /v1/partner/sub-tenants/{sub}/roles/{name}` | manage | Create a custom role: `{"description": "…", "permissions": ["approval.decide", "run.read", "workflow.read"]}` |
+
+**Custom roles.** A workflow's approval step names a role (`payroll_approver`); the people who hold it, and have `approval.decide`, decide. Create the role with the permissions it needs, any but `partner.*` (it needs the custom roles plan feature). You can change a role you created until someone holds it; after that, and for roles the sub-tenant's own people created, only its admins change what it allows (409).
+
+Invitations, roles and withdrawals are audited in both chains, like every partner action: `partner.subtenant.invitation.create`, `.cancel`, `partner.subtenant.role.put` in yours and theirs, and `member.invite`, `member.invitation.accept`, `role.put` in the sub-tenant's. The sub-tenant's admins see your pending invitations in their own Members page, marked as from you.
+
+## 15. Workflow packages
+
+Build a workflow once in your own tenant and install it into each sub-tenant: the installed copy is the sub-tenant's own workflow, running with its own secrets, variables, connections and approvers.
+
+1. **Share it**: `PUT /v1/partner/workflows/{wf}/share` (`DELETE` stops; `GET /v1/partner/workflows` lists). The workflow's id is the package id; its version numbers are the package versions.
+2. **Install it** into a sub-tenant:
+
+   ```http
+   POST /v1/partner/sub-tenants/{sub}/workflows
+   {
+     "package": "0190f0d1-…", "version": 3,
+     "environments": ["dev", "prod"],
+     "variables": {"dev":  {"payrolla_api_url": "https://sandbox-api.payrolla.com"},
+                   "prod": {"payrolla_api_url": "https://api.payrolla.com"}},
+     "roles": [{"name": "payroll_approver", "description": "Releases payrolls", "permissions": ["approval.decide", "run.read", "workflow.read"]}]
+   }
+   → 201 {
+     "workflow_id": "…", "package": "0190f0d1-…", "package_version": 3, "version": 1, "state": "published",
+     "environments": ["dev", "prod"],
+     "endpoints": [{"environment": "prod", "type": "webhook", "url": "/hooks/<sub>/payrolla/payroll-approved?env=prod",
+                    "auth": "hmac", "secret_name": "webhook_wf_payrollaSalaryDisbursement", "deployed_version": 1}, …],
+     "roles_created": ["payroll_approver"], "roles_kept": [],
+     "variables_missing": [],
+     "secrets": [{"environment": "prod", "name": "payrolla_api_token", "set": false},
+                 {"environment": "prod", "name": "webhook_wf_payrollaSalaryDisbursement", "set": false}, …],
+     "problems": []
+   }
+   ```
+
+| Field | Rules |
+| --- | --- |
+| `package`, `version` | A workflow you share, and one of its versions (the latest when left out) |
+| `environments` | Ungated environments to publish to on a first install (every ungated one when left out). A gated environment (one that takes promotions) is refused: the sub-tenant's people promote into it |
+| `variables` | Per environment, values of the variables the definition reads (`env.<name>`); any other name is refused. Not secrets |
+| `roles` | Custom roles the workflow needs. Missing ones are created; existing ones are kept as they are (`roles_kept`) |
+
+**What you get back.** `endpoints`: each environment's webhook URL (relative to your Taskiem host) and how it is authenticated. `secrets`: the secrets the workflow reads and its webhook's signing secret, and whether each is set, never a value. `variables_missing`: variables still without a value. Nothing in the answer is secret.
+
+**Governance.** The installed copy publishes as the sub-tenant's governance says. With four-eyes on, a first install opens a publish request in your key owner's name instead (`state: pending_approval`), which a second person decides: a member of the sub-tenant with `workflow.publish`, or another of your people with their own key ([end users and four-eyes](#end-users-and-four-eyes)); your key's owner cannot. An invalid definition in the sub-tenant (for example a connector it cannot use) answers 422 with `problems`, and nothing is installed.
+
+**Upgrades.** Installing a newer version into a sub-tenant that has the package adds it as a **draft** of the same workflow (`state: draft`, `200`), with its `problems` if any: production keeps running the version it has until the sub-tenant's people publish the draft. Installing the version it has again changes nothing (`state: unchanged`). A copy the sub-tenant manages in Git refuses installs (409).
+
+**Secrets stay with the sub-tenant's people.** You set configuration, never secrets. The sub-tenant's people:
+
+- set the secrets the workflow reads (`payrolla_api_token`) on their Secrets page;
+- make the webhook's **signing secret** on the workflow's Endpoints page ("New signing secret", `POST /v1/workflows/{wf}/signing-secret`), which shows it once, and give it to whoever sends to the webhook (your product, through its own screens);
+- add the hosts an `http` step calls to their egress allow-list (Secrets & settings > Egress). An `http` step reaches only those hosts, so no variable you set can send their secrets anywhere they have not allowed.
+
+| Endpoint | Permission | Does |
+| --- | --- | --- |
+| `GET /v1/partner/workflows` | read | Workflows you share: id, name, latest version |
+| `PUT /v1/partner/workflows/{wf}/share`, `DELETE …` | manage | Share or stop sharing. Unsharing stops new installs; installed copies stay, they are the sub-tenants' |
+| `POST /v1/partner/sub-tenants/{sub}/workflows` | manage | Install or upgrade (above) |
+| `GET /v1/partner/sub-tenants/{sub}/installs` | read | Packages installed there: its workflow, the package version last installed, its latest and published versions, and the webhook URLs each environment listens on now |
+
+Installs are audited in both chains (`partner.subtenant.workflow.install`), and in the sub-tenant's as `workflow.create`, `workflow.publish` or `workflow.version.create`, `variable.write` and `role.put`. The installed workflow's runs show in `GET /v1/partner/sub-tenants/{sub}/runs`, redacted as always.
+
 ## Security model
 
 - **Isolation.** A sub-tenant is a tenant: row-level security keeps its data from every other tenant. No membership puts a sub-tenant in a session's scope, including the partner's owners. The only way from a partner to a sub-tenant is `taskiem_partner_enter`, a reviewed `SECURITY DEFINER` function that checks the sub-tenant's `parent_id` against the partner the transaction is scoped to, writes the access to both audit chains, and narrows the transaction to that one sub-tenant. A tenant's parent can never change.
@@ -397,6 +499,8 @@ Routing never crosses partners: only the sub-tenants of the tenant the delivery 
 - **Custom domains** map to an app only after DNS verification, are exclusive once verified, and serve the embed surface alone.
 - **Bridge credentials** are written into the sub-tenant's own vault through the audited partner path and are never readable through any API.
 - **Routed events** cross from the partner to a sub-tenant only through `taskiem_partner_route_event`: the partner in scope, its own non-deleted sub-tenants, the key listed by the sub-tenant's connection, recorded and audited in both chains in the same transaction. The delivery itself then runs in the sub-tenant's own scope, as at its own URL. Shared provider keys are limited per sub-tenant by the connector's allow-list.
+- **People** join a sub-tenant only by accepting an invitation with their own credentials, and become members of that sub-tenant alone. An invitation link goes by email to the invitee only, never to the partner, and works only for an account nobody can sign in to yet; the partner makes the first owner and no other.
+- **Packages** are copied into the sub-tenant and run with its secrets, variables, connections and egress allow-list, never the partner's. The partner sets variables, never secrets, and newer versions arrive as drafts.
 - **Redaction.** The partner sees outcomes, not data: run statuses and error kinds, never inputs, outputs or messages, in the API and in webhooks.
 
 The threat model's boundary B11 covers this ([threat model](security/threat-model.md)).
@@ -405,6 +509,6 @@ The threat model's boundary B11 covers this ([threat model](security/threat-mode
 
 | Milestone | Status |
 | --- | --- |
-| C4: first embedded deployment (Payrolla) | Needs people ([needs people](needs-people.md#phase-3), EM1) |
+| C4: first embedded deployment (Payrolla) | Onboarding API built ([people](#14-people-in-a-sub-tenant), [packages](#15-workflow-packages)); the deployment itself needs people ([needs people](needs-people.md#phase-3), EM1) |
 
-Known gaps: end users cannot hold `approval.decide` (decisions are recorded against platform users), and their publishes under four-eyes wait for a platform person; deleting a sub-tenant is an operator task; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.
+Known gaps: an invited person with no account needs email to set one up (`delivery: none` otherwise); the partner cannot remove a member (the sub-tenant's admins do) or delete an installed workflow; a package is one workflow (no bundles of several, nor of connectors and policies); installing does not add hosts to the sub-tenant's egress allow-list, which its own people do; end users cannot hold `approval.decide` (decisions are recorded against platform users), and their publishes under four-eyes wait for a platform person; deleting a sub-tenant is an operator task; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.

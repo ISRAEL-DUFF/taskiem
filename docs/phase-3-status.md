@@ -23,7 +23,7 @@ Each workstream has its own milestones. Anything that needs people (accounts, ap
 | C | C1 | Sub-tenants (`parent_id`), `embed_apps`, end-user token minting, partner admin API with webhooks and a dual audit trail, headless mode | 13.1, 13.4, 5.3 | **Done** ([below](#c1-what-exists)) |
 | C | C2 | Embedded builder web component and iframe, theming tokens, custom domains, white-label | 13.4 | **Done** ([below](#c2-what-exists)); TLS for partners' hosts needs EM2 |
 | C | C3 | Partner connector bridge (the partner's API as a pre-authenticated connector) | 13.4 | **Done** ([below](#c3-what-exists)) |
-| C | C4 | First embedded deployment inside a holdco product (Payrolla customer automations) | — | Needs people |
+| C | C4 | First embedded deployment inside a holdco product (Payrolla customer automations) | — | Onboarding API built (one sub-tenant per company: invitations, roles, workflow packages; [below](#hooks-left-for-c4)); the deployment needs people |
 | — | X | Container steps (gVisor or Firecracker); mobile money (M-Pesa, MTN MoMo, Airtel Money); tax and statutory connectors | 7.5 | Container steps done (code; [what exists](#x-container-steps)), production needs CS1, CS2; mobile money: M-Pesa and MTN MoMo done (code; [what exists](#x-mobile-money)), Airtel Money needs MM3; tax/statutory connectors planned |
 
 ## A1: WhatsApp as a client of the platform
@@ -233,7 +233,7 @@ Embedding foundations, 2026-10-07. Partner guide: [embedding.md](embedding.md). 
 
 ### Hooks left for C4
 
-- **C4 (Payrolla).** Needs people: [needs-people](needs-people.md#phase-3) (EM1). Everything it needs is built: C2 and C3 below.
+- **C4 (Payrolla).** Needs people: [needs-people](needs-people.md#phase-3) (EM1). Everything it needs is built: C2 and C3 below, and (14 October 2026) the onboarding API Payrolla asked for, one sub-tenant per customer company with no step by Taskiem staff ([decision 0030](decisions/0030-partner-onboarding.md)): the partner invites the company's people into its sub-tenant (an emailed passkey link for someone new; the partner makes the first owner only), creates the roles its workflows need, and installs a shared workflow as the company's own copy with its variables, getting the webhook URLs back and never a secret; newer versions arrive as drafts; the company's people set its secrets and make the webhook signing secret on the Endpoints page. Guide: [embedding](embedding.md#14-people-in-a-sub-tenant), [Payrolla](integrations/payrolla.md#one-sub-tenant-per-company). Migrations 00165–00166.
 
 ### Known gaps
 
