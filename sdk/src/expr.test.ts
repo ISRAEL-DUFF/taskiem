@@ -62,6 +62,15 @@ describe("celToFunction", () => {
     expect(celToFunction("steps.approve.output.decision == 'approved'")).toBe('({ steps }) => steps.approve.output.decision === "approved"');
     expect(celToFunction("size(trigger.body.employees.filter(e, !has(e.wallet_id)))")).toBe("({ trigger }) => cel.size(trigger.body.employees.filter((e) => !cel.has(e.wallet_id)))");
   });
+
+  it("parenthesises a map literal that starts an arrow body", () => {
+    // Unparenthesised, JavaScript reads "(i) => { id: i.id }" as a block, so
+    // these fell back to raw CEL strings.
+    expect(celToFunction("trigger.body.items.map(i, {'id': i.id})")).toBe("({ trigger }) => trigger.body.items.map((i) => ({ id: i.id }))");
+    expect(celToFunction("trigger.body.items.filter(i, {'a': i.x}.a > 1)")).toBe("({ trigger }) => trigger.body.items.filter((i) => ({ a: i.x }.a > 1))");
+    expect(celToFunction("{'a': trigger.body.x}.a")).toBe("({ trigger }) => ({ a: trigger.body.x }.a)");
+    expect(celToFunction("trigger.body.items.map(i, i.tags.map(t, {'t': t}))")).toBe("({ trigger }) => trigger.body.items.map((i) => i.tags.map((t) => ({ t: t })))");
+  });
   it("keeps CEL it cannot print exactly", () => {
     for (const cel of ['trigger.x == "double quoted"', "trigger.a  +  1", "(trigger.a)", "trigger.amount * 100.0", "trigger.xs.exists_one(x, x)", "1 + 2", "trigger.n == 1u", "steps.x.output.length"]) {
       expect(celToFunction(cel), cel).toBeNull();

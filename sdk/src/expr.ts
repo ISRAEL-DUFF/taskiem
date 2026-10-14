@@ -761,13 +761,22 @@ export function celToFunction(cel: string): string | null {
   }
   if (roots.size === 0) return null; // a constant is clearer as a literal
   const names = ROOTS.filter((r) => roots.has(r));
-  const fn = `({ ${names.join(", ")} }) => ${body.startsWith("{") ? `(${body})` : body}`;
+  const fn = `({ ${names.join(", ")} }) => ${arrowBody(body)}`;
   try {
     if (compileFunction(fn) !== cel) return null;
   } catch {
     return null;
   }
   return fn;
+}
+
+/**
+ * An arrow function's expression body. One that starts with "{" (a map
+ * literal, alone or as the start of a larger expression) is parenthesised,
+ * or JavaScript would read it as a block.
+ */
+function arrowBody(body: string): string {
+  return body.startsWith("{") ? `(${body})` : body;
 }
 
 function printJs(n: Node, vars: Set<string>, roots: Set<string>): string {
@@ -798,7 +807,7 @@ function printJs(n: Node, vars: Set<string>, roots: Set<string>): string {
       const [first, body] = n.args;
       if (js && n.args.length === 2 && first?.k === "ident" && body) {
         const inner = new Set(vars).add(first.name);
-        return `${p(n.obj, 8)}.${js}((${first.name}) => ${printJs(body, inner, roots)})`;
+        return `${p(n.obj, 8)}.${js}((${first.name}) => ${arrowBody(printJs(body, inner, roots))})`;
       }
       if (MACROS[n.name] !== undefined || n.name === "exists_one") throw new ExpressionError("macro without a code form");
       return `${p(n.obj, 8)}.${n.name}(${all(n.args)})`;
