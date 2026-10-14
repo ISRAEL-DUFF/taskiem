@@ -89,7 +89,7 @@ iswallet's replay cache lasts 24 hours, after which a repeated key returns a 500
 
 ## Waiting on us
 
-Client names for the two API keys (`payrolla`, `ispend`), Payrolla's largest payroll and the tier it needs, sandbox provisioning parameters (employee wallets, funding; iswallet provisions a sandbox client in one call), Taskiem's webhook URLs per product, and our egress IPs (iswallet has no IP allow-list today; it wants them for incident forensics).
+Client names for the two API keys (`payrolla`, `ispend`), Payrolla's largest payroll (during its beta, 2 people and ₦3,000, which a TIER_1 wallet covers), sandbox provisioning parameters (employee wallets, funding; iswallet provisions a sandbox client in one call), Taskiem's webhook URLs per product, and our egress IPs (iswallet has no IP allow-list today; it wants them for incident forensics).
 
 ## Sandbox (PGDock item 32)
 

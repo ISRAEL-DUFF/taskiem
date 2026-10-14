@@ -18,12 +18,12 @@ Payrolla's side is built and tested against a stub of our webhook. Its reply of 
 
 | Id | Needed from Payrolla | When | Status |
 | --- | --- | --- | --- |
-| N1 | Pilot company's payroll: headcount, total net value, how many paid to bank accounts, run dates; and Payrolla's largest payroll across customers. iswallet needs these for the wallet tier and rate limit | Now | [ ] Blank in Payrolla's reply (R5) |
-| N2 | Peter Chuks's full email (the reply says "eazidefi"); approvers so far: Peter Chuks, John Chuks (eazidefi+approver@gmail.com) | Now | [ ] |
+| N1 | Pilot company's payroll: headcount, total net value, how many paid to bank accounts, run dates; and Payrolla's largest payroll across customers. iswallet needs these for the wallet tier and rate limit | Now | [x] 14 October: Payrolla is in beta with no production customer yet. The sandbox pilot (Chuks Electronics) pays 2 people, both to bank accounts, ₦3,000 net in all; that is also Payrolla's largest payroll. Run dates not fixed. A new TIER_1 wallet (₦50,000 per payout and per day) and 100 requests a minute cover it, so no tier or rate-limit raise is needed until a real customer is onboarded |
+| N2 | Peter Chuks's full email; approvers so far: Peter Chuks (eazidefi@gmail.com), John Chuks (eazidefi+approver@gmail.com) | Now | [x] 14 October |
 | N3 | Each onboarded company's iswallet wallets it pays from (at least its funding wallet), for its connection's `wallet_ids`; for sandbox, the test company's wallets | Now | [ ] |
 | N4 | Who at Payrolla receives Taskiem's partner API key | Now | [ ] |
 | N5 | Build `POST {payrolla_api_url}/payrolls/{payroll_id}/reversal-notice` to the payload in the guide | Now | [ ] |
-| N6 | Pilot company's production `funding_wallet_id` (R6), its name (Chuks Electronics?), start date, on-call contact for payroll days (T2) | Before production | [ ] |
+| N6 | Pilot company's production `funding_wallet_id` (R6), start date, on-call contact for payroll days (T2) | Before production | [ ] The sandbox pilot company is Chuks Electronics; the first production customer is not chosen yet |
 | N7 | Confirm 35 days of watching for reversals is enough (settable per company, 1–60) | Confirm | [ ] |
 | E1 | Embedding the builder: after the payroll pilot | Later | Deferred by Payrolla |
 
@@ -41,11 +41,11 @@ The connector is built on iswallet's answers of 5 October ([iswallet](integratio
 | W4 | How to force each sandbox outcome: payout confirmed, failed, reversed after confirmation, unresolved; credit rejected and reversed | Now | [~] Simulators for deposit, payout confirmed/failed/reversed and credit clawback; failed debits are real refusals. Still open: payout `unresolved`, credit `rejected` |
 | H1 | Lookup by our idempotency key | Before production | [x] Shipped 12 October (`GET /v1/requests/{key}`); used by the connector |
 | H2 | Typed duplicate error instead of the 500, and the replay window | Before production | [ ] Now their top item; no longer blocks us (the lookup comes first) |
-| H3 | `Retry-After` on 429; higher rate limit for `payrolla` (needs N1) | Before production | [~] No `Retry-After` yet (on their list); we use `X-RateLimit-Reset`. Limit raise still needs N1 |
+| H3 | `Retry-After` on 429; higher rate limit for `payrolla` | Before production | [~] No `Retry-After` yet (on their list); we use `X-RateLimit-Reset`. No limit raise needed during Payrolla's beta (N1); ask again with the first real customer's headcount |
 | H6 | Error catalogue per endpoint, with retryability | Before production | [~] Debit codes given to PGDock match our handling; a full catalogue per endpoint still open |
 | H8 | `POST /v1/outflows` in the OpenAPI spec; multispend path fix | Before production | [ ] |
 | H4, H5, H7, H9 | Bulk payouts, structured transfer metadata, parked-credit signal, non-NGN limits | Later | [ ] |
-| P1 | KYC tier raised for the pilot company's wallet, limits confirmed by compliance (needs N1) | Before production | [ ] |
+| P1 | KYC tier raised for the pilot company's wallet, limits confirmed by compliance | Before production | [ ] Not needed for the beta pilot (N1 fits TIER_1); needed for the first real customer |
 | P2, P3 | Production client keys; production webhook subscriptions and secrets | Before production | [ ] |
 | P4 | Allow-list our egress IPs, if they allow-list callers | Before production | [x] Not needed: no allow-list today. They want our IPs for incident forensics |
 | P5 | On-call contact for payout incidents | Before production | [ ] They will name a technical contact and escalation path |
@@ -85,6 +85,6 @@ Phase 1 is built from PGDock's published contracts ([plan](pgdock-integration.md
 | Payrolla's partner tenant and partner API key | Payrolla onboarding (N4) | Staging |
 | Webhook URLs per product and environment | iswallet W3, P3; Payrolla per company | Staging, then production |
 | Fixed egress IPs | PGDock (if they allow-list); iswallet for forensics only | Cloud provider and NAT (P4-C1, P4-C5) |
-| Passing Payrolla's payroll figures to iswallet | iswallet H3, P1 | N1 from Payrolla |
+| Telling iswallet Payrolla's figures: beta only, 2 people and ₦3,000, so no tier or limit raise yet | iswallet H3, P1 | Nothing: N1 answered; send with the next iswallet message |
 | A sending domain for invitation emails | Company people joining their sub-tenants | P4-O1 |
 | Running the sandbox tests with each partner | Payrolla T1, iswallet W4, PGDock S1 | Staging and the sandbox items above |
