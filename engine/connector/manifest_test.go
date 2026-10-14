@@ -116,6 +116,28 @@ func TestAckIsNeverAPage(t *testing.T) {
 	}
 }
 
+func TestRouteNamesAPlainField(t *testing.T) {
+	manifest := func(field, extra string) string {
+		src := strings.Replace(head, "auth: { type: none }", "auth:\n  type: api_key\n  fields:\n    - { key: k, label: K, secret: true }\n    - { key: accounts, label: Accounts, required: false }", 1)
+		return src + "  get: { title: Get, class: read, input: { type: object } }\ntriggers:\n  ev:\n    type: webhook\n" +
+			"    verify: { scheme: header_secret, header: X-Secret, secret_field: k }\n    route: { key: =body.account, field: " + field + " }\n" + extra
+	}
+	for name, c := range map[string]struct{ src, want string }{
+		"plain field":   {manifest("accounts", ""), ""},
+		"unknown field": {manifest("wallets", ""), "not an auth field"},
+		"secret field":  {manifest("k", ""), "is secret"},
+		"remote":        {manifest("accounts", "    registration: remote\n"), "cannot be routed"},
+	} {
+		_, probs := Parse([]byte(c.src))
+		if c.want == "" && len(probs) > 0 || c.want != "" && !strings.Contains(strings.Join(probs, "; "), c.want) {
+			t.Errorf("%s: %v, want %q", name, probs, c.want)
+		}
+	}
+	if got := ListValues(" a, b,,a\nc "); strings.Join(got, "|") != "a|b|c" {
+		t.Errorf("ListValues: %q", got)
+	}
+}
+
 func TestRedactURLError(t *testing.T) {
 	resp, err := (&http.Client{Transport: &http.Transport{}}).Get("http://127.0.0.1:1/v1/balance?api_key=sk_live_secret#frag")
 	if resp != nil {

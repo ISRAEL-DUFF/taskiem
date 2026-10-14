@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -53,7 +54,50 @@ func New(o Options) *connector.Connector {
 		"get_payout":   connector.ActionFunc(c.getPayout),
 		"name_enquiry": connector.ActionFunc(c.nameEnquiry),
 		"list_banks":   connector.ActionFunc(c.listBanks),
-	}}
+	}, CheckCredentials: CheckCredentials}
+}
+
+// The allow-list's error codes. Both refusals are fatal and happen before
+// any request leaves Taskiem.
+var (
+	// ErrWalletNotAllowed: the call names a wallet (or iswallet returned
+	// one) outside the connection's wallet_ids.
+	ErrWalletNotAllowed = errors.New("WALLET_NOT_ALLOWED")
+	// ErrAllowListMissing: the connection says its key is a shared
+	// client's but lists no wallets, so nothing that touches a wallet runs.
+	ErrAllowListMissing = errors.New("WALLET_ALLOW_LIST_MISSING")
+)
+
+// CheckCredentials refuses a shared client's connection without wallets,
+// and a shared_client value other than true or false.
+func CheckCredentials(creds map[string]string) error {
+	switch creds["shared_client"] {
+	case "", "false":
+		return nil
+	case "true":
+		if len(connector.ListValues(creds["wallet_ids"])) == 0 {
+			return fmt.Errorf("iswallet: a shared client's key reaches every customer's wallets; list this customer's wallets in wallet_ids (%w)", ErrAllowListMissing)
+		}
+		return nil
+	}
+	return fmt.Errorf("iswallet: shared_client must be true or false, not %q", creds["shared_client"])
+}
+
+// allowWallet checks a wallet against the connection's allow-list (decision
+// 0031). A connection without one may use any wallet its key reaches,
+// unless it is marked as a shared client's.
+func allowWallet(req connector.Request, field, wallet string) error {
+	list := connector.ListValues(req.Credentials["wallet_ids"])
+	if len(list) == 0 {
+		if req.Credentials["shared_client"] == "true" {
+			return fmt.Errorf("iswallet %w: this connection is a shared client's and lists no wallet_ids, so it may use no wallet; nothing was sent: %w", ErrAllowListMissing, effects.ErrFatal)
+		}
+		return nil
+	}
+	if wallet == "" || !slices.Contains(list, wallet) {
+		return fmt.Errorf("iswallet %w: %s %q is not one of this connection's wallet_ids; nothing was sent: %w", ErrWalletNotAllowed, field, wallet, effects.ErrFatal)
+	}
+	return nil
 }
 
 type client struct {
@@ -128,6 +172,9 @@ func (c *client) getBalance(ctx context.Context, req connector.Request) (connect
 			Scale     int    `json:"scale"`
 		} `json:"balances"`
 	}
+	if err := allowWallet(req, "wallet_id", str(req.Input, "wallet_id")); err != nil {
+		return connector.Response{}, err
+	}
 	if err := c.do(ctx, req, http.MethodGet, "/v1/wallets/"+url.PathEscape(str(req.Input, "wallet_id"))+"/balance", nil, &r); err != nil {
 		return connector.Response{}, err
 	}
@@ -147,6 +194,9 @@ func currency(in map[string]any) string {
 
 func (c *client) transfer(ctx context.Context, req connector.Request) (connector.Response, error) {
 	in := req.Input
+	if err := allowWallet(req, "from_wallet_id", str(in, "from_wallet_id")); err != nil {
+		return connector.Response{}, err
+	}
 	body := map[string]any{"from_wallet_id": in["from_wallet_id"], "to_wallet_id": in["to_wallet_id"], "amount": in["amount"], "currency": currency(in)}
 	if n := str(in, "narration"); n != "" {
 		body["narration"] = n
@@ -160,6 +210,9 @@ func (c *client) transfer(ctx context.Context, req connector.Request) (connector
 
 func (c *client) payout(ctx context.Context, req connector.Request) (connector.Response, error) {
 	in := req.Input
+	if err := allowWallet(req, "wallet_id", str(in, "wallet_id")); err != nil {
+		return connector.Response{}, err
+	}
 	if cur := currency(in); cur != "NGN" {
 		return connector.Response{}, fmt.Errorf("iswallet pays out to banks in NGN only, not %s: %w", cur, effects.ErrFatal)
 	}
@@ -185,10 +238,22 @@ func (c *client) payout(ctx context.Context, req connector.Request) (connector.R
 
 func (c *client) getPayout(ctx context.Context, req connector.Request) (connector.Response, error) {
 	var r map[string]any
+	// A shared client's connection without wallets reads no payout either.
+	if err := allowWallet(req, "wallet_id", ""); errors.Is(err, ErrAllowListMissing) {
+		return connector.Response{}, err
+	}
 	if err := c.do(ctx, req, http.MethodGet, "/v1/outflows/"+url.PathEscape(str(req.Input, "outflow_id")), nil, &r); err != nil {
 		return connector.Response{}, err
 	}
-	return connector.Response{Output: pick(r, "outflow_id", "status", "amount", "fee", "provider_reference", "confirmed_at")}, nil
+	// An outflow id names any payout of the client: one debited from a
+	// wallet outside the allow-list is not this connection's to read.
+	if len(connector.ListValues(req.Credentials["wallet_ids"])) > 0 {
+		if w, ok := r["wallet_id"].(string); ok && !slices.Contains(connector.ListValues(req.Credentials["wallet_ids"]), w) {
+			return connector.Response{}, fmt.Errorf("iswallet %w: payout %s was debited from wallet %q, which is not one of this connection's wallet_ids; its details are withheld: %w",
+				ErrWalletNotAllowed, str(req.Input, "outflow_id"), w, effects.ErrFatal)
+		}
+	}
+	return connector.Response{Output: pick(r, "outflow_id", "wallet_id", "status", "amount", "fee", "provider_reference", "confirmed_at")}, nil
 }
 
 func (c *client) nameEnquiry(ctx context.Context, req connector.Request) (connector.Response, error) {

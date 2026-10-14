@@ -3,7 +3,7 @@
 # 5 October 2026 (docs/integrations/iswallet.md).
 manifest: connector/v1
 id: iswallet
-version: 1.0.0
+version: 1.1.0
 name: iswallet
 description: Wallet-to-wallet transfers, bank payouts, balances and wallet events on iswallet.
 category: payments
@@ -13,6 +13,11 @@ auth:
   fields:
     - { key: api_key, label: API key (client scope), secret: true }
     - { key: webhook_secret, label: Webhook signing secret (from the subscription), secret: true, required: false }
+    # A client key reaches every wallet of the client. When one client is
+    # shared by several customers (a partner's sub-tenants), wallet_ids
+    # limits the connection to the customer's own wallets (decision 0031).
+    - { key: wallet_ids, label: Wallets this connection may use (comma-separated wallet ids), required: false }
+    - { key: shared_client, label: "Shared client: true when the key also reaches other customers' wallets (then wallet_ids is required)", required: false }
   test: { action: list_banks }
 # 100 requests a minute per API key (client scope).
 rate_limit: { requests: 100, per: 1m, scope: connection }
@@ -122,6 +127,7 @@ actions:
       type: object
       properties:
         outflow_id:   { type: string }
+        wallet_id:    { type: string, description: The wallet the payout was debited from }
         status:       { type: string, enum: [pending, confirmed, failed, reversed, unresolved, resolved] }
         amount:       { type: integer }
         fee:          { type: integer }
@@ -162,6 +168,9 @@ triggers:
     event_type: =body.event_type
     dedup: =body.id
     correlation: =body.data.outflow_id
+    # A partner holding the client's one subscription delivers each event
+    # into the sub-tenants whose connection lists the wallet (decision 0031).
+    route: { key: =body.wallet_id, field: wallet_ids }
   credit_event:
     type: webhook
     verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
@@ -169,6 +178,7 @@ triggers:
     event_type: =body.event_type
     dedup: =body.id
     correlation: =body.wallet_id
+    route: { key: =body.wallet_id, field: wallet_ids }
   transfer_event:
     type: webhook
     verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
@@ -176,3 +186,6 @@ triggers:
     event_type: =body.event_type
     dedup: =body.id
     correlation: =body.wallet_id
+    # Fires once per side, each with its own wallet_id: each side reaches
+    # the sub-tenant that holds that wallet.
+    route: { key: =body.wallet_id, field: wallet_ids }

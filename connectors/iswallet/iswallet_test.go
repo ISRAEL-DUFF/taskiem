@@ -187,3 +187,98 @@ func containsAll(s string, subs ...string) bool {
 	}
 	return true
 }
+
+// callAs is call with the connection's other fields (the allow-list).
+func callAs(t *testing.T, creds map[string]string, action string, input map[string]any, req connector.Request, exchanges ...string) (connector.Response, error) {
+	t.Helper()
+	var exs []fixture.Exchange
+	for _, n := range exchanges {
+		exs = append(exs, fixture.Load(t, n))
+	}
+	srv := fixture.Serve(t, exs...)
+	c := New(Options{BaseURL: srv.URL, Now: func() time.Time { return now }})
+	req.Input, req.HTTP = input, srv.Client()
+	req.Credentials = map[string]string{"api_key": "isw_test_key"}
+	for k, v := range creds {
+		req.Credentials[k] = v
+	}
+	return c.Actions[action].Execute(context.Background(), req)
+}
+
+// TestWalletAllowList: a connection with wallet_ids moves and reads money
+// only from those wallets; anything else is refused before a request is
+// sent (no exchange is served, so a request would fail the fixture).
+func TestWalletAllowList(t *testing.T) {
+	company := map[string]string{"wallet_ids": "6f1e, 7a00", "shared_client": "true"}
+	refused := func(name string, err error) {
+		t.Helper()
+		if !errors.Is(err, ErrWalletNotAllowed) || effects.Classify(err) != effects.KindFatal || !strings.Contains(err.Error(), "WALLET_NOT_ALLOWED") {
+			t.Errorf("%s: %v, want a fatal WALLET_NOT_ALLOWED", name, err)
+		}
+	}
+	_, err := callAs(t, company, "transfer", map[string]any{"from_wallet_id": "9c2a", "to_wallet_id": "6f1e", "amount": 100}, write(1, now))
+	refused("transfer from another company's wallet", err)
+	_, err = callAs(t, company, "payout", map[string]any{"wallet_id": "9c2a", "amount": 100, "bank_code": "044", "account_number": "0690000031", "account_name": "X"}, write(1, now))
+	refused("payout from another company's wallet", err)
+	_, err = callAs(t, company, "get_balance", map[string]any{"wallet_id": "9c2a"}, connector.Request{})
+	refused("balance of another company's wallet", err)
+	_, err = callAs(t, company, "transfer", map[string]any{"to_wallet_id": "6f1e", "amount": 100}, write(1, now))
+	refused("transfer naming no source", err)
+
+	// Its own wallets work; the destination of a transfer is not limited.
+	if _, err := callAs(t, company, "transfer", map[string]any{"from_wallet_id": "6f1e", "to_wallet_id": "9c2a", "amount": 4500000, "narration": "Sept salary emp-417"},
+		write(1, now), "transfer_completed"); err != nil {
+		t.Errorf("transfer from its own wallet: %v", err)
+	}
+	if _, err := callAs(t, company, "payout", payoutIn, write(1, now), "payout_pending"); err != nil {
+		t.Errorf("payout from its own wallet: %v", err)
+	}
+	if _, err := callAs(t, company, "get_balance", map[string]any{"wallet_id": "6f1e"}, connector.Request{}, "balance"); err != nil {
+		t.Errorf("own balance: %v", err)
+	}
+	// A payout of another wallet is withheld even when asked for by its id.
+	r, err := callAs(t, company, "get_payout", map[string]any{"outflow_id": "8d3f"}, connector.Request{}, "get_payout_confirmed")
+	if err != nil || r.Output.(map[string]any)["wallet_id"] != "6f1e" {
+		t.Errorf("own payout: %v %v", r.Output, err)
+	}
+	_, err = callAs(t, map[string]string{"wallet_ids": "7a00"}, "get_payout", map[string]any{"outflow_id": "8d3f"}, connector.Request{}, "get_payout_confirmed")
+	refused("another wallet's payout", err)
+
+	// A shared client's connection without wallets may use none.
+	_, err = callAs(t, map[string]string{"shared_client": "true"}, "transfer", map[string]any{"from_wallet_id": "6f1e", "to_wallet_id": "9c2a", "amount": 100}, write(1, now))
+	if !errors.Is(err, ErrAllowListMissing) || effects.Classify(err) != effects.KindFatal {
+		t.Errorf("shared client without wallets: %v", err)
+	}
+	_, err = callAs(t, map[string]string{"shared_client": "true"}, "get_payout", map[string]any{"outflow_id": "8d3f"}, connector.Request{})
+	if !errors.Is(err, ErrAllowListMissing) {
+		t.Errorf("shared client without wallets, get_payout: %v", err)
+	}
+	// A connection of the client's own (no allow-list, not shared) is unchanged.
+	if _, err := callAs(t, nil, "get_balance", map[string]any{"wallet_id": "6f1e"}, connector.Request{}, "balance"); err != nil {
+		t.Errorf("unlimited connection: %v", err)
+	}
+}
+
+func TestSharedClientNeedsWallets(t *testing.T) {
+	for creds, ok := range map[[2]string]bool{
+		{"", ""}: true, {"false", ""}: true, {"true", "6f1e"}: true, {"true", " 6f1e ,7a00"}: true,
+		{"true", ""}: false, {"true", " , "}: false, {"yes", "6f1e"}: false,
+	} {
+		err := New(Options{}).CheckCredentials(map[string]string{"api_key": "k", "shared_client": creds[0], "wallet_ids": creds[1]})
+		if (err == nil) != ok {
+			t.Errorf("shared_client %q wallet_ids %q: %v", creds[0], creds[1], err)
+		}
+	}
+}
+
+func TestEventsRouteByWallet(t *testing.T) {
+	m := New(Options{}).Manifest
+	for _, name := range []string{"outflow_event", "credit_event", "transfer_event"} {
+		if r := m.Triggers[name].Route; r == nil || r.Key != "=body.wallet_id" || r.Field != "wallet_ids" {
+			t.Errorf("%s route %+v", name, r)
+		}
+	}
+	if k := m.RouteKeys(map[string]string{"wallet_ids": "6f1e,7a00, 6f1e"}); len(k["wallet_ids"]) != 2 {
+		t.Errorf("route keys %v", k)
+	}
+}

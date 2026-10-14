@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"maps"
 	"mime"
 	"net/http"
 	"net/url"
@@ -654,13 +653,6 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		test = b && err == nil
 	}
 	// Subscribed workflows, loaded once for every event in the delivery.
-	type subscriber struct {
-		workflow   uuid.UUID
-		version    int
-		events     []string
-		connection *string
-		options    map[string]any
-	}
 	var subs []subscriber
 	err = db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if sub != nil && test {
@@ -672,29 +664,19 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		if sub != nil {
 			owner = sub.WorkflowID
 		}
-		rows, err := tx.Query(ctx, `SELECT workflow_id, version, COALESCE(events, '{}'), connection, options FROM triggers
-			WHERE type = 'connector_event' AND environment = $1 AND connector = $2 AND trigger_name = $3 AND ($4::uuid IS NULL OR workflow_id = $4)`,
-			env, ref, name, nullUUID(owner))
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			var s subscriber
-			var opts []byte
-			if err := rows.Scan(&s.workflow, &s.version, &s.events, &s.connection, &opts); err != nil {
-				return err
-			}
-			if len(opts) > 0 {
-				_ = json.Unmarshal(opts, &s.options)
-			}
-			subs = append(subs, s)
-		}
-		return rows.Err()
+		var err error
+		subs, err = loadSubscribers(ctx, tx, env, ref, name, owner)
+		return err
 	})
 	if err != nil {
 		h.unavailable(w, r, err)
 		return
 	}
+	here := target{tenant: tenant, connection: connection, throttled: d.throttled, subs: subs}
+	// A partner holding a provider's one subscription for all its
+	// customers routes each event on to the sub-tenants it is about
+	// (decision 0031). Not for a provider's test, nor a remote trigger.
+	route := spec.Route != nil && sub == nil && !test
 
 	// A provider that batches events gets one delivery per item.
 	items := []any{nil}
@@ -743,64 +725,22 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 			results = append(results, map[string]any{"ignored": event})
 			continue
 		}
-		out := map[string]any{"event": event}
-		payload := map[string]any{"event": event, "body": p.body}
-		trig := map[string]any{"type": "connector_event", "connector": ref, "trigger": name, "event": event, "body": p.body}
-		if spec.Split != "" {
-			payload["item"], trig["item"] = item, item
+		ev := eventItem{conn: conn, ref: ref, name: name, env: env, event: event, dedup: dedup, correlation: correlation,
+			body: p.body, item: item, split: spec.Split != "", test: test}
+		out, ok := h.deliverInto(ctx, w, r, here, ev)
+		if !ok {
+			return
 		}
-		if test {
-			out["test"], trig["test"] = true, true
-		}
-		if correlation != "" {
-			woke, fresh, err := h.Store.DeliverSignalOnce(ctx, tenant, env, ref+":"+name, correlation, dedup, payload)
-			if err != nil {
-				h.unavailable(w, r, err)
+		if route {
+			// An event without the key (or whose key expression fails)
+			// matches no sub-tenant: it is recorded as unrouted.
+			key, _ := evalString(h.exprs, spec.Route.Key, ia)
+			n, ok := h.routeEvent(ctx, w, r, tenant, spec.Route.Field, key, ev)
+			if !ok {
 				return
 			}
-			out["signalled"], out["duplicate"] = len(woke), !fresh
+			out["routed"] = n
 		}
-		runs := []uuid.UUID{}
-		for _, s := range subs {
-			if (len(s.events) > 0 || test) && !slices.Contains(s.events, event) {
-				continue
-			}
-			if s.connection != nil && *s.connection != connection {
-				continue
-			}
-			runTrig := trig
-			if enrich := conn.Enrichers[name]; enrich != nil {
-				body, err := h.enrich(ctx, enrich, tenant, env, conn, connection, s.options, p.body)
-				if err != nil {
-					h.unavailable(w, r, fmt.Errorf("completing the event: %w", err))
-					return
-				}
-				runTrig = maps.Clone(trig)
-				runTrig["body"] = body
-			}
-			// Signals above were delivered whatever the tenant's limits; a
-			// refused start fails the delivery so the provider retries, and
-			// the retry's signal is recognised as a duplicate.
-			run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
-				TenantID: tenant, WorkflowID: s.workflow, Version: s.version, Environment: env,
-				Trigger: runTrig, StartedBy: "connector:" + ref, TriggerID: "event/" + s.workflow.String() + "/" + env, DedupKey: dedup,
-				Throttled: d.throttled,
-			})
-			if le, ok := runtime.IsLimit(err); ok {
-				limited(w, le)
-				return
-			}
-			if errors.Is(err, runtime.ErrTenantSuspended) {
-				h.suspended(w, r, tenant)
-				return
-			}
-			if err != nil {
-				h.unavailable(w, r, err)
-				return
-			}
-			runs = append(runs, run.ID)
-		}
-		out["runs"] = runs
 		results = append(results, out)
 	}
 	if a := spec.Ack; a != nil {

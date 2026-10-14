@@ -75,6 +75,7 @@ func (s *Server) partnerRoutes(r chi.Router) {
 	r.With(manage).Post("/sub-tenants/{sub}/connections", s.createSubTenantConnection)
 	r.With(manage).Put("/sub-tenants/{sub}/connections/{conn}/credentials", s.replaceSubTenantConnection)
 	r.With(manage).Delete("/sub-tenants/{sub}/connections/{conn}", s.deleteSubTenantConnection)
+	r.With(read).Get("/event-routes", s.listEventRoutes)
 	r.With(read).Get("/webhook-deliveries", s.listWebhookDeliveries)
 	r.With(manage).Post("/webhook-deliveries/{id}/retry", s.retryWebhookDelivery)
 }

@@ -50,6 +50,19 @@ type TriggerSpec struct {
 	// test the endpoint: it is verified and acknowledged, and starts only
 	// workflows that subscribe to its event by name.
 	TestEvent string `json:"test_event"`
+	// Route, when set, lets a partner hold the provider's one subscription
+	// and deliver each event into the sub-tenants whose connection lists
+	// the event's key (decision 0031).
+	Route *RouteSpec `json:"route"`
+}
+
+// RouteSpec routes a partner's delivery to its sub-tenants: Key, an
+// expression over the delivery (and item), names the account the event is
+// about; Field names the connection field (a list) holding the accounts a
+// connection may use.
+type RouteSpec struct {
+	Key   string `json:"key"`
+	Field string `json:"field"`
 }
 
 // Remote reports whether Taskiem registers this trigger at the provider.

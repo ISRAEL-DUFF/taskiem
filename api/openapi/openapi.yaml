@@ -5161,6 +5161,58 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/partner/event-routes:
+    get:
+      operationId: listEventRoutes
+      tags:
+      - Partner
+      summary: List routed provider events
+      description: Where provider events received at the partner's own connector trigger went (decision 0031). One entry per event and sub-tenant it was delivered to, or an `unrouted` entry when no sub-tenant's connection lists the event's key. Ids only, never the event's body. Newest first.
+      security:
+      - apiKey: []
+      x-taskiem-permission: partner.read
+      x-taskiem-plan-feature:
+      - embedded
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRouteList'
+        '400':
+          description: A bad status, sub-tenant id or time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - routed
+          - unrouted
+      - name: sub_tenant
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
   /v1/partner/sub-tenants:
     get:
       operationId: listSubTenants
@@ -15103,6 +15155,60 @@ components:
           enum:
           - active
       additionalProperties: false
+    EventRouteList:
+      type: object
+      required:
+      - routes
+      properties:
+        routes:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - environment
+            - connector
+            - trigger
+            - event
+            - dedup
+            - route_key
+            - sub_tenant_id
+            - connection
+            - status
+            - received_at
+            properties:
+              id:
+                type: string
+                format: uuid
+              environment:
+                type: string
+              connector:
+                type: string
+                description: The connector and major version, e.g. `iswallet@1`.
+              trigger:
+                type: string
+              event:
+                type: string
+              dedup:
+                type: string
+                description: The event's dedup key (iswallet's envelope id).
+              route_key:
+                type: string
+                description: The account the event names (iswallet's wallet id).
+              sub_tenant_id:
+                $ref: '#/components/schemas/NullableUUID'
+              connection:
+                type:
+                - string
+                - 'null'
+                description: The sub-tenant's connection that lists the key.
+              status:
+                type: string
+                enum:
+                - routed
+                - unrouted
+              received_at:
+                $ref: '#/components/schemas/Timestamp'
     WebhookDeliveryList:
       type: object
       required:
