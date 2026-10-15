@@ -232,8 +232,8 @@ jobs:
           PW=$(sed -n 's/.*first password[^:]*: //p' install.log | tail -n1)
           test -n "$PW"
           sudo sh -c 'grep -q "unseal key" /root/taskiem-recovery-*.txt && shred -u /root/taskiem-recovery-*.txt'
-          sudo taskiem-vps backup
-          sudo taskiem-vps check
+          sudo -E taskiem-vps backup
+          sudo -E taskiem-vps check
           # Test only: an https public URL holds admins to passkeys, which a script cannot use.
           echo "TASKIEM_REQUIRE_ADMIN_PASSKEYS='false'" | sudo tee -a /opt/taskiem/taskiem.env >/dev/null
           sudo docker compose --project-directory /opt/taskiem up -d --wait taskiem
@@ -245,13 +245,13 @@ jobs:
           sudo docker compose --project-directory /opt/taskiem restart openbao
           for i in $(seq 30); do sudo docker compose --project-directory /opt/taskiem exec -T openbao bao status >/dev/null 2>&1 && break; sleep 2; done
           put ci_two
-          sudo taskiem-vps check
+          sudo -E taskiem-vps check
       - name: A broken release is rolled back
         run: |
           if sudo -E TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:broken taskiem-vps update --now; then echo "the broken release was accepted"; exit 1; fi
           test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
           curl -fsk https://localhost/readyz
-          out=$(sudo taskiem-vps check || true)
+          out=$(sudo -E taskiem-vps check || true)
           grep -q 'taskiem:broken failed to upgrade' <<<"$out"
       - name: A good release upgrades; rollback returns to the one before
         run: |
@@ -260,10 +260,10 @@ jobs:
           sudo -E taskiem-vps rollback
           test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
           curl -fsk https://localhost/readyz
-          sudo taskiem-vps status
+          sudo -E taskiem-vps status
       - name: Disaster and restore from the backup and the recovery sheet
         run: |
-          sudo taskiem-vps backup
+          sudo -E taskiem-vps backup
           UNSEAL=$(sudo sed -n "s/^BAO_STATIC_UNSEAL_KEY='\(.*\)'$/\1/p" /opt/taskiem/openbao-unseal.env)
           RESTIC=$(sudo sed -n "s/^RESTIC_PASSWORD='\(.*\)'$/\1/p" /etc/taskiem/backup.env)
           test -n "$UNSEAL" && test -n "$RESTIC"
