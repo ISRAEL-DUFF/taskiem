@@ -188,6 +188,9 @@ jobs:
   # (auto-unseal), a broken release (rolled back), a good one, and rollback.
   vps:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash # -eo pipefail: a failure before "| tee" fails the step
     services:
       postgres:
         image: postgres:16

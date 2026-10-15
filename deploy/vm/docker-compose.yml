@@ -31,7 +31,7 @@ services:
     depends_on:
       taskiem: { condition: service_healthy }
 
-  # Keys for every secret Taskiem stores. File storage on a named volume;
+  # Keys for every secret Taskiem stores. Raft storage on a named volume;
   # unseals itself on start with the static key in openbao-unseal.env
   # (decision 0032, amendment). Not published: only Taskiem talks to it, on
   # the Compose network.
@@ -39,7 +39,6 @@ services:
     <<: *hardening
     image: openbao/openbao:${OPENBAO_VERSION:-2.7.1}
     command: ["server"]
-    cap_add: [IPC_LOCK]
     environment:
       BAO_ADDR: http://127.0.0.1:8200
     env_file: [openbao-unseal.env]

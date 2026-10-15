@@ -80,7 +80,7 @@ Each upgrade, successful or rolled back, is reported too.
 
 ## Backups and restore
 
-Every night, encrypted with restic into the bucket: OpenBao's storage, Taskiem's archive and audit anchors, and the server's settings, kept 14 daily, 8 weekly and 12 monthly. The unseal key is left out on purpose: it is on the recovery sheet. The database is backed up by its provider (point-in-time recovery).
+Every night, encrypted with restic into the bucket: OpenBao's storage, Taskiem's archive and audit anchors, and the server's settings, kept 14 daily, 8 weekly and 12 monthly. The unseal key is left out on purpose: it is on the recovery sheet. The database is backed up by its provider (point-in-time recovery). OpenBao keeps its keys in an integrated (Raft) database, which is copied with OpenBao stopped for a few seconds so the copy is consistent; anything needing a secret in those seconds waits for its retry.
 
 **To rebuild on a new VPS** (the old one is gone): restore the database first if it was lost too, then on the new VPS
 

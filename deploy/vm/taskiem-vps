@@ -462,12 +462,12 @@ cmd_rollback() {
 # (read-only unless RESTIC_MODE=rw, for restore). A repository that is a
 # local path (tests, or a mounted disk) is mounted too.
 restic_run() {
-  local mode=${RESTIC_MODE:-ro} repo host extra=()
+  local mode=${RESTIC_MODE:-ro} repo host extra=() openbao=${OPENBAO_SOURCE:-taskiem_openbao_data}
   repo=$(env_get "$ETC/backup.env" RESTIC_REPOSITORY)
   host=$(conf DOMAIN)
   case $repo in /*) mkdir -p "$repo" && extra=(-v "$repo:$repo") ;; esac
   docker run --rm --env-file "$ETC/backup.env" --hostname "${host:-taskiem}" "${extra[@]}" \
-    -v "taskiem_openbao_data:/backup/openbao:$mode" -v "taskiem_taskiem_data:/backup/taskiem-data:$mode" \
+    -v "$openbao:/backup/openbao:$mode" -v "taskiem_taskiem_data:/backup/taskiem-data:$mode" \
     -v "$KIT:/backup/kit:$mode" -v "$ETC:/backup/etc:$mode" \
     "$RESTIC_IMAGE" "$@"
 }
@@ -475,10 +475,18 @@ restic_run() {
 cmd_backup() {
   need_root backup
   [ -s "$ETC/backup.env" ] || die "no backup destination: run taskiem-vps setup"
+  # OpenBao's Raft database must not be copied while it is open: stop it for
+  # the seconds a local copy takes, start it again, and back up the copy.
   # The unseal key is left out on purpose: it is on the recovery sheet.
-  # OpenBao's file storage only changes when keys or policies do, so a copy
-  # of the live directory is consistent.
-  if restic_run backup /backup --tag taskiem --exclude /backup/kit/openbao-unseal.env --exclude /backup/etc/backup.env &&
+  local copy="$STATE/openbao-copy"
+  mkdir -p "$copy" && chmod 700 "$copy"
+  trap 'compose start openbao >/dev/null 2>&1 || true' EXIT
+  compose stop openbao >/dev/null
+  docker run --rm --user 0 --entrypoint sh -v taskiem_openbao_data:/src:ro -v "$copy:/dst" "$OPENBAO_IMAGE" \
+    -c 'find /dst -mindepth 1 -delete && cp -a /src/. /dst/'
+  compose start openbao >/dev/null
+  trap - EXIT
+  if OPENBAO_SOURCE=$copy restic_run backup /backup --tag taskiem --exclude /backup/kit/openbao-unseal.env --exclude /backup/etc/backup.env &&
     restic_run forget --tag taskiem --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune >/dev/null; then
     date -u +%FT%TZ >"$STATE/last-backup"
     log "backup done"
