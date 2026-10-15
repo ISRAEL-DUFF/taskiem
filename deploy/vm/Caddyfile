@@ -1,0 +1,8 @@
+# HTTPS for Taskiem (certificates from Let's Encrypt, renewed by Caddy).
+# Everything goes to the one process: the web app, /v1, and webhooks
+# (/hooks/, which the all-roles process serves too). Taskiem sets HSTS
+# itself on an https TASKIEM_PUBLIC_URL. Metrics (9090) are never proxied.
+{$TASKIEM_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy taskiem:8080
+}

@@ -1,0 +1,112 @@
+# Taskiem on one VM (decision 0032): every role in one process, persistent
+# OpenBao, Caddy for HTTPS. Postgres is NOT here: use a managed Postgres 16
+# (or one on another host) with backups and point-in-time recovery.
+#
+# Read docs/vm.md first. In short, in this directory:
+#   for f in .env taskiem.env migrate.env openbao.env; do cp $f.example $f; done
+#   (fill them in; chmod 600 *.env)
+#   docker compose up -d openbao      # then initialise and unseal it (docs/vm.md)
+#   docker compose up -d
+#
+# Container steps are deliberately off: their only safe runner is Kubernetes.
+name: taskiem
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "50m", max-file: "5" }
+
+services:
+  caddy:
+    <<: *hardening
+    image: caddy:2
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      TASKIEM_DOMAIN: ${TASKIEM_DOMAIN:?set TASKIEM_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      taskiem: { condition: service_healthy }
+
+  # Keys for every secret Taskiem stores. File storage on a named volume;
+  # sealed after every restart until someone unseals it (docs/vm.md). Not
+  # published: only Taskiem talks to it, on the Compose network.
+  openbao:
+    <<: *hardening
+    image: openbao/openbao:${OPENBAO_VERSION:-2.4.1}
+    command: ["server"]
+    cap_add: [IPC_LOCK]
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+    volumes:
+      - ./openbao.hcl:/openbao/config/openbao.hcl:ro
+      - ./openbao-taskiem-policy.hcl:/openbao/policies/taskiem.hcl:ro
+      - openbao_data:/openbao/file
+    healthcheck:
+      # 200 only when initialised and unsealed.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8200/v1/sys/health"]
+      interval: 10s
+      retries: 3
+
+  # Renews Taskiem's periodic OpenBao token once a day. Taskiem itself does
+  # not renew it, and an expired token makes every secret unreadable.
+  openbao-renew:
+    <<: *hardening
+    image: openbao/openbao:${OPENBAO_VERSION:-2.4.1}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        export BAO_TOKEN="$$TASKIEM_OPENBAO_TOKEN"
+        while :; do
+          if bao token renew >/dev/null; then echo "$$(date -u +%FT%TZ) renewed"; else echo "$$(date -u +%FT%TZ) RENEWAL FAILED" >&2; fi
+          sleep 86400
+        done
+    environment:
+      BAO_ADDR: http://openbao:8200
+    # Only the token: never the database or other secrets.
+    env_file: [openbao.env]
+    depends_on:
+      openbao: { condition: service_healthy }
+
+  # Forward-only migrations as the schema owner, before Taskiem starts.
+  migrate:
+    image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
+    command: ["migrate"]
+    env_file: [migrate.env]
+    restart: "no"
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+
+  taskiem:
+    <<: *hardening
+    image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
+    command: ["serve", "--role", "all"]
+    env_file: [taskiem.env, openbao.env]
+    read_only: true
+    cap_drop: [ALL]
+    tmpfs: [/tmp, /cache]
+    volumes:
+      # Archived runs and audit anchors (TASKIEM_ARCHIVE_DIR, TASKIEM_ANCHOR_DIR).
+      - taskiem_data:/var/lib/taskiem
+    ports:
+      # Metrics for a Prometheus on this host only; never public.
+      - "127.0.0.1:9090:9090"
+    # Workers drain for up to TASKIEM_WORKER_DRAIN (30 s) on shutdown.
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD", "/taskiem", "healthcheck"]
+      interval: 10s
+      retries: 6
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      openbao: { condition: service_healthy }
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  openbao_data: {}
+  taskiem_data: {}
