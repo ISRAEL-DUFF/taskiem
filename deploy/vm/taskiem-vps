@@ -136,7 +136,8 @@ wait_healthy() { # SECONDS
   local deadline=$((SECONDS + $1)) id status
   while [ $SECONDS -lt $deadline ]; do
     id=$(compose ps -q taskiem 2>/dev/null || true)
-    status=$([ -n "$id" ] && docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true)
+    status=""
+    if [ -n "$id" ]; then status=$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true); fi
     if [ "$status" = healthy ] && local_https /readyz >/dev/null 2>&1; then return 0; fi
     sleep 3
   done
@@ -190,6 +191,8 @@ cmd_setup() {
   touch "$ETC/vps.conf" && chmod 600 "$ETC/vps.conf"
   [ -f "$KIT/docker-compose.yml" ] || die "no deployment kit in $KIT (run install.sh)"
 
+  # ALERT_EMAIL and ALERT_WEBHOOK are read indirectly (${!f}) when saved below.
+  # shellcheck disable=SC2034
   local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET
   echo "Taskiem setup. Press Enter to keep the value in brackets." >&2
   ask DOMAIN "Public host name (DNS must point here)" "$(conf DOMAIN)"
@@ -215,7 +218,9 @@ cmd_setup() {
     ask_secret BACKUP_SECRET "Backup secret key" "$(env_get "$ETC/backup.env" AWS_SECRET_ACCESS_KEY)"
   fi
 
-  [ -n "$DOMAIN" ] && [ -n "$OWNER_EMAIL" ] && [ -n "$ORG" ] && [ -n "$DATABASE_URL" ] || die "domain, owner email, organisation and database URL are required"
+  if [ -z "$DOMAIN" ] || [ -z "$OWNER_EMAIL" ] || [ -z "$ORG" ] || [ -z "$DATABASE_URL" ]; then
+    die "domain, owner email, organisation and database URL are required"
+  fi
   case $CHANNEL in staging | production) ;; *) die "channel must be staging or production" ;; esac
   [[ $DATABASE_URL =~ ^(postgres(ql)?://)([^@/]*@)?([^/?]+)/([A-Za-z0-9_]+)(\?.*)?$ ]] || die "database URL must look like postgres://user:password@host:5432/dbname?sslmode=verify-full"
   local dsn_scheme=${BASH_REMATCH[1]} dsn_host=${BASH_REMATCH[4]} dbname=${BASH_REMATCH[5]} dsn_query=${BASH_REMATCH[6]}
@@ -301,7 +306,7 @@ cmd_setup() {
     local init root
     init=$(compose exec -T openbao bao operator init -format=json -recovery-shares=5 -recovery-threshold=3)
     root=$(jq -r .root_token <<<"$init")
-    for i in $(seq 30); do compose exec -T openbao bao status >/dev/null 2>&1 && break; sleep 2; done
+    for _ in $(seq 30); do compose exec -T openbao bao status >/dev/null 2>&1 && break; sleep 2; done
     compose exec -T openbao bao status >/dev/null 2>&1 || die "OpenBao did not unseal itself after initialising"
     local token
     token=$(compose exec -T -e BAO_TOKEN="$root" openbao sh -ec '
@@ -498,7 +503,9 @@ cmd_restore() {
   [ -z "$BACKUP_KEY_ID" ] || ask_secret BACKUP_SECRET "Backup secret key"
   ask_secret RESTIC_PASSWORD "Backup repository password (recovery sheet)"
   ask_secret UNSEAL_KEY "OpenBao unseal key (recovery sheet)"
-  [ -n "$BACKUP_REPO" ] && [ -n "$RESTIC_PASSWORD" ] && [ -n "$UNSEAL_KEY" ] || die "the repository, its password and the unseal key are required"
+  if [ -z "$BACKUP_REPO" ] || [ -z "$RESTIC_PASSWORD" ] || [ -z "$UNSEAL_KEY" ]; then
+    die "the repository, its password and the unseal key are required"
+  fi
   env_set "$ETC/backup.env" RESTIC_REPOSITORY "$BACKUP_REPO"
   env_set "$ETC/backup.env" RESTIC_PASSWORD "$RESTIC_PASSWORD"
   env_set "$ETC/backup.env" AWS_ACCESS_KEY_ID "${BACKUP_KEY_ID:-}"
@@ -525,7 +532,8 @@ run_checks() {
   local id status domain days age
   domain=$(conf DOMAIN)
   id=$(compose ps -q taskiem 2>/dev/null || true)
-  status=$([ -n "$id" ] && docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || echo missing)
+  status=missing
+  if [ -n "$id" ]; then status=$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || echo missing); fi
   [ "$status" = healthy ] || echo "Taskiem container is $status"
   local_https /readyz >/dev/null 2>&1 || echo "https://$domain/readyz does not answer"
   compose exec -T openbao wget -qO- http://127.0.0.1:8200/v1/sys/health >/dev/null 2>&1 || echo "OpenBao is sealed or down: secrets cannot be read"
