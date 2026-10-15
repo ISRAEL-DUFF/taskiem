@@ -27,7 +27,7 @@ Payrolla's side is built and tested against a stub of our webhook. Its reply of 
 | N7 | Confirm 35 days of watching for reversals is enough (settable per company, 1–60) | Confirm | [ ] |
 | E1 | Embedding the builder: after the payroll pilot | Later | Deferred by Payrolla |
 
-Known from Payrolla's reply: report base URL `https://synledger.name.ng/payroller/api/v1/integrations/taskiem` (sandbox) and `https://ispend.name.ng/payroller/api/v1/integrations/taskiem` (production), one bearer token per company issued in Payrolla and entered by the company's account holder; re-sends use `{run_id}-r2`, `-r3`; payrolls are sent once locked.
+Known from Payrolla's reply: report base URL `https://synledger.name.ng/payrolla/api/v1/integrations/taskiem` (sandbox; the reply said `/payroller`, but staging serves Payrolla under `/payrolla`, checked 15 October: `/payrolla/health` answers ok and the integration path answers 401 without a token) and `https://ispend.name.ng/payroller/api/v1/integrations/taskiem` (production, as the reply gave it; confirm whether it moved to `/payrolla` too), one bearer token per company issued in Payrolla and entered by the company's account holder; re-sends use `{run_id}-r2`, `-r3`; payrolls are sent once locked.
 
 ## iswallet (and iSpend)
 
