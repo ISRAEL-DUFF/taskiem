@@ -3,6 +3,7 @@ name: ci
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 permissions:
@@ -181,6 +182,59 @@ jobs:
             repair-eval.md
           if-no-files-found: ignore
 
+  # The image the Helm chart and the VM deployment pull (decision 0032):
+  # pushed to GHCR on every merge to main and every v* tag, signed keylessly
+  # with cosign, with an SBOM and build provenance attached. Deployments pin
+  # the immutable sha-<12> tag (or the version tag), never "main".
+  image:
+    if: github.event_name == 'push'
+    needs: [go, typescript, web, docker, licences]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing via GitHub OIDC
+    steps:
+      - uses: actions/checkout@v5
+      - name: Image name and version
+        id: name
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"; fi
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ steps.name.outputs.image }}
+          tags: |
+            type=raw,value=sha-${{ steps.name.outputs.sha }}
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          push: true
+          build-args: VERSION=${{ steps.name.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image
+        env:
+          REF: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          cosign sign --yes "$REF"
+          { echo "Pushed and signed \`$REF\`"; echo; echo "Tags: $(echo "$TAGS" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
+
   # Signed builds and SBOM (build plan Phase 0). Runs on main only.
   release-build:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -226,5 +280,10 @@ jobs:
         run: |
           make chart
           git diff --exit-code deploy/kubernetes
+      - name: VM Compose file (decision 0032)
+        working-directory: deploy/vm
+        run: |
+          for f in .env taskiem.env migrate.env openbao.env; do cp "$f.example" "$f"; done
+          docker compose config --quiet
       - name: Image
         run: docker build --build-arg VERSION=ci -t taskiem:ci .
