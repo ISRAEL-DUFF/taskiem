@@ -298,8 +298,8 @@ cmd_setup() {
   log "starting OpenBao"
   compose up -d openbao
   # bao status exits 0 when unsealed, 2 when sealed or not initialised, 1 on error.
-  local i rc st
-  for i in $(seq 60); do rc=0; compose exec -T openbao bao status >/dev/null 2>&1 || rc=$?; [ "$rc" = 1 ] || break; sleep 2; done
+  local rc st
+  for _ in $(seq 60); do rc=0; compose exec -T openbao bao status >/dev/null 2>&1 || rc=$?; [ "$rc" = 1 ] || break; sleep 2; done
   st=$(compose exec -T openbao bao status -format=json 2>/dev/null || true)
   if [ "$(jq -r '.initialized // false' <<<"$st" 2>/dev/null)" != true ]; then
     log "initialising OpenBao"
