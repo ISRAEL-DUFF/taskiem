@@ -350,7 +350,11 @@ SQL
     if [ -n "$SMTP_URL" ] && owner_reset_email; then
       log "$OWNER_EMAIL has been sent a link to set their password"
     else
-      printf '\nOwner %s, first password (shown once, change it at first sign-in): %s\n\n' "$OWNER_EMAIL" "$pw" >/dev/tty 2>/dev/null || printf 'Owner first password: %s\n' "$pw"
+      if { true >/dev/tty; } 2>/dev/null; then
+        printf '\nOwner %s, first password (shown once, change it at first sign-in): %s\n\n' "$OWNER_EMAIL" "$pw" >/dev/tty
+      else
+        printf 'Owner first password: %s\n' "$pw"
+      fi
     fi
   fi
 
@@ -458,6 +462,16 @@ cmd_rollback() {
   log "rolled back"
 }
 
+# docker run --env-file takes values literally, quotes included (Compose
+# strips them): give it an unquoted copy, readable by root only.
+docker_env() { # FILE -> prints the path of a temporary unquoted copy
+  local tmp
+  tmp=$(mktemp)
+  chmod 600 "$tmp"
+  sed -n "s/^\([A-Za-z_][A-Za-z0-9_]*\)='\(.*\)'\$/\1=\2/p" "$1" >"$tmp"
+  printf '%s\n' "$tmp"
+}
+
 # restic in a container, with what it backs up mounted under /backup
 # (read-only unless RESTIC_MODE=rw, for restore). A repository that is a
 # local path (tests, or a mounted disk) is mounted too.
@@ -466,10 +480,14 @@ restic_run() {
   repo=$(env_get "$ETC/backup.env" RESTIC_REPOSITORY)
   host=$(conf DOMAIN)
   case $repo in /*) mkdir -p "$repo" && extra=(-v "$repo:$repo") ;; esac
-  docker run --rm --env-file "$ETC/backup.env" --hostname "${host:-taskiem}" "${extra[@]}" \
+  local envf rc=0
+  envf=$(docker_env "$ETC/backup.env")
+  docker run --rm --env-file "$envf" --hostname "${host:-taskiem}" "${extra[@]}" \
     -v "$openbao:/backup/openbao:$mode" -v "taskiem_taskiem_data:/backup/taskiem-data:$mode" \
     -v "$KIT:/backup/kit:$mode" -v "$ETC:/backup/etc:$mode" \
-    "$RESTIC_IMAGE" "$@"
+    "$RESTIC_IMAGE" "$@" || rc=$?
+  rm -f "$envf"
+  return "$rc"
 }
 
 cmd_backup() {
