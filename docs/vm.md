@@ -1,144 +1,109 @@
 # Running Taskiem on one VM
 
-[Decision 0032](decisions/0032-deployment-target.md) allows staging and the first production environment to run on one VM until a trigger moves them to [Kubernetes](kubernetes.md). This guide sets that up with `deploy/vm`: every role in one process, OpenBao with persistent storage, and Caddy for HTTPS. Postgres runs elsewhere, on a managed service or another host, with backups and point-in-time recovery.
+[Decision 0032](decisions/0032-deployment-target.md) runs staging and the first production environment on one VM until a trigger moves them to [Kubernetes](kubernetes.md). Installing, upgrading, backing up and watching that VM is automated by `taskiem-vps` (in `deploy/vm`): you answer a few questions once, and the server then keeps itself on the newest signed release of its channel, rolls back a release that fails, backs itself up every night and alerts you when something is wrong.
 
-What this deployment does not do: container steps (their only safe runner is Kubernetes), more than one replica of anything, or upgrades without a short stop. If you need any of those, you have met a trigger in 0032.
+What runs: Taskiem with every role in one process, OpenBao (auto-unsealed) for the key that wraps every secret, and Caddy for HTTPS. Postgres is a managed service, outside the VM. Container steps are off (their only safe runner is Kubernetes).
 
 ## Before you start
 
 | You need | Notes |
 | --- | --- |
-| A Linux VM, hosted in Nigeria (P4-C1) | At least 2 vCPU and 4 GiB; 4 vCPU and 8 GiB is comfortable (each running Python step may use 256 MiB). Docker Engine with the Compose plugin |
-| A DNS name | An A (and AAAA) record pointing at the VM before the first start, so Caddy can get a certificate |
-| A firewall | Inbound 80 and 443 from anywhere; 22 from your own addresses only. Nothing else, including 8200 (OpenBao) and 9090 (metrics) |
-| Postgres 16 | Managed, or on another host; backups with point-in-time recovery turned on. `max_connections` of at least 30 for this deployment |
-| SMTP | For password resets, invitations and alerts (P4-O1 for the sending domain) |
-| The image | Published by CI to `ghcr.io/israel-duff/taskiem` on every merge to main, tagged `sha-<12 characters of the commit>` and, for releases, the version. The package is private until its owner makes it public; otherwise run `docker login ghcr.io` on the VM with a token that has only `read:packages` |
+| A VPS | Ubuntu 22.04 or 24.04 (or Debian 12), x86_64, hosted in Nigeria (P4-C1). At least 2 vCPU and 4 GiB; 4 vCPU and 8 GiB is comfortable |
+| A DNS name | An A record pointing at the VPS, so Caddy can get a certificate |
+| A Postgres 16 database | Managed, with point-in-time recovery turned on. An empty database and its owner, who must have `CREATEROLE` (managed services' admin users usually do) |
+| SMTP | For the owner's set-your-password link, invitations, password resets and alerts |
+| Backup storage | Any S3-compatible bucket (restic repository), with an access key limited to it. Optional, but without it nothing on the VM survives losing the VM |
+| Once per repository | In GitHub: make the `taskiem` package public (Packages → taskiem → Package settings), and create the `production` environment with required reviewers (Settings → Environments). See [Releases](#releases) |
 
-## 1. Database
+## Install
 
-Create the database and two roles. The owner runs migrations, which create the `taskiem_app` and `taskiem_dispatch` roles, so it needs `CREATEROLE` (on a managed service, use its administrator to create it). Taskiem itself signs in as a login role that is only a member of `taskiem_app` ([operations](operations.md#database-roles)).
-
-```sql
-CREATE ROLE taskiem_owner LOGIN CREATEROLE PASSWORD '…';
-CREATE DATABASE taskiem OWNER taskiem_owner;
-```
-
-After the first migration (step 4), as `taskiem_owner`:
-
-```sql
-CREATE ROLE taskiem LOGIN PASSWORD '…';
-GRANT taskiem_app TO taskiem;
-```
-
-Use `sslmode=verify-full` in both connection strings wherever the provider supports it.
-
-## 2. Files
-
-Copy `deploy/vm` to the VM (for example to `/opt/taskiem`) and, in it:
+On the VPS:
 
 ```sh
-for f in .env taskiem.env migrate.env openbao.env; do cp "$f.example" "$f"; done
-chmod 600 *.env
+curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/install.sh | sudo bash
 ```
 
-| File | Holds |
-| --- | --- |
-| `.env` | `TASKIEM_DOMAIN` and `TASKIEM_IMAGE` (an immutable tag, never `main`). No secrets |
-| `migrate.env` | The owner's connection string |
-| `taskiem.env` | Taskiem's settings: the `taskiem` role's connection string, the public URL, the anchor key (`openssl rand -base64 32`, kept offline too), SMTP |
-| `openbao.env` | Taskiem's OpenBao token, filled in during step 3 |
+It asks for the host name, the owner's email, the organisation's name, the database URL, SMTP, the release channel (staging or production), the upgrade window, where to send alerts, and the backup bucket. Then, without further questions, it:
 
-The `.env` files are ignored by Git; only the `.example` files are in the repository.
+1. installs Docker, cosign and the firewall rules (SSH, HTTP and HTTPS in; nothing else);
+2. picks the newest release on the channel and checks its signature: only images signed by this repository's CI are accepted;
+3. generates every secret itself (OpenBao's unseal key, the audit-anchor key, the database password, the backup password);
+4. initialises OpenBao, creates Taskiem's transit key and a token limited to it, and revokes the root token;
+5. migrates the database and creates the restricted role Taskiem signs in as;
+6. starts everything behind HTTPS, creates the organisation and its owner, and emails the owner a link to set their password (the owner then adds a passkey: administrators are held to passkeys);
+7. initialises the backup repository and turns on the timers: updates every 15 minutes, health checks every 5, a backup every night at 02:30.
 
-Check the image before trusting it. CI signs every image keylessly:
+It ends by writing a **recovery sheet** to `/root/taskiem-recovery-<date>.txt`: OpenBao's unseal and recovery keys, the anchor key and the backup password. Put it in two offline places, then delete it (`shred -u`); the health checks remind you until you do. Without the unseal key, a backup of OpenBao cannot be opened.
 
-```sh
-cosign verify "$TASKIEM_IMAGE" \
-  --certificate-identity-regexp '^https://github.com/ISRAEL-DUFF/taskiem/\.github/workflows/ci\.yml@refs/(heads/main|tags/v.+)$' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-```
+Re-run `sudo taskiem-vps setup` any time to change an answer; it keeps every secret and skips what is done.
 
-## 3. OpenBao
+**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, with `TASKIEM_VPS_NONINTERACTIVE=1`.
 
-OpenBao holds the key that wraps every secret Taskiem stores. It starts sealed, and stays sealed after every restart until people with unseal keys open it.
+## Releases
 
-1. Start it: `docker compose up -d openbao`.
-2. Initialise it once. Five key shares, any three of which unseal:
+CI publishes a signed image for every merge to main and every version tag. Servers follow a channel:
 
-   ```sh
-   docker compose exec openbao bao operator init -key-shares=5 -key-threshold=3
-   ```
-
-   Give each unseal key to a different person, stored offline. Keep the printed root token only until step 5.
-3. Unseal it: run `docker compose exec openbao bao operator unseal` three times, with three different keys (it prompts; nothing goes into shell history).
-4. Create Taskiem's key, policy and token. In a shell inside the container (`docker compose exec openbao sh`):
-
-   ```sh
-   bao login                                    # paste the root token at the prompt
-   bao secrets enable transit
-   bao write -f transit/keys/taskiem            # aes256-gcm96, not exportable, not deletable
-   bao policy write taskiem /openbao/policies/taskiem.hcl
-   bao token create -policy=taskiem -no-default-policy -orphan -period=768h -display-name=taskiem -field=token
-   ```
-
-   Put the token in `openbao.env` as `TASKIEM_OPENBAO_TOKEN`. It can only encrypt and decrypt with that key and renew itself (`openbao-taskiem-policy.hcl`). It is periodic: it lasts 32 days from its last renewal, and the `openbao-renew` service renews it daily. Taskiem does not renew it itself, so never stop `openbao-renew` for long.
-5. Revoke the root token: `bao token revoke -self`, then `exit`. A new one can be made later from the unseal keys (`bao operator generate-root`).
-
-## 4. Start
-
-```sh
-docker compose up -d
-docker compose ps        # migrate exited 0; openbao, taskiem and caddy healthy
-```
-
-The order is enforced: migrations first, Taskiem once they finish and OpenBao is unsealed, Caddy once Taskiem is healthy. Then create the `taskiem` login role (step 1) if you have not, and restart: `docker compose up -d --force-recreate taskiem`.
-
-Create the first tenant once. Read the password without echoing it:
-
-```sh
-read -rs P && docker compose run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD="$P" taskiem \
-  bootstrap --tenant "Payrolla" --email you@example.com; unset P
-```
-
-## 5. Check
-
-- `https://<domain>/readyz` answers `ok`; `https://<domain>/status` shows the status page.
-- Sign in; the owner is asked to add a passkey (administrators are held to passkeys with an https public URL).
-- Alerts → add an email channel, confirm it, and send a test message.
-- Audit log → Verify chain.
-- `docker compose logs openbao-renew` shows `renewed`.
-
-## 6. Partners
-
-Webhook URLs are on each workflow's Endpoints tab (or `GET /v1/workflows/{id}/triggers`):
-
-- **Payrolla** sends payrolls to `https://<domain>/hooks/<tenant>/payrolla/payroll-approved?env=prod`, signed with the environment secret `webhook_wf_payrollaSalaryDisbursement`. Set `payrolla_api_url` to Payrolla's report base URL and `payrolla_api_token` to the token the company issues ([Payrolla](integrations/payrolla.md)).
-- **iswallet** delivers outflow events to `https://<domain>/hooks/<tenant>/connectors/iswallet@1/outflow_event?env=prod&connection=<name>`. The connection holds the API key and the subscription's signing secret ([iswallet](integrations/iswallet.md)).
-
-The VM's public address is the platform's egress address; give it to partners who want it for incident forensics.
-
-## Upgrades
-
-1. Set `TASKIEM_IMAGE` in `.env` to the new tag, and verify its signature.
-2. `docker compose pull && docker compose up -d`.
-
-Taskiem drains its workers (up to 30 s), the migration runs, and the new version starts. Webhooks sent during the gap get connection errors and are retried by the sender; nothing already accepted is lost. Upgrade outside payroll runs. Every release works with the schema of the release before it, so going back means setting the previous tag again; the schema never moves backwards.
-
-## After a reboot
-
-Docker restarts every service, but OpenBao comes back **sealed**. Until it is unsealed (step 3.3), Taskiem cannot decrypt secrets, and anything that needs one fails. Unseal it at once, and alert on it (`/v1/sys/health` answers 503 while sealed).
-
-## Backups
-
-| What | How | Without it |
+| Channel | Moves when | Upgrades |
 | --- | --- | --- |
-| Postgres | The provider's backups with point-in-time recovery; a restore drill each quarter ([cloud](cloud.md#restore-drills)) | Every workflow, run and audit entry |
-| OpenBao's storage (`openbao_data`) | A daily copy, encrypted, kept off the VM: `docker run --rm -v taskiem_openbao_data:/d:ro -v "$PWD":/b openbao/openbao:2.4.1 tar czf /b/openbao-$(date +%F).tgz -C /d .` | **Every secret Taskiem holds, permanently**: the storage without unseal keys, or the keys without the storage, is useless |
-| Unseal keys | Offline, with five different people | As above |
-| `TASKIEM_ANCHOR_KEY` | Offline | Anchors already signed still verify with the published public key; new ones need a new key |
-| `taskiem_data` (archive, anchors) | Copy off the VM; anchors ideally to write-once storage | Archived runs past retention; the anchors' independent copy |
+| `staging` | Every merge to main that passes CI | Within 15 minutes, at any time unless a window is set |
+| `production` | A version tag (`git tag v1.2.0 && git push --tags`) is **approved** in the `production` environment on GitHub | In the server's upgrade window (default 01:00–05:00 Lagos time) |
 
-## Monitoring
+An upgrade checks the signature, fetches the matching deployment kit, runs the migration, starts the new release and waits for it to be healthy behind HTTPS. If the migration fails or the release is not healthy within four minutes, the server **rolls back** to the release it was on, alerts you, and does not try that release again. Every release works with the schema of the one before it, so rolling back is always safe.
 
-Metrics are on `127.0.0.1:9090` for a Prometheus on the VM or one reaching it through a tunnel; the recording rules and alerts are in `deploy/prometheus` ([reliability](reliability.md)). Watch at least: Taskiem's health, OpenBao sealed, `openbao-renew` failures, disk space for Docker volumes, and certificate expiry (Caddy renews on its own).
+An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payroll-heavy hours outside the window. Webhooks sent in that gap are retried by their senders.
+
+## Every day
+
+| Command | Does |
+| --- | --- |
+| `sudo taskiem-vps status` | Channel, release and commit, last upgrade and backup, services, problems |
+| `sudo taskiem-vps update --now` | Upgrade now, outside the window |
+| `sudo taskiem-vps rollback` | Back to the release before the current one |
+| `sudo taskiem-vps backup` | Back up now |
+| `sudo taskiem-vps check` | Run the health checks |
+| `sudo taskiem-vps logs [service]` | Follow logs (`taskiem`, `openbao`, `caddy`, `openbao-renew`) |
+| `sudo taskiem-vps owner-reset` | Email the owner a new set-your-password link |
+
+## Alerts
+
+`taskiem-vps check` runs every 5 minutes and sends an email (through Taskiem's SMTP) and a Slack-compatible webhook when the set of problems changes, and again when it clears:
+
+- Taskiem unhealthy, or `https://<domain>/readyz` not answering;
+- OpenBao sealed or down, or its token renewal failing (Taskiem never renews its own OpenBao token; the `openbao-renew` service does, daily);
+- a disk 85% full;
+- the certificate expiring within 14 days;
+- no successful backup for 36 hours;
+- a release that failed to upgrade and was rolled back;
+- the recovery sheet still on the server.
+
+Each upgrade, successful or rolled back, is reported too.
+
+## Backups and restore
+
+Every night, encrypted with restic into the bucket: OpenBao's storage, Taskiem's archive and audit anchors, and the server's settings, kept 14 daily, 8 weekly and 12 monthly. The unseal key is left out on purpose: it is on the recovery sheet. The database is backed up by its provider (point-in-time recovery).
+
+**To rebuild on a new VPS** (the old one is gone): restore the database first if it was lost too, then on the new VPS
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/install.sh | sudo TASKIEM_VPS_RESTORE=1 bash
+```
+
+It asks for the bucket and its key, and from the recovery sheet the backup password and the unseal key; restores the newest backup; starts the release that was running; and turns the timers back on. Point the DNS name at the new VPS. CI rehearses this on every change.
+
+## Security notes
+
+- Auto-unseal keeps OpenBao's unseal key on the VPS, in a root-only file outside the backups. Someone with root on the VPS can read every secret, as they could anyway through Taskiem's own token; a stolen backup alone cannot.
+- Ports 8200 (OpenBao) and 9090 (metrics, on `127.0.0.1`) are never public. Docker publishes only 80 and 443.
+- The database user Taskiem signs in as is a member of `taskiem_app` only; row-level security applies to it ([operations](operations.md#database-roles)). The owner's URL is used for migrations only.
+- Images are accepted only with a cosign signature from this repository's CI workflow on main or a version tag.
+
+## What is in deploy/vm
+
+| File | Is |
+| --- | --- |
+| `install.sh` | The one-line installer |
+| `taskiem-vps` | Setup, update, rollback, backup, restore, checks (installed to `/usr/local/bin`) |
+| `docker-compose.yml`, `Caddyfile`, `openbao.hcl`, `openbao-taskiem-policy.hcl` | The stack, installed to `/opt/taskiem` and replaced on each upgrade with the release's own copy |
+| `systemd/` | The update, check and backup timers |
+
+The server's settings are in `/opt/taskiem/*.env` and `/etc/taskiem` (root only); its state (current and previous release, last backup) is in `/var/lib/taskiem-vps`.

@@ -1,0 +1,592 @@
+#!/usr/bin/env bash
+# taskiem-vps: install, update, back up and watch Taskiem on one VM
+# (decision 0032, docs/vm.md). Installed to /usr/local/bin by install.sh.
+#
+#   taskiem-vps setup               first install, or re-run to change settings (idempotent)
+#   taskiem-vps update [--now]      move to the newest signed release on this server's channel
+#   taskiem-vps rollback            go back to the release before the current one
+#   taskiem-vps status              what runs, which release, health, last update and backup
+#   taskiem-vps check               health checks; alerts on change (run every 5 minutes)
+#   taskiem-vps backup              encrypted backup of OpenBao, Taskiem's data and settings
+#   taskiem-vps restore             rebuild this deployment on a new server from a backup
+#   taskiem-vps logs [SERVICE...]   follow the logs
+#   taskiem-vps owner-reset         send the owner a new set-your-password email
+set -Eeuo pipefail
+
+KIT=${TASKIEM_VPS_KIT:-/opt/taskiem}
+ETC=${TASKIEM_VPS_ETC:-/etc/taskiem}
+STATE=${TASKIEM_VPS_STATE:-/var/lib/taskiem-vps}
+REPO_SLUG=ISRAEL-DUFF/taskiem
+IMAGE_REPO=ghcr.io/israel-duff/taskiem
+SIGNER='^https://github\.com/ISRAEL-DUFF/taskiem/\.github/workflows/ci\.yml@refs/(heads/main|tags/v.+)$'
+ISSUER=https://token.actions.githubusercontent.com
+PSQL_IMAGE=postgres:16-alpine
+RESTIC_IMAGE=restic/restic:0.19.1
+OPENBAO_IMAGE=openbao/openbao:2.7.1
+
+# --- helpers -----------------------------------------------------------------
+
+log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >&2; }
+die() { log "ERROR: $*"; exit 1; }
+need_root() { [ "$(id -u)" = 0 ] || die "run as root (sudo taskiem-vps $*)"; }
+compose() { docker compose --project-directory "$KIT" -f "$KIT/docker-compose.yml" "$@"; }
+
+# Env files are KEY='value': single quotes make Compose read the value
+# literally. A value holding a single quote or a newline is refused.
+env_get() { # FILE KEY
+  [ -f "$1" ] || return 0
+  sed -n "s/^$2='\\(.*\\)'\$/\\1/p" "$1" | tail -n1
+}
+env_set() { # FILE KEY VALUE
+  local file=$1 key=$2 value=$3 tmp
+  case $value in *"'"* | *$'\n'*) die "$key may not contain a single quote or a newline" ;; esac
+  touch "$file" && chmod 600 "$file"
+  tmp=$(mktemp "$file.XXXX")
+  grep -v "^$key=" "$file" >"$tmp" || true
+  printf "%s='%s'\n" "$key" "$value" >>"$tmp"
+  chmod 600 "$tmp" && mv "$tmp" "$file"
+}
+conf() { env_get "$ETC/vps.conf" "$1"; }
+
+# ask VAR "question" [default]: from TASKIEM_VPS_<VAR> if set, else the
+# terminal (stdin may be the piped installer), else the default.
+ask() {
+  local var=$1 question=$2 default=${3:-} value env="TASKIEM_VPS_$1"
+  value=${!env:-}
+  if [ -z "$value" ] && [ -r /dev/tty ] && [ -z "${TASKIEM_VPS_NONINTERACTIVE:-}" ]; then
+    if [ -n "$default" ]; then printf '%s [%s]: ' "$question" "$default" >/dev/tty; else printf '%s: ' "$question" >/dev/tty; fi
+    IFS= read -r value </dev/tty || true
+  fi
+  printf -v "$var" '%s' "${value:-$default}"
+}
+ask_secret() {
+  local var=$1 question=$2 default=${3:-} value env="TASKIEM_VPS_$1"
+  value=${!env:-}
+  if [ -z "$value" ] && [ -r /dev/tty ] && [ -z "${TASKIEM_VPS_NONINTERACTIVE:-}" ]; then
+    printf '%s%s: ' "$question" "${default:+ [keep current]}" >/dev/tty
+    IFS= read -rs value </dev/tty || true
+    printf '\n' >/dev/tty
+  fi
+  printf -v "$var" '%s' "${value:-$default}"
+}
+
+hex() { openssl rand -hex "$1"; }
+test_mode() { [ -n "${TASKIEM_VPS_IMAGE_OVERRIDE:-}" ]; }
+
+# curl against this server's own HTTPS front door, whatever DNS says.
+local_https() { # PATH [curl args...]
+  local path=$1 domain insecure=()
+  shift
+  domain=$(conf DOMAIN)
+  [ -z "${TASKIEM_VPS_INSECURE_TLS:-}" ] || insecure=(-k) # tests only: Caddy's internal CA for localhost
+  curl -fsS --max-time 10 "${insecure[@]}" --resolve "$domain:443:127.0.0.1" "$@" "https://$domain$path"
+}
+
+# --- releases ----------------------------------------------------------------
+
+# The digest the server's channel tag (staging or production) points at.
+channel_digest() {
+  docker buildx imagetools inspect "$IMAGE_REPO:$(conf CHANNEL)" --format '{{.Manifest.Digest}}'
+}
+
+verify_image() { # REF
+  if [ "${TASKIEM_VPS_VERIFY:-1}" = 0 ]; then
+    log "WARNING: signature check skipped (TASKIEM_VPS_VERIFY=0); never do this on a real server"
+    return 0
+  fi
+  cosign verify "$1" --certificate-identity-regexp "$SIGNER" --certificate-oidc-issuer "$ISSUER" >/dev/null ||
+    die "$1 is not signed by Taskiem's CI: refusing it"
+}
+
+# The commit an image was built from (OCI revision label), for the matching kit.
+image_revision() { docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$1" 2>/dev/null || true; }
+
+# Replace the kit (Compose file, configs, this tool, timers) with the copy
+# from the commit the image was built from. Env files are never touched.
+sync_kit() { # REVISION
+  local rev=$1 tmp
+  [ -n "$rev" ] || { log "image has no revision label: keeping the installed kit"; return 0; }
+  [ -z "${TASKIEM_VPS_KIT_SOURCE:-}" ] || { log "kit from $TASKIEM_VPS_KIT_SOURCE (local source): not syncing"; return 0; }
+  tmp=$(mktemp -d)
+  curl -fsSL "https://codeload.github.com/$REPO_SLUG/tar.gz/$rev" | tar -xz -C "$tmp" --strip-components=3 --wildcards "*/deploy/vm" ||
+    { rm -rf "$tmp"; die "could not fetch the deployment kit for $rev"; }
+  install_kit "$tmp"
+  rm -rf "$tmp"
+}
+
+install_kit() { # DIR
+  local src=$1 f
+  for f in docker-compose.yml Caddyfile openbao.hcl openbao-taskiem-policy.hcl; do
+    install -m 0644 "$src/$f" "$KIT/$f"
+  done
+  install -m 0755 "$src/taskiem-vps" "/usr/local/bin/taskiem-vps.new" && mv -f /usr/local/bin/taskiem-vps.new /usr/local/bin/taskiem-vps
+  if [ -z "${TASKIEM_VPS_NO_TIMERS:-}" ] && [ -d /run/systemd/system ]; then
+    install -m 0644 "$src"/systemd/taskiem-vps-*.service "$src"/systemd/taskiem-vps-*.timer /etc/systemd/system/
+    systemctl daemon-reload
+  fi
+}
+
+set_image() { # REF
+  env_set "$KIT/.env" TASKIEM_IMAGE "$1"
+  printf '%s\n' "$1" >"$STATE/current"
+}
+
+# Healthy container and the public front door answering readyz.
+wait_healthy() { # SECONDS
+  local deadline=$((SECONDS + $1)) id status
+  while [ $SECONDS -lt $deadline ]; do
+    id=$(compose ps -q taskiem 2>/dev/null || true)
+    status=$([ -n "$id" ] && docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true)
+    if [ "$status" = healthy ] && local_https /readyz >/dev/null 2>&1; then return 0; fi
+    sleep 3
+  done
+  return 1
+}
+
+in_window() {
+  local window tz now start end
+  window=$(conf WINDOW)
+  [ -n "$window" ] || return 0
+  tz=$(conf TZ)
+  now=$(TZ=${tz:-Africa/Lagos} date +%H%M)
+  start=${window%-*} end=${window#*-}
+  start=${start/:/} end=${end/:/}
+  if [ "$start" -le "$end" ]; then [ "$now" -ge "$start" ] && [ "$now" -lt "$end" ]; else [ "$now" -ge "$start" ] || [ "$now" -lt "$end" ]; fi
+}
+
+# --- alerts ------------------------------------------------------------------
+
+notify() { # SUBJECT BODY
+  local subject body=$2 smtp from to webhook msg
+  subject="[Taskiem $(conf DOMAIN)] $1"
+  log "ALERT: $1"
+  to=$(conf ALERT_EMAIL)
+  smtp=$(env_get "$KIT/taskiem.env" TASKIEM_SMTP_URL)
+  from=$(env_get "$KIT/taskiem.env" TASKIEM_ALERT_FROM)
+  if [ -n "$to" ] && [ -n "$smtp" ]; then
+    msg=$(mktemp)
+    printf 'From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\n\r\n%s\r\n' "$from" "$to" "$subject" "$(date -R)" "$body" >"$msg"
+    local tls=()
+    [ "${smtp%%://*}" != smtp ] || tls=(--ssl-reqd) # smtp:// must upgrade with STARTTLS
+    curl -fsS --max-time 30 "${tls[@]}" --url "$smtp" --mail-from "$from" --mail-rcpt "$to" --upload-file "$msg" >/dev/null ||
+      log "alert email failed"
+    rm -f "$msg"
+  fi
+  webhook=$(conf ALERT_WEBHOOK)
+  if [ -n "$webhook" ]; then
+    jq -n --arg text "$subject"$'\n'"$body" '{text: $text}' |
+      curl -fsS --max-time 15 -H 'Content-Type: application/json' -d @- "$webhook" >/dev/null || log "alert webhook failed"
+  fi
+}
+
+# --- commands ----------------------------------------------------------------
+
+cmd_setup() {
+  need_root setup
+  command -v docker >/dev/null || die "Docker is not installed (run install.sh)"
+  docker compose version >/dev/null || die "the Docker Compose plugin is missing"
+  command -v jq >/dev/null || die "jq is missing (run install.sh)"
+  mkdir -p "$KIT" "$ETC" "$STATE" && chmod 700 "$ETC" "$STATE"
+  touch "$ETC/vps.conf" && chmod 600 "$ETC/vps.conf"
+  [ -f "$KIT/docker-compose.yml" ] || die "no deployment kit in $KIT (run install.sh)"
+
+  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET
+  echo "Taskiem setup. Press Enter to keep the value in brackets." >&2
+  ask DOMAIN "Public host name (DNS must point here)" "$(conf DOMAIN)"
+  ask OWNER_EMAIL "Owner's email (receives the set-your-password link)" "$(conf OWNER_EMAIL)"
+  ask ORG "Organisation name" "$(conf ORG)"
+  ask_secret DATABASE_URL "Postgres 16 URL of an empty database, as its owner (needs CREATEROLE)" "$(env_get "$KIT/migrate.env" TASKIEM_DATABASE_URL)"
+  ask_secret SMTP_URL "SMTP URL (smtps://user:pass@host:465)" "$(env_get "$KIT/taskiem.env" TASKIEM_SMTP_URL)"
+  ask MAIL_FROM "Sender address for email" "$(env_get "$KIT/taskiem.env" TASKIEM_ALERT_FROM)"
+  local first_run=""
+  [ -n "$(conf CHANNEL)" ] || first_run=1
+  ask CHANNEL "Release channel: staging (upgrades on every merge) or production (upgrades on approved versions)" "$(conf CHANNEL)"
+  CHANNEL=${CHANNEL:-staging}
+  local default_window
+  default_window=$(conf WINDOW)
+  if [ -n "$first_run" ] && [ "$CHANNEL" = production ]; then default_window=01:00-05:00; fi
+  ask WINDOW "Upgrade window, Africa/Lagos time, like 01:00-05:00 ('any' for any time)" "${default_window:-any}"
+  [ "$WINDOW" != any ] || WINDOW=""
+  ask ALERT_EMAIL "Alert email (empty: none)" "$(conf ALERT_EMAIL)"
+  ask ALERT_WEBHOOK "Alert webhook, Slack-compatible (empty: none)" "$(conf ALERT_WEBHOOK)"
+  ask BACKUP_REPO "Backup destination, restic repository such as s3:https://host/bucket/taskiem (empty: no backups)" "$(env_get "$ETC/backup.env" RESTIC_REPOSITORY)"
+  if [ -n "$BACKUP_REPO" ]; then
+    ask BACKUP_KEY_ID "Backup access key id" "$(env_get "$ETC/backup.env" AWS_ACCESS_KEY_ID)"
+    ask_secret BACKUP_SECRET "Backup secret key" "$(env_get "$ETC/backup.env" AWS_SECRET_ACCESS_KEY)"
+  fi
+
+  [ -n "$DOMAIN" ] && [ -n "$OWNER_EMAIL" ] && [ -n "$ORG" ] && [ -n "$DATABASE_URL" ] || die "domain, owner email, organisation and database URL are required"
+  case $CHANNEL in staging | production) ;; *) die "channel must be staging or production" ;; esac
+  [[ $DATABASE_URL =~ ^(postgres(ql)?://)([^@/]*@)?([^/?]+)/([A-Za-z0-9_]+)(\?.*)?$ ]] || die "database URL must look like postgres://user:password@host:5432/dbname?sslmode=verify-full"
+  local dsn_scheme=${BASH_REMATCH[1]} dsn_host=${BASH_REMATCH[4]} dbname=${BASH_REMATCH[5]} dsn_query=${BASH_REMATCH[6]}
+  [ -n "$SMTP_URL" ] || log "WARNING: no SMTP: no password emails, invitations or alert emails"
+  [ -z "$SMTP_URL" ] || [ -n "$MAIL_FROM" ] || die "a sender address is required with SMTP"
+  [ -n "$BACKUP_REPO" ] || log "WARNING: no backup destination: OpenBao's storage is not backed up off this server"
+
+  local f
+  for f in DOMAIN OWNER_EMAIL ORG CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK; do env_set "$ETC/vps.conf" "$f" "${!f}"; done
+  env_set "$ETC/vps.conf" TZ Africa/Lagos
+
+  # Secrets made once, never regenerated.
+  local unseal anchor apppw resticpw fresh=""
+  unseal=$(env_get "$KIT/openbao-unseal.env" BAO_STATIC_UNSEAL_KEY)
+  [ -n "$unseal" ] || { unseal=$(hex 32); fresh=1; }
+  anchor=$(env_get "$KIT/taskiem.env" TASKIEM_ANCHOR_KEY)
+  [ -n "$anchor" ] || anchor=$(openssl rand -base64 32)
+  apppw=$(env_get "$ETC/secrets.env" APP_DB_PASSWORD)
+  [ -n "$apppw" ] || apppw=$(hex 24)
+  resticpw=$(env_get "$ETC/backup.env" RESTIC_PASSWORD)
+  [ -n "$resticpw" ] || resticpw=$(hex 32)
+  env_set "$ETC/secrets.env" APP_DB_PASSWORD "$apppw"
+
+  local approle="${dbname}_app"
+  env_set "$KIT/openbao-unseal.env" BAO_STATIC_UNSEAL_KEY "$unseal"
+  env_set "$KIT/migrate.env" TASKIEM_DATABASE_URL "$DATABASE_URL"
+  local t="$KIT/taskiem.env"
+  env_set "$t" TASKIEM_DATABASE_URL "${dsn_scheme}${approle}:${apppw}@${dsn_host}/${dbname}${dsn_query}"
+  env_set "$t" TASKIEM_KMS openbao
+  env_set "$t" TASKIEM_OPENBAO_ADDR http://openbao:8200
+  env_set "$t" TASKIEM_KMS_KEY taskiem
+  env_set "$t" TASKIEM_PUBLIC_URL "https://$DOMAIN"
+  env_set "$t" TASKIEM_TRUST_PROXY true
+  env_set "$t" TASKIEM_WORKER_QUEUES connector,sandbox
+  env_set "$t" TASKIEM_WASM_CACHE /cache/wazero
+  env_set "$t" TASKIEM_ARCHIVE_DIR /var/lib/taskiem/archive
+  env_set "$t" TASKIEM_ANCHOR_DIR /var/lib/taskiem/anchors
+  env_set "$t" TASKIEM_ANCHOR_KEY "$anchor"
+  env_set "$t" TASKIEM_SMTP_URL "$SMTP_URL"
+  env_set "$t" TASKIEM_ALERT_FROM "$MAIL_FROM"
+  env_set "$t" TASKIEM_ALLOW_SIGNUP false
+  touch "$KIT/openbao.env" && chmod 600 "$KIT/openbao.env"
+  env_set "$KIT/.env" TASKIEM_DOMAIN "$DOMAIN"
+  env_set "$KIT/.env" OPENBAO_VERSION "${OPENBAO_IMAGE#*:}"
+  if [ -n "$BACKUP_REPO" ]; then
+    env_set "$ETC/backup.env" RESTIC_REPOSITORY "$BACKUP_REPO"
+    env_set "$ETC/backup.env" RESTIC_PASSWORD "$resticpw"
+    env_set "$ETC/backup.env" AWS_ACCESS_KEY_ID "$BACKUP_KEY_ID"
+    env_set "$ETC/backup.env" AWS_SECRET_ACCESS_KEY "$BACKUP_SECRET"
+  fi
+
+  log "checking the database"
+  echo 'SELECT 1' | docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' >/dev/null ||
+    die "cannot reach the database with that URL"
+
+  # The release: the channel's newest signed image (or a local test image).
+  local ref
+  if test_mode; then
+    ref=$TASKIEM_VPS_IMAGE_OVERRIDE
+  elif [ -s "$STATE/current" ]; then
+    ref=$(cat "$STATE/current")
+  else
+    ref="$IMAGE_REPO@$(channel_digest)"
+    verify_image "$ref"
+  fi
+  set_image "$ref"
+  if ! test_mode; then
+    docker pull --quiet "$ref" >/dev/null
+    sync_kit "$(image_revision "$ref")" # the kit from the commit this release was built from
+    compose pull --quiet
+  fi
+
+  # OpenBao: start, initialise once (auto-unseals with the static key), then
+  # Taskiem's transit key, policy and periodic token; the root token is revoked.
+  log "starting OpenBao"
+  compose up -d openbao
+  # bao status exits 0 when unsealed, 2 when sealed or not initialised, 1 on error.
+  local i rc st
+  for i in $(seq 60); do rc=0; compose exec -T openbao bao status >/dev/null 2>&1 || rc=$?; [ "$rc" = 1 ] || break; sleep 2; done
+  st=$(compose exec -T openbao bao status -format=json 2>/dev/null || true)
+  if [ "$(jq -r '.initialized // false' <<<"$st" 2>/dev/null)" != true ]; then
+    log "initialising OpenBao"
+    local init root
+    init=$(compose exec -T openbao bao operator init -format=json -recovery-shares=5 -recovery-threshold=3)
+    root=$(jq -r .root_token <<<"$init")
+    for i in $(seq 30); do compose exec -T openbao bao status >/dev/null 2>&1 && break; sleep 2; done
+    compose exec -T openbao bao status >/dev/null 2>&1 || die "OpenBao did not unseal itself after initialising"
+    local token
+    token=$(compose exec -T -e BAO_TOKEN="$root" openbao sh -ec '
+      bao secrets enable transit >/dev/null
+      bao write -f transit/keys/taskiem >/dev/null
+      bao policy write taskiem /openbao/policies/taskiem.hcl >/dev/null
+      bao token create -policy=taskiem -no-default-policy -orphan -period=768h -display-name=taskiem -field=token')
+    compose exec -T -e BAO_TOKEN="$root" openbao bao token revoke -self >/dev/null
+    env_set "$KIT/openbao.env" TASKIEM_OPENBAO_TOKEN "$token"
+    write_recovery_sheet "$unseal" "$(jq -r '.recovery_keys_b64[]' <<<"$init")" "$anchor" "$resticpw"
+  elif [ -n "$fresh" ]; then
+    die "OpenBao is initialised but its unseal key is missing from $KIT/openbao-unseal.env: restore it from the recovery sheet"
+  fi
+  [ -n "$(env_get "$KIT/openbao.env" TASKIEM_OPENBAO_TOKEN)" ] || die "Taskiem's OpenBao token is missing from $KIT/openbao.env"
+
+  log "migrating the database"
+  compose run --rm migrate
+
+  log "creating the database role Taskiem signs in as ($approle)"
+  docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
+DO \$\$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$approle') THEN
+    CREATE ROLE "$approle" LOGIN PASSWORD '$apppw';
+  ELSE
+    ALTER ROLE "$approle" LOGIN PASSWORD '$apppw';
+  END IF;
+END \$\$;
+GRANT taskiem_app TO "$approle";
+SQL
+
+  log "starting Taskiem"
+  compose up -d --remove-orphans
+  wait_healthy 300 || die "Taskiem did not become healthy: taskiem-vps logs"
+
+  if [ ! -f "$STATE/bootstrapped" ]; then
+    log "creating the organisation and its owner"
+    local pw
+    pw=$(hex 16)
+    compose run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD="$pw" taskiem bootstrap --tenant "$ORG" --email "$OWNER_EMAIL" >/dev/null
+    touch "$STATE/bootstrapped"
+    if [ -n "$SMTP_URL" ] && owner_reset_email; then
+      log "$OWNER_EMAIL has been sent a link to set their password"
+    else
+      printf '\nOwner %s, first password (shown once, change it at first sign-in): %s\n\n' "$OWNER_EMAIL" "$pw" >/dev/tty 2>/dev/null || printf 'Owner first password: %s\n' "$pw"
+    fi
+  fi
+
+  if [ -n "$BACKUP_REPO" ]; then
+    restic_run cat config >/dev/null 2>&1 || restic_run init >/dev/null
+  fi
+  enable_timers
+  log "done: https://$DOMAIN ($CHANNEL channel)"
+  ls /root/taskiem-recovery-*.txt >/dev/null 2>&1 &&
+    log "IMPORTANT: copy /root/taskiem-recovery-*.txt to two offline places, then delete it (shred -u)"
+  return 0
+}
+
+write_recovery_sheet() { # UNSEAL RECOVERY_KEYS ANCHOR RESTICPW
+  local sheet
+  sheet="/root/taskiem-recovery-$(date +%F).txt"
+  umask 077
+  cat >"$sheet" <<EOF
+TASKIEM RECOVERY SHEET — $(conf DOMAIN) — $(date -u +%FT%TZ)
+
+Store this in two offline places (a safe, a password manager vault), then
+delete it from the server: shred -u $sheet
+
+OpenBao unseal key (hex). Without it, a restored OpenBao cannot open,
+and every secret Taskiem holds is lost:
+$1
+
+OpenBao recovery keys (any 3 of 5; for generating a new root token):
+$2
+
+Audit anchor signing key (TASKIEM_ANCHOR_KEY):
+$3
+
+Backup repository password (restic):
+$4
+EOF
+  log "recovery sheet written to $sheet"
+}
+
+enable_timers() {
+  [ -z "${TASKIEM_VPS_NO_TIMERS:-}" ] && [ -d /run/systemd/system ] || return 0
+  systemctl enable --now taskiem-vps-update.timer taskiem-vps-check.timer >/dev/null
+  if [ -s "$ETC/backup.env" ]; then systemctl enable --now taskiem-vps-backup.timer >/dev/null; fi
+}
+
+owner_reset_email() {
+  local email
+  email=$(conf OWNER_EMAIL)
+  jq -n --arg email "$email" '{email: $email}' | local_https /v1/auth/password/forgot -H 'Content-Type: application/json' -d @- >/dev/null
+}
+
+cmd_owner_reset() { need_root owner-reset; owner_reset_email && log "sent to $(conf OWNER_EMAIL)"; }
+
+cmd_update() {
+  need_root update
+  local auto="" now=""
+  for a in "$@"; do case $a in --auto) auto=1 ;; --now) now=1 ;; *) die "unknown option $a" ;; esac; done
+  exec 9>"$STATE/update.lock"
+  flock -n 9 || { log "another update is running"; return 0; }
+
+  local current target
+  current=$(cat "$STATE/current" 2>/dev/null || true)
+  if test_mode; then target=$TASKIEM_VPS_IMAGE_OVERRIDE; else target="$IMAGE_REPO@$(channel_digest)"; fi
+  if [ "$target" = "$current" ]; then [ -n "$auto" ] || log "already on the newest $(conf CHANNEL) release"; return 0; fi
+  if [ -z "$now" ] && ! in_window; then
+    [ -n "$auto" ] || log "outside the upgrade window ($(conf WINDOW)); use --now to upgrade anyway"
+    return 0
+  fi
+
+  log "upgrading to $target"
+  test_mode || verify_image "$target"
+  test_mode || docker pull --quiet "$target" >/dev/null
+  sync_kit "$(image_revision "$target")"
+  printf '%s\n' "$current" >"$STATE/previous"
+  set_image "$target"
+  if compose up -d --remove-orphans 2>"$STATE/last-update.log" && wait_healthy 240; then
+    rm -f "$STATE/update-failed"
+    date -u +%FT%TZ >"$STATE/last-update"
+    log "upgraded to $target"
+    notify "upgraded" "Now running $target (was $current)."
+    return 0
+  fi
+  log "the new release did not become healthy: rolling back to $current"
+  set_image "$current"
+  compose up -d --remove-orphans >/dev/null 2>&1 || true
+  printf '%s\n' "$target" >"$STATE/update-failed"
+  if wait_healthy 240; then
+    notify "upgrade failed, rolled back" "The release $target did not become healthy and was rolled back to $current. It will not be tried again until a newer release is published. Details: $STATE/last-update.log and taskiem-vps logs."
+  else
+    notify "UPGRADE FAILED AND ROLLBACK UNHEALTHY" "Neither $target nor $current is healthy. Taskiem may be down. Run taskiem-vps status and taskiem-vps logs now."
+  fi
+  return 1
+}
+
+cmd_rollback() {
+  need_root rollback
+  local previous
+  previous=$(cat "$STATE/previous" 2>/dev/null || true)
+  [ -n "$previous" ] || die "no previous release recorded"
+  log "rolling back to $previous"
+  printf '%s\n' "$(cat "$STATE/current")" >"$STATE/previous"
+  set_image "$previous"
+  compose up -d --remove-orphans
+  wait_healthy 240 || die "not healthy after rollback: taskiem-vps logs"
+  log "rolled back"
+}
+
+# restic in a container, with what it backs up mounted under /backup
+# (read-only unless RESTIC_MODE=rw, for restore). A repository that is a
+# local path (tests, or a mounted disk) is mounted too.
+restic_run() {
+  local mode=${RESTIC_MODE:-ro} repo host extra=()
+  repo=$(env_get "$ETC/backup.env" RESTIC_REPOSITORY)
+  host=$(conf DOMAIN)
+  case $repo in /*) mkdir -p "$repo" && extra=(-v "$repo:$repo") ;; esac
+  docker run --rm --env-file "$ETC/backup.env" --hostname "${host:-taskiem}" "${extra[@]}" \
+    -v "taskiem_openbao_data:/backup/openbao:$mode" -v "taskiem_taskiem_data:/backup/taskiem-data:$mode" \
+    -v "$KIT:/backup/kit:$mode" -v "$ETC:/backup/etc:$mode" \
+    "$RESTIC_IMAGE" "$@"
+}
+
+cmd_backup() {
+  need_root backup
+  [ -s "$ETC/backup.env" ] || die "no backup destination: run taskiem-vps setup"
+  # The unseal key is left out on purpose: it is on the recovery sheet.
+  # OpenBao's file storage only changes when keys or policies do, so a copy
+  # of the live directory is consistent.
+  if restic_run backup /backup --tag taskiem --exclude /backup/kit/openbao-unseal.env --exclude /backup/etc/backup.env &&
+    restic_run forget --tag taskiem --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune >/dev/null; then
+    date -u +%FT%TZ >"$STATE/last-backup"
+    log "backup done"
+  else
+    notify "backup failed" "The nightly backup to $(env_get "$ETC/backup.env" RESTIC_REPOSITORY) failed. Run taskiem-vps backup to see why."
+    return 1
+  fi
+}
+
+# Rebuild on a new server: settings, OpenBao's storage and Taskiem's data
+# from the newest backup, the unseal key from the recovery sheet. The
+# database is the provider's (restore it with point-in-time recovery first
+# if it was lost too); the restored settings point at it.
+cmd_restore() {
+  need_root restore
+  [ ! -s "$KIT/openbao.env" ] || [ -n "${TASKIEM_VPS_FORCE:-}" ] ||
+    die "this server already has a deployment; restore is for a new one (TASKIEM_VPS_FORCE=1 overwrites it)"
+  mkdir -p "$KIT" "$ETC" "$STATE" && chmod 700 "$ETC" "$STATE"
+  local BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET RESTIC_PASSWORD UNSEAL_KEY v current
+  ask BACKUP_REPO "Backup repository (restic), as set up on the old server"
+  ask BACKUP_KEY_ID "Backup access key id (empty for a local path)"
+  [ -z "$BACKUP_KEY_ID" ] || ask_secret BACKUP_SECRET "Backup secret key"
+  ask_secret RESTIC_PASSWORD "Backup repository password (recovery sheet)"
+  ask_secret UNSEAL_KEY "OpenBao unseal key (recovery sheet)"
+  [ -n "$BACKUP_REPO" ] && [ -n "$RESTIC_PASSWORD" ] && [ -n "$UNSEAL_KEY" ] || die "the repository, its password and the unseal key are required"
+  env_set "$ETC/backup.env" RESTIC_REPOSITORY "$BACKUP_REPO"
+  env_set "$ETC/backup.env" RESTIC_PASSWORD "$RESTIC_PASSWORD"
+  env_set "$ETC/backup.env" AWS_ACCESS_KEY_ID "${BACKUP_KEY_ID:-}"
+  env_set "$ETC/backup.env" AWS_SECRET_ACCESS_KEY "${BACKUP_SECRET:-}"
+  for v in openbao_data taskiem_data; do
+    docker volume create --label com.docker.compose.project=taskiem --label "com.docker.compose.volume=$v" "taskiem_$v" >/dev/null
+  done
+  log "restoring the newest backup"
+  RESTIC_MODE=rw restic_run restore latest --tag taskiem --target /
+  env_set "$KIT/openbao-unseal.env" BAO_STATIC_UNSEAL_KEY "$UNSEAL_KEY"
+  current=$(env_get "$KIT/.env" TASKIEM_IMAGE)
+  [ -n "$current" ] || die "the backup holds no release (TASKIEM_IMAGE in .env)"
+  printf '%s\n' "$current" >"$STATE/current"
+  touch "$STATE/bootstrapped"
+  test_mode || docker pull --quiet "$current" >/dev/null
+  compose up -d --remove-orphans
+  wait_healthy 300 || die "restored, but Taskiem is not healthy: taskiem-vps logs"
+  enable_timers
+  log "restored $(conf DOMAIN): point its DNS at this server if it is not already"
+}
+
+# Each failing check prints one line; alerts go out when the set changes.
+run_checks() {
+  local id status domain days age
+  domain=$(conf DOMAIN)
+  id=$(compose ps -q taskiem 2>/dev/null || true)
+  status=$([ -n "$id" ] && docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || echo missing)
+  [ "$status" = healthy ] || echo "Taskiem container is $status"
+  local_https /readyz >/dev/null 2>&1 || echo "https://$domain/readyz does not answer"
+  compose exec -T openbao wget -qO- http://127.0.0.1:8200/v1/sys/health >/dev/null 2>&1 || echo "OpenBao is sealed or down: secrets cannot be read"
+  if compose logs --since 30h openbao-renew 2>/dev/null | grep 'RENEWAL FAILED' >/dev/null; then echo "OpenBao token renewal failed: secrets stop working when the token expires"; fi
+  df -P / /var/lib/docker 2>/dev/null | awk 'NR>1 && $5+0 >= 85 {print "disk " $6 " is " $5 " full"}' | sort -u
+  if [ -z "${TASKIEM_VPS_INSECURE_TLS:-}" ]; then
+    days=$(echo | openssl s_client -connect 127.0.0.1:443 -servername "$domain" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+    if [ -n "$days" ]; then
+      days=$(( ($(date -d "$days" +%s) - $(date +%s)) / 86400 ))
+      [ "$days" -ge 14 ] || echo "TLS certificate expires in $days days"
+    fi
+  fi
+  if [ -s "$ETC/backup.env" ]; then
+    if [ -f "$STATE/last-backup" ]; then
+      age=$(( ($(date +%s) - $(date -d "$(cat "$STATE/last-backup")" +%s)) / 3600 ))
+      [ "$age" -lt 36 ] || echo "last successful backup was $age hours ago"
+    else
+      echo "no successful backup yet"
+    fi
+  fi
+  [ ! -s "$STATE/update-failed" ] || echo "release $(cat "$STATE/update-failed") failed to upgrade and was rolled back"
+  ! ls /root/taskiem-recovery-*.txt >/dev/null 2>&1 || echo "the recovery sheet is still on the server (/root/taskiem-recovery-*.txt)"
+}
+
+cmd_check() {
+  need_root check
+  local now before
+  now=$(run_checks || true)
+  before=$(cat "$STATE/alerts" 2>/dev/null || true)
+  if [ "$now" != "$before" ]; then
+    if [ -n "$now" ]; then notify "problems" "$now"; else notify "all checks pass again" "Previously: $before"; fi
+    printf '%s' "$now" >"$STATE/alerts"
+  fi
+  if [ -n "$now" ]; then printf '%s\n' "$now"; return 1; fi
+  echo "all checks pass"
+}
+
+cmd_status() {
+  need_root status
+  local cur
+  cur=$(cat "$STATE/current" 2>/dev/null || echo none)
+  printf 'Server     https://%s\nChannel    %s (upgrade window: %s)\nRelease    %s\nCommit     %s\nUpdated    %s\nBackup     %s\n\n' \
+    "$(conf DOMAIN)" "$(conf CHANNEL)" "$(conf WINDOW || true)" "$cur" "$(image_revision "$cur" | cut -c1-12)" \
+    "$(cat "$STATE/last-update" 2>/dev/null || echo never)" "$(cat "$STATE/last-backup" 2>/dev/null || echo never)"
+  compose ps --format 'table {{.Service}}\t{{.Status}}'
+  echo
+  run_checks | sed 's/^/PROBLEM: /' || true
+}
+
+cmd_logs() { need_root logs; compose logs -f --tail 200 "$@"; }
+
+case ${1:-} in
+setup) shift; cmd_setup "$@" ;;
+update) shift; cmd_update "$@" ;;
+rollback) shift; cmd_rollback ;;
+status) cmd_status ;;
+check) cmd_check ;;
+backup) cmd_backup ;;
+restore) cmd_restore ;;
+logs) shift; cmd_logs "$@" ;;
+owner-reset) cmd_owner_reset ;;
+_install-kit) need_root; mkdir -p "$KIT"; install_kit "$2" ;; # used by install.sh
+*) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
