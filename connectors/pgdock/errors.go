@@ -12,13 +12,15 @@ import (
 	"github.com/israel-duff/taskiem/engine/effects"
 )
 
-// Error classes (plan item P1-T6). PGDock publishes its error shape
-// ({code, message}, with sql_error carrying a SQLSTATE) but not yet the
-// list of codes (P1-G4), so a code is mapped only where the OpenAPI file
-// names it, a SQLSTATE where one is present, and everything else by HTTP
-// status, conservatively: only refusals that prove nothing was done
-// (429, 503, and SQLSTATEs that mean the statement did not run) are
-// retryable.
+// Error classes (plan item P1-T6). The management API's error shape is
+// {code, message}, with sql_error carrying a SQLSTATE; its codes are
+// mapped only where the OpenAPI file names them, a SQLSTATE where one is
+// present, and everything else by HTTP status, conservatively: only
+// refusals that prove nothing was done (429, 503, and SQLSTATEs that mean
+// the statement did not run) are retryable. The data API's errors are
+// {"error": {code, message, details, request_id}} and its codes are
+// published (Xenibase docs/errors.md, the Data API table, read 17 October
+// 2026): mapDataError below follows that table.
 const (
 	ClassValidation  = "validation"
 	ClassAuth        = "auth"
@@ -32,16 +34,18 @@ const (
 	ClassServer      = "server"
 )
 
-// Error is a PGDock refusal, classified. It wraps the effects sentinel the
-// engine acts on, and connector.ErrNotFound for a 404.
+// Error is a Xenibase refusal, classified. It wraps the effects sentinel
+// the engine acts on, and connector.ErrNotFound for a 404.
 type Error struct {
 	Status     int
-	Code       string // PGDock's error code
+	Code       string // Xenibase's error code
 	Message    string
 	SQLState   string
 	Class      string
 	RetryAfter time.Duration
-	kind       error
+	// RequestID is the data API's request_id, for Xenibase's support.
+	RequestID string
+	kind      error
 }
 
 func (e *Error) Error() string {
@@ -57,6 +61,9 @@ func (e *Error) Error() string {
 	if e.Message != "" {
 		b.WriteString(": " + e.Message)
 	}
+	if e.RequestID != "" {
+		b.WriteString(" (request " + e.RequestID + ")")
+	}
 	return b.String()
 }
 
@@ -67,7 +74,7 @@ func (e *Error) Unwrap() []error {
 	return []error{e.kind}
 }
 
-// RetryAfterDelay is PGDock's Retry-After, honoured by the engine.
+// RetryAfterDelay is Xenibase's Retry-After, honoured by the engine.
 func (e *Error) RetryAfterDelay() time.Duration { return e.RetryAfter }
 
 type apiError struct {
@@ -139,7 +146,7 @@ func mapError(err error) error {
 	case st == http.StatusGatewayTimeout:
 		e.Class, kind = ClassTimeout, effects.ErrUnknownOutcome
 	case st >= 500:
-		// PGDock may have acted before failing: reads and idempotent
+		// Xenibase may have acted before failing: reads and idempotent
 		// writes retry, unsafe writes park.
 		e.Class, kind = ClassServer, effects.ErrUnknownOutcome
 	default:
@@ -147,6 +154,68 @@ func mapError(err error) error {
 	}
 	if e.Message == "" {
 		e.Message = strings.TrimSpace(string(he.Body))
+		if len(e.Message) > 300 {
+			e.Message = e.Message[:300]
+		}
+	}
+	e.kind = kind
+	return e
+}
+
+// dataAPIError is the data API's error body.
+type dataAPIError struct {
+	Error struct {
+		Code      string         `json:"code"`
+		Message   string         `json:"message"`
+		Details   map[string]any `json:"details"`
+		RequestID string         `json:"request_id"`
+	} `json:"error"`
+}
+
+// mapDataError classifies a data API refusal by its published code and
+// status (docs/errors.md, the Data API table). Every 4xx is fatal: 409
+// unique_violation and foreign_key_violation are conflicts, 422
+// idempotency_key_reused too (the engine's key was used for another
+// request, which must not happen), the rest validation, auth, permission
+// or not found. 429 and 503 are retryable, waiting at least Retry-After,
+// except plan_limit_reached, which Xenibase marks as not retryable (the
+// month's requests are used up: quota). 504 statement_timeout and any
+// other 5xx are unknown outcomes: the write may have committed, so an
+// idempotent write retries with the same key, which replays or runs it.
+func mapDataError(status int, body []byte, retryAfter time.Duration) error {
+	var de dataAPIError
+	_ = json.Unmarshal(body, &de)
+	e := &Error{Status: status, Code: de.Error.Code, Message: de.Error.Message, RequestID: de.Error.RequestID, RetryAfter: retryAfter}
+	if pg, ok := de.Error.Details["pg_code"].(string); ok {
+		e.SQLState = pg
+	}
+	kind := effects.ErrFatal
+	switch {
+	case status == http.StatusTooManyRequests && e.Code == "plan_limit_reached":
+		e.Class = ClassQuota
+	case status == http.StatusTooManyRequests:
+		e.Class, kind = ClassRateLimited, effects.ErrRetryable
+	case status == http.StatusServiceUnavailable:
+		e.Class, kind = ClassUnavailable, effects.ErrRetryable
+	case status == http.StatusGatewayTimeout:
+		e.Class, kind = ClassTimeout, effects.ErrUnknownOutcome
+	case status >= 500:
+		e.Class, kind = ClassServer, effects.ErrUnknownOutcome
+	case status == http.StatusUnauthorized:
+		e.Class = ClassAuth
+	case status == http.StatusForbidden && e.Code == "read_only":
+		e.Class = ClassConflict
+	case status == http.StatusForbidden:
+		e.Class = ClassPermission
+	case status == http.StatusNotFound:
+		e.Class = ClassNotFound
+	case status == http.StatusConflict, e.Code == "idempotency_key_reused":
+		e.Class = ClassConflict
+	default:
+		e.Class = ClassValidation // 400, 405, 413, 422 and other refusals
+	}
+	if e.Message == "" {
+		e.Message = strings.TrimSpace(string(body))
 		if len(e.Message) > 300 {
 			e.Message = e.Message[:300]
 		}

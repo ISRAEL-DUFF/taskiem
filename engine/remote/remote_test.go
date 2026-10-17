@@ -33,6 +33,7 @@ var ctx = context.Background()
 const (
 	project = "7d2c9a10-5b4e-4f00-9c11-0000000000a1"
 	token   = "pgd_taskiem_shop"
+	secret  = "xb_sec_taskiem_shop"
 )
 
 // graph is a fake WhatsApp Cloud API that records the messages sent.
@@ -80,6 +81,7 @@ func newWorld(t *testing.T) *world {
 	w.pg.AddTable(project, "orders", []string{"id"}, "id", "customer", "phone", "status", "total", "notes")
 	w.pg.AddTable(project, "customers", []string{"id"}, "id", "name")
 	w.pg.AddToken(pgdocktest.Token{Secret: token, ID: "tok-1", Name: "taskiem", Scopes: []string{"read", "write"}, ProjectIDs: []string{project}})
+	w.pg.AddSecretKey(project, secret)
 	for _, c := range []*connector.Connector{pgdock.New(pgdock.Options{BaseURL: w.pg.URL}), whatsapp.New(whatsapp.Options{BaseURL: w.graph.URL})} {
 		if err := e.Registry.Register(c); err != nil {
 			t.Fatal(err)
@@ -92,7 +94,7 @@ func newWorld(t *testing.T) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "pgdock", "shop", "api_key", map[string]string{"token": token, "project_id": project}, "test"); err != nil {
+	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "pgdock", "shop", "api_key", map[string]string{"token": token, "project_id": project, "secret_key": secret, "api_url": w.pg.APIURL(project)}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "whatsapp", "main", "api_key", map[string]string{"access_token": "EAAtest", "phone_number_id": "106540352242922"}, "test"); err != nil {
@@ -114,11 +116,20 @@ func newWorld(t *testing.T) *world {
 }
 
 func flow(tables, events string, extra string) string {
+	return flowSteps(tables, events, extra, "")
+}
+
+// writeBack is the step that marks the row notified through the data API,
+// by its key, retried quickly after an unknown outcome.
+const writeBack = `,{"id":"mark","type":"connector","connector":"pgdock@1","action":"update_rows","connection":"shop","needs":["notify"],
+	    "input":{"table":"orders","key":"=trigger.body.record.id","set":{"status":"notified"}},"retry":{"max":3,"initial":"10ms","backoff":"fixed"}}`
+
+func flowSteps(tables, events, extra, steps string) string {
 	return `{"schema":"wd/v1","id":"wf_newOrder","version":1,"name":"new order",
 	  "trigger":{"type":"connector_event","config":{"connector":"pgdock@1","trigger":"row_changed","connection":"shop","events":` + events + `,
 	    "options":{"tables":` + tables + extra + `}}},
 	  "steps":[{"id":"notify","type":"connector","connector":"whatsapp@1","action":"send_text","connection":"main",
-	    "input":{"to":"=trigger.body.record.phone","body":"='New order ' + string(trigger.body.record.id) + ' from ' + trigger.body.record.customer"}}]}`
+	    "input":{"to":"=trigger.body.record.phone","body":"='New order ' + string(trigger.body.record.id) + ' from ' + trigger.body.record.customer"}}` + steps + `]}`
 }
 
 // deploy registers a version's trigger in prod as the API does, and
@@ -222,13 +233,16 @@ func (w *world) only(t *testing.T) (remote.Status, *pgdocktest.Webhook) {
 	return s, w.pg.Hook(project, *s.RemoteID)
 }
 
-// The plan's acceptance test (P1-T8, without the write-back, which waits
-// for P1-G1): a new orders row starts a workflow that sends a WhatsApp
-// message; a rolled-back insert starts nothing; deliveries retried after
-// Taskiem was unavailable, and deliveries PGDock repeats, are taken once.
+// The plan's acceptance test (P1-T8): a new orders row starts a workflow
+// that sends a WhatsApp message and writes status notified back to the
+// row through the data API; a rolled-back insert starts nothing;
+// deliveries retried after Taskiem was unavailable, and deliveries
+// Xenibase repeats, are taken once; and a write-back whose answer was
+// lost is retried under the same idempotency key, so the row changes
+// exactly once.
 func TestNewRowSendsWhatsAppOnce(t *testing.T) {
 	w := newWorld(t)
-	doc := flow(`["orders"]`, `["INSERT"]`, "")
+	doc := flowSteps(`["orders"]`, `["INSERT"]`, "", writeBack)
 	wf := w.Publish(t, doc)
 	w.deploy(t, wf, 1, doc)
 	if s := w.subs(t); len(s) != 1 || s[0].Health != "pending" || s[0].RemoteID != nil {
@@ -265,12 +279,20 @@ func TestNewRowSendsWhatsAppOnce(t *testing.T) {
 		t.Fatalf("messages %v; runs %v; %s", msgs, w.runs(t, wf), w.events(t, wf))
 	}
 	if runs := w.runs(t, wf); runs[0]["status"] != "completed" {
-		t.Errorf("run %v", runs)
+		t.Errorf("run %v; %s", runs, w.events(t, wf))
+	}
+	// The write-back went through the data API by key, once.
+	if rows := w.pg.Rows(project, "orders"); rows[0]["status"] != "notified" || w.pg.Changes(project, "orders") != 2 {
+		t.Errorf("after the write-back: %v (%d changes)", rows, w.pg.Changes(project, "orders"))
+	}
+	if n := patches(w.pg.Requests); n != 1 {
+		t.Errorf("%d PATCH requests: %v", n, w.pg.Requests)
 	}
 
 	// A rolled-back insert sends nothing and starts nothing.
 	w.pg.Begin(project).Insert("orders", map[string]any{"id": 8, "customer": "Bayo", "phone": "+2348000000000"}).Rollback()
-	// An update is not subscribed to: PGDock is not asked for it.
+	// An update is not subscribed to: Xenibase is not asked for it (and
+	// the write-back's own update started nothing above).
 	w.pg.Begin(project).Update("orders", map[string]any{"id": 7}, map[string]any{"status": "paid"}).Commit()
 	if n := w.pg.Deliver(); n != 0 || len(w.runs(t, wf)) != 1 {
 		t.Fatalf("rolled back or unsubscribed change delivered: %d", n)
@@ -300,13 +322,41 @@ func TestNewRowSendsWhatsAppOnce(t *testing.T) {
 			t.Fatalf("redelivery: %d %v", st, err)
 		}
 	}
+	// One write-back's answer is lost after Xenibase committed it: the
+	// step's outcome is unknown, the engine retries it with the same key,
+	// and Xenibase replays the first answer instead of writing again.
+	w.pg.Fail(pgdocktest.Failure{Method: http.MethodPatch, PathPrefix: "/edge/", LoseAnswer: true})
 	w.Drain(t)
-	if runs := w.runs(t, wf); len(runs) != 3 {
-		t.Fatalf("runs after retries and repeats: %d", len(runs))
+	if runs := w.runs(t, wf); len(runs) != 3 || runs[1]["status"] != "completed" || runs[2]["status"] != "completed" {
+		t.Fatalf("runs after retries and repeats: %v; %s", runs, w.events(t, wf))
 	}
 	if msgs := w.graph.messages(); len(msgs) != 3 || msgs[1]["to"] != "+2348011111111" || msgs[2]["to"] != "+2348022222222" {
 		t.Errorf("messages %v", msgs)
 	}
+	// Three inserts, the update to paid and three write-backs: the retried
+	// write-back changed its row once, and the lost answer cost one more
+	// PATCH, not one more change.
+	rows := w.pg.Rows(project, "orders")
+	if len(rows) != 3 || rows[1]["status"] != "notified" || rows[2]["status"] != "notified" || w.pg.Changes(project, "orders") != 7 {
+		t.Errorf("rows %v (%d changes)", rows, w.pg.Changes(project, "orders"))
+	}
+	if n := patches(w.pg.Requests); n != 4 {
+		t.Errorf("%d PATCH requests: %v", n, w.pg.Requests)
+	}
+	if !strings.Contains(w.events(t, wf), `"replayed": true`) {
+		t.Errorf("no replayed write-back in the history: %s", w.events(t, wf))
+	}
+}
+
+// patches counts the data API updates among the fake's requests.
+func patches(requests []string) int {
+	n := 0
+	for _, r := range requests {
+		if strings.HasPrefix(r, "PATCH /edge/") {
+			n++
+		}
+	}
+	return n
 }
 
 func post(t *testing.T, target string, body []byte, hdr http.Header) int {

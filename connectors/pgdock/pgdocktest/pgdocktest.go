@@ -1,17 +1,23 @@
-// Package pgdocktest is a fake PGDock for Taskiem's tests (plan item
-// P1-T7), built only from what PGDock publishes: docs/webhooks.md (the
-// transactional outbox, payload, PGDock-Signature, ordering, retries,
-// dead letters, pausing, truncation, test events), docs/cli.md (tokens)
-// and api/openapi.yaml (the API's paths, request and response shapes, and
-// the {code, message} error). Where PGDock publishes no detail, the fake
-// makes the most conservative assumption and the test that relies on it
-// says so (see docs/integrations/pgdock.md, "What PGDock does not publish").
+// Package pgdocktest is a fake Xenibase (formerly PGDock) for Taskiem's
+// tests (plan item P1-T7), built only from what Xenibase publishes:
+// docs/webhooks.md (the transactional outbox, payload, PGDock-Signature,
+// ordering, retries, dead letters, pausing, truncation, test events),
+// docs/cli.md (tokens), api/openapi.yaml (the management API's paths,
+// request and response shapes, the {code, message} error, and
+// /projects/{id}/services), docs/backend-services.md (the data API: keys,
+// reads, writes, Idempotency-Key, functions; data.go) and docs/errors.md
+// (the data API's codes and wrapped error shape). Where Xenibase publishes
+// no detail, the fake makes the most conservative assumption and the test
+// that relies on it says so (see docs/integrations/pgdock.md, "What
+// Xenibase does not publish").
 //
 // Changes are made in transactions (Begin, then Insert, Update, Delete,
 // and Commit or Rollback): a committed change writes an event to the
 // outbox of every webhook on its table, a rolled-back one writes nothing,
-// as PGDock's triggers do. Deliver posts queued events in commit order,
-// one webhook at a time, holding a webhook's queue at its first failure.
+// as Xenibase's triggers do. Writes through the data API go through the
+// same path, so they fire webhooks and keep the outbox's order. Deliver
+// posts queued events in commit order, one webhook at a time, holding a
+// webhook's queue at its first failure.
 package pgdocktest
 
 import (
@@ -50,6 +56,10 @@ type Table struct {
 	Columns []string
 	Key     []string
 	rows    []map[string]any
+	// seq is the identity for a single-column key left out of an insert.
+	seq int64
+	// changes counts the committed changes (one per row).
+	changes int
 }
 
 // Webhook is a webhook as PGDock holds it.
@@ -94,14 +104,29 @@ type project struct {
 	ID, Name, OrgID string
 	Tables          map[string]*Table
 	Webhooks        []*Webhook
+	// Ref is the project reference in its data API hostname; here the
+	// data API is served under /edge/{ref} of the same server.
+	Ref string
+	// Services is whether backend services are on; AddSecretKey turns
+	// them on.
+	Services   bool
+	SecretKeys []string
+	Functions  map[string]Function
 }
+
+// Function is a database function the data API's rpc endpoint calls.
+type Function func(args map[string]any) (any, error)
 
 // Failure is an answer the fake gives instead of serving a request.
 type Failure struct {
 	Method, PathPrefix string
 	Status             int
-	Body               any // JSON; default {code, message}
+	Body               any // JSON; default {code, message}, or the data API's wrapped {error: {…}} under /edge/
 	RetryAfter         int // seconds; 0: no header
+	// LoseAnswer serves the request (a write commits and its idempotency
+	// key is recorded) and then answers 502 with no body, as when the
+	// answer is lost between the database and the caller.
+	LoseAnswer bool
 }
 
 // Fake is a fake PGDock server.
@@ -117,6 +142,9 @@ type Fake struct {
 	failures []Failure
 	seq      int64
 	hookSeq  int
+	// idem holds the data API's recorded answers by project, key and
+	// Idempotency-Key, for the fake's lifetime (Xenibase: 24 hours).
+	idem map[string]idemEntry
 	// TruncateAbove is the size above which an event's records are left
 	// out (PGDock: 256 KB).
 	TruncateAbove int
@@ -134,7 +162,7 @@ type Fake struct {
 func New(t testing.TB) *Fake {
 	t.Helper()
 	f := &Fake{t: t, OrgID: "0b0c0d0e-0000-4000-8000-000000000001", OrgName: "Acme Foods",
-		tokens: map[string]Token{}, projects: map[string]*project{}, TruncateAbove: 256 << 10,
+		tokens: map[string]Token{}, projects: map[string]*project{}, idem: map[string]idemEntry{}, TruncateAbove: 256 << 10,
 		Now: time.Now, Client: &http.Client{Timeout: 10 * time.Second}}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Close)
@@ -145,8 +173,60 @@ func New(t testing.TB) *Fake {
 func (f *Fake) AddProject(id, name string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.projects[id] = &project{ID: id, Name: name, OrgID: f.OrgID, Tables: map[string]*Table{}}
+	f.projects[id] = &project{ID: id, Name: name, OrgID: f.OrgID, Tables: map[string]*Table{}, Ref: ref(id), Functions: map[string]Function{}}
 	return id
+}
+
+// ref is a project's reference: eight letters and digits starting with a
+// letter, derived from its id.
+func ref(id string) string {
+	sum := sha256.Sum256([]byte(id))
+	return "k" + hex.EncodeToString(sum[:])[:7]
+}
+
+// AddSecretKey lets a secret key (xb_sec_…) call the project's data API,
+// and turns its backend services on.
+func (f *Fake) AddSecretKey(projectID, key string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p := f.projects[projectID]
+	p.Services = true
+	p.SecretKeys = append(p.SecretKeys, key)
+}
+
+// APIURL is the project's data API base URL, as GET /projects/{id}/services
+// names it (here a path of the same server).
+func (f *Fake) APIURL(projectID string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.URL + "/edge/" + f.projects[projectID].Ref
+}
+
+// AddFunction registers a function POST /data/v1/rpc/{name} calls.
+func (f *Fake) AddFunction(projectID, name string, fn Function) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.projects[projectID].Functions[name] = fn
+}
+
+// Rows returns copies of a table's rows, in insertion order.
+func (f *Fake) Rows(projectID, table string) []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.projects[projectID].Tables[qualify(table)]
+	out := make([]map[string]any, 0, len(t.rows))
+	for _, r := range t.rows {
+		out = append(out, clone(r))
+	}
+	return out
+}
+
+// Changes is how many row changes a table has committed (inserts,
+// updates and deletes, one per row), whichever way they were made.
+func (f *Fake) Changes(projectID, table string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.projects[projectID].Tables[qualify(table)].changes
 }
 
 // AddTable adds a table ("orders" or "billing.invoices") to a project.
@@ -270,6 +350,13 @@ func (tx *Tx) Commit() {
 	f := tx.f
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	tx.commitLocked()
+}
+
+// commitLocked is Commit with the fake's lock held (the data API commits
+// under the lock of the request).
+func (tx *Tx) commitLocked() {
+	f := tx.f
 	if tx.done {
 		f.t.Fatal("pgdocktest: transaction already finished")
 	}
@@ -305,6 +392,7 @@ func (tx *Tx) Commit() {
 			old = t.rows[i]
 			t.rows = slices.Delete(t.rows, i, i+1)
 		}
+		t.changes++
 		for _, w := range p.Webhooks {
 			if !w.Enabled || !slices.Contains(w.Tables, c.table) && !slices.Contains(w.Tables, strings.TrimPrefix(c.table, "public.")) {
 				continue
@@ -557,24 +645,52 @@ func newSecret() string {
 	return "whsec_" + hex.EncodeToString(b[:])
 }
 
-func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
+// takeFailure takes the first injected failure matching the request.
+func (f *Fake) takeFailure(r *http.Request) (Failure, bool) {
 	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.Requests = append(f.Requests, r.Method+" "+r.URL.Path)
 	for i, fl := range f.failures {
 		if fl.Method == r.Method && strings.HasPrefix(r.URL.Path, fl.PathPrefix) {
 			f.failures = slices.Delete(f.failures, i, i+1)
-			f.mu.Unlock()
-			if fl.RetryAfter > 0 {
-				w.Header().Set("Retry-After", strconv.Itoa(fl.RetryAfter))
-			}
-			body := fl.Body
-			if body == nil {
-				body = apiErr{Code: "injected", Message: http.StatusText(fl.Status)}
-			}
-			reply(w, fl.Status, body)
-			return
+			return fl, true
 		}
 	}
+	return Failure{}, false
+}
+
+func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
+	data := strings.HasPrefix(r.URL.Path, "/edge/")
+	if fl, ok := f.takeFailure(r); ok {
+		if fl.LoseAnswer {
+			f.route(httptest.NewRecorder(), r, data)
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		if fl.RetryAfter > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(fl.RetryAfter))
+		}
+		body := fl.Body
+		switch {
+		case body == nil && data:
+			body = dataErr{Error: dataErrBody{Code: "injected", Message: http.StatusText(fl.Status), RequestID: "req_injected"}}
+		case body == nil:
+			body = apiErr{Code: "injected", Message: http.StatusText(fl.Status)}
+		}
+		reply(w, fl.Status, body)
+		return
+	}
+	f.route(w, r, data)
+}
+
+// route serves a request: the data API under /edge/{ref}, otherwise the
+// management API with its token.
+func (f *Fake) route(w http.ResponseWriter, r *http.Request, data bool) {
+	if data {
+		f.serveData(w, r)
+		return
+	}
+	f.mu.Lock()
 	tok, ok := f.tokens[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
 	f.mu.Unlock()
 	if !ok || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
@@ -639,6 +755,18 @@ func (f *Fake) serveProject(w http.ResponseWriter, r *http.Request, tok Token, i
 		f.serveWebhooks(w, r, p, rest[1:])
 	case rest[0] == "tables" && len(rest) == 4 && rest[3] == "rows" && r.Method == http.MethodGet:
 		f.serveRows(w, r, p, rest[1], rest[2])
+	case rest[0] == "services" && len(rest) == 1 && r.Method == http.MethodGet:
+		// BackendServices: enabled false with nothing else when the
+		// services were never turned on.
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if !p.Services {
+			reply(w, http.StatusOK, map[string]any{"enabled": false, "keys": []any{}, "cors_origins": []any{}, "exposed_schemas": []any{}, "public_tables": []any{}, "settings": map[string]any{}, "feed_configured": true})
+			return
+		}
+		reply(w, http.StatusOK, map[string]any{"enabled": true, "ref": p.Ref, "url": f.URL + "/edge/" + p.Ref, "enabled_at": "2026-10-01T00:00:00Z",
+			"keys": []any{}, "cors_origins": []any{}, "exposed_schemas": []any{"public"}, "public_tables": []any{}, "settings": map[string]any{}, "feed_configured": true,
+			"roles": map[string]any{"anon": "p_anon", "user": "p_user", "service": "p_service"}})
 	default:
 		refuse(w, http.StatusNotFound, "not_found", "no such route")
 	}

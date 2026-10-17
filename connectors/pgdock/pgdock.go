@@ -1,9 +1,11 @@
-// Package pgdock is the first-party PGDock connector (docs/integrations/pgdock.md).
-// It is built only from PGDock's published contracts (decision 0018): its
-// webhooks and CLI docs and its OpenAPI file. Its row-changed trigger is
-// registered remotely (decision 0021): Taskiem creates the PGDock webhook
-// behind it when a workflow is deployed and deletes it when the workflow
-// leaves the environment.
+// Package pgdock is the first-party Xenibase connector (Xenibase was
+// PGDock; the connector id stays pgdock; docs/integrations/pgdock.md). It
+// is built only from Xenibase's published contracts (decision 0018): its
+// webhooks, CLI, backend-services and errors docs and its OpenAPI file.
+// Its row-changed trigger is registered remotely (decision 0021): Taskiem
+// creates the Xenibase webhook behind it when a workflow is deployed and
+// deletes it when the workflow leaves the environment. Rows are written,
+// and functions called, through the project's data API (data.go).
 package pgdock
 
 import (
@@ -14,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,13 +29,20 @@ import (
 //go:embed manifest.yaml
 var manifest []byte
 
-// Options configure the connector. BaseURL is the platform's PGDock (the
+// Options configure the connector. BaseURL is the platform's Xenibase (the
 // default for connections that name no server; TASKIEM_PGDOCK_URL).
 type Options struct {
 	BaseURL string
 }
 
-// New returns the PGDock connector.
+// identRe is a table or function name: name, or schema.name.
+var identRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)?$`)
+
+// columnRe is a column in a filter or an order: a name, or a JSON path
+// into a column (meta->tag, meta->>tag).
+var columnRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_$]*(->>?[A-Za-z0-9_$]+)*$`)
+
+// New returns the Xenibase connector.
 func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
 	base := strings.TrimRight(o.BaseURL, "/")
@@ -48,6 +58,12 @@ func New(o Options) *connector.Connector {
 			"test_connection": connector.ActionFunc(c.testConnection),
 			"query_rows":      connector.ActionFunc(c.queryRows),
 			"get_row":         connector.ActionFunc(c.getRow),
+			"read_rows":       connector.ActionFunc(c.readRows),
+			"insert_rows":     connector.ActionFunc(c.insertRows),
+			"upsert_rows":     connector.ActionFunc(c.upsertRows),
+			"update_rows":     connector.ActionFunc(c.updateRows),
+			"delete_rows":     connector.ActionFunc(c.deleteRows),
+			"call_function":   connector.ActionFunc(c.callFunction),
 		},
 		Registrars: map[string]connector.Registrar{"row_changed": registrar{c}},
 		Enrichers:  map[string]connector.Enricher{"row_changed": c.enrich},
@@ -56,7 +72,7 @@ func New(o Options) *connector.Connector {
 
 type client struct{ base string }
 
-// server is the connection's PGDock: its own server URL, or the platform's.
+// server is the connection's Xenibase: its own server URL, or the platform's.
 func (c *client) server(creds map[string]string) (string, error) {
 	if s := strings.TrimRight(strings.TrimSpace(creds["base_url"]), "/"); s != "" {
 		u, err := url.Parse(s)
@@ -66,12 +82,13 @@ func (c *client) server(creds map[string]string) (string, error) {
 		return s, nil
 	}
 	if c.base == "" {
-		return "", fmt.Errorf("pgdock: no PGDock server: set the connection's server URL (this platform has no default PGDock): %w", effects.ErrFatal)
+		return "", fmt.Errorf("pgdock: no Xenibase server: set the connection's server URL (this platform has no default Xenibase): %w", effects.ErrFatal)
 	}
 	return c.base, nil
 }
 
-// do calls PGDock's API with the connection's token and maps its errors.
+// do calls Xenibase's management API with the connection's token and maps
+// its errors.
 func (c *client) do(ctx context.Context, creds map[string]string, hc *http.Client, method, path string, body, out any) error {
 	tok := creds["token"]
 	if tok == "" {
@@ -112,8 +129,19 @@ type named struct {
 // expiringSoon is when test_connection warns that the token expires.
 const expiringSoon = 14 * 24 * time.Hour
 
+// backendServices is the project's BackendServices (the fields Taskiem reads).
+type backendServices struct {
+	Enabled bool   `json:"enabled"`
+	Ref     string `json:"ref"`
+	URL     string `json:"url"`
+}
+
 // testConnection names the token's organisation and projects (GET /me,
-// /orgs/{org}, /projects) and checks the connection's project is one of them.
+// /orgs/{org}, /projects) and checks the connection's project is one of
+// them. It then reads the project's backend services (GET
+// /projects/{id}/services) and warns, without failing, when they are off,
+// when the connection's data API URL is not the project's, or when the
+// connection has no secret key: read_rows, writes and functions need them.
 func (c *client) testConnection(ctx context.Context, req connector.Request) (connector.Response, error) {
 	var me struct {
 		Token *tokenGrant `json:"token"`
@@ -173,11 +201,38 @@ func (c *client) testConnection(ctx context.Context, req connector.Request) (con
 	out := map[string]any{
 		"organisation": map[string]any{"id": t.OrgID, "name": org.Name},
 		"project":      map[string]any{"id": mine.ID, "name": mine.Name},
-		"projects":     projects, "scopes": scopes, "restricted": t.ProjectIDs != nil, "warnings": warnings,
+		"projects":     projects, "scopes": scopes, "restricted": t.ProjectIDs != nil,
 	}
 	if !t.ExpiresAt.IsZero() {
 		out["expires_at"] = t.ExpiresAt.UTC().Format(time.RFC3339)
 	}
+	// The data API: the project's services, against the connection's
+	// api_url and secret_key. Nothing here fails the test.
+	var svc backendServices
+	have := strings.TrimRight(strings.TrimSpace(req.Credentials["api_url"]), "/")
+	if err := c.do(ctx, req.Credentials, req.HTTP, http.MethodGet, "/api/v1/projects/"+url.PathEscape(mine.ID)+"/services", nil, &svc); err != nil {
+		warnings = append(warnings, "could not read the project's backend services, which read_rows, writes and functions need: "+err.Error())
+	} else {
+		switch {
+		case !svc.Enabled:
+			warnings = append(warnings, "backend services are off for "+mine.Name+"; turn them on (Settings > API) before using read_rows, writes or functions")
+		case svc.URL == "":
+			warnings = append(warnings, "the project has no data API URL (the server has no API domain); read_rows, writes and functions need one")
+		default:
+			out["api_url"] = svc.URL
+			want := strings.TrimRight(svc.URL, "/")
+			switch {
+			case have == "":
+				warnings = append(warnings, "the connection has no data API URL; the project's is "+want+" (read_rows, writes and functions need it)")
+			case !strings.EqualFold(have, want):
+				warnings = append(warnings, "the connection's data API URL ("+have+") is not the project's ("+want+")")
+			}
+		}
+	}
+	if strings.TrimSpace(req.Credentials["secret_key"]) == "" {
+		warnings = append(warnings, "the connection has no project secret key (xb_sec_…); read_rows, writes and functions need one (Settings > API > keys)")
+	}
+	out["warnings"] = warnings
 	return connector.Response{Output: out}, nil
 }
 
@@ -196,10 +251,10 @@ type tablePage struct {
 
 var ops = []string{"eq", "neq", "lt", "lte", "gt", "gte", "contains", "is_null", "not_null", "in"}
 
-// rowsQuery builds the rows endpoint's query string. Filters and order are
-// PGDock's structured JSON forms, which it compiles to a parameterised
-// WHERE clause: values never become SQL text. The raw "where" parameter is
-// never used.
+// rowsQuery builds the management API's rows endpoint query string.
+// Filters and order are its structured JSON forms, which Xenibase compiles
+// to a parameterised WHERE clause: values never become SQL text. The raw
+// "where" parameter is never used.
 func rowsQuery(filters, order []any, limit int, after string) (url.Values, error) {
 	q := url.Values{}
 	for i, f := range filters {
@@ -278,8 +333,8 @@ func (c *client) rows(ctx context.Context, creds map[string]string, hc *http.Cli
 	return page, err
 }
 
-// objects turns PGDock's rows (arrays of text, null for NULL) into objects
-// keyed by column.
+// objects turns the rows endpoint's rows (arrays of text, null for NULL)
+// into objects keyed by column.
 func (p tablePage) objects() []any {
 	out := make([]any, 0, len(p.Rows))
 	for _, r := range p.Rows {
