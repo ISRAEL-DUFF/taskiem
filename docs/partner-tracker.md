@@ -62,20 +62,20 @@ The connector is built on iswallet's answers of 5 October ([iswallet](integratio
 
 ## PGDock
 
-Phase 1 is built from PGDock's published contracts ([plan](pgdock-integration.md), [guide](integrations/pgdock.md)). Write actions wait on P1-G1.
+PGDock is now Xenibase. Phase 1 is built from its published contracts ([plan](pgdock-integration.md), [guide](integrations/pgdock.md)), including the write actions on the V4 data API. Xenibase's reply of October 2026 (`docs/integrations/taskiem-reply.md` in its repository) answers the items below; ticked on 17 October 2026.
 
 | Id | Needed from PGDock | When | Status |
 | --- | --- | --- | --- |
 | S1 | Sandbox organisation, project-restricted token (read and write), cloud API base URL | Now | [ ] |
-| S2 | Signed sample deliveries (insert, update, delete, test, truncated) | Now | [ ] |
+| S2 | Signed sample deliveries (insert, update, delete, test, truncated) | Now | [x] `docs/integrations/fixtures/webhooks` in the Xenibase repository, checked in its CI |
 | S3 | A contact for contract questions | Now | [ ] |
-| P1-G1 | Parameterised SQL or row-write endpoints | Needed for write actions | [ ] |
-| P1-G3 | Webhook management API frozen as a versioned contract | Needed | [ ] |
-| P1-G4 | Error code list with retryability | Needed | [ ] |
-| P1-G2 | `Idempotency-Key` on writes | Wanted | [ ] |
-| C1 | Publish the V3 and V4 contracts (data API, auth, storage, billing events) | Needed for phases 2–4 | [ ] |
-| Q7–Q28 | Thirteen questions on the request page, section 3 | Answer | [ ] |
-| P2-G1, P3-G1/G2, P4 | OAuth consent, data API, project creation by token, contract tests in their CI | Later | [ ] |
+| P1-G1 | Parameterised SQL or row-write endpoints | Needed for write actions | [x] The V4 data API; no SQL endpoint will be added |
+| P1-G3 | Webhook management API frozen as a versioned contract | Needed | [x] `docs/webhooks.md`, with `description` and `metadata` |
+| P1-G4 | Error code list with retryability | Needed | [x] `docs/errors.md` |
+| P1-G2 | `Idempotency-Key` on writes | Wanted | [x] On every data API write, 24 hours |
+| C1 | Publish the V3 and V4 contracts (data API, auth, storage, billing events) | Needed for phases 2–4 | [~] Data API, auth, storage and paused projects published; no billing events yet |
+| Q7–Q28 | Thirteen questions on the request page, section 3 | Answer | [x] Answered; recorded in the plan's section 5 |
+| P2-G1, P3-G1/G2, P4 | OAuth consent, data API, project creation by token, contract tests in their CI | Later | [~] Data API and project creation by token exist; OAuth consent and the dedicated-instance role bootstrap are built on the Xenibase branch `claude/nigeria-workflow-automation-strategy-uoddh0`; contract tests in their CI once the `pgdock@1` suite is sent |
 
 ## What partners are waiting on from us
 

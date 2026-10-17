@@ -1,6 +1,6 @@
-# PGDock integration plan
+# Xenibase (PGDock) integration plan
 
-Status: **phase 1 in progress**: the trigger, reads and remote registration are built ([PGDock connector](integrations/pgdock.md)); writes wait for P1-G1. This plan runs in parallel with Taskiem's own phases. It never blocks them, and they never wait for it.
+Status: **phase 1 done, phases 2 and 3 in progress** (17 October 2026). PGDock is now called Xenibase; the connector keeps the id `pgdock@1`. The trigger, reads, remote registration and, on Xenibase's V4 data API, the write actions are built ([Xenibase connector](integrations/pgdock.md)). Xenibase answered the asks below in `docs/integrations/taskiem-reply.md` of its repository and in its decisions log ("Taskiem integration asks"); the data tables feature is designed in [decision 0033](decisions/0033-data-tables-on-xenibase.md) and under way. This plan runs in parallel with Taskiem's own phases. It never blocks them, and they never wait for it.
 
 Source: *PGDock × Taskiem: How the Two Platforms Work Together* (7 October 2026, @EaziDeFi), called **the joint doc** below. This plan turns the joint doc into tracked work. It records:
 
@@ -87,29 +87,29 @@ These are the joint doc's four phases, with each item's owner, dependency and st
 | P1-T2 | `pgdock@1` connection | API token, plus organisation and project (the token should be project-restricted). Scopes: `read` for the trigger and query, `write` for the webhook API and writes. A connection test that names the token's organisation and projects. Base URL per connection (self-hosted PGDock) or the platform default. | — | Done (base URL: Q20 open) |
 | P1-T3 | Row-changed trigger | Table(s), events and optional changed columns, registered through P1-T1. Signature checked with `hmac_sha256_timestamped` against `PGDock-Signature`, adding a format if the existing one differs. De-duplicated on `PGDock-Event-Id`. `TEST` events delivered as tests. Truncated events refetched through the rows endpoint by `primary_key` before the run starts, or passed as truncated (Q14). PII declared by path when a table's columns are marked. | P1-T1, P1-T2 | Done (Q14, Q22–Q24 open; table PII marking not yet) |
 | P1-T4 | Query rows (read) | Through the rows endpoint: structured filters, order, limit (≤ 1,000), keyset pagination, as a `read` action. Never through the SQL endpoint with values in the text. | P1-T2 | Done |
-| P1-T5 | Write actions (insert, upsert, update, delete with a required filter and a maximum-affected guard; call a function) | Built only on a parameterised endpoint (P1-G1). Insert is `unsafe_write` until P1-G2; upsert on a conflict column is `idempotent_write`; update and delete need a filter and refuse when more rows than the guard would change. | P1-G1 (P1-G2 for idempotent insert) | Blocked |
+| P1-T5 | Write actions (insert, upsert, update, delete with a required filter and a maximum-affected guard; call a function) | Built on Xenibase's V4 data API with the project's secret key: every write is an `idempotent_write` carrying `Idempotency-Key`; update and delete need a key or a filter and refuse past `max_affected`. The connection gains `secret_key` and `api_url`. | P1-G1, P1-G2 (both answered by the data API) | Done (17 October 2026) |
 | P1-T6 | Error mapping | Map PGDock `{code}` values to Taskiem's classes (validation, permission, conflict, rate limit, temporarily unavailable). Map SQL errors returned with status 200 by SQLSTATE: `23505` conflict, `40001` and `40P01` retryable, `57014` timeout, `42501` permission. Refusals with a `Retry-After` are retryable. | P1-G4 (error code list) | Done, by HTTP status where no code is published (P1-G4) |
 | P1-T7 | Fake PGDock server and fixtures | Built from the published payloads and OpenAPI file: signing, ordering, retries, truncation, test events, the webhook API, the rows endpoint, errors. | — | Done |
-| P1-T8 | End-to-end acceptance test | The joint doc's "done when": a new `orders` row starts a workflow that sends a WhatsApp message (fake Graph API) and writes a status back to the row (needs P1-T5); a rolled-back insert starts nothing; deliveries retried after Taskiem was unavailable are taken once. | P1-T3, P1-T5 | Done without the write-back (blocked on P1-G1) |
+| P1-T8 | End-to-end acceptance test | The joint doc's "done when": a new `orders` row starts a workflow that sends a WhatsApp message (fake Graph API) and writes a status back to the row; a rolled-back insert starts nothing; deliveries retried after Taskiem was unavailable are taken once. | P1-T3, P1-T5 | Done, with the write-back |
 | P1-T9 | Docs and SDK | `docs/integrations/pgdock.md`, SDK helpers, a template ("new row → WhatsApp message"), and an entry in the evaluation suite | P1-T3 | Done |
 
 **PGDock team**
 
 | ID | Item | Detail | Status |
 | --- | --- | --- | --- |
-| P1-G1 | Parameterised, single-statement SQL endpoint, or row-write endpoints | Bound parameters; one statement per call; a `max_rows_affected` guard; errors with a non-200 status or a stable error code. Without it, Taskiem ships no write actions (C9). | Needed |
-| P1-G2 | `Idempotency-Key` on write endpoints | Replays within a window return the first answer (C10) | Wanted |
-| P1-G3 | Webhook management API contract frozen | Field names, the secret returned once at creation, behaviour of `PATCH`, errors. Published as a versioned contract that Taskiem's tests run against. | Needed |
-| P1-G4 | Error code list | Every `code` the webhook, rows and SQL endpoints can return, and which are retryable | Needed |
-| P1-G5 | Test fixtures and a sandbox organisation | Signed sample payloads (including truncated and `TEST`), plus a sandbox for Taskiem's CI integration tests | Wanted |
-| P1-G6 | Webhook delivery rates | Confirm whether a Taskiem-created webhook counts against the customer's per-plan delivery rate (Q15) | Question |
+| P1-G1 | Parameterised, single-statement SQL endpoint, or row-write endpoints | Answered: the V4 data API's row writes (bound values, one operation per call, `filter_required`, `max_affected`, non-2xx errors with stable codes). Xenibase will add no parameterised SQL endpoint. | Done (exists) |
+| P1-G2 | `Idempotency-Key` on write endpoints | Done: on every data API write, 24-hour window, `Idempotent-Replayed: true` on a replay, `422 idempotency_key_reused` on a different request with the same key | Done |
+| P1-G3 | Webhook management API contract frozen | Done: `docs/webhooks.md` ("Managing webhooks from another tool"), plus `description` and string `metadata` on webhooks, and a deprecation policy (`docs/errors.md`) | Done |
+| P1-G4 | Error code list | Done: `docs/errors.md`, with the retryable codes marked; every `429` and retryable `503` carries `Retry-After`. Note: the management API's body is flat (`{code, message}`), the data API's is wrapped (`{"error": {code, message, details, request_id}}`) | Done |
+| P1-G5 | Test fixtures and a sandbox organisation | Fixtures done (`docs/integrations/fixtures/webhooks`, checked in Xenibase's CI); the sandbox organisation and its credentials are a people item (partner tracker S1) | Fixtures done; sandbox needs people |
+| P1-G6 | Webhook delivery rates | Answered: deliveries count against the organisation's per-minute rate, whoever created the webhook | Done |
 
 ### Phase 2 — Account linking and shared modules (can run in parallel with phase 1)
 
 | ID | Item | Owner | Detail | Status |
 | --- | --- | --- | --- | --- |
-| P2-G1 | OAuth-style authorization flow | PGDock | Authorization code with PKCE. The customer picks the organisation, projects and scopes. Issues a project-restricted token. Revocable from PGDock, with an audit entry on both sides. | Needed |
-| P2-T1 | Generic OAuth connection flow | Taskiem | Authorization-code connections for any connector (PGDock first, Google next): redirect, state and PKCE, token storage and refresh in the vault, revocation, and the connect screen | Planned |
+| P2-G1 | OAuth-style authorization flow | Xenibase | Authorization code with PKCE (S256, mandatory). The customer picks the organisation, projects and scopes on a consent page. The exchange issues an ordinary Xenibase API token (`created_via: oauth`, named after the app), so revocation, limits and the Account page are shared. Platform admins register clients. | Built (17 October 2026, Xenibase branch) |
+| P2-T1 | Generic OAuth connection flow | Taskiem | Authorization-code connections for any connector (Xenibase first, Google next): redirect, state and PKCE, token storage in the vault, revocation, and the connect screen | In progress |
 | P2-T2 | Revocation in both directions | Both | Revoking in either product stops the connection. Taskiem marks the connection broken when PGDock answers that the token was revoked. | Planned |
 | P2-T3 | Shared payment module | PGDock owns, per the joint doc | Depends on Q1 and C3–C5: Taskiem's `billing.PaymentProvider` already exists | Decision needed |
 | P2-T4 | Shared message module | Taskiem owns, per the joint doc | Taskiem's WhatsApp layer, outbox and templates exist. Decide whether PGDock calls Taskiem's public API, imports a versioned module, or reuses the design (Q1, Q16). | Decision needed |
@@ -118,10 +118,10 @@ These are the joint doc's four phases, with each item's owner, dependency and st
 
 | ID | Item | Owner | Detail | Status |
 | --- | --- | --- | --- | --- |
-| P3-G1 | Data API and SDK | PGDock | V4 data API: query, insert, upsert, update, delete, RPC | PGDock roadmap |
-| P3-T1 | Rebuild actions on the data API | Taskiem | Retire the P1 stopgap actions; the connector's major version stays if the action contracts hold | Waiting |
-| P3-T2 | **Data tables (new feature)** | Taskiem | Write a spec section first: what a data table is in a workflow, its permissions, PII, retention, and whether PGDock is the only backend (Q9). Then the table view and lifecycle on PGDock projects. | Spec needed |
-| P3-G2 | Project creation by token, with quotas | PGDock | So data tables can create projects on the customer's behalf, within the customer's plan | PGDock roadmap |
+| P3-G1 | Data API and SDK | Xenibase | V4 data API: query, insert, upsert, update, delete, RPC, batches; SDKs for JavaScript, Dart and Go | Done (exists) |
+| P3-T1 | Rebuild actions on the data API | Taskiem | There was no stopgap to retire: the writes were built on the data API from the start (P1-T5) and `read_rows` reads through it with typed values; `query_rows` on the management rows endpoint stays for tokens without a secret key. Major version unchanged (1.1.0). | Done |
+| P3-T2 | **Data tables (new feature)** | Taskiem | Designed in [decision 0033](decisions/0033-data-tables-on-xenibase.md): one Xenibase project per organisation, provisioned by Taskiem from a platform-owned organisation (or the organisation's own project), tables through Xenibase's schema API, rows through the data API with idempotency keys, reached by workflows as a managed `pgdock@1` connection named `data_tables`; the table page, API, chat and builder context. Guide: [data tables](data-tables.md). | In progress |
+| P3-G2 | Project creation by token, with quotas | Xenibase | Exists: `POST /api/v1/projects` with an unrestricted token with the `write` scope, within the organisation's quota (`409 quota_exceeded`); turning backend services on and minting keys need the `admin` scope | Done (exists) |
 
 ### Phase 4 — Storage, auth, billing and operations (waits for PGDock V4)
 
@@ -132,7 +132,7 @@ These are the joint doc's four phases, with each item's owner, dependency and st
 | P4-T3 | Combined plan and invoice | Both | Taskiem's plans config and billing can carry a bundle discount. Decide which product issues the invoice and how a combined subscription moves between the two (Q3, Q4). | Decision needed |
 | P4-T4 | PGDock operations workflows | Taskiem builds and hosts; PGDock defines processes and events | Dunning, onboarding, withholding-tax credit-note chasing, and capacity, backup and incident alerts, built as workflows in a Taskiem tenant for PGDock. These are Taskiem's first external money-handling reference workflows. | Waiting on PGDock events |
 | P4-T5 | Integration tests in each other's CI | Both | Each team runs the other's contract tests on every change to a contract the other depends on | Planned |
-| P4-T6 | Execution store feasibility | Both | Check Taskiem's database requirements against PGDock dedicated instances (C11, Q5) before any decision | Planned |
+| P4-T6 | Execution store feasibility | Both | Answered by Xenibase: `SECURITY DEFINER`, forced RLS, `LISTEN/NOTIFY` (session pooler or direct), partitioning and an owning migration role all work on a dedicated instance; creating roles did not. Xenibase adds an operator-only action that creates integrator NOLOGIN roles on a dedicated project and grants them to the owner, so Taskiem's migrations (which create `taskiem_app` and `taskiem_dispatch`) can run there. | Feasible; bootstrap built on the Xenibase branch |
 
 ## 5. Open questions
 
@@ -143,31 +143,31 @@ The joint doc's five questions come first (Q1–Q5). The rest came up while chec
 | Q1 | Shared library or shared design for common building blocks? Given C4: does PGDock adopt Taskiem's modules, Taskiem PGDock's, or do they only align contracts? Who owns each module, and how are versions managed? | Both founders / tech leads | P2-T3, P2-T4 |
 | Q2 | Single sign-on across both products, or only linked accounts with explicit consent? | Product | P2-G1, P2-T1 |
 | Q3 | Bundle pricing: what discount, and which product's billing issues the bundle invoice? Taskiem's billing uses Paystack and Flutterwave (C3). | Leadership / finance | P4-T3 |
-| Q4 | Data tables default: always PGDock, or PGDock as one backend among others? | Product | P3-T2 |
+| Q4 | Data tables default: always PGDock, or PGDock as one backend among others? **Decided (0033): Xenibase only; an organisation may bring its own Xenibase project.** | Product | P3-T2 |
 | Q5 | Execution store: should Taskiem run its own database on PGDock dedicated instances? This first needs the feasibility check (C11, P4-T6). | Both tech leads | P4-T6 |
-| Q6 | Is the joint doc's data-tables idea wanted at all, given Taskiem has no such feature (C1)? If yes, who writes its spec section? | Product | P3-T2 |
-| Q7 | Will PGDock add a parameterised SQL endpoint or row-write endpoints before the V4 data API (P1-G1)? Without one, P1 ships no write actions. | PGDock | P1-T5, P1-T8 write-back |
-| Q8 | Will PGDock honour an `Idempotency-Key` on writes (P1-G2), or should Taskiem rely on upserts and treat inserts as unsafe? | PGDock | P1-T5 classes |
-| Q9 | For data tables, does a table map to one PGDock project per tenant, one per workflow, or a schema in a shared project? Who pays for the project? | Product, both teams | P3-T2 |
+| Q6 | Is the joint doc's data-tables idea wanted at all, given Taskiem has no such feature (C1)? If yes, who writes its spec section? **Yes: decision 0033 and the [data tables guide](data-tables.md).** | Product | P3-T2 |
+| Q7 | Will PGDock add a parameterised SQL endpoint or row-write endpoints before the V4 data API (P1-G1)? **Answered: no; the V4 data API is the write path, and it exists.** | Xenibase | Closed |
+| Q8 | Will PGDock honour an `Idempotency-Key` on writes (P1-G2)? **Answered: yes, on every data API write, 24 hours; every pgdock write is an `idempotent_write`.** | Xenibase | Closed |
+| Q9 | For data tables, does a table map to one PGDock project per tenant, one per workflow, or a schema in a shared project? Who pays for the project? **Decided (0033): one project per organisation, paid by the platform as part of the plan.** | Product, both teams | P3-T2 |
 | Q10 | Does Taskiem want a public forms feature (C2)? If yes, does it use PGDock auth, Taskiem's own end-user tokens, or WhatsApp OTP, which Taskiem already has? | Product | P4-T2 |
 | Q11 | Should the PGDock trigger implement wd/v1's reserved `database_change` trigger type, or stay a connector trigger (`connector_event`), with `database_change` kept for direct logical replication on any Postgres? | Taskiem | P1-T3 shape |
 | Q12 | Ordering: do some customer workflows need events processed in commit order? If yes, use `settings.concurrency_key` per table and primary key, or a strictly serial option (C8). | Product | P1-T3 docs |
-| Q13 | Does PGDock have, or plan, a free-tier paused project with a "resuming" answer? Which error code and `Retry-After` (C6)? | PGDock | P1-T6 |
+| Q13 | Does PGDock have, or plan, a free-tier paused project with a "resuming" answer? **Answered: `503 project_resuming` (`Retry-After: 10`) and `503 project_restoring` (`Retry-After: 60`) on both APIs; retryable.** | Xenibase | Closed |
 | Q14 | Truncated events (over 256 KB): should Taskiem refetch the row before starting the run (one more API call, and the row may have changed since) or pass the event as truncated and let the workflow fetch it? | Taskiem, with PGDock input | P1-T3 |
-| Q15 | Do deliveries from Taskiem-created webhooks count against the customer's PGDock delivery-rate limit? Should Taskiem show that limit? | PGDock | P1-G6 |
+| Q15 | Do deliveries from Taskiem-created webhooks count against the customer's PGDock delivery-rate limit? **Answered: yes, against the organisation's per-minute rate; over it, events queue.** | Xenibase | Closed |
 | Q16 | For the shared message module: should PGDock's notifications (dunning, alerts) go through Taskiem's WhatsApp and SMS layer as a customer of Taskiem's public API, through a shared module, or separately? | Both | P2-T4, P4-T4 |
 | Q17 | Should Taskiem's billing handle withholding tax (C5)? | Finance | Taskiem billing |
 | Q18 | Should workflow files (attachments, generated documents, container-step outputs) move to PGDock storage, or only be reachable through a storage connector? | Product | P4-T1 |
 | Q19 | Where does a customer manage a linked connection: in both products, or one canonical place with the other read-only? | Product | P2-T1, P2-T2 |
 | Q20 | Self-hosted PGDock: should the connector support any PGDock server URL, or only PGDock's cloud? | Product | P1-T2 |
 | Q21 | Which PGDock contracts count as "public" for the deprecation policy, given only the V2 docs and OpenAPI file are published (V3 and V4 are not in the repository)? | PGDock | All phases |
-| Q22 | During `rotate-secret`, is there an overlap window in which deliveries carry signatures from both the old and new secrets (two `v1=` values)? Without one, deliveries in flight during a rotation fail verification. | PGDock | P1-T3, P1-G3 |
-| Q23 | Is `primary_key` enough to refetch a truncated event's row through the rows endpoint, and could it be sent on every event, not only truncated ones? | PGDock | P1-T3, Q14 |
-| Q24 | Does an `UPDATE` event's `old_record` hold every column, or only the changed ones? The trigger's changed-columns filter depends on it. | PGDock | P1-T3 |
-| Q25 | How does an API token authenticate? The OpenAPI file declares no security scheme; the connector sends `Authorization: Bearer <token>`, as PGDock's metrics endpoint documents. Do token-authenticated calls skip the CSRF header the session flow needs? | PGDock | P1-T2 |
-| Q26 | Which scope does deleting a webhook need, and does it need a typed confirmation like other destructive actions (`confirm`)? Taskiem assumes `write` and no confirmation. | PGDock | P1-T1 |
-| Q27 | Are webhook names unique within a project? Taskiem finds a webhook it created before a crash by its name (`taskiem-<id>`). Could PGDock add a description or metadata field for integrators' tags? | PGDock | P1-T1 |
-| Q28 | Is the payload's `project` the project's id? The published example (`p_k2f9a7bq3d`) is not a UUID like the API's project ids. | PGDock | P1-T3 |
+| Q22 | During `rotate-secret`, is there an overlap window? **Answered: `overlap_seconds` (up to a day); each delivery then carries one `v1=` per secret, which the verifier already handles.** | Xenibase | Closed |
+| Q23 | Is `primary_key` enough to refetch a truncated event's row, and could it be sent on every event? **Answered: yes; every change event of a table with a primary key carries it.** | Xenibase | Closed |
+| Q24 | Does an `UPDATE` event's `old_record` hold every column? **Answered: every column (`to_jsonb(OLD)`).** | Xenibase | Closed |
+| Q25 | How does an API token authenticate? **Answered: `Authorization: Bearer xb_…`; token calls never need the CSRF header.** | Xenibase | Closed |
+| Q26 | Which scope does deleting a webhook need, and does it need a typed confirmation? **Answered: every webhook call needs `write`; deletion needs no `confirm`.** | Xenibase | Closed |
+| Q27 | Are webhook names unique within a project? **Answered: yes; `description` and string `metadata` (16 keys) exist, and Xenibase suggests finding a webhook by metadata since a person may rename it (a follow-up for the registrar).** | Xenibase | Closed |
+| Q28 | Is the payload's `project` the project's id? **Answered: no, it is the database name; the new `project_id` field is the UUID.** | Xenibase | Closed |
 
 ## 6. Updates this plan needs elsewhere
 
@@ -189,8 +189,8 @@ The joint doc's five questions come first (Q1–Q5). The rest came up while chec
 | --- | --- |
 | `docs/webhooks.md` | Note that integrators (Taskiem) create webhooks through the API with project-restricted tokens, and how deliveries count against rate limits (Q15); whether rotation signs with both secrets for a while (Q22); `primary_key`'s shape (Q23); whether webhook names are unique (Q27) |
 | `api/openapi.yaml` (auth) | A security scheme for API tokens (Q25); the scope each webhook operation needs (Q26) |
-| `api/openapi.yaml` | A parameterised SQL endpoint or row-write endpoints (P1-G1); `Idempotency-Key` (P1-G2); the error code list (P1-G4) |
-| Authorization | The OAuth-style consent flow (P2-G1) |
+| `api/openapi.yaml` | ~~A parameterised SQL endpoint or row-write endpoints (P1-G1); `Idempotency-Key` (P1-G2); the error code list (P1-G4)~~ Done through the data API and `docs/errors.md` |
+| Authorization | The OAuth-style consent flow (P2-G1): built on the Xenibase branch (`docs/oauth-apps.md` there) |
 | CI | Run Taskiem's `pgdock@1` contract tests (P4-T5) |
 
 ### In the joint doc
@@ -206,8 +206,8 @@ Apply corrections C1–C11. Replace its open-questions section with a link to Q1
 | Cross-product data exposure (from the joint doc) | Project-restricted tokens with the smallest scopes; consent; revocation from either side; audit entries in both |
 | Roadmap dependency on PGDock V4 (from the joint doc) | Phase 1 ships the trigger and reads on today's APIs; writes wait for P1-G1 rather than for V4 |
 | Bundle confusion and hidden coupling through shared code (from the joint doc) | Each product priced alone; shared modules versioned with owners (Q1) |
-| **Unsafe SQL stopgap** (new) | No values put into SQL text, ever. Writes wait for bound parameters (C9). |
-| **Duplicate writes without idempotency keys** (new) | Inserts are `unsafe_write` until P1-G2; upserts preferred (C10) |
+| **Unsafe SQL stopgap** (closed) | No values put into SQL text, ever. Writes go through the data API's bound values (C9). |
+| **Duplicate writes without idempotency keys** (closed) | Every data API write carries an idempotency key honoured for 24 hours (C10) |
 | **Ordering assumptions** (new) | Documented (C8), with a per-key concurrency setting where order matters (Q12) |
 | **Unpublished V3 and V4 contracts** (new) | Taskiem builds nothing on them until they are published (Q21) |
 | **Remote webhook drift**: a customer deletes or pauses the PGDock webhook (new) | P1-T1 shows a broken or paused remote subscription on the connection and on the workflow; republishing reinstalls it |
