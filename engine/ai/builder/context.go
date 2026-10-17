@@ -21,6 +21,24 @@ type Context struct {
 	Policies    []Policy           `json:"policies,omitempty"`
 	Variables   []Variable         `json:"variables,omitempty"`
 	Workflows   []ExistingWorkflow `json:"-"`
+	// Tables are the tenant's data tables (decision 0033): names and
+	// column types only, never rows.
+	Tables []DataTable `json:"data_tables,omitempty"`
+}
+
+// DataTable is a data table, reached with pgdock@1 actions on the
+// connection named data_tables.
+type DataTable struct {
+	Name    string            `json:"name"`
+	Title   string            `json:"title,omitempty"`
+	Columns []DataTableColumn `json:"columns"`
+}
+
+// DataTableColumn is a column's name and type.
+type DataTableColumn struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Required bool   `json:"required,omitempty"`
 }
 
 // Connection is a tenant's connection, by name.

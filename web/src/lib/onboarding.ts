@@ -119,7 +119,7 @@ export function sampleInput(schema: JSONSchema | undefined, types: Record<string
 
 /** In-product help: a few plain sentences per page, and the docs page for
  * more when the deployment has a docs site. */
-export type HelpTopic = "start" | "templates" | "connections" | "variables";
+export type HelpTopic = "start" | "templates" | "connections" | "variables" | "tables";
 
 export const HELP: Record<HelpTopic, { title: string; body: string[]; doc: string }> = {
   start: {
@@ -147,6 +147,15 @@ export const HELP: Record<HelpTopic, { title: string; body: string[]; doc: strin
       "Credentials are encrypted when saved and never shown again; to change them, add the connection again.",
     ],
     doc: "connector-sdk",
+  },
+  tables: {
+    title: "About data tables",
+    body: [
+      "A data table holds records your business keeps, such as your debtors with their phone numbers and balances, so a workflow can read and write them without a spreadsheet.",
+      "Tables live in a Xenibase project Taskiem keeps for your organisation. Workflows reach them through the connection named data_tables with the Xenibase connector's actions; the AI builder knows your tables and their columns.",
+      "Phone and email columns are personal data: they are masked in logs and never shown to the AI. Deleting a table or a column drops its data, so you type its name first.",
+    ],
+    doc: "data-tables",
   },
   variables: {
     title: "About variables",

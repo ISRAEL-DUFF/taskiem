@@ -34,6 +34,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/canary"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embed"
@@ -95,6 +96,9 @@ type config struct {
 	// Billing turns plans, subscriptions and payments on (TASKIEM_BILLING=on,
 	// docs/billing.md); off, every tenant is on the internal plan.
 	Billing BillingConfig
+	// Xenibase is the platform's Xenibase for data tables
+	// (TASKIEM_XENIBASE_*, decision 0033); unset, tables answer 503.
+	Xenibase datatables.Platform
 	// Keys tunes customer keys and the key job (TASKIEM_BYOK_*,
 	// TASKIEM_KEY_*; docs/byok.md).
 	Keys KeysConfig
@@ -314,6 +318,12 @@ func loadConfig() (config, error) {
 			PGDockURL:         os.Getenv("TASKIEM_PGDOCK_URL"),
 		},
 		PoolSize: 20,
+		Xenibase: datatables.Platform{URL: strings.TrimRight(os.Getenv("TASKIEM_XENIBASE_URL"), "/"), Token: os.Getenv("TASKIEM_XENIBASE_TOKEN"),
+			Org: os.Getenv("TASKIEM_XENIBASE_ORG"), Region: os.Getenv("TASKIEM_XENIBASE_REGION")},
+	}
+	// The platform's Xenibase is also the connector's default server.
+	if c.Connectors.PGDockURL == "" {
+		c.Connectors.PGDockURL = c.Xenibase.URL
 	}
 	// Administrators are held to passkeys wherever passkeys can work.
 	if c.HooksURL == "" && c.PublicURL != "" {
@@ -437,6 +447,17 @@ type engine struct {
 	connectors *wasmconn.Source
 	// wa is the platform WhatsApp number, when configured.
 	wa *whatsapp.Platform
+}
+
+// tables is the data tables service (decision 0033): provisioning in the
+// platform's Xenibase when TASKIEM_XENIBASE_URL, _TOKEN and _ORG are
+// set; otherwise only organisations that brought their own project
+// have tables. The platform token stays in this process.
+func (e *engine) tables() *datatables.Service {
+	if !e.cfg.Xenibase.Configured() {
+		e.log.Info("data tables: TASKIEM_XENIBASE_URL, TASKIEM_XENIBASE_TOKEN and TASKIEM_XENIBASE_ORG unset; tables are available only to organisations with their own Xenibase project")
+	}
+	return &datatables.Service{Pool: e.pool, Vault: e.vault, Egress: &egress.Guard{Logger: e.log}, Logger: e.log, Platform: e.cfg.Xenibase, ConnectorURL: e.cfg.Connectors.PGDockURL}
 }
 
 func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, error) {
@@ -701,6 +722,7 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.Billing = bill
+		srv.Tables = e.tables()
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD)
 	}
 	if *role == "edge" {
@@ -750,7 +772,9 @@ func serve(ctx context.Context, args []string) error {
 				}
 				telemetry.KeyChecksFailed.WithLabelValues(by).Inc()
 			}}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, e.remote().Run, keys.Run)
+		// Data tables: the data_tables connections' tokens, renewed before
+		// they expire (docs/data-tables.md#token-renewal).
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

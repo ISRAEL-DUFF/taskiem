@@ -45,8 +45,8 @@ func (s *Server) getLimits(w http.ResponseWriter, r *http.Request) {
 		"refused_while_suspended": nonNil(refused)})
 }
 
-// checkCount refuses creating one more workflow, secret or connection
-// beyond the tenant's plan.
+// checkCount refuses creating one more workflow, secret, connection or
+// data table beyond the tenant's plan.
 func (s *Server) checkCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit string) error {
 	lim, err := s.Store.LimitsFor(ctx, tenant)
 	if err != nil {
@@ -59,6 +59,8 @@ func (s *Server) checkCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, li
 		err = runtime.CheckCount(ctx, tx, limit, `secrets WHERE tenant_id = $1 AND name IS NOT NULL`, lim.MaxSecrets, tenant)
 	case "max_connections":
 		err = runtime.CheckCount(ctx, tx, limit, `connections WHERE tenant_id = $1 AND status = 'active'`, lim.MaxConnections, tenant)
+	case "max_data_tables":
+		err = runtime.CheckCount(ctx, tx, limit, `data_tables WHERE tenant_id = $1`, lim.MaxDataTables, tenant)
 	}
 	if _, ok := runtime.IsLimit(err); ok {
 		s.Store.LimitHit(ctx, tenant, limit)

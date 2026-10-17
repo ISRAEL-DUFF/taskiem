@@ -6,6 +6,7 @@ const paths: Record<string, string> = {
   dashboard: "M4 13h6V4H4zm10 7h6V11h-6zM4 20h6v-4H4zm10-11h6V4h-6z",
   workflows: "M6 3v6m0 6v6M6 9a3 3 0 100 6 3 3 0 000-6zm12-6a3 3 0 100 6 3 3 0 000-6zm0 6v3a3 3 0 01-3 3H9",
   templates: "M4 5a1 1 0 011-1h5v16H5a1 1 0 01-1-1zm10-1h5a1 1 0 011 1v5h-6zm0 10h6v5a1 1 0 01-1 1h-5z",
+  tables: "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14",
   runs: "M8 5v14l11-7z",
   approvals: "M9 12l2 2 4-4M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z",
   policies: "M4 6h16M4 12h10M4 18h7M17 15l2 2 3-3",

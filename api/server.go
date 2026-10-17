@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/httpsec"
@@ -141,6 +142,9 @@ type Server struct {
 	// 503 so load balancers stop sending requests, while those already
 	// sent are still served (docs/reliability.md#graceful-shutdown).
 	Draining func() bool
+	// Tables provisions and keeps organisations' data table projects
+	// (datatables.go, decision 0033); nil answers 503 tables_unavailable.
+	Tables *datatables.Service
 
 	code         codeGate                            // tenant code admitted at once (codegate.go)
 	ussd         ussdState                           // USSD channels, sessions and menus (ussd.go)
@@ -317,6 +321,7 @@ func (s *Server) Handler() http.Handler {
 
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
+			r.Group(s.tablesRoutes) // data tables (datatables.go)
 			r.With(s.need(PermSecretManage)).Get("/secrets", s.listSecrets)
 			r.With(s.need(PermAuditRead)).Get("/secrets/reads", s.listSecretReads)
 			r.With(s.need(PermSecretManage)).Put("/secrets/{env}/{name}", s.putSecret)

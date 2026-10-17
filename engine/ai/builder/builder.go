@@ -525,6 +525,7 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	doc := map[string]any{
 		"relevant_connectors": details,
 		"connections":         nonNil(req.Context.Connections),
+		"data_tables":         nonNil(req.Context.Tables),
 		"variables":           nonNil(req.Context.Variables),
 		"approval_policies":   nonNil(req.Context.Policies),
 		"similar_workflows":   nonNil(similar(req.Goal, req.Context.Workflows, 3)),

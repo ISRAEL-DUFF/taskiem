@@ -8,6 +8,7 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | --- | --- | --- |
 | `debtor-reminder-sms` | Every week, text each customer on the debtors sheet how much they still owe | Google Sheets, Termii |
 | `debtor-reminder-whatsapp` | The same by an approved WhatsApp template | Google Sheets, WhatsApp |
+| `debtor-reminder-table` | Every week, text each customer in the debtors [data table](data-tables.md) who still has a balance; no spreadsheet | Xenibase (the `data_tables` connection), Termii |
 | `invoice-follow-up` | After an invoice, wait a few days, check with Paystack, remind the customer if unpaid | Paystack, Termii |
 | `transfer-received-notify` | Text the owner about each transfer into the Moniepoint (Monnify) account and log it in a sheet | Moniepoint, Termii, Google Sheets |
 | `daily-sales-summary` | Every evening, add up today's sales from the sales sheet and text the owner | Google Sheets, Termii |

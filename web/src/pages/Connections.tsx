@@ -15,6 +15,8 @@ interface Conn {
   status: string;
   created_at: string;
   last_used_at: string | null;
+  /** What made the connection when it was not a person: taskiem:data_tables for the data tables project's. */
+  provisioned_by: string | null;
   /** Subscriptions Taskiem keeps at the provider through this connection (a PGDock webhook per workflow). */
   remote?: {
     subscriptions: number;
@@ -83,7 +85,15 @@ export function Connections() {
             {list.data.connections.map((c) => (
               <tr key={c.id}>
                 <td>{c.connector}</td>
-                <td>{c.name}</td>
+                <td>
+                  {c.provisioned_by === "taskiem:data_tables" ? (
+                    <>
+                      <Link to="/tables">Data tables</Link> <span className="hint">({c.name}, kept by Taskiem)</span>
+                    </>
+                  ) : (
+                    c.name
+                  )}
+                </td>
                 <td>{c.environment}</td>
                 <td>
                   <Badge value={c.status === "active" ? "ok" : c.status} />

@@ -354,9 +354,11 @@ func (rec aiRecorder) Record(ctx context.Context, it builder.Interaction) error 
 }
 
 // aiContext reads what a prompt may carry: connections by name and
-// connector, variables by name, active policies by name and summary, and
-// workflows' latest definitions (the builder keeps only their structure).
-// It never selects secrets, credentials (secret_ref) or variable values.
+// connector, data tables by name with their columns' names and types
+// (never rows), variables by name, active policies by name and summary,
+// and workflows' latest definitions (the builder keeps only their
+// structure). It never selects secrets, credentials (secret_ref) or
+// variable values.
 func aiContext(ctx context.Context, tx pgx.Tx, env string, skip *uuid.UUID) (builder.Context, error) {
 	var c builder.Context
 	rows, err := tx.Query(ctx, `SELECT environment, connector, name, status FROM connections
@@ -369,6 +371,30 @@ func aiContext(ctx context.Context, tx pgx.Tx, env string, skip *uuid.UUID) (bui
 		return x, r.Scan(&x.Environment, &x.Connector, &x.Name, &x.Status)
 	})
 	if err != nil {
+		return c, err
+	}
+	rows, err = tx.Query(ctx, `SELECT t.id, t.name, t.title, c.name, c.type, c.required FROM data_tables t
+		JOIN data_table_columns c ON c.table_id = t.id ORDER BY t.name, c.position LIMIT 2000`)
+	if err != nil {
+		return c, err
+	}
+	var last uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		var name, title string
+		var col builder.DataTableColumn
+		if err := rows.Scan(&id, &name, &title, &col.Name, &col.Type, &col.Required); err != nil {
+			rows.Close()
+			return c, err
+		}
+		if id != last {
+			c.Tables = append(c.Tables, builder.DataTable{Name: name, Title: title})
+			last = id
+		}
+		c.Tables[len(c.Tables)-1].Columns = append(c.Tables[len(c.Tables)-1].Columns, col)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
 		return c, err
 	}
 	rows, err = tx.Query(ctx, `SELECT environment, name FROM variables WHERE ($1 = '' OR environment = $1) ORDER BY environment, name LIMIT 500`, env)

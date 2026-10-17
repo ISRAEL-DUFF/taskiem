@@ -57,7 +57,10 @@ type Token struct {
 type Table struct {
 	Columns []string
 	Key     []string
-	rows    []map[string]any
+	// Types are the columns' Postgres types, where known (the schema API
+	// created them); a column without one reads as text.
+	Types map[string]string
+	rows  []map[string]any
 	// seq is the identity for a single-column key left out of an insert.
 	seq int64
 	// changes counts the committed changes (one per row).
@@ -116,6 +119,12 @@ type project struct {
 	Services   bool
 	SecretKeys []string
 	Functions  map[string]Function
+	// Keys are the API keys made through the API (provision.go).
+	Keys   []apiKey
+	Region string
+	// creating is set while the create operation has not succeeded;
+	// failed when it failed.
+	creating, failed bool
 }
 
 // Function is a database function the data API's rpc endpoint calls.
@@ -160,6 +169,13 @@ type Fake struct {
 	Deliveries []Delivery
 	// Requests are the API requests served ("GET /api/v1/me"), in order.
 	Requests []string
+	// Provisioning (provision.go): operations, project quotas per
+	// organisation, operation failures to inject, and the projects in the
+	// order they were made.
+	ops          []*Operation
+	quotas       map[string]int
+	opFailures   map[string]string
+	projectOrder []string
 }
 
 // New starts a fake PGDock with one organisation and no projects.
@@ -178,6 +194,7 @@ func (f *Fake) AddProject(id, name string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.projects[id] = &project{ID: id, Name: name, OrgID: f.OrgID, Tables: map[string]*Table{}, Ref: ref(id), Functions: map[string]Function{}}
+	f.projectOrder = append(f.projectOrder, id)
 	return id
 }
 
@@ -726,6 +743,29 @@ func (f *Fake) route(w http.ResponseWriter, r *http.Request, data bool) {
 		}
 		reply(w, http.StatusOK, map[string]any{"id": f.OrgID, "name": f.OrgName, "slug": "acme", "personal": false, "role": "owner",
 			"plan": "team", "status": "active", "members_can_create_projects": true, "member_count": 2, "project_count": len(f.projects), "created_at": "2026-01-01T00:00:00Z"})
+	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/projects":
+		f.serveCreateProject(w, r, tok)
+	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/tokens":
+		f.serveCreateToken(w, r, tok)
+	case r.Method == http.MethodGet && len(seg) == 4 && seg[2] == "operations":
+		f.serveOperation(w, tok, seg[3])
+	case r.Method == http.MethodGet && len(seg) == 4 && seg[2] == "projects":
+		f.mu.Lock()
+		p := f.projects[seg[3]]
+		f.mu.Unlock()
+		if p == nil || p.OrgID != tok.OrgID || tok.ProjectIDs != nil && !slices.Contains(tok.ProjectIDs, seg[3]) {
+			refuse(w, http.StatusNotFound, "not_found", "no such project")
+			return
+		}
+		f.mu.Lock()
+		for _, op := range f.ops {
+			if op.ProjectID == p.ID && op.Kind == "create" && op.Status == "queued" {
+				f.advance(op)
+			}
+		}
+		view := p.view(f)
+		f.mu.Unlock()
+		reply(w, http.StatusOK, view)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/projects":
 		f.mu.Lock()
 		items := []any{}
@@ -737,7 +777,7 @@ func (f *Fake) route(w http.ResponseWriter, r *http.Request, data bool) {
 		for _, id := range ids {
 			p := f.projects[id]
 			if p.OrgID == tok.OrgID && (tok.ProjectIDs == nil || slices.Contains(tok.ProjectIDs, id)) {
-				items = append(items, map[string]any{"id": p.ID, "org_id": p.OrgID, "name": p.Name, "slug": strings.ToLower(p.Name), "status": "active"})
+				items = append(items, p.view(f))
 			}
 		}
 		f.mu.Unlock()
@@ -769,16 +809,27 @@ func (f *Fake) serveProject(w http.ResponseWriter, r *http.Request, tok Token, i
 		f.serveRows(w, r, p, rest[1], rest[2])
 	case rest[0] == "services" && len(rest) == 1 && r.Method == http.MethodGet:
 		// BackendServices: enabled false with nothing else when the
-		// services were never turned on.
+		// services were never turned on; otherwise the keys' metadata,
+		// with only the publishable key's value.
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		if !p.Services {
 			reply(w, http.StatusOK, map[string]any{"enabled": false, "keys": []any{}, "cors_origins": []any{}, "exposed_schemas": []any{}, "public_tables": []any{}, "settings": map[string]any{}, "feed_configured": true})
 			return
 		}
-		reply(w, http.StatusOK, map[string]any{"enabled": true, "ref": p.Ref, "url": f.URL + "/edge/" + p.Ref, "enabled_at": "2026-10-01T00:00:00Z",
-			"keys": []any{}, "cors_origins": []any{}, "exposed_schemas": []any{"public"}, "public_tables": []any{}, "settings": map[string]any{}, "feed_configured": true,
-			"roles": map[string]any{"anon": "p_anon", "user": "p_user", "service": "p_service"}})
+		reply(w, http.StatusOK, f.servicesView(p))
+	case rest[0] == "services" && len(rest) == 1 && r.Method == http.MethodPost:
+		f.serveEnableServices(w, p, tok)
+	case rest[0] == "services" && len(rest) == 2 && rest[1] == "keys" && r.Method == http.MethodPost:
+		f.serveCreateKey(w, r, p, tok)
+	case rest[0] == "schema" && len(rest) == 1 && r.Method == http.MethodGet:
+		f.serveSchema(w, p)
+	case rest[0] == "schema" && len(rest) == 2 && rest[1] == "preview" && r.Method == http.MethodPost:
+		body, _ := io.ReadAll(r.Body)
+		f.serveSchemaPreview(w, p, body)
+	case rest[0] == "schema" && len(rest) == 2 && rest[1] == "apply" && r.Method == http.MethodPost:
+		body, _ := io.ReadAll(r.Body)
+		f.serveSchemaApply(w, p, tok, body)
 	default:
 		refuse(w, http.StatusNotFound, "not_found", "no such route")
 	}

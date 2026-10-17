@@ -86,6 +86,11 @@ tags:
 - name: Templates
   description: The SME template library.
   x-taskiem-guide: templates
+- name: Data tables
+  description: >-
+    Records a business keeps (customers, debtors, staff, stock) as tables in the organisation's Xenibase project, reached
+    by workflows through the `pgdock@1` connection named `data_tables`.
+  x-taskiem-guide: data-tables
 - name: Catalogue
   description: 'The public connector catalogue: browsing, installing, publishing and submissions.'
   x-taskiem-guide: connector-submissions
@@ -9172,6 +9177,808 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/tables/status:
+    get:
+      operationId: getTablesStatus
+      tags:
+      - Data tables
+      summary: Data tables status
+      description: >-
+        Whether tables can be made (`available`), whether the platform's Xenibase is configured, the organisation's project and its state (`none`, `creating`, `enabling`, `ready`, `failed`), whether it is the organisation's own, and when the connection's token expires.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TablesStatus'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/project:
+    put:
+      operationId: putTablesProject
+      tags:
+      - Data tables
+      summary: Use your own Xenibase project
+      description: >-
+        Makes an existing `pgdock@1` connection of the organisation's own, in prod, the data tables project: its credentials (which must hold the project's secret key and data API URL) are tested with `test_connection` and copied into the `data_tables` connection. Refused once any table exists. Taskiem never provisions, renews or deletes anything for an own project.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit,connection.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TablesProjectRequest'
+      responses:
+        '200':
+          description: The project is set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TablesStatus'
+        '400':
+          description: >-
+            Not a pgdock connection of your own in prod, no secret key or data API URL, or the connection failed its test.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            Tables already exist in the current project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables:
+    get:
+      operationId: listTables
+      tags:
+      - Data tables
+      summary: List data tables
+      description: >-
+        Every table with its columns, and an estimated row count where Xenibase answered within a short budget (`?counts=no` skips the counts).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: counts
+        in: query
+        schema:
+          type: string
+          enum:
+          - 'no'
+        description: Skip the row counts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createTable
+      tags:
+      - Data tables
+      summary: Create a data table
+      description: >-
+        Records the table and creates it in the organisation's Xenibase project through the schema API (`create_table`), provisioning the project on the first table (which takes a minute or two). Every table gets `id`, `created_at` and `updated_at`; names are lower-case letters, digits and underscores; `personal` defaults to true for phone and email columns.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          description: >-
+            A bad name, column or type, or Xenibase refused the DDL (`xenibase_refused`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            A table of that name exists, or the project is being created (`tables_provisioning`, with Retry-After), or the platform's Xenibase organisation is at its project quota (`xenibase_quota`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            `limit_exceeded` with `limit` `max_data_tables`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: >-
+            `tables_unavailable`: no platform Xenibase is configured and the organisation brought no project; `tables_project_failed`; `xenibase_unavailable` (with Retry-After).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}:
+    get:
+      operationId: getTable
+      tags:
+      - Data tables
+      summary: Get a data table
+      description: >-
+        The table with its columns, its Postgres name, the connection workflows use and an estimated row count when Xenibase answered.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateTable
+      tags:
+      - Data tables
+      summary: Change a table's title or description
+      description: >-
+        Columns and the name do not change here.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TablePatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteTable
+      tags:
+      - Data tables
+      summary: Delete a data table
+      description: >-
+        Drops the Postgres table and every row through the schema API (`drop_table`), then forgets the table. `confirm` must be the table's name. Audited as `table.delete`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmRequest'
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '400':
+          description: >-
+            `confirm` is not the table's name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: >-
+            `tables_unavailable`: no platform Xenibase is configured and the organisation brought no project; `tables_project_failed`; `xenibase_unavailable` (with Retry-After).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}/columns:
+    post:
+      operationId: addTableColumn
+      tags:
+      - Data tables
+      summary: Add a column
+      description: >-
+        Adds the column through the schema API (`add_column`), then records it. A required column cannot be added to a table with rows (Postgres refuses it).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ColumnRequest'
+      responses:
+        '201':
+          description: The table with the new column
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          description: >-
+            A bad name or type, or Xenibase refused the DDL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            The table already has that column.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            `limit_exceeded` with `limit` `max_data_table_columns`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: >-
+            `tables_unavailable`: no platform Xenibase is configured and the organisation brought no project; `tables_project_failed`; `xenibase_unavailable` (with Retry-After).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}/columns/{name}:
+    delete:
+      operationId: dropTableColumn
+      tags:
+      - Data tables
+      summary: Drop a column
+      description: >-
+        Drops the column and its data (`drop_column`). `confirm` must be the column's name. Audited as `table.column.drop`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The column's name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmRequest'
+      responses:
+        '200':
+          description: The table without the column
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          description: >-
+            `confirm` is not the column's name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table or column.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: >-
+            `tables_unavailable`: no platform Xenibase is configured and the organisation brought no project; `tables_project_failed`; `xenibase_unavailable` (with Retry-After).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}/rows:
+    get:
+      operationId: listTableRows
+      tags:
+      - Data tables
+      summary: List rows
+      description: >-
+        A page of rows, newest first, through `read_rows` on the `data_tables` connection (every read is in the secret reads like a step's). `q` searches a text column: `column:text`, or text alone on the table's first text column. Personal columns are returned as they are.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 50
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: The previous page's next_cursor
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: A search, as column:text or text
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RowPage'
+        '404':
+          description: >-
+            No such table (or Xenibase has no such table: `xenibase_not_found`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: >-
+            `xenibase_unavailable`, with Retry-After.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: insertTableRows
+      tags:
+      - Data tables
+      summary: Insert rows
+      description: >-
+        Inserts one row (`row`) or up to 1,000 (`rows`) through `insert_rows`, after checking every value against the columns' types and required flags. The request's `Idempotency-Key` (or a fresh one) is the data API's key: a repeat answers the first attempt with `replayed` true.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the write safe to retry: Xenibase answers a repeat within 24 hours from the first attempt. A fresh key is used when none is sent.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RowsRequest'
+      responses:
+        '201':
+          description: Written
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RowsWritten'
+        '400':
+          description: >-
+            A value does not fit its column, a required column is missing, or Xenibase refused it (`xenibase_refused`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            A unique constraint (`xenibase_conflict`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            The project's data API quota (`quota_exceeded`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}/rows/query:
+    post:
+      operationId: queryTableRows
+      tags:
+      - Data tables
+      summary: Query rows
+      description: >-
+        A page of rows by the connector's structured filters and order (`read_rows`): what a workflow step can ask, from a client. Columns must be the table's (or id, created_at, updated_at).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RowsQuery'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RowPage'
+        '400':
+          description: >-
+            An unknown column, operator or limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}/rows/{row}:
+    patch:
+      operationId: updateTableRow
+      tags:
+      - Data tables
+      summary: Update a row
+      description: >-
+        Sets columns on one row by its id (`update_rows` with `max_affected` 1), values checked against the columns.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The row's id
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the write safe to retry: Xenibase answers a repeat within 24 hours from the first attempt. A fresh key is used when none is sent.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RowPatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RowWritten'
+        '400':
+          description: >-
+            A value does not fit its column.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table or row.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteTableRow
+      tags:
+      - Data tables
+      summary: Delete a row
+      description: >-
+        Deletes one row by its id (`delete_rows` with `max_affected` 1).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The row's id
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the write safe to retry: Xenibase answers a repeat within 24 hours from the first attempt. A fresh key is used when none is sent.'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RowsDeleted'
+        '404':
+          description: >-
+            No such table or row.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}/import:
+    post:
+      operationId: importTableRows
+      tags:
+      - Data tables
+      summary: Import rows from CSV
+      description: >-
+        A multipart form with a `file` field holding a CSV whose header row names the table's columns (`created_at` and `updated_at` are ignored). Up to 5,000 rows per call, written in batches of 500: upserted on `id` when the file has an `id` column (an export imported back), inserted otherwise. Each batch carries its own key from the import id and the batch's index, so a retried import writes nothing twice. Audited as `table.import` with counts only.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The CSV file (at most 16 MB)
+      responses:
+        '200':
+          description: Imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '400':
+          description: >-
+            No file, no header, an unknown column, a value that does not fit, over 5,000 rows, or Xenibase refused a batch (the message names it).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}/export:
+    get:
+      operationId: exportTableRows
+      tags:
+      - Data tables
+      summary: Export rows as CSV
+      description: >-
+        The table as CSV: `id`, the columns, `created_at` and `updated_at`, by id, paging through `read_rows` up to 100,000 rows.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      responses:
+        '200':
+          description: The rows
+          content:
+            text/csv:
+              schema:
+                type: string
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     sessionCookie:
@@ -11713,6 +12520,10 @@ components:
           type: integer
         max_retention_days:
           type: integer
+        max_data_tables:
+          type: integer
+        max_data_table_columns:
+          type: integer
       additionalProperties: false
     Usage:
       type: object
@@ -13252,6 +14063,11 @@ components:
         last_used_at:
           $ref: '#/components/schemas/NullableTimestamp'
           description: The last recorded read of its credentials.
+        provisioned_by:
+          type:
+          - string
+          - 'null'
+          description: What made the connection when it was not a person, e.g. `taskiem:data_tables` for the data tables project's.
         remote:
           type: object
           description: Its subscriptions at the provider, when it has any.
@@ -17190,4 +18006,383 @@ components:
                 items:
                   $ref: '#/components/schemas/PackageEndpoint'
             additionalProperties: false
+      additionalProperties: false
+    TablesStatus:
+      type: object
+      required:
+      - available
+      - configured
+      - status
+      - own
+      - connection
+      - tables
+      properties:
+        available:
+          type: boolean
+          description: Tables can be made; the platform's Xenibase is configured, or the organisation's own project is ready.
+        configured:
+          type: boolean
+          description: The platform's Xenibase is configured (TASKIEM_XENIBASE_URL, _TOKEN, _ORG).
+        status:
+          type: string
+          enum:
+          - none
+          - creating
+          - enabling
+          - ready
+          - failed
+        own:
+          type: boolean
+          description: The organisation brought its own project.
+        connection:
+          type: string
+          description: The connection workflows use (`data_tables`).
+        tables:
+          type: integer
+        project_name:
+          type: string
+        project_id:
+          type: string
+        project_ref:
+          type: string
+          description: The project reference in its data API hostname.
+        api_url:
+          type: string
+        token_expires_at:
+          $ref: '#/components/schemas/Timestamp'
+        error:
+          type: string
+          description: Why provisioning stopped, when it did.
+      additionalProperties: false
+    TablesProjectRequest:
+      type: object
+      required:
+      - connection_id
+      properties:
+        connection_id:
+          type: string
+          format: uuid
+          description: An active pgdock@1 connection of your own in prod, with the project's secret key and data API URL.
+      additionalProperties: false
+    ColumnType:
+      type: string
+      enum:
+      - text
+      - integer
+      - number
+      - boolean
+      - date
+      - datetime
+      - phone
+      - email
+      - json
+      description: 'Postgres: text, bigint, numeric, boolean, date, timestamptz, text, text, jsonb.'
+    ColumnRequest:
+      type: object
+      required:
+      - name
+      - type
+      properties:
+        name:
+          type: string
+          description: 'Lower-case letters, digits and underscores, starting with a letter; not id, created_at, updated_at, xb_* or pg_*.'
+        title:
+          type: string
+        type:
+          $ref: '#/components/schemas/ColumnType'
+        required:
+          type: boolean
+        personal:
+          type: boolean
+          description: Personal data, masked in logs, audit and the AI builder's context; defaults to true for phone and email.
+      additionalProperties: false
+    Column:
+      type: object
+      required:
+      - name
+      - title
+      - type
+      - required
+      - personal
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        type:
+          $ref: '#/components/schemas/ColumnType'
+        required:
+          type: boolean
+        personal:
+          type: boolean
+      additionalProperties: false
+    TableRequest:
+      type: object
+      required:
+      - name
+      - columns
+      properties:
+        name:
+          type: string
+          description: The Postgres table's name (public.<name>); lower-case letters, digits and underscores.
+        title:
+          type: string
+        description:
+          type: string
+        columns:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ColumnRequest'
+      additionalProperties: false
+    TablePatch:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+      additionalProperties: false
+    Table:
+      type: object
+      required:
+      - id
+      - name
+      - title
+      - description
+      - columns
+      - postgres_table
+      - connection
+      - created_by
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/Column'
+        postgres_table:
+          type: string
+          description: public.<name>
+        connection:
+          type: string
+          description: The connection a workflow step names (`data_tables`).
+        row_count:
+          type: integer
+          description: Estimated, when Xenibase answered.
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+      additionalProperties: false
+    TableList:
+      type: object
+      required:
+      - tables
+      properties:
+        tables:
+          type: array
+          items:
+            $ref: '#/components/schemas/Table'
+      additionalProperties: false
+    ConfirmRequest:
+      type: object
+      required:
+      - confirm
+      properties:
+        confirm:
+          type: string
+          description: The name of what is deleted, typed.
+      additionalProperties: false
+    Row:
+      type: object
+      description: 'A row: id, the columns, created_at and updated_at, typed as the data API returns them.'
+      additionalProperties: true
+    RowPage:
+      type: object
+      required:
+      - rows
+      - next_cursor
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/Row'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: The next page's cursor; empty on the last.
+        count:
+          type:
+          - integer
+          - 'null'
+          description: When the query asked for one.
+      additionalProperties: false
+    RowFilter:
+      type: object
+      required:
+      - column
+      - op
+      properties:
+        column:
+          type: string
+        op:
+          type: string
+          enum:
+          - eq
+          - neq
+          - lt
+          - lte
+          - gt
+          - gte
+          - in
+          - like
+          - ilike
+          - is
+          - contains
+          - contained_by
+          - search
+          - is_null
+          - not_null
+        value: {}
+        values:
+          type: array
+          items: {}
+      additionalProperties: false
+    RowOrder:
+      type: object
+      required:
+      - column
+      properties:
+        column:
+          type: string
+        desc:
+          type: boolean
+      additionalProperties: false
+    RowsQuery:
+      type: object
+      properties:
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/RowFilter'
+        order:
+          type: array
+          items:
+            $ref: '#/components/schemas/RowOrder'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        cursor:
+          type: string
+        count:
+          type: string
+          enum:
+          - exact
+          - estimated
+      additionalProperties: false
+    RowsRequest:
+      type: object
+      properties:
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/Row'
+        row:
+          $ref: '#/components/schemas/Row'
+      additionalProperties: false
+    RowsWritten:
+      type: object
+      required:
+      - affected
+      - rows
+      - replayed
+      properties:
+        affected:
+          type: integer
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/Row'
+        replayed:
+          type: boolean
+          description: Xenibase answered from an earlier attempt with the same key; nothing was written again.
+      additionalProperties: false
+    RowPatch:
+      type: object
+      required:
+      - set
+      properties:
+        set:
+          $ref: '#/components/schemas/Row'
+      additionalProperties: false
+    RowWritten:
+      type: object
+      required:
+      - affected
+      - row
+      - replayed
+      properties:
+        affected:
+          type: integer
+        row:
+          oneOf:
+          - $ref: '#/components/schemas/Row'
+          - type: 'null'
+        replayed:
+          type: boolean
+      additionalProperties: false
+    RowsDeleted:
+      type: object
+      required:
+      - affected
+      - replayed
+      properties:
+        affected:
+          type: integer
+        replayed:
+          type: boolean
+      additionalProperties: false
+    ImportResult:
+      type: object
+      required:
+      - import_id
+      - rows
+      - imported
+      - batches
+      - replayed_batches
+      - mode
+      properties:
+        import_id:
+          type: string
+        rows:
+          type: integer
+          description: Rows read from the file.
+        imported:
+          type: integer
+          description: Rows Xenibase reports written.
+        batches:
+          type: integer
+        replayed_batches:
+          type: integer
+        mode:
+          type: string
+          enum:
+          - insert_rows
+          - upsert_rows
       additionalProperties: false

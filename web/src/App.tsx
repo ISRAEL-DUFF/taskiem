@@ -28,6 +28,7 @@ import { Signup, VerifyEmail } from "./pages/Signup";
 import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
+import { TablePage, Tables } from "./pages/Tables";
 
 export function App() {
   return (
@@ -140,6 +141,7 @@ function SignedIn() {
         ["/dashboard", "Dashboard", "dashboard", can("run.read")],
         ["/workflows", "Workflows", "workflows", can("workflow.read")],
         ["/templates", "Templates", "templates", true],
+        ["/tables", "Tables", "tables", can("table.read")],
         ["/runs", "Runs", "runs", can("run.read")],
         ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish")],
       ],
@@ -249,6 +251,8 @@ function SignedIn() {
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/workflows/:id" element={<Editor />} />
           <Route path="/templates" element={<Templates />} />
+          <Route path="/tables" element={<Tables />} />
+          <Route path="/tables/:id" element={<TablePage />} />
           <Route path="/start" element={<Start />} />
           <Route path="/start/guide" element={<Guide />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
