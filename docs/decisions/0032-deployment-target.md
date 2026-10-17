@@ -48,3 +48,14 @@ The load today is small: the Payrolla pilot pays 2 people (₦3,000), Payrolla h
 - Container steps stay unavailable on the cloud until the move. The feature is built and tested; it is not offered.
 - Two follow-ups before any deployment: a CI job that pushes the signed image (point 5), and a VM deployment guide with a Compose file that meets point 3 (persistent OpenBao, no bundled database, a reverse proxy for TLS).
 - The penetration test (X1) can target the VM staging, but the move to Kubernetes adds boundaries it would not have tested (the container sandbox, B15; network policies); the test scope should say which deployment it covered.
+
+## Amendment, 2026-10-15: the VM runs itself
+
+Point 3's guarantees stay; the manual steps around them go. `deploy/vm/install.sh` and `taskiem-vps` ([one VM](../vm.md)) install, upgrade, back up, restore and watch the VM:
+
+1. **Auto-unseal with a static key** (OpenBao 2.4+), held in a root-only file on the VM and left out of backups; it is on an offline recovery sheet. On one VM a manual unseal protects only against a stolen disk or backup, at the price of downtime after every reboot until key holders respond; root on the VM already reaches Taskiem's token. A stolen backup alone still opens nothing.
+2. **Channels instead of hand-edited tags.** CI moves `staging` on every merge to main; a version tag moves `production` only after approval in the `production` GitHub environment. Servers follow their channel's digest, accept only images signed by this repository's CI workflow, upgrade inside a window, and roll back on a failed migration or an unhealthy release, alerting either way.
+3. **The kit travels with the release.** An upgrade installs the Compose file, configuration and `taskiem-vps` from the commit the image was built from, so the stack and the release never drift apart.
+4. **Nightly encrypted backups** (restic, to S3-compatible storage) of OpenBao's storage, Taskiem's archive and anchors, and the settings; `taskiem-vps restore` rebuilds on a new VM from a backup and the recovery sheet.
+5. **CI rehearses it.** The `vps` job installs on a fresh runner with a real Postgres, restarts OpenBao (auto-unseal), rejects and rolls back a broken release, upgrades and rolls back a good one, and restores from a backup after wiping the deployment.
+6. **Taskiem does not renew its OpenBao token.** The VM's `openbao-renew` service does, daily, and alerts on failure. The Helm chart needs the same (or Taskiem renewing its own token) before a Kubernetes deployment.

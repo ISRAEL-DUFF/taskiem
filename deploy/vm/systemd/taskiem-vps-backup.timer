@@ -1,0 +1,10 @@
+[Unit]
+Description=Taskiem: nightly backup at 02:30 Lagos time
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Africa/Lagos
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

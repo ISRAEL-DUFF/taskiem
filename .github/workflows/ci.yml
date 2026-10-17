@@ -182,18 +182,120 @@ jobs:
             repair-eval.md
           if-no-files-found: ignore
 
+  # The one-VM deployment, end to end on a fresh runner (decision 0032,
+  # docs/vm.md): install.sh and taskiem-vps setup against a real Postgres,
+  # OpenBao initialised and auto-unsealed, Caddy in front; then a restart
+  # (auto-unseal), a broken release (rolled back), a good one, and rollback.
+  vps:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash # -eo pipefail: a failure before "| tee" fails the step
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 2s --health-retries 30
+    env:
+      TASKIEM_VPS_KIT_SOURCE: ${{ github.workspace }}/deploy/vm
+      TASKIEM_VPS_NO_FIREWALL: "1"
+      TASKIEM_VPS_NO_TIMERS: "1"
+      TASKIEM_VPS_NONINTERACTIVE: "1"
+      TASKIEM_VPS_VERIFY: "0"
+      TASKIEM_VPS_INSECURE_TLS: "1"
+      TASKIEM_VPS_IMAGE_OVERRIDE: taskiem:ci
+      TASKIEM_VPS_DOMAIN: localhost
+      TASKIEM_VPS_OWNER_EMAIL: owner@example.com
+      TASKIEM_VPS_ORG: CI Company
+      TASKIEM_VPS_CHANNEL: staging
+      TASKIEM_VPS_WINDOW: any
+      TASKIEM_VPS_BACKUP_REPO: /srv/taskiem-backups
+    steps:
+      - uses: actions/checkout@v5
+      - name: ShellCheck
+        run: shellcheck deploy/vm/install.sh deploy/vm/taskiem-vps
+      - name: Images (a good one, a renamed copy, and one that cannot start)
+        run: |
+          docker build --build-arg VERSION=ci -t taskiem:ci .
+          docker tag taskiem:ci taskiem:ci-next
+          printf 'FROM taskiem:ci\nENTRYPOINT ["/taskiem", "no-such-command"]\n' | docker build -t taskiem:broken -
+          PGPASSWORD=postgres createdb -h 127.0.0.1 -U postgres taskiem_ci
+      - name: Install
+        run: |
+          # The runner's own address: Taskiem's containers reach Postgres as a server reaches its database host.
+          export TASKIEM_VPS_DATABASE_URL="postgres://postgres:postgres@$(hostname -I | awk '{print $1}'):5432/taskiem_ci?sslmode=disable"
+          sudo -E bash deploy/vm/install.sh 2>&1 | tee install.log
+      - name: Installed, healthy, owner created
+        run: |
+          curl -fsk https://localhost/readyz
+          PW=$(sed -n 's/.*first password[^:]*: //p' install.log | tail -n1)
+          test -n "$PW"
+          sudo sh -c 'grep -q "unseal key" /root/taskiem-recovery-*.txt && shred -u /root/taskiem-recovery-*.txt'
+          sudo -E taskiem-vps backup
+          sudo -E taskiem-vps check
+          # Test only: an https public URL holds admins to passkeys, which a script cannot use.
+          echo "TASKIEM_REQUIRE_ADMIN_PASSKEYS='false'" | sudo tee -a /opt/taskiem/taskiem.env >/dev/null
+          sudo docker compose --project-directory /opt/taskiem up -d --wait taskiem
+          curl -fsk -H 'Content-Type: application/json' -d "{\"email\":\"owner@example.com\",\"password\":\"$PW\",\"bearer\":true}" https://localhost/v1/auth/login | jq -er .token > token
+      - name: A secret goes through OpenBao, before and after OpenBao restarts (auto-unseal)
+        run: |
+          put() { curl -fsk -X PUT -H "Authorization: Bearer $(cat token)" -H 'Content-Type: application/json' -d '{"value":"v"}' "https://localhost/v1/secrets/prod/$1"; }
+          put ci_one
+          sudo docker compose --project-directory /opt/taskiem restart openbao
+          for i in $(seq 30); do sudo docker compose --project-directory /opt/taskiem exec -T openbao bao status >/dev/null 2>&1 && break; sleep 2; done
+          put ci_two
+          sudo -E taskiem-vps check
+      - name: A broken release is rolled back
+        run: |
+          if sudo -E TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:broken taskiem-vps update --now; then echo "the broken release was accepted"; exit 1; fi
+          test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
+          curl -fsk https://localhost/readyz
+          out=$(sudo -E taskiem-vps check || true)
+          grep -q 'taskiem:broken failed to upgrade' <<<"$out"
+      - name: A good release upgrades; rollback returns to the one before
+        run: |
+          sudo -E TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:ci-next taskiem-vps update --now
+          test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci-next
+          sudo -E taskiem-vps rollback
+          test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
+          curl -fsk https://localhost/readyz
+          sudo -E taskiem-vps status
+      - name: Disaster and restore from the backup and the recovery sheet
+        run: |
+          sudo -E taskiem-vps backup
+          UNSEAL=$(sudo sed -n "s/^BAO_STATIC_UNSEAL_KEY='\(.*\)'$/\1/p" /opt/taskiem/openbao-unseal.env)
+          RESTIC=$(sudo sed -n "s/^RESTIC_PASSWORD='\(.*\)'$/\1/p" /etc/taskiem/backup.env)
+          test -n "$UNSEAL" && test -n "$RESTIC"
+          # Lose the server: containers, volumes (OpenBao's storage included) and every setting.
+          sudo docker compose --project-directory /opt/taskiem down -v
+          sudo sh -c 'rm -rf /opt/taskiem/.env /opt/taskiem/*.env /etc/taskiem /var/lib/taskiem-vps'
+          sudo -E TASKIEM_VPS_RESTIC_PASSWORD="$RESTIC" TASKIEM_VPS_UNSEAL_KEY="$UNSEAL" taskiem-vps restore
+          curl -fsk https://localhost/readyz
+          # Writing a secret unwraps the tenant key through the restored OpenBao.
+          curl -fsk -X PUT -H "Authorization: Bearer $(cat token)" -H 'Content-Type: application/json' -d '{"value":"v"}' https://localhost/v1/secrets/prod/ci_three
+      - if: failure()
+        run: |
+          sudo docker compose --project-directory /opt/taskiem logs --tail 200 || true
+          sudo cat /var/lib/taskiem-vps/last-update.log || true
+
   # The image the Helm chart and the VM deployment pull (decision 0032):
   # pushed to GHCR on every merge to main and every v* tag, signed keylessly
-  # with cosign, with an SBOM and build provenance attached. Deployments pin
-  # the immutable sha-<12> tag (or the version tag), never "main".
+  # with cosign, with an SBOM and build provenance attached. Tags: sha-<12>
+  # and the version (immutable), and the channel "staging", which servers on
+  # the staging channel follow (taskiem-vps). "production" is moved only by
+  # the promote job below.
   image:
     if: github.event_name == 'push'
-    needs: [go, typescript, web, docker, licences]
+    needs: [go, typescript, web, docker, licences, vps]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write # keyless cosign signing via GitHub OIDC
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v5
       - name: Image name and version
@@ -208,7 +310,7 @@ jobs:
           images: ${{ steps.name.outputs.image }}
           tags: |
             type=raw,value=sha-${{ steps.name.outputs.sha }}
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -227,6 +329,8 @@ jobs:
           provenance: mode=max
           sbom: true
       - uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: v3.1.3 # the version taskiem-vps verifies with
       - name: Sign the image
         env:
           REF: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
@@ -234,6 +338,34 @@ jobs:
         run: |
           cosign sign --yes "$REF"
           { echo "Pushed and signed \`$REF\`"; echo; echo "Tags: $(echo "$TAGS" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
+
+  # Production servers follow the "production" tag. A version tag (v1.2.0)
+  # builds and signs its image above; this job moves "production" to it once
+  # someone approves the deployment in the "production" GitHub environment
+  # (Settings → Environments → production → required reviewers). Servers then
+  # upgrade themselves inside their upgrade window, rolling back on failure.
+  promote:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [image]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Point production at this release
+        env:
+          IMAGE: ${{ needs.image.outputs.image }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          docker buildx imagetools create -t "$IMAGE:production" "$IMAGE@$DIGEST"
+          echo "production → \`$IMAGE@$DIGEST\` ($GITHUB_REF_NAME)" >> "$GITHUB_STEP_SUMMARY"
 
   # Signed builds and SBOM (build plan Phase 0). Runs on main only.
   release-build:
@@ -283,7 +415,8 @@ jobs:
       - name: VM Compose file (decision 0032)
         working-directory: deploy/vm
         run: |
-          for f in .env taskiem.env migrate.env openbao.env; do cp "$f.example" "$f"; done
+          printf "TASKIEM_DOMAIN='ci.example'\nTASKIEM_IMAGE='taskiem:ci'\n" > .env
+          touch taskiem.env migrate.env openbao.env openbao-unseal.env
           docker compose config --quiet
       - name: Image
         run: docker build --build-arg VERSION=ci -t taskiem:ci .
