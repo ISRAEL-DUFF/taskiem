@@ -382,21 +382,21 @@ func TestDeliveryChecks(t *testing.T) {
 	signed := func(secret string) http.Header {
 		h := http.Header{}
 		h.Set("Content-Type", "application/json")
-		h.Set("PGDock-Event-Id", "evt_x_1")
-		h.Set("PGDock-Signature", pgdocktest.Sign(time.Now(), body, secret))
+		h.Set("Xenibase-Event-Id", "evt_x_1")
+		h.Set("Xenibase-Signature", pgdocktest.Sign(time.Now(), body, secret))
 		return h
 	}
 	if st := post(t, hook.URL, body, signed("whsec_wrong")); st != http.StatusUnauthorized {
 		t.Errorf("wrong secret: %d", st)
 	}
 	stale := signed(hook.Secret)
-	stale.Set("PGDock-Signature", pgdocktest.Sign(time.Now().Add(-6*time.Minute), body, hook.Secret))
+	stale.Set("Xenibase-Signature", pgdocktest.Sign(time.Now().Add(-6*time.Minute), body, hook.Secret))
 	if st := post(t, hook.URL, body, stale); st != http.StatusUnauthorized {
 		t.Errorf("replayed outside the window: %d", st)
 	}
 	// Rotation overlap (plan Q22): a header with the old and new signature.
 	both := signed(hook.Secret)
-	both.Set("PGDock-Signature", pgdocktest.Sign(time.Now(), body, "whsec_previous", hook.Secret))
+	both.Set("Xenibase-Signature", pgdocktest.Sign(time.Now(), body, "whsec_previous", hook.Secret))
 	if st := post(t, hook.URL, body, both); st != http.StatusAccepted {
 		t.Errorf("two v1 values: %d", st)
 	}
@@ -470,8 +470,9 @@ func TestTestEventsAndTruncatedRows(t *testing.T) {
 	if len(msgs) != 1 || msgs[0]["to"] != "+2348033333333" {
 		t.Fatalf("messages after a refetched truncated event: %v", msgs)
 	}
-	// PGDock busy while refetching: the delivery is refused and retried.
-	w.pg.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/" + project + "/tables/", Status: 503})
+	// Xenibase busy while refetching (the row is fetched by its key through
+	// the data API): the delivery is refused and retried.
+	w.pg.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/edge/", Status: 503})
 	w.pg.Begin(project).Update("orders", map[string]any{"id": 11}, map[string]any{"status": "paid"}).Commit()
 	if n := w.pg.Deliver(); n != 0 {
 		t.Fatalf("delivered though the row could not be fetched: %d", n)

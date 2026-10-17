@@ -1,7 +1,8 @@
 // Package pgdocktest is a fake Xenibase (formerly PGDock) for Taskiem's
 // tests (plan item P1-T7), built only from what Xenibase publishes:
-// docs/webhooks.md (the transactional outbox, payload, PGDock-Signature,
-// ordering, retries, dead letters, pausing, truncation, test events),
+// docs/webhooks.md (the transactional outbox, payload, Xenibase-Signature,
+// ordering, retries, dead letters, pausing, truncation, test events,
+// description and metadata, project_id and primary_key on every event),
 // docs/cli.md (tokens), api/openapi.yaml (the management API's paths,
 // request and response shapes, the {code, message} error, and
 // /projects/{id}/services), docs/backend-services.md (the data API: keys,
@@ -32,6 +33,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -62,9 +64,11 @@ type Table struct {
 	changes int
 }
 
-// Webhook is a webhook as PGDock holds it.
+// Webhook is a webhook as Xenibase holds it.
 type Webhook struct {
 	ID, Name            string
+	Description         string
+	Metadata            map[string]string
 	Tables, Events      []string
 	Columns             []string
 	URL                 string
@@ -405,14 +409,11 @@ func (tx *Tx) commitLocked() {
 			}
 			f.seq++
 			id := fmt.Sprintf("evt_%s_%d", strings.ReplaceAll(w.ID, "-", "")[:12], f.seq)
-			payload := map[string]any{"id": id, "webhook": w.Name, "project": p.ID, "table": c.table, "type": c.kind,
+			// project is the database name, project_id the API's id.
+			payload := map[string]any{"id": id, "webhook": w.Name, "project": p.dbName(), "project_id": p.ID, "table": c.table, "type": c.kind,
 				"record": record, "old_record": old, "committed_at": at.Format(time.RFC3339)}
-			body, _ := json.Marshal(payload)
-			if len(body) > f.TruncateAbove {
-				// PGDock: both records omitted, truncated and the key sent.
-				delete(payload, "record")
-				delete(payload, "old_record")
-				payload["truncated"] = true
+			if len(t.Key) > 0 {
+				// Every change event of a keyed table carries the key.
 				src := record
 				if src == nil {
 					src = old
@@ -422,6 +423,12 @@ func (tx *Tx) commitLocked() {
 					pk[k] = src[k]
 				}
 				payload["primary_key"] = pk
+			}
+			body, _ := json.Marshal(payload)
+			if len(body) > f.TruncateAbove {
+				// Both records omitted, truncated true; the key stays.
+				payload["record"], payload["old_record"] = nil, nil
+				payload["truncated"] = true
 				body, _ = json.Marshal(payload)
 			}
 			w.queue = append(w.queue, &Event{ID: id, Body: body, Seq: f.seq})
@@ -464,6 +471,10 @@ func clone(m map[string]any) map[string]any {
 	}
 	return out
 }
+
+// dbName is the project's database name, as the payload's project field
+// carries it.
+func (p *project) dbName() string { return "p_" + strings.TrimPrefix(p.Ref, "k") + "db" }
 
 func qualify(table string) string {
 	if strings.Contains(table, ".") {
@@ -561,7 +572,7 @@ func (f *Fake) Redeliver(projectID, webhookID, eventID string) (int, error) {
 	return f.post(w, e)
 }
 
-// Sign returns the PGDock-Signature header for body at t with secrets.
+// Sign returns the Xenibase-Signature header for body at t with secrets.
 func Sign(t time.Time, body []byte, secrets ...string) string {
 	ts := strconv.FormatInt(t.Unix(), 10)
 	parts := []string{"t=" + ts}
@@ -582,9 +593,10 @@ func (f *Fake) post(w *Webhook, e *Event) (int, error) {
 	}
 	hdr := http.Header{}
 	hdr.Set("Content-Type", "application/json")
-	hdr.Set("PGDock-Event-Id", e.ID)
-	hdr.Set("PGDock-Webhook", w.Name)
-	hdr.Set("PGDock-Signature", Sign(f.Now(), e.Body, secrets...))
+	hdr.Set("Xenibase-Event-Id", e.ID)
+	hdr.Set("Xenibase-Webhook", w.Name)
+	hdr.Set("Xenibase-Signature", Sign(f.Now(), e.Body, secrets...))
+	hdr.Set("User-Agent", "Xenibase-Webhooks/1")
 	for k, v := range w.Headers {
 		hdr.Set(k, v)
 	}
@@ -782,21 +794,31 @@ func (wh *Webhook) view() map[string]any {
 	if wh.StatusReason != "" {
 		reason = wh.StatusReason
 	}
-	return map[string]any{"id": wh.ID, "project_id": "", "name": wh.Name, "tables": wh.Tables, "events": wh.Events, "columns": wh.Columns,
+	meta := wh.Metadata
+	if meta == nil {
+		meta = map[string]string{}
+	}
+	return map[string]any{"id": wh.ID, "project_id": "", "name": wh.Name, "description": wh.Description, "metadata": meta,
+		"tables": wh.Tables, "events": wh.Events, "columns": wh.Columns,
 		"url": wh.URL, "header_names": names, "enabled": wh.Enabled, "status": wh.Status, "status_reason": reason,
 		"consecutive_failures": wh.ConsecutiveFailures, "backlog": len(wh.queue), "created_at": wh.CreatedAt.UTC().Format(time.RFC3339)}
 }
 
 type webhookReq struct {
-	Name    *string           `json:"name"`
-	Tables  []string          `json:"tables"`
-	Events  []string          `json:"events"`
-	Columns *[]string         `json:"columns"`
-	URL     *string           `json:"url"`
-	Headers map[string]string `json:"headers"`
-	Enabled *bool             `json:"enabled"`
-	raw     map[string]json.RawMessage
+	Name        *string           `json:"name"`
+	Description *string           `json:"description"`
+	Metadata    map[string]string `json:"metadata"`
+	Tables      []string          `json:"tables"`
+	Events      []string          `json:"events"`
+	Columns     *[]string         `json:"columns"`
+	URL         *string           `json:"url"`
+	Headers     map[string]string `json:"headers"`
+	Enabled     *bool             `json:"enabled"`
+	raw         map[string]json.RawMessage
 }
+
+// metadataKey is a metadata key as Xenibase allows it.
+var metadataKey = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,40}$`)
 
 func (f *Fake) serveWebhooks(w http.ResponseWriter, r *http.Request, p *project, rest []string) {
 	f.mu.Lock()
@@ -842,6 +864,20 @@ func (f *Fake) serveWebhooks(w http.ResponseWriter, r *http.Request, p *project,
 				return false
 			}
 		}
+		if req.Description != nil && len(*req.Description) > 500 {
+			refuse(w, http.StatusBadRequest, "bad_request", "description is at most 500 characters")
+			return false
+		}
+		if len(req.Metadata) > 16 {
+			refuse(w, http.StatusBadRequest, "bad_request", "metadata holds at most 16 keys")
+			return false
+		}
+		for k, v := range req.Metadata {
+			if !metadataKey.MatchString(k) || len(v) > 500 {
+				refuse(w, http.StatusBadRequest, "bad_request", "metadata keys are 1 to 40 of letters, digits, dots, colons, dashes and underscores; values up to 500 characters")
+				return false
+			}
+		}
 		return true
 	}
 	switch {
@@ -861,8 +897,11 @@ func (f *Fake) serveWebhooks(w http.ResponseWriter, r *http.Request, p *project,
 			return
 		}
 		f.hookSeq++
-		h := &Webhook{ID: newID(), Name: *req.Name, Tables: req.Tables, Events: req.Events, URL: *req.URL, Headers: req.Headers,
+		h := &Webhook{ID: newID(), Name: *req.Name, Tables: req.Tables, Events: req.Events, URL: *req.URL, Headers: req.Headers, Metadata: req.Metadata,
 			Enabled: true, Status: "healthy", Secret: newSecret(), CreatedAt: f.Now().Add(time.Duration(f.hookSeq) * time.Microsecond)}
+		if req.Description != nil {
+			h.Description = *req.Description
+		}
 		if req.Columns != nil {
 			h.Columns = *req.Columns
 		}
@@ -880,6 +919,12 @@ func (f *Fake) serveWebhooks(w http.ResponseWriter, r *http.Request, p *project,
 		}
 		if req.Name != nil {
 			hook.Name = *req.Name
+		}
+		if req.Description != nil {
+			hook.Description = *req.Description
+		}
+		if _, set := req.raw["metadata"]; set {
+			hook.Metadata = req.Metadata // replaced, not merged; {} removes it
 		}
 		if req.Tables != nil {
 			hook.Tables = req.Tables

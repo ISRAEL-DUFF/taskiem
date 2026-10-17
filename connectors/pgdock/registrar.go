@@ -7,30 +7,42 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 )
 
-// registrar manages the PGDock webhook behind a row_changed trigger through
-// PGDock's webhook API (POST/GET/PATCH/DELETE /projects/{id}/webhooks,
-// rotate-secret). Taskiem's webhooks are named after their subscription
-// (connector.RemoteSpec.Name), which is how a webhook created just before
-// a crash is found again.
+// registrar manages the Xenibase webhook behind a row_changed trigger
+// through Xenibase's webhook API (POST/GET/PATCH/DELETE
+// /projects/{id}/webhooks, rotate-secret; docs/webhooks.md, "Managing
+// webhooks from another tool"). Taskiem's webhooks are named after their
+// subscription (connector.RemoteSpec.Name) and tagged with it in metadata
+// (taskiem_subscription), which is how a webhook created just before a
+// crash is found again, by the tag first, since a person may rename it.
 type registrar struct{ c *client }
 
-// webhook is PGDock's Webhook (the fields Taskiem reads).
+// metaSubscription is the metadata key that tags a webhook as a Taskiem
+// subscription's; its value is the subscription id.
+const metaSubscription = "taskiem_subscription"
+
+// subscriptionOf is the subscription id a webhook name carries
+// (taskiem-<id>).
+func subscriptionOf(name string) string { return strings.TrimPrefix(name, "taskiem-") }
+
+// webhook is Xenibase's Webhook (the fields Taskiem reads).
 type webhook struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Tables       []string `json:"tables"`
-	Events       []string `json:"events"`
-	Columns      []string `json:"columns"`
-	URL          string   `json:"url"`
-	Enabled      bool     `json:"enabled"`
-	Status       string   `json:"status"`
-	StatusReason *string  `json:"status_reason"`
-	Backlog      int64    `json:"backlog"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Metadata     map[string]string `json:"metadata"`
+	Tables       []string          `json:"tables"`
+	Events       []string          `json:"events"`
+	Columns      []string          `json:"columns"`
+	URL          string            `json:"url"`
+	Enabled      bool              `json:"enabled"`
+	Status       string            `json:"status"`
+	StatusReason *string           `json:"status_reason"`
+	Backlog      int64             `json:"backlog"`
 }
 
 func (w webhook) state() connector.RemoteState {
@@ -48,7 +60,7 @@ func (w webhook) state() connector.RemoteState {
 	return st
 }
 
-// pgEvents are the change events PGDock sends; TEST is sent on request
+// pgEvents are the change events Xenibase sends; TEST is sent on request
 // and needs no subscription.
 var pgEvents = []string{"INSERT", "UPDATE", "DELETE"}
 
@@ -67,7 +79,8 @@ func strs(v any) []string {
 	return out
 }
 
-// request is the webhook PGDock should hold for spec.
+// request is the webhook Xenibase should hold for spec: its tables,
+// events and URL, a description, and the subscription tag in metadata.
 func request(spec connector.RemoteSpec, update bool) (map[string]any, error) {
 	tables := strs(spec.Options["tables"])
 	if len(tables) == 0 {
@@ -82,7 +95,8 @@ func request(spec connector.RemoteSpec, update bool) (map[string]any, error) {
 	if len(events) == 0 {
 		events = pgEvents // no filter, or only TEST: every change
 	}
-	body := map[string]any{"name": spec.Name, "tables": tables, "events": events, "url": spec.URL, "enabled": true}
+	body := map[string]any{"name": spec.Name, "tables": tables, "events": events, "url": spec.URL, "enabled": true,
+		"description": "Managed by Taskiem", "metadata": map[string]string{metaSubscription: subscriptionOf(spec.Name)}}
 	if cols := strs(spec.Options["columns"]); len(cols) > 0 {
 		body["columns"] = cols
 	} else if update {
@@ -162,6 +176,13 @@ func (r registrar) Find(ctx context.Context, c connector.RemoteCall, name string
 	if err := r.c.do(ctx, c.Credentials, c.HTTP, http.MethodGet, path, nil, &out); err != nil {
 		return connector.RemoteState{}, false, err
 	}
+	// By the subscription tag first (a person may have renamed the
+	// webhook), then by name (a webhook created before tags were sent).
+	for _, w := range out.Items {
+		if w.Metadata[metaSubscription] == subscriptionOf(name) {
+			return w.state(), true, nil
+		}
+	}
 	for _, w := range out.Items {
 		if w.Name == name {
 			return w.state(), true, nil
@@ -203,8 +224,10 @@ func (r registrar) Delete(ctx context.Context, c connector.RemoteCall, id string
 
 // enrich completes a truncated row-changed event (over 256 KB, sent
 // without its records) when the workflow asked for it
-// (options.refetch_truncated): the row is fetched by its primary_key
-// through the rows endpoint, so it may have changed since the event. The
+// (options.refetch_truncated): the row is fetched by its primary_key,
+// through the data API (GET /data/v1/{table}/{key}, a single-column key)
+// when the connection has its secret key and URL, else through the
+// management rows endpoint, so it may have changed since the event. The
 // event stays marked truncated, with refetched true and record set, or
 // refetched false and refetch_error saying why (the row is gone, the key
 // is not one PGDock sent as an object). A refusal worth retrying (429,
@@ -241,7 +264,7 @@ func (c *client) enrich(ctx context.Context, call connector.EventCall, body any)
 	if err != nil {
 		return nil, err
 	}
-	row, found, err := c.row(ctx, creds, hc, schema, name, key)
+	row, found, err := c.rowByKey(ctx, creds, hc, schema, name, key)
 	switch {
 	case err != nil && effects.Classify(err) == effects.KindFatal:
 		return fail(err.Error())
@@ -252,4 +275,39 @@ func (c *client) enrich(ctx context.Context, call connector.EventCall, body any)
 	}
 	out["record"], out["refetched"] = row, true
 	return out, nil
+}
+
+// rowByKey fetches one row by its primary key: through the data API when
+// the connection has its credentials and the key is one column, else
+// through the management rows endpoint.
+func (c *client) rowByKey(ctx context.Context, creds map[string]string, hc *http.Client, schema, table string, key map[string]any) (map[string]any, bool, error) {
+	if _, _, err := dataAPI(creds); err != nil || len(key) != 1 {
+		return c.row(ctx, creds, hc, schema, table, key)
+	}
+	var col string
+	for k := range key {
+		col = k
+	}
+	text, err := valueText(key[col])
+	if err != nil || text == "" {
+		return c.row(ctx, creds, hc, schema, table, key)
+	}
+	name := table
+	if schema != "" && schema != "public" {
+		name = schema + "." + table
+	}
+	if !identRe.MatchString(name) {
+		return nil, false, fmt.Errorf("pgdock: %q is not a table: %w", name, effects.ErrFatal)
+	}
+	var out struct {
+		Data map[string]any `json:"data"`
+	}
+	_, err = c.doData(ctx, connector.Request{Credentials: creds, HTTP: hc, Attempt: 1}, http.MethodGet, "/data/v1/"+url.PathEscape(name)+"/"+url.PathEscape(text), nil, nil, &out)
+	switch {
+	case errors.Is(err, connector.ErrNotFound):
+		return nil, false, nil
+	case err != nil:
+		return nil, false, err
+	}
+	return out.Data, out.Data != nil, nil
 }

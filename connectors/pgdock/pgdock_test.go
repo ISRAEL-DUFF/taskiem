@@ -335,12 +335,36 @@ func TestRegistrar(t *testing.T) {
 		t.Fatalf("create: %+v %v", st, err)
 	}
 	h := f.Hook(project, st.ID)
-	if h.Name != "taskiem-1" || !slices.Equal(h.Events, []string{"INSERT"}) || !slices.Equal(h.Tables, []string{"orders"}) || h.Secret != st.Secret {
+	if h.Name != "taskiem-1" || !slices.Equal(h.Events, []string{"INSERT"}) || !slices.Equal(h.Tables, []string{"orders"}) || h.Secret != st.Secret ||
+		h.Description != "Managed by Taskiem" || h.Metadata["taskiem_subscription"] != "1" {
 		t.Errorf("webhook %+v", h)
 	}
 	found, ok, err := reg.Find(ctx, rc, "taskiem-1")
 	if err != nil || !ok || found.ID != st.ID || found.Secret != "" {
 		t.Errorf("find: %+v %v %v", found, ok, err)
+	}
+	// A person renamed it in Xenibase: the metadata tag still finds it.
+	rename, _ := http.NewRequest(http.MethodPatch, f.URL+"/api/v1/projects/"+project+"/webhooks/"+st.ID, strings.NewReader(`{"name":"orders to whatsapp"}`))
+	rename.Header.Set("Authorization", "Bearer "+token)
+	if resp, err := http.DefaultClient.Do(rename); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("rename: %v %v", resp, err)
+	} else {
+		_ = resp.Body.Close()
+	}
+	if found, ok, err := reg.Find(ctx, rc, "taskiem-1"); err != nil || !ok || found.ID != st.ID {
+		t.Errorf("find after a rename: %+v %v %v", found, ok, err)
+	}
+	// A webhook created before tags were sent is found by its name.
+	f.Begin(project).Commit()
+	untagged, _ := http.NewRequest(http.MethodPost, f.URL+"/api/v1/projects/"+project+"/webhooks", strings.NewReader(`{"name":"taskiem-0","tables":["orders"],"events":["INSERT"],"url":"https://hooks.example/z"}`))
+	untagged.Header.Set("Authorization", "Bearer "+token)
+	if resp, err := http.DefaultClient.Do(untagged); err != nil || resp.StatusCode != http.StatusCreated {
+		t.Fatalf("untagged create: %v %v", resp, err)
+	} else {
+		_ = resp.Body.Close()
+	}
+	if found, ok, err := reg.Find(ctx, rc, "taskiem-0"); err != nil || !ok || found.Name != "taskiem-0" {
+		t.Errorf("find by name: %+v %v %v", found, ok, err)
 	}
 	// Update: columns, events, and repair of a broken or paused webhook.
 	f.SetStatus(project, st.ID, "broken", "triggers dropped")
@@ -351,7 +375,7 @@ func TestRegistrar(t *testing.T) {
 		t.Fatalf("update: %+v %v", up, err)
 	}
 	h = f.Hook(project, st.ID)
-	if h.URL != "https://hooks.example/y" || len(h.Events) != 3 || !slices.Equal(h.Columns, []string{"status"}) {
+	if h.URL != "https://hooks.example/y" || len(h.Events) != 3 || !slices.Equal(h.Columns, []string{"status"}) || h.Name != "taskiem-1" || h.Metadata["taskiem_subscription"] != "1" {
 		t.Errorf("updated %+v", h)
 	}
 	f.SetStatus(project, st.ID, "paused", "50 failures in a row")
@@ -432,10 +456,27 @@ func TestEnrichTruncated(t *testing.T) {
 			t.Errorf("%v: %v %v", c.ev, out, err)
 		}
 	}
+	// The row came through the data API by its key (Q23), not the rows endpoint.
+	for _, r := range f.Requests {
+		if strings.Contains(r, "/tables/") {
+			t.Errorf("the rows endpoint was used with the data API available: %s", r)
+		}
+	}
 	// Xenibase busy: the delivery is refused, so Xenibase sends it again.
-	f.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/", Status: 503})
+	f.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/edge/", Status: 503})
 	if _, err := enrich(ctx, call(on), ev("UPDATE", map[string]any{"id": float64(9)})); effects.Classify(err) != effects.KindRetryable {
 		t.Errorf("busy: %v", err)
+	}
+	// Without the data API credentials, the management rows endpoint.
+	delete(creds, "secret_key")
+	n := len(f.Requests)
+	out, err = enrich(ctx, call(on), ev("UPDATE", map[string]any{"id": float64(9)}))
+	if m := out.(map[string]any); err != nil || m["refetched"] != true || m["record"].(map[string]any)["customer"] != "ada" || !strings.Contains(f.Requests[n], "/tables/public/orders/rows") {
+		t.Errorf("fallback: %v %v %v", out, err, f.Requests[n:])
+	}
+	f.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/", Status: 503})
+	if _, err := enrich(ctx, call(on), ev("UPDATE", map[string]any{"id": float64(9)})); effects.Classify(err) != effects.KindRetryable {
+		t.Errorf("busy on the rows endpoint: %v", err)
 	}
 }
 
