@@ -39,9 +39,72 @@ type Manifest struct {
 type Auth struct {
 	Type   string      `json:"type"`
 	Fields []AuthField `json:"fields"`
+	// OAuth2, when set, lets a connection be made by OAuth 2.0
+	// authorization code grant with PKCE instead of pasted credentials
+	// (docs/connector-sdk.md, decision 0034). The pasted fields stay.
+	OAuth2 *OAuth2 `json:"oauth2,omitempty"`
 	Test   *struct {
 		Action string `json:"action"`
 	} `json:"test"`
+}
+
+// OAuth2 is how a connector's provider issues tokens to Taskiem. The URLs
+// are absolute, or start with ${server}/ to be resolved from the
+// connector's base URL (the platform's server for that provider) when a
+// connection is linked: see Resolve.
+type OAuth2 struct {
+	AuthorizeURL string   `json:"authorize_url"`
+	TokenURL     string   `json:"token_url"`
+	RevokeURL    string   `json:"revoke_url,omitempty"`
+	Scopes       []string `json:"scopes"`
+	PKCE         bool     `json:"pkce"`
+	// FieldsFromToken fills auth fields from the token answer: the value
+	// names a field of the answer (access_token, org_id), one element of a
+	// list field (project_ids[0]: the list must then hold exactly one), or
+	// ${server} for the server the token was issued by.
+	FieldsFromToken map[string]string `json:"fields_from_token,omitempty"`
+}
+
+// ServerPlaceholder starts an OAuth URL resolved from the connector's base
+// URL at runtime.
+const ServerPlaceholder = "${server}"
+
+// Resolve returns the authorize, token and revoke URLs for a provider at
+// server (the connector's base URL; empty when the platform has none). A
+// URL that needs the server is an error when there is none: such a
+// connector is not linkable on this platform.
+func (o *OAuth2) Resolve(server string) (authorize, token, revoke string, err error) {
+	server = strings.TrimRight(server, "/")
+	one := func(u string) (string, error) {
+		if !strings.HasPrefix(u, ServerPlaceholder+"/") {
+			return u, nil
+		}
+		if server == "" {
+			return "", fmt.Errorf("%s needs the provider's server, which this platform does not name", u)
+		}
+		return server + strings.TrimPrefix(u, ServerPlaceholder), nil
+	}
+	if authorize, err = one(o.AuthorizeURL); err != nil {
+		return "", "", "", err
+	}
+	if token, err = one(o.TokenURL); err != nil {
+		return "", "", "", err
+	}
+	if o.RevokeURL != "" {
+		if revoke, err = one(o.RevokeURL); err != nil {
+			return "", "", "", err
+		}
+	}
+	return authorize, token, revoke, nil
+}
+
+// TokenField is one FieldsFromToken value, parsed: the answer field, and
+// whether one element of a list is wanted.
+func TokenField(v string) (field string, element bool) {
+	if f, ok := strings.CutSuffix(v, "[0]"); ok {
+		return f, true
+	}
+	return v, false
 }
 
 // AuthField is one credential a connection supplies.
@@ -193,6 +256,39 @@ func (m *Manifest) check() []string {
 			add("/auth/test: unknown action %q", m.Auth.Test.Action)
 		} else if a.Class != effects.Read {
 			add("/auth/test: %q must be a read action", m.Auth.Test.Action)
+		}
+	}
+	if o := m.Auth.OAuth2; o != nil {
+		for name, u := range map[string]string{"authorize_url": o.AuthorizeURL, "token_url": o.TokenURL, "revoke_url": o.RevokeURL} {
+			if u == "" {
+				continue
+			}
+			if _, _, _, err := o.Resolve("https://provider.example"); err != nil {
+				add("/auth/oauth2/%s: %v", name, err)
+			} else if p, err := url.Parse(strings.Replace(u, ServerPlaceholder, "https://provider.example", 1)); err != nil || p.Scheme != "https" || p.Hostname() == "" || p.Fragment != "" {
+				add("/auth/oauth2/%s: must be an https URL without a fragment", name)
+			}
+		}
+		if len(o.Scopes) == 0 {
+			add("/auth/oauth2/scopes: name at least one scope")
+		}
+		if !o.PKCE {
+			add("/auth/oauth2/pkce: Taskiem always sends a PKCE challenge; declare pkce: true")
+		}
+		keys := make([]string, 0, len(o.FieldsFromToken))
+		for k := range o.FieldsFromToken {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == k }) {
+				add("/auth/oauth2/fields_from_token/%s: not an auth field", k)
+			}
+		}
+		for _, f := range m.Auth.Fields {
+			if _, ok := o.FieldsFromToken[f.Key]; !ok && (f.Required == nil || *f.Required) {
+				add("/auth/oauth2/fields_from_token: required field %q is not filled from the token; a linked connection would be missing it", f.Key)
+			}
 		}
 	}
 	return out

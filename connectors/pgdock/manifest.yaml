@@ -5,6 +5,8 @@
 #                      (headers, project_id and primary_key on every event, and
 #                      description and metadata on webhooks: read 17 October 2026)
 #   docs/cli.md        API tokens: one organisation, scopes, project restriction
+#   docs/oauth-apps.md OAuth for third-party apps: authorize, token, revoke
+#                      (read 17 October 2026)
 #   api/openapi.yaml   /me (TokenGrant), /orgs/{org}, /projects,
 #                      /projects/{id}/webhooks[/{webhook_id}[/rotate-secret]],
 #                      /projects/{id}/tables/{schema}/{table}/rows, Error
@@ -39,6 +41,20 @@ auth:
     - { key: base_url, label: "Xenibase server URL (https://…; empty: the platform's Xenibase)", required: false }
     - { key: secret_key, label: "Project secret key (xb_sec_…); needed for writes and functions", secret: true, required: false }
     - { key: api_url, label: "Data API URL (https://<ref>.<api-domain>); from the project's API page", required: false }
+  # Or connect with one click: Xenibase's OAuth 2.0 authorization code
+  # grant with PKCE (Xenibase docs/oauth-apps.md, read 17 October 2026;
+  # decision 0034). The URLs are the platform's Xenibase (TASKIEM_PGDOCK_URL)
+  # resolved at runtime; a self-hosted Xenibase is not linkable this way
+  # until it registers Taskiem as a client. Taskiem asks for read and
+  # write; the person may narrow them and restrict the token to projects.
+  # A connection is one project, so the grant must name exactly one.
+  oauth2:
+    authorize_url: "${server}/oauth/authorize"
+    token_url: "${server}/api/v1/oauth/token"
+    revoke_url: "${server}/api/v1/oauth/revoke"
+    scopes: [read, write]
+    pkce: true
+    fields_from_token: { token: access_token, org_id: org_id, project_id: "project_ids[0]", base_url: "${server}" }
   test: { action: test_connection }
 # The server is the platform's Xenibase (TASKIEM_PGDOCK_URL) or the
 # connection's own (a self-hosted Xenibase); the data API is the project's

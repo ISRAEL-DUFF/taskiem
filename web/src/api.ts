@@ -200,7 +200,14 @@ export interface ConnectorInfo {
   id: string;
   version: string;
   name: string;
-  auth: { type: string; fields: { key: string; label: string; secret?: boolean; required?: boolean }[] | null };
+  auth: {
+    type: string;
+    fields: { key: string; label: string; secret?: boolean; required?: boolean }[] | null;
+    /** Declared by a connector that connects by OAuth (docs/connector-sdk.md). */
+    oauth2?: { authorize_url: string; token_url: string; revoke_url?: string; scopes: string[]; pkce: boolean; fields_from_token?: Record<string, string> };
+  };
+  /** For a connector with `auth.oauth2`: whether it can be connected by OAuth on this platform. */
+  oauth_linkable?: boolean;
   actions: Record<string, { title: string; class: string; input?: JSONSchema; output?: JSONSchema }>;
   triggers: string[];
 }

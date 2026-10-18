@@ -169,6 +169,11 @@ type Fake struct {
 	Deliveries []Delivery
 	// Requests are the API requests served ("GET /api/v1/me"), in order.
 	Requests []string
+	// OAuth (oauth.go): the registered app, the codes its consent page
+	// issued, and the tokens revoked through the endpoint, in order.
+	oauthClient *OAuthClient
+	oauthCodes  map[string]*OAuthCode
+	Revoked     []string
 	// Provisioning (provision.go): operations, project quotas per
 	// organisation, operation failures to inject, and the projects in the
 	// order they were made.
@@ -719,15 +724,23 @@ func (f *Fake) route(w http.ResponseWriter, r *http.Request, data bool) {
 		f.serveData(w, r)
 		return
 	}
-	f.mu.Lock()
-	tok, ok := f.tokens[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
-	f.mu.Unlock()
-	if !ok || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+	if f.serveOAuth(w, r) {
+		return
+	}
+	if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
 		refuse(w, http.StatusUnauthorized, "unauthenticated", "sign in or send an API token")
 		return
 	}
+	f.mu.Lock()
+	tok, ok := f.tokens[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
+	f.mu.Unlock()
+	// docs/errors.md: invalid_token is "unknown, revoked or expired".
+	if !ok {
+		refuse(w, http.StatusUnauthorized, "invalid_token", "the API token is unknown or revoked")
+		return
+	}
 	if f.Now().After(tok.ExpiresAt) {
-		refuse(w, http.StatusUnauthorized, "token_expired", "the API token has expired")
+		refuse(w, http.StatusUnauthorized, "invalid_token", "the API token has expired")
 		return
 	}
 	seg := strings.Split(strings.Trim(r.URL.Path, "/"), "/")

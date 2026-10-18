@@ -46,6 +46,9 @@ type Error struct {
 	// RequestID is the data API's request_id, for Xenibase's support.
 	RequestID string
 	kind      error
+	// rejected: a 401 invalid_token, the token revoked or expired
+	// (Xenibase docs/errors.md); the engine expires an OAuth connection.
+	rejected bool
 }
 
 func (e *Error) Error() string {
@@ -68,10 +71,14 @@ func (e *Error) Error() string {
 }
 
 func (e *Error) Unwrap() []error {
+	out := []error{e.kind}
 	if e.Class == ClassNotFound {
-		return []error{e.kind, connector.ErrNotFound}
+		out = append(out, connector.ErrNotFound)
 	}
-	return []error{e.kind}
+	if e.rejected {
+		out = append(out, connector.ErrCredentialsRejected)
+	}
+	return out
 }
 
 // RetryAfterDelay is Xenibase's Retry-After, honoured by the engine.
@@ -136,7 +143,8 @@ func mapError(err error) error {
 	case st == http.StatusServiceUnavailable:
 		e.Class, kind = ClassUnavailable, effects.ErrRetryable
 	case st == http.StatusUnauthorized:
-		e.Class = ClassAuth
+		// invalid_token: unknown, revoked or expired (docs/errors.md).
+		e.Class, e.rejected = ClassAuth, body.Code == "invalid_token"
 	case st == http.StatusForbidden:
 		e.Class = ClassPermission
 	case st == http.StatusNotFound:

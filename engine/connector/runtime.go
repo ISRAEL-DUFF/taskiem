@@ -51,6 +51,13 @@ func (f ActionFunc) Execute(ctx context.Context, req Request) (Response, error) 
 // record of the effect, so it is safe to send it again.
 var ErrNotFound = errors.New("not_found")
 
+// ErrCredentialsRejected is wrapped by a connector's error when the
+// provider refused the connection's credentials as revoked or expired (a
+// 401 that names the token, not a missing header). The engine marks an
+// OAuth connection expired on it (decision 0034); the error stays fatal
+// for the step.
+var ErrCredentialsRejected = errors.New("credentials_rejected")
+
 // Connector is a manifest plus its action handlers.
 type Connector struct {
 	Manifest *Manifest

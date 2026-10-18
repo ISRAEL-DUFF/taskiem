@@ -2153,6 +2153,187 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/connections/oauth/start:
+    post:
+      operationId: startOAuthConnection
+      tags:
+      - Connectors
+      summary: Start connecting by OAuth
+      description: |
+        For a connector whose manifest declares `auth.oauth2` (Xenibase): records a request that lasts ten minutes and answers the
+        provider's consent URL, carrying the state and a PKCE challenge (S256). Send the browser there; the provider sends it back
+        to `/v1/connections/oauth/callback`, which saves the connection and redirects to the Connections page with `?linked=<id>` or
+        `?error=<message>`. 503 `oauth_unavailable` when Taskiem is not registered as a client with the provider on this platform
+        (`TASKIEM_OAUTH_<CONNECTOR>_CLIENT_ID`), has no public URL, or the provider's server is not known.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: connection.manage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthStartRequest'
+        required: true
+      responses:
+        '200':
+          description: Where to send the browser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthStarted'
+        '400':
+          description: An unknown connector, or one that does not connect by OAuth.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: A connection of that connector and name already exists in the environment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The connector cannot be linked on this platform (`oauth_unavailable`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/connections/oauth/callback:
+    get:
+      operationId: oauthConnectionCallback
+      tags:
+      - Connectors
+      summary: OAuth callback
+      description: |
+        Where the provider returns the browser after consent. The `state` alone names the request (it works once, within ten
+        minutes); the code is exchanged for a token at the provider and the connection saved with the fields the manifest takes
+        from the token. Redirects to the web app's Connections page with `?linked=<id>`, or `?error=<message>` when the person
+        denied, the state is unknown, used or expired, or the grant does not make a connection (Xenibase: not exactly one project).
+      security: []
+      parameters:
+      - name: code
+        in: query
+        schema:
+          type: string
+        description: The authorization code, when approved.
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: error
+        in: query
+        schema:
+          type: string
+        description: '`access_denied` when the person denied.'
+      responses:
+        '302':
+          description: Redirects the browser
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/connections/{id}:
+    delete:
+      operationId: deleteConnection
+      tags:
+      - Connectors
+      summary: Delete a connection
+      description: |
+        Removes the connection and its credentials. A connection a deployed workflow names is refused with 409 `in_use` and the
+        workflows, unless `force=true`. One Taskiem keeps (data tables) is refused. An OAuth connection's token is also revoked at
+        the provider, best effort.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: connection.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: force
+        in: query
+        schema:
+          type: boolean
+        description: Delete even though deployed workflows name the connection.
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '404':
+          description: No such connection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Deployed workflows use the connection (`in_use`, with `workflows`), or Taskiem keeps it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionInUse'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/connections/{id}/credentials:
+    put:
+      operationId: mergeConnectionCredentials
+      tags:
+      - Connectors
+      summary: Add or replace some credential fields
+      description: |
+        Merges the given fields into the connection's credentials, keeping the rest: the secret key and data API URL a linked
+        Xenibase connection gets afterwards. An empty value clears a field. The result must still fit the connector's auth
+        (every required field present, no unknown one). Refused for a connection Taskiem keeps, and for an expired one.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: connection.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionCredentialsMerge'
+        required: true
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '400':
+          description: A field the connector does not take, or a required one cleared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such connection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The connection is kept by Taskiem, or has expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/connector-drift:
     get:
       operationId: listDrift
@@ -13523,7 +13704,10 @@ components:
           type: string
         auth:
           type: object
-          description: How the connector authenticates (its manifest's `auth`).
+          description: How the connector authenticates (its manifest's `auth`, with `oauth2` when it connects by OAuth).
+        oauth_linkable:
+          type: boolean
+          description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform.
         actions:
           type: object
           additionalProperties:
@@ -14136,6 +14320,74 @@ components:
         name:
           type: string
       additionalProperties: false
+    OAuthStartRequest:
+      type: object
+      required:
+      - connector
+      properties:
+        connector:
+          type: string
+          description: '`id@major`, e.g. `pgdock@1`; its manifest must declare `auth.oauth2`.'
+        environment:
+          type: string
+          description: Defaults to prod, or the API key's environment.
+        name:
+          type: string
+          description: Defaults to `default`.
+      additionalProperties: false
+    OAuthStarted:
+      type: object
+      required:
+      - url
+      - expires_in
+      properties:
+        url:
+          type: string
+          description: The provider's consent page, with the client, redirect URI, scopes, state and PKCE challenge.
+        expires_in:
+          type: integer
+          description: Seconds the request may be completed in.
+      additionalProperties: false
+    ConnectionCredentialsMerge:
+      type: object
+      required:
+      - credentials
+      properties:
+        credentials:
+          type: object
+          additionalProperties:
+            type: string
+          description: Fields to add or replace; an empty value clears a field.
+      additionalProperties: false
+    ConnectionInUse:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          description: '`in_use` when deployed workflows name the connection.'
+        workflows:
+          type: array
+          description: The deployed workflows with a step on the connection.
+          items:
+            type: object
+            required:
+            - id
+            - name
+            - environment
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              environment:
+                type: string
+            additionalProperties: false
+      additionalProperties: true
     DriftList:
       type: object
       required:

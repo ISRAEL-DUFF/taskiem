@@ -319,6 +319,23 @@ func TestErrorMapping(t *testing.T) {
 	}
 }
 
+// A token Xenibase revoked or let expire answers 401 invalid_token
+// (docs/errors.md); the error says so to the engine, which expires an
+// OAuth connection on it (decision 0034). Any other 401 does not.
+func TestRevokedTokenReadsAsRejected(t *testing.T) {
+	f, c, creds := setup(t)
+	f.RevokeToken(token)
+	_, err := call(t, c, creds, "test_connection", map[string]any{})
+	var pe *pgdock.Error
+	if !errors.As(err, &pe) || pe.Class != pgdock.ClassAuth || pe.Code != "invalid_token" || !errors.Is(err, connector.ErrCredentialsRejected) || effects.Classify(err) != effects.KindFatal {
+		t.Fatalf("revoked token: %v", err)
+	}
+	f.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/me", Status: 401, Body: map[string]any{"code": "unauthenticated", "message": "no token"}})
+	if _, err := call(t, c, creds, "test_connection", map[string]any{}); errors.Is(err, connector.ErrCredentialsRejected) {
+		t.Fatalf("a 401 without invalid_token reads as rejected credentials: %v", err)
+	}
+}
+
 func spec(name, hookURL string) connector.RemoteSpec {
 	return connector.RemoteSpec{Name: name, URL: hookURL, Events: []string{"INSERT", "TEST"}, Options: map[string]any{"tables": []any{"orders"}}}
 }

@@ -10,3 +10,7 @@
 | [WebAssembly connector ABI `taskiem-connector/v1`](connector-wasm-v1.md) (Phase 2) | module imports and exports | `engine/wasmconn`, `sdk/connectorsdk` |
 
 "Frozen" means Phase 1 builds against these as written. A change during Phase 1 needs a decision-log entry; a breaking change after Phase 1 needs a new schema version and a migration tool (build plan, "Release cadence").
+
+Changes recorded during Phase 1:
+
+- `connector/v1` rule 13, `auth.oauth2` (an addition; nothing existing changed): [decision 0034](../decisions/0034-oauth-connections.md).

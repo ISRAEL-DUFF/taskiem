@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -39,6 +40,17 @@ func (v *Vault) CreateConnection(ctx context.Context, tenant uuid.UUID, env, con
 // who outside the tenant provisioned it. The credentials are encrypted
 // under tenant's own key and can never be read back through the API.
 func (v *Vault) CreateConnectionTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, connector, name, authType string, creds map[string]string, by, provisionedBy string) (uuid.UUID, error) {
+	return v.createConnectionTx(ctx, tx, tenant, env, connector, name, authType, creds, by, provisionedBy, nil, nil)
+}
+
+// CreateOAuthConnectionTx is CreateConnectionTx for a connection linked by
+// OAuth (decision 0034): auth_type oauth2, expiring when the token does
+// (nil: the provider named no expiry), and audited with via: oauth.
+func (v *Vault) CreateOAuthConnectionTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, connector, name string, creds map[string]string, expiresAt *time.Time, by string) (uuid.UUID, error) {
+	return v.createConnectionTx(ctx, tx, tenant, env, connector, name, "oauth2", creds, by, "", expiresAt, map[string]any{"via": "oauth"})
+}
+
+func (v *Vault) createConnectionTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, connector, name, authType string, creds map[string]string, by, provisionedBy string, expiresAt *time.Time, detail map[string]any) (uuid.UUID, error) {
 	id := uuid.Must(uuid.NewV7())
 	var secretRef *uuid.UUID
 	if len(creds) > 0 {
@@ -54,11 +66,110 @@ func (v *Vault) CreateConnectionTx(ctx context.Context, tx pgx.Tx, tenant uuid.U
 		}
 		secretRef = &sid
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO connections (id, tenant_id, environment, connector, name, auth_type, secret_ref, provisioned_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`, id, tenant, env, connector, name, authType, secretRef, provisionedBy); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO connections (id, tenant_id, environment, connector, name, auth_type, secret_ref, provisioned_by, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9)`, id, tenant, env, connector, name, authType, secretRef, provisionedBy, expiresAt); err != nil {
 		return id, err
 	}
-	return id, audit(ctx, tx, tenant, by, "connection.create", connector+"/"+name, map[string]any{"connection_id": id, "environment": env})
+	d := map[string]any{"connection_id": id, "environment": env}
+	for k, x := range detail {
+		d[k] = x
+	}
+	return id, audit(ctx, tx, tenant, by, "connection.create", connector+"/"+name, d)
+}
+
+// ConnectionCredentialsTx returns a connection's decrypted credential
+// fields by id, in a transaction scoped to tenant, for the platform's own
+// use of them (adding fields, revoking the token at the provider): never
+// for an answer. The read is recorded with the Use attached to ctx. A
+// connection without credentials gives an empty map; one that is not
+// tenant's gives ErrNotFound.
+func (v *Vault) ConnectionCredentialsTx(ctx context.Context, tx pgx.Tx, tenant, conn uuid.UUID) (map[string]string, error) {
+	out := map[string]string{}
+	var connector, name, env string
+	var ref *uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT connector, name, environment, secret_ref FROM connections WHERE id = $1 AND tenant_id = $2`, conn, tenant).Scan(&connector, &name, &env, &ref)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if ref == nil {
+		return out, nil
+	}
+	var ct, wdek []byte
+	var ver, aad int
+	if err := tx.QueryRow(ctx, `SELECT ciphertext, wrapped_key, kek_version, aad_version FROM secrets WHERE id = $1`, *ref).Scan(&ct, &wdek, &ver, &aad); err != nil {
+		return nil, err
+	}
+	raw, err := v.decrypt(ctx, tx, tenant, *ref, env, connectionBinding(conn), aad, ct, wdek, ver)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	return out, record(ctx, tx, tenant, useFrom(ctx, KindConnection), env, name, &conn, connector)
+}
+
+// DeleteConnectionTx removes a connection and its credentials, in a
+// transaction scoped to tenant, audited as connection.delete. Its routing
+// keys go with it (ON DELETE CASCADE); its recorded secret reads stay, as
+// history. ErrNotFound when the connection is not tenant's.
+func (v *Vault) DeleteConnectionTx(ctx context.Context, tx pgx.Tx, tenant, conn uuid.UUID, by string, detail map[string]any) error {
+	var connector, name, env string
+	var ref *uuid.UUID
+	err := tx.QueryRow(ctx, `DELETE FROM connections WHERE id = $1 AND tenant_id = $2 RETURNING connector, name, environment, secret_ref`, conn, tenant).Scan(&connector, &name, &env, &ref)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if ref != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM secrets WHERE id = $1`, *ref); err != nil {
+			return err
+		}
+	}
+	d := map[string]any{"connection_id": conn, "environment": env}
+	for k, x := range detail {
+		d[k] = x
+	}
+	return audit(ctx, tx, tenant, by, "connection.delete", connector+"/"+name, d)
+}
+
+// ExpireConnection marks the active OAuth connection(s) a step used as
+// expired, when the provider answered that their token is revoked or
+// expired (decision 0034): runs stop picking them, the Connections page
+// shows it, and the person connects again. An empty name means the only
+// active connection for the connector in env, as Credentials selects it.
+// Pasted credentials (auth_type api_key) are left alone: the person
+// replaces them. Audited as connection.expire, by the system.
+func (v *Vault) ExpireConnection(ctx context.Context, tenant uuid.UUID, env, connector, name string) error {
+	return db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `UPDATE connections SET status = 'expired' WHERE tenant_id = $1 AND environment = $2 AND connector = $3
+			AND auth_type = 'oauth2' AND status = 'active' AND ($4 = '' OR name = $4) RETURNING id, name`, tenant, env, connector, name)
+		if err != nil {
+			return err
+		}
+		type hit struct {
+			id   uuid.UUID
+			name string
+		}
+		hits, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (hit, error) {
+			var h hit
+			return h, r.Scan(&h.id, &h.name)
+		})
+		if err != nil {
+			return err
+		}
+		for _, h := range hits {
+			if err := audit(ctx, tx, tenant, "system", "connection.expire", connector+"/"+h.name, map[string]any{"connection_id": h.id, "environment": env, "reason": "the provider refused the token as revoked or expired"}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // ReplaceCredentialsTx replaces a connection's credentials (a rotation) in

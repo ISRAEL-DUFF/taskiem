@@ -164,6 +164,7 @@ tr.clickable:hover td { background: var(--accent-soft); }
 
 .error { color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--panel)); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); padding: 10px 12px; border-radius: var(--radius-sm); margin: 10px 0; }
 .error ul { margin: 4px 0 0 18px; padding: 0; }
+tr.highlight td { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); } /* the connection just linked */
 .notice { background: color-mix(in srgb, var(--info) 7%, var(--panel)); border: 1px solid color-mix(in srgb, var(--info) 28%, transparent); padding: 10px 12px; border-radius: var(--radius-sm); margin: 10px 0; }
 .empty { color: var(--muted); padding: 40px 24px; text-align: center; border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--panel-2); }
 

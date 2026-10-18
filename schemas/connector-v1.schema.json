@@ -81,13 +81,22 @@
           }
         },
         "oauth2": {
+          "description": "How a connection is made by OAuth 2.0 authorization code grant with PKCE (docs/connector-sdk.md). A URL may start with ${server}/ to be resolved from the connector's base_url at runtime.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["authorize_url", "token_url"],
+          "required": ["authorize_url", "token_url", "scopes", "pkce"],
           "properties": {
-            "authorize_url": { "type": "string", "pattern": "^https://" },
-            "token_url": { "type": "string", "pattern": "^https://" },
-            "scopes": { "type": "array", "items": { "type": "string" } }
+            "authorize_url": { "type": "string", "pattern": "^(https://|\\$\\{server\\}/)" },
+            "token_url": { "type": "string", "pattern": "^(https://|\\$\\{server\\}/)" },
+            "revoke_url": { "type": "string", "pattern": "^(https://|\\$\\{server\\}/)" },
+            "scopes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+            "pkce": { "const": true },
+            "fields_from_token": {
+              "description": "Auth fields filled from the token answer: a field of the answer, one element of a list field (project_ids[0]), or ${server}.",
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/name" },
+              "additionalProperties": { "type": "string", "pattern": "^([a-z][a-z0-9_]*(\\[0\\])?|\\$\\{server\\})$" }
+            }
           }
         },
         "test": {

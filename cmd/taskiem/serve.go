@@ -679,6 +679,9 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
+		if srv.OAuthClients, err = oauthClients(e.registry, log); err != nil {
+			return err
+		}
 		srv.Remote = e.remote()
 		srv.Alerts = alerter
 		// Catalogue submissions are checked in a sandbox of their own,
@@ -929,6 +932,31 @@ func (c config) anchorSigner(log *slog.Logger) *audit.Signer {
 		log.Error("TASKIEM_ANCHOR_KEY must be 32 bytes, base64 (openssl rand -base64 32)", "err", err)
 	}
 	return nil
+}
+
+// oauthClients reads Taskiem's registrations with the providers whose
+// connectors connect by OAuth (decision 0034): TASKIEM_OAUTH_<CONNECTOR>_CLIENT_ID
+// and _CLIENT_SECRET per connector id, upper-cased (TASKIEM_OAUTH_PGDOCK_CLIENT_ID
+// for pgdock). A connector with neither is not linkable here, which the
+// API says; one with only one of the two is a misconfiguration.
+func oauthClients(reg *connector.Registry, log *slog.Logger) (map[string]api.OAuthClient, error) {
+	out := map[string]api.OAuthClient{}
+	for _, c := range reg.List() {
+		if c.Manifest.Auth.OAuth2 == nil {
+			continue
+		}
+		key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ID)
+		id, secret := strings.TrimSpace(os.Getenv(key+"_CLIENT_ID")), strings.TrimSpace(os.Getenv(key+"_CLIENT_SECRET"))
+		switch {
+		case id == "" && secret == "":
+			log.Info("oauth: no client registered; connections are made by pasting credentials", "connector", c.Manifest.ID, "env", key+"_CLIENT_ID")
+		case id == "" || secret == "":
+			return nil, fmt.Errorf("%s_CLIENT_ID and %s_CLIENT_SECRET must both be set, or neither", key, key)
+		default:
+			out[c.Manifest.ID] = api.OAuthClient{ID: id, Secret: secret}
+		}
+	}
+	return out, nil
 }
 
 // relyingParty is the passkey configuration from TASKIEM_PUBLIC_URL.

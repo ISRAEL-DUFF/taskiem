@@ -86,8 +86,13 @@ type Server struct {
 	// installing still work).
 	Catalogue *catalogue.Checker
 	// PublicURL is where people reach the web app (TASKIEM_PUBLIC_URL);
-	// single sign-on callbacks are built from it.
+	// single sign-on and OAuth connection callbacks are built from it.
 	PublicURL string
+	// OAuthClients are Taskiem's registrations with providers whose
+	// connectors connect by OAuth, by connector id
+	// (TASKIEM_OAUTH_<CONNECTOR>_CLIENT_ID and _CLIENT_SECRET); a connector
+	// without one is not linkable (oauthconnections.go).
+	OAuthClients map[string]OAuthClient
 	// LoginBurst is how many sign-in attempts an address may make at once
 	// (then one every six seconds); default 10.
 	LoginBurst int
@@ -194,6 +199,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/sso/discover", s.ssoDiscover)
 		r.Get("/auth/sso/{id}/start", s.ssoStart)
 		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
+		r.Get("/connections/oauth/callback", s.oauthConnectionCallback) // providers send the browser back here (oauthconnections.go)
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
@@ -321,6 +327,9 @@ func (s *Server) Handler() http.Handler {
 
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
+			r.With(s.need(PermConnectionManage)).Post("/connections/oauth/start", s.startOAuthConnection) // connect by OAuth (oauthconnections.go)
+			r.With(s.need(PermConnectionManage)).Put("/connections/{id}/credentials", s.mergeConnectionCredentials)
+			r.With(s.need(PermConnectionManage)).Delete("/connections/{id}", s.deleteConnection)
 			r.Group(s.tablesRoutes) // data tables (datatables.go)
 			r.With(s.need(PermSecretManage)).Get("/secrets", s.listSecrets)
 			r.With(s.need(PermAuditRead)).Get("/secrets/reads", s.listSecretReads)
