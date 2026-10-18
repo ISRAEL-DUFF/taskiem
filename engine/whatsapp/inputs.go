@@ -25,7 +25,11 @@ type Field struct {
 	Type        string // string, integer, number or boolean
 	Enum        []any
 	PII         string // the field's x-pii category, if any
-	schema      *schemacheck.Schema
+	// Required: an answer is needed. A workflow's inputs are the required
+	// fields of its schema; a data table's columns may be optional, and a
+	// form leaves those blank.
+	Required bool
+	schema   *schemacheck.Schema
 }
 
 // ErrInputsUnsupported: the inputs need something chat cannot collect yet
@@ -77,7 +81,7 @@ func InputFields(schema json.RawMessage, types map[string]json.RawMessage) ([]Fi
 		if err != nil {
 			return nil, err
 		}
-		f := Field{Name: name, Title: str(ps, "title"), Description: str(ps, "description"), Type: str(ps, "type"), PII: str(ps, "x-pii")}
+		f := Field{Name: name, Title: str(ps, "title"), Description: str(ps, "description"), Type: str(ps, "type"), PII: str(ps, "x-pii"), Required: true}
 		if e, ok := ps["enum"].([]any); ok {
 			f.Enum = e
 		}

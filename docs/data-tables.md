@@ -95,6 +95,10 @@ A workflow can start when a row of a table is added, changed or deleted: the `pg
 {"type": "connector_event", "config": {"connector": "pgdock@1", "trigger": "row_changed", "connection": "data_tables", "events": ["INSERT"], "options": {"tables": ["orders"]}}}
 ```
 
+## On WhatsApp
+
+A person whose number is linked can send `tables` for the list, `add to <table>` to add one row (a form where Flows are set up, else column by column; the row is shown with personal values masked and added only after **yes**) and `find <table> <text>` for up to five matching rows. The same permissions apply, the values are checked by the same code, the connection reads are recorded under the purpose `tables.chat`, and the insert carries an idempotency key from the conversation. Creating or changing tables, and editing or deleting rows, stay here. See [WhatsApp: data tables](whatsapp.md#data-tables).
+
 ## Personal data
 
 Columns of type `phone` and `email`, and any column flagged `personal`, are personal data. The table page and the rows API return them as they are to people with `table.read` (the page is the record), and the connector declares rows as personal data, so they are masked in run outputs, in chat and in logs; they never appear in audit details, and the AI builder sees names and types, never rows. Keep the `table.read` permission to the people who should see the records.

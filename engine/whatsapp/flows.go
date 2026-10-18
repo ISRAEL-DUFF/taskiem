@@ -99,8 +99,8 @@ func (f Field) options() []FlowOption {
 }
 
 // FlowForm is the inputs Flow's screen data for fields: each field in its
-// slot, in order, the rest hidden. errs, keyed by field name, show under
-// their fields.
+// slot, in order, the rest hidden; a field not Required may be left
+// blank. errs, keyed by field name, show under their fields.
 func FlowForm(title string, fields []Field, errs map[string]string) (map[string]any, error) {
 	if len(fields) > FlowSlots {
 		return nil, ErrFlowUnsupported
@@ -127,7 +127,7 @@ func FlowForm(title string, fields []Field, errs map[string]string) (map[string]
 		if r := []rune(label); len(r) > 20 && help == "" {
 			help = label
 		}
-		d[key+"_on"], d[key+"_req"], d[key+"_label"], d[key+"_help"] = true, true, clip(label, 20), clip(help, 80)
+		d[key+"_on"], d[key+"_req"], d[key+"_label"], d[key+"_help"] = true, f.Required, clip(label, 20), clip(help, 80)
 		if k == slotChoice {
 			opts := f.options()
 			if len(opts) > maxFlowOptions {
@@ -146,7 +146,8 @@ func FlowForm(title string, fields []Field, errs map[string]string) (map[string]
 }
 
 // FlowValues reads a submitted inputs form: each field's answer, parsed
-// and checked against its schema. Problems are keyed by field name.
+// and checked against its schema; a field not Required left blank has no
+// value. Problems are keyed by field name.
 func FlowValues(fields []Field, form map[string]any) (map[string]any, map[string]string) {
 	vals, errs := map[string]any{}, map[string]string{}
 	for i, f := range fields {
@@ -166,6 +167,9 @@ func FlowValues(fields []Field, form map[string]any) (map[string]any, map[string
 		}
 		s = strings.TrimSpace(s)
 		if !ok || s == "" {
+			if !f.Required {
+				continue
+			}
 			errs[f.Name] = "this is required"
 			continue
 		}

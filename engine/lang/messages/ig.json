@@ -48,6 +48,10 @@
       "text": "Jụ",
       "reviewed": false
     },
+    "button.yes_add": {
+      "text": "Ee, tinye ya",
+      "reviewed": false
+    },
     "button.yes_run": {
       "text": "Ee, malite ya",
       "reviewed": false
@@ -488,6 +492,10 @@
       "text": "Iji jụ {step}, kwado ya site na passkey gị ma ọ bụ koodu authenticator na Taskiem n'ime nkeji 10:\n{link}",
       "reviewed": false
     },
+    "wa.help.add": {
+      "text": "• *add to* na aha tebụl: tinye ahịrị (ị ga-ebu ụzọ kwado)",
+      "reviewed": false
+    },
     "wa.help.approvals": {
       "text": "• *approvals*: arịrịọ na-eche gị",
       "reviewed": false
@@ -498,6 +506,10 @@
     },
     "wa.help.cancel": {
       "text": "• *cancel*: hapụ ihe na-aga n'ihu",
+      "reviewed": false
+    },
+    "wa.help.find": {
+      "text": "• *find*, aha tebụl na otu okwu: chọọ ahịrị",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -518,6 +530,10 @@
     },
     "wa.help.switch": {
       "text": "• *switch* na aha nzukọ: rụọ ọrụ na nke ọzọ",
+      "reviewed": false
+    },
+    "wa.help.tables": {
+      "text": "• *tables*: tebụl data nke nzukọ gị",
       "reviewed": false
     },
     "wa.help.voice": {
@@ -734,6 +750,154 @@
     },
     "wa.switch.which": {
       "text": "Kedu nzukọ? Nke gị bụ:\n{list}",
+      "reviewed": false
+    },
+    "wa.table.add_failed": {
+      "text": "Etinyeghị ahịrị ahụ: {reason}\n\nZaa *yes* ka ịnwaa ọzọ ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.add_what": {
+      "text": "Ziga *add to* na aha tebụl.",
+      "reviewed": false
+    },
+    "wa.table.added": {
+      "text": "Etinyela ahịrị {id} na {table}.",
+      "reviewed": false
+    },
+    "wa.table.cancelled": {
+      "text": "Akagbuola ya. Etinyeghị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.table.confirm": {
+      "text": "Tinye ahịrị a na {table}?\n{row}\n\nZaa *yes* ka etinye ya ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.confirm_reminder": {
+      "text": "Zaa *yes* ka etinye ahịrị ahụ na {table}, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.denied_edit": {
+      "text": "Ị pụghị itinye ahịrị na {org} (ọ chọrọ table.edit).",
+      "reviewed": false
+    },
+    "wa.table.denied_now": {
+      "text": "Ị pụghịzi itinye ahịrị na {org}.",
+      "reviewed": false
+    },
+    "wa.table.denied_read": {
+      "text": "Ị pụghị ịhụ tebụl data na {org} (ọ chọrọ table.read).",
+      "reviewed": false
+    },
+    "wa.table.find_head": {
+      "text": "Na {table}, ndị kwekọrọ na {text}:",
+      "reviewed": false
+    },
+    "wa.table.find_more": {
+      "text": "… na {count} ọzọ. Mee ka ọchụchọ dị nso, ma ọ bụ mepee Tables na Taskiem.",
+      "reviewed": false
+    },
+    "wa.table.find_no_column": {
+      "text": "{table} enweghị kọlụm ederede a ga-achọ. Ziga *find*, tebụl ahụ na column:text.",
+      "reviewed": false
+    },
+    "wa.table.find_none": {
+      "text": "Ọ dịghị ihe na {table} kwekọrọ na {text}.",
+      "reviewed": false
+    },
+    "wa.table.find_what": {
+      "text": "Ziga *find*, aha tebụl na ihe ị na-achọ.",
+      "reviewed": false
+    },
+    "wa.table.form": {
+      "text": "{table}: pịa *{cta}* ka itinye nkọwa {count} nke ahịrị; ị ga-akwado tupu etinye ya. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.table.form_more": {
+      "text": "Daalụ. {count} ọzọ ka ị ga-etinye ebe a. Ziga *cancel* ka ịkwụsị.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.table.gone": {
+      "text": "{table} gbanwere mgbe ị na-etinye na ya. Ziga *add to* ọzọ.",
+      "reviewed": false
+    },
+    "wa.table.hint.date": {
+      "text": "Ụbọchị dị ka YYYY-MM-DD, dị ka 2026-11-01",
+      "reviewed": false
+    },
+    "wa.table.hint.datetime": {
+      "text": "Ụbọchị na oge, dị ka 2026-11-01T09:30:00+01:00",
+      "reviewed": false
+    },
+    "wa.table.hint.email": {
+      "text": "Adreesị ozi-e",
+      "reviewed": false
+    },
+    "wa.table.hint.json": {
+      "text": "Data a haziri dị ka JSON",
+      "reviewed": false
+    },
+    "wa.table.hint.phone": {
+      "text": "Nọmba ekwentị nwere koodu mba, dị ka 2348012345678",
+      "reviewed": false
+    },
+    "wa.table.list_head": {
+      "text": "Tebụl data na {org}:",
+      "reviewed": false
+    },
+    "wa.table.list_line": {
+      "text": "{n}. {title}: ahịrị {count}",
+      "reviewed": false
+    },
+    "wa.table.list_line_nocount": {
+      "text": "{n}. {title}",
+      "reviewed": false
+    },
+    "wa.table.list_tail_add": {
+      "text": "Ziga *add to* na aha tebụl ka itinye ahịrị.",
+      "reviewed": false
+    },
+    "wa.table.list_tail_find": {
+      "text": "Ziga *find*, aha tebụl na otu okwu ka ịchọọ ahịrị.",
+      "reviewed": false
+    },
+    "wa.table.needs_values": {
+      "text": "Na-etinye ahịrị na {table} (kọlụm {count}). Ziga *cancel* ka ịkwụsị.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.table.no_match": {
+      "text": "Enweghị tebụl data kwekọrọ na {name}. Ziga *tables* ka ịhụ ha.",
+      "reviewed": false
+    },
+    "wa.table.none": {
+      "text": "{org} enwebeghị tebụl data. Mepụta otu na Taskiem, n'okpuru Tables{link}.",
+      "reviewed": false
+    },
+    "wa.table.not_added": {
+      "text": "Etinyeghị ahịrị ahụ na {table}: {reason}. Ziga *add to* ọzọ.",
+      "reviewed": false
+    },
+    "wa.table.optional": {
+      "text": "(ọ bụghị iwu: ziga *skip* ka ọ dị efu)",
+      "reviewed": false
+    },
+    "wa.table.pick_again": {
+      "text": "Ziga nọmba site na ndepụta, ma ọ bụ *cancel*:\n{list}",
+      "reviewed": false
+    },
+    "wa.table.too_many": {
+      "text": "Ị tinyela ọtụtụ ahịrị ugbu a. Chere otu nkeji, wee nwaa ọzọ.",
+      "reviewed": false
+    },
+    "wa.table.unavailable": {
+      "text": "Enweghị ike iru tebụl data ugbu a. Nwaa ọzọ n'otu nkeji.",
+      "reviewed": false
+    },
+    "wa.table.which": {
+      "text": "Kedu nke?\n{list}\nZiga nọmba ya, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.which_find": {
+      "text": "Kedu nke?\n{list}\nZiga *find*, aha ya zuru oke na ihe ị na-achọ.",
       "reviewed": false
     },
     "wa.too_fast": {

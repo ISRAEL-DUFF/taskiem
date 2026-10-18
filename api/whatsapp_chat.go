@@ -202,6 +202,12 @@ type chatData struct {
 	// Build is an AI build being shown, completed or confirmed
 	// (whatsapp_build.go).
 	Build *waBuild `json:"build,omitempty"`
+	// A data table row being added (whatsapp_tables.go): the table, its
+	// title in Name, the values so far (personal columns sealed) and, while
+	// several tables match, the ones offered for a numbered pick.
+	Table uuid.UUID      `json:"table,omitempty"`
+	Row   map[string]any `json:"row,omitempty"`
+	Pick  []uuid.UUID    `json:"pick,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -423,18 +429,31 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
 	}
+	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
 	case stateCollecting:
+		if table {
+			return s.waTableCollect(ctx, c, text)
+		}
 		return s.waCollect(ctx, c, text)
 	case stateConfirming:
 		switch cmd {
 		case "yes", "y", "confirm", "run it", "go":
+			if table {
+				return s.waTableInsert(ctx, c)
+			}
 			return s.waConfirm(ctx, c)
 		case "no", "n":
 			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 				return err
 			}
+			if table {
+				return c.say(ctx, s, c.t("wa.table.cancelled"))
+			}
 			return c.say(ctx, s, c.t("wa.cancelled_nothing_started"))
+		}
+		if table {
+			return c.say(ctx, s, c.t("wa.table.confirm_reminder", "table", whatsapp.SafeText(c.data.Name)), addButtons(c)...)
 		}
 		return c.say(ctx, s, c.t("wa.confirm_reminder", "workflow", c.data.Name), confirmButtons(c)...)
 	}
@@ -487,6 +506,12 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 			return false, nil
 		}
 		return true, s.waStartBuild(ctx, c, arg)
+	case lang.IntentTables:
+		return true, s.waTables(ctx, c)
+	case lang.IntentAdd:
+		return true, s.waTableAdd(ctx, c, arg)
+	case lang.IntentFind:
+		return true, s.waTableFind(ctx, c, arg)
 	}
 	return false, nil
 }
@@ -501,6 +526,15 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermWorkflowEdit) && s.AI != nil {
 		lines = append(lines, c.t("wa.help.build"))
+	}
+	if c.p.Can(PermTableRead) {
+		lines = append(lines, c.t("wa.help.tables"))
+	}
+	if c.p.Can(PermTableEdit) {
+		lines = append(lines, c.t("wa.help.add"))
+	}
+	if c.p.Can(PermTableRead) {
+		lines = append(lines, c.t("wa.help.find"))
 	}
 	if len(c.tenants) > 1 {
 		lines = append(lines, c.t("wa.help.switch"))

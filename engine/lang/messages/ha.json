@@ -48,6 +48,10 @@
       "text": "Ƙi",
       "reviewed": false
     },
+    "button.yes_add": {
+      "text": "Eh, ƙara shi",
+      "reviewed": false
+    },
     "button.yes_run": {
       "text": "Eh, fara shi",
       "reviewed": false
@@ -488,6 +492,10 @@
       "text": "Don ƙin {step}, tabbatar da passkey ko lambar authenticator ɗinka a Taskiem cikin minti 10:\n{link}",
       "reviewed": false
     },
+    "wa.help.add": {
+      "text": "• *add to* da sunan tebur: ƙara layi (za ka tabbatar da farko)",
+      "reviewed": false
+    },
     "wa.help.approvals": {
       "text": "• *approvals*: buƙatun da ke jiran ka",
       "reviewed": false
@@ -498,6 +506,10 @@
     },
     "wa.help.cancel": {
       "text": "• *cancel*: bar abin da ke gudana",
+      "reviewed": false
+    },
+    "wa.help.find": {
+      "text": "• *find*, sunan tebur da kalma: nemo layuka",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -518,6 +530,10 @@
     },
     "wa.help.switch": {
       "text": "• *switch* da sunan ƙungiya: yi aiki a wata",
+      "reviewed": false
+    },
+    "wa.help.tables": {
+      "text": "• *tables*: teburorin bayanai na ƙungiyarka",
       "reviewed": false
     },
     "wa.help.voice": {
@@ -734,6 +750,154 @@
     },
     "wa.switch.which": {
       "text": "Wace ƙungiya? Naka sune:\n{list}",
+      "reviewed": false
+    },
+    "wa.table.add_failed": {
+      "text": "Ba a ƙara layin ba: {reason}\n\nAmsa da *yes* don sake gwadawa ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.add_what": {
+      "text": "Aika *add to* da sunan tebur.",
+      "reviewed": false
+    },
+    "wa.table.added": {
+      "text": "An ƙara layi {id} a {table}.",
+      "reviewed": false
+    },
+    "wa.table.cancelled": {
+      "text": "An soke. Ba a ƙara komai ba.",
+      "reviewed": false
+    },
+    "wa.table.confirm": {
+      "text": "A ƙara wannan layi a {table}?\n{row}\n\nAmsa da *yes* don ƙara shi ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.confirm_reminder": {
+      "text": "Amsa da *yes* don ƙara layin a {table}, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.denied_edit": {
+      "text": "Ba za ka iya ƙara layuka a {org} ba (yana buƙatar table.edit).",
+      "reviewed": false
+    },
+    "wa.table.denied_now": {
+      "text": "Ba za ka iya ƙara layuka a {org} ba kuma.",
+      "reviewed": false
+    },
+    "wa.table.denied_read": {
+      "text": "Ba za ka iya ganin teburorin bayanai a {org} ba (yana buƙatar table.read).",
+      "reviewed": false
+    },
+    "wa.table.find_head": {
+      "text": "A {table}, masu dacewa da {text}:",
+      "reviewed": false
+    },
+    "wa.table.find_more": {
+      "text": "… da wasu {count}. Rage binciken, ko buɗe Tables a Taskiem.",
+      "reviewed": false
+    },
+    "wa.table.find_no_column": {
+      "text": "{table} ba shi da ginshiƙin rubutu da za a nema. Aika *find*, teburin da column:text.",
+      "reviewed": false
+    },
+    "wa.table.find_none": {
+      "text": "Babu abin da ya dace da {text} a {table}.",
+      "reviewed": false
+    },
+    "wa.table.find_what": {
+      "text": "Aika *find*, sunan tebur da abin da kake nema.",
+      "reviewed": false
+    },
+    "wa.table.form": {
+      "text": "{table}: danna *{cta}* don shigar da bayanai {count} na layin; za ka tabbatar kafin a ƙara shi. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.table.form_more": {
+      "text": "Na gode. Sauran {count} za a shigar a nan. Aika *cancel* don tsayawa.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.table.gone": {
+      "text": "{table} ya canza yayin da kake ƙarawa. Aika *add to* kuma.",
+      "reviewed": false
+    },
+    "wa.table.hint.date": {
+      "text": "Kwanan wata kamar YYYY-MM-DD, misali 2026-11-01",
+      "reviewed": false
+    },
+    "wa.table.hint.datetime": {
+      "text": "Kwanan wata da lokaci, misali 2026-11-01T09:30:00+01:00",
+      "reviewed": false
+    },
+    "wa.table.hint.email": {
+      "text": "Adireshin imel",
+      "reviewed": false
+    },
+    "wa.table.hint.json": {
+      "text": "Bayanai masu tsari a matsayin JSON",
+      "reviewed": false
+    },
+    "wa.table.hint.phone": {
+      "text": "Lambar waya da lambar ƙasa, misali 2348012345678",
+      "reviewed": false
+    },
+    "wa.table.list_head": {
+      "text": "Teburorin bayanai a {org}:",
+      "reviewed": false
+    },
+    "wa.table.list_line": {
+      "text": "{n}. {title}: layuka {count}",
+      "reviewed": false
+    },
+    "wa.table.list_line_nocount": {
+      "text": "{n}. {title}",
+      "reviewed": false
+    },
+    "wa.table.list_tail_add": {
+      "text": "Aika *add to* da sunan tebur don ƙara layi.",
+      "reviewed": false
+    },
+    "wa.table.list_tail_find": {
+      "text": "Aika *find*, sunan tebur da kalma don nemo layuka.",
+      "reviewed": false
+    },
+    "wa.table.needs_values": {
+      "text": "Ana ƙara layi a {table} (ginshiƙai {count}). Aika *cancel* don tsayawa.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.table.no_match": {
+      "text": "Babu teburin bayanai da ya dace da {name}. Aika *tables* don ganin su.",
+      "reviewed": false
+    },
+    "wa.table.none": {
+      "text": "{org} ba ta da teburin bayanai tukuna. Ƙirƙiri ɗaya a Taskiem, ƙarƙashin Tables{link}.",
+      "reviewed": false
+    },
+    "wa.table.not_added": {
+      "text": "Ba a ƙara layin a {table} ba: {reason}. Aika *add to* kuma.",
+      "reviewed": false
+    },
+    "wa.table.optional": {
+      "text": "(ba dole ba: aika *skip* don barin shi fanko)",
+      "reviewed": false
+    },
+    "wa.table.pick_again": {
+      "text": "Aika lamba daga jerin, ko *cancel*:\n{list}",
+      "reviewed": false
+    },
+    "wa.table.too_many": {
+      "text": "Ka ƙara layuka da yawa yanzu. Jira minti ɗaya, sannan ka sake gwadawa.",
+      "reviewed": false
+    },
+    "wa.table.unavailable": {
+      "text": "Ba a iya kai ga teburorin bayanai yanzu. Sake gwadawa bayan minti ɗaya.",
+      "reviewed": false
+    },
+    "wa.table.which": {
+      "text": "Wanne?\n{list}\nAika lambarsa, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.which_find": {
+      "text": "Wanne?\n{list}\nAika *find*, cikakken suna da abin da kake nema.",
       "reviewed": false
     },
     "wa.too_fast": {

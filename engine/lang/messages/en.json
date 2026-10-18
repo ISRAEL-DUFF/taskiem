@@ -59,6 +59,11 @@
       "reviewed": true,
       "context": "Reply button, at most 20 characters"
     },
+    "button.yes_add": {
+      "text": "Yes, add it",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters"
+    },
     "button.yes_run": {
       "text": "Yes, run it",
       "reviewed": true,
@@ -609,6 +614,11 @@
       "reviewed": true,
       "context": "Step-up link to reject"
     },
+    "wa.help.add": {
+      "text": "• *add to* and a table's name: add a row (you confirm first)",
+      "reviewed": true,
+      "context": "Help line"
+    },
     "wa.help.approvals": {
       "text": "• *approvals*: requests waiting for you",
       "reviewed": true,
@@ -621,6 +631,11 @@
     },
     "wa.help.cancel": {
       "text": "• *cancel*: drop what is in progress",
+      "reviewed": true,
+      "context": "Help line"
+    },
+    "wa.help.find": {
+      "text": "• *find*, a table's name and a word: look up rows",
       "reviewed": true,
       "context": "Help line"
     },
@@ -646,6 +661,11 @@
     },
     "wa.help.switch": {
       "text": "• *switch* and an organisation's name: work in another one",
+      "reviewed": true,
+      "context": "Help line"
+    },
+    "wa.help.tables": {
+      "text": "• *tables*: your organisation's data tables",
       "reviewed": true,
       "context": "Help line"
     },
@@ -918,6 +938,191 @@
       "text": "Which organisation? Yours are:\n{list}",
       "reviewed": true,
       "context": "switch matched none or several"
+    },
+    "wa.table.add_failed": {
+      "text": "The row was not added: {reason}\n\nReply *yes* to try again or *cancel*.",
+      "reviewed": true,
+      "context": "Xenibase refused the row; {reason} in English"
+    },
+    "wa.table.add_what": {
+      "text": "Send *add to* and a table's name.",
+      "reviewed": true,
+      "context": "add without a table"
+    },
+    "wa.table.added": {
+      "text": "Added row {id} to {table}.",
+      "reviewed": true,
+      "context": "The row was added; {id} is its id"
+    },
+    "wa.table.cancelled": {
+      "text": "Cancelled. Nothing was added.",
+      "reviewed": true,
+      "context": "no while a row waits for yes"
+    },
+    "wa.table.confirm": {
+      "text": "Add this row to {table}?\n{row}\n\nReply *yes* to add it or *cancel*.",
+      "reviewed": true,
+      "context": "The summary before a row is added (personal values masked)"
+    },
+    "wa.table.confirm_reminder": {
+      "text": "Reply *yes* to add the row to {table}, or *cancel*.",
+      "reviewed": true,
+      "context": "Something else sent while a row waits for yes"
+    },
+    "wa.table.denied_edit": {
+      "text": "You cannot add rows in {org} (it takes table.edit).",
+      "reviewed": true,
+      "context": "add without table.edit"
+    },
+    "wa.table.denied_now": {
+      "text": "You cannot add rows in {org} any more.",
+      "reviewed": true,
+      "context": "table.edit lost while confirming"
+    },
+    "wa.table.denied_read": {
+      "text": "You cannot see data tables in {org} (it takes table.read).",
+      "reviewed": true,
+      "context": "tables or find without table.read"
+    },
+    "wa.table.find_head": {
+      "text": "In {table}, matching {text}:",
+      "reviewed": true,
+      "context": "find: first line, before up to five rows"
+    },
+    "wa.table.find_more": {
+      "text": "… and {count} more. Narrow the search, or open Tables in Taskiem.",
+      "reviewed": true,
+      "context": "find: more rows than shown"
+    },
+    "wa.table.find_no_column": {
+      "text": "{table} has no text column to search. Send *find*, the table and column:text.",
+      "reviewed": true,
+      "context": "find: the table has no text column and no column was named"
+    },
+    "wa.table.find_none": {
+      "text": "Nothing in {table} matches {text}.",
+      "reviewed": true,
+      "context": "find: no row; {text} is quoted"
+    },
+    "wa.table.find_what": {
+      "text": "Send *find*, a table's name and what to look for.",
+      "reviewed": true,
+      "context": "find without a table or a text"
+    },
+    "wa.table.form": {
+      "text": "{table}: tap *{cta}* to enter the row's {count} detail(s); you confirm before it is added. Send *cancel* to stop.",
+      "reviewed": true,
+      "context": "The message carrying a row's form; {cta} is button.fill_in"
+    },
+    "wa.table.form_more": {
+      "text": "Thanks. {count} more to enter here. Send *cancel* to stop.\n\n{prompt}",
+      "reviewed": true,
+      "context": "After a form, when the table has more columns than the form holds"
+    },
+    "wa.table.gone": {
+      "text": "{table} changed while you were adding to it. Send *add to* again.",
+      "reviewed": true,
+      "context": "The table was deleted or its columns changed"
+    },
+    "wa.table.hint.date": {
+      "text": "A date as YYYY-MM-DD, like 2026-11-01",
+      "reviewed": true,
+      "context": "Under a date column's question and in its form field"
+    },
+    "wa.table.hint.datetime": {
+      "text": "A date and time, like 2026-11-01T09:30:00+01:00",
+      "reviewed": true,
+      "context": "Under a datetime column's question"
+    },
+    "wa.table.hint.email": {
+      "text": "An email address",
+      "reviewed": true,
+      "context": "Under an email column's question"
+    },
+    "wa.table.hint.json": {
+      "text": "Structured data as JSON",
+      "reviewed": true,
+      "context": "Under a json column's question"
+    },
+    "wa.table.hint.phone": {
+      "text": "A phone number with the country code, like 2348012345678",
+      "reviewed": true,
+      "context": "Under a phone column's question"
+    },
+    "wa.table.list_head": {
+      "text": "Data tables in {org}:",
+      "reviewed": true,
+      "context": "tables: first line"
+    },
+    "wa.table.list_line": {
+      "text": "{n}. {title}: {count} row(s)",
+      "reviewed": true,
+      "context": "tables: one table with its estimated row count"
+    },
+    "wa.table.list_line_nocount": {
+      "text": "{n}. {title}",
+      "reviewed": true,
+      "context": "tables: one table whose count could not be had"
+    },
+    "wa.table.list_tail_add": {
+      "text": "Send *add to* and a table's name to add a row.",
+      "reviewed": true,
+      "context": "tables: last lines, with table.edit"
+    },
+    "wa.table.list_tail_find": {
+      "text": "Send *find*, a table's name and a word to look up rows.",
+      "reviewed": true,
+      "context": "tables: last lines"
+    },
+    "wa.table.needs_values": {
+      "text": "Adding a row to {table} ({count} column(s)). Send *cancel* to stop.\n\n{prompt}",
+      "reviewed": true,
+      "context": "add: columns asked one by one; {prompt} is the first column's question"
+    },
+    "wa.table.no_match": {
+      "text": "No data table matches {name}. Send *tables* to see them.",
+      "reviewed": true,
+      "context": "add or find: no table matches; {name} is quoted"
+    },
+    "wa.table.none": {
+      "text": "{org} has no data tables yet. Create one in Taskiem, under Tables{link}.",
+      "reviewed": true,
+      "context": "tables: none; {link} is wa.link_at or empty"
+    },
+    "wa.table.not_added": {
+      "text": "The row was not added to {table}: {reason}. Send *add to* again.",
+      "reviewed": true,
+      "context": "The row failed the table's checks at the end (the columns changed)"
+    },
+    "wa.table.optional": {
+      "text": "(optional: send *skip* to leave it empty)",
+      "reviewed": true,
+      "context": "Under a column's question when it may be left empty"
+    },
+    "wa.table.pick_again": {
+      "text": "Send a number from the list, or *cancel*:\n{list}",
+      "reviewed": true,
+      "context": "add: the pick was not a number on the list"
+    },
+    "wa.table.too_many": {
+      "text": "You have added several rows just now. Wait a minute, then try again.",
+      "reviewed": true,
+      "context": "Rate limit on rows added from chat"
+    },
+    "wa.table.unavailable": {
+      "text": "Data tables cannot be reached right now. Try again in a minute.",
+      "reviewed": true,
+      "context": "Xenibase or the connection could not be used"
+    },
+    "wa.table.which": {
+      "text": "Which one?\n{list}\nSend its number, or *cancel*.",
+      "reviewed": true,
+      "context": "add: several tables match; {list} is numbered"
+    },
+    "wa.table.which_find": {
+      "text": "Which one?\n{list}\nSend *find*, the full name and what to look for.",
+      "reviewed": true,
+      "context": "find: several tables match"
     },
     "wa.too_fast": {
       "text": "You are sending messages too quickly. Wait a minute, then try again.",

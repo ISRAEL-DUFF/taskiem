@@ -71,8 +71,13 @@ func (s *Server) tableRows(r *http.Request) (tableRows, error) {
 	if err != nil {
 		return tableRows{}, err
 	}
-	p := principalFrom(r.Context())
-	conn, creds, hc, err := s.pgdockConnection(r.Context(), p.TenantID, datatables.ConnectionName, tablesPurpose)
+	return s.tableRowsFor(r.Context(), principalFrom(r.Context()).TenantID, t, tablesPurpose)
+}
+
+// tableRowsFor is a table with the connector ready to act on its rows,
+// the connection read recorded under purpose (the API's, or the chat's).
+func (s *Server) tableRowsFor(ctx context.Context, tenant uuid.UUID, t datatables.Table, purpose string) (tableRows, error) {
+	conn, creds, hc, err := s.pgdockConnection(ctx, tenant, datatables.ConnectionName, purpose)
 	if err != nil {
 		return tableRows{}, err
 	}
@@ -94,16 +99,38 @@ func (tr tableRows) call(ctx context.Context, s *Server, action string, in map[s
 }
 
 // known reports whether a column may be filtered or ordered on.
-func (tr tableRows) known(col string) bool {
+func (tr tableRows) known(col string) bool { return knownColumn(tr.table.Columns, col) }
+
+func knownColumn(cols []datatables.Column, col string) bool {
 	if col == "id" || col == "created_at" || col == "updated_at" {
 		return true
 	}
-	for _, c := range tr.table.Columns {
+	for _, c := range cols {
 		if c.Name == col {
 			return true
 		}
 	}
 	return false
+}
+
+// searchFilter is the read_rows filter for a search q: column:text on
+// one of the table's columns, or text alone matched on the table's first
+// text column; false when there is no column to search.
+func searchFilter(cols []datatables.Column, q string) (map[string]any, bool) {
+	col, text, ok := strings.Cut(q, ":")
+	if !ok || !knownColumn(cols, col) {
+		col, text = "", q
+		for _, c := range cols {
+			if c.Type == "text" {
+				col = c.Name
+				break
+			}
+		}
+	}
+	if col == "" {
+		return nil, false
+	}
+	return map[string]any{"column": col, "op": "ilike", "value": "%" + strings.NewReplacer("%", `\%`, "_", `\_`).Replace(strings.TrimSpace(text)) + "%"}, true
 }
 
 // pageLimit reads limit (1 to 1,000; default 50).
@@ -137,21 +164,12 @@ func (s *Server) listTableRows(w http.ResponseWriter, r *http.Request) {
 		in["cursor"] = cur
 	}
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		col, text, ok := strings.Cut(q, ":")
-		if !ok || !tr.known(col) {
-			col, text = "", q
-			for _, c := range tr.table.Columns {
-				if c.Type == "text" {
-					col = c.Name
-					break
-				}
-			}
-		}
-		if col == "" {
+		f, ok := searchFilter(tr.table.Columns, q)
+		if !ok {
 			writeErr(w, http.StatusBadRequest, "q searches a text column: give it as column:text")
 			return
 		}
-		in["filters"] = []any{map[string]any{"column": col, "op": "ilike", "value": "%" + strings.NewReplacer("%", `\%`, "_", `\_`).Replace(strings.TrimSpace(text)) + "%"}}
+		in["filters"] = []any{f}
 	}
 	out, err := tr.call(r.Context(), s, "read_rows", in, "")
 	if err != nil {

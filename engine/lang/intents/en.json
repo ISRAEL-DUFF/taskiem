@@ -9,13 +9,16 @@
     "cancel": ["cancel", "stop"],
     "yes": ["yes", "y", "confirm", "run it", "go"],
     "no": ["no", "n"],
-    "switch": ["organisations", "organizations", "tenants"]
+    "switch": ["organisations", "organizations", "tenants"],
+    "tables": ["tables", "my tables", "data tables", "list tables", "show tables"]
   },
   "prefixes": {
     "switch": ["switch"],
     "run": ["run", "start"],
     "build": ["build", "create"],
-    "language": ["language", "lang"]
+    "language": ["language", "lang"],
+    "add": ["add to", "add"],
+    "find": ["find", "search", "look up", "lookup"]
   },
   "fillers": ["please", "pls", "kindly"],
   "markers": []

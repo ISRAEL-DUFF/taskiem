@@ -183,6 +183,7 @@ func TestEveryIDTheAPIUsesExists(t *testing.T) {
 	}
 	// Ids built at run time.
 	for _, id := range []string{"wa.handoff.approve", "wa.handoff.reject", "wa.form.pin_approve", "wa.form.pin_reject",
+		"wa.table.hint.date", "wa.table.hint.datetime", "wa.table.hint.phone", "wa.table.hint.email", "wa.table.hint.json",
 		"run.status.completed", "run.status.failed", "run.status.needs_reconciliation", "run.status.running", "run.status.waiting",
 		"run.status.queued", "run.status.cancelled", "approval.status.open", "approval.status.approved", "approval.status.rejected",
 		"approval.status.expired", "approval.status.cancelled"} {
@@ -248,6 +249,19 @@ func TestMatchIntent(t *testing.T) {
 		{"switch acme", all, lang.IntentSwitch, "acme"},
 		{"organisations", all, lang.IntentSwitch, ""},
 		{"language yoruba", all, lang.IntentLanguage, "yoruba"},
+		// Data tables: the list, a row to add, a search.
+		{"tables", all, lang.IntentTables, ""},
+		{"my tables", all, lang.IntentTables, ""},
+		{"add to customers", all, lang.IntentAdd, "customers"},
+		{"Add Debtors", all, lang.IntentAdd, "Debtors"},
+		{"add", all, lang.IntentAdd, ""},
+		{"find debtors Ada", all, lang.IntentFind, "debtors Ada"},
+		{"look up customers phone:0801", all, lang.IntentFind, "customers phone:0801"},
+		{"abeg put am for debtors", []lang.Tag{lang.PCM, lang.EN}, lang.IntentAdd, "debtors"},
+		{"tables wey i get", []lang.Tag{lang.PCM, lang.EN}, lang.IntentTables, ""},
+		{"ƙara a debtors", []lang.Tag{lang.HA, lang.EN}, lang.IntentAdd, "debtors"},
+		{"chọọ na debtors Ada", []lang.Tag{lang.IG, lang.EN}, lang.IntentFind, "debtors Ada"},
+		{"wá nínú debtors Ada", []lang.Tag{lang.YO, lang.EN}, lang.IntentFind, "debtors Ada"},
 		// The person's language first, English still understood.
 		{"abeg run payroll", []lang.Tag{lang.PCM, lang.EN}, lang.IntentRun, "payroll"},
 		{"wetin fail today", []lang.Tag{lang.PCM, lang.EN}, lang.IntentStatus, ""},

@@ -309,27 +309,42 @@ func (s *Server) listTables(w http.ResponseWriter, r *http.Request) {
 	for i, t := range tables {
 		views[i] = tableView(t)
 	}
-	// Row counts, estimated, read in parallel with a short budget; a
-	// table whose count cannot be had shows none.
-	if len(tables) > 0 && r.URL.Query().Get("counts") != "no" {
-		p := principalFrom(r.Context())
-		if conn, creds, hc, err := s.pgdockConnection(r.Context(), p.TenantID, datatables.ConnectionName, tablesPurpose); err == nil {
-			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-			var wg sync.WaitGroup
-			for i, t := range tables {
-				wg.Add(1)
-				go func(i int, name string) {
-					defer wg.Done()
-					if n, ok := s.rowCount(ctx, conn, creds, hc, name); ok {
-						views[i]["row_count"] = n
-					}
-				}(i, t.Name)
+	if r.URL.Query().Get("counts") != "no" {
+		for i, n := range s.rowCounts(r.Context(), principalFrom(r.Context()).TenantID, tablesPurpose, tables) {
+			if n != nil {
+				views[i]["row_count"] = *n
 			}
-			wg.Wait()
-			cancel()
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tables": views})
+}
+
+// rowCounts are the tables' estimated row counts, read in parallel with
+// a short budget, in the tables' order; a table whose count cannot be had
+// (or every one, when the connection cannot be read) has nil.
+func (s *Server) rowCounts(ctx context.Context, tenant uuid.UUID, purpose string, tables []datatables.Table) []*int64 {
+	counts := make([]*int64, len(tables))
+	if len(tables) == 0 {
+		return counts
+	}
+	conn, creds, hc, err := s.pgdockConnection(ctx, tenant, datatables.ConnectionName, purpose)
+	if err != nil {
+		return counts
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	for i, t := range tables {
+		wg.Add(1)
+		go func(i int, name string) {
+			defer wg.Done()
+			if n, ok := s.rowCount(ctx, conn, creds, hc, name); ok {
+				counts[i] = &n
+			}
+		}(i, t.Name)
+	}
+	wg.Wait()
+	return counts
 }
 
 // rowCount is a table's estimated row count through read_rows.
