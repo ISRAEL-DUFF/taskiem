@@ -1,6 +1,6 @@
 # Data tables
 
-Records a business keeps (customers, debtors, staff, stock) that its workflows read and write, without a spreadsheet or a database of its own. A data table is a Postgres table in a Xenibase project that Taskiem creates and manages for the organisation ([decision 0033](decisions/0033-data-tables-on-xenibase.md)); workflows reach it through the `pgdock@1` connection named `data_tables` ([Xenibase integration](integrations/pgdock.md)), so nothing in the engine knows what a data table is.
+Records a business keeps (customers, debtors, staff, stock) that its workflows read and write, without a spreadsheet or a database of its own. A data table is a Postgres table in a Xenibase project that Taskiem creates and manages for the organisation ([decision 0033](decisions/0033-data-tables-on-xenibase.md)); workflows reach it through the `xenibase@1` connection named `data_tables` ([Xenibase integration](integrations/xenibase.md)), so nothing in the engine knows what a data table is.
 
 Permissions: `table.read` sees tables and their rows; `table.edit` creates and changes tables, columns and rows. Owners, admins and builders have both; operators, auditors and viewers have `table.read`.
 
@@ -73,15 +73,15 @@ Every write carries an `Idempotency-Key` to Xenibase's data API: the request's o
 
 ## Using a table in a workflow
 
-A data table is an ordinary Xenibase table to a workflow: the connector is `pgdock@1`, the connection `data_tables`, and `table` the table's name. Reads use `read_rows` (typed values, filters, order, pages); writes use `insert_rows`, `upsert_rows`, `update_rows` and `delete_rows`, each with the engine's idempotency key, updates and deletes by `key` or `filters` with a `max_affected`.
+A data table is an ordinary Xenibase table to a workflow: the connector is `xenibase@1`, the connection `data_tables`, and `table` the table's name. Reads use `read_rows` (typed values, filters, order, pages); writes use `insert_rows`, `upsert_rows`, `update_rows` and `delete_rows`, each with the engine's idempotency key, updates and deletes by `key` or `filters` with a `max_affected`.
 
 ```json
-{"id": "read_debtors", "type": "connector", "connector": "pgdock@1", "action": "read_rows", "connection": "data_tables",
+{"id": "read_debtors", "type": "connector", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
  "input": {"table": "debtors", "filters": [{"column": "balance_kobo", "op": "gt", "value": 0}], "order": [{"column": "name"}], "limit": 1000}}
 ```
 
 ```json
-{"id": "mark_paid", "type": "connector", "connector": "pgdock@1", "action": "update_rows", "connection": "data_tables",
+{"id": "mark_paid", "type": "connector", "connector": "xenibase@1", "action": "update_rows", "connection": "data_tables",
  "needs": ["read_debtors"], "input": {"table": "debtors", "key": "=item.id", "set": {"paid": true}}}
 ```
 
@@ -89,10 +89,10 @@ The template [`debtor-reminder-table`](templates.md) is the weekly debtor remind
 
 ### The row-changed trigger
 
-A workflow can start when a row of a table is added, changed or deleted: the `pgdock@1` `row_changed` trigger on the `data_tables` connection, with `options.tables` naming the table. Taskiem registers the webhook in the project when the workflow is published and removes it when it leaves the environment ([decision 0021](decisions/0021-remote-trigger-registration.md)), so an organisation on the platform's Xenibase gets webhooks within the project's plan rate.
+A workflow can start when a row of a table is added, changed or deleted: the `xenibase@1` `row_changed` trigger on the `data_tables` connection, with `options.tables` naming the table. Taskiem registers the webhook in the project when the workflow is published and removes it when it leaves the environment ([decision 0021](decisions/0021-remote-trigger-registration.md)), so an organisation on the platform's Xenibase gets webhooks within the project's plan rate.
 
 ```json
-{"type": "connector_event", "config": {"connector": "pgdock@1", "trigger": "row_changed", "connection": "data_tables", "events": ["INSERT"], "options": {"tables": ["orders"]}}}
+{"type": "connector_event", "config": {"connector": "xenibase@1", "trigger": "row_changed", "connection": "data_tables", "events": ["INSERT"], "options": {"tables": ["orders"]}}}
 ```
 
 ## On WhatsApp
@@ -122,7 +122,7 @@ Rows, requests and size are the Xenibase project's own quotas: the data API's `p
 
 | Variable | Notes |
 | --- | --- |
-| `TASKIEM_XENIBASE_URL` | The platform's Xenibase (`https://…`). Also the default server for Xenibase connections that name none when `TASKIEM_PGDOCK_URL` is unset |
+| `TASKIEM_XENIBASE_URL` | The platform's Xenibase (`https://…`). Also the default server for Xenibase connections that name none |
 | `TASKIEM_XENIBASE_TOKEN` | An API token on that Xenibase: unrestricted (not limited to projects), with the `read`, `write` and `admin` scopes (project creation needs an unrestricted `write` token; enabling services, minting keys and dropping tables by token need `admin`). It stays in the `api` and `scheduler` processes, is never stored in a tenant's vault, never logged and never used by a workflow. Xenibase tokens last a year at most: rotate it before it expires, since the tokens Taskiem mints from it never outlive it |
 | `TASKIEM_XENIBASE_ORG` | The Xenibase organisation Taskiem makes projects in. The platform pays for them as part of the plan (decision 0033, Q9); raise its project quota as organisations grow |
 | `TASKIEM_XENIBASE_REGION` | Optional: the region projects are made in (Xenibase's home region by default) |
@@ -137,7 +137,7 @@ The first table an organisation creates runs, in the request, with the platform 
 2. looks for a project of that name in the organisation (a project made by an attempt whose record was lost is adopted, never made twice), else `POST /api/v1/projects` (shared tier, the configured region) and waits for the create operation (`GET /api/v1/operations/{id}`, up to five minutes);
 3. turns backend services on (`POST /projects/{id}/services`) and keeps the secret key from that one answer; services already on from an earlier attempt get a fresh secret key (`POST /services/keys`) instead;
 4. mints a project-restricted token named `taskiem-data-tables` with the `read`, `write` and `admin` scopes for 365 days (`POST /api/v1/tokens`);
-5. stores the `pgdock` connection `data_tables` in `prod` with `token`, `project_id`, `org_id`, `base_url`, `secret_key` and `api_url`, marked `provisioned_by = taskiem:data_tables` (the Connections page shows it as "Data tables"), and records the project as ready, audited as `table.project.provision`.
+5. stores the `xenibase` connection `data_tables` in `prod` with `token`, `project_id`, `org_id`, `base_url`, `secret_key` and `api_url`, marked `provisioned_by = taskiem:data_tables` (the Connections page shows it as "Data tables"), and records the project as ready, audited as `table.project.provision`.
 
 Each step is recorded before the next, so a process that dies half way leaves a record the next request resumes from the same step. A Xenibase refusal is recorded (`GET /v1/tables/status` shows `error`): an organisation quota answers 409 `xenibase_quota` with the quota's name, `no_capacity` and other temporary conditions 503 `xenibase_unavailable` with `Retry-After`, and a create operation that failed leaves the project `failed` until an operator looks at it in Xenibase. The per-call timeout is 20 seconds, through the egress guard to the platform's host only.
 
@@ -147,7 +147,7 @@ Xenibase tokens expire. The `scheduler` role renews, every six hours, the token 
 
 ### Bringing your own project
 
-Settings > Data tables (the "Data project" section of the Tables page, for `connection.manage` holders) takes an existing `pgdock@1` connection of the organisation's own in `prod`: a token restricted to the project with `read`, `write` and `admin` (drops by token need `admin`), the project's secret key and its data API URL. Taskiem runs `test_connection`, refuses a connection without a secret key or data API URL, and copies the credentials into the `data_tables` connection (the original stays), so workflows and the API find the project under the one name; `PUT /v1/tables/project` does the same with `{"connection_id": …}`, audited as `table.project.set`. It is refused once any table exists. For an own project Taskiem provisions nothing, renews nothing and deletes nothing: when its token nears expiry, the organisation makes a new connection and sets it again.
+Settings > Data tables (the "Data project" section of the Tables page, for `connection.manage` holders) takes an existing `xenibase@1` connection of the organisation's own in `prod`: a token restricted to the project with `read`, `write` and `admin` (drops by token need `admin`), the project's secret key and its data API URL. Taskiem runs `test_connection`, refuses a connection without a secret key or data API URL, and copies the credentials into the `data_tables` connection (the original stays), so workflows and the API find the project under the one name; `PUT /v1/tables/project` does the same with `{"connection_id": …}`, audited as `table.project.set`. It is refused once any table exists. For an own project Taskiem provisions nothing, renews nothing and deletes nothing: when its token nears expiry, the organisation makes a new connection and sets it again.
 
 ### What happens on delete
 

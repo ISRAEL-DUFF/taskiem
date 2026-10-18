@@ -213,7 +213,7 @@ function ProjectSettings({ status, tables, onChange }: { status: TablesStatus; t
   const conns = useLoad(() => get<{ connections: Conn[] }>("/v1/connections"), []);
   const [chosen, setChosen] = useState("");
   const act = useAction();
-  const own = conns.data?.connections.filter((c) => c.connector === "pgdock" && c.environment === "prod" && !c.provisioned_by) ?? [];
+  const own = conns.data?.connections.filter((c) => c.connector === "xenibase" && c.environment === "prod" && !c.provisioned_by) ?? [];
   return (
     <section className="card" style={{ marginTop: 24 }}>
       <h2>Data project</h2>
@@ -258,7 +258,7 @@ function ProjectSettings({ status, tables, onChange }: { status: TablesStatus; t
             void act.run(async () => (await put("/v1/tables/project", { connection_id: chosen }), onChange()));
           }}
         >
-          <Field label="Use my own Xenibase project" hint="A pgdock connection in prod with the project's secret key and data API URL; it is tested first.">
+          <Field label="Use my own Xenibase project" hint="A xenibase connection in prod with the project's secret key and data API URL; it is tested first.">
             <select value={chosen} onChange={(e) => setChosen(e.target.value)}>
               <option value="">Choose a connection…</option>
               {own.map((c) => (
@@ -628,7 +628,7 @@ function UseInWorkflow({ table }: { table: Table }) {
     <section className="card" style={{ marginTop: 24 }}>
       <h2>Use in a workflow</h2>
       <p className="hint">
-        Workflows reach this table like any Xenibase table: connector <code>pgdock@1</code>, connection <code>{table.connection}</code>, table <code>{table.name}</code>. The AI builder knows its columns.
+        Workflows reach this table like any Xenibase table: connector <code>xenibase@1</code>, connection <code>{table.connection}</code>, table <code>{table.name}</code>. The AI builder knows its columns.
       </p>
       <dl className="kv">
         {TABLE_ACTIONS.map((a) => (

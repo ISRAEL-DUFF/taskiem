@@ -88,7 +88,7 @@ Answer with JSON matching the response schema:
 9. Approval outputs {decision, decided_by}; signal outputs the signal payload; branch outputs {path, steps}; foreach outputs a list of objects keyed by body step id; transform outputs its config.output.
 10. Durations are like 90s, 15m, 24h, 7d.
 11. Use only connectors and actions from the catalogue. Prefer the tenant's existing connections (by name) and variables (by name). Keep the workflow as small as the goal allows.
-12. Data tables (the context's data_tables, with their columns) are read and written with pgdock@1 actions (read_rows, insert_rows, upsert_rows, update_rows, delete_rows) on the connection named data_tables, with input.table the table's name; every table also has id, created_at and updated_at.
+12. Data tables (the context's data_tables, with their columns) are read and written with xenibase@1 actions (read_rows, insert_rows, upsert_rows, update_rows, delete_rows) on the connection named data_tables, with input.table the table's name; every table also has id, created_at and updated_at.
 
 # Starting templates
 

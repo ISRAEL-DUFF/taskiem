@@ -20,7 +20,7 @@ interface Conn {
   last_used_at: string | null;
   /** What made the connection when it was not a person: taskiem:data_tables for the data tables project's. */
   provisioned_by: string | null;
-  /** Subscriptions Taskiem keeps at the provider through this connection (a PGDock webhook per workflow). */
+  /** Subscriptions Taskiem keeps at the provider through this connection (a Xenibase webhook per workflow). */
   remote?: {
     subscriptions: number;
     health: string;
@@ -92,7 +92,7 @@ export function Connections() {
           {toComplete.length > 0 && (
             <>
               {" "}
-              {linked.connector === "pgdock" ? "Writes, functions and read_rows also need the project's secret key and data API URL. " : "It may also take: " + toComplete.map((f) => f.label).join(", ") + ". "}
+              {linked.connector === "xenibase" ? "Writes, functions and read_rows also need the project's secret key and data API URL. " : "It may also take: " + toComplete.map((f) => f.label).join(", ") + ". "}
               <button className="link" onClick={() => setCompleting(linked)}>
                 Add them now
               </button>{" "}

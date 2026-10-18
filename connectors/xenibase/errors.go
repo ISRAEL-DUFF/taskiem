@@ -1,4 +1,4 @@
-package pgdock
+package xenibase
 
 import (
 	"encoding/json"
@@ -53,7 +53,7 @@ type Error struct {
 
 func (e *Error) Error() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "pgdock %s (http %d", e.Class, e.Status)
+	fmt.Fprintf(&b, "xenibase %s (http %d", e.Class, e.Status)
 	if e.Code != "" {
 		b.WriteString(", " + e.Code)
 	}

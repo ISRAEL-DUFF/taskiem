@@ -315,16 +315,13 @@ func loadConfig() (config, error) {
 			YouverifyURL:      os.Getenv("TASKIEM_YOUVERIFY_URL"),
 			MpesaURL:          os.Getenv("TASKIEM_MPESA_URL"),
 			MTNMoMoURL:        os.Getenv("TASKIEM_MTNMOMO_URL"),
-			PGDockURL:         os.Getenv("TASKIEM_PGDOCK_URL"),
 		},
 		PoolSize: 20,
 		Xenibase: datatables.Platform{URL: strings.TrimRight(os.Getenv("TASKIEM_XENIBASE_URL"), "/"), Token: os.Getenv("TASKIEM_XENIBASE_TOKEN"),
 			Org: os.Getenv("TASKIEM_XENIBASE_ORG"), Region: os.Getenv("TASKIEM_XENIBASE_REGION")},
 	}
 	// The platform's Xenibase is also the connector's default server.
-	if c.Connectors.PGDockURL == "" {
-		c.Connectors.PGDockURL = c.Xenibase.URL
-	}
+	c.Connectors.XenibaseURL = c.Xenibase.URL
 	// Administrators are held to passkeys wherever passkeys can work.
 	if c.HooksURL == "" && c.PublicURL != "" {
 		c.HooksURL = c.PublicURL + "/hooks"
@@ -457,7 +454,7 @@ func (e *engine) tables() *datatables.Service {
 	if !e.cfg.Xenibase.Configured() {
 		e.log.Info("data tables: TASKIEM_XENIBASE_URL, TASKIEM_XENIBASE_TOKEN and TASKIEM_XENIBASE_ORG unset; tables are available only to organisations with their own Xenibase project")
 	}
-	return &datatables.Service{Pool: e.pool, Vault: e.vault, Egress: &egress.Guard{Logger: e.log}, Logger: e.log, Platform: e.cfg.Xenibase, ConnectorURL: e.cfg.Connectors.PGDockURL}
+	return &datatables.Service{Pool: e.pool, Vault: e.vault, Egress: &egress.Guard{Logger: e.log}, Logger: e.log, Platform: e.cfg.Xenibase, ConnectorURL: e.cfg.Connectors.XenibaseURL}
 }
 
 func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, error) {
@@ -936,8 +933,8 @@ func (c config) anchorSigner(log *slog.Logger) *audit.Signer {
 
 // oauthClients reads Taskiem's registrations with the providers whose
 // connectors connect by OAuth (decision 0034): TASKIEM_OAUTH_<CONNECTOR>_CLIENT_ID
-// and _CLIENT_SECRET per connector id, upper-cased (TASKIEM_OAUTH_PGDOCK_CLIENT_ID
-// for pgdock). A connector with neither is not linkable here, which the
+// and _CLIENT_SECRET per connector id, upper-cased (TASKIEM_OAUTH_XENIBASE_CLIENT_ID
+// for xenibase). A connector with neither is not linkable here, which the
 // API says; one with only one of the two is a misconfiguration.
 func oauthClients(reg *connector.Registry, log *slog.Logger) (map[string]api.OAuthClient, error) {
 	out := map[string]api.OAuthClient{}

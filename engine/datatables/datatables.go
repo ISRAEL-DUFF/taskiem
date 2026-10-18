@@ -1,7 +1,7 @@
 // Package datatables is the engine side of data tables (decision 0033,
 // docs/data-tables.md): records a business keeps (customers, debtors,
 // staff, stock) as Postgres tables in a Xenibase project, one project per
-// organisation, reached by workflows through the ordinary pgdock@1
+// organisation, reached by workflows through the ordinary xenibase@1
 // connection named data_tables in prod.
 //
 // Taskiem keeps the table's definition (data_tables, data_table_columns)
@@ -40,13 +40,13 @@ import (
 )
 
 const (
-	// ConnectionName is the pgdock@1 connection every data table is
+	// ConnectionName is the xenibase@1 connection every data table is
 	// reached through, in Environment.
 	ConnectionName = "data_tables"
 	// Environment is the environment the connection lives in.
 	Environment = "prod"
 	// Connector is the connector id of the connection.
-	Connector = "pgdock"
+	Connector = "xenibase"
 	// ProvisionedBy marks the connection as Taskiem's own (the Connections
 	// page shows it as "Data tables" and refuses edits).
 	ProvisionedBy = "taskiem:data_tables"
@@ -87,8 +87,8 @@ type Service struct {
 	// Platform is the platform's Xenibase; unset, tables are unavailable
 	// unless an organisation brought its own project.
 	Platform Platform
-	// ConnectorURL is the pgdock connector's default server
-	// (TASKIEM_PGDOCK_URL): the Xenibase a connection naming no base_url
+	// ConnectorURL is the xenibase connector's default server
+	// (TASKIEM_XENIBASE_URL): the Xenibase a connection naming no base_url
 	// reaches; empty takes Platform.URL.
 	ConnectorURL string
 	// Now is the clock (tests).

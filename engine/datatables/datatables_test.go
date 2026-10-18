@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/connectors/pgdock"
-	"github.com/israel-duff/taskiem/connectors/pgdock/pgdocktest"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
+	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -27,7 +27,7 @@ const platformToken = "xb_platform_unrestricted"
 
 type world struct {
 	*rt.Env
-	pg  *pgdocktest.Fake
+	pg  *xenibasetest.Fake
 	svc *datatables.Service
 	now time.Time
 }
@@ -35,12 +35,12 @@ type world struct {
 func newWorld(t *testing.T) *world {
 	t.Helper()
 	e := rt.New(t)
-	w := &world{Env: e, pg: pgdocktest.New(t), now: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)}
+	w := &world{Env: e, pg: xenibasetest.New(t), now: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)}
 	w.pg.Now = func() time.Time { return w.now }
 	// The platform's token: unrestricted, every scope, long-lived (a
 	// minted token never outlives its maker).
-	w.pg.AddToken(pgdocktest.Token{Secret: platformToken, ID: "tok-platform", Name: "taskiem-platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: w.now.Add(10 * 365 * 24 * time.Hour)})
-	if err := e.Registry.Register(pgdock.New(pgdock.Options{BaseURL: w.pg.URL})); err != nil {
+	w.pg.AddToken(xenibasetest.Token{Secret: platformToken, ID: "tok-platform", Name: "taskiem-platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: w.now.Add(10 * 365 * 24 * time.Hour)})
+	if err := e.Registry.Register(xenibase.New(xenibase.Options{BaseURL: w.pg.URL})); err != nil {
 		t.Fatal(err)
 	}
 	err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
@@ -118,7 +118,7 @@ func TestFirstTableProvisionsProject(t *testing.T) {
 			t.Errorf("request %d is %s, want %s", i, w.pg.Requests[i], pre)
 		}
 	}
-	var tok pgdocktest.Token
+	var tok xenibasetest.Token
 	for _, x := range w.pg.Tokens() {
 		if x.Name == datatables.TokenName {
 			tok = x
@@ -138,7 +138,7 @@ func TestFirstTableProvisionsProject(t *testing.T) {
 	var by string
 	var name string
 	err = db.InTenantTx(ctx, w.DB.App, []uuid.UUID{w.Tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT provisioned_by, name FROM connections WHERE id = $1 AND environment = 'prod' AND connector = 'pgdock'`, p.ConnectionID).Scan(&by, &name)
+		return tx.QueryRow(ctx, `SELECT provisioned_by, name FROM connections WHERE id = $1 AND environment = 'prod' AND connector = 'xenibase'`, p.ConnectionID).Scan(&by, &name)
 	})
 	if err != nil || by != datatables.ProvisionedBy || name != datatables.ConnectionName {
 		t.Fatalf("connection: %v %q %q", err, by, name)
@@ -149,7 +149,7 @@ func TestFirstTableProvisionsProject(t *testing.T) {
 		t.Fatalf("second call: %v %+v %v", err, again, w.pg.Requests[n:])
 	}
 	// The data API serves the project with the secret key.
-	conn, _ := w.Registry.Get("pgdock@1")
+	conn, _ := w.Registry.Get("xenibase@1")
 	if err := w.svc.Apply(ctx, w.Tenant, "test", datatables.CreateTableChange("debtors", []datatables.Column{{Name: "name", Type: "text", Required: true}, {Name: "phone", Type: "phone"}})); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestFirstTableProvisionsProject(t *testing.T) {
 // the same project rather than making another.
 func TestProvisioningResumesAfterCrash(t *testing.T) {
 	w := newWorld(t)
-	w.pg.Fail(pgdocktest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/projects/", Status: 500})
+	w.pg.Fail(xenibasetest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/projects/", Status: 500})
 	_, err := w.svc.EnsureProject(ctx, w.Tenant)
 	if err == nil {
 		t.Fatal("provisioning succeeded through a failed services call")
@@ -206,7 +206,7 @@ func TestProvisioningResumesAfterCrash(t *testing.T) {
 	// A record whose project was made but whose create answer was lost
 	// (no project id): the project is found by name, not made again.
 	w2 := newWorld(t)
-	w2.pg.Fail(pgdocktest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/projects", Status: 502, LoseAnswer: true})
+	w2.pg.Fail(xenibasetest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/projects", Status: 502, LoseAnswer: true})
 	if _, err := w2.svc.EnsureProject(ctx, w2.Tenant); err == nil {
 		t.Fatal("a lost create answer did not fail the request")
 	}
@@ -224,7 +224,7 @@ func TestProvisioningResumesAfterCrash(t *testing.T) {
 	// Services already on from an earlier attempt whose secret key was
 	// lost: a fresh key is minted rather than enabling again.
 	w3 := newWorld(t)
-	w3.pg.Fail(pgdocktest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/tokens", Status: 500})
+	w3.pg.Fail(xenibasetest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/tokens", Status: 500})
 	if _, err := w3.svc.EnsureProject(ctx, w3.Tenant); err == nil {
 		t.Fatal("a failed token call did not fail the request")
 	}
@@ -306,7 +306,7 @@ func TestTokenRenewal(t *testing.T) {
 		t.Fatalf("expiry not moved: %+v", st)
 	}
 	// Two tokens now carry the name; the connection holds the new one.
-	var tok pgdocktest.Token
+	var tok xenibasetest.Token
 	for _, x := range w.pg.Tokens() {
 		if x.Secret == creds["token"] {
 			tok = x
@@ -321,7 +321,7 @@ func TestTokenRenewal(t *testing.T) {
 	}
 	// A renewal that fails is logged and raised to the tenant once a day.
 	w.now = w.now.Add(352 * 24 * time.Hour)
-	w.pg.Fail(pgdocktest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/tokens", Status: 503})
+	w.pg.Fail(xenibasetest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/tokens", Status: 503})
 	if err := w.svc.RenewTick(ctx); err == nil {
 		t.Fatal("a refused token call did not fail the tick")
 	}
@@ -405,7 +405,7 @@ func TestSchemaPreviewApplyAndDrops(t *testing.T) {
 	if st, body := apply(creds["token"], map[string]any{"change": change, "hash": "stale", "confirm": "debtors"}); st != 409 || !strings.Contains(body, "stale_plan") {
 		t.Fatalf("stale hash: %d %s", st, body)
 	}
-	w.pg.AddToken(pgdocktest.Token{Secret: "xb_writer", Scopes: []string{"read", "write"}, ProjectIDs: []string{p.ProjectID}})
+	w.pg.AddToken(xenibasetest.Token{Secret: "xb_writer", Scopes: []string{"read", "write"}, ProjectIDs: []string{p.ProjectID}})
 	if st, body := apply("xb_writer", map[string]any{"change": change, "hash": preview.Hash, "confirm": "debtors"}); st != 403 || !strings.Contains(body, "insufficient_scope") {
 		t.Fatalf("drop without admin: %d %s", st, body)
 	}
@@ -431,7 +431,7 @@ func TestWorkflowReadsTableRows(t *testing.T) {
 	}
 	w.pg.Begin(p.ProjectID).Insert("debtors", map[string]any{"id": 1, "name": "Ada", "balance_kobo": 500000}).Insert("debtors", map[string]any{"id": 2, "name": "Bisi", "balance_kobo": 0}).Commit()
 	wf := w.Publish(t, `{"schema":"wd/v1","id":"wf_owing","version":1,"name":"owing","trigger":{"type":"manual"},
-	  "steps":[{"id":"read","type":"connector","connector":"pgdock@1","action":"read_rows","connection":"data_tables",
+	  "steps":[{"id":"read","type":"connector","connector":"xenibase@1","action":"read_rows","connection":"data_tables",
 	    "input":{"table":"debtors","filters":[{"column":"balance_kobo","op":"gt","value":0}]}}]}`)
 	ref := w.Start(t, wf, map[string]any{})
 	w.Drain(t)

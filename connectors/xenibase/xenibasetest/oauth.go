@@ -1,4 +1,4 @@
-package pgdocktest
+package xenibasetest
 
 // OAuth for third-party apps (Xenibase docs/oauth-apps.md, api/openapi.yaml
 // /api/v1/oauth/token and /revoke, read 17 October 2026): the exchange of

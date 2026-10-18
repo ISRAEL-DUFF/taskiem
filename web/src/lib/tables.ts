@@ -188,11 +188,11 @@ export function importError(header: string[], columns: Column[]): string | null 
 export function exampleStep(table: Table): string {
   const filter = table.columns.find((c) => c.type === "integer" || c.type === "number");
   const filters = filter ? `, "filters": [{"column": "${filter.name}", "op": "gt", "value": 0}]` : "";
-  return `{"id": "read_${table.name}", "type": "connector", "connector": "pgdock@1", "action": "read_rows",
+  return `{"id": "read_${table.name}", "type": "connector", "connector": "xenibase@1", "action": "read_rows",
  "connection": "${table.connection}", "input": {"table": "${table.name}"${filters}, "limit": 1000}}`;
 }
 
-/** The pgdock@1 actions a workflow uses on a table. */
+/** The xenibase@1 actions a workflow uses on a table. */
 export const TABLE_ACTIONS: { action: string; what: string }[] = [
   { action: "read_rows", what: "a page of rows by filters and order" },
   { action: "insert_rows", what: "add rows" },

@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/connectors/pgdock"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
@@ -540,7 +540,7 @@ func (s *Server) waTableInsert(ctx context.Context, c *chat) error {
 
 // tablesChatReason says, in a few words, why Xenibase refused a row.
 func tablesChatReason(err error) string {
-	var pe *pgdock.Error
+	var pe *xenibase.Error
 	var xe *datatables.Error
 	msg := "Xenibase could not be reached"
 	switch {

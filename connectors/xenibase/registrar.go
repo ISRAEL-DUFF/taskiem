@@ -1,4 +1,4 @@
-package pgdock
+package xenibase
 
 import (
 	"context"
@@ -84,7 +84,7 @@ func strs(v any) []string {
 func request(spec connector.RemoteSpec, update bool) (map[string]any, error) {
 	tables := strs(spec.Options["tables"])
 	if len(tables) == 0 {
-		return nil, fmt.Errorf("pgdock: the trigger names no tables: %w", effects.ErrFatal)
+		return nil, fmt.Errorf("xenibase: the trigger names no tables: %w", effects.ErrFatal)
 	}
 	var events []string
 	for _, e := range spec.Events {
@@ -130,7 +130,7 @@ func (r registrar) Create(ctx context.Context, c connector.RemoteCall, spec conn
 		return connector.RemoteState{}, err
 	}
 	if out.Webhook.ID == "" || out.Secret == "" {
-		return connector.RemoteState{}, fmt.Errorf("pgdock: the created webhook came back without its id or secret: %w", effects.ErrUnknownOutcome)
+		return connector.RemoteState{}, fmt.Errorf("xenibase: the created webhook came back without its id or secret: %w", effects.ErrUnknownOutcome)
 	}
 	st := out.Webhook.state()
 	st.Secret = out.Secret
@@ -203,7 +203,7 @@ func (r registrar) RotateSecret(ctx context.Context, c connector.RemoteCall, id 
 		return "", err
 	}
 	if out.Secret == "" {
-		return "", fmt.Errorf("pgdock: the rotated secret came back empty: %w", effects.ErrUnknownOutcome)
+		return "", fmt.Errorf("xenibase: the rotated secret came back empty: %w", effects.ErrUnknownOutcome)
 	}
 	return out.Secret, nil
 }
@@ -230,8 +230,8 @@ func (r registrar) Delete(ctx context.Context, c connector.RemoteCall, id string
 // management rows endpoint, so it may have changed since the event. The
 // event stays marked truncated, with refetched true and record set, or
 // refetched false and refetch_error saying why (the row is gone, the key
-// is not one PGDock sent as an object). A refusal worth retrying (429,
-// 503, a timeout) refuses the delivery, and PGDock sends it again.
+// is not one Xenibase sent as an object). A refusal worth retrying (429,
+// 503, a timeout) refuses the delivery, and Xenibase sends it again.
 func (c *client) enrich(ctx context.Context, call connector.EventCall, body any) (any, error) {
 	ev, ok := body.(map[string]any)
 	if !ok || ev["truncated"] != true {
@@ -297,7 +297,7 @@ func (c *client) rowByKey(ctx context.Context, creds map[string]string, hc *http
 		name = schema + "." + table
 	}
 	if !identRe.MatchString(name) {
-		return nil, false, fmt.Errorf("pgdock: %q is not a table: %w", name, effects.ErrFatal)
+		return nil, false, fmt.Errorf("xenibase: %q is not a table: %w", name, effects.ErrFatal)
 	}
 	var out struct {
 		Data map[string]any `json:"data"`

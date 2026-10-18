@@ -284,7 +284,7 @@ export interface TriggerInfo {
   remote?: RemoteSubscription;
 }
 
-/** A provider subscription Taskiem created for a trigger (a PGDock webhook). */
+/** A provider subscription Taskiem created for a trigger (a Xenibase webhook). */
 export interface RemoteSubscription {
   id: string;
   environment: string;

@@ -1,4 +1,4 @@
-package pgdocktest
+package xenibasetest
 
 // Provisioning (decision 0033, data tables), built from Xenibase's
 // api/openapi.yaml read 17 October 2026: POST /projects

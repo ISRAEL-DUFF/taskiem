@@ -67,7 +67,7 @@ auth:
     fields_from_token: { token: access_token, project_id: "project_ids[0]" }
 ```
 
-- `authorize_url`, `token_url` and `revoke_url` are `https://` URLs, or start with `${server}/` to be resolved from the connector's `base_url` (the platform's server for that provider, such as `TASKIEM_PGDOCK_URL`) when a connection is linked. A connector whose URLs need a server is not linkable on a platform that names none; a connection's own server (a self-hosted instance) is never used for OAuth, since Taskiem is not registered there.
+- `authorize_url`, `token_url` and `revoke_url` are `https://` URLs, or start with `${server}/` to be resolved from the connector's `base_url` (the platform's server for that provider, such as `TASKIEM_XENIBASE_URL`) when a connection is linked. A connector whose URLs need a server is not linkable on a platform that names none; a connection's own server (a self-hosted instance) is never used for OAuth, since Taskiem is not registered there.
 - `scopes` is what Taskiem asks for; the person may grant less.
 - `fields_from_token` fills auth fields from the token answer: a field of the answer (`access_token`, `org_id`), one element of a list field (`project_ids[0]`: the grant must then name exactly one, or the person is asked to connect again and choose one), or `${server}` for the server the token came from. Every required field must be filled this way, or a linked connection would be missing it. Optional fields the token does not fill (Xenibase's secret key and data API URL) are added afterwards from the Connections page (`PUT /v1/connections/{id}/credentials`).
 

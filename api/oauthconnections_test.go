@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/api"
-	"github.com/israel-duff/taskiem/connectors/pgdock"
-	"github.com/israel-duff/taskiem/connectors/pgdock/pgdocktest"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
+	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
@@ -28,29 +28,29 @@ const (
 
 type oauthWorld struct {
 	*world
-	fake *pgdocktest.Fake
+	fake *xenibasetest.Fake
 }
 
 // newOAuthWorld is a world whose platform Xenibase is the fake, with
 // Taskiem registered there as a client.
 func newOAuthWorld(t *testing.T) *oauthWorld {
 	w := newWorld(t)
-	f := pgdocktest.New(t)
+	f := xenibasetest.New(t)
 	f.AddProject(oauthProject, "shop")
 	f.AddProject(oauthOther, "blog")
-	if err := w.env.Registry.Register(pgdock.New(pgdock.Options{BaseURL: f.URL})); err != nil {
+	if err := w.env.Registry.Register(xenibase.New(xenibase.Options{BaseURL: f.URL})); err != nil {
 		t.Fatal(err)
 	}
 	w.srv.PublicURL = w.base
-	w.srv.OAuthClients = map[string]api.OAuthClient{"pgdock": {ID: "xbapp_taskiem", Secret: "xbc_secret"}}
-	f.RegisterOAuthClient(pgdocktest.OAuthClient{ID: "xbapp_taskiem", Secret: "xbc_secret", RedirectURI: w.base + "/v1/connections/oauth/callback"})
+	w.srv.OAuthClients = map[string]api.OAuthClient{"xenibase": {ID: "xbapp_taskiem", Secret: "xbc_secret"}}
+	f.RegisterOAuthClient(xenibasetest.OAuthClient{ID: "xbapp_taskiem", Secret: "xbc_secret", RedirectURI: w.base + "/v1/connections/oauth/callback"})
 	return &oauthWorld{world: w, fake: f}
 }
 
 // start begins linking and returns the consent URL's query.
 func (w *oauthWorld) start(t *testing.T, c *client, name string) url.Values {
 	t.Helper()
-	out := c.must(200, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "pgdock@1", "environment": "prod", "name": name})
+	out := c.must(200, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "xenibase@1", "environment": "prod", "name": name})
 	u, err := url.Parse(out["url"].(string))
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +87,7 @@ func (w *oauthWorld) callback(t *testing.T, params url.Values) url.Values {
 func (w *oauthWorld) link(t *testing.T, c *client, name, code string) string {
 	t.Helper()
 	q := w.start(t, c, name)
-	w.fake.AddOAuthCode(pgdocktest.OAuthCode{Code: code, Challenge: q.Get("code_challenge"), Scopes: []string{"read", "write"}, ProjectIDs: []string{oauthProject}})
+	w.fake.AddOAuthCode(xenibasetest.OAuthCode{Code: code, Challenge: q.Get("code_challenge"), Scopes: []string{"read", "write"}, ProjectIDs: []string{oauthProject}})
 	back := w.callback(t, url.Values{"code": {code}, "state": {q.Get("state")}})
 	if back.Get("linked") == "" {
 		t.Fatalf("not linked: %s", back.Get("error"))
@@ -102,8 +102,8 @@ func TestOAuthConnection(t *testing.T) {
 
 	// The connector says it is linkable here.
 	for _, c := range owner.must(200, "GET", "/v1/connectors", nil)["connectors"].([]any) {
-		if c := c.(map[string]any); c["ref"] == "pgdock@1" && c["oauth_linkable"] != true {
-			t.Fatalf("pgdock@1 is not linkable: %v", c["oauth_linkable"])
+		if c := c.(map[string]any); c["ref"] == "xenibase@1" && c["oauth_linkable"] != true {
+			t.Fatalf("xenibase@1 is not linkable: %v", c["oauth_linkable"])
 		}
 	}
 
@@ -113,7 +113,7 @@ func TestOAuthConnection(t *testing.T) {
 		t.Fatalf("consent query: %v", q)
 	}
 	// What the person approved: the organisation, both scopes, one project.
-	w.fake.AddOAuthCode(pgdocktest.OAuthCode{Code: "code-1", Challenge: q.Get("code_challenge"), Scopes: []string{"read", "write"}, ProjectIDs: []string{oauthProject}, ExpiresIn: 7776000})
+	w.fake.AddOAuthCode(xenibasetest.OAuthCode{Code: "code-1", Challenge: q.Get("code_challenge"), Scopes: []string{"read", "write"}, ProjectIDs: []string{oauthProject}, ExpiresIn: 7776000})
 	back := w.callback(t, url.Values{"code": {"code-1"}, "state": {q.Get("state")}})
 	id := back.Get("linked")
 	if id == "" {
@@ -127,12 +127,12 @@ func TestOAuthConnection(t *testing.T) {
 			listed = c
 		}
 	}
-	if listed == nil || listed["connector"] != "pgdock" || listed["name"] != "shop" || listed["auth_type"] != "oauth2" || listed["status"] != "active" || listed["expires_at"] == nil {
+	if listed == nil || listed["connector"] != "xenibase" || listed["name"] != "shop" || listed["auth_type"] != "oauth2" || listed["status"] != "active" || listed["expires_at"] == nil {
 		t.Fatalf("listed: %v", listed)
 	}
 	// Its credentials are the token and what the manifest takes from the
 	// token answer: the organisation, the one project, the server.
-	creds, err := w.env.Vault.Credentials(context.Background(), tenant, "prod", "pgdock", "shop")
+	creds, err := w.env.Vault.Credentials(context.Background(), tenant, "prod", "xenibase", "shop")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestOAuthConnection(t *testing.T) {
 	token := creds["token"]
 	// The connection test works with them (less the server: the fake is
 	// plain http, which the connector takes only as the platform's own).
-	c, _ := w.env.Registry.Get("pgdock@1")
+	c, _ := w.env.Registry.Get("xenibase@1")
 	usable := map[string]string{}
 	for k, v := range creds {
 		if k != "base_url" {
@@ -169,7 +169,7 @@ func TestOAuthConnection(t *testing.T) {
 	owner.must(400, "PUT", "/v1/connections/"+id+"/credentials", map[string]any{"credentials": map[string]string{"token": ""}})
 	owner.must(204, "PUT", "/v1/connections/"+id+"/credentials", map[string]any{"credentials": map[string]string{"secret_key": "xb_sec_shop", "api_url": w.fake.APIURL(oauthProject)}})
 	owner.must(404, "PUT", "/v1/connections/"+uuid.Must(uuid.NewV7()).String()+"/credentials", map[string]any{"credentials": map[string]string{"secret_key": "x"}})
-	creds, err = w.env.Vault.Credentials(context.Background(), tenant, "prod", "pgdock", "shop")
+	creds, err = w.env.Vault.Credentials(context.Background(), tenant, "prod", "xenibase", "shop")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestOAuthConnection(t *testing.T) {
 	// A deployed workflow naming the connection stops a delete, unless
 	// forced; deleting revokes the token at Xenibase.
 	wf := publishFlow(t, owner, `{"schema":"wd/v1","id":"wf_rows","version":1,"name":"rows","trigger":{"type":"manual"},
-	  "steps":[{"id":"q","type":"connector","connector":"pgdock@1","action":"query_rows","connection":"shop","input":{"table":"orders"}}]}`)
+	  "steps":[{"id":"q","type":"connector","connector":"xenibase@1","action":"query_rows","connection":"shop","input":{"table":"orders"}}]}`)
 	st, out := owner.do("DELETE", "/v1/connections/"+id, nil)
 	if st != 409 || out["code"] != "in_use" || !strings.Contains(toJSON(out["workflows"]), wf) || !strings.Contains(toJSON(out["workflows"]), `"prod"`) {
 		t.Fatalf("delete in use: %d %v", st, out)
@@ -195,7 +195,7 @@ func TestOAuthConnection(t *testing.T) {
 			t.Fatal("deleted connection still listed")
 		}
 	}
-	if _, err := w.env.Vault.Credentials(context.Background(), tenant, "prod", "pgdock", "shop"); err == nil {
+	if _, err := w.env.Vault.Credentials(context.Background(), tenant, "prod", "xenibase", "shop"); err == nil {
 		t.Fatal("credentials survive the delete")
 	}
 
@@ -241,7 +241,7 @@ func TestOAuthConnectionRefusals(t *testing.T) {
 	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE oauth_connection_requests SET expires_at = now() - interval '1 second'`); err != nil {
 		t.Fatal(err)
 	}
-	w.fake.AddOAuthCode(pgdocktest.OAuthCode{Code: "code-late", Challenge: q.Get("code_challenge"), Scopes: []string{"read"}, ProjectIDs: []string{oauthProject}})
+	w.fake.AddOAuthCode(xenibasetest.OAuthCode{Code: "code-late", Challenge: q.Get("code_challenge"), Scopes: []string{"read"}, ProjectIDs: []string{oauthProject}})
 	if back := w.callback(t, url.Values{"code": {"code-late"}, "state": {q.Get("state")}}); !strings.Contains(back.Get("error"), "expired") {
 		t.Fatalf("expired state: %q", back.Get("error"))
 	}
@@ -256,7 +256,7 @@ func TestOAuthConnectionRefusals(t *testing.T) {
 	// two are refused, and the token given back.
 	for name, projects := range map[string][]string{"all": nil, "two": {oauthProject, oauthOther}} {
 		q = w.start(t, owner, name)
-		w.fake.AddOAuthCode(pgdocktest.OAuthCode{Code: "code-" + name, Challenge: q.Get("code_challenge"), Scopes: []string{"read", "write"}, ProjectIDs: projects})
+		w.fake.AddOAuthCode(xenibasetest.OAuthCode{Code: "code-" + name, Challenge: q.Get("code_challenge"), Scopes: []string{"read", "write"}, ProjectIDs: projects})
 		back := w.callback(t, url.Values{"code": {"code-" + name}, "state": {q.Get("state")}})
 		if e := back.Get("error"); !strings.Contains(e, "choose exactly one") || back.Get("linked") != "" {
 			t.Fatalf("%s projects: linked %q, error %q", name, back.Get("linked"), e)
@@ -276,8 +276,8 @@ func TestOAuthConnectionRefusals(t *testing.T) {
 	owner.must(204, "DELETE", "/v1/connections/"+id, nil)
 
 	// A name already taken is refused at the start, not after consent.
-	owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "pgdock@1", "name": "pasted", "credentials": map[string]string{"token": "pgd_x", "project_id": oauthProject}})
-	owner.must(409, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "pgdock@1", "environment": "prod", "name": "pasted"})
+	owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "xenibase@1", "name": "pasted", "credentials": map[string]string{"token": "pgd_x", "project_id": oauthProject}})
+	owner.must(409, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "xenibase@1", "environment": "prod", "name": "pasted"})
 	// A connector without OAuth, and an unknown one.
 	owner.must(400, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "fakepay@1", "environment": "prod"})
 	owner.must(400, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "nope@1", "environment": "prod"})
@@ -285,19 +285,19 @@ func TestOAuthConnectionRefusals(t *testing.T) {
 	// Without a client registered the connector is not linkable, and the
 	// API says so.
 	w.srv.OAuthClients = nil
-	st, out := owner.do("POST", "/v1/connections/oauth/start", map[string]any{"connector": "pgdock@1", "environment": "prod", "name": "later"})
-	if st != 503 || out["code"] != "oauth_unavailable" || !strings.Contains(out["error"].(string), "TASKIEM_OAUTH_PGDOCK_CLIENT_ID") {
+	st, out := owner.do("POST", "/v1/connections/oauth/start", map[string]any{"connector": "xenibase@1", "environment": "prod", "name": "later"})
+	if st != 503 || out["code"] != "oauth_unavailable" || !strings.Contains(out["error"].(string), "TASKIEM_OAUTH_XENIBASE_CLIENT_ID") {
 		t.Fatalf("no client: %d %v", st, out)
 	}
 	for _, c := range owner.must(200, "GET", "/v1/connectors", nil)["connectors"].([]any) {
-		if c := c.(map[string]any); c["ref"] == "pgdock@1" && c["oauth_linkable"] != false {
-			t.Fatalf("pgdock@1 linkable without a client: %v", c["oauth_linkable"])
+		if c := c.(map[string]any); c["ref"] == "xenibase@1" && c["oauth_linkable"] != false {
+			t.Fatalf("xenibase@1 linkable without a client: %v", c["oauth_linkable"])
 		}
 	}
 
 	// A member without connection.manage may not start.
 	viewer := addMember(t, w.world, owner, "viewer", "viewer")
-	viewer.must(403, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "pgdock@1", "environment": "prod"})
+	viewer.must(403, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "xenibase@1", "environment": "prod"})
 }
 
 // connectorRequest is a connector call with the credentials, as a test

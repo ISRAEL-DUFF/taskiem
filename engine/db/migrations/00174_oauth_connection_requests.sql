@@ -22,7 +22,7 @@ CREATE TABLE oauth_connection_requests (
   tenant_id     uuid NOT NULL REFERENCES tenants(id),
   state_hash    bytea NOT NULL UNIQUE CHECK (length(state_hash) = 32),  -- SHA-256 of the state the browser carries
   person        text NOT NULL,                                          -- the actor who started it
-  connector     text NOT NULL,                                          -- id@major, e.g. pgdock@1
+  connector     text NOT NULL,                                          -- id@major, e.g. xenibase@1
   environment   text NOT NULL,
   name          text NOT NULL,
   verifier      bytea NOT NULL,                                         -- PKCE code verifier, sealed

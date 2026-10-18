@@ -102,7 +102,7 @@ func connectorByID(reg connector.Lookup, id string) (*connector.Connector, bool)
 }
 
 type oauthStartReq struct {
-	Connector   string `json:"connector"` // "pgdock@1"
+	Connector   string `json:"connector"` // "xenibase@1"
 	Environment string `json:"environment"`
 	Name        string `json:"name"`
 }

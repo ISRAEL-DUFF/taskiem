@@ -1,4 +1,4 @@
-package pgdocktest
+package xenibasetest
 
 // The data API (Xenibase docs/backend-services.md, read 17 October 2026:
 // Keys, Reading data, Writing data, Retrying writes safely:

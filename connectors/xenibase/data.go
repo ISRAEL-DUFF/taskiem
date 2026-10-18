@@ -1,4 +1,4 @@
-package pgdock
+package xenibase
 
 // The project's data API (Xenibase docs/backend-services.md, read
 // 17 October 2026: Keys, Reading data, Writing data, Retrying writes
@@ -47,18 +47,18 @@ const keyWindow = 24 * time.Hour
 func dataAPI(creds map[string]string) (base, key string, err error) {
 	key = strings.TrimSpace(creds["secret_key"])
 	if key == "" {
-		return "", "", fmt.Errorf("pgdock: the connection has no project secret key (xb_sec_…), which writes, functions and read_rows need: %w", effects.ErrFatal)
+		return "", "", fmt.Errorf("xenibase: the connection has no project secret key (xb_sec_…), which writes, functions and read_rows need: %w", effects.ErrFatal)
 	}
 	base = strings.TrimRight(strings.TrimSpace(creds["api_url"]), "/")
 	if base == "" {
-		return "", "", fmt.Errorf("pgdock: the connection has no data API URL (https://<ref>.<api-domain>, on the project's API page): %w", effects.ErrFatal)
+		return "", "", fmt.Errorf("xenibase: the connection has no data API URL (https://<ref>.<api-domain>, on the project's API page): %w", effects.ErrFatal)
 	}
 	u, perr := url.Parse(base)
 	if perr != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return "", "", fmt.Errorf("pgdock: the connection's data API URL must be https://host: %w", effects.ErrFatal)
+		return "", "", fmt.Errorf("xenibase: the connection's data API URL must be https://host: %w", effects.ErrFatal)
 	}
 	if u.Scheme != "https" && (u.Scheme != "http" || !loopback(u.Hostname())) {
-		return "", "", fmt.Errorf("pgdock: the connection's data API URL must be https://host: %w", effects.ErrFatal)
+		return "", "", fmt.Errorf("xenibase: the connection's data API URL must be https://host: %w", effects.ErrFatal)
 	}
 	return base, key, nil
 }
@@ -84,7 +84,7 @@ func (c *client) doData(ctx context.Context, req connector.Request, method, path
 	if write && req.IdempotencyKey != "" && req.Attempt > 1 && !req.KeyFirstSent.IsZero() && time.Since(req.KeyFirstSent) > keyWindow {
 		// Xenibase forgets the key after a day; sending it again could
 		// run the write twice. The earlier attempt may have committed.
-		return false, fmt.Errorf("pgdock: the idempotency key was first sent over 24 hours ago, as long as Xenibase keeps it; an earlier attempt may have written, so check the table before running this step again: %w", effects.ErrFatal)
+		return false, fmt.Errorf("xenibase: the idempotency key was first sent over 24 hours ago, as long as Xenibase keeps it; an earlier attempt may have written, so check the table before running this step again: %w", effects.ErrFatal)
 	}
 	target := base + path
 	if len(q) > 0 {
@@ -94,7 +94,7 @@ func (c *client) doData(ctx context.Context, req connector.Request, method, path
 	if body != nil {
 		raw, err := json.Marshal(body)
 		if err != nil {
-			return false, fmt.Errorf("pgdock: encode request: %w: %w", err, effects.ErrFatal)
+			return false, fmt.Errorf("xenibase: encode request: %w: %w", err, effects.ErrFatal)
 		}
 		rd = bytes.NewReader(raw)
 	}
@@ -121,7 +121,7 @@ func (c *client) doData(ctx context.Context, req connector.Request, method, path
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxDataBody+1))
 	if err != nil {
-		return false, fmt.Errorf("pgdock: read response: %w: %w", err, effects.ErrUnknownOutcome)
+		return false, fmt.Errorf("xenibase: read response: %w: %w", err, effects.ErrUnknownOutcome)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var ra time.Duration
@@ -131,13 +131,13 @@ func (c *client) doData(ctx context.Context, req connector.Request, method, path
 		return false, mapDataError(resp.StatusCode, raw, ra)
 	}
 	if len(raw) > maxDataBody {
-		return false, fmt.Errorf("pgdock: the answer is over 10 MB; ask for fewer rows or columns: %w", effects.ErrFatal)
+		return false, fmt.Errorf("xenibase: the answer is over 10 MB; ask for fewer rows or columns: %w", effects.ErrFatal)
 	}
 	replayed = strings.EqualFold(resp.Header.Get("Idempotent-Replayed"), "true")
 	if out != nil && len(bytes.TrimSpace(raw)) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {
 			// Xenibase acted but the answer cannot be read.
-			return replayed, fmt.Errorf("pgdock: decode response: %w: %w", err, effects.ErrUnknownOutcome)
+			return replayed, fmt.Errorf("xenibase: decode response: %w: %w", err, effects.ErrUnknownOutcome)
 		}
 	}
 	return replayed, nil
@@ -318,7 +318,7 @@ func orderText(order []any) (string, error) {
 // --- inputs ---
 
 func fatal(format string, args ...any) error {
-	return fmt.Errorf("pgdock: "+format+": %w", append(args, effects.ErrFatal)...)
+	return fmt.Errorf("xenibase: "+format+": %w", append(args, effects.ErrFatal)...)
 }
 
 // dataTable reads the action's table (table, or schema.table) for the path.

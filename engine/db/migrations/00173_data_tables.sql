@@ -3,7 +3,7 @@
 -- A data table is a Postgres table in a Xenibase project, plus Taskiem's
 -- record of it here: its name, title, columns (a small list of types, a
 -- required flag, a personal-data flag) and nothing else. The rows live
--- only in Xenibase and are read and written through the pgdock@1
+-- only in Xenibase and are read and written through the xenibase@1
 -- connection named data_tables in prod.
 --
 -- data_table_projects is the organisation's Xenibase project: the one

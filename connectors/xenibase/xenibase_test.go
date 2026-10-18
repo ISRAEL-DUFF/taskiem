@@ -1,4 +1,4 @@
-package pgdock_test
+package xenibase_test
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/israel-duff/taskiem/connectors/pgdock"
-	"github.com/israel-duff/taskiem/connectors/pgdock/pgdocktest"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
+	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 )
@@ -24,15 +24,15 @@ const (
 	secret  = "xb_sec_test_shop"
 )
 
-func setup(t *testing.T) (*pgdocktest.Fake, *connector.Connector, map[string]string) {
+func setup(t *testing.T) (*xenibasetest.Fake, *connector.Connector, map[string]string) {
 	t.Helper()
-	f := pgdocktest.New(t)
+	f := xenibasetest.New(t)
 	f.AddProject(project, "shop")
 	f.AddProject(other, "blog")
 	f.AddTable(project, "orders", []string{"id"}, "id", "customer", "phone", "status", "total")
-	f.AddToken(pgdocktest.Token{Secret: token, ID: "tok-1", Name: "taskiem", Scopes: []string{"read", "write"}, ProjectIDs: []string{project}})
+	f.AddToken(xenibasetest.Token{Secret: token, ID: "tok-1", Name: "taskiem", Scopes: []string{"read", "write"}, ProjectIDs: []string{project}})
 	f.AddSecretKey(project, secret)
-	c := pgdock.New(pgdock.Options{BaseURL: f.URL})
+	c := xenibase.New(xenibase.Options{BaseURL: f.URL})
 	return f, c, map[string]string{"token": token, "project_id": project, "secret_key": secret, "api_url": f.APIURL(project)}
 }
 
@@ -60,12 +60,12 @@ var writeActions = []string{"insert_rows", "upsert_rows", "update_rows", "delete
 
 func TestManifest(t *testing.T) {
 	reg := connector.NewRegistry()
-	if err := reg.Register(pgdock.New(pgdock.Options{BaseURL: "https://pgdock.example.com"})); err != nil {
+	if err := reg.Register(xenibase.New(xenibase.Options{BaseURL: "https://xenibase.example.com"})); err != nil {
 		t.Fatal(err)
 	}
-	c, ok := reg.Get("pgdock@1")
+	c, ok := reg.Get("xenibase@1")
 	if !ok {
-		t.Fatal("pgdock@1 not registered")
+		t.Fatal("xenibase@1 not registered")
 	}
 	if c.Manifest.Name != "Xenibase" || c.Manifest.Version != "1.1.0" {
 		t.Errorf("name %q version %q", c.Manifest.Name, c.Manifest.Version)
@@ -93,10 +93,10 @@ func TestManifest(t *testing.T) {
 		t.Errorf("row_changed: %+v", tr)
 	}
 	hosts := c.Manifest.HostsFor(map[string]string{"base_url": "https://db.acme.example", "api_url": "https://k7f3m2q9.api.xenibase.ng"})
-	if !slices.Equal(hosts, []string{"pgdock.example.com", "db.acme.example", "k7f3m2q9.api.xenibase.ng"}) {
+	if !slices.Equal(hosts, []string{"xenibase.example.com", "db.acme.example", "k7f3m2q9.api.xenibase.ng"}) {
 		t.Errorf("hosts %v", hosts)
 	}
-	if h := pgdock.New(pgdock.Options{}).Manifest.HostsFor(nil); len(h) != 0 {
+	if h := xenibase.New(xenibase.Options{}).Manifest.HostsFor(nil); len(h) != 0 {
 		t.Errorf("no platform Xenibase and no server URL still reaches %v", h)
 	}
 	var fields []string
@@ -135,7 +135,7 @@ func TestConnectionTestNamesOrganisationAndProjects(t *testing.T) {
 	}
 
 	// A token for every project, without write, close to expiry: warned.
-	f.AddToken(pgdocktest.Token{Secret: "pgd_wide", Scopes: []string{"read"}, ExpiresAt: time.Now().Add(48 * time.Hour)})
+	f.AddToken(xenibasetest.Token{Secret: "pgd_wide", Scopes: []string{"read"}, ExpiresAt: time.Now().Add(48 * time.Hour)})
 	wide := map[string]string{"token": "pgd_wide", "project_id": project, "secret_key": secret, "api_url": f.APIURL(project)}
 	out, err = call(t, c, wide, "test_connection", nil)
 	if err != nil {
@@ -165,11 +165,11 @@ func TestConnectionTestNamesOrganisationAndProjects(t *testing.T) {
 	if w := warnings(map[string]string{"token": token, "project_id": project}); !strings.Contains(w, "no data API URL") || !strings.Contains(w, "no project secret key") {
 		t.Errorf("no data API fields: %q", w)
 	}
-	f.AddToken(pgdocktest.Token{Secret: "pgd_blog", Scopes: []string{"read", "write"}, ProjectIDs: []string{other}})
+	f.AddToken(xenibasetest.Token{Secret: "pgd_blog", Scopes: []string{"read", "write"}, ProjectIDs: []string{other}})
 	if w := warnings(map[string]string{"token": "pgd_blog", "project_id": other, "secret_key": "xb_sec_x", "api_url": "https://x.api.xenibase.ng"}); !strings.Contains(w, "backend services are off") {
 		t.Errorf("services off: %q", w)
 	}
-	f.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/" + project + "/services", Status: 503, RetryAfter: 10})
+	f.Fail(xenibasetest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/" + project + "/services", Status: 503, RetryAfter: 10})
 	if w := warnings(creds); !strings.Contains(w, "could not read the project's backend services") {
 		t.Errorf("services unavailable: %q", w)
 	}
@@ -186,19 +186,19 @@ func TestConnectionTestNamesOrganisationAndProjects(t *testing.T) {
 	}
 	// A bad token.
 	_, err = call(t, c, map[string]string{"token": "pgd_nope", "project_id": project}, "test_connection", nil)
-	var pe *pgdock.Error
-	if !errors.As(err, &pe) || pe.Class != pgdock.ClassAuth || effects.Classify(err) != effects.KindFatal {
+	var pe *xenibase.Error
+	if !errors.As(err, &pe) || pe.Class != xenibase.ClassAuth || effects.Classify(err) != effects.KindFatal {
 		t.Errorf("bad token: %v", err)
 	}
 }
 
 func TestServerURL(t *testing.T) {
 	_, _, creds := setup(t)
-	none := pgdock.New(pgdock.Options{})
+	none := xenibase.New(xenibase.Options{})
 	if _, err := call(t, none, creds, "test_connection", nil); effects.Classify(err) != effects.KindFatal || !strings.Contains(err.Error(), "no Xenibase server") {
 		t.Errorf("no server: %v", err)
 	}
-	creds["base_url"] = "http://pgdock.internal"
+	creds["base_url"] = "http://xenibase.internal"
 	if _, err := call(t, none, creds, "test_connection", nil); effects.Classify(err) != effects.KindFatal || !strings.Contains(err.Error(), "https") {
 		t.Errorf("plain http: %v", err)
 	}
@@ -284,36 +284,36 @@ func TestErrorMapping(t *testing.T) {
 	q := map[string]any{"table": "orders"}
 	rows := "/api/v1/projects/" + project + "/tables/"
 	for _, tc := range []struct {
-		fail  pgdocktest.Failure
+		fail  xenibasetest.Failure
 		class string
 		kind  effects.ErrorKind
 		retry time.Duration
 	}{
-		{pgdocktest.Failure{Status: 429, RetryAfter: 30}, pgdock.ClassRateLimited, effects.KindRetryable, 30 * time.Second},
-		{pgdocktest.Failure{Status: 503, RetryAfter: 5}, pgdock.ClassUnavailable, effects.KindRetryable, 5 * time.Second},
-		{pgdocktest.Failure{Status: 500}, pgdock.ClassServer, effects.KindUnknownOutcome, 0},
-		{pgdocktest.Failure{Status: 504}, pgdock.ClassTimeout, effects.KindUnknownOutcome, 0},
-		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "invalid_filter", "message": "no column x"}}, pgdock.ClassValidation, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 401}, pgdock.ClassAuth, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 403, Body: map[string]any{"code": "reauth_required", "message": "re-authenticate"}}, pgdock.ClassPermission, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 404}, pgdock.ClassNotFound, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 409}, pgdock.ClassConflict, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 402, Body: map[string]any{"code": "quota_exceeded", "message": "over", "quota": map[string]any{"name": "rows"}}}, pgdock.ClassQuota, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "40001", "message": "could not serialise access"}}}, pgdock.ClassConflict, effects.KindRetryable, 0},
-		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "40P01", "message": "deadlock"}}}, pgdock.ClassConflict, effects.KindRetryable, 0},
-		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "57014", "message": "canceling statement due to statement timeout"}}}, pgdock.ClassTimeout, effects.KindRetryable, 0},
-		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "23505", "message": "duplicate key"}}}, pgdock.ClassConflict, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "42501", "message": "permission denied"}}}, pgdock.ClassPermission, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 500, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "53300", "message": "too many connections"}}}, pgdock.ClassUnavailable, effects.KindRetryable, 0},
+		{xenibasetest.Failure{Status: 429, RetryAfter: 30}, xenibase.ClassRateLimited, effects.KindRetryable, 30 * time.Second},
+		{xenibasetest.Failure{Status: 503, RetryAfter: 5}, xenibase.ClassUnavailable, effects.KindRetryable, 5 * time.Second},
+		{xenibasetest.Failure{Status: 500}, xenibase.ClassServer, effects.KindUnknownOutcome, 0},
+		{xenibasetest.Failure{Status: 504}, xenibase.ClassTimeout, effects.KindUnknownOutcome, 0},
+		{xenibasetest.Failure{Status: 400, Body: map[string]any{"code": "invalid_filter", "message": "no column x"}}, xenibase.ClassValidation, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 401}, xenibase.ClassAuth, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 403, Body: map[string]any{"code": "reauth_required", "message": "re-authenticate"}}, xenibase.ClassPermission, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 404}, xenibase.ClassNotFound, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 409}, xenibase.ClassConflict, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 402, Body: map[string]any{"code": "quota_exceeded", "message": "over", "quota": map[string]any{"name": "rows"}}}, xenibase.ClassQuota, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "40001", "message": "could not serialise access"}}}, xenibase.ClassConflict, effects.KindRetryable, 0},
+		{xenibasetest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "40P01", "message": "deadlock"}}}, xenibase.ClassConflict, effects.KindRetryable, 0},
+		{xenibasetest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "57014", "message": "canceling statement due to statement timeout"}}}, xenibase.ClassTimeout, effects.KindRetryable, 0},
+		{xenibasetest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "23505", "message": "duplicate key"}}}, xenibase.ClassConflict, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 400, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "42501", "message": "permission denied"}}}, xenibase.ClassPermission, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 500, Body: map[string]any{"code": "sql_error", "message": "", "sql_error": map[string]any{"code": "53300", "message": "too many connections"}}}, xenibase.ClassUnavailable, effects.KindRetryable, 0},
 	} {
 		tc.fail.Method, tc.fail.PathPrefix = http.MethodGet, rows
 		f.Fail(tc.fail)
 		_, err := call(t, c, creds, "query_rows", q)
-		var pe *pgdock.Error
+		var pe *xenibase.Error
 		if !errors.As(err, &pe) || pe.Class != tc.class || effects.Classify(err) != tc.kind || pe.RetryAfterDelay() != tc.retry {
 			t.Errorf("%d %v: %v (class %v, kind %v)", tc.fail.Status, tc.fail.Body, err, pe, effects.Classify(err))
 		}
-		if pe != nil && pe.Class == pgdock.ClassNotFound && !errors.Is(err, connector.ErrNotFound) {
+		if pe != nil && pe.Class == xenibase.ClassNotFound && !errors.Is(err, connector.ErrNotFound) {
 			t.Error("a 404 does not read as not found")
 		}
 	}
@@ -326,11 +326,11 @@ func TestRevokedTokenReadsAsRejected(t *testing.T) {
 	f, c, creds := setup(t)
 	f.RevokeToken(token)
 	_, err := call(t, c, creds, "test_connection", map[string]any{})
-	var pe *pgdock.Error
-	if !errors.As(err, &pe) || pe.Class != pgdock.ClassAuth || pe.Code != "invalid_token" || !errors.Is(err, connector.ErrCredentialsRejected) || effects.Classify(err) != effects.KindFatal {
+	var pe *xenibase.Error
+	if !errors.As(err, &pe) || pe.Class != xenibase.ClassAuth || pe.Code != "invalid_token" || !errors.Is(err, connector.ErrCredentialsRejected) || effects.Classify(err) != effects.KindFatal {
 		t.Fatalf("revoked token: %v", err)
 	}
-	f.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/me", Status: 401, Body: map[string]any{"code": "unauthenticated", "message": "no token"}})
+	f.Fail(xenibasetest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/me", Status: 401, Body: map[string]any{"code": "unauthenticated", "message": "no token"}})
 	if _, err := call(t, c, creds, "test_connection", map[string]any{}); errors.Is(err, connector.ErrCredentialsRejected) {
 		t.Fatalf("a 401 without invalid_token reads as rejected credentials: %v", err)
 	}
@@ -419,10 +419,10 @@ func TestRegistrar(t *testing.T) {
 		t.Errorf("update after delete: %v", err)
 	}
 	// Without the write scope Xenibase refuses: a permission error.
-	f.AddToken(pgdocktest.Token{Secret: "pgd_ro", Scopes: []string{"read"}, ProjectIDs: []string{project}})
+	f.AddToken(xenibasetest.Token{Secret: "pgd_ro", Scopes: []string{"read"}, ProjectIDs: []string{project}})
 	_, err = reg.Create(ctx, connector.RemoteCall{Credentials: map[string]string{"token": "pgd_ro", "project_id": project}, HTTP: http.DefaultClient}, spec("taskiem-2", "https://hooks.example/x"))
-	var pe *pgdock.Error
-	if !errors.As(err, &pe) || pe.Class != pgdock.ClassPermission {
+	var pe *xenibase.Error
+	if !errors.As(err, &pe) || pe.Class != xenibase.ClassPermission {
 		t.Errorf("read-only token: %v", err)
 	}
 	if _, err := reg.Create(ctx, rc, connector.RemoteSpec{Name: "x", URL: "https://h"}); effects.Classify(err) != effects.KindFatal {
@@ -480,7 +480,7 @@ func TestEnrichTruncated(t *testing.T) {
 		}
 	}
 	// Xenibase busy: the delivery is refused, so Xenibase sends it again.
-	f.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/edge/", Status: 503})
+	f.Fail(xenibasetest.Failure{Method: http.MethodGet, PathPrefix: "/edge/", Status: 503})
 	if _, err := enrich(ctx, call(on), ev("UPDATE", map[string]any{"id": float64(9)})); effects.Classify(err) != effects.KindRetryable {
 		t.Errorf("busy: %v", err)
 	}
@@ -491,7 +491,7 @@ func TestEnrichTruncated(t *testing.T) {
 	if m := out.(map[string]any); err != nil || m["refetched"] != true || m["record"].(map[string]any)["customer"] != "ada" || !strings.Contains(f.Requests[n], "/tables/public/orders/rows") {
 		t.Errorf("fallback: %v %v %v", out, err, f.Requests[n:])
 	}
-	f.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/", Status: 503})
+	f.Fail(xenibasetest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/", Status: 503})
 	if _, err := enrich(ctx, call(on), ev("UPDATE", map[string]any{"id": float64(9)})); effects.Classify(err) != effects.KindRetryable {
 		t.Errorf("busy on the rows endpoint: %v", err)
 	}
@@ -499,7 +499,7 @@ func TestEnrichTruncated(t *testing.T) {
 
 // --- the data API ---
 
-func seedOrders(f *pgdocktest.Fake) {
+func seedOrders(f *xenibasetest.Fake) {
 	tx := f.Begin(project)
 	for i, st := range []string{"new", "paid", "paid", "new", "paid"} {
 		row := map[string]any{"id": i + 1, "customer": "c" + string(rune('a'+i)), "status": st, "total": (i + 1) * 1000}
@@ -559,8 +559,8 @@ func TestReadRows(t *testing.T) {
 	}
 	// Unknown columns are Xenibase's refusal: fatal.
 	_, err = call(t, c, creds, "read_rows", map[string]any{"table": "orders", "filters": []any{map[string]any{"column": "nope", "op": "eq", "value": 1}}})
-	var pe *pgdock.Error
-	if !errors.As(err, &pe) || pe.Code != "unknown_column" || pe.Class != pgdock.ClassValidation || effects.Classify(err) != effects.KindFatal {
+	var pe *xenibase.Error
+	if !errors.As(err, &pe) || pe.Code != "unknown_column" || pe.Class != xenibase.ClassValidation || effects.Classify(err) != effects.KindFatal {
 		t.Errorf("unknown column: %v", err)
 	}
 	// Bad input is refused before anything is sent.
@@ -611,8 +611,8 @@ func TestInsertRows(t *testing.T) {
 	}
 	// A duplicate key is a conflict, fatal, with the SQLSTATE in details.
 	_, err = write(t, c, creds, "insert_rows", "tsk-k3", 1, map[string]any{"table": "orders", "row": map[string]any{"id": float64(7)}})
-	var pe *pgdock.Error
-	if !errors.As(err, &pe) || pe.Code != "unique_violation" || pe.Class != pgdock.ClassConflict || pe.SQLState != "23505" || effects.Classify(err) != effects.KindFatal {
+	var pe *xenibase.Error
+	if !errors.As(err, &pe) || pe.Code != "unique_violation" || pe.Class != xenibase.ClassConflict || pe.SQLState != "23505" || effects.Classify(err) != effects.KindFatal {
 		t.Errorf("duplicate: %v", err)
 	}
 	// Refused before anything is sent.
@@ -654,7 +654,7 @@ func TestInsertRows(t *testing.T) {
 	// A management token is not a key: the data API refuses it.
 	creds["api_url"], creds["secret_key"] = f.APIURL(project), token
 	_, err = write(t, c, creds, "insert_rows", "tsk-k9", 1, map[string]any{"table": "orders", "row": map[string]any{"customer": "x"}})
-	if !errors.As(err, &pe) || pe.Code != "invalid_key" || pe.Class != pgdock.ClassAuth {
+	if !errors.As(err, &pe) || pe.Code != "invalid_key" || pe.Class != xenibase.ClassAuth {
 		t.Errorf("token as key: %v", err)
 	}
 }
@@ -723,7 +723,7 @@ func TestUpdateRows(t *testing.T) {
 	before := f.Changes(project, "orders")
 	_, err = write(t, c, creds, "update_rows", "tsk-w4", 1, map[string]any{"table": "orders", "max_affected": float64(2),
 		"filters": []any{map[string]any{"column": "id", "op": "gte", "value": float64(1)}}, "set": map[string]any{"status": "bulk"}})
-	var pe *pgdock.Error
+	var pe *xenibase.Error
 	if !errors.As(err, &pe) || pe.Code != "too_many_rows" || effects.Classify(err) != effects.KindFatal || f.Changes(project, "orders") != before {
 		t.Errorf("too many rows: %v (changes %d, was %d)", err, f.Changes(project, "orders"), before)
 	}
@@ -762,7 +762,7 @@ func TestDeleteRows(t *testing.T) {
 		t.Errorf("by filters: %v %v", out, err)
 	}
 	_, err = write(t, c, creds, "delete_rows", "tsk-d3", 1, map[string]any{"table": "orders", "max_affected": float64(1), "filters": []any{map[string]any{"column": "id", "op": "gt", "value": float64(0)}}})
-	var pe *pgdock.Error
+	var pe *xenibase.Error
 	if !errors.As(err, &pe) || pe.Code != "too_many_rows" || len(f.Rows(project, "orders")) != 2 {
 		t.Errorf("too many rows: %v", err)
 	}
@@ -793,7 +793,7 @@ func TestCallFunction(t *testing.T) {
 		t.Errorf("%v %v", out, err)
 	}
 	_, err = write(t, c, creds, "call_function", "tsk-f2", 1, map[string]any{"function": "close_cart", "args": map[string]any{"cart_id": 4}})
-	var pe *pgdock.Error
+	var pe *xenibase.Error
 	if !errors.As(err, &pe) || pe.Code != "database_error" || pe.SQLState != "P0001" || effects.Classify(err) != effects.KindFatal {
 		t.Errorf("function error: %v", err)
 	}
@@ -829,7 +829,7 @@ func TestIdempotentReplay(t *testing.T) {
 	}
 	// The answer lost after the commit: an unknown outcome, then the retry
 	// with the same key replays it and the row is still one.
-	f.Fail(pgdocktest.Failure{Method: http.MethodPatch, PathPrefix: "/edge/", LoseAnswer: true})
+	f.Fail(xenibasetest.Failure{Method: http.MethodPatch, PathPrefix: "/edge/", LoseAnswer: true})
 	up := map[string]any{"table": "orders", "key": float64(1), "set": map[string]any{"status": "notified"}}
 	_, err = write(t, c, creds, "update_rows", "tsk-lost", 1, up)
 	if effects.Classify(err) != effects.KindUnknownOutcome {
@@ -841,8 +841,8 @@ func TestIdempotentReplay(t *testing.T) {
 	}
 	// The same key for a different request: refused, nothing written.
 	_, err = write(t, c, creds, "insert_rows", "tsk-same", 1, map[string]any{"table": "orders", "row": map[string]any{"customer": "Bayo"}})
-	var pe *pgdock.Error
-	if !errors.As(err, &pe) || pe.Code != "idempotency_key_reused" || pe.Class != pgdock.ClassConflict || effects.Classify(err) != effects.KindFatal || len(f.Rows(project, "orders")) != 1 {
+	var pe *xenibase.Error
+	if !errors.As(err, &pe) || pe.Code != "idempotency_key_reused" || pe.Class != xenibase.ClassConflict || effects.Classify(err) != effects.KindFatal || len(f.Rows(project, "orders")) != 1 {
 		t.Errorf("key reused: %v", err)
 	}
 	// A refused write records no key: the same key then runs a corrected request.
@@ -884,34 +884,34 @@ func TestDataErrorMapping(t *testing.T) {
 		return map[string]any{"error": e}
 	}
 	for _, tc := range []struct {
-		fail  pgdocktest.Failure
+		fail  xenibasetest.Failure
 		class string
 		kind  effects.ErrorKind
 		retry time.Duration
 	}{
-		{pgdocktest.Failure{Status: 429, RetryAfter: 1, Body: wrapped("rate_limited", "slow down", nil)}, pgdock.ClassRateLimited, effects.KindRetryable, time.Second},
-		{pgdocktest.Failure{Status: 429, RetryAfter: 86400, Body: wrapped("plan_limit_reached", "the month's requests are used up", nil)}, pgdock.ClassQuota, effects.KindFatal, 86400 * time.Second},
-		{pgdocktest.Failure{Status: 503, RetryAfter: 10, Body: wrapped("project_resuming", "waking", nil)}, pgdock.ClassUnavailable, effects.KindRetryable, 10 * time.Second},
-		{pgdocktest.Failure{Status: 503, RetryAfter: 5}, pgdock.ClassUnavailable, effects.KindRetryable, 5 * time.Second},
-		{pgdocktest.Failure{Status: 504, Body: wrapped("statement_timeout", "8 s", nil)}, pgdock.ClassTimeout, effects.KindUnknownOutcome, 0},
-		{pgdocktest.Failure{Status: 500}, pgdock.ClassServer, effects.KindUnknownOutcome, 0},
-		{pgdocktest.Failure{Status: 502}, pgdock.ClassServer, effects.KindUnknownOutcome, 0},
-		{pgdocktest.Failure{Status: 400, Body: wrapped("filter_required", "an update needs a filter", nil)}, pgdock.ClassValidation, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 400, Body: wrapped("database_error", "boom", map[string]any{"pg_code": "22P02"})}, pgdock.ClassValidation, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 401, Body: wrapped("invalid_key", "unknown key", nil)}, pgdock.ClassAuth, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 403, Body: wrapped("permission_denied", "no", nil)}, pgdock.ClassPermission, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 403, Body: wrapped("read_only", "storage limit", nil)}, pgdock.ClassConflict, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 404, Body: wrapped("unknown_table", "no table", nil)}, pgdock.ClassNotFound, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 405, Body: wrapped("method_not_allowed", "no", nil)}, pgdock.ClassValidation, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 409, Body: wrapped("unique_violation", "dup", map[string]any{"pg_code": "23505"})}, pgdock.ClassConflict, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 413, Body: wrapped("result_too_large", "over 10 MB", nil)}, pgdock.ClassValidation, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 422, Body: wrapped("not_null_violation", "null", nil)}, pgdock.ClassValidation, effects.KindFatal, 0},
-		{pgdocktest.Failure{Status: 422, Body: wrapped("idempotency_key_reused", "reused", nil)}, pgdock.ClassConflict, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 429, RetryAfter: 1, Body: wrapped("rate_limited", "slow down", nil)}, xenibase.ClassRateLimited, effects.KindRetryable, time.Second},
+		{xenibasetest.Failure{Status: 429, RetryAfter: 86400, Body: wrapped("plan_limit_reached", "the month's requests are used up", nil)}, xenibase.ClassQuota, effects.KindFatal, 86400 * time.Second},
+		{xenibasetest.Failure{Status: 503, RetryAfter: 10, Body: wrapped("project_resuming", "waking", nil)}, xenibase.ClassUnavailable, effects.KindRetryable, 10 * time.Second},
+		{xenibasetest.Failure{Status: 503, RetryAfter: 5}, xenibase.ClassUnavailable, effects.KindRetryable, 5 * time.Second},
+		{xenibasetest.Failure{Status: 504, Body: wrapped("statement_timeout", "8 s", nil)}, xenibase.ClassTimeout, effects.KindUnknownOutcome, 0},
+		{xenibasetest.Failure{Status: 500}, xenibase.ClassServer, effects.KindUnknownOutcome, 0},
+		{xenibasetest.Failure{Status: 502}, xenibase.ClassServer, effects.KindUnknownOutcome, 0},
+		{xenibasetest.Failure{Status: 400, Body: wrapped("filter_required", "an update needs a filter", nil)}, xenibase.ClassValidation, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 400, Body: wrapped("database_error", "boom", map[string]any{"pg_code": "22P02"})}, xenibase.ClassValidation, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 401, Body: wrapped("invalid_key", "unknown key", nil)}, xenibase.ClassAuth, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 403, Body: wrapped("permission_denied", "no", nil)}, xenibase.ClassPermission, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 403, Body: wrapped("read_only", "storage limit", nil)}, xenibase.ClassConflict, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 404, Body: wrapped("unknown_table", "no table", nil)}, xenibase.ClassNotFound, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 405, Body: wrapped("method_not_allowed", "no", nil)}, xenibase.ClassValidation, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 409, Body: wrapped("unique_violation", "dup", map[string]any{"pg_code": "23505"})}, xenibase.ClassConflict, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 413, Body: wrapped("result_too_large", "over 10 MB", nil)}, xenibase.ClassValidation, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 422, Body: wrapped("not_null_violation", "null", nil)}, xenibase.ClassValidation, effects.KindFatal, 0},
+		{xenibasetest.Failure{Status: 422, Body: wrapped("idempotency_key_reused", "reused", nil)}, xenibase.ClassConflict, effects.KindFatal, 0},
 	} {
 		tc.fail.Method, tc.fail.PathPrefix = http.MethodPost, "/edge/"
 		f.Fail(tc.fail)
 		_, err := call(t, c, creds, "read_rows", map[string]any{"table": "orders"})
-		var pe *pgdock.Error
+		var pe *xenibase.Error
 		if !errors.As(err, &pe) || pe.Class != tc.class || effects.Classify(err) != tc.kind || pe.RetryAfterDelay() != tc.retry {
 			t.Errorf("%d %v: %v (class %v, kind %v)", tc.fail.Status, tc.fail.Body, err, pe, effects.Classify(err))
 			continue
@@ -919,7 +919,7 @@ func TestDataErrorMapping(t *testing.T) {
 		if tc.fail.Body != nil && (pe.RequestID != "req_abc123" || !strings.Contains(err.Error(), "(request req_abc123)")) {
 			t.Errorf("request id: %v", err)
 		}
-		if pe.Class == pgdock.ClassNotFound && !errors.Is(err, connector.ErrNotFound) {
+		if pe.Class == xenibase.ClassNotFound && !errors.Is(err, connector.ErrNotFound) {
 			t.Error("a 404 does not read as not found")
 		}
 		if pe.Code == "database_error" && pe.SQLState != "22P02" {
@@ -929,7 +929,7 @@ func TestDataErrorMapping(t *testing.T) {
 	// A Retry-After the engine honours comes with the error, so the
 	// manifest's writes wait at least that long before the same key is
 	// sent again.
-	f.Fail(pgdocktest.Failure{Method: http.MethodPatch, PathPrefix: "/edge/", Status: 503, RetryAfter: 2, Body: wrapped("database_unavailable", "later", nil)})
+	f.Fail(xenibasetest.Failure{Method: http.MethodPatch, PathPrefix: "/edge/", Status: 503, RetryAfter: 2, Body: wrapped("database_unavailable", "later", nil)})
 	_, err := write(t, c, creds, "update_rows", "tsk-ra", 1, map[string]any{"table": "orders", "key": float64(1), "set": map[string]any{"status": "x"}})
 	var ra interface{ RetryAfterDelay() time.Duration }
 	if !errors.As(err, &ra) || ra.RetryAfterDelay() != 2*time.Second || effects.Classify(err) != effects.KindRetryable {

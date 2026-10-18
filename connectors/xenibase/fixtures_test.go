@@ -1,4 +1,4 @@
-package pgdock_test
+package xenibase_test
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/israel-duff/taskiem/connectors/pgdock"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expr"
 )
@@ -23,7 +23,7 @@ import (
 // timestamp in its signature as now, and its expressions read what the
 // trigger needs.
 func TestFixtureDeliveries(t *testing.T) {
-	c := pgdock.New(pgdock.Options{})
+	c := xenibase.New(xenibase.Options{})
 	tr := c.Manifest.Triggers["row_changed"]
 	e := expr.MustNewTriggerEngine("body", "headers", "query", "item")
 	want := map[string][3]string{ // event, dedup, test

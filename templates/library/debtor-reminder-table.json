@@ -6,7 +6,7 @@
   "category": "collections",
   "tags": ["collections", "debtors", "reminders", "sms", "schedule", "data table"],
   "keywords": ["owe", "owing", "debt", "debtor", "credit", "remind", "reminder", "customer", "outstanding", "unpaid", "balance", "table", "record", "records", "database"],
-  "connectors": ["pgdock@1", "termii@1"],
+  "connectors": ["xenibase@1", "termii@1"],
   "params": [
     {"name": "business_name", "type": "string", "title": "Business name", "description": "How your customers know you; it starts every message.", "required": true, "example": "Mama Nkechi Provisions", "max_length": 60},
     {"name": "table", "type": "string", "title": "Debtors table", "description": "The name of the data table with name, phone and balance_kobo columns.", "required": false, "default": "debtors", "example": "debtors", "pattern": "^[a-z][a-z0-9_]{0,62}$"},
@@ -25,7 +25,7 @@
     "steps": [
       {"id": "settings", "type": "transform", "name": "Use your business name and payment details",
        "config": {"output": {"business_name": "{{business_name}}", "payment_details": "{{payment_details}}"}}},
-      {"id": "read_debtors", "type": "connector", "name": "Read the customers who still owe from the data table", "connector": "pgdock@1", "action": "read_rows", "connection": "data_tables",
+      {"id": "read_debtors", "type": "connector", "name": "Read the customers who still owe from the data table", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
        "input": {"table": "{{table}}", "filters": [{"column": "balance_kobo", "op": "gt", "value": 0}], "order": [{"column": "name"}], "limit": 1000}},
       {"id": "remind_each", "type": "foreach", "name": "For each customer who owes", "needs": ["settings", "read_debtors"],
        "config": {"items": "=has(steps.read_debtors.output.rows) ? steps.read_debtors.output.rows : []", "max_concurrency": 5, "max_items": 1000, "steps": [

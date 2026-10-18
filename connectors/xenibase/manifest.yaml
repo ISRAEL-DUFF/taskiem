@@ -1,5 +1,5 @@
-# Xenibase (formerly PGDock; managed Postgres). The connector id stays
-# pgdock, which workflows pin as pgdock@1. Built only from what Xenibase
+# Xenibase (formerly PGDock; managed Postgres). Workflows pin this connector
+# as xenibase@1 (it was pgdock@1 before the rename). Built only from what Xenibase
 # publishes (decision 0018, the "third-party test"), read 7 October 2026:
 #   docs/webhooks.md   webhooks: payload, Xenibase-Signature, delivery, truncation
 #                      (headers, project_id and primary_key on every event, and
@@ -25,9 +25,9 @@
 #                      no parameterised SQL endpoint), P1-G2 (the key)
 # Reads and the row-changed trigger use the management API with the
 # connection's token; writes, functions and read_rows use the project's
-# data API with its secret key. See docs/integrations/pgdock.md.
+# data API with its secret key. See docs/integrations/xenibase.md.
 manifest: connector/v1
-id: pgdock
+id: xenibase
 version: 1.1.0
 name: Xenibase
 description: Start workflows when rows change in a Xenibase (formerly PGDock) project (Taskiem creates and removes the webhook itself); read, insert, upsert, update and delete a table's rows and call its functions through the project's data API.
@@ -43,7 +43,7 @@ auth:
     - { key: api_url, label: "Data API URL (https://<ref>.<api-domain>); from the project's API page", required: false }
   # Or connect with one click: Xenibase's OAuth 2.0 authorization code
   # grant with PKCE (Xenibase docs/oauth-apps.md, read 17 October 2026;
-  # decision 0034). The URLs are the platform's Xenibase (TASKIEM_PGDOCK_URL)
+  # decision 0034). The URLs are the platform's Xenibase (TASKIEM_XENIBASE_URL)
   # resolved at runtime; a self-hosted Xenibase is not linkable this way
   # until it registers Taskiem as a client. Taskiem asks for read and
   # write; the person may narrow them and restrict the token to projects.
@@ -56,7 +56,7 @@ auth:
     pkce: true
     fields_from_token: { token: access_token, org_id: org_id, project_id: "project_ids[0]", base_url: "${server}" }
   test: { action: test_connection }
-# The server is the platform's Xenibase (TASKIEM_PGDOCK_URL) or the
+# The server is the platform's Xenibase (TASKIEM_XENIBASE_URL) or the
 # connection's own (a self-hosted Xenibase); the data API is the project's
 # own hostname. The egress guard still refuses private addresses.
 egress_hosts: ["${connection.base_url}", "${connection.api_url}"]

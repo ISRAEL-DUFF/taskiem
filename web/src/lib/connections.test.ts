@@ -3,8 +3,8 @@ import type { ConnectorInfo } from "../api";
 import { connectorOf, fieldsToComplete, linkResult } from "./connections";
 
 const xenibase: ConnectorInfo = {
-  ref: "pgdock@1",
-  id: "pgdock",
+  ref: "xenibase@1",
+  id: "xenibase",
   version: "1.1.0",
   name: "Xenibase",
   auth: {
@@ -50,8 +50,8 @@ describe("fieldsToComplete", () => {
 
 describe("connectorOf", () => {
   it("finds a connector by the id a connection names", () => {
-    expect(connectorOf([plain, xenibase], "pgdock")?.name).toBe("Xenibase");
-    expect(connectorOf([plain], "pgdock")).toBeUndefined();
-    expect(connectorOf(undefined, "pgdock")).toBeUndefined();
+    expect(connectorOf([plain, xenibase], "xenibase")?.name).toBe("Xenibase");
+    expect(connectorOf([plain], "xenibase")).toBeUndefined();
+    expect(connectorOf(undefined, "xenibase")).toBeUndefined();
   });
 });

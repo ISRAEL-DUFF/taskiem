@@ -26,7 +26,7 @@ type Context struct {
 	Tables []DataTable `json:"data_tables,omitempty"`
 }
 
-// DataTable is a data table, reached with pgdock@1 actions on the
+// DataTable is a data table, reached with xenibase@1 actions on the
 // connection named data_tables.
 type DataTable struct {
 	Name    string            `json:"name"`

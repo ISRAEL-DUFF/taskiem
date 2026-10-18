@@ -89,7 +89,7 @@ tags:
 - name: Data tables
   description: >-
     Records a business keeps (customers, debtors, staff, stock) as tables in the organisation's Xenibase project, reached
-    by workflows through the `pgdock@1` connection named `data_tables`.
+    by workflows through the `xenibase@1` connection named `data_tables`.
   x-taskiem-guide: data-tables
 - name: Catalogue
   description: 'The public connector catalogue: browsing, installing, publishing and submissions.'
@@ -9387,7 +9387,7 @@ paths:
       - Data tables
       summary: Use your own Xenibase project
       description: >-
-        Makes an existing `pgdock@1` connection of the organisation's own, in prod, the data tables project: its credentials (which must hold the project's secret key and data API URL) are tested with `test_connection` and copied into the `data_tables` connection. Refused once any table exists. Taskiem never provisions, renews or deletes anything for an own project.
+        Makes an existing `xenibase@1` connection of the organisation's own, in prod, the data tables project: its credentials (which must hold the project's secret key and data API URL) are tested with `test_connection` and copied into the `data_tables` connection. Refused once any table exists. Taskiem never provisions, renews or deletes anything for an own project.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -9409,7 +9409,7 @@ paths:
                 $ref: '#/components/schemas/TablesStatus'
         '400':
           description: >-
-            Not a pgdock connection of your own in prod, no secret key or data API URL, or the connection failed its test.
+            Not a xenibase connection of your own in prod, no secret key or data API URL, or the connection failed its test.
           content:
             application/json:
               schema:
@@ -14327,7 +14327,7 @@ components:
       properties:
         connector:
           type: string
-          description: '`id@major`, e.g. `pgdock@1`; its manifest must declare `auth.oauth2`.'
+          description: '`id@major`, e.g. `xenibase@1`; its manifest must declare `auth.oauth2`.'
         environment:
           type: string
           description: Defaults to prod, or the API key's environment.
@@ -18314,7 +18314,7 @@ components:
         connection_id:
           type: string
           format: uuid
-          description: An active pgdock@1 connection of your own in prod, with the project's secret key and data API URL.
+          description: An active xenibase@1 connection of your own in prod, with the project's secret key and data API URL.
       additionalProperties: false
     ColumnType:
       type: string

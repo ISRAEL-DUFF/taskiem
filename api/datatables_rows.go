@@ -77,7 +77,7 @@ func (s *Server) tableRows(r *http.Request) (tableRows, error) {
 // tableRowsFor is a table with the connector ready to act on its rows,
 // the connection read recorded under purpose (the API's, or the chat's).
 func (s *Server) tableRowsFor(ctx context.Context, tenant uuid.UUID, t datatables.Table, purpose string) (tableRows, error) {
-	conn, creds, hc, err := s.pgdockConnection(ctx, tenant, datatables.ConnectionName, purpose)
+	conn, creds, hc, err := s.xenibaseConnection(ctx, tenant, datatables.ConnectionName, purpose)
 	if err != nil {
 		return tableRows{}, err
 	}

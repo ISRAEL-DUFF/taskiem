@@ -1,4 +1,4 @@
-// Package pgdocktest is a fake Xenibase (formerly PGDock) for Taskiem's
+// Package xenibasetest is a fake Xenibase (formerly PGDock) for Taskiem's
 // tests (plan item P1-T7), built only from what Xenibase publishes:
 // docs/webhooks.md (the transactional outbox, payload, Xenibase-Signature,
 // ordering, retries, dead letters, pausing, truncation, test events,
@@ -9,7 +9,7 @@
 // reads, writes, Idempotency-Key, functions; data.go) and docs/errors.md
 // (the data API's codes and wrapped error shape). Where Xenibase publishes
 // no detail, the fake makes the most conservative assumption and the test
-// that relies on it says so (see docs/integrations/pgdock.md, "What
+// that relies on it says so (see docs/integrations/xenibase.md, "What
 // Xenibase does not publish").
 //
 // Changes are made in transactions (Begin, then Insert, Update, Delete,
@@ -19,7 +19,7 @@
 // same path, so they fire webhooks and keep the outbox's order. Deliver
 // posts queued events in commit order, one webhook at a time, holding a
 // webhook's queue at its first failure.
-package pgdocktest
+package xenibasetest
 
 import (
 	"bytes"
@@ -82,7 +82,7 @@ type Webhook struct {
 	ConsecutiveFailures int
 	Secret              string
 	// PreviousSecret, while set, also signs deliveries (a second v1 value),
-	// modelling a rotation overlap PGDock has not confirmed (plan Q22).
+	// modelling a rotation overlap Xenibase has not confirmed (plan Q22).
 	PreviousSecret string
 	CreatedAt      time.Time
 	queue          []*Event
@@ -142,7 +142,7 @@ type Failure struct {
 	LoseAnswer bool
 }
 
-// Fake is a fake PGDock server.
+// Fake is a fake Xenibase server.
 type Fake struct {
 	*httptest.Server
 	t testing.TB
@@ -159,7 +159,7 @@ type Fake struct {
 	// Idempotency-Key, for the fake's lifetime (Xenibase: 24 hours).
 	idem map[string]idemEntry
 	// TruncateAbove is the size above which an event's records are left
-	// out (PGDock: 256 KB).
+	// out (Xenibase: 256 KB).
 	TruncateAbove int
 	// Now is the clock for signatures and committed_at.
 	Now func() time.Time
@@ -183,7 +183,7 @@ type Fake struct {
 	projectOrder []string
 }
 
-// New starts a fake PGDock with one organisation and no projects.
+// New starts a fake Xenibase with one organisation and no projects.
 func New(t testing.TB) *Fake {
 	t.Helper()
 	f := &Fake{t: t, OrgID: "0b0c0d0e-0000-4000-8000-000000000001", OrgName: "Acme Foods",
@@ -307,7 +307,7 @@ func (f *Fake) Hook(projectID, id string) *Webhook {
 	return nil
 }
 
-// SetStatus changes a webhook as PGDock would on its own: broken (its
+// SetStatus changes a webhook as Xenibase would on its own: broken (its
 // triggers were dropped), paused (enabled false).
 func (f *Fake) SetStatus(projectID, id, status, reason string) {
 	f.mu.Lock()
@@ -322,7 +322,7 @@ func (f *Fake) SetStatus(projectID, id, status, reason string) {
 	}
 }
 
-// RemoveWebhook deletes a webhook out of band (a person in PGDock's UI).
+// RemoveWebhook deletes a webhook out of band (a person in Xenibase's UI).
 func (f *Fake) RemoveWebhook(projectID, id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -384,7 +384,7 @@ func (tx *Tx) Commit() {
 func (tx *Tx) commitLocked() {
 	f := tx.f
 	if tx.done {
-		f.t.Fatal("pgdocktest: transaction already finished")
+		f.t.Fatal("xenibasetest: transaction already finished")
 	}
 	tx.done = true
 	p := f.projects[tx.project]
@@ -392,7 +392,7 @@ func (tx *Tx) commitLocked() {
 	for _, c := range tx.changes {
 		t := p.Tables[c.table]
 		if t == nil {
-			f.t.Fatalf("pgdocktest: no table %s", c.table)
+			f.t.Fatalf("xenibasetest: no table %s", c.table)
 		}
 		var record, old map[string]any
 		switch c.kind {
@@ -517,7 +517,7 @@ func (f *Fake) Queued(projectID, webhookID string) int {
 	return 0
 }
 
-// Deliver makes one delivery pass, as PGDock's worker does after a commit
+// Deliver makes one delivery pass, as Xenibase's worker does after a commit
 // or a backoff: each webhook's queue is posted in commit order until an
 // event fails, which holds back the ones behind it. 429, 5xx and network
 // errors are retried on a later pass; other 4xx and redirects dead-letter
@@ -571,7 +571,7 @@ func (f *Fake) Deliver() int {
 	return n
 }
 
-// Redeliver posts an event that was already delivered again (PGDock
+// Redeliver posts an event that was already delivered again (Xenibase
 // delivers at least once).
 func (f *Fake) Redeliver(projectID, webhookID, eventID string) (int, error) {
 	f.mu.Lock()
@@ -589,7 +589,7 @@ func (f *Fake) Redeliver(projectID, webhookID, eventID string) (int, error) {
 	}
 	f.mu.Unlock()
 	if e == nil {
-		return 0, fmt.Errorf("pgdocktest: no delivered event %s", eventID)
+		return 0, fmt.Errorf("xenibasetest: no delivered event %s", eventID)
 	}
 	return f.post(w, e)
 }

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/israel-duff/taskiem/connectors/pgdock"
-	"github.com/israel-duff/taskiem/connectors/pgdock/pgdocktest"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
+	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
@@ -22,15 +22,15 @@ import (
 // waTablesWorld is a WhatsApp world with a fake Xenibase as the platform's.
 type waTablesWorld struct {
 	*waWorld
-	pg *pgdocktest.Fake
+	pg *xenibasetest.Fake
 }
 
 func newWATablesWorld(t *testing.T) *waTablesWorld {
 	t.Helper()
 	w := newWAWorld(t)
-	pg := pgdocktest.New(t)
-	pg.AddToken(pgdocktest.Token{Secret: tablesPlatformToken, Name: "platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: time.Now().Add(5 * 365 * 24 * time.Hour)})
-	if err := w.env.Registry.Register(pgdock.New(pgdock.Options{BaseURL: pg.URL})); err != nil {
+	pg := xenibasetest.New(t)
+	pg.AddToken(xenibasetest.Token{Secret: tablesPlatformToken, Name: "platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: time.Now().Add(5 * 365 * 24 * time.Hour)})
+	if err := w.env.Registry.Register(xenibase.New(xenibase.Options{BaseURL: pg.URL})); err != nil {
 		t.Fatal(err)
 	}
 	w.srv.Tables = &datatables.Service{Pool: w.env.DB.App, Vault: w.env.Vault, Egress: w.env.Egress, Logger: w.srv.Logger,

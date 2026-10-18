@@ -15,8 +15,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/israel-duff/taskiem/connectors/pgdock"
-	"github.com/israel-duff/taskiem/connectors/pgdock/pgdocktest"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
+	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
 	"github.com/israel-duff/taskiem/engine/datatables"
 )
 
@@ -25,16 +25,16 @@ const tablesPlatformToken = "xb_platform"
 // tablesWorld is a world with a fake Xenibase as the platform's.
 type tablesWorld struct {
 	*world
-	pg  *pgdocktest.Fake
+	pg  *xenibasetest.Fake
 	svc *datatables.Service
 }
 
 func newTablesWorld(t *testing.T) *tablesWorld {
 	t.Helper()
 	w := newWorld(t)
-	pg := pgdocktest.New(t)
-	pg.AddToken(pgdocktest.Token{Secret: tablesPlatformToken, Name: "platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: time.Now().Add(5 * 365 * 24 * time.Hour)})
-	if err := w.env.Registry.Register(pgdock.New(pgdock.Options{BaseURL: pg.URL})); err != nil {
+	pg := xenibasetest.New(t)
+	pg.AddToken(xenibasetest.Token{Secret: tablesPlatformToken, Name: "platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: time.Now().Add(5 * 365 * 24 * time.Hour)})
+	if err := w.env.Registry.Register(xenibase.New(xenibase.Options{BaseURL: pg.URL})); err != nil {
 		t.Fatal(err)
 	}
 	svc := &datatables.Service{Pool: w.env.DB.App, Vault: w.env.Vault, Egress: w.env.Egress, Logger: w.srv.Logger,
@@ -177,7 +177,7 @@ func TestDataTables(t *testing.T) {
 	var found bool
 	for _, c := range owner.must(200, "GET", "/v1/connections", nil)["connections"].([]any) {
 		m := c.(map[string]any)
-		if m["name"] == "data_tables" && m["connector"] == "pgdock" && m["provisioned_by"] == "taskiem:data_tables" && m["environment"] == "prod" {
+		if m["name"] == "data_tables" && m["connector"] == "xenibase" && m["provisioned_by"] == "taskiem:data_tables" && m["environment"] == "prod" {
 			found = true
 		}
 	}
@@ -376,8 +376,8 @@ func TestDataTablesLimitsAndOwnProject(t *testing.T) {
 	shop := "7d2c9a10-5b4e-4f00-9c11-0000000000b2"
 	w.pg.AddProject(shop, "Shop")
 	w.pg.AddSecretKey(shop, "xb_sec_shop")
-	w.pg.AddToken(pgdocktest.Token{Secret: "xb_shop", Scopes: []string{"read", "write"}, ProjectIDs: []string{shop}})
-	conn := owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "pgdock@1", "name": "shop",
+	w.pg.AddToken(xenibasetest.Token{Secret: "xb_shop", Scopes: []string{"read", "write"}, ProjectIDs: []string{shop}})
+	conn := owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "xenibase@1", "name": "shop",
 		"credentials": map[string]string{"token": "xb_shop", "project_id": shop, "secret_key": "xb_sec_shop", "api_url": w.pg.APIURL(shop)}})
 	if s, out := owner.do("PUT", "/v1/tables/project", map[string]any{"connection_id": conn["id"]}); s != 409 {
 		t.Errorf("own project with tables: %d %v", s, out)
@@ -385,7 +385,7 @@ func TestDataTablesLimitsAndOwnProject(t *testing.T) {
 
 	// Another organisation brings its own project before any table.
 	other := w.tenant(t, "Beta", "owner@beta.test")
-	bare := other.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "pgdock@1", "name": "bare",
+	bare := other.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "xenibase@1", "name": "bare",
 		"credentials": map[string]string{"token": "xb_shop", "project_id": shop}})
 	if s, out := other.do("PUT", "/v1/tables/project", map[string]any{"connection_id": bare["id"]}); s != 400 || !strings.Contains(out["error"].(string), "secret key") {
 		t.Errorf("own project without a key: %d %v", s, out)
@@ -393,7 +393,7 @@ func TestDataTablesLimitsAndOwnProject(t *testing.T) {
 	if s, _ := other.do("PUT", "/v1/tables/project", map[string]any{"connection_id": uuid.New()}); s != 400 {
 		t.Errorf("own project with an unknown connection: %d", s)
 	}
-	full := other.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "pgdock@1", "name": "shop",
+	full := other.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "xenibase@1", "name": "shop",
 		"credentials": map[string]string{"token": "xb_shop", "project_id": shop, "secret_key": "xb_sec_shop", "api_url": w.pg.APIURL(shop)}})
 	st := other.must(200, "PUT", "/v1/tables/project", map[string]any{"connection_id": full["id"]})
 	if st["own"] != true || st["status"] != "ready" || st["project_id"] != shop || st["available"] != true {

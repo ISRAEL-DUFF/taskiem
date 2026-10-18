@@ -1,12 +1,12 @@
-// Package pgdock is the first-party Xenibase connector (Xenibase was
-// PGDock; the connector id stays pgdock; docs/integrations/pgdock.md). It
-// is built only from Xenibase's published contracts (decision 0018): its
+// Package xenibase is the first-party Xenibase connector (Xenibase was
+// called PGDock until October 2026, and the connector id was pgdock;
+// docs/integrations/xenibase.md). It is built only from Xenibase's published contracts (decision 0018): its
 // webhooks, CLI, backend-services and errors docs and its OpenAPI file.
 // Its row-changed trigger is registered remotely (decision 0021): Taskiem
 // creates the Xenibase webhook behind it when a workflow is deployed and
 // deletes it when the workflow leaves the environment. Rows are written,
 // and functions called, through the project's data API (data.go).
-package pgdock
+package xenibase
 
 import (
 	"context"
@@ -30,7 +30,7 @@ import (
 var manifest []byte
 
 // Options configure the connector. BaseURL is the platform's Xenibase (the
-// default for connections that name no server; TASKIEM_PGDOCK_URL).
+// default for connections that name no server; TASKIEM_XENIBASE_URL).
 type Options struct {
 	BaseURL string
 }
@@ -77,12 +77,12 @@ func (c *client) server(creds map[string]string) (string, error) {
 	if s := strings.TrimRight(strings.TrimSpace(creds["base_url"]), "/"); s != "" {
 		u, err := url.Parse(s)
 		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" {
-			return "", fmt.Errorf("pgdock: the connection's server URL must be https://host[/path]: %w", effects.ErrFatal)
+			return "", fmt.Errorf("xenibase: the connection's server URL must be https://host[/path]: %w", effects.ErrFatal)
 		}
 		return s, nil
 	}
 	if c.base == "" {
-		return "", fmt.Errorf("pgdock: no Xenibase server: set the connection's server URL (this platform has no default Xenibase): %w", effects.ErrFatal)
+		return "", fmt.Errorf("xenibase: no Xenibase server: set the connection's server URL (this platform has no default Xenibase): %w", effects.ErrFatal)
 	}
 	return c.base, nil
 }
@@ -92,7 +92,7 @@ func (c *client) server(creds map[string]string) (string, error) {
 func (c *client) do(ctx context.Context, creds map[string]string, hc *http.Client, method, path string, body, out any) error {
 	tok := creds["token"]
 	if tok == "" {
-		return fmt.Errorf("pgdock: the connection has no API token: %w", effects.ErrFatal)
+		return fmt.Errorf("xenibase: the connection has no API token: %w", effects.ErrFatal)
 	}
 	base, err := c.server(creds)
 	if err != nil {
@@ -105,7 +105,7 @@ func (c *client) do(ctx context.Context, creds map[string]string, hc *http.Clien
 func project(creds map[string]string) (string, error) {
 	p := strings.TrimSpace(creds["project_id"])
 	if p == "" {
-		return "", fmt.Errorf("pgdock: the connection has no project: %w", effects.ErrFatal)
+		return "", fmt.Errorf("xenibase: the connection has no project: %w", effects.ErrFatal)
 	}
 	return url.PathEscape(p), nil
 }
@@ -150,11 +150,11 @@ func (c *client) testConnection(ctx context.Context, req connector.Request) (con
 		return connector.Response{}, err
 	}
 	if me.Token == nil {
-		return connector.Response{}, fmt.Errorf("pgdock: the credential is not an API token: %w", effects.ErrFatal)
+		return connector.Response{}, fmt.Errorf("xenibase: the credential is not an API token: %w", effects.ErrFatal)
 	}
 	t := me.Token
 	if want := strings.TrimSpace(req.Credentials["org_id"]); want != "" && !strings.EqualFold(want, t.OrgID) {
-		return connector.Response{}, fmt.Errorf("pgdock: the token acts in organisation %s, not %s: %w", t.OrgID, want, effects.ErrFatal)
+		return connector.Response{}, fmt.Errorf("xenibase: the token acts in organisation %s, not %s: %w", t.OrgID, want, effects.ErrFatal)
 	}
 	var org named
 	if err := c.do(ctx, req.Credentials, req.HTTP, http.MethodGet, "/api/v1/orgs/"+url.PathEscape(t.OrgID), nil, &org); err != nil {
@@ -179,7 +179,7 @@ func (c *client) testConnection(ctx context.Context, req connector.Request) (con
 		}
 	}
 	if mine == nil {
-		return connector.Response{}, fmt.Errorf("pgdock: project %s is not one this token reaches in %s: %w", pid, org.Name, effects.ErrFatal)
+		return connector.Response{}, fmt.Errorf("xenibase: project %s is not one this token reaches in %s: %w", pid, org.Name, effects.ErrFatal)
 	}
 	warnings := []any{}
 	if t.ProjectIDs == nil {
@@ -318,7 +318,7 @@ func tablePath(creds map[string]string, schema, table string) (string, error) {
 		schema = "public"
 	}
 	if table == "" {
-		return "", fmt.Errorf("pgdock: a table is required: %w", effects.ErrFatal)
+		return "", fmt.Errorf("xenibase: a table is required: %w", effects.ErrFatal)
 	}
 	return "/api/v1/projects/" + p + "/tables/" + url.PathEscape(schema) + "/" + url.PathEscape(table) + "/rows", nil
 }
@@ -374,7 +374,7 @@ func (c *client) queryRows(ctx context.Context, req connector.Request) (connecto
 	after, _ := in["after"].(string)
 	q, err := rowsQuery(filters, order, intOr(in["limit"], 50), after)
 	if err != nil {
-		return connector.Response{}, fmt.Errorf("pgdock: %w: %w", err, effects.ErrFatal)
+		return connector.Response{}, fmt.Errorf("xenibase: %w: %w", err, effects.ErrFatal)
 	}
 	schema, _ := in["schema"].(string)
 	table, _ := in["table"].(string)
@@ -399,7 +399,7 @@ var errAmbiguousKey = errors.New("the key matches more than one row")
 // row reads one row by its key columns.
 func (c *client) row(ctx context.Context, creds map[string]string, hc *http.Client, schema, table string, key map[string]any) (map[string]any, bool, error) {
 	if len(key) == 0 {
-		return nil, false, fmt.Errorf("pgdock: a key is required: %w", effects.ErrFatal)
+		return nil, false, fmt.Errorf("xenibase: a key is required: %w", effects.ErrFatal)
 	}
 	cols := make([]string, 0, len(key))
 	for k := range key {
@@ -412,7 +412,7 @@ func (c *client) row(ctx context.Context, creds map[string]string, hc *http.Clie
 	}
 	q, err := rowsQuery(filters, nil, 2, "")
 	if err != nil {
-		return nil, false, fmt.Errorf("pgdock: %w: %w", err, effects.ErrFatal)
+		return nil, false, fmt.Errorf("xenibase: %w: %w", err, effects.ErrFatal)
 	}
 	page, err := c.rows(ctx, creds, hc, schema, table, q)
 	if err != nil {
@@ -425,7 +425,7 @@ func (c *client) row(ctx context.Context, creds map[string]string, hc *http.Clie
 	case 1:
 		return rows[0].(map[string]any), true, nil
 	}
-	return nil, false, fmt.Errorf("pgdock: %w: %w", errAmbiguousKey, effects.ErrFatal)
+	return nil, false, fmt.Errorf("xenibase: %w: %w", errAmbiguousKey, effects.ErrFatal)
 }
 
 func (c *client) getRow(ctx context.Context, req connector.Request) (connector.Response, error) {

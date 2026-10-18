@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/connectors/pgdock"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -24,7 +24,7 @@ import (
 
 // Data tables (decision 0033, docs/data-tables.md): a table's definition
 // lives here, its rows in the organisation's Xenibase project, reached
-// through the pgdock@1 connection named data_tables like any workflow
+// through the xenibase@1 connection named data_tables like any workflow
 // step would. Reading rows needs table.read, changing anything
 // table.edit. Personal columns come back to table.read holders as they
 // are (the page is the record) and never reach audit details or logs.
@@ -67,7 +67,7 @@ func (s *Server) failTables(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSON(w, status, map[string]any{"error": msg, "code": code})
 	}
 	var xe *datatables.Error
-	var pe *pgdock.Error
+	var pe *xenibase.Error
 	switch {
 	case errors.Is(err, datatables.ErrUnavailable):
 		code(http.StatusServiceUnavailable, "tables_unavailable", "data tables are not available on this platform: no Xenibase is configured and the organisation brought no project")
@@ -108,15 +108,15 @@ func (s *Server) failTables(w http.ResponseWriter, r *http.Request, err error) {
 			msg = "Xenibase (" + pe.Code + "): " + pe.Message
 		}
 		switch pe.Class {
-		case pgdock.ClassValidation:
+		case xenibase.ClassValidation:
 			code(http.StatusBadRequest, "xenibase_refused", msg)
-		case pgdock.ClassNotFound:
+		case xenibase.ClassNotFound:
 			code(http.StatusNotFound, "xenibase_not_found", msg)
-		case pgdock.ClassConflict:
+		case xenibase.ClassConflict:
 			code(http.StatusConflict, "xenibase_conflict", msg)
-		case pgdock.ClassQuota:
+		case xenibase.ClassQuota:
 			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": msg, "code": "quota_exceeded", "limit": "xenibase_" + pe.Code})
-		case pgdock.ClassRateLimited, pgdock.ClassUnavailable, pgdock.ClassTimeout:
+		case xenibase.ClassRateLimited, xenibase.ClassUnavailable, xenibase.ClassTimeout:
 			ra := pe.RetryAfter
 			if ra <= 0 {
 				ra = 5 * time.Second
@@ -173,7 +173,7 @@ func statusView(st datatables.Status, tables int) map[string]any {
 	return out
 }
 
-// putTablesProject makes an existing pgdock connection of the
+// putTablesProject makes an existing xenibase connection of the
 // organisation's own the data tables project (decision 0033, point 4).
 func (s *Server) putTablesProject(w http.ResponseWriter, r *http.Request) {
 	svc, err := s.tables()
@@ -194,14 +194,14 @@ func (s *Server) putTablesProject(w http.ResponseWriter, r *http.Request) {
 		err := tx.QueryRow(r.Context(), `SELECT name FROM connections WHERE id = $1 AND environment = $2 AND connector = $3 AND status = 'active' AND provisioned_by IS NULL`,
 			req.ConnectionID, datatables.Environment, datatables.Connector).Scan(&name)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("%w: connection_id must be an active pgdock@1 connection of your own in %s", errBadRequest, datatables.Environment)
+			return fmt.Errorf("%w: connection_id must be an active xenibase@1 connection of your own in %s", errBadRequest, datatables.Environment)
 		}
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	conn, creds, hc, err := s.pgdockConnection(r.Context(), p.TenantID, name, "tables.project.set")
+	conn, creds, hc, err := s.xenibaseConnection(r.Context(), p.TenantID, name, "tables.project.set")
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -249,9 +249,9 @@ func (s *Server) putTablesProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, statusView(status, 0))
 }
 
-// pgdockConnection reads a pgdock connection's credentials for a purpose
+// xenibaseConnection reads a xenibase connection's credentials for a purpose
 // and returns the connector with a guarded client for it.
-func (s *Server) pgdockConnection(ctx context.Context, tenant uuid.UUID, name, purpose string) (*connector.Connector, map[string]string, *http.Client, error) {
+func (s *Server) xenibaseConnection(ctx context.Context, tenant uuid.UUID, name, purpose string) (*connector.Connector, map[string]string, *http.Client, error) {
 	if s.Registry == nil || s.Vault == nil {
 		return nil, nil, nil, errors.New("no connector registry or vault")
 	}
@@ -327,7 +327,7 @@ func (s *Server) rowCounts(ctx context.Context, tenant uuid.UUID, purpose string
 	if len(tables) == 0 {
 		return counts
 	}
-	conn, creds, hc, err := s.pgdockConnection(ctx, tenant, datatables.ConnectionName, purpose)
+	conn, creds, hc, err := s.xenibaseConnection(ctx, tenant, datatables.ConnectionName, purpose)
 	if err != nil {
 		return counts
 	}
@@ -511,7 +511,7 @@ func (s *Server) getTable(w http.ResponseWriter, r *http.Request) {
 	}
 	view := tableView(t)
 	p := principalFrom(r.Context())
-	if conn, creds, hc, err := s.pgdockConnection(r.Context(), p.TenantID, datatables.ConnectionName, tablesPurpose); err == nil {
+	if conn, creds, hc, err := s.xenibaseConnection(r.Context(), p.TenantID, datatables.ConnectionName, tablesPurpose); err == nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		if n, ok := s.rowCount(ctx, conn, creds, hc, t.Name); ok {
 			view["row_count"] = n

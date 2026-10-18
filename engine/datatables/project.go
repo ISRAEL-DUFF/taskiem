@@ -338,7 +338,7 @@ func audit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, action, target stri
 	return err
 }
 
-// SetOwnProject records an existing pgdock connection's project as the
+// SetOwnProject records an existing xenibase connection's project as the
 // organisation's (Settings > Data tables). The caller checked the
 // connection (test_connection, a secret key and a data API URL) and
 // that no table exists yet; here its credentials are copied into the
