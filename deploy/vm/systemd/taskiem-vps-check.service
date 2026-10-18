@@ -1,0 +1,10 @@
+[Unit]
+Description=Taskiem: health checks, alerting when they change
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/taskiem-vps check
+# A failing check is reported by alert; it is not a unit failure.
+SuccessExitStatus=1

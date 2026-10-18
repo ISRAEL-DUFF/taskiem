@@ -1,0 +1,9 @@
+[Unit]
+Description=Taskiem: upgrade to the newest signed release on this server's channel
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/taskiem-vps update --auto

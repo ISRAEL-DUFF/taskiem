@@ -2,11 +2,10 @@
 # OpenBao, Caddy for HTTPS. Postgres is NOT here: use a managed Postgres 16
 # (or one on another host) with backups and point-in-time recovery.
 #
-# Read docs/vm.md first. In short, in this directory:
-#   for f in .env taskiem.env migrate.env openbao.env; do cp $f.example $f; done
-#   (fill them in; chmod 600 *.env)
-#   docker compose up -d openbao      # then initialise and unseal it (docs/vm.md)
-#   docker compose up -d
+# Installed and run by taskiem-vps (docs/vm.md): `taskiem-vps setup` writes
+# the env files and initialises OpenBao, and `taskiem-vps update` moves
+# TASKIEM_IMAGE (a digest) between releases. Do not edit it on a server: the
+# next update replaces it with the copy from the release being installed.
 #
 # Container steps are deliberately off: their only safe runner is Kubernetes.
 name: taskiem
@@ -32,16 +31,17 @@ services:
     depends_on:
       taskiem: { condition: service_healthy }
 
-  # Keys for every secret Taskiem stores. File storage on a named volume;
-  # sealed after every restart until someone unseals it (docs/vm.md). Not
-  # published: only Taskiem talks to it, on the Compose network.
+  # Keys for every secret Taskiem stores. Raft storage on a named volume;
+  # unseals itself on start with the static key in openbao-unseal.env
+  # (decision 0032, amendment). Not published: only Taskiem talks to it, on
+  # the Compose network.
   openbao:
     <<: *hardening
-    image: openbao/openbao:${OPENBAO_VERSION:-2.4.1}
+    image: openbao/openbao:${OPENBAO_VERSION:-2.7.1}
     command: ["server"]
-    cap_add: [IPC_LOCK]
     environment:
       BAO_ADDR: http://127.0.0.1:8200
+    env_file: [openbao-unseal.env]
     volumes:
       - ./openbao.hcl:/openbao/config/openbao.hcl:ro
       - ./openbao-taskiem-policy.hcl:/openbao/policies/taskiem.hcl:ro
@@ -56,7 +56,7 @@ services:
   # not renew it, and an expired token makes every secret unreadable.
   openbao-renew:
     <<: *hardening
-    image: openbao/openbao:${OPENBAO_VERSION:-2.4.1}
+    image: openbao/openbao:${OPENBAO_VERSION:-2.7.1}
     entrypoint: ["sh", "-c"]
     command:
       - |
