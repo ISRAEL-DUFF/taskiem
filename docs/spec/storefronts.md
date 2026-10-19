@@ -50,7 +50,7 @@ The first users are **new street businesses and SMEs**: Taskiem is not launched 
 | --- | --- |
 | **Storefront** | One public page per tenant (one per sub-tenant for partners): business details, a catalogue, actions. A draft is edited; a published snapshot is served |
 | **Catalogue** | The items on the page. It is a [data table](../data-tables.md) whose columns follow a catalogue shape ([6.2](#62-catalogue)), so the owner edits it like any table: the Tables page, CSV, or `add to products` in chat |
-| **Action** | Something a visitor can do: `order`, `enquiry` and `callback` in v1; `booking` and `custom` later. An action has a form and a workflow |
+| **Action** | Something a visitor can do: `order`, `booking`, `enquiry` and `callback` in v1; `custom` later. An action has a form and a workflow |
 | **Hosted form** | The form an action shows. Its fields come from the workflow's input schema ([6.3](#63-actions-and-hosted-forms)) |
 | **Submission** | One filled form. It is recorded, and it starts a run of the action's workflow through a new `storefront` trigger ([8.2](#82-the-storefront-trigger)) |
 | **Order** | A submission of the `order` action. It is a row in an `orders` data table the storefront keeps, and its status is moved on by the workflow |
