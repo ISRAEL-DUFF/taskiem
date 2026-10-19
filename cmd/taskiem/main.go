@@ -161,6 +161,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return statusCmd(context.Background(), args[1:], stdout)
 	case "operators":
 		return operatorsCmd(context.Background(), args[1:], stdout)
+	case "messages":
+		return messagesCmd(context.Background(), args[1:], stdout)
 	case "canary":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()

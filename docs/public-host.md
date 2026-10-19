@@ -45,6 +45,8 @@ VALUES ('ada.shops.example.com', '<tenant id>', 'storefront', gen_random_uuid(),
 
 ## Building blocks for the next milestones
 
+- **`engine/sender`:** SMS and email to customers and respondents through the platform's providers, from a durable outbox ([messages](messages.md)).
+
 - **`engine/formguard`:** what every public form uses.
   - Signed one-time form tokens, with a minimum fill time, a maximum age and an idempotency key.
   - A honeypot field.

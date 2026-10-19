@@ -88,6 +88,8 @@ type config struct {
 	DocsURL              string
 	// Public is the public host for storefronts and forms (public.go).
 	Public publicConfig
+	// Messages are SMS and email to people outside a tenant (messages.go).
+	Messages messagesConfig
 	// Limits are the platform's default plan limits (TASKIEM_DEFAULT_*).
 	Limits runtime.Limits
 	// WhatsApp is the platform number (TASKIEM_WHATSAPP_*); nil: off.
@@ -399,6 +401,9 @@ func loadConfig() (config, error) {
 		return c, err
 	}
 	if c.Public, err = publicConfigFromEnv(); err != nil {
+		return c, err
+	}
+	if c.Messages, err = messagesConfigFromEnv(); err != nil {
 		return c, err
 	}
 	if c.DSN == "" {
@@ -747,6 +752,10 @@ func serve(ctx context.Context, args []string) error {
 		srv.Billing = bill
 		srv.Tables = e.tables()
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD)
+		// SMS and email to people outside a tenant (messages.go).
+		if w := cfg.senderWorker(e, alerter.Mailer, log); w != nil {
+			tasks = append(tasks, w.Run)
+		}
 	}
 	if *role == "edge" {
 		mux := http.NewServeMux()

@@ -43,6 +43,7 @@ var internal = []struct{ pattern, why string }{
 	{"partner-tracker", "what is outstanding with each partner, for the team"},
 	{"performance", "load-test results from a development machine, not production figures"},
 	{"public-host", "the public host is built but off until Phase 5 ships; publish it with storefronts"},
+	{"messages", "SMS and email to customers are built but idle until Phase 5 ships; publish them with storefronts"},
 	{"clean-room-policy", "how contributors work; it belongs with CONTRIBUTING.md"},
 	{"spec/*", "the internal product specification and build plan"},
 	{"strategy/*", "strategy proposals and the user-story catalogue, for the team"},

@@ -95,6 +95,22 @@ func (v *Vault) SealTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, category str
 	return map[string]any{"$pii": category, "subject": subject, "ct": base64.StdEncoding.EncodeToString(ct)}, nil
 }
 
+// SealUnderTx encrypts a value under an existing subject's key, so it is
+// erased with that subject: a message queued for a person, sealed under
+// the subject of their phone number or email.
+func (v *Vault) SealUnderTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, subject, category string, value any) (map[string]any, error) {
+	dek, err := v.subjectKey(ctx, tx, t, subject, category, false)
+	if err != nil {
+		return nil, err
+	}
+	raw, _ := json.Marshal(value)
+	ct, err := seal(dek, raw, []byte(subject))
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"$pii": category, "subject": subject, "ct": base64.StdEncoding.EncodeToString(ct)}, nil
+}
+
 // OpenTx decrypts an envelope; it returns pii.ErrErased once the subject's
 // key is destroyed.
 func (v *Vault) OpenTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, env map[string]any) (any, error) {
