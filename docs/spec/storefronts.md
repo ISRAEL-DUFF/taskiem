@@ -1,6 +1,6 @@
 # Storefronts: a public page and order forms for businesses without a website
 
-Status: **draft for review** (proposed in [decision 0036](../decisions/0036-storefronts.md)). Nothing here is built. Revised 2026-10-19 with the first answers to the open questions ([section 13](#13-open-questions)): own domains from the domain platform, Xenibase storage, SMS or email to customers, no free plan, new businesses only, both payment timings, bookings in v1, field agents.
+Status: **draft for review** (proposed in [decision 0036](../decisions/0036-storefronts.md)). Nothing here is built. Revised 2026-10-19 with the first answers to the open questions ([section 13](#13-open-questions)): own domains from the domain platform, Xenibase storage, SMS or email to customers, no free plan, new businesses only, both payment timings, bookings in v1, field agents. Revised again the same day: storefronts can be embedded on a website the business already has ([6.11](#611-on-a-website-the-business-already-has)).
 
 *Storefront* is a working name, like Taskiem itself. It is a generic word, and is checked against competitors' marks before it ships (clean-room policy, rule 3).
 
@@ -14,6 +14,8 @@ A small business with no website gets a one-page public **storefront** from Task
 
 Every action is a hosted form, and every submission starts one of the business's workflows. That workflow tells the owner on WhatsApp or Telegram, lets them accept or decline, messages the customer, sends a payment link, and records the order.
 
+A business that already has a website can put its catalogue, basket or booking form on it instead, or as well ([6.11](#611-on-a-website-the-business-already-has)).
+
 The page is the business's public face, and the workflows are the back office it never had. **The page exists to feed workflows.** It is not a website builder, and it never becomes one ([non-goals](#3-goals-and-non-goals)).
 
 ## 2. Who it is for
@@ -24,7 +26,7 @@ The page is the business's public face, and the workflows are the back office it
 | **The customer**: anyone with a phone and a browser, often on a cheap Android phone with metered data | Asks "how much?" or "are you free Saturday?" in DMs and waits | Sees prices and photos, orders or books in under a minute, gets a confirmation by SMS, or email when they gave one |
 | **A field agent**: a person who visits businesses where they trade and signs them up ([6.10](#610-field-agents)) | n/a | Sets up the business's account and storefront in about ten minutes, with the owner, and hands it over |
 
-The first users are **new street businesses and SMEs**: Taskiem is not launched yet, so none of them has an account. Most will be signed up by field agents, the rest from chat or the web app.
+The first users are **new street businesses and SMEs**: Taskiem is not launched yet, so none of them has an account. Most will be signed up by field agents, the rest from chat or the web app. Most have no website; the few that do embed the storefront's parts on it ([6.11](#611-on-a-website-the-business-already-has)).
 
 ## 3. Goals and non-goals
 
@@ -301,6 +303,43 @@ Most businesses are signed up in person. A **field agent** is someone who visits
 | Verification | An agent attests that they met the business at its address and saw its owner (with a photo of the stall, location attached), which counts as business verification ([7.1](#71-verification)) |
 | Commission (if adopted) | Counted from businesses that publish and pay; payouts are outside this spec |
 
+### 6.11 On a website the business already has
+
+Some businesses already have a website (often a one-page site a nephew built, or a WordPress or Wix site) but nothing behind it to take orders. They can put the storefront's working parts on it, and keep the storefront page as well.
+
+**What can be embedded:**
+
+| View | Shows | Typical place |
+| --- | --- | --- |
+| `page` | The whole storefront | A "Shop" page |
+| `catalogue` | The catalogue with its basket and checkout | A products page |
+| `action:<kind>` | One action's form: `order` for one product, `booking`, `enquiry`, `callback` | A contact or booking page |
+| `button` | An **Order** or **Book** button that opens the view in an overlay on the site | Anywhere, in the site's own design |
+
+**Three ways to add it** (Settings > Storefront > Your website gives each, ready to copy):
+
+1. **A link** to the storefront. It needs nothing and always works.
+2. **The script:** one tag and one element. The script (under 5 KB) puts a frame in the element, sizes it to its content, and opens the overlay for `button`:
+
+```html
+<script src="https://<preview domain>/embed/v1/storefront.js" defer></script>
+<taskiem-storefront store="ada-kitchen" view="catalogue"></taskiem-storefront>
+```
+
+3. **A plain frame**, for site builders that do not allow scripts: `<iframe src="https://adakitchen.ng/embed/catalogue">`, with a fixed height.
+
+**How it works:**
+- **A frame, always.** The embedded parts are the storefront's own pages, served from its domain in a frame, never HTML written into the host site. The host site's scripts cannot read what a customer types, and the storefront's CSP, rate limits and moderation apply unchanged.
+- **Which sites may frame it:** only the `/embed/` pages can be framed, and only by the **websites the owner has added and verified** (a DNS TXT record or a file at `/.well-known/taskiem-storefront.txt`; a field agent can add it during setup). Those pages are served with `frame-ancestors` naming the verified sites, as the [embedded builder's frame page](../embedding.md#8-iframe-mode) is. Every other page keeps `frame-ancestors 'none'`. Verifying stops a scam site from framing a real business to look trustworthy, or putting an invisible frame under its own buttons.
+- **Look:** the frame uses the storefront's template and accent. The element may set `accent` and `theme` (`light` or `dark`) to match the site, from the same fixed choices. No CSS from the host site reaches it.
+- **Cookies:** none, so browsers that block third-party cookies change nothing. The form's one-time token is in the form.
+- **Payment:** a provider's payment page does not work reliably inside a frame. When paying at order time, the frame opens the payment page in a new tab, waits, and shows the confirmation when the provider confirms (the frame asks by its own one-time reference, which shows only that submission's status).
+- **Messages to the host site** (`postMessage`, only to the verified site's origin): `storefront:height` for sizing, and `storefront:submitted` with the action and reference, so the site can show its own thank-you or count orders in its analytics. Never a name, phone number or any other personal field.
+- **Records:** submissions from a frame have `channel: embed` and the site they came from, so the owner sees which orders came from their website.
+- **Their own domain:** a business whose website is on `example.com` can serve its storefront on `shop.example.com` instead of a new domain ([6.6](#66-addresses-domains-and-sharing)). The domain platform's domain is then optional.
+
+**Not supported:** embedding by a site the owner has not verified, changing the frame's fields or layout from the host site, and passing a customer's details into the frame from the host site. The `?item=` prefill ([6.3](#63-actions-and-hosted-forms)) is the only input a host site gives.
+
 ## 7. Trust and safety
 
 Public pages made by businesses Taskiem has not met will be abused unless the design prevents it. These controls are part of v1.
@@ -326,7 +365,7 @@ A verification is a record with who did it, how and when, and appears in the aud
 
 ### 7.3 Forms cannot phish
 
-- **No owner code:** no custom HTML, CSS or JavaScript, and no embedding of other sites.
+- **No owner code:** no custom HTML, CSS or JavaScript, and no embedding of other sites in a storefront. (A storefront being embedded on the owner's own verified website is the other way round: [6.11](#611-on-a-website-the-business-already-has).)
 - **Links:** only `wa.me`, `tel:`, the map link, and the business's verified domain.
 - **Fields:** the refused fields of [6.3](#63-actions-and-hosted-forms) are refused when saved and when submitted.
 - **Payments:** only through the business's payment-provider link, created by the workflow and sent by message. Never a form asking for account or card details.
@@ -375,6 +414,7 @@ A verification is a record with who did it, how and when, and appears in the aud
 | `storefront_submissions` | Reference, action, idempotency token hash, sealed personal fields, basket, totals, the run it started, IP hash, status |
 | `storefront_media` | Upload records: hashes, sizes, moderation state, and the object's key in the business's Xenibase storage |
 | `storefront_domains` | The business's domain: name, source (the domain platform, or one the business brings), the platform's registration id, DNS and certificate state, renewal date |
+| `storefront_embed_sites` | The owner's websites allowed to frame the `/embed/` pages: origin, verification method and token hash, verified time, status |
 | `storefront_availability` | Opening hours per service or for the whole business, slot length, buffer, how far ahead people can book, and closed days |
 | `storefront_holds` | A slot held while a customer pays: service, start, end, submission, expiry. A unique constraint on (storefront, service, start) for live holds and confirmed bookings prevents double booking |
 | `storefront_moderation` | Each check: what was checked, the model's verdict and reasons, the reviewer, the decision |
@@ -407,7 +447,7 @@ New trigger type `storefront` in wd/v1:
 
 - **Separate domains:** pages and forms are served on the business's own domain and the preview domain only. That host serves nothing of the app or the API, the same rule as custom embed domains.
 - **No cookies:** a form's idempotency token is in the form itself, so there is nothing for a page to steal or confuse.
-- **Strict CSP:** `default-src 'self'`, no inline scripts except the hashed basket script, `frame-ancestors 'none'`, `form-action 'self'`.
+- **Strict CSP:** `default-src 'self'`, no inline scripts except the hashed basket script, `frame-ancestors 'none'`, `form-action 'self'`. The `/embed/` pages alone name the storefront's verified websites in `frame-ancestors` instead, and are the only ones without `X-Frame-Options: DENY`.
 - **Where it runs:** pages are rendered by the `edge` role (or a new `storefront` route group on it). They read through narrow functions, never with a tenant's broad scope, so a page can only ever see its own published snapshot and catalogue's public columns.
 
 ### 8.4 Rendering, caching and performance
@@ -428,10 +468,11 @@ New trigger type `storefront` in wd/v1:
 | `GET /v1/storefront/submissions` | Submissions, with personal fields masked as everywhere |
 | `GET /v1/storefront/qr` | QR code and printable card |
 | `GET/POST /v1/storefront/domains...` | The business's domain: search and claim one from the domain platform, or bring one; DNS and certificate state |
+| `GET/POST/DELETE /v1/storefront/embed-sites...`, `POST .../{id}/verify` | Websites allowed to embed the storefront |
 | `GET/PUT /v1/storefront/availability`, `GET /v1/storefront/bookings` | Hours and slots; bookings, with accept, reschedule and cancel |
 | `POST /v1/storefront/onboarding`, `POST /v1/storefront/onboarding/{id}/consent`, `POST /v1/storefront/onboarding/{id}/handover` | Field agents: start a sign-up, confirm the owner's code, hand the page over |
 | `GET /v1/ops/storefront-moderation`, `POST .../{id}/decide` | The review queue |
-| Public, on the business's domain and the preview domain: `GET /` (the page), `GET /a/{action}` (a form), `POST /a/{action}` (submit), `GET /slots/{service}` (free slots), `GET/POST /b/{reference}` (a customer reschedules or cancels, by the link in their SMS), `GET /media/{hash}`, `POST /report` | Served by the edge, no session |
+| Public, on the business's domain and the preview domain: `GET /` (the page), `GET /a/{action}` (a form), `POST /a/{action}` (submit), `GET /slots/{service}` (free slots), `GET/POST /b/{reference}` (a customer reschedules or cancels, by the link in their SMS), `GET /media/{hash}`, `POST /report`; for embedding, `GET /embed/{view}`, `GET /embed/v1/storefront.js` and `GET /embed/status/{reference}` | Served by the edge, no session |
 | Operators: `/v1/ops/storefronts...` | Search, reports, suspend, restore, verification review |
 
 **Permissions:** a new `storefront.manage` (owners and admins by default) for the page, actions and publishing; catalogue and order edits stay under `table.edit`. Everything is audited (`storefront.publish`, `storefront.suspend`, `storefront.action.create`...).
@@ -464,8 +505,8 @@ There is **no free plan**. A storefront comes in paid plans, each including the 
 
 | Plan | For | Storefront |
 | --- | --- | --- |
-| **Shop** (new) | A single trader or service | Own domain; 50 products or services; orders and bookings with fair-use limits; payment after acceptance; the default workflows (adjustable in chat, not on the canvas); a monthly SMS allowance |
-| **Shop Plus** (new) | A busy shop or salon | 500 items; pay-when-ordering and deposits; email to customers with the business's name; editing workflows on the canvas; a larger SMS allowance; several owners or staff |
+| **Shop** (new) | A single trader or service | Own domain; embedding on 1 website; 50 products or services; orders and bookings with fair-use limits; payment after acceptance; the default workflows (adjustable in chat, not on the canvas); a monthly SMS allowance |
+| **Shop Plus** (new) | A busy shop or salon | 500 items; pay-when-ordering and deposits; email to customers with the business's name; editing workflows on the canvas; a larger SMS allowance; several owners or staff; up to 3 websites to embed on |
 | Starter and above | Businesses automating beyond the storefront | Storefront included; 2,000 items; removing the footer brand (never the safety line); all workflows |
 
 - **Annual pricing:** with the domain included, an annual option suits domain registration.
@@ -476,7 +517,7 @@ There is **no free plan**. A storefront comes in paid plans, each including the 
 
 | Phase | Scope |
 | --- | --- |
-| **v1** | Page (card, catalogue, 2 templates) on the business's own domain from the domain platform; `order`, `booking`, `enquiry` and `callback` actions; both payment timings (Paystack first); the `storefront` trigger; default workflows with owner approval in chat; SMS and email to customers; booking reminders and reschedule or cancel links; setup and management from chat and web; field agents and onboarding sessions; phone and agent verification; the trust-and-safety controls in section 7; media on Xenibase storage; QR and sharing; the Shop plans |
+| **v1** | Page (card, catalogue, 2 templates) on the business's own domain from the domain platform; `order`, `booking`, `enquiry` and `callback` actions; both payment timings (Paystack first); the `storefront` trigger; default workflows with owner approval in chat; SMS and email to customers; booking reminders and reschedule or cancel links; setup and management from chat and web; field agents and onboarding sessions; phone and agent verification; the trust-and-safety controls in section 7; media on Xenibase storage; QR and sharing; embedding on the business's website (link, script, frame); the Shop plans |
 | **v2** | Business verification through ID providers with the badge; a status link for orders; several staff calendars for bookings; Moniepoint and OPay payment links; agent commissions (if adopted) |
 | **v3** | `custom` forms, WhatsApp messages to customers (own numbers), multi-branch businesses, a public directory (if wanted), simple analytics |
 
@@ -502,7 +543,7 @@ There is **no free plan**. A storefront comes in paid plans, each including the 
 - photos go in Xenibase storage;
 - customers hear back by SMS, or email when given;
 - there is no free plan;
-- the first users are new businesses;
+- the first users are new businesses; a few will already have a website, and embed the storefront on it;
 - both payment timings are supported;
 - bookings are in v1;
 - field agents set pages up.

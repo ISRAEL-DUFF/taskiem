@@ -25,7 +25,8 @@ The chat-first strategy targets small Nigerian businesses that run on WhatsApp a
 9. **Field agents sign businesses up in person**, through time-limited onboarding sessions the owner consents to by a code to their WhatsApp. The agent never becomes a member of the business.
 10. **Photos in Xenibase storage**, in the business's own Xenibase project beside its data tables.
 11. **Customers hear back by SMS, and by email when they give one.** WhatsApp to customers is a later phase.
-12. **Moderation (proposed, awaiting decision):** every upload and text change is checked by a model through the AI layer against a written policy, and anything flagged waits for a person in an operator review queue.
+12. **Embeddable on the business's own website**: the catalogue, a form or a button that opens an overlay. Each is a frame from the storefront's domain, allowed only on websites the owner has verified.
+13. **Moderation (proposed, awaiting decision):** every upload and text change is checked by a model through the AI layer against a written policy, and anything flagged waits for a person in an operator review queue.
 
 ## Where the ideas come from
 
@@ -45,6 +46,7 @@ Original to Taskiem:
 - **Hosted forms only, no page.** Rejected as the goal: a form alone does not make a business visible. The forms are still the core, and could ship first.
 - **A full site builder.** Rejected: it would turn Taskiem into a different product and open the door to arbitrary content and phishing.
 - **Pages on the app's domain.** Rejected: one mistake in a page could reach the app's cookies and origin.
+- **Embedding as HTML written into the host site** (a script that builds the form in the site's page). Rejected: the site's own scripts could read what customers type, and the storefront's CSP would not apply. A frame keeps the form on the storefront's origin.
 - **A free plan.** Rejected by the product owner: every storefront comes with a domain, which has a cost, and paid plans keep out throwaway scam pages.
 - **Moderation:**
   - *A dedicated image-safety service* is cheap and good at nudity and violence, but cannot judge scams, counterfeits or text.
