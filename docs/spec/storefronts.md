@@ -76,7 +76,7 @@ The same is possible on the web, under **Storefront** in the web app. A field ag
 
 ### 5.2 A customer orders
 
-1. The customer opens `ada-kitchen.<storefront domain>`, from a QR code, a status post or a link.
+1. The customer opens `adakitchen.ng` (the business's own domain; `ada-kitchen.<preview domain>` before it is live), from a QR code, a status post or a link.
 2. They see the business card, then the catalogue: photo, name, price and an **Add** button for each item.
 3. Their basket shows the total. They tap **Order**.
 4. The order form asks for name, phone, and delivery or pickup, plus anything the owner's workflow asks for. They submit.
@@ -431,7 +431,7 @@ New trigger type `storefront` in wd/v1:
 | `GET/PUT /v1/storefront/availability`, `GET /v1/storefront/bookings` | Hours and slots; bookings, with accept, reschedule and cancel |
 | `POST /v1/storefront/onboarding`, `POST /v1/storefront/onboarding/{id}/consent`, `POST /v1/storefront/onboarding/{id}/handover` | Field agents: start a sign-up, confirm the owner's code, hand the page over |
 | `GET /v1/ops/storefront-moderation`, `POST .../{id}/decide` | The review queue |
-| Public, on the storefront domain: `GET /` (the page), `GET /a/{action}` (a form), `POST /a/{action}` (submit), `GET /slots/{service}` (free slots), `GET/POST /b/{reference}` (a customer reschedules or cancels, by the link in their SMS), `GET /media/{hash}`, `POST /report` | Served by the edge, no session |
+| Public, on the business's domain and the preview domain: `GET /` (the page), `GET /a/{action}` (a form), `POST /a/{action}` (submit), `GET /slots/{service}` (free slots), `GET/POST /b/{reference}` (a customer reschedules or cancels, by the link in their SMS), `GET /media/{hash}`, `POST /report` | Served by the edge, no session |
 | Operators: `/v1/ops/storefronts...` | Search, reports, suspend, restore, verification review |
 
 **Permissions:** a new `storefront.manage` (owners and admins by default) for the page, actions and publishing; catalogue and order edits stay under `table.edit`. Everything is audited (`storefront.publish`, `storefront.suspend`, `storefront.action.create`...).
