@@ -185,6 +185,7 @@ A WD is a directed graph of steps plus metadata. Loops and parallelism are expli
 | `signal` | Pause until an external event arrives (webhook, WhatsApp reply) |
 | `approval` | Human decision under a governance policy |
 | `subflow` | Call another workflow, pinned to a version |
+| `form` (proposed) | Send a person a one-time form link and wait for their answers ([forms](forms.md)) |
 | `transform` | Pure data mapping with expressions, no side effects |
 | `ai` | LLM call with a typed output schema |
 
@@ -659,6 +660,8 @@ A trigger turns an outside event into a `RunStarted` event, and every trigger pa
 | USSD | Session callback from an aggregator, mapped to a menu workflow | Session id plus step |
 | Email | Inbound address per workflow, parsed to structured fields | Message-ID header |
 | Subflow | Called by another workflow | Parent run and step |
+| Form (proposed) | A hosted form submitted: public, by one-time link, or by a signed-in member ([forms](forms.md)) | Submission id |
+| Storefront (proposed) | A hosted form on a business's public storefront submitted ([storefronts](storefronts.md)) | Submission id |
 
 ### 8.2 Ingest pipeline
 
@@ -844,6 +847,10 @@ WhatsApp is a full client of the platform, not just a notification channel: user
 ### 11.6 Languages and voice
 
 Phase 3 adds Nigerian Pidgin, Yoruba, Hausa, and Igbo for intent matching and replies, plus voice-note transcription, since many SME owners prefer voice. Quality for each language must be tested with native speakers before launch.
+
+### 11.7 Storefronts (proposed)
+
+A business without a website gets a one-page public storefront: its details, a catalogue (a data table), and actions such as ordering, each a hosted form whose submission starts a workflow. The owner handles orders from chat with the approvals above. The full specification is [storefronts](storefronts.md), proposed in decision 0036.
 
 ## 12. AI workflow builder and self-repair
 
