@@ -139,6 +139,10 @@ type Alerter struct {
 	// WhatsApp delivers to whatsapp channels; nil leaves them failing with
 	// a reason.
 	WhatsApp WhatsApp
+	// Telegram delivers to telegram channels (members' linked Telegram
+	// accounts, decision 0035) through the same interface; nil leaves them
+	// failing with a reason.
+	Telegram WhatsApp
 	// PublicURL builds links back into the web app.
 	PublicURL string
 	Interval  time.Duration // default 30s
@@ -746,20 +750,27 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 		}
 		body, _ := json.Marshal(map[string]any{"text": "*" + slackEscape(m.Title) + "*\n" + slackEscape(text)})
 		return a.post(ctx, tenant, hook, body, nil)
-	case "whatsapp":
+	case "whatsapp", "telegram":
 		var cfg struct {
 			Members []uuid.UUID `json:"members"`
 		}
 		if err := json.Unmarshal(cfgRaw, &cfg); err != nil || len(cfg.Members) == 0 {
 			return errors.New("the channel names no members")
 		}
-		if a.WhatsApp == nil {
+		chat := a.WhatsApp
+		if kind == "telegram" {
+			chat = a.Telegram
+		}
+		if chat == nil {
+			if kind == "telegram" {
+				return errors.New("the Telegram bot is not configured on this deployment (TASKIEM_TELEGRAM_*)")
+			}
 			return errors.New("WhatsApp is not configured on this deployment (TASKIEM_WHATSAPP_*)")
 		}
 		if m.Kind != "test" {
 			// Delivered once queued: each member's message is retried by
 			// the outbox, so a failure for one never resends to the rest.
-			return a.WhatsApp.Queue(ctx, tenant, m.ID, cfg.Members)
+			return chat.Queue(ctx, tenant, m.ID, cfg.Members)
 		}
 		var detail map[string]any
 		_ = json.Unmarshal(m.Detail, &detail)
@@ -767,7 +778,7 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 		if m.Link != nil {
 			link = *m.Link
 		}
-		return a.WhatsApp.Notify(ctx, tenant, cfg.Members, m.Kind, m.Title, m.Body, link, detail)
+		return chat.Notify(ctx, tenant, cfg.Members, m.Kind, m.Title, m.Body, link, detail)
 	case "webhook":
 		var cfg struct {
 			URL string `json:"url"`

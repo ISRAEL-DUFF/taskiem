@@ -54,7 +54,7 @@ func (s *Server) listAlertChannels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"channels": nonNil(out), "email_configured": s.Alerts != nil && s.Alerts.Mailer != nil,
-		"whatsapp_configured": s.WhatsApp != nil})
+		"whatsapp_configured": s.WhatsApp != nil, "telegram_configured": s.Telegram != nil})
 }
 
 // createAlertChannel adds a channel. A Slack webhook URL is a credential
@@ -102,8 +102,9 @@ func (s *Server) createAlertChannel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		secret = req.URL
-	case "whatsapp":
-		// Members, by email: each alert goes to those with a bound number.
+	case "whatsapp", "telegram":
+		// Members, by email: each alert goes to those who have linked the
+		// channel (a WhatsApp number, a Telegram account).
 		if len(req.To) == 0 || len(req.To) > 20 {
 			s.fail(w, r, fmt.Errorf("%w: give 1 to 20 members' emails", errBadRequest))
 			return
@@ -117,11 +118,11 @@ func (s *Server) createAlertChannel(w http.ResponseWriter, r *http.Request) {
 		cfg["url"] = u.String()
 		secret = "whsec_" + newToken()
 	default:
-		s.fail(w, r, fmt.Errorf("%w: kind is email, slack, whatsapp or webhook", errBadRequest))
+		s.fail(w, r, fmt.Errorf("%w: kind is email, slack, whatsapp, telegram or webhook", errBadRequest))
 		return
 	}
 	p := principalFrom(r.Context())
-	if req.Kind == "whatsapp" {
+	if req.Kind == "whatsapp" || req.Kind == "telegram" {
 		err := s.tx(r, func(tx pgx.Tx) error {
 			var ids []uuid.UUID
 			var emails []string

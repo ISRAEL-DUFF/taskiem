@@ -40,3 +40,4 @@ Names: the index uses today's names. Xenibase was called PGDock until October 20
 | [0032](0032-deployment-target.md) | Deployment target: one VM (with the platform's guarantees kept) until a named trigger, then Kubernetes with the Helm chart | Proposed (provider and region pending P4-C1); amended: the VM runs itself |
 | [0033](0033-data-tables-on-xenibase.md) | Data tables: a Xenibase project per organisation, provisioned by Taskiem and reached as a managed `xenibase@1` connection; rows through the data API with idempotency keys | Proposed |
 | [0034](0034-oauth-connections.md) | OAuth connections: state and PKCE kept server-side, ten-minute requests, one project per connection, revocation both ways, client registration in the environment for now | Proposed |
+| [0035](0035-telegram-channel.md) | Telegram as a second chat channel: one shared conversation behind a channel interface, tg:<id> addresses, one-time deep-link linking, the same decision tokens | Accepted |

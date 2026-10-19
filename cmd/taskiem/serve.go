@@ -46,6 +46,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/status"
+	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
 	"github.com/israel-duff/taskiem/engine/webauthn"
@@ -88,6 +89,12 @@ type config struct {
 	Limits runtime.Limits
 	// WhatsApp is the platform number (TASKIEM_WHATSAPP_*); nil: off.
 	WhatsApp *whatsapp.Config
+	// Telegram is the platform bot (TASKIEM_TELEGRAM_*, decision 0035);
+	// nil: off.
+	Telegram *telegram.Config
+	// ChatTokenKey signs approval tokens when WhatsApp is off
+	// (TASKIEM_CHAT_TOKEN_KEY; with WhatsApp on, its token key is used).
+	ChatTokenKey []byte
 	// AI is the model provider for AI building (TASKIEM_AI_*, docs/ai.md).
 	AI ai.Config
 	// Languages are languages beyond English and voice notes on WhatsApp,
@@ -354,6 +361,16 @@ func loadConfig() (config, error) {
 	if c.WhatsApp, err = whatsapp.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
+	if c.Telegram, err = telegram.ConfigFromEnv(os.LookupEnv); err != nil {
+		return c, err
+	}
+	if c.Telegram != nil && c.WhatsApp == nil {
+		key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(os.Getenv("TASKIEM_CHAT_TOKEN_KEY")))
+		if err != nil || len(key) < 32 {
+			return c, errors.New("TASKIEM_TELEGRAM_BOT_TOKEN is set without WhatsApp: TASKIEM_CHAT_TOKEN_KEY must be at least 32 bytes, base64 (openssl rand -base64 32); it signs approval buttons")
+		}
+		c.ChatTokenKey = key
+	}
 	if c.AI, err = ai.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
@@ -444,6 +461,8 @@ type engine struct {
 	connectors *wasmconn.Source
 	// wa is the platform WhatsApp number, when configured.
 	wa *whatsapp.Platform
+	// tg is the platform Telegram bot, when configured.
+	tg *telegram.Platform
 }
 
 // tables is the data tables service (decision 0033): provisioning in the
@@ -499,6 +518,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 			l, err := e.store.LimitsFor(ctx, t)
 			return l.WhatsAppTemplatesMonthly, err
 		}}
+	}
+	if cfg.Telegram != nil {
+		e.tg = telegram.New(pool, *cfg.Telegram, &egress.Guard{Logger: log}, log)
 	}
 	return e, nil
 }
@@ -560,6 +582,7 @@ func aiSettings(c ai.Config) (*api.AISettings, error) {
 // size and budgets as the api role.
 func edgeServer(e *engine, cfg config, log *slog.Logger) (*api.Server, error) {
 	srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL, TrustProxy: cfg.TrustProxy}
+	e.chat(srv)
 	var err error
 	if srv.AI, err = aiSettings(cfg.AI); err != nil {
 		return nil, err
@@ -718,6 +741,10 @@ func serve(ctx context.Context, args []string) error {
 			srv.EmbedDir = cfg.WebDir + "/embed/v1"
 		}
 		srv.WhatsApp = e.wa
+		e.chat(srv)
+		if e.tg != nil {
+			tasks = append(tasks, func(ctx context.Context) error { setTelegramWebhook(ctx, e.tg, cfg.PublicURL, log); return nil })
+		}
 		if srv.Languages, srv.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
 			return err
 		}
@@ -739,6 +766,10 @@ func serve(ctx context.Context, args []string) error {
 			wa := http.StripPrefix("/channels/whatsapp", git.WhatsAppHooks())
 			mux.Handle("/channels/whatsapp", wa)
 			mux.Handle("/channels/whatsapp/", wa)
+		}
+		if e.tg != nil {
+			// The platform bot's webhook (docs/telegram.md).
+			mux.HandleFunc("/channels/telegram", git.TelegramHooks().ServeHTTP)
 		}
 		// USSD aggregators' callbacks: the fast path (docs/ussd.md).
 		mux.Handle("/channels/ussd/", http.StripPrefix("/channels/ussd", git.USSDHooks()))
@@ -901,6 +932,9 @@ func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
 	if e.wa != nil {
 		a.WhatsApp = e.wa
 	}
+	if e.tg != nil {
+		a.Telegram = &api.TelegramAlerts{Pool: e.pool, Telegram: e.tg}
+	}
 	if c.SMTPURL != "" {
 		m, err := alerts.NewSMTPMailer(c.SMTPURL)
 		if err != nil {
@@ -973,4 +1007,37 @@ func (c config) relyingParty() (webauthn.Config, error) {
 		return webauthn.Config{}, fmt.Errorf("TASKIEM_PASSKEY_RP_ID %q must be the host of TASKIEM_PUBLIC_URL or a domain above it", rp)
 	}
 	return webauthn.Config{RPID: rp, RPName: "Taskiem", Origins: []string{u.Scheme + "://" + u.Host}}, nil
+}
+
+// chat gives a server the chat channels: the Telegram bot, and the key
+// that signs approval buttons when WhatsApp is off.
+func (e *engine) chat(srv *api.Server) {
+	srv.Telegram = e.tg
+	if e.wa == nil && len(e.cfg.ChatTokenKey) > 0 {
+		srv.ChatSigner = whatsapp.Signer{Key: e.cfg.ChatTokenKey}
+	}
+}
+
+// setTelegramWebhook points the platform bot's updates at this deployment
+// (PUBLIC_URL/channels/telegram, with the webhook secret), retrying until
+// Telegram accepts it: nothing to do by hand. Telegram needs https.
+func setTelegramWebhook(ctx context.Context, tg *telegram.Platform, publicURL string, log *slog.Logger) {
+	if !strings.HasPrefix(publicURL, "https://") {
+		log.Warn("Telegram webhook not set: TASKIEM_PUBLIC_URL must be https for Telegram to deliver updates", "public_url", publicURL)
+		return
+	}
+	url := strings.TrimRight(publicURL, "/") + "/channels/telegram"
+	for wait := 5 * time.Second; ; wait = min(wait*2, 10*time.Minute) {
+		err := tg.Client.SetWebhook(ctx, url, tg.Config.WebhookSecret)
+		if err == nil {
+			log.Info("Telegram webhook set", "url", url)
+			return
+		}
+		log.Warn("Telegram webhook not set yet", "err", err, "retry_in", wait)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+	}
 }

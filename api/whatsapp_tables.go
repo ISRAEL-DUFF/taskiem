@@ -487,7 +487,7 @@ func (s *Server) waTableInsert(ctx context.Context, c *chat) error {
 		}
 		return c.say(ctx, s, c.t("wa.table.denied_now", "org", c.tenant.Name))
 	}
-	if !s.limiter("wa-table:"+c.number, 20*time.Second, 3).Allow() {
+	if !s.limiter("wa-table:"+c.addr, 20*time.Second, 3).Allow() {
 		return c.say(ctx, s, c.t("wa.table.too_many"))
 	}
 	t, err := s.waGetTable(ctx, c.tenant.ID, data.Table)
@@ -531,7 +531,7 @@ func (s *Server) waTableInsert(ctx context.Context, c *chat) error {
 		}
 	}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		return waAudit(ctx, tx, c.p, "table.row.add", t.Name, map[string]any{"table_id": t.ID, "row_id": id, "replayed": out["replayed"] == true})
+		return waAudit(ctx, tx, c.ch.Name(), c.p, "table.row.add", t.Name, map[string]any{"table_id": t.ID, "row_id": id, "replayed": out["replayed"] == true})
 	}); err != nil {
 		return err
 	}

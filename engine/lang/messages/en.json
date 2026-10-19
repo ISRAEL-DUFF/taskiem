@@ -139,6 +139,31 @@
       "reviewed": true,
       "context": "SMS after a USSD run that needs reconciliation (ASCII)"
     },
+    "tg.button_expired": {
+      "text": "That button has expired. Send *approvals* to get your open approvals again.",
+      "reviewed": true,
+      "context": "A Telegram button that is unknown, expired or not for this account was tapped"
+    },
+    "tg.link_invalid": {
+      "text": "That link has expired or was already used. Make a new one under Telegram on {where}.",
+      "reviewed": true,
+      "context": "A one-time Telegram link that is unknown, expired or spent; {where} is the account page"
+    },
+    "tg.link_taken": {
+      "text": "This Telegram account is linked to another Taskiem account. Unlink it there first.",
+      "reviewed": true,
+      "context": "The Telegram account opening a link is already linked to someone else"
+    },
+    "tg.linked": {
+      "text": "This Telegram account is now linked to your Taskiem account. Send *help* to see what you can do here.",
+      "reviewed": true,
+      "context": "A Telegram account was linked by opening its one-time link"
+    },
+    "tg.unbound": {
+      "text": "This Telegram account is not linked to a Taskiem account. To use Taskiem here, sign in, open {where}, and choose Link Telegram: it opens this chat with a one-time link.",
+      "reviewed": true,
+      "context": "A Telegram account linked to no one wrote; {where} is the account page"
+    },
     "ussd.busy": {
       "text": "This service is busy. Please try again shortly.",
       "reviewed": true,

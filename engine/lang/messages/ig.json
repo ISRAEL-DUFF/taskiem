@@ -112,6 +112,26 @@
       "text": "Ana-enyocha aririo gi {reference}. Anyi ga-agwa gi.",
       "reviewed": false
     },
+    "tg.button_expired": {
+      "text": "Bọtịnụ ahụ agwụla oge. Zipu *approvals* ka ị nweta nnabata gị ndị ka mepere emepe ọzọ.",
+      "reviewed": false
+    },
+    "tg.link_invalid": {
+      "text": "Njikọ ahụ agwụla oge ma ọ bụ ejirila ya mee ihe. Mepụta nke ọhụrụ n'okpuru Telegram na {where}.",
+      "reviewed": false
+    },
+    "tg.link_taken": {
+      "text": "Ejikọọla akaụntụ Telegram a na akaụntụ Taskiem ọzọ. Buru ụzọ wepụ ya n'ebe ahụ.",
+      "reviewed": false
+    },
+    "tg.linked": {
+      "text": "Ejikọọla akaụntụ Telegram a na akaụntụ Taskiem gị ugbu a. Zipu *help* ka ịhụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false
+    },
+    "tg.unbound": {
+      "text": "Akaụntụ Telegram a ejikọbeghị ya na akaụntụ Taskiem ọ bụla. Iji jiri Taskiem ebe a, banye, mepee {where}, ma họrọ Link Telegram: ọ ga-emepe mkparịta ụka a site na njikọ otu oge.",
+      "reviewed": false
+    },
     "ussd.busy": {
       "text": "Oru a na-arusi ike. Biko nwaa ozo n'oge na-adighi anya.",
       "reviewed": false

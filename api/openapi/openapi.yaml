@@ -52,6 +52,9 @@ tags:
 - name: WhatsApp
   description: Linking people to WhatsApp, the tenant's own number, the outbox and approval hand-offs.
   x-taskiem-guide: whatsapp
+- name: Telegram
+  description: Linking people to the platform's Telegram bot.
+  x-taskiem-guide: telegram
 - name: Account
   description: 'The signed-in person: who they are, their factors, invitations and email confirmation.'
   x-taskiem-guide: governance
@@ -4529,6 +4532,91 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/telegram:
+    get:
+      operationId: getTelegram
+      tags:
+      - Telegram
+      summary: Get the caller's Telegram link
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLink'
+        '403':
+          description: An API key has no Telegram account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: startTelegramLink
+      tags:
+      - Telegram
+      summary: Make a one-time Telegram link
+      description: Returns a t.me link to the platform bot, valid once for 10 minutes. The Telegram account that opens it and
+        presses Start is linked to the caller.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactorProof'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkMade'
+        '403':
+          description: An API key, or the proof is missing or wrong (`reauth`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Telegram is not set up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many links asked for.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unlinkTelegram
+      tags:
+      - Telegram
+      summary: Unlink Telegram
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/whatsapp:
@@ -11929,11 +12017,12 @@ components:
       - email
       - slack
       - whatsapp
+      - telegram
       - webhook
     AlertChannelConfig:
       type: object
-      description: 'What the channel sends to: `to` for email; `url` for a webhook; `members` and `emails` for WhatsApp;
-        nothing for Slack (its webhook URL is kept in the vault).'
+      description: 'What the channel sends to: `to` for email; `url` for a webhook; `members` and `emails` for WhatsApp
+        and Telegram; nothing for Slack (its webhook URL is kept in the vault).'
       properties:
         to:
           type: array
@@ -11992,6 +12081,9 @@ components:
         whatsapp_configured:
           type: boolean
           description: Whether the deployment has a WhatsApp number.
+        telegram_configured:
+          type: boolean
+          description: Whether the deployment has a Telegram bot.
       additionalProperties: false
     AlertChannelRequest:
       type: object
@@ -17218,6 +17310,44 @@ components:
         flows:
           type: boolean
           description: Whether WhatsApp forms are available.
+      additionalProperties: false
+    TelegramLink:
+      type: object
+      required:
+      - enabled
+      - linked
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the deployment has a Telegram bot.
+        bot_username:
+          type: string
+          description: The bot, without @.
+        linked:
+          type: boolean
+        username:
+          type: string
+          description: The linked account's Telegram username, when it has one.
+        verified_at:
+          type: string
+          format: date-time
+        pending_expires_at:
+          type: string
+          format: date-time
+          description: A link made and not opened yet works until then.
+      additionalProperties: false
+    TelegramLinkMade:
+      type: object
+      required:
+      - url
+      - expires_at
+      properties:
+        url:
+          type: string
+          description: https://t.me/<bot>?start=<code>; works once.
+        expires_at:
+          type: string
+          format: date-time
       additionalProperties: false
     WhatsAppBindRequest:
       type: object
