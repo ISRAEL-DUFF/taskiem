@@ -11,7 +11,7 @@ The chat-first strategy targets small Nigerian businesses that run on WhatsApp a
 1. **A one-page storefront per tenant, as the front door to workflows**, not a website builder: fixed mobile-first templates, a business card, a catalogue and actions. No custom HTML, CSS or JavaScript, ever.
 2. **The catalogue and orders are data tables.** Owners edit them as they already edit tables, from the web app or chat, and workflows read and write them.
 3. **Actions are hosted forms generated from the action workflow's input schema**, starting runs through a new `storefront` trigger in wd/v1, deduplicated per submission. The customer gets an immediate reference; the outcome arrives by message, never by holding a page open.
-4. **Each business on its own domain**, registered and pointed by the group's domain platform as part of its plan, with a dedicated preview domain beside it. Pages are isolated from the app's origin and cookies, rendered on the server by the edge role, and small enough for 3G and cheap phones.
+4. **Each business on its own domain**, registered and pointed by the group's domain platform as part of its plan, with a dedicated preview domain beside it. Pages are isolated from the app's origin and cookies, rendered on the server by a separate `public` role with its own Postgres role and pool, and small enough for 3G and cheap phones. Page views read a copy of the catalogue kept in Taskiem, never Xenibase or the primary database.
 5. **Trust and safety in v1:**
    - verification levels gate what a page can do;
    - look-alike and reserved names are refused;
@@ -47,6 +47,8 @@ Original to Taskiem:
 - **A full site builder.** Rejected: it would turn Taskiem into a different product and open the door to arbitrary content and phishing.
 - **Pages on the app's domain.** Rejected: one mistake in a page could reach the app's cookies and origin.
 - **Embedding as HTML written into the host site** (a script that builds the form in the site's page). Rejected: the site's own scripts could read what customers type, and the storefront's CSP would not apply. A frame keeps the form on the storefront's origin.
+- **Rendering pages on the `edge` role.** Rejected: `edge` takes payment and chat webhooks, which a viral page or a flood must never delay.
+- **Reading the catalogue live from Xenibase on each view.** Rejected: it spends the business's Xenibase rate limits on page views and fails while a project is paused. A copy refreshed on change is served instead.
 - **A free plan.** Rejected by the product owner: every storefront comes with a domain, which has a cost, and paid plans keep out throwaway scam pages.
 - **Moderation:**
   - *A dedicated image-safety service* is cheap and good at nudity and violence, but cannot judge scams, counterfeits or text.

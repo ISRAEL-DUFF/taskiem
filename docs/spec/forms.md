@@ -223,7 +223,7 @@ The same form can be filled in from WhatsApp (as a Flow) or Telegram (one questi
 
 ### 7.3 Abuse
 
-- **Rate limits:** per form and per IP hash (default 20 submissions an hour per IP for a public form), and the organisation's ingest limits.
+- **Rate limits:** per form and per IP hash (default 50 submissions an hour per IP for a public form, generous because mobile networks share IPs; see [storefronts 7.5](storefronts.md#75-abuse-of-forms)), and the organisation's ingest limits.
 - **Bots:** a hidden honeypot field, a minimum time to fill in, and a light proof-of-work in the page's script. A form under attack falls back to requiring the code (`verify`) for a while. No third-party captcha, which would be a new data processor.
 - **Size:** a submission is at most 256 KB without files.
 - **Plan limits:** submissions count as runs. Beyond the plan, the form shows its closed message and the organisation is alerted.
@@ -259,7 +259,7 @@ The run's `trigger.body` is the answers, checked against `inputs.schema`, exactl
 - **A domain of its own** (for example `forms.<platform domain>`), separate from the app and the API, serving nothing else. Organisations can use their own subdomain (`forms.example.com`), verified like embed domains ([embedding 10](../embedding.md#10-custom-domains)). The storefront host and the form host can be the same service with separate domains.
 - **No cookies.** The idempotency token and the session id of a multi-page form are in the form. `members` forms are served by the app instead, under its session.
 - **Strict CSP:** `default-src 'self'`, no inline scripts except hashed ones, `form-action 'self'`, `frame-ancestors 'none'` except `/embed/` pages for verified sites.
-- **Rendering** by the `edge` role (Go templates), working without JavaScript. Conditions are evaluated on the server between pages; a small script shows and hides fields on the same page and uploads files with progress. Page weight is under 50 KB before the logo.
+- **Rendering** by the `public` role shared with storefronts, with its own Postgres role and pool ([storefronts 8.3](storefronts.md#83-isolation-from-the-app)) (Go templates), working without JavaScript. Conditions are evaluated on the server between pages; a small script shows and hides fields on the same page and uploads files with progress. Page weight is under 50 KB before the logo.
 - **Narrow access:** the host reads a form's deployed definition and options for `x-form.options_from` through narrow functions, never with a tenant's broad scope.
 
 ### 8.4 API
@@ -312,6 +312,8 @@ Submissions are runs and count against the plan's runs. Forms add:
 The limits per plan are for the pricing work (B1), like the others.
 
 ## 12. Phasing
+
+v1 is milestone S7 of Phase 5 in the [build plan](build-plan.md#phase-5--storefronts-and-forms-about-20-weeks), on the public host built in S1.
 
 | Phase | Scope |
 | --- | --- |
