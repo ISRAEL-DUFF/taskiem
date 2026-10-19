@@ -1220,34 +1220,6 @@ export const paystack = {
   verify_transfer: (input: PaystackVerifyTransferInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "verify_transfer", input, extra),
 };
 
-// PGDock (pgdock@1)
-export interface PgdockGetRowInput {
-  /** Primary key columns and values, e.g. {id: 7} */
-  key: Value;
-  schema?: Val<string>;
-  table: Val<string>;
-}
-export interface PgdockQueryRowsInput {
-  /** The previous page's next */
-  after?: Val<string>;
-  filters?: Value;
-  limit?: Val<number>;
-  order?: Value;
-  schema?: Val<string>;
-  table: Val<string>;
-}
-export interface PgdockTestConnectionInput {
-  [key: string]: Value;
-}
-export const pgdock = {
-  /** Get a row by its key (read) */
-  get_row: (input: PgdockGetRowInput, extra?: ConnectorExtra): StepSpec => connector("pgdock@1", "get_row", input, extra),
-  /** Query rows (read) */
-  query_rows: (input: PgdockQueryRowsInput, extra?: ConnectorExtra): StepSpec => connector("pgdock@1", "query_rows", input, extra),
-  /** Check the connection (read) */
-  test_connection: (input?: PgdockTestConnectionInput, extra?: ConnectorExtra): StepSpec => connector("pgdock@1", "test_connection", input, extra),
-};
-
 // PostgreSQL (postgres@1)
 export interface PostgresExecuteInput {
   params?: Value;
@@ -1920,6 +1892,104 @@ export const whatsapp = {
   send_text: (input: WhatsappSendTextInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_text", input, extra),
 };
 
+// Xenibase (xenibase@1)
+export interface XenibaseCallFunctionInput {
+  /** Named arguments */
+  args?: Value;
+  /** The function */
+  function: Val<string>;
+}
+export interface XenibaseDeleteRowsInput {
+  filters?: Value;
+  /** The primary key value of one row */
+  key?: Value;
+  max_affected?: Val<number>;
+  table: Val<string>;
+}
+export interface XenibaseGetRowInput {
+  /** Primary key columns and values, e.g. {id: 7} */
+  key: Value;
+  schema?: Val<string>;
+  table: Val<string>;
+}
+export interface XenibaseInsertRowsInput {
+  /** minimal: only affected */
+  return?: Val<"representation" | "minimal">;
+  /** One row; or use rows */
+  row?: Value;
+  rows?: Value;
+  /** Which columns of the written rows come back (default all) */
+  select?: Val<string>;
+  table: Val<string>;
+}
+export interface XenibaseQueryRowsInput {
+  /** The previous page's next */
+  after?: Val<string>;
+  filters?: Value;
+  limit?: Val<number>;
+  order?: Value;
+  schema?: Val<string>;
+  table: Val<string>;
+}
+export interface XenibaseReadRowsInput {
+  /** Also count the rows the filters match */
+  count?: Val<"exact" | "estimated">;
+  /** The previous page's next_cursor */
+  cursor?: Val<string>;
+  filters?: Value;
+  limit?: Val<number>;
+  order?: Value;
+  /** Columns to return (default all), as the data API's select: id,title,owner:profiles(name) */
+  select?: Val<string>;
+  /** The table */
+  table: Val<string>;
+}
+export interface XenibaseTestConnectionInput {
+  [key: string]: Value;
+}
+export interface XenibaseUpdateRowsInput {
+  filters?: Value;
+  /** The primary key value of one row (single-column keys) */
+  key?: Value;
+  max_affected?: Val<number>;
+  return?: Val<"representation" | "minimal">;
+  select?: Val<string>;
+  /** The columns to set and their values */
+  set: Value;
+  table: Val<string>;
+}
+export interface XenibaseUpsertRowsInput {
+  /** The columns of a unique constraint */
+  on_conflict: Value;
+  resolution?: Val<"merge" | "ignore">;
+  return?: Val<"representation" | "minimal">;
+  /** One row; or use rows */
+  row?: Value;
+  rows?: Value;
+  select?: Val<string>;
+  table: Val<string>;
+}
+export const xenibase = {
+  /** Call a database function (idempotent_write) */
+  call_function: (input: XenibaseCallFunctionInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "call_function", input, extra),
+  /** Delete rows (idempotent_write) */
+  delete_rows: (input: XenibaseDeleteRowsInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "delete_rows", input, extra),
+  /** Get a row by its key (read) */
+  get_row: (input: XenibaseGetRowInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "get_row", input, extra),
+  /** Insert rows (idempotent_write) */
+  insert_rows: (input: XenibaseInsertRowsInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "insert_rows", input, extra),
+  /** Query rows (read) */
+  query_rows: (input: XenibaseQueryRowsInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "query_rows", input, extra),
+  /** Read rows (data API) (read) */
+  read_rows: (input: XenibaseReadRowsInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "read_rows", input, extra),
+  /** Check the connection (read) */
+  test_connection: (input?: XenibaseTestConnectionInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "test_connection", input, extra),
+  /** Update rows (idempotent_write) */
+  update_rows: (input: XenibaseUpdateRowsInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "update_rows", input, extra),
+  /** Upsert rows (idempotent_write) */
+  upsert_rows: (input: XenibaseUpsertRowsInput, extra?: ConnectorExtra): StepSpec => connector("xenibase@1", "upsert_rows", input, extra),
+};
+
 // Youverify (youverify@1)
 export interface YouverifyCompareFacesInput {
   image1: Val<string>;
@@ -2080,7 +2150,6 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "mysql@1": "mysql",
   "opay@1": "opay",
   "paystack@1": "paystack",
-  "pgdock@1": "pgdock",
   "postgres@1": "postgres",
   "prembly@1": "prembly",
   "remita@1": "remita",
@@ -2090,6 +2159,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "telegram@1": "telegram",
   "termii@1": "termii",
   "whatsapp@1": "whatsapp",
+  "xenibase@1": "xenibase",
   "youverify@1": "youverify",
 };
 
@@ -2112,7 +2182,6 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "mysql@1": ["execute", "query"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "paystack@1": ["check_balance", "transfer", "verify_charge", "verify_transfer"],
-  "pgdock@1": ["get_row", "query_rows", "test_connection"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
@@ -2122,5 +2191,6 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_phone_number", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
+  "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],
   "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
 };

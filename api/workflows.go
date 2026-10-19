@@ -560,6 +560,10 @@ type connectorInfo struct {
 	Auth     connector.Auth             `json:"auth"`
 	Actions  map[string]connectorAction `json:"actions"`
 	Triggers []string                   `json:"triggers"`
+	// OAuthLinkable says whether a connector that declares auth.oauth2
+	// can be connected by OAuth on this platform (a client is registered
+	// and the provider's server known); absent for the others.
+	OAuthLinkable *bool `json:"oauth_linkable,omitempty"`
 }
 
 type connectorAction struct {
@@ -580,7 +584,7 @@ func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {
 	var out []connectorInfo
 	for _, c := range reg.List() {
 		m := c.Manifest
-		info := connectorInfo{Ref: c.Ref(), ID: m.ID, Version: m.Version, Name: m.Name, Auth: m.Auth, Actions: map[string]connectorAction{}, Triggers: []string{}}
+		info := connectorInfo{Ref: c.Ref(), ID: m.ID, Version: m.Version, Name: m.Name, Auth: m.Auth, Actions: map[string]connectorAction{}, Triggers: []string{}, OAuthLinkable: s.oauthLinkable(c)}
 		for name, a := range m.Actions {
 			info.Actions[name] = connectorAction{Title: a.Title, Class: string(a.Class), Input: a.Input, Output: a.Output}
 		}

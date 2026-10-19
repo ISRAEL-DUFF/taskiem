@@ -60,6 +60,7 @@ export interface MergeConflict {
 export const get = <T>(path: string) => api<T>("GET", path);
 export const post = <T>(path: string, body?: unknown) => api<T>("POST", path, body ?? {});
 export const put = <T>(path: string, body?: unknown) => api<T>("PUT", path, body ?? {});
+export const patch = <T>(path: string, body?: unknown) => api<T>("PATCH", path, body ?? {});
 export const del = <T>(path: string, body?: unknown) => api<T>("DELETE", path, body);
 
 // --- response shapes ---
@@ -199,7 +200,14 @@ export interface ConnectorInfo {
   id: string;
   version: string;
   name: string;
-  auth: { type: string; fields: { key: string; label: string; secret?: boolean; required?: boolean }[] | null };
+  auth: {
+    type: string;
+    fields: { key: string; label: string; secret?: boolean; required?: boolean }[] | null;
+    /** Declared by a connector that connects by OAuth (docs/connector-sdk.md). */
+    oauth2?: { authorize_url: string; token_url: string; revoke_url?: string; scopes: string[]; pkce: boolean; fields_from_token?: Record<string, string> };
+  };
+  /** For a connector with `auth.oauth2`: whether it can be connected by OAuth on this platform. */
+  oauth_linkable?: boolean;
   actions: Record<string, { title: string; class: string; input?: JSONSchema; output?: JSONSchema }>;
   triggers: string[];
 }
@@ -276,7 +284,7 @@ export interface TriggerInfo {
   remote?: RemoteSubscription;
 }
 
-/** A provider subscription Taskiem created for a trigger (a PGDock webhook). */
+/** A provider subscription Taskiem created for a trigger (a Xenibase webhook). */
 export interface RemoteSubscription {
   id: string;
   environment: string;

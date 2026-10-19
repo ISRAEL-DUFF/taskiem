@@ -103,6 +103,51 @@ func TestInvalid(t *testing.T) {
 	}
 }
 
+func TestOAuth2Declaration(t *testing.T) {
+	manifest := func(fields, oauth string) string {
+		src := strings.Replace(head, "auth: { type: none }", "auth:\n  type: api_key\n  fields:\n"+fields+"  oauth2:\n"+oauth, 1)
+		return src + "  get: { title: Get, class: read, input: { type: object } }\n"
+	}
+	fields := "    - { key: token, label: Token, secret: true }\n    - { key: project_id, label: Project }\n    - { key: note, label: Note, required: false }\n"
+	good := "    authorize_url: ${server}/oauth/authorize\n    token_url: https://p.example/oauth/token\n    revoke_url: ${server}/oauth/revoke\n    scopes: [read, write]\n    pkce: true\n    fields_from_token: { token: access_token, project_id: \"project_ids[0]\" }\n"
+	for name, c := range map[string]struct{ src, want string }{
+		"good":                   {manifest(fields, good), ""},
+		"no scopes":              {manifest(fields, strings.Replace(good, "[read, write]", "[]", 1)), "schema:"},
+		"pkce off":               {manifest(fields, strings.Replace(good, "pkce: true", "pkce: false", 1)), "schema:"},
+		"plain http":             {manifest(fields, strings.Replace(good, "https://p.example", "http://p.example", 1)), "schema:"},
+		"fragment":               {manifest(fields, strings.Replace(good, "https://p.example/oauth/token", "https://p.example/oauth/token#x", 1)), "without a fragment"},
+		"unknown field":          {manifest(fields, strings.Replace(good, "token: access_token", "token: access_token, other: org_id", 1)), "not an auth field"},
+		"required field missing": {manifest(fields, strings.Replace(good, ", project_id: \"project_ids[0]\"", "", 1)), `required field "project_id" is not filled`},
+		"bad token path":         {manifest(fields, strings.Replace(good, "project_ids[0]", "project_ids[1]", 1)), "schema:"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, probs := Parse([]byte(c.src))
+			if c.want == "" {
+				if len(probs) > 0 {
+					t.Fatalf("problems: %v", probs)
+				}
+				a, tok, rev, err := m.Auth.OAuth2.Resolve("https://xb.example/")
+				if err != nil || a != "https://xb.example/oauth/authorize" || tok != "https://p.example/oauth/token" || rev != "https://xb.example/oauth/revoke" {
+					t.Errorf("resolved %q %q %q, %v", a, tok, rev, err)
+				}
+				if _, _, _, err := m.Auth.OAuth2.Resolve(""); err == nil {
+					t.Error("resolved without a server")
+				}
+				if f, el := TokenField(m.Auth.OAuth2.FieldsFromToken["project_id"]); f != "project_ids" || !el {
+					t.Errorf("TokenField: %q %v", f, el)
+				}
+				return
+			}
+			for _, p := range probs {
+				if strings.Contains(p, c.want) {
+					return
+				}
+			}
+			t.Errorf("want a problem containing %q, got %v", c.want, probs)
+		})
+	}
+}
+
 func TestAckIsNeverAPage(t *testing.T) {
 	trigger := func(ct string) string {
 		return head + "  get: { title: Get, class: read, input: { type: object } }\ntriggers:\n  ev:\n    type: webhook\n" +

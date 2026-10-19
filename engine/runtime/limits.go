@@ -70,6 +70,11 @@ type Limits struct {
 	// MaxRetentionDays caps how long an ended run's history is kept, whatever
 	// its workflow or the tenant's governance settings ask for (spec 16.2).
 	MaxRetentionDays int `json:"max_retention_days"`
+	// MaxDataTables and MaxDataTableColumns: data tables a tenant may
+	// create and columns one table may have (decision 0033). Rows and
+	// size are the Xenibase project's own quotas.
+	MaxDataTables       int `json:"max_data_tables"`
+	MaxDataTableColumns int `json:"max_data_table_columns"`
 
 	// The plan (when billing is on) and its subscription status: a
 	// sub-tenant's are its partner's. Set by the store.
@@ -165,6 +170,8 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"container_minutes_monthly", "container-step minutes per UTC month; beyond it container steps fail (0: container steps are off)"},
 	{"container_concurrency", "container steps running at once (0: the platform default)"},
 	{"max_retention_days", "days an ended run's history is kept at most, whatever a workflow asks (0: no cap)"},
+	{"max_data_tables", "data tables (0: no limit)"},
+	{"max_data_table_columns", "columns one data table may have (0: no limit)"},
 }
 
 // DefaultContainerConcurrency is the platform's default cap on one
@@ -178,6 +185,13 @@ const DefaultWhatsAppTemplatesMonthly = 1000
 // DefaultAIMonthlyTokens is the platform's default monthly AI budget: a
 // few dozen builds with self-correction on a frontier model.
 const DefaultAIMonthlyTokens = 2_000_000
+
+// DefaultMaxDataTables and DefaultMaxDataTableColumns are the platform's
+// default data table limits (decision 0033).
+const (
+	DefaultMaxDataTables       = 20
+	DefaultMaxDataTableColumns = 50
+)
 
 // MaxPayload is the largest delivery any tenant may be allowed.
 const MaxPayload = 10 << 20
@@ -195,6 +209,8 @@ func DefaultLimits() Limits {
 
 		WhatsAppTemplatesMonthly: DefaultWhatsAppTemplatesMonthly,
 		ContainerConcurrency:     DefaultContainerConcurrency,
+		MaxDataTables:            DefaultMaxDataTables,
+		MaxDataTableColumns:      DefaultMaxDataTableColumns,
 	}
 }
 

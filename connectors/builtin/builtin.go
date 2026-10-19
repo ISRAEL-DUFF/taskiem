@@ -20,7 +20,6 @@ import (
 	"github.com/israel-duff/taskiem/connectors/mysql"
 	"github.com/israel-duff/taskiem/connectors/opay"
 	"github.com/israel-duff/taskiem/connectors/paystack"
-	"github.com/israel-duff/taskiem/connectors/pgdock"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/prembly"
 	"github.com/israel-duff/taskiem/connectors/remita"
@@ -30,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/telegram"
 	"github.com/israel-duff/taskiem/connectors/termii"
 	"github.com/israel-duff/taskiem/connectors/whatsapp"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/connectors/youverify"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
@@ -45,9 +45,9 @@ type Options struct {
 	OpayURL, RemitaURL                            string
 	MonoURL, PremblyURL, YouverifyURL             string
 	MpesaURL, MTNMoMoURL                          string
-	// PGDockURL is the platform's PGDock, for connections that name no
-	// server of their own (TASKIEM_PGDOCK_URL; none by default).
-	PGDockURL string
+	// XenibaseURL is the platform's Xenibase, for connections that name no
+	// server of their own (TASKIEM_XENIBASE_URL; none by default).
+	XenibaseURL string
 	// GoogleTokenURL overrides Google's OAuth token endpoint (tests).
 	GoogleTokenURL string
 }
@@ -79,7 +79,7 @@ func Register(r *connector.Registry, o Options) error {
 		mpesa.New(mpesa.Options{BaseURL: o.MpesaURL}),
 		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
 		postgres.New(),
-		pgdock.New(pgdock.Options{BaseURL: o.PGDockURL}),
+		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),
 		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),
 		sftp.New(),

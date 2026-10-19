@@ -1,6 +1,6 @@
 // Package remote keeps providers' subscriptions in step with deployed
 // workflows, for connector triggers registered remotely (decision 0021,
-// connector/v1 registration: remote): a PGDock webhook pointed at
+// connector/v1 registration: remote): a Xenibase webhook pointed at
 // Taskiem's ingest URL, for example.
 //
 // The lifecycle has two halves. Deploying records intent: the deploying
@@ -54,7 +54,7 @@ func Name(id uuid.UUID) string { return "taskiem-" + id.String() }
 
 // Declaration is a remote trigger a deployment wants.
 type Declaration struct {
-	Connector  string // "pgdock@1"
+	Connector  string // "xenibase@1"
 	Trigger    string
 	Connection string // "" for the only active connection
 	Events     []string

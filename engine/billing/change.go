@@ -261,6 +261,7 @@ func (s *Service) blockers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p P
 		{"max_workflows", int64(target.MaxWorkflows), `SELECT count(*) FROM workflows WHERE tenant_id = $1`, "workflows"},
 		{"max_secrets", int64(target.MaxSecrets), `SELECT count(*) FROM secrets WHERE tenant_id = $1 AND name IS NOT NULL`, "secrets"},
 		{"max_connections", int64(target.MaxConnections), `SELECT count(*) FROM connections WHERE tenant_id = $1 AND status = 'active'`, "connections"},
+		{"max_data_tables", int64(target.MaxDataTables), `SELECT count(*) FROM data_tables WHERE tenant_id = $1`, "data tables"},
 		{"max_subtenants", int64(p.Partner.MaxSubtenants), `SELECT count(*) FROM taskiem_partner_usage($1)`, "sub-tenants"},
 	}
 	for _, c := range checks {

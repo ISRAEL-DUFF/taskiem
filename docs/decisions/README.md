@@ -2,6 +2,8 @@
 
 One file per decision, numbered in order: `NNNN-short-title.md`. Each entry records what was decided, why, the alternatives considered, and, where the design resembles an existing product, where the idea came from. Entries are never rewritten: amendments are appended with a date, and a later decision supersedes an earlier one by number.
 
+Names: the index uses today's names. Xenibase was called PGDock until October 2026, and entries written before then (0018, 0021, 0025) say PGDock and `pgdock@1`; see the amendment to 0018.
+
 | # | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-event-sourced-execution.md) | Event-sourced runs with a pure `decide()` | Accepted |
@@ -21,7 +23,7 @@ One file per decision, numbered in order: `NNNN-short-title.md`. Each entry reco
 | [0015](0015-embedding-tenancy.md) | Embedding: sub-tenants entered through one audited function, opaque end-user tokens, a separate embed API | Accepted |
 | [0016](0016-repair-and-resume.md) | Self-repair: a background queue, rules before the model, a shadow sandbox, and resuming a failed run as a fork | Accepted |
 | [0017](0017-plans-and-billing.md) | Plans and billing: a config-file catalogue under the limits, subscriptions per top-level tenant, degraded never stranded | Accepted (prices pending B1) |
-| [0018](0018-pgdock-integration-principles.md) | PGDock integration: public contracts only, each product stands alone | Accepted |
+| [0018](0018-pgdock-integration-principles.md) | Xenibase integration: public contracts only, each product stands alone | Accepted |
 | [0019](0019-bring-your-own-key.md) | Bring your own key: the customer's key wraps outside the platform's, keys re-wrap in the background, work parks when a key is lost | Accepted |
 | [0020](0020-connector-catalogue.md) | The connector catalogue: signed packages, automated checks, four-eyes review, pinned installs with consent | Accepted (publisher agreement and reviewers pending P4-E1 to P4-E3) |
 | [0021](0021-remote-trigger-registration.md) | Remote trigger registration: intent recorded in the deploy, a reconciler for the provider (amends 0012) | Accepted |
@@ -36,3 +38,5 @@ One file per decision, numbered in order: `NNNN-short-title.md`. Each entry reco
 | [0030](0030-partner-onboarding.md) | Partner onboarding: people join a sub-tenant by invitation (a passkey link only for unclaimed accounts, the partner makes the first owner only), workflow packages installed as the sub-tenant's own copies, secrets set by its own people | Accepted |
 | [0031](0031-shared-provider-clients.md) | Shared provider clients: a wallet allow-list per connection, and a partner's provider events routed to its sub-tenants through one audited function | Accepted (iswallet wallet-scoped keys and per-wallet subscriptions asked for, P4-W1) |
 | [0032](0032-deployment-target.md) | Deployment target: one VM (with the platform's guarantees kept) until a named trigger, then Kubernetes with the Helm chart | Proposed (provider and region pending P4-C1); amended: the VM runs itself |
+| [0033](0033-data-tables-on-xenibase.md) | Data tables: a Xenibase project per organisation, provisioned by Taskiem and reached as a managed `xenibase@1` connection; rows through the data API with idempotency keys | Proposed |
+| [0034](0034-oauth-connections.md) | OAuth connections: state and PKCE kept server-side, ten-minute requests, one project per connection, revocation both ways, client registration in the environment for now | Proposed |

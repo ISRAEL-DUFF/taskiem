@@ -1,6 +1,6 @@
 # Partner tracker: what is still needed
 
-Last updated 14 October 2026, after iswallet's answers to PGDock. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
+Last updated 14 October 2026, after iswallet's answers to Xenibase. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
 
 The request pages sent to partners:
 
@@ -8,7 +8,7 @@ The request pages sent to partners:
 | --- | --- | --- |
 | Payrolla | [Payrolla integration: our answers, what's left, and the guide](https://claude.ai/artifact/QqY5U7DNXwAYVXq2hWZGDt) | 14 October 2026, answering Payrolla's reply |
 | iswallet (and iSpend) | [What Taskiem needs from iswallet to go live](https://claude.ai/artifact/QkzDpSN1V75TozwWs73Tpo) | 9 October 2026, plus section 3a on 14 October |
-| PGDock | [What Taskiem needs from PGDock](https://claude.ai/artifact/KjzURqhiLmdUsBttbXk7to) | 9 October 2026 |
+| Xenibase | [What Taskiem needs from Xenibase](https://claude.ai/artifact/KjzURqhiLmdUsBttbXk7to) | 9 October 2026 |
 
 Keys, tokens and signing secrets never travel in email, chat, tickets or these pages: the holder enters them on Taskiem's Connections or Secrets page, or we agree a one-time password-manager share.
 
@@ -31,7 +31,7 @@ Known from Payrolla's reply: report base URL `https://synledger.name.ng/payrolla
 
 ## iswallet (and iSpend)
 
-The connector is built on iswallet's answers of 5 October ([iswallet](integrations/iswallet.md), [answers](integrations/iswallet-answers-2026-10-05.md)). Their answers to PGDock of 12–13 October ([kept here](integrations/iswallet-answers-2026-10-12-pgdock.md)) were passed to us on 14 October: they do not answer our request page, but they settle H1, P4 and most of W4, and the connector now uses the lookup by key, `X-RateLimit-Reset` and per-side transfer dedup. Their FX, consent and billing questions are PGDock's.
+The connector is built on iswallet's answers of 5 October ([iswallet](integrations/iswallet.md), [answers](integrations/iswallet-answers-2026-10-05.md)). Their answers to Xenibase of 12–13 October ([kept here](integrations/iswallet-answers-2026-10-12-pgdock.md)) were passed to us on 14 October: they do not answer our request page, but they settle H1, P4 and most of W4, and the connector now uses the lookup by key, `X-RateLimit-Reset` and per-side transfer dedup. Their FX, consent and billing questions are Xenibase's.
 
 | Id | Needed from iswallet | When | Status |
 | --- | --- | --- | --- |
@@ -42,7 +42,7 @@ The connector is built on iswallet's answers of 5 October ([iswallet](integratio
 | H1 | Lookup by our idempotency key | Before production | [x] Shipped 12 October (`GET /v1/requests/{key}`); used by the connector |
 | H2 | Typed duplicate error instead of the 500, and the replay window | Before production | [ ] Now their top item; no longer blocks us (the lookup comes first) |
 | H3 | `Retry-After` on 429; higher rate limit for `payrolla` | Before production | [~] No `Retry-After` yet (on their list); we use `X-RateLimit-Reset`. No limit raise needed during Payrolla's beta (N1); ask again with the first real customer's headcount |
-| H6 | Error catalogue per endpoint, with retryability | Before production | [~] Debit codes given to PGDock match our handling; a full catalogue per endpoint still open |
+| H6 | Error catalogue per endpoint, with retryability | Before production | [~] Debit codes given to Xenibase match our handling; a full catalogue per endpoint still open |
 | H8 | `POST /v1/outflows` in the OpenAPI spec; multispend path fix | Before production | [ ] |
 | H4, H5, H7, H9 | Bulk payouts, structured transfer metadata, parked-credit signal, non-NGN limits | Later | [ ] |
 | P1 | KYC tier raised for the pilot company's wallet, limits confirmed by compliance | Before production | [ ] Not needed for the beta pilot (N1 fits TIER_1); needed for the first real customer |
@@ -60,31 +60,31 @@ The connector is built on iswallet's answers of 5 October ([iswallet](integratio
 | S2 | `ispend_api_url` (sandbox and production) and a bearer token, delivered securely | Now | [ ] |
 | S3 | Confirm the credit-exception workflow | Now | [ ] |
 
-## PGDock
+## Xenibase
 
-Phase 1 is built from PGDock's published contracts ([plan](pgdock-integration.md), [guide](integrations/pgdock.md)). Write actions wait on P1-G1.
+Xenibase (formerly PGDock). Phase 1 is built from its published contracts ([plan](xenibase-integration.md), [guide](integrations/xenibase.md)), including the write actions on the V4 data API. Xenibase's reply of October 2026 (`docs/integrations/taskiem-reply.md` in its repository) answers the items below; ticked on 17 October 2026.
 
-| Id | Needed from PGDock | When | Status |
+| Id | Needed from Xenibase | When | Status |
 | --- | --- | --- | --- |
 | S1 | Sandbox organisation, project-restricted token (read and write), cloud API base URL | Now | [ ] |
-| S2 | Signed sample deliveries (insert, update, delete, test, truncated) | Now | [ ] |
+| S2 | Signed sample deliveries (insert, update, delete, test, truncated) | Now | [x] `docs/integrations/fixtures/webhooks` in the Xenibase repository, checked in its CI |
 | S3 | A contact for contract questions | Now | [ ] |
-| P1-G1 | Parameterised SQL or row-write endpoints | Needed for write actions | [ ] |
-| P1-G3 | Webhook management API frozen as a versioned contract | Needed | [ ] |
-| P1-G4 | Error code list with retryability | Needed | [ ] |
-| P1-G2 | `Idempotency-Key` on writes | Wanted | [ ] |
-| C1 | Publish the V3 and V4 contracts (data API, auth, storage, billing events) | Needed for phases 2–4 | [ ] |
-| Q7–Q28 | Thirteen questions on the request page, section 3 | Answer | [ ] |
-| P2-G1, P3-G1/G2, P4 | OAuth consent, data API, project creation by token, contract tests in their CI | Later | [ ] |
+| P1-G1 | Parameterised SQL or row-write endpoints | Needed for write actions | [x] The V4 data API; no SQL endpoint will be added |
+| P1-G3 | Webhook management API frozen as a versioned contract | Needed | [x] `docs/webhooks.md`, with `description` and `metadata` |
+| P1-G4 | Error code list with retryability | Needed | [x] `docs/errors.md` |
+| P1-G2 | `Idempotency-Key` on writes | Wanted | [x] On every data API write, 24 hours |
+| C1 | Publish the V3 and V4 contracts (data API, auth, storage, billing events) | Needed for phases 2–4 | [~] Data API, auth, storage and paused projects published; no billing events yet |
+| Q7–Q28 | Thirteen questions on the request page, section 3 | Answer | [x] Answered; recorded in the plan's section 5 |
+| P2-G1, P3-G1/G2, P4 | OAuth consent, data API, project creation by token, contract tests in their CI | Later | [~] Data API and project creation by token exist; OAuth consent and the dedicated-instance role bootstrap are built on the Xenibase branch `claude/nigeria-workflow-automation-strategy-uoddh0`; contract tests in their CI once the `xenibase@1` suite is sent |
 
 ## What partners are waiting on from us
 
 | Item | For | Blocked by |
 | --- | --- | --- |
-| A Taskiem staging deployment with a public URL | Everyone: webhook URLs for Payrolla, iswallet subscriptions, PGDock testing | Infrastructure ([needs people](needs-people.md) D5, P4-C1) |
+| A Taskiem staging deployment with a public URL | Everyone: webhook URLs for Payrolla, iswallet subscriptions, Xenibase testing | Infrastructure ([needs people](needs-people.md) D5, P4-C1) |
 | Payrolla's partner tenant and partner API key | Payrolla onboarding (N4) | Staging |
 | Webhook URLs per product and environment | iswallet W3, P3; Payrolla per company | Staging, then production |
-| Fixed egress IPs | PGDock (if they allow-list); iswallet for forensics only | Cloud provider and NAT (P4-C1, P4-C5) |
+| Fixed egress IPs | Xenibase (if they allow-list); iswallet for forensics only | Cloud provider and NAT (P4-C1, P4-C5) |
 | Telling iswallet Payrolla's figures: beta only, 2 people and ₦3,000, so no tier or limit raise yet | iswallet H3, P1 | Nothing: N1 answered; send with the next iswallet message |
 | A sending domain for invitation emails | Company people joining their sub-tenants | P4-O1 |
-| Running the sandbox tests with each partner | Payrolla T1, iswallet W4, PGDock S1 | Staging and the sandbox items above |
+| Running the sandbox tests with each partner | Payrolla T1, iswallet W4, Xenibase S1 | Staging and the sandbox items above |

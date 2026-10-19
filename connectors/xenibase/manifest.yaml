@@ -1,0 +1,419 @@
+# Xenibase (formerly PGDock; managed Postgres). Workflows pin this connector
+# as xenibase@1 (it was pgdock@1 before the rename). Built only from what Xenibase
+# publishes (decision 0018, the "third-party test"), read 7 October 2026:
+#   docs/webhooks.md   webhooks: payload, Xenibase-Signature, delivery, truncation
+#                      (headers, project_id and primary_key on every event, and
+#                      description and metadata on webhooks: read 17 October 2026)
+#   docs/cli.md        API tokens: one organisation, scopes, project restriction
+#   docs/oauth-apps.md OAuth for third-party apps: authorize, token, revoke
+#                      (read 17 October 2026)
+#   api/openapi.yaml   /me (TokenGrant), /orgs/{org}, /projects,
+#                      /projects/{id}/webhooks[/{webhook_id}[/rotate-secret]],
+#                      /projects/{id}/tables/{schema}/{table}/rows, Error
+# and, for the data API (version 1.1.0), read 17 October 2026:
+#   api/openapi.yaml   /projects/{id}/services (BackendServices: ref, url)
+#   docs/backend-services.md
+#                      Keys (the apikey header, the secret key runs as the
+#                      service role), Reading data (POST /data/v1/{table}/query),
+#                      Writing data (POST, PATCH, DELETE /data/v1/{table},
+#                      on_conflict, filter_required, max_affected, return,
+#                      select), Retrying writes safely: Idempotency-Key,
+#                      Functions (POST /data/v1/rpc/{function})
+#   docs/errors.md     the Data API table: codes, classes, Retry-After
+#   docs/integrations/taskiem-reply.md
+#                      P1-G1 (writes go through the data API; there will be
+#                      no parameterised SQL endpoint), P1-G2 (the key)
+# Reads and the row-changed trigger use the management API with the
+# connection's token; writes, functions and read_rows use the project's
+# data API with its secret key. See docs/integrations/xenibase.md.
+manifest: connector/v1
+id: xenibase
+version: 1.1.0
+name: Xenibase
+description: Start workflows when rows change in a Xenibase (formerly PGDock) project (Taskiem creates and removes the webhook itself); read, insert, upsert, update and delete a table's rows and call its functions through the project's data API.
+category: database
+auth:
+  type: api_key
+  fields:
+    - { key: token, label: "API token (pgd_…). Restrict it to the project; read and write scopes", secret: true }
+    - { key: project_id, label: Project ID }
+    - { key: org_id, label: Organisation ID (optional; checked against the token), required: false }
+    - { key: base_url, label: "Xenibase server URL (https://…; empty: the platform's Xenibase)", required: false }
+    - { key: secret_key, label: "Project secret key (xb_sec_…); needed for writes and functions", secret: true, required: false }
+    - { key: api_url, label: "Data API URL (https://<ref>.<api-domain>); from the project's API page", required: false }
+  # Or connect with one click: Xenibase's OAuth 2.0 authorization code
+  # grant with PKCE (Xenibase docs/oauth-apps.md, read 17 October 2026;
+  # decision 0034). The URLs are the platform's Xenibase (TASKIEM_XENIBASE_URL)
+  # resolved at runtime; a self-hosted Xenibase is not linkable this way
+  # until it registers Taskiem as a client. Taskiem asks for read and
+  # write; the person may narrow them and restrict the token to projects.
+  # A connection is one project, so the grant must name exactly one.
+  oauth2:
+    authorize_url: "${server}/oauth/authorize"
+    token_url: "${server}/api/v1/oauth/token"
+    revoke_url: "${server}/api/v1/oauth/revoke"
+    scopes: [read, write]
+    pkce: true
+    fields_from_token: { token: access_token, org_id: org_id, project_id: "project_ids[0]", base_url: "${server}" }
+  test: { action: test_connection }
+# The server is the platform's Xenibase (TASKIEM_XENIBASE_URL) or the
+# connection's own (a self-hosted Xenibase); the data API is the project's
+# own hostname. The egress guard still refuses private addresses.
+egress_hosts: ["${connection.base_url}", "${connection.api_url}"]
+actions:
+  test_connection:
+    title: Check the connection
+    description: >-
+      Reads the token (organisation, scopes, projects it is restricted to)
+      and names its organisation and projects. Fails when the connection's
+      project is not one the token can reach. Also reads the project's
+      backend services and warns, without failing, when the connection's
+      data API URL is not the project's, or when it has no secret key
+      (writes, functions and read_rows need one).
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        organisation:
+          type: object
+          properties:
+            id:   { type: string }
+            name: { type: string }
+        project:
+          type: object
+          properties:
+            id:   { type: string }
+            name: { type: string }
+        projects:
+          type: array
+          items:
+            type: object
+            properties:
+              id:   { type: string }
+              name: { type: string }
+        scopes:     { type: array, items: { type: string } }
+        restricted: { type: boolean, description: The token is restricted to some projects (recommended) }
+        expires_at: { type: string }
+        api_url:    { type: string, description: The project's data API URL, when backend services are on }
+        warnings:   { type: array, items: { type: string } }
+  query_rows:
+    title: Query rows
+    description: >-
+      A page of a table's rows through the management API's rows endpoint:
+      structured filters (compiled by Xenibase to a parameterised WHERE
+      clause), order, up to 1,000 rows, and keyset pagination (pass next as
+      after). Values are never put into SQL text. Every value comes back as
+      text; read_rows returns typed values through the data API.
+    class: read
+    input:
+      type: object
+      required: [table]
+      properties:
+        schema: { type: string, default: public }
+        table:  { type: string }
+        filters:
+          type: array
+          items:
+            type: object
+            required: [column, op]
+            properties:
+              column: { type: string }
+              op:     { type: string, enum: [eq, neq, lt, lte, gt, gte, contains, is_null, not_null, in] }
+              value:  {}
+              values: { type: array }
+        order:
+          type: array
+          items:
+            type: object
+            required: [column]
+            properties:
+              column: { type: string }
+              desc:   { type: boolean }
+        limit: { type: integer, minimum: 1, maximum: 1000, default: 50 }
+        after: { type: string, description: The previous page's next }
+    output:
+      type: object
+      properties:
+        rows:        { type: array, items: { type: object } }
+        columns:     { type: array, items: { type: object, properties: { name: { type: string }, type: { type: string } } } }
+        next:        { type: string, description: Cursor of the next page; empty on the last }
+        order:       { type: string }
+        key_columns: { type: array, items: { type: string } }
+    pii:
+      - { field: output.rows, category: other }
+  get_row:
+    title: Get a row by its key
+    description: One row by its primary key (for example the primary_key of a truncated row-changed event). found is false when there is no such row.
+    class: read
+    input:
+      type: object
+      required: [table, key]
+      properties:
+        schema: { type: string, default: public }
+        table:  { type: string }
+        key:    { type: object, description: "Primary key columns and values, e.g. {id: 7}" }
+    output:
+      type: object
+      properties:
+        found: { type: boolean }
+        row:   { type: object }
+    pii:
+      - { field: output.row, category: other }
+  read_rows:
+    title: Read rows (data API)
+    description: >-
+      A page of a table's rows through the project's data API
+      (POST /data/v1/{table}/query, with the secret key): structured
+      filters (values are bound by Xenibase, never SQL text), order, up to
+      1,000 rows, keyset pagination (pass next_cursor as cursor) and an
+      optional count. Values come back typed (numbers, booleans, null),
+      unlike query_rows. Needs the connection's secret key and data API URL.
+    class: read
+    input:
+      type: object
+      required: [table]
+      properties:
+        table:  { type: string, description: The table, or schema.table for a schema other than public }
+        select: { type: string, description: "Columns to return (default all), as the data API's select: id,title,owner:profiles(name)" }
+        filters:
+          type: array
+          items:
+            type: object
+            required: [column, op]
+            properties:
+              column: { type: string }
+              op:     { type: string, enum: [eq, neq, lt, lte, gt, gte, in, like, ilike, is, contains, contained_by, search, is_null, not_null] }
+              value:  { description: "The value; for is: null, true or false" }
+              values: { type: array, description: For in }
+        order:
+          type: array
+          items:
+            type: object
+            required: [column]
+            properties:
+              column: { type: string }
+              desc:   { type: boolean }
+        limit:  { type: integer, minimum: 1, maximum: 1000, default: 100 }
+        cursor: { type: string, description: The previous page's next_cursor }
+        count:  { type: string, enum: [exact, estimated], description: Also count the rows the filters match }
+    output:
+      type: object
+      properties:
+        rows:        { type: array, items: { type: object } }
+        next_cursor: { type: string, description: Cursor of the next page; empty on the last }
+        count:       { type: integer, description: When count was asked for; null when the exact count ran out of time }
+    pii:
+      - { field: output.rows, category: other }
+  insert_rows:
+    title: Insert rows
+    description: >-
+      Inserts one row (row) or up to 1,000 rows (rows) through the
+      project's data API (POST /data/v1/{table}). Every call carries an
+      Idempotency-Key, so a retry after a lost answer returns the first
+      answer instead of inserting again (replayed is then true). A unique
+      constraint refuses the insert (conflict); use upsert_rows to merge.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base64url
+      length: 22
+      prefix: "tsk-"
+      limits: { min_length: 1, max_length: 255, charset: "A-Za-z0-9_-" }
+    input:
+      type: object
+      required: [table]
+      properties:
+        table:  { type: string }
+        rows:   { type: array, minItems: 1, maxItems: 1000, items: { type: object } }
+        row:    { type: object, description: One row; or use rows }
+        select: { type: string, description: Which columns of the written rows come back (default all) }
+        return: { type: string, enum: [representation, minimal], default: representation, description: "minimal: only affected" }
+    output:
+      type: object
+      properties:
+        affected: { type: integer }
+        rows:     { type: array, items: { type: object }, description: The rows as written (empty with return minimal) }
+        replayed: { type: boolean, description: Xenibase answered from an earlier attempt with the same key; nothing was written again }
+    pii:
+      - { field: input.rows, category: other }
+      - { field: input.row, category: other }
+      - { field: output.rows, category: other }
+  upsert_rows:
+    title: Upsert rows
+    description: >-
+      As insert_rows, with on_conflict naming the columns of a unique
+      constraint (POST /data/v1/{table}?on_conflict=): a row that conflicts
+      is updated with the sent columns (resolution merge) or left alone
+      (ignore). Carries an Idempotency-Key.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base64url
+      length: 22
+      prefix: "tsk-"
+      limits: { min_length: 1, max_length: 255, charset: "A-Za-z0-9_-" }
+    input:
+      type: object
+      required: [table, on_conflict]
+      properties:
+        table:       { type: string }
+        rows:        { type: array, minItems: 1, maxItems: 1000, items: { type: object } }
+        row:         { type: object, description: One row; or use rows }
+        on_conflict: { type: array, minItems: 1, items: { type: string }, description: The columns of a unique constraint }
+        resolution:  { type: string, enum: [merge, ignore], default: merge }
+        select:      { type: string }
+        return:      { type: string, enum: [representation, minimal], default: representation }
+    output:
+      type: object
+      properties:
+        affected: { type: integer }
+        rows:     { type: array, items: { type: object } }
+        replayed: { type: boolean }
+    pii:
+      - { field: input.rows, category: other }
+      - { field: input.row, category: other }
+      - { field: output.rows, category: other }
+  update_rows:
+    title: Update rows
+    description: >-
+      Sets columns on one row by its primary key (key; PATCH
+      /data/v1/{table}/{key}) or on the rows filters match (PATCH
+      /data/v1/{table}?where=). Exactly one of key and filters is required;
+      the call is refused before anything is sent otherwise. Refused by
+      Xenibase, with nothing changed, when more than max_affected rows
+      would change. Carries an Idempotency-Key.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base64url
+      length: 22
+      prefix: "tsk-"
+      limits: { min_length: 1, max_length: 255, charset: "A-Za-z0-9_-" }
+    input:
+      type: object
+      required: [table, set]
+      properties:
+        table: { type: string }
+        set:   { type: object, description: The columns to set and their values }
+        key:   { description: The primary key value of one row (single-column keys) }
+        filters:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [column, op]
+            properties:
+              column: { type: string }
+              op:     { type: string, enum: [eq, neq, lt, lte, gt, gte, in, like, ilike, is, contains, contained_by, search, is_null] }
+              value:  {}
+              values: { type: array }
+        max_affected: { type: integer, minimum: 1, maximum: 100000, default: 1000 }
+        select: { type: string }
+        return: { type: string, enum: [representation, minimal], default: representation }
+    output:
+      type: object
+      properties:
+        affected: { type: integer }
+        rows:     { type: array, items: { type: object } }
+        replayed: { type: boolean }
+    pii:
+      - { field: input.set, category: other }
+      - { field: output.rows, category: other }
+  delete_rows:
+    title: Delete rows
+    description: >-
+      Deletes one row by its primary key (key; DELETE /data/v1/{table}/{key})
+      or the rows filters match (DELETE /data/v1/{table}?where=). Exactly
+      one of key and filters is required. Refused by Xenibase, with nothing
+      changed, when more than max_affected rows would go. Carries an
+      Idempotency-Key.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base64url
+      length: 22
+      prefix: "tsk-"
+      limits: { min_length: 1, max_length: 255, charset: "A-Za-z0-9_-" }
+    input:
+      type: object
+      required: [table]
+      properties:
+        table: { type: string }
+        key:   { description: The primary key value of one row }
+        filters:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [column, op]
+            properties:
+              column: { type: string }
+              op:     { type: string, enum: [eq, neq, lt, lte, gt, gte, in, like, ilike, is, contains, contained_by, search, is_null] }
+              value:  {}
+              values: { type: array }
+        max_affected: { type: integer, minimum: 1, maximum: 100000, default: 1000 }
+    output:
+      type: object
+      properties:
+        affected: { type: integer }
+        replayed: { type: boolean }
+  call_function:
+    title: Call a database function
+    description: >-
+      Calls a function in the project's exposed schemas with named
+      arguments (POST /data/v1/rpc/{function}), as the service role. A
+      scalar comes back as data; a set or table as a list. Carries an
+      Idempotency-Key, which Xenibase honours on function calls, so a
+      retry after a lost answer replays the first answer.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base64url
+      length: 22
+      prefix: "tsk-"
+      limits: { min_length: 1, max_length: 255, charset: "A-Za-z0-9_-" }
+    input:
+      type: object
+      required: [function]
+      properties:
+        function: { type: string, description: The function, or schema.function }
+        args:     { type: object, description: Named arguments }
+    output:
+      type: object
+      properties:
+        data:     { description: The function's result }
+        replayed: { type: boolean }
+    pii:
+      - { field: output.data, category: other }
+triggers:
+  row_changed:
+    type: webhook
+    # Taskiem creates the Xenibase webhook when a workflow using this trigger
+    # is deployed, updates it on a redeploy and deletes it when the
+    # workflow leaves the environment (decision 0021).
+    registration: remote
+    verify: { scheme: hmac_sha256_timestamped, header: Xenibase-Signature, signature_format: t_v1, tolerance: 5m }
+    events: [INSERT, UPDATE, DELETE, TEST]
+    event_type: =body.type
+    # Xenibase delivers at least once; Xenibase-Event-Id names the event.
+    dedup: "='xenibase-event-id' in headers ? headers['xenibase-event-id'] : body.id"
+    test_event: =body.type == 'TEST'
+    options:
+      type: object
+      required: [tables]
+      additionalProperties: false
+      properties:
+        tables:
+          type: array
+          minItems: 1
+          items: { type: string, pattern: "^[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)?$" }
+          description: Tables as schema.table, or table in public
+        columns:
+          type: array
+          items: { type: string }
+          description: For UPDATE, start only when one of these columns changed
+        refetch_truncated:
+          type: boolean
+          default: false
+          description: A change over 256 KB arrives without its records; fetch the row by its primary key before the run starts (it may have changed since)

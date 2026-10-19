@@ -222,8 +222,9 @@ func flowDone(token string) map[string]any {
 
 // --- inputs ---
 
-// waSendInputsFlow sends the inputs form for a workflow, when Flows are
-// set up and the fields fit one; false leaves them to chat.
+// waSendInputsFlow sends the inputs form for a workflow, or the row form
+// for a data table (data.Table set), when Flows are set up and the fields
+// fit one; false leaves them to chat.
 func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, fields []whatsapp.Field) (bool, error) {
 	if c.wa.Config.FlowKey == nil {
 		return false, nil
@@ -236,11 +237,21 @@ func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, f
 		return false, err
 	}
 	tok, hash := whatsapp.NewFlowToken(c.tenant.ID)
-	meta, _ := json.Marshal(map[string]any{"title": data.Name})
+	meta := map[string]any{"title": data.Name}
+	var wf *uuid.UUID
+	var version *int
+	body := c.t("wa.form.inputs", "workflow", data.Name, "count", strconv.Itoa(len(fields)), "cta", c.t("button.fill_in"))
+	if data.Table != uuid.Nil {
+		meta["table"] = data.Table.String()
+		body = c.t("wa.table.form", "table", whatsapp.SafeText(data.Name), "count", strconv.Itoa(len(fields)), "cta", c.t("button.fill_in"))
+	} else {
+		wf, version = &data.Workflow, &data.Version
+	}
+	raw, _ := json.Marshal(meta)
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO whatsapp_flows (token_hash, tenant_id, kind, number, phone_number_id, user_id, workflow_id, version, data, expires_at)
 			VALUES ($1, $2, 'inputs', $3, $4, $5, $6, $7, $8, now() + $9::interval)`, hash, c.tenant.ID, c.number, c.wa.Config.PhoneNumberID, c.p.UserID,
-			data.Workflow, data.Version, meta, waPendingTTL.String())
+			wf, version, raw, waPendingTTL.String())
 		return err
 	}); err != nil {
 		return false, err
@@ -250,7 +261,7 @@ func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, f
 		return false, err
 	}
 	_, err = c.wa.Client.SendFlow(ctx, c.number, whatsapp.FlowMessage{Flow: whatsapp.FlowInputs, Token: tok, CTA: c.t("button.fill_in"), Screen: whatsapp.ScreenInputs, Data: form,
-		Body: c.wa.Prefix(c.tenant.Name) + c.t("wa.form.inputs", "workflow", data.Name, "count", strconv.Itoa(len(fields)), "cta", c.t("button.fill_in"))})
+		Body: c.wa.Prefix(c.tenant.Name) + body})
 	if err != nil {
 		// Not delivered (an old app, the window, Meta): ask in chat.
 		s.Logger.Warn("whatsapp: sending an inputs form", "err", err)
@@ -265,6 +276,9 @@ func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, f
 // field, then as a whole), kept (personal ones sealed) until the person
 // confirms in chat.
 func (s *Server) waFlowInputs(ctx context.Context, row flowRow, req whatsapp.FlowRequest) (any, error) {
+	if tid, _ := row.data["table"].(string); tid != "" {
+		return s.waFlowTableInputs(ctx, row, req)
+	}
 	if row.workflow == nil || row.version == nil {
 		return nil, errors.New("an inputs Flow without its workflow")
 	}
@@ -374,14 +388,18 @@ func (s *Server) waFlowCompleted(ctx context.Context, c *chat) error {
 			return c.say(ctx, s, c.t("wa.form.gone"))
 		}
 		data := c.data
-		data.Inputs, _ = row.data["inputs"].(map[string]any)
-		if data.Inputs == nil {
-			data.Inputs = map[string]any{}
+		inputs, _ := row.data["inputs"].(map[string]any)
+		if inputs == nil {
+			inputs = map[string]any{}
 		}
 		data.Flow = ""
 		if err := s.setFlow(ctx, row, "done", map[string]any{}); err != nil {
 			return err
 		}
+		if data.Table != uuid.Nil {
+			return s.waTableFormDone(ctx, c, data, inputs)
+		}
+		data.Inputs = inputs
 		return s.waAskConfirm(ctx, c, data)
 	}
 	return invalid()

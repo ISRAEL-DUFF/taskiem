@@ -48,6 +48,10 @@
       "text": "Kọ̀ ọ́",
       "reviewed": false
     },
+    "button.yes_add": {
+      "text": "Bẹ́ẹ̀ni, fi kún",
+      "reviewed": false
+    },
     "button.yes_run": {
       "text": "Bẹ́ẹ̀ni, bẹ̀rẹ̀",
       "reviewed": false
@@ -488,6 +492,10 @@
       "text": "Láti kọ {step}, ẹ fìdí rẹ̀ múlẹ̀ pẹ̀lú passkey tàbí kóòdù authenticator yín nínú Taskiem láàárín ìṣẹ́jú mẹ́wàá:\n{link}",
       "reviewed": false
     },
+    "wa.help.add": {
+      "text": "• *add to* àti orúkọ tábìlì kan: fi ìlà kan kún un (ẹ ó kọ́kọ́ fìdí rẹ̀ múlẹ̀)",
+      "reviewed": false
+    },
     "wa.help.approvals": {
       "text": "• *approvals*: àwọn ìbéèrè tó ń dúró dè yín",
       "reviewed": false
@@ -498,6 +506,10 @@
     },
     "wa.help.cancel": {
       "text": "• *cancel*: láti pa ohun tó ń lọ lọ́wọ́ tì",
+      "reviewed": false
+    },
+    "wa.help.find": {
+      "text": "• *find*, orúkọ tábìlì àti ọ̀rọ̀ kan: wá àwọn ìlà",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -518,6 +530,10 @@
     },
     "wa.help.switch": {
       "text": "• *switch* àti orúkọ àjọ kan: láti ṣiṣẹ́ nínú òmíràn",
+      "reviewed": false
+    },
+    "wa.help.tables": {
+      "text": "• *tables*: àwọn tábìlì dátà ti àjọ yín",
       "reviewed": false
     },
     "wa.help.voice": {
@@ -734,6 +750,154 @@
     },
     "wa.switch.which": {
       "text": "Àjọ wo? Tiyín ni:\n{list}",
+      "reviewed": false
+    },
+    "wa.table.add_failed": {
+      "text": "A kò fi ìlà náà kún un: {reason}\n\nẸ dáhùn *yes* láti tún gbìyànjú tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.add_what": {
+      "text": "Ẹ fi *add to* àti orúkọ tábìlì kan ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.table.added": {
+      "text": "A ti fi ìlà {id} kún {table}.",
+      "reviewed": false
+    },
+    "wa.table.cancelled": {
+      "text": "A ti fagilé e. A kò fi nǹkan kún un.",
+      "reviewed": false
+    },
+    "wa.table.confirm": {
+      "text": "Kí a fi ìlà yìí kún {table}?\n{row}\n\nẸ dáhùn *yes* láti fi kún un tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.confirm_reminder": {
+      "text": "Ẹ dáhùn *yes* láti fi ìlà náà kún {table}, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.denied_edit": {
+      "text": "Ẹ kò lè fi ìlà kún tábìlì nínú {org} (ó nílò table.edit).",
+      "reviewed": false
+    },
+    "wa.table.denied_now": {
+      "text": "Ẹ kò lè fi ìlà kún tábìlì nínú {org} mọ́.",
+      "reviewed": false
+    },
+    "wa.table.denied_read": {
+      "text": "Ẹ kò lè rí àwọn tábìlì dátà nínú {org} (ó nílò table.read).",
+      "reviewed": false
+    },
+    "wa.table.find_head": {
+      "text": "Nínú {table}, èyí tó bá {text} mu:",
+      "reviewed": false
+    },
+    "wa.table.find_more": {
+      "text": "… àti {count} mìíràn. Ẹ wá pẹ̀lú ọ̀rọ̀ tó pọ̀ sí i, tàbí ẹ ṣí Tables nínú Taskiem.",
+      "reviewed": false
+    },
+    "wa.table.find_no_column": {
+      "text": "{table} kò ní ọ̀wọ́n ọ̀rọ̀ tí a lè wá nínú rẹ̀. Ẹ fi *find*, tábìlì náà àti column:text ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.table.find_none": {
+      "text": "Kò sí nǹkan nínú {table} tó bá {text} mu.",
+      "reviewed": false
+    },
+    "wa.table.find_what": {
+      "text": "Ẹ fi *find*, orúkọ tábìlì àti ohun tí ẹ ń wá ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.table.form": {
+      "text": "{table}: ẹ tẹ *{cta}* láti kọ àlàyé {count} ti ìlà náà; ẹ ó fìdí rẹ̀ múlẹ̀ kí a tó fi kún un. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
+      "reviewed": false
+    },
+    "wa.table.form_more": {
+      "text": "Ẹ ṣé. {count} tó kù ni ẹ ó kọ síbí. Ẹ fi *cancel* ránṣẹ́ láti dúró.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.table.gone": {
+      "text": "{table} yí padà nígbà tí ẹ ń fi kún un. Ẹ tún fi *add to* ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.table.hint.date": {
+      "text": "Ọjọ́ gẹ́gẹ́ bí YYYY-MM-DD, bíi 2026-11-01",
+      "reviewed": false
+    },
+    "wa.table.hint.datetime": {
+      "text": "Ọjọ́ àti àkókò, bíi 2026-11-01T09:30:00+01:00",
+      "reviewed": false
+    },
+    "wa.table.hint.email": {
+      "text": "Àdírẹ́sì ímeèlì",
+      "reviewed": false
+    },
+    "wa.table.hint.json": {
+      "text": "Dátà tí a ṣètò gẹ́gẹ́ bí JSON",
+      "reviewed": false
+    },
+    "wa.table.hint.phone": {
+      "text": "Nọ́mbà fóònù pẹ̀lú kóòdù orílẹ̀-èdè, bíi 2348012345678",
+      "reviewed": false
+    },
+    "wa.table.list_head": {
+      "text": "Àwọn tábìlì dátà nínú {org}:",
+      "reviewed": false
+    },
+    "wa.table.list_line": {
+      "text": "{n}. {title}: ìlà {count}",
+      "reviewed": false
+    },
+    "wa.table.list_line_nocount": {
+      "text": "{n}. {title}",
+      "reviewed": false
+    },
+    "wa.table.list_tail_add": {
+      "text": "Ẹ fi *add to* àti orúkọ tábìlì ránṣẹ́ láti fi ìlà kan kún un.",
+      "reviewed": false
+    },
+    "wa.table.list_tail_find": {
+      "text": "Ẹ fi *find*, orúkọ tábìlì àti ọ̀rọ̀ kan ránṣẹ́ láti wá àwọn ìlà.",
+      "reviewed": false
+    },
+    "wa.table.needs_values": {
+      "text": "À ń fi ìlà kan kún {table} (ọ̀wọ́n {count}). Ẹ fi *cancel* ránṣẹ́ láti dúró.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.table.no_match": {
+      "text": "Kò sí tábìlì dátà tó bá {name} mu. Ẹ fi *tables* ránṣẹ́ láti rí wọn.",
+      "reviewed": false
+    },
+    "wa.table.none": {
+      "text": "{org} kò tíì ní tábìlì dátà kankan. Ẹ ṣẹ̀dá ọ̀kan nínú Taskiem, lábẹ́ Tables{link}.",
+      "reviewed": false
+    },
+    "wa.table.not_added": {
+      "text": "A kò fi ìlà náà kún {table}: {reason}. Ẹ tún fi *add to* ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.table.optional": {
+      "text": "(kì í ṣe dandan: ẹ fi *skip* ránṣẹ́ láti fi í sílẹ̀ ní òfo)",
+      "reviewed": false
+    },
+    "wa.table.pick_again": {
+      "text": "Ẹ fi nọ́mbà kan láti inú àkójọ ránṣẹ́, tàbí *cancel*:\n{list}",
+      "reviewed": false
+    },
+    "wa.table.too_many": {
+      "text": "Ẹ ti fi ọ̀pọ̀ ìlà kún un ní ìṣẹ́jú yìí. Ẹ dúró fún ìṣẹ́jú kan, kí ẹ tún gbìyànjú.",
+      "reviewed": false
+    },
+    "wa.table.unavailable": {
+      "text": "A kò lè dé ọ̀dọ̀ àwọn tábìlì dátà báyìí. Ẹ tún gbìyànjú láìpẹ́.",
+      "reviewed": false
+    },
+    "wa.table.which": {
+      "text": "Èwo?\n{list}\nẸ fi nọ́mbà rẹ̀ ránṣẹ́, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.which_find": {
+      "text": "Èwo?\n{list}\nẸ fi *find*, orúkọ rẹ̀ ní kíkún àti ohun tí ẹ ń wá ránṣẹ́.",
       "reviewed": false
     },
     "wa.too_fast": {

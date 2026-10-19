@@ -51,6 +51,7 @@ plans:
       ai_monthly_tokens: 500000
       whatsapp_templates_monthly: 500
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
+      max_data_tables: 10
     features: {ai: true}
 
   - id: growth
@@ -75,6 +76,7 @@ plans:
       ai_monthly_tokens: 2000000
       whatsapp_templates_monthly: 2000
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
+      max_data_tables: 50
     features: {ai: true, git: true}
 
   - id: business
@@ -99,6 +101,7 @@ plans:
       ai_monthly_tokens: 10000000
       whatsapp_templates_monthly: 10000
       container_minutes_monthly: 600   # PLACEHOLDER (CS3): 0 = container steps off
+      max_data_tables: 0
     features: {ai: true, git: true, sso: true, embedded: true}
     partner:
       max_subtenants: 50

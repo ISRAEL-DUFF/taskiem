@@ -8,13 +8,16 @@
     "approvals": ["amincewa", "me ke jira na"],
     "cancel": ["soke", "fasa", "a fasa", "tsaya"],
     "yes": ["eh", "na'am", "to", "yi shi"],
-    "no": ["a'a", "kada", "kar a yi"]
+    "no": ["a'a", "kada", "kar a yi"],
+    "tables": ["teburori", "teburorina", "jerin teburori", "bayanan da nake da su"]
   },
   "prefixes": {
     "switch": ["koma", "sauya zuwa"],
     "run": ["fara", "gudanar"],
     "build": ["gina", "kirkiro"],
-    "language": ["harshe", "canza harshe zuwa"]
+    "language": ["harshe", "canza harshe zuwa"],
+    "add": ["ƙara a", "ƙara zuwa", "saka a", "ƙara"],
+    "find": ["nemo", "nemo a", "nemi", "bincika"]
   },
   "fillers": ["don allah", "dan allah"],
   "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana"]

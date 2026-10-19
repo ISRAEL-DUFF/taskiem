@@ -23,7 +23,7 @@ type section struct {
 }
 
 var nav = []section{
-	{"Get started", []string{"onboarding", "templates", "dashboard", "environments", "cli"}},
+	{"Get started", []string{"onboarding", "templates", "data-tables", "dashboard", "environments", "cli"}},
 	{"Build workflows", []string{"sdk", "code-steps", "container-steps", "ai", "alerts"}},
 	{"Connectors", []string{"connector-sdk", "connector-submissions", "integrations/*"}},
 	{"Channels", []string{"whatsapp", "ussd", "languages"}},
@@ -39,11 +39,12 @@ var nav = []section{
 var internal = []struct{ pattern, why string }{
 	{"phase-*-status", "build-plan progress for the team"},
 	{"needs-people", "the team's list of decisions and work waiting on people"},
-	{"pgdock-integration", "a delivery plan"},
+	{"xenibase-integration", "a delivery plan"},
 	{"partner-tracker", "what is outstanding with each partner, for the team"},
 	{"performance", "load-test results from a development machine, not production figures"},
 	{"clean-room-policy", "how contributors work; it belongs with CONTRIBUTING.md"},
 	{"spec/*", "the internal product specification and build plan"},
+	{"strategy/*", "strategy proposals and the user-story catalogue, for the team"},
 	{"security/*", "the threat model, self-review and pen-test scope"},
 	{"decisions/*", "architecture decision records for the team"},
 	{"integrations/iswallet-answers-*", "correspondence with a partner"},

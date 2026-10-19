@@ -45,22 +45,27 @@ const (
 	PermRoleManage       = "role.manage"
 	PermSCIM             = "scim.provision" // an identity provider's key
 	PermAlertManage      = "alert.manage"
+	// Data tables (decision 0033): reading a table's rows, and creating
+	// and changing tables and rows.
+	PermTableRead = "table.read"
+	PermTableEdit = "table.edit"
 )
 
 var allPermissions = []string{PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel,
-	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage}
+	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage,
+	PermTableRead, PermTableEdit}
 
 // rolePermissions are the built-in roles (spec 13.3). Any other membership
 // role (e.g. "credit_officer") is a business role that only qualifies the
 // member for approval steps naming it, on top of approval.decide.
 var rolePermissions = map[string][]string{
 	"owner":    allPermissions,
-	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage},
-	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart},
-	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve},
+	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage, PermTableRead, PermTableEdit},
+	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart, PermTableRead, PermTableEdit},
+	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermTableRead},
 	"approver": {PermWorkflowRead, PermRunRead, PermApprovalDecide},
-	"auditor":  {PermWorkflowRead, PermRunRead, PermAuditRead},
-	"viewer":   {PermWorkflowRead, PermRunRead},
+	"auditor":  {PermWorkflowRead, PermRunRead, PermAuditRead, PermTableRead},
+	"viewer":   {PermWorkflowRead, PermRunRead, PermTableRead},
 }
 
 // Principal is who is calling.

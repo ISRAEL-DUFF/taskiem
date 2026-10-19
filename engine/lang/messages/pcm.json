@@ -48,6 +48,10 @@
       "text": "Reject",
       "reviewed": false
     },
+    "button.yes_add": {
+      "text": "Yes, add am",
+      "reviewed": false
+    },
     "button.yes_run": {
       "text": "Yes, run am",
       "reviewed": false
@@ -488,6 +492,10 @@
       "text": "To reject {step}, confirm with your passkey or authenticator code for Taskiem inside 10 minutes:\n{link}",
       "reviewed": false
     },
+    "wa.help.add": {
+      "text": "• *add to* and the table name: add one row (you go confirm first)",
+      "reviewed": false
+    },
     "wa.help.approvals": {
       "text": "• *approvals*: request wey dey wait for you",
       "reviewed": false
@@ -498,6 +506,10 @@
     },
     "wa.help.cancel": {
       "text": "• *cancel*: drop wetin dey go on",
+      "reviewed": false
+    },
+    "wa.help.find": {
+      "text": "• *find*, the table name and one word: look for rows",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -518,6 +530,10 @@
     },
     "wa.help.switch": {
       "text": "• *switch* and organisation name: work for another one",
+      "reviewed": false
+    },
+    "wa.help.tables": {
+      "text": "• *tables*: the data tables wey your organisation get",
       "reviewed": false
     },
     "wa.help.voice": {
@@ -734,6 +750,154 @@
     },
     "wa.switch.which": {
       "text": "Which organisation? Your own na:\n{list}",
+      "reviewed": false
+    },
+    "wa.table.add_failed": {
+      "text": "The row no enter: {reason}\n\nReply *yes* to try again or *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.add_what": {
+      "text": "Send *add to* and the table name.",
+      "reviewed": false
+    },
+    "wa.table.added": {
+      "text": "I don add row {id} to {table}.",
+      "reviewed": false
+    },
+    "wa.table.cancelled": {
+      "text": "I don cancel am. Nothing enter.",
+      "reviewed": false
+    },
+    "wa.table.confirm": {
+      "text": "Make I add this row to {table}?\n{row}\n\nReply *yes* make I add am or *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.confirm_reminder": {
+      "text": "Reply *yes* make I add the row to {table}, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.denied_edit": {
+      "text": "You no fit add rows for {org} (you need table.edit).",
+      "reviewed": false
+    },
+    "wa.table.denied_now": {
+      "text": "You no fit add rows for {org} again.",
+      "reviewed": false
+    },
+    "wa.table.denied_read": {
+      "text": "You no fit see data tables for {org} (you need table.read).",
+      "reviewed": false
+    },
+    "wa.table.find_head": {
+      "text": "For {table}, wetin match {text}:",
+      "reviewed": false
+    },
+    "wa.table.find_more": {
+      "text": "… and {count} more. Find with more words, or open Tables for Taskiem.",
+      "reviewed": false
+    },
+    "wa.table.find_no_column": {
+      "text": "{table} no get text column wey I fit search. Send *find*, the table and column:text.",
+      "reviewed": false
+    },
+    "wa.table.find_none": {
+      "text": "Nothing for {table} match {text}.",
+      "reviewed": false
+    },
+    "wa.table.find_what": {
+      "text": "Send *find*, the table name and wetin you dey find.",
+      "reviewed": false
+    },
+    "wa.table.form": {
+      "text": "{table}: tap *{cta}* to enter the {count} detail(s) for the row; you go confirm before I add am. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.table.form_more": {
+      "text": "Thank you. {count} more to enter here. Send *cancel* to stop.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.table.gone": {
+      "text": "{table} don change while you dey add to am. Send *add to* again.",
+      "reviewed": false
+    },
+    "wa.table.hint.date": {
+      "text": "One date as YYYY-MM-DD, like 2026-11-01",
+      "reviewed": false
+    },
+    "wa.table.hint.datetime": {
+      "text": "One date and time, like 2026-11-01T09:30:00+01:00",
+      "reviewed": false
+    },
+    "wa.table.hint.email": {
+      "text": "One email address",
+      "reviewed": false
+    },
+    "wa.table.hint.json": {
+      "text": "Structured data as JSON",
+      "reviewed": false
+    },
+    "wa.table.hint.phone": {
+      "text": "One phone number with the country code, like 2348012345678",
+      "reviewed": false
+    },
+    "wa.table.list_head": {
+      "text": "Data tables for {org}:",
+      "reviewed": false
+    },
+    "wa.table.list_line": {
+      "text": "{n}. {title}: {count} row(s)",
+      "reviewed": false
+    },
+    "wa.table.list_line_nocount": {
+      "text": "{n}. {title}",
+      "reviewed": false
+    },
+    "wa.table.list_tail_add": {
+      "text": "Send *add to* and the table name to add one row.",
+      "reviewed": false
+    },
+    "wa.table.list_tail_find": {
+      "text": "Send *find*, the table name and one word to look for rows.",
+      "reviewed": false
+    },
+    "wa.table.needs_values": {
+      "text": "I dey add one row to {table} ({count} column(s)). Send *cancel* to stop.\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.table.no_match": {
+      "text": "No data table match {name}. Send *tables* to see dem.",
+      "reviewed": false
+    },
+    "wa.table.none": {
+      "text": "{org} never get any data table. Create one for Taskiem, under Tables{link}.",
+      "reviewed": false
+    },
+    "wa.table.not_added": {
+      "text": "The row no enter {table}: {reason}. Send *add to* again.",
+      "reviewed": false
+    },
+    "wa.table.optional": {
+      "text": "(no be must: send *skip* to leave am empty)",
+      "reviewed": false
+    },
+    "wa.table.pick_again": {
+      "text": "Send one number from the list, or *cancel*:\n{list}",
+      "reviewed": false
+    },
+    "wa.table.too_many": {
+      "text": "You don add plenty rows just now. Wait one minute, then try again.",
+      "reviewed": false
+    },
+    "wa.table.unavailable": {
+      "text": "Data tables no dey reachable now. Try again after one minute.",
+      "reviewed": false
+    },
+    "wa.table.which": {
+      "text": "Which one?\n{list}\nSend the number, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.table.which_find": {
+      "text": "Which one?\n{list}\nSend *find*, the full name and wetin you dey find.",
       "reviewed": false
     },
     "wa.too_fast": {

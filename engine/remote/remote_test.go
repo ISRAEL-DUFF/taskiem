@@ -17,9 +17,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/connectors/pgdock"
-	"github.com/israel-duff/taskiem/connectors/pgdock/pgdocktest"
 	"github.com/israel-duff/taskiem/connectors/whatsapp"
+	"github.com/israel-duff/taskiem/connectors/xenibase"
+	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/ingest"
@@ -33,6 +33,7 @@ var ctx = context.Background()
 const (
 	project = "7d2c9a10-5b4e-4f00-9c11-0000000000a1"
 	token   = "pgd_taskiem_shop"
+	secret  = "xb_sec_taskiem_shop"
 )
 
 // graph is a fake WhatsApp Cloud API that records the messages sent.
@@ -66,7 +67,7 @@ func (g *graph) messages() []map[string]any {
 
 type world struct {
 	*rt.Env
-	pg    *pgdocktest.Fake
+	pg    *xenibasetest.Fake
 	graph *graph
 	edge  *httptest.Server
 	down  atomic.Bool // Taskiem's edge is unavailable: 503
@@ -75,12 +76,13 @@ type world struct {
 
 func newWorld(t *testing.T) *world {
 	e := rt.New(t)
-	w := &world{Env: e, pg: pgdocktest.New(t), graph: newGraph(t)}
+	w := &world{Env: e, pg: xenibasetest.New(t), graph: newGraph(t)}
 	w.pg.AddProject(project, "shop")
 	w.pg.AddTable(project, "orders", []string{"id"}, "id", "customer", "phone", "status", "total", "notes")
 	w.pg.AddTable(project, "customers", []string{"id"}, "id", "name")
-	w.pg.AddToken(pgdocktest.Token{Secret: token, ID: "tok-1", Name: "taskiem", Scopes: []string{"read", "write"}, ProjectIDs: []string{project}})
-	for _, c := range []*connector.Connector{pgdock.New(pgdock.Options{BaseURL: w.pg.URL}), whatsapp.New(whatsapp.Options{BaseURL: w.graph.URL})} {
+	w.pg.AddToken(xenibasetest.Token{Secret: token, ID: "tok-1", Name: "taskiem", Scopes: []string{"read", "write"}, ProjectIDs: []string{project}})
+	w.pg.AddSecretKey(project, secret)
+	for _, c := range []*connector.Connector{xenibase.New(xenibase.Options{BaseURL: w.pg.URL}), whatsapp.New(whatsapp.Options{BaseURL: w.graph.URL})} {
 		if err := e.Registry.Register(c); err != nil {
 			t.Fatal(err)
 		}
@@ -92,7 +94,7 @@ func newWorld(t *testing.T) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "pgdock", "shop", "api_key", map[string]string{"token": token, "project_id": project}, "test"); err != nil {
+	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "xenibase", "shop", "api_key", map[string]string{"token": token, "project_id": project, "secret_key": secret, "api_url": w.pg.APIURL(project)}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "whatsapp", "main", "api_key", map[string]string{"access_token": "EAAtest", "phone_number_id": "106540352242922"}, "test"); err != nil {
@@ -114,11 +116,20 @@ func newWorld(t *testing.T) *world {
 }
 
 func flow(tables, events string, extra string) string {
+	return flowSteps(tables, events, extra, "")
+}
+
+// writeBack is the step that marks the row notified through the data API,
+// by its key, retried quickly after an unknown outcome.
+const writeBack = `,{"id":"mark","type":"connector","connector":"xenibase@1","action":"update_rows","connection":"shop","needs":["notify"],
+	    "input":{"table":"orders","key":"=trigger.body.record.id","set":{"status":"notified"}},"retry":{"max":3,"initial":"10ms","backoff":"fixed"}}`
+
+func flowSteps(tables, events, extra, steps string) string {
 	return `{"schema":"wd/v1","id":"wf_newOrder","version":1,"name":"new order",
-	  "trigger":{"type":"connector_event","config":{"connector":"pgdock@1","trigger":"row_changed","connection":"shop","events":` + events + `,
+	  "trigger":{"type":"connector_event","config":{"connector":"xenibase@1","trigger":"row_changed","connection":"shop","events":` + events + `,
 	    "options":{"tables":` + tables + extra + `}}},
 	  "steps":[{"id":"notify","type":"connector","connector":"whatsapp@1","action":"send_text","connection":"main",
-	    "input":{"to":"=trigger.body.record.phone","body":"='New order ' + string(trigger.body.record.id) + ' from ' + trigger.body.record.customer"}}]}`
+	    "input":{"to":"=trigger.body.record.phone","body":"='New order ' + string(trigger.body.record.id) + ' from ' + trigger.body.record.customer"}}` + steps + `]}`
 }
 
 // deploy registers a version's trigger in prod as the API does, and
@@ -209,7 +220,7 @@ func (w *world) events(t *testing.T, wf uuid.UUID) string {
 	return b.String()
 }
 
-func (w *world) only(t *testing.T) (remote.Status, *pgdocktest.Webhook) {
+func (w *world) only(t *testing.T) (remote.Status, *xenibasetest.Webhook) {
 	t.Helper()
 	subs := w.subs(t)
 	if len(subs) != 1 {
@@ -222,20 +233,23 @@ func (w *world) only(t *testing.T) (remote.Status, *pgdocktest.Webhook) {
 	return s, w.pg.Hook(project, *s.RemoteID)
 }
 
-// The plan's acceptance test (P1-T8, without the write-back, which waits
-// for P1-G1): a new orders row starts a workflow that sends a WhatsApp
-// message; a rolled-back insert starts nothing; deliveries retried after
-// Taskiem was unavailable, and deliveries PGDock repeats, are taken once.
+// The plan's acceptance test (P1-T8): a new orders row starts a workflow
+// that sends a WhatsApp message and writes status notified back to the
+// row through the data API; a rolled-back insert starts nothing;
+// deliveries retried after Taskiem was unavailable, and deliveries
+// Xenibase repeats, are taken once; and a write-back whose answer was
+// lost is retried under the same idempotency key, so the row changes
+// exactly once.
 func TestNewRowSendsWhatsAppOnce(t *testing.T) {
 	w := newWorld(t)
-	doc := flow(`["orders"]`, `["INSERT"]`, "")
+	doc := flowSteps(`["orders"]`, `["INSERT"]`, "", writeBack)
 	wf := w.Publish(t, doc)
 	w.deploy(t, wf, 1, doc)
 	if s := w.subs(t); len(s) != 1 || s[0].Health != "pending" || s[0].RemoteID != nil {
 		t.Fatalf("declared before any call: %+v", s)
 	}
 	if len(w.pg.Requests) != 0 {
-		t.Fatalf("the deploy called PGDock: %v", w.pg.Requests)
+		t.Fatalf("the deploy called Xenibase: %v", w.pg.Requests)
 	}
 	w.tick(t)
 	sub, hook := w.only(t)
@@ -244,7 +258,7 @@ func TestNewRowSendsWhatsAppOnce(t *testing.T) {
 	}
 	u, _ := url.Parse(hook.URL)
 	if u.Query().Get("subscription") != sub.ID.String() || u.Query().Get("env") != "prod" || u.Query().Get("connection") != "shop" ||
-		!strings.HasSuffix(u.Path, "/connectors/pgdock@1/row_changed") {
+		!strings.HasSuffix(u.Path, "/connectors/xenibase@1/row_changed") {
 		t.Errorf("ingest URL %s", hook.URL)
 	}
 	if ok, _ := w.Vault.Exists(ctx, w.Tenant, remote.SecretEnv, remote.SecretName(sub.ID)); !ok {
@@ -265,18 +279,26 @@ func TestNewRowSendsWhatsAppOnce(t *testing.T) {
 		t.Fatalf("messages %v; runs %v; %s", msgs, w.runs(t, wf), w.events(t, wf))
 	}
 	if runs := w.runs(t, wf); runs[0]["status"] != "completed" {
-		t.Errorf("run %v", runs)
+		t.Errorf("run %v; %s", runs, w.events(t, wf))
+	}
+	// The write-back went through the data API by key, once.
+	if rows := w.pg.Rows(project, "orders"); rows[0]["status"] != "notified" || w.pg.Changes(project, "orders") != 2 {
+		t.Errorf("after the write-back: %v (%d changes)", rows, w.pg.Changes(project, "orders"))
+	}
+	if n := patches(w.pg.Requests); n != 1 {
+		t.Errorf("%d PATCH requests: %v", n, w.pg.Requests)
 	}
 
 	// A rolled-back insert sends nothing and starts nothing.
 	w.pg.Begin(project).Insert("orders", map[string]any{"id": 8, "customer": "Bayo", "phone": "+2348000000000"}).Rollback()
-	// An update is not subscribed to: PGDock is not asked for it.
+	// An update is not subscribed to: Xenibase is not asked for it (and
+	// the write-back's own update started nothing above).
 	w.pg.Begin(project).Update("orders", map[string]any{"id": 7}, map[string]any{"status": "paid"}).Commit()
 	if n := w.pg.Deliver(); n != 0 || len(w.runs(t, wf)) != 1 {
 		t.Fatalf("rolled back or unsubscribed change delivered: %d", n)
 	}
 
-	// Taskiem is down: PGDock keeps the event and retries.
+	// Taskiem is down: Xenibase keeps the event and retries.
 	w.down.Store(true)
 	w.pg.Begin(project).Insert("orders", map[string]any{"id": 9, "customer": "Chi", "phone": "+2348011111111"}).Commit()
 	w.pg.Begin(project).Insert("orders", map[string]any{"id": 10, "customer": "Dayo", "phone": "+2348022222222"}).Commit()
@@ -292,7 +314,7 @@ func TestNewRowSendsWhatsAppOnce(t *testing.T) {
 	if n := w.pg.Deliver(); n != 2 {
 		t.Fatalf("delivered after recovery: %d", n)
 	}
-	// PGDock delivers at least once: a repeat is acknowledged, not run again.
+	// Xenibase delivers at least once: a repeat is acknowledged, not run again.
 	last := w.pg.Hook(project, hook.ID).Delivered
 	for _, ev := range last {
 		st, err := w.pg.Redeliver(project, hook.ID, ev.ID)
@@ -300,13 +322,41 @@ func TestNewRowSendsWhatsAppOnce(t *testing.T) {
 			t.Fatalf("redelivery: %d %v", st, err)
 		}
 	}
+	// One write-back's answer is lost after Xenibase committed it: the
+	// step's outcome is unknown, the engine retries it with the same key,
+	// and Xenibase replays the first answer instead of writing again.
+	w.pg.Fail(xenibasetest.Failure{Method: http.MethodPatch, PathPrefix: "/edge/", LoseAnswer: true})
 	w.Drain(t)
-	if runs := w.runs(t, wf); len(runs) != 3 {
-		t.Fatalf("runs after retries and repeats: %d", len(runs))
+	if runs := w.runs(t, wf); len(runs) != 3 || runs[1]["status"] != "completed" || runs[2]["status"] != "completed" {
+		t.Fatalf("runs after retries and repeats: %v; %s", runs, w.events(t, wf))
 	}
 	if msgs := w.graph.messages(); len(msgs) != 3 || msgs[1]["to"] != "+2348011111111" || msgs[2]["to"] != "+2348022222222" {
 		t.Errorf("messages %v", msgs)
 	}
+	// Three inserts, the update to paid and three write-backs: the retried
+	// write-back changed its row once, and the lost answer cost one more
+	// PATCH, not one more change.
+	rows := w.pg.Rows(project, "orders")
+	if len(rows) != 3 || rows[1]["status"] != "notified" || rows[2]["status"] != "notified" || w.pg.Changes(project, "orders") != 7 {
+		t.Errorf("rows %v (%d changes)", rows, w.pg.Changes(project, "orders"))
+	}
+	if n := patches(w.pg.Requests); n != 4 {
+		t.Errorf("%d PATCH requests: %v", n, w.pg.Requests)
+	}
+	if !strings.Contains(w.events(t, wf), `"replayed": true`) {
+		t.Errorf("no replayed write-back in the history: %s", w.events(t, wf))
+	}
+}
+
+// patches counts the data API updates among the fake's requests.
+func patches(requests []string) int {
+	n := 0
+	for _, r := range requests {
+		if strings.HasPrefix(r, "PATCH /edge/") {
+			n++
+		}
+	}
+	return n
 }
 
 func post(t *testing.T, target string, body []byte, hdr http.Header) int {
@@ -332,21 +382,21 @@ func TestDeliveryChecks(t *testing.T) {
 	signed := func(secret string) http.Header {
 		h := http.Header{}
 		h.Set("Content-Type", "application/json")
-		h.Set("PGDock-Event-Id", "evt_x_1")
-		h.Set("PGDock-Signature", pgdocktest.Sign(time.Now(), body, secret))
+		h.Set("Xenibase-Event-Id", "evt_x_1")
+		h.Set("Xenibase-Signature", xenibasetest.Sign(time.Now(), body, secret))
 		return h
 	}
 	if st := post(t, hook.URL, body, signed("whsec_wrong")); st != http.StatusUnauthorized {
 		t.Errorf("wrong secret: %d", st)
 	}
 	stale := signed(hook.Secret)
-	stale.Set("PGDock-Signature", pgdocktest.Sign(time.Now().Add(-6*time.Minute), body, hook.Secret))
+	stale.Set("Xenibase-Signature", xenibasetest.Sign(time.Now().Add(-6*time.Minute), body, hook.Secret))
 	if st := post(t, hook.URL, body, stale); st != http.StatusUnauthorized {
 		t.Errorf("replayed outside the window: %d", st)
 	}
 	// Rotation overlap (plan Q22): a header with the old and new signature.
 	both := signed(hook.Secret)
-	both.Set("PGDock-Signature", pgdocktest.Sign(time.Now(), body, "whsec_previous", hook.Secret))
+	both.Set("Xenibase-Signature", xenibasetest.Sign(time.Now(), body, "whsec_previous", hook.Secret))
 	if st := post(t, hook.URL, body, both); st != http.StatusAccepted {
 		t.Errorf("two v1 values: %d", st)
 	}
@@ -385,7 +435,7 @@ func TestTestEventsAndTruncatedRows(t *testing.T) {
 	w.tick(t)
 	sub, hook := w.only(t)
 
-	// PGDock's "Send test event": acknowledged, recorded, no run.
+	// Xenibase's "Send test event": acknowledged, recorded, no run.
 	req, _ := http.NewRequest(http.MethodPost, w.pg.URL+"/api/v1/projects/"+project+"/webhooks/"+hook.ID+"/test", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := http.DefaultClient.Do(req)
@@ -420,8 +470,9 @@ func TestTestEventsAndTruncatedRows(t *testing.T) {
 	if len(msgs) != 1 || msgs[0]["to"] != "+2348033333333" {
 		t.Fatalf("messages after a refetched truncated event: %v", msgs)
 	}
-	// PGDock busy while refetching: the delivery is refused and retried.
-	w.pg.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/" + project + "/tables/", Status: 503})
+	// Xenibase busy while refetching (the row is fetched by its key through
+	// the data API): the delivery is refused and retried.
+	w.pg.Fail(xenibasetest.Failure{Method: http.MethodGet, PathPrefix: "/edge/", Status: 503})
 	w.pg.Begin(project).Update("orders", map[string]any{"id": 11}, map[string]any{"status": "paid"}).Commit()
 	if n := w.pg.Deliver(); n != 0 {
 		t.Fatalf("delivered though the row could not be fetched: %d", n)
@@ -441,12 +492,12 @@ func TestRemoteLifecycle(t *testing.T) {
 	wf := w.Publish(t, doc)
 	w.deploy(t, wf, 1, doc)
 
-	// Taskiem crashed after PGDock created the webhook but before it
+	// Taskiem crashed after Xenibase created the webhook but before it
 	// recorded it: the next pass finds it by name and adopts it, with a new
 	// secret, rather than creating a second one.
 	sub := w.subs(t)[0]
 	reg := w.Registry
-	c, _ := reg.Get("pgdock@1")
+	c, _ := reg.Get("xenibase@1")
 	rc := connector.RemoteCall{Credentials: map[string]string{"token": token, "project_id": project}, HTTP: http.DefaultClient}
 	orphan, err := c.Registrars["row_changed"].Create(ctx, rc, connector.RemoteSpec{Name: remote.Name(sub.ID), URL: "https://stale.example/hooks", Options: map[string]any{"tables": []any{"customers"}}})
 	if err != nil {
@@ -474,7 +525,7 @@ func TestRemoteLifecycle(t *testing.T) {
 		t.Fatalf("updated %+v", h)
 	}
 
-	// Drift at PGDock shows on the subscription: broken, paused, missing.
+	// Drift at Xenibase shows on the subscription: broken, paused, missing.
 	w.pg.SetStatus(project, hook.ID, "broken", "the triggers on public.orders were dropped")
 	w.tick(t)
 	if s, _ := w.only(t); s.Health != "broken" || s.StatusReason == nil || !strings.Contains(*s.StatusReason, "dropped") {
@@ -490,8 +541,8 @@ func TestRemoteLifecycle(t *testing.T) {
 	if s, _ := w.only(t); s.Health != "paused" {
 		t.Errorf("paused: %+v", s)
 	}
-	// A health check PGDock refuses is recorded and never turns into a repair.
-	w.pg.Fail(pgdocktest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/" + project + "/webhooks/", Status: 503})
+	// A health check Xenibase refuses is recorded and never turns into a repair.
+	w.pg.Fail(xenibasetest.Failure{Method: http.MethodGet, PathPrefix: "/api/v1/projects/" + project + "/webhooks/", Status: 503})
 	w.tick(t)
 	w.tick(t)
 	if s, _ := w.only(t); s.Health != "paused" || w.pg.Hook(project, hook.ID).Enabled {
@@ -512,9 +563,9 @@ func TestRemoteLifecycle(t *testing.T) {
 		t.Fatalf("recreated: %+v %+v", s, hook2)
 	}
 
-	// PGDock refuses (a token without write): the subscription shows the
+	// Xenibase refuses (a token without write): the subscription shows the
 	// error and is retried later, not dropped.
-	w.pg.Fail(pgdocktest.Failure{Method: http.MethodPatch, PathPrefix: "/api/v1/projects/", Status: 403, Body: map[string]any{"code": "forbidden", "message": "the token lacks the write scope"}})
+	w.pg.Fail(xenibasetest.Failure{Method: http.MethodPatch, PathPrefix: "/api/v1/projects/", Status: 403, Body: map[string]any{"code": "forbidden", "message": "the token lacks the write scope"}})
 	repair(t, w, wf)
 	if s, _ := w.only(t); s.Health != "failed" || s.LastError == nil || !strings.Contains(*s.LastError, "write scope") || s.NextAttempt == nil {
 		t.Errorf("refused: %+v", s)
@@ -532,7 +583,7 @@ func TestRemoteLifecycle(t *testing.T) {
 	}
 	w.tick(t)
 	if hooks := w.pg.Webhooks(project); len(hooks) != 0 {
-		t.Errorf("left at PGDock: %+v", hooks)
+		t.Errorf("left at Xenibase: %+v", hooks)
 	}
 	if s := w.subs(t); len(s) != 0 {
 		t.Errorf("rows left %+v", s)
@@ -574,7 +625,7 @@ func TestReleaseBeforeRecordLeavesNothing(t *testing.T) {
 	wf := w.Publish(t, doc)
 	w.deploy(t, wf, 1, doc)
 	sub := w.subs(t)[0]
-	c, _ := w.Registry.Get("pgdock@1")
+	c, _ := w.Registry.Get("xenibase@1")
 	rc := connector.RemoteCall{Credentials: map[string]string{"token": token, "project_id": project}, HTTP: http.DefaultClient}
 	if _, err := c.Registrars["row_changed"].Create(ctx, rc, connector.RemoteSpec{Name: remote.Name(sub.ID), URL: "https://h.example", Options: map[string]any{"tables": []any{"orders"}}}); err != nil {
 		t.Fatal(err)

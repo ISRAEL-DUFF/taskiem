@@ -28,6 +28,7 @@ The format is [connector/v1](contracts/connector-v1.md), as for built-in connect
 - **Declare your hosts.** `base_url` (https), and `egress_hosts` when the connector reaches more than one host. Nothing else is reachable.
 - **Declare personal fields** under `pii`, in inputs and outputs, so Taskiem seals them in run history.
 - Webhook triggers must verify their deliveries (a signature or secret scheme; `none` is refused).
+- A provider that issues tokens to apps by OAuth 2.0 may declare `auth.oauth2` so people connect with one click instead of pasting a token ([below](#connecting-by-oauth)).
 
 `taskiem connector validate` applies the strict lint the catalogue uses, and you should hold your own connectors to it too:
 
@@ -45,6 +46,34 @@ taskiem connector validate manifest.yaml connector.wasm
 | Module | It imports anything but WASI and the four host functions, does not export `taskiem_execute_v1`, imports memory, starts with more memory than the cap, or is over 32 MiB |
 
 Warnings (shown, not blocking): an `unsafe_write` (it will park on timeouts), no `auth.test` action, an idempotency field the input schema does not declare, a missing description for your own connector.
+
+### Connecting by OAuth
+
+A connector keeps its `auth.fields` (people can always paste credentials) and adds `auth.oauth2` when the provider supports the OAuth 2.0 authorization code grant with PKCE ([decision 0034](decisions/0034-oauth-connections.md); rule 13 of the [contract](contracts/connector-v1.md)):
+
+```yaml
+auth:
+  type: api_key
+  fields:
+    - { key: token, label: API token, secret: true }
+    - { key: project_id, label: Project ID }
+    - { key: secret_key, label: Project secret key, secret: true, required: false }
+  oauth2:
+    authorize_url: "${server}/oauth/authorize"     # or an absolute https URL
+    token_url: "${server}/api/v1/oauth/token"
+    revoke_url: "${server}/api/v1/oauth/revoke"     # optional (RFC 7009)
+    scopes: [read, write]
+    pkce: true                                      # always; Taskiem sends an S256 challenge
+    fields_from_token: { token: access_token, project_id: "project_ids[0]" }
+```
+
+- `authorize_url`, `token_url` and `revoke_url` are `https://` URLs, or start with `${server}/` to be resolved from the connector's `base_url` (the platform's server for that provider, such as `TASKIEM_XENIBASE_URL`) when a connection is linked. A connector whose URLs need a server is not linkable on a platform that names none; a connection's own server (a self-hosted instance) is never used for OAuth, since Taskiem is not registered there.
+- `scopes` is what Taskiem asks for; the person may grant less.
+- `fields_from_token` fills auth fields from the token answer: a field of the answer (`access_token`, `org_id`), one element of a list field (`project_ids[0]`: the grant must then name exactly one, or the person is asked to connect again and choose one), or `${server}` for the server the token came from. Every required field must be filled this way, or a linked connection would be missing it. Optional fields the token does not fill (Xenibase's secret key and data API URL) are added afterwards from the Connections page (`PUT /v1/connections/{id}/credentials`).
+
+The flow is Taskiem's, not the connector's: `POST /v1/connections/oauth/start` records a ten-minute request and answers the consent URL (client id, redirect URI, scopes, state, PKCE challenge); the provider sends the browser back to `/v1/connections/oauth/callback`, which exchanges the code at `token_url` with the client secret and the verifier and saves the connection with `auth_type: oauth2` and the token's expiry. The state and the verifier never leave the server; the client secret never leaves the process. Taskiem's registration with the provider is per connector in the environment: `TASKIEM_OAUTH_<CONNECTOR>_CLIENT_ID` and `_CLIENT_SECRET` ([operations](operations.md#configuration)); without it, `GET /v1/connectors` says `oauth_linkable: false` and start answers 503 `oauth_unavailable`.
+
+Revocation goes both ways. Deleting an OAuth connection (`DELETE /v1/connections/{id}`) also posts its token to `revoke_url`, best effort. When the provider refuses a connection's token as revoked or expired, the connector wraps `connector.ErrCredentialsRejected` in its error (the Xenibase connector does for `401 invalid_token`); the engine then marks an OAuth connection `expired` at that step, so runs stop using it and the Connections page says to connect again. Pasted credentials are left alone: the person replaces them.
 
 ## 3. Write the handlers (Go)
 

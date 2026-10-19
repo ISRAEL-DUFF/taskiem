@@ -29,10 +29,16 @@ const (
 	IntentRun       Intent = "run"
 	IntentBuild     Intent = "build"
 	IntentLanguage  Intent = "language"
+	// Data tables (docs/whatsapp.md#data-tables): the list, "add to
+	// <table>" and "find <table> <text>".
+	IntentTables Intent = "tables"
+	IntentAdd    Intent = "add"
+	IntentFind   Intent = "find"
 )
 
 // Intents are every intent, in a fixed order.
-var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage}
+var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
+	IntentTables, IntentAdd, IntentFind}
 
 // Word lists live in intents/<tag>.json: whole messages that mean an
 // intent (phrases), words that start one and are followed by what it is
@@ -57,7 +63,7 @@ type Words struct {
 }
 
 // prefixIntents take what follows them; the others are whole messages.
-var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage}
+var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind}
 
 var (
 	wordsOnce sync.Once

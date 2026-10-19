@@ -24,12 +24,12 @@ func tv1(ts int64, body []byte, secrets ...string) string {
 	return strings.Join(parts, ",")
 }
 
-// The PGDock-style header: "t=<unix>,v1=<hex HMAC-SHA256 of t.body>", with
+// The Xenibase-style header: "t=<unix>,v1=<hex HMAC-SHA256 of t.body>", with
 // any v1 value accepted (rotation overlap) and a five-minute window.
 func TestTimestampedTV1(t *testing.T) {
 	Now = func() time.Time { return time.Unix(1791320000, 0) }
 	defer func() { Now = time.Now }()
-	spec := &VerifySpec{Scheme: "hmac_sha256_timestamped", Header: "PGDock-Signature", SignatureFormat: "t_v1", Tolerance: "5m"}
+	spec := &VerifySpec{Scheme: "hmac_sha256_timestamped", Header: "Xenibase-Signature", SignatureFormat: "t_v1", Tolerance: "5m"}
 	body := []byte(`{"id":"evt_1","type":"INSERT"}`)
 	const secret = "whsec_new"
 	for name, c := range map[string]struct {
@@ -50,15 +50,15 @@ func TestTimestampedTV1(t *testing.T) {
 		"empty":                {"", false},
 		"another version only": {"t=1791320000,v0=abc", false},
 	} {
-		err := VerifyWebhook(spec, secret, header("PGDock-Signature", c.header), body)
+		err := VerifyWebhook(spec, secret, header("Xenibase-Signature", c.header), body)
 		if (err == nil) != c.ok {
 			t.Errorf("%s: err=%v, want ok=%v", name, err, c.ok)
 		}
 	}
-	if VerifyWebhook(spec, secret, header("PGDock-Signature", tv1(1791320000, body, secret)), append(body, ' ')) == nil {
+	if VerifyWebhook(spec, secret, header("Xenibase-Signature", tv1(1791320000, body, secret)), append(body, ' ')) == nil {
 		t.Error("tampered body accepted")
 	}
-	if VerifyWebhook(spec, "", header("PGDock-Signature", tv1(1791320000, body, "")), body) == nil {
+	if VerifyWebhook(spec, "", header("Xenibase-Signature", tv1(1791320000, body, "")), body) == nil {
 		t.Error("an empty secret accepted")
 	}
 }
@@ -131,12 +131,12 @@ func TestRemoteTriggerNeedsRegistrar(t *testing.T) {
 }
 
 func TestHostsFor(t *testing.T) {
-	m := &Manifest{Egress: []string{"pgdock.example.com", "${connection.base_url}", "${connection.host}"}}
-	got := m.HostsFor(map[string]string{"base_url": "https://db.acme.example:8443/pgdock", "host": "10.0.0.5"})
-	if want := []string{"pgdock.example.com", "db.acme.example", "10.0.0.5"}; !slices.Equal(got, want) {
+	m := &Manifest{Egress: []string{"xenibase.example.com", "${connection.base_url}", "${connection.host}"}}
+	got := m.HostsFor(map[string]string{"base_url": "https://db.acme.example:8443/xenibase", "host": "10.0.0.5"})
+	if want := []string{"xenibase.example.com", "db.acme.example", "10.0.0.5"}; !slices.Equal(got, want) {
 		t.Errorf("hosts %v, want %v", got, want)
 	}
-	if got := m.HostsFor(map[string]string{"base_url": "https://pgdock.example.com"}); !slices.Equal(got, []string{"pgdock.example.com"}) {
+	if got := m.HostsFor(map[string]string{"base_url": "https://xenibase.example.com"}); !slices.Equal(got, []string{"xenibase.example.com"}) {
 		t.Errorf("empty and repeated hosts: %v", got)
 	}
 }

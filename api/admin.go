@@ -62,6 +62,9 @@ type connectionInfo struct {
 	ExpiresAt   *time.Time `json:"expires_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at"` // last recorded read of its credentials
+	// ProvisionedBy names what made the connection when it was not a
+	// person: "taskiem:data_tables" for the data tables project's.
+	ProvisionedBy *string `json:"provisioned_by"`
 	// Remote is the state of the subscriptions Taskiem keeps at the
 	// provider through this connection (decision 0021), when there are any.
 	Remote *remoteSummary `json:"remote,omitempty" db:"-"`
@@ -72,7 +75,7 @@ func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	only := principalFrom(r.Context()).Environment // a key limited to one environment sees only it
 	err := s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT c.id, c.environment, c.connector, c.name, c.auth_type, c.status, c.expires_at, c.created_at,
-			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = c.tenant_id AND sr.connection_id = c.id)
+			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = c.tenant_id AND sr.connection_id = c.id), c.provisioned_by
 			FROM connections c WHERE $1 = '' OR c.environment = $1 ORDER BY c.environment, c.connector, c.name`, only)
 		if err != nil {
 			return err

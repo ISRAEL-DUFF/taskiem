@@ -40,7 +40,7 @@ Rules 1–5, 9, 10 and 12 are enforced by `engine/wd.Validate`. Rules 6–8 are 
 
 ## Connector triggers
 
-A `connector_event` trigger's `config` is `connector` (`pgdock@1`), `trigger` (a trigger in its manifest), optional `events` (each one the trigger sends), `connection` and `options`. `options` must match the manifest trigger's `options` schema (a trigger without one takes none); it is checked when the version is published. For a trigger the manifest registers remotely (connector/v1 rule 8, [decision 0021](../decisions/0021-remote-trigger-registration.md)), `events` and `options` say what Taskiem subscribes to at the provider: PGDock's `row_changed` takes `options.tables`, optional `columns` and `refetch_truncated`. The reserved `database_change` trigger type is not used for PGDock ([PGDock](../integrations/pgdock.md#trigger)).
+A `connector_event` trigger's `config` is `connector` (`xenibase@1`), `trigger` (a trigger in its manifest), optional `events` (each one the trigger sends), `connection` and `options`. `options` must match the manifest trigger's `options` schema (a trigger without one takes none); it is checked when the version is published. For a trigger the manifest registers remotely (connector/v1 rule 8, [decision 0021](../decisions/0021-remote-trigger-registration.md)), `events` and `options` say what Taskiem subscribes to at the provider: Xenibase's `row_changed` takes `options.tables`, optional `columns` and `refetch_truncated`. The reserved `database_change` trigger type is not used for Xenibase ([Xenibase](../integrations/xenibase.md#trigger)).
 
 ## USSD menus
 

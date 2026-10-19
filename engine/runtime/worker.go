@@ -1061,6 +1061,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		var resp connector.Response
 		resp, err = p.conn.Actions[p.action].Execute(ctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
 		if err != nil {
+			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)
 		}
 		out = resp.Output
@@ -1157,6 +1158,31 @@ func collectSecrets(v any, into map[string]bool) {
 		for _, c := range t {
 			collectSecrets(c, into)
 		}
+	}
+}
+
+// ConnectionExpirer marks a connection expired when its provider refused
+// its token; secrets.Vault implements it.
+type ConnectionExpirer interface {
+	ExpireConnection(ctx context.Context, tenant uuid.UUID, environment, connector, name string) error
+}
+
+// expireRejected marks the step's connection expired when the provider
+// refused its credentials as revoked or expired (the connector wrapped
+// connector.ErrCredentialsRejected): the single place every connector
+// call's error passes, so an OAuth token revoked at the provider shows as
+// an expired connection at the next use (decision 0034). Only OAuth
+// connections are expired; the vault leaves pasted credentials alone.
+func (w *Worker) expireRejected(ctx context.Context, p *plan, err error) {
+	if !errors.Is(err, connector.ErrCredentialsRejected) || p.conn == nil {
+		return
+	}
+	ex, ok := w.Connections.(ConnectionExpirer)
+	if !ok {
+		return
+	}
+	if err := ex.ExpireConnection(ctx, p.c.tenant, p.env, p.conn.Manifest.ID, p.sched.Connection); err != nil && w.Logger != nil {
+		w.Logger.Warn("connection: could not mark expired after the provider refused its token", "connector", p.conn.Manifest.ID, "err", err)
 	}
 }
 
