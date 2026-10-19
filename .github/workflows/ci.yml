@@ -31,7 +31,7 @@ jobs:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.15.0
       - name: Start OpenBao (transit engine for the secrets tests)
         run: |
           curl -sSL -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz

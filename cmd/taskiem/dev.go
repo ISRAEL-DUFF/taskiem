@@ -104,7 +104,7 @@ func devCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	go func() { served <- serve(serveCtx, []string{"--role", "all"}) }()
 	defer func() {
 		stopServe()
-		<-served
+		<-served //nolint:errcheck // waiting for serve to stop; its error after a cancel says nothing
 	}()
 	base := "http://" + *listen
 	if err := waitReady(ctx, base, served); err != nil {
