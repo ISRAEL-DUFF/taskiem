@@ -235,12 +235,13 @@ func (s *Server) putTablesProject(w http.ResponseWriter, r *http.Request) {
 	}
 	var status datatables.Status
 	err = s.tx(r, func(tx pgx.Tx) error {
-		proj, err := svc.SetOwnProject(r.Context(), tx, p.TenantID, creds, projectName, ref, strings.TrimSpace(creds["api_url"]), expires)
+		proj, renewed, err := svc.SetOwnProject(r.Context(), tx, p.TenantID, creds, projectName, ref, strings.TrimSpace(creds["api_url"]), expires)
 		if err != nil {
 			return err
 		}
 		status = datatables.Status{Project: proj, Available: true, Configured: svc.Available(), Connection: datatables.ConnectionName}
-		return auditTx(r, tx, "table.project.set", proj.ProjectID, map[string]any{"connection_id": req.ConnectionID, "connection": name, "project_name": projectName})
+		return auditTx(r, tx, "table.project.set", proj.ProjectID, map[string]any{"connection_id": req.ConnectionID, "connection": name, "project_name": projectName,
+			"renewed_credentials": renewed})
 	})
 	if err != nil {
 		s.failTables(w, r, err)

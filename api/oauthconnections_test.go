@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strings"
@@ -29,6 +31,9 @@ const (
 type oauthWorld struct {
 	*world
 	fake *xenibasetest.Fake
+	// browser is the binding cookie the last start set: the browser that
+	// started linking carries it back to the callback.
+	browser *http.Cookie
 }
 
 // newOAuthWorld is a world whose platform Xenibase is the fake, with
@@ -50,7 +55,31 @@ func newOAuthWorld(t *testing.T) *oauthWorld {
 // start begins linking and returns the consent URL's query.
 func (w *oauthWorld) start(t *testing.T, c *client, name string) url.Values {
 	t.Helper()
-	out := c.must(200, "POST", "/v1/connections/oauth/start", map[string]any{"connector": "xenibase@1", "environment": "prod", "name": name})
+	raw, _ := json.Marshal(map[string]any{"connector": "xenibase@1", "environment": "prod", "name": name})
+	req, _ := http.NewRequest("POST", w.base+"/v1/connections/oauth/start", bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var out map[string]any
+	if resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&out) != nil {
+		t.Fatalf("start: status %d", resp.StatusCode)
+	}
+	w.browser = nil
+	for _, ck := range resp.Cookies() {
+		if ck.Name == "taskiem_oauth" {
+			if !ck.HttpOnly || ck.SameSite != http.SameSiteLaxMode || ck.Path != "/v1/connections/oauth/callback" || ck.MaxAge <= 0 {
+				t.Fatalf("binding cookie: %+v", ck)
+			}
+			w.browser = ck
+		}
+	}
+	if w.browser == nil {
+		t.Fatal("start set no browser binding cookie")
+	}
 	u, err := url.Parse(out["url"].(string))
 	if err != nil {
 		t.Fatal(err)
@@ -61,11 +90,22 @@ func (w *oauthWorld) start(t *testing.T, c *client, name string) url.Values {
 	return u.Query()
 }
 
-// callback plays the browser coming back and returns where it is sent.
+// callback plays the browser that started linking coming back and returns
+// where it is sent.
 func (w *oauthWorld) callback(t *testing.T, params url.Values) url.Values {
 	t.Helper()
+	return w.callbackFrom(t, params, w.browser)
+}
+
+// callbackFrom plays a browser carrying cookie (nil: none) coming back.
+func (w *oauthWorld) callbackFrom(t *testing.T, params url.Values, cookie *http.Cookie) url.Values {
+	t.Helper()
 	hc := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := hc.Get(w.base + "/v1/connections/oauth/callback?" + params.Encode())
+	req, _ := http.NewRequest("GET", w.base+"/v1/connections/oauth/callback?"+params.Encode(), nil)
+	if cookie != nil {
+		req.AddCookie(&http.Cookie{Name: cookie.Name, Value: cookie.Value})
+	}
+	resp, err := hc.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,10 +271,11 @@ func TestOAuthConnectionRefusals(t *testing.T) {
 	owner := w.tenant(t, "Acme", "owner@acme.test")
 
 	// Unknown state, and a start whose request has expired.
-	if back := w.callback(t, url.Values{"code": {"x"}, "state": {strings.Repeat("a", 43)}}); !strings.Contains(back.Get("error"), "unknown, already used or expired") {
+	some := &http.Cookie{Name: "taskiem_oauth", Value: strings.Repeat("b", 43)}
+	if back := w.callbackFrom(t, url.Values{"code": {"x"}, "state": {strings.Repeat("a", 43)}}, some); !strings.Contains(back.Get("error"), "unknown, already used or expired") {
 		t.Fatalf("unknown state: %q", back.Get("error"))
 	}
-	if back := w.callback(t, url.Values{"code": {"x"}, "state": {"short"}}); !strings.Contains(back.Get("error"), "unknown, already used or expired") {
+	if back := w.callbackFrom(t, url.Values{"code": {"x"}, "state": {"short"}}, some); !strings.Contains(back.Get("error"), "unknown, already used or expired") {
 		t.Fatalf("short state: %q", back.Get("error"))
 	}
 	q := w.start(t, owner, "late")
@@ -304,4 +345,34 @@ func TestOAuthConnectionRefusals(t *testing.T) {
 // would make it.
 func connectorRequest(creds map[string]string) connector.Request {
 	return connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: http.DefaultClient, Attempt: 1}
+}
+
+// A consent link sent to someone else: they approve in their own browser,
+// which has no binding cookie (or another start's), and nothing is linked
+// into the organisation that started it.
+func TestOAuthCallbackIsBoundToTheStartingBrowser(t *testing.T) {
+	w := newOAuthWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	q := w.start(t, owner, "lure")
+	mine := w.browser
+	w.fake.AddOAuthCode(xenibasetest.OAuthCode{Code: "victim-code", Challenge: q.Get("code_challenge"), Scopes: []string{"read", "write"}, ProjectIDs: []string{oauthOther}})
+	params := url.Values{"code": {"victim-code"}, "state": {q.Get("state")}}
+	if back := w.callbackFrom(t, params, nil); back.Get("linked") != "" || !strings.Contains(back.Get("error"), "browser where you started") {
+		t.Fatalf("no cookie: %v", back)
+	}
+	q2 := w.start(t, owner, "other") // another start's cookie does not fit this state
+	_ = q2
+	if back := w.callbackFrom(t, params, w.browser); back.Get("linked") != "" || !strings.Contains(back.Get("error"), "unknown, already used or expired") {
+		t.Fatalf("another start's cookie: %v", back)
+	}
+	for _, c := range owner.must(200, "GET", "/v1/connections", nil)["connections"].([]any) {
+		if c.(map[string]any)["name"] == "lure" {
+			t.Fatal("a connection was made from another browser")
+		}
+	}
+	// The starting browser could still finish (the state was not spent by
+	// the others: each attempt above named nothing).
+	if back := w.callbackFrom(t, params, mine); back.Get("linked") == "" {
+		t.Fatalf("starting browser: %v", back)
+	}
 }

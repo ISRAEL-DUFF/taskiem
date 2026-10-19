@@ -93,7 +93,7 @@ The trigger is `row_changed`, a connector event (`connector_event`). wd/v1's res
 | --- | --- |
 | **Signature** | `Xenibase-Signature: t=<unix>,v1=<hex>`: HMAC-SHA256 of `"<t>.<raw body>"` with the webhook's secret, compared in constant time; refused when `t` is more than five minutes from now. Every `v1` value is tried, so a rotation that signs with the old and new secret for a while is accepted (Q22: `rotate-secret` with `overlap_seconds` does that) |
 | **Event** | The payload's `type` |
-| **Dedup** | `Xenibase-Event-Id` (the payload's `id` if the header is missing). Xenibase delivers at least once; a repeat is acknowledged and starts nothing |
+| **Dedup** | The payload's `id`, which is signed (it equals `Xenibase-Event-Id`, which is not, so the header is never trusted for it). Xenibase delivers at least once; a repeat is acknowledged and starts nothing |
 | **Routing** | Only the workflow the webhook was created for starts |
 
 The run's trigger is `{type: "connector_event", connector, trigger, event, body}`, with Xenibase's payload as `body`: `id`, `webhook`, `project`, `table` (`public.orders`), `type`, `record` (null for a `DELETE`), `old_record` (null for an `INSERT`) and `committed_at`. An `UPDATE`'s `old_record` is the whole row before the change (Q24).

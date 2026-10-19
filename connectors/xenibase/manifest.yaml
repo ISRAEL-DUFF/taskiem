@@ -396,8 +396,10 @@ triggers:
     verify: { scheme: hmac_sha256_timestamped, header: Xenibase-Signature, signature_format: t_v1, tolerance: 5m }
     events: [INSERT, UPDATE, DELETE, TEST]
     event_type: =body.type
-    # Xenibase delivers at least once; Xenibase-Event-Id names the event.
-    dedup: "='xenibase-event-id' in headers ? headers['xenibase-event-id'] : body.id"
+    # Xenibase delivers at least once. The event's id is deduplicated from
+    # the signed body, never the Xenibase-Event-Id header: only the body is
+    # signed, so a replay with an altered header must not look new.
+    dedup: =body.id
     test_event: =body.type == 'TEST'
     options:
       type: object

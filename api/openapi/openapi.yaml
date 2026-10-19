@@ -10160,7 +10160,7 @@ paths:
       - Data tables
       summary: Import rows from CSV
       description: >-
-        A multipart form with a `file` field holding a CSV whose header row names the table's columns (`created_at` and `updated_at` are ignored). Up to 5,000 rows per call, written in batches of 500: upserted on `id` when the file has an `id` column (an export imported back), inserted otherwise. Each batch carries its own key from the import id and the batch's index, so a retried import writes nothing twice. Audited as `table.import` with counts only.
+        A multipart form with a `file` field holding a CSV whose header row names the table's columns (`created_at` and `updated_at` are ignored). Up to 5,000 rows per call, written in batches of 500: upserted on `id` when the file has an `id` column (an export imported back), inserted otherwise. Each batch carries its own key from the import id and the batch's index; the import id comes from the `Idempotency-Key` header, or without one from the file and the table, so a retried import writes nothing twice (`replayed_batches`). Send a new key to import the same file again on purpose. Audited as `table.import` with counts only.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -10175,6 +10175,12 @@ paths:
           type: string
           format: uuid
         description: The table's id
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the import safe to retry: the same key (or, without one, the same file) writes nothing twice'
       requestBody:
         required: true
         content:

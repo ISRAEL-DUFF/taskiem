@@ -89,9 +89,11 @@ func TestFixtureDeliveries(t *testing.T) {
 			}
 		}
 	}
-	// Without the event id header, the payload's id deduplicates.
-	v, err := e.Eval(tr.Dedup, map[string]any{"body": map[string]any{"id": "evt_x"}, "headers": map[string]any{}, "query": map[string]any{}, "item": nil})
+	// The signed body's id deduplicates, whatever the (unsigned) event id
+	// header says: a replay with an altered header is still a repeat.
+	v, err := e.Eval(tr.Dedup, map[string]any{"body": map[string]any{"id": "evt_x"}, "headers": map[string]any{"xenibase-event-id": "evt_forged"},
+		"query": map[string]any{}, "item": nil})
 	if err != nil || v != "evt_x" {
-		t.Errorf("fallback dedup: %v %v", v, err)
+		t.Errorf("dedup from a forged header: %v %v", v, err)
 	}
 }

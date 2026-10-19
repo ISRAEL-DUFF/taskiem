@@ -43,6 +43,12 @@ type OAuthClient struct {
 // URL, under PublicURL, is what they must have registered.
 const oauthCallbackPath = "/v1/connections/oauth/callback"
 
+// oauthBrowserCookie binds a linking request to the browser that started
+// it: the callback is taken only with it, so a consent link sent to
+// someone else cannot put their account into this organisation. Sent only
+// to the callback; Lax, so it travels on the provider's redirect back.
+const oauthBrowserCookie = "taskiem_oauth"
+
 // errOAuthUnavailable: the connector cannot be linked on this platform
 // (no client registered, no public URL, no provider server). 503 with
 // code oauth_unavailable, and the reason.
@@ -139,7 +145,7 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		req.Name = "default"
 	}
-	var state, verifier string
+	var state, browser, verifier string
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_connections"); err != nil {
 			return err
@@ -151,7 +157,7 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		if exists {
 			return fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, req.Name, env)
 		}
-		state, verifier, err = s.Vault.BeginOAuthRequestTx(r.Context(), tx, p.TenantID, c.Ref(), env, req.Name, p.Actor())
+		state, browser, verifier, err = s.Vault.BeginOAuthRequestTx(r.Context(), tx, p.TenantID, c.Ref(), env, req.Name, p.Actor())
 		return err
 	})
 	if err != nil {
@@ -167,6 +173,8 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		"code_challenge":        {base64.RawURLEncoding.EncodeToString(sum[:])},
 		"code_challenge_method": {"S256"},
 	}
+	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: browser, Path: oauthCallbackPath, MaxAge: int(secrets.OAuthRequestTTL.Seconds()),
+		HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode})
 	writeJSON(w, http.StatusOK, map[string]any{"url": prov.authorize + "?" + q.Encode(), "expires_in": int(secrets.OAuthRequestTTL.Seconds())})
 }
 
@@ -181,13 +189,20 @@ func (s *Server) failOAuth(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // oauthConnectionCallback is where the provider sends the browser back.
-// It is unauthenticated: the state alone names the request, works once,
-// and lasts ten minutes. Whatever happens, the browser ends up on the
-// Connections page, with the new connection or with what went wrong.
+// It is unauthenticated: the state and the browser's binding cookie name
+// the request, which works once and lasts ten minutes. Whatever happens,
+// the browser ends up on the Connections page, with the new connection or
+// with what went wrong.
 func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	ctx := r.Context()
-	req, err := s.Vault.TakeOAuthRequest(ctx, q.Get("state"))
+	cookie, _ := r.Cookie(oauthBrowserCookie)
+	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: "", Path: oauthCallbackPath, MaxAge: -1, HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode})
+	if cookie == nil {
+		s.oauthDone(w, r, "", fmt.Errorf("%w: finish linking in the browser where you started it (start again from Connections)", errOAuthGrant))
+		return
+	}
+	req, err := s.Vault.TakeOAuthRequest(ctx, q.Get("state"), cookie.Value)
 	if err != nil {
 		s.oauthDone(w, r, "", err)
 		return
