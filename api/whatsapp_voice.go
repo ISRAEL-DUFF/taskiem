@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -47,7 +48,7 @@ func (s *Server) waVoice(ctx context.Context, c *chat) error {
 		return c.say(ctx, s, c.t("voice.type_now"))
 	}
 	// Per number and per tenant: transcription costs money and time.
-	if !s.limiter("wa-voice:"+c.number, 30*time.Second, 5).Allow() || !s.limiter("wa-voice-tenant:"+c.tenant.ID.String(), 2*time.Second, 30).Allow() {
+	if !s.limiter("wa-voice:"+c.addr, 30*time.Second, 5).Allow() || !s.limiter("wa-voice-tenant:"+c.tenant.ID.String(), 2*time.Second, 30).Allow() {
 		return c.say(ctx, s, c.t("voice.too_many"))
 	}
 	lim := s.Voice.Limits.WithDefaults()
@@ -61,24 +62,12 @@ func (s *Server) waVoice(ctx context.Context, c *chat) error {
 	if voice.Extension(media.MimeType) == "" {
 		return refuse("refused", "unsupported", c.t("voice.unsupported"), 0, 0)
 	}
-	info, err := c.wa.Client.MediaInfo(ctx, media.ID)
-	if err != nil {
-		s.Logger.Warn("whatsapp: looking up a voice note", "err", err)
-		return refuse("failed", "download_error", c.t("voice.failed"), 0, 0)
-	}
-	mime := media.MimeType
-	if info.MimeType != "" {
-		mime = info.MimeType
-	}
-	if info.SHA256 == "" {
-		info.SHA256 = media.SHA256
-	}
-	data, err := c.wa.Client.Download(ctx, info, lim.MaxBytes)
+	data, mime, size, err := s.fetchVoice(ctx, c, lim.MaxBytes)
 	if errors.Is(err, whatsapp.ErrMediaTooLarge) {
-		return refuse("refused", "too_large", c.t("voice.too_large"), 0, int(info.Size))
+		return refuse("refused", "too_large", c.t("voice.too_large"), 0, size)
 	}
 	if err != nil {
-		s.Logger.Warn("whatsapp: downloading a voice note", "err", err)
+		s.Logger.Warn("chat: fetching a voice note", "channel", c.ch.Name(), "err", err)
 		return refuse("failed", "download_error", c.t("voice.failed"), 0, 0)
 	}
 	audio := voice.Audio{Data: data, MimeType: mime}
@@ -115,7 +104,7 @@ func (s *Server) waVoice(ctx context.Context, c *chat) error {
 		return err
 	}
 	// Read as typed, in the language the words are in.
-	c.lang = s.chooseLang(ctx, c.tenant.ID, c.number, text)
+	c.lang = s.chooseLang(ctx, c.tenant.ID, c.addr, text)
 	echo := text
 	if utf8.RuneCountInString(echo) > voiceEcho {
 		echo = string([]rune(echo)[:voiceEcho]) + "…"
@@ -131,13 +120,49 @@ func (s *Server) waVoice(ctx context.Context, c *chat) error {
 	if c.note != "" {
 		// The command answered with something other than a reply (fresh
 		// approval requests): say what was heard anyway.
-		return s.waSay(ctx, c.wa, c.number, c.tenant.Name, c.note)
+		return s.waSay(ctx, c.ch, c.addr, c.tenant.Name, c.note)
 	}
 	return nil
 }
 
 // recordVoice keeps what happened to a voice note: the transcript sealed,
 // for the retention period; refusals and failures with their reason only.
+// fetchVoice downloads the recording of c's voice note, at most max bytes
+// (whatsapp.ErrMediaTooLarge beyond), with its MIME type and size.
+func (s *Server) fetchVoice(ctx context.Context, c *chat, max int64) ([]byte, string, int, error) {
+	media := c.in.Media
+	if c.wa == nil {
+		if s.Telegram == nil {
+			return nil, "", 0, errors.New("no channel to fetch from")
+		}
+		path, size, err := s.Telegram.Client.FileInfo(ctx, media.ID)
+		if err != nil {
+			return nil, "", 0, err
+		}
+		if size > max {
+			return nil, "", int(size), whatsapp.ErrMediaTooLarge
+		}
+		data, err := s.Telegram.Client.Download(ctx, path, max)
+		if err != nil {
+			return nil, "", int(size), fmt.Errorf("telegram: downloading a voice note: %w", err)
+		}
+		return data, media.MimeType, len(data), nil
+	}
+	info, err := c.wa.Client.MediaInfo(ctx, media.ID)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	mime := media.MimeType
+	if info.MimeType != "" {
+		mime = info.MimeType
+	}
+	if info.SHA256 == "" {
+		info.SHA256 = media.SHA256
+	}
+	data, err := c.wa.Client.Download(ctx, info, max)
+	return data, mime, int(info.Size), err
+}
+
 func (s *Server) recordVoice(ctx context.Context, c *chat, status, reason string, dur time.Duration, size int, text string) error {
 	retention := s.Voice.Retention
 	if retention <= 0 {
@@ -161,9 +186,9 @@ func (s *Server) recordVoice(ctx context.Context, c *chat, status, reason string
 			}
 			sealed = env
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO voice_transcripts (id, tenant_id, user_id, provider, language, status, reason, duration_ms, bytes, transcript, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now() + $11::interval)`,
-			uuid.Must(uuid.NewV7()), c.tenant.ID, c.p.UserID, s.Voice.Provider.Name(), string(c.lang.Tag), status, reasonP, durMS, size, sealed, retention.String())
+		_, err := tx.Exec(ctx, `INSERT INTO voice_transcripts (id, tenant_id, user_id, provider, language, status, reason, duration_ms, bytes, transcript, expires_at, channel)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now() + $11::interval, $12)`,
+			uuid.Must(uuid.NewV7()), c.tenant.ID, c.p.UserID, s.Voice.Provider.Name(), string(c.lang.Tag), status, reasonP, durMS, size, sealed, retention.String(), c.ch.Name())
 		return err
 	})
 }

@@ -226,7 +226,7 @@ func flowDone(token string) map[string]any {
 // for a data table (data.Table set), when Flows are set up and the fields
 // fit one; false leaves them to chat.
 func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, fields []whatsapp.Field) (bool, error) {
-	if c.wa.Config.FlowKey == nil {
+	if c.wa == nil || c.wa.Config.FlowKey == nil {
 		return false, nil
 	}
 	form, err := whatsapp.FlowForm(data.Name, fields, nil)
@@ -250,7 +250,7 @@ func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, f
 	raw, _ := json.Marshal(meta)
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO whatsapp_flows (token_hash, tenant_id, kind, number, phone_number_id, user_id, workflow_id, version, data, expires_at)
-			VALUES ($1, $2, 'inputs', $3, $4, $5, $6, $7, $8, now() + $9::interval)`, hash, c.tenant.ID, c.number, c.wa.Config.PhoneNumberID, c.p.UserID,
+			VALUES ($1, $2, 'inputs', $3, $4, $5, $6, $7, $8, now() + $9::interval)`, hash, c.tenant.ID, c.addr, c.wa.Config.PhoneNumberID, c.p.UserID,
 			wf, version, raw, waPendingTTL.String())
 		return err
 	}); err != nil {
@@ -260,7 +260,7 @@ func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, f
 	if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 		return false, err
 	}
-	_, err = c.wa.Client.SendFlow(ctx, c.number, whatsapp.FlowMessage{Flow: whatsapp.FlowInputs, Token: tok, CTA: c.t("button.fill_in"), Screen: whatsapp.ScreenInputs, Data: form,
+	_, err = c.wa.Client.SendFlow(ctx, c.addr, whatsapp.FlowMessage{Flow: whatsapp.FlowInputs, Token: tok, CTA: c.t("button.fill_in"), Screen: whatsapp.ScreenInputs, Data: form,
 		Body: c.wa.Prefix(c.tenant.Name) + body})
 	if err != nil {
 		// Not delivered (an old app, the window, Meta): ask in chat.
@@ -373,12 +373,12 @@ func (s *Server) waFlowCompleted(ctx context.Context, c *chat) error {
 		return err
 	}
 	// Only the number and the person it was sent to.
-	if row.number != c.number || row.user == nil || *row.user != c.p.UserID {
+	if row.number != c.addr || row.user == nil || *row.user != c.p.UserID {
 		return invalid()
 	}
 	switch row.kind {
 	case "pin":
-		say := func(text string) error { return s.waSay(ctx, c.wa, c.number, c.tenants[i].Name, text) }
+		say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, c.tenants[i].Name, text) }
 		if out, _ := row.data["outcome"].(string); out != "" && (row.status == "done" || row.status == "refused") {
 			return say(out)
 		}
@@ -411,7 +411,7 @@ func (s *Server) waFlowCompleted(ctx context.Context, c *chat) error {
 // decision, when Flows are set up and the person has a PIN that is not
 // locked; false leaves step-up to the web link.
 func (s *Server) waSendPinFlow(ctx context.Context, c *chat, tenant tenantRef, p *Principal, cl whatsapp.Claims) (bool, error) {
-	if c.wa.Config.FlowKey == nil {
+	if c.wa == nil || c.wa.Config.FlowKey == nil {
 		return false, nil
 	}
 	pin, err := s.waPinInfo(ctx, p.UserID)
@@ -430,7 +430,7 @@ func (s *Server) waSendPinFlow(ctx context.Context, c *chat, tenant tenantRef, p
 		}
 		meta, _ := json.Marshal(map[string]any{"title": verb + " " + cl.Step, "summary": whatsapp.SafeText(wf) + " · " + env})
 		_, err := tx.Exec(ctx, `INSERT INTO whatsapp_flows (token_hash, tenant_id, kind, number, phone_number_id, user_id, run_id, step_id, level, decision, decision_nonce, data, expires_at)
-			VALUES ($1, $2, 'pin', $3, $4, $5, $6, $7, $8, $9, $10, $11, now() + $12::interval)`, hash, tenant.ID, c.number, c.wa.Config.PhoneNumberID, p.UserID,
+			VALUES ($1, $2, 'pin', $3, $4, $5, $6, $7, $8, $9, $10, $11, now() + $12::interval)`, hash, tenant.ID, c.addr, c.wa.Config.PhoneNumberID, p.UserID,
 			cl.Run, cl.Step, cl.Level, cl.Decision, cl.Nonce[:], meta, waHandoffTTL.String())
 		return err
 	})
@@ -442,7 +442,7 @@ func (s *Server) waSendPinFlow(ctx context.Context, c *chat, tenant tenantRef, p
 			return false, err
 		}
 	}
-	_, err = c.wa.Client.SendFlow(ctx, c.number, whatsapp.FlowMessage{Flow: whatsapp.FlowPin, Token: tok, CTA: c.t("button.enter_pin"), Screen: whatsapp.ScreenPin,
+	_, err = c.wa.Client.SendFlow(ctx, c.addr, whatsapp.FlowMessage{Flow: whatsapp.FlowPin, Token: tok, CTA: c.t("button.enter_pin"), Screen: whatsapp.ScreenPin,
 		Data: whatsapp.PinForm(verb+" "+cl.Step, whatsapp.SafeText(wf)+" · "+env, ""),
 		Body: c.wa.Prefix(tenant.Name) + c.t("wa.form.pin_"+strings.ToLower(verb), "step", cl.Step)})
 	if err != nil {
@@ -482,7 +482,7 @@ func (s *Server) waFlowPin(ctx context.Context, row flowRow, req whatsapp.FlowRe
 			return
 		}
 		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{row.tenant}, func(tx pgx.Tx) error {
-			return waAudit(ctx, tx, p, action, row.run.String()+"/"+*row.step, detail)
+			return waAudit(ctx, tx, "whatsapp", p, action, row.run.String()+"/"+*row.step, detail)
 		})
 	}
 	if perr != nil || !p.Can(PermApprovalDecide) {

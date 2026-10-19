@@ -112,6 +112,26 @@
       "text": "A n se ayewo ibeere yin {reference}. A o je ki e mo.",
       "reviewed": false
     },
+    "tg.button_expired": {
+      "text": "Bọ́tìnnì yẹn ti parí àkókò. Fi *approvals* ránṣẹ́ láti gba àwọn ìfọwọ́sí rẹ tí ó ṣí sílẹ̀ padà.",
+      "reviewed": false
+    },
+    "tg.link_invalid": {
+      "text": "Ìjápọ̀ yẹn ti parí àkókò tàbí wọ́n ti lò ó tẹ́lẹ̀. Ṣe tuntun lábẹ́ Telegram ní {where}.",
+      "reviewed": false
+    },
+    "tg.link_taken": {
+      "text": "Àkọọ́lẹ̀ Telegram yìí ti so mọ́ àkọọ́lẹ̀ Taskiem mìíràn. Kọ́kọ́ yọ ọ́ kúrò níbẹ̀.",
+      "reviewed": false
+    },
+    "tg.linked": {
+      "text": "Àkọọ́lẹ̀ Telegram yìí ti so mọ́ àkọọ́lẹ̀ Taskiem rẹ báyìí. Fi *help* ránṣẹ́ láti rí ohun tí o lè ṣe níbí.",
+      "reviewed": false
+    },
+    "tg.unbound": {
+      "text": "Àkọọ́lẹ̀ Telegram yìí kò tíì so mọ́ àkọọ́lẹ̀ Taskiem kankan. Láti lo Taskiem níbí, wọlé, ṣí {where}, kí o sì yan Link Telegram: yóò ṣí ìjíròrò yìí pẹ̀lú ìjápọ̀ ẹ̀ẹ̀kan ṣoṣo.",
+      "reviewed": false
+    },
     "ussd.busy": {
       "text": "Ise yii di lowo. E jowo e tun gbiyanju laipe.",
       "reviewed": false

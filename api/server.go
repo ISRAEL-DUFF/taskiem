@@ -36,6 +36,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -115,6 +116,11 @@ type Server struct {
 	WhatsApp *whatsapp.Platform
 	// WhatsAppPublic answers numbers bound to no one; nil sends how to link.
 	WhatsAppPublic WhatsAppPublic
+	// Telegram is the platform bot (decision 0035); nil turns the channel off.
+	Telegram *telegram.Platform
+	// ChatSigner signs approval decision and hand-off tokens when WhatsApp
+	// is off (with WhatsApp on, its signer is used for both channels).
+	ChatSigner whatsapp.Signer
 	// USSD tunes the USSD fast path (ussd.go).
 	USSD USSDSettings
 	// Languages turns languages beyond English on for WhatsApp, USSD and
@@ -185,6 +191,9 @@ func (s *Server) Handler() http.Handler {
 		if s.WhatsApp != nil {
 			r.Mount("/channels/whatsapp", s.WhatsAppHooks())
 		}
+		if s.Telegram != nil {
+			r.Post("/channels/telegram", s.tgReceive)
+		}
 		r.Mount("/channels/ussd", s.USSDHooks())
 	}
 	r.Route("/v1", func(r chi.Router) {
@@ -237,6 +246,9 @@ func (s *Server) Handler() http.Handler {
 			r.Delete("/me/whatsapp", s.unbindWhatsApp)
 			r.Put("/me/whatsapp/pin", s.setWhatsAppPin)
 			r.Delete("/me/whatsapp/pin", s.removeWhatsAppPin)
+			r.Get("/me/telegram", s.getTelegram)
+			r.Post("/me/telegram", s.startTelegramLink)
+			r.Delete("/me/telegram", s.unlinkTelegram)
 			r.With(s.need(PermSecretManage)).Get("/whatsapp/number", s.getWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/whatsapp/number", s.putWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/whatsapp/number", s.deleteWhatsAppNumber)

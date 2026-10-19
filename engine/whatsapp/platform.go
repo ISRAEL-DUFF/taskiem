@@ -115,6 +115,13 @@ type Platform struct {
 // Own reports whether this is a tenant's own number.
 func (p *Platform) Own() bool { return p.Tenant != uuid.Nil }
 
+// Name is the channel's name ("whatsapp"), as recorded on votes and in
+// chat-channel tables.
+func (p *Platform) Name() string { return "whatsapp" }
+
+// OwnTenant is an own number's tenant, uuid.Nil on the shared number.
+func (p *Platform) OwnTenant() uuid.UUID { return p.Tenant }
+
 // New builds the platform from its configuration.
 func New(pool *pgxpool.Pool, cfg Config, guard *egress.Guard, log *slog.Logger) *Platform {
 	if cfg.Language == "" {

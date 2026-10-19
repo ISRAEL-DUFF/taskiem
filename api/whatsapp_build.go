@@ -102,11 +102,11 @@ func (s *Server) waStartBuild(ctx context.Context, c *chat, goal string) error {
 	}
 	// Per number and per tenant (shared with the web app): a phone cannot
 	// spend the tenant's budget in a burst.
-	if !s.limiter("wa-build:"+c.number, 20*time.Second, 3).Allow() || !s.limiter("ai-build:"+c.tenant.ID.String(), 20*time.Second, 5).Allow() {
+	if !s.limiter("wa-build:"+c.addr, 20*time.Second, 3).Allow() || !s.limiter("ai-build:"+c.tenant.ID.String(), 20*time.Second, 5).Allow() {
 		return c.say(ctx, s, c.t("wa.build.too_many"))
 	}
-	who := aiActor{tenant: c.tenant.ID, actor: c.p.Actor(), actorType: c.p.ActorType(), ip: "whatsapp"}
-	wa, number, tenant, user := c.wa, c.number, c.tenant, c.p.UserID
+	who := aiActor{tenant: c.tenant.ID, actor: c.p.Actor(), actorType: c.p.ActorType(), ip: c.ch.Name()}
+	ch, wa, addr, tenant, user := c.ch, c.wa, c.addr, c.tenant, c.p.UserID
 	ready := make(chan struct{})
 	req := aiBuildReq{Goal: goal}
 	if c.lang.Tag != lang.EN {
@@ -114,9 +114,9 @@ func (s *Server) waStartBuild(ctx context.Context, c *chat, goal string) error {
 		info, _ := lang.Lookup(c.lang.Tag)
 		req.language = info.English
 	}
-	id, err := s.startAIBuild(ctx, who, req, "whatsapp", func(id uuid.UUID, prop *builder.Proposal, err error) {
+	id, err := s.startAIBuild(ctx, who, req, ch.Name(), func(id uuid.UUID, prop *builder.Proposal, err error) {
 		<-ready
-		s.waBuildDone(wa, number, tenant, user, id, prop, err)
+		s.waBuildDone(ch, wa, addr, tenant, user, id, prop, err)
 	})
 	if err != nil {
 		return err
@@ -130,15 +130,15 @@ func (s *Server) waStartBuild(ctx context.Context, c *chat, goal string) error {
 
 // waBuildDone answers when a build finishes, if the person is still
 // waiting for it.
-func (s *Server) waBuildDone(wa *whatsapp.Platform, number string, tenant tenantRef, user, id uuid.UUID, prop *builder.Proposal, buildErr error) {
+func (s *Server) waBuildDone(ch chatChannel, wa *whatsapp.Platform, addr string, tenant tenantRef, user, id uuid.UUID, prop *builder.Proposal, buildErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	c := &chat{wa: wa, number: number, tenant: tenant}
+	c := &chat{ch: ch, wa: wa, addr: addr, tenant: tenant}
 	var err error
 	if c.p, err = s.principalOf(ctx, tenant.ID, user); err != nil {
 		return // no longer a member: nothing to tell
 	}
-	c.lang = s.chooseLang(ctx, tenant.ID, number, "")
+	c.lang = s.chooseLang(ctx, tenant.ID, addr, "")
 	if err := s.loadSession(ctx, c); err != nil {
 		s.Logger.Error("whatsapp build: loading the session", "err", err)
 		return
@@ -421,7 +421,7 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 		var err error
 		var doc []byte
 		wf, _, doc, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", func(action, target string, detail map[string]any) error {
-			return waAudit(ctx, tx, c.p, action, target, detail)
+			return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 		})
 		if err == nil {
 			var d struct {

@@ -309,11 +309,11 @@ func (s *Server) principalOf(ctx context.Context, tenant, user uuid.UUID) (*Prin
 }
 
 // waAudit appends an audit entry for an action taken over WhatsApp.
-func waAudit(ctx context.Context, tx pgx.Tx, p *Principal, action, target string, detail map[string]any) error {
+func waAudit(ctx context.Context, tx pgx.Tx, channel string, p *Principal, action, target string, detail map[string]any) error {
 	if detail == nil {
 		detail = map[string]any{}
 	}
-	detail["channel"] = "whatsapp"
+	detail["channel"] = channel
 	raw, _ := json.Marshal(detail)
 	_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, $3, $4, $5)`, p.TenantID, p.UserID.String(), action, target, raw)
 	return err

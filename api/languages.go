@@ -221,7 +221,7 @@ func (s *Server) waLanguage(ctx context.Context, c *chat, arg string) error {
 		}
 		return c.say(ctx, s, c.t("lang.unavailable", "name", name, "languages", langNames(c.lang.On)))
 	}
-	if err := s.setNumberLang(ctx, c.number, info.Tag, "command"); err != nil {
+	if err := s.setNumberLang(ctx, c.addr, info.Tag, "command"); err != nil {
 		return err
 	}
 	c.lang.Tag = info.Tag
@@ -240,7 +240,7 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	if s.Languages == nil || s.Languages.Model == nil || c.lang.Tag == lang.EN {
 		return lang.Match{}
 	}
-	if !s.limiter("wa-intent:"+c.number, 6*time.Second, 10).Allow() {
+	if !s.limiter("wa-intent:"+c.addr, 6*time.Second, 10).Allow() {
 		return lang.Match{}
 	}
 	limit, used, err := s.aiBudget(ctx, c.tenant.ID)
