@@ -152,7 +152,7 @@ No Xenibase auth and no new account system: members use Taskiem's own sign-in, o
 
 ### 6.5 Files
 
-- **Where they go:** Xenibase storage, in the organisation's Xenibase project, in a private bucket. This depends on the Xenibase storage integration (P4-T1), which storefronts need too.
+- **Where they go:** Xenibase storage, in the organisation's Xenibase project, in its private bucket, reached only through signed URLs ([media](../media.md#files-from-forms)).
 - **Limits:** the field's `accept` types and `max_mb` (default 10 MB, at most 25), and at most 10 files a submission. The type is checked by the file's content, not its name.
 - **Scanning:** every file is scanned for malware before the submission is accepted. A file that fails is refused and the respondent is told. The scanner runs in its own sandbox, with no network.
 - **Images:** metadata (including location) is removed. Large photos are scaled down to 2,000 pixels.

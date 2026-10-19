@@ -223,10 +223,10 @@ Logos and product photos are uploaded by the owner (web, or a photo in chat).
 
 **Processing:**
 - **On upload:** checked by type (JPEG, PNG, WebP), size (5 MB) and dimensions; EXIF metadata, including location, is stripped.
-- **Sizes:** 320 and 800 pixels wide, in WebP with a JPEG fallback, using Xenibase storage's image transforms where they cover this.
+- **Sizes:** 320, 800 and 2000 pixels wide, as JPEG (PNG for logos with transparency). Taskiem makes them itself when the photo is stored, not with Xenibase's image transforms, which are counted against the project's plan ([media](../media.md#photos)).
 - **Moderated** before publishing ([7.4](#74-content-and-moderation)).
 
-**Storage:** in **Xenibase storage** (released on production), in a bucket of the business's Xenibase project, the same project as its data tables. Data tables only hold the object's reference. **Taskiem needs a storage integration first**: upload, public-read objects for published images, image transforms, and deletion. This was planned as P4-T1 in the Xenibase plan and is now a v1 dependency.
+**Storage:** in **Xenibase storage** (released on production), in a bucket of the business's Xenibase project, the same project as its data tables. Data tables only hold the object's reference. The storage integration (P4-T1 in the Xenibase plan) is built in S1: a public and a private bucket per project, uploads, signed URLs and deletion ([media](../media.md)).
 
 **Serving:** images are served through the storefront's own domain (proxied and cached by the storefront servers), with long cache lifetimes and content-hashed names, so a page never sends visitors to another host.
 
