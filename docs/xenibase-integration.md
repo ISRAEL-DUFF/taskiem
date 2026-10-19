@@ -127,7 +127,7 @@ These are the joint doc's four phases, with each item's owner, dependency and st
 
 | ID | Item | Owner | Detail | Status |
 | --- | --- | --- | --- | --- |
-| P4-T1 | Files on Xenibase storage | Taskiem | A storage connector (buckets, signed URLs) and, if wanted, Xenibase as the backend for workflow files (Q18) | Waiting |
+| P4-T1 | Files on Xenibase storage | Taskiem | A storage connector (buckets, signed URLs) and, if wanted, Xenibase as the backend for workflow files (Q18). Storefront photos and hosted-form uploads need it (Phase 5, S1). Xenibase storage is released; its API: [storage API reference](integrations/xenibase-storage-api.md). Built for storefronts and forms ([media](media.md)); a storage connector for workflows and Q18 are still open | Partly done |
 | P4-T2 | Auth for public forms | Taskiem | Only if a public-forms feature is specified (C2, Q10). Proposed specs ([storefronts](spec/storefronts.md), [forms](spec/forms.md)) need none from Xenibase | Not needed if they are accepted |
 | P4-T3 | Combined plan and invoice | Both | Taskiem's plans config and billing can carry a bundle discount. Decide which product issues the invoice and how a combined subscription moves between the two (Q3, Q4). | Decision needed |
 | P4-T4 | Xenibase operations workflows | Taskiem builds and hosts; Xenibase defines processes and events | Dunning, onboarding, withholding-tax credit-note chasing, and capacity, backup and incident alerts, built as workflows in a Taskiem tenant for Xenibase. These are Taskiem's first external money-handling reference workflows. | Waiting on Xenibase events |

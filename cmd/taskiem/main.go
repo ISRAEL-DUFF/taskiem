@@ -92,6 +92,7 @@ Usage:
   taskiem messages test --sms NUMBER|--email ADDRESS
                                      send one test message through the platform's SMS or mail (docs/messages.md)
   taskiem canary setup|probe|run     set up and run the synthetic end-to-end probe (docs/reliability.md)
+  taskiem media check TENANT_ID      round trip through a tenant's Xenibase storage (docs/media.md)
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
 
@@ -159,6 +160,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return connectorCmd(context.Background(), args[1:], stdout)
 	case "catalogue":
 		return catalogueCmd(context.Background(), args[1:], stdout)
+	case "media":
+		return mediaCmd(context.Background(), args[1:], stdout)
 	case "status":
 		return statusCmd(context.Background(), args[1:], stdout)
 	case "operators":

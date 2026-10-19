@@ -19,7 +19,7 @@ The full design is [the forms spec](../spec/forms.md).
 
    There are no respondent accounts and no Xenibase auth.
 4. **The form step is a signal** with a one-time link sent through the outbox, reminders and a timeout, like an approval request.
-5. **A cookieless form host** on its own domain, rendered on the server by the edge role, working without JavaScript. The `/embed/` pages are framed only by the organisation's verified websites, sharing storefronts' design.
+5. **A cookieless form host** on its own domain, rendered on the server by the `public` role shared with storefronts, working without JavaScript. The `/embed/` pages are framed only by the organisation's verified websites, sharing storefronts' design.
 6. **Files go to Xenibase storage** in a private bucket, scanned for malware and stripped of metadata. Runs see only references; downloads need `pii.read` and are audited.
 7. **Fields that are never collected:** passwords, card numbers, CVV, PINs, one-time codes and bank logins. Government and bank identifiers are allowed only when marked `x-pii` (sealed at once), and not on anonymous public forms.
 8. **The public host, renderer, embed frame, abuse controls and `embed_sites` are shared with storefronts**, built by whichever ships first.

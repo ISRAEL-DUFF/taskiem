@@ -149,7 +149,7 @@ A catalogue is a data table the storefront marks as its catalogue. It can be mad
 
 - **Limits:** up to 200 visible items per page in v1, 2,000 on paid plans.
 - **What is public:** the page reads only the catalogue's public columns. Columns marked personal can never be catalogue columns.
-- **When changes appear:** catalogue edits are shown within a minute, because the published page caches the catalogue ([8.4](#84-rendering-caching-and-performance)).
+- **When changes appear:** catalogue edits are shown within seconds. Pages read a copy of the catalogue's public columns kept in Taskiem, refreshed when Xenibase reports a row change ([8.1](#81-data-model-new-tenant-data-under-forced-row-level-security)), never Xenibase itself.
 
 ### 6.3 Actions and hosted forms
 
@@ -223,10 +223,10 @@ Logos and product photos are uploaded by the owner (web, or a photo in chat).
 
 **Processing:**
 - **On upload:** checked by type (JPEG, PNG, WebP), size (5 MB) and dimensions; EXIF metadata, including location, is stripped.
-- **Sizes:** 320 and 800 pixels wide, in WebP with a JPEG fallback, using Xenibase storage's image transforms where they cover this.
+- **Sizes:** 320, 800 and 2000 pixels wide, as JPEG (PNG for logos with transparency). Taskiem makes them itself when the photo is stored, not with Xenibase's image transforms, which are counted against the project's plan ([media](../media.md#photos)).
 - **Moderated** before publishing ([7.4](#74-content-and-moderation)).
 
-**Storage:** in **Xenibase storage** (released on production), in a bucket of the business's Xenibase project, the same project as its data tables. Data tables only hold the object's reference. **Taskiem needs a storage integration first**: upload, public-read objects for published images, image transforms, and deletion. This was planned as P4-T1 in the Xenibase plan and is now a v1 dependency.
+**Storage:** in **Xenibase storage** (released on production), in a bucket of the business's Xenibase project, the same project as its data tables. Data tables only hold the object's reference. The storage integration (P4-T1 in the Xenibase plan) is built in S1: a public and a private bucket per project, uploads, signed URLs and deletion ([media](../media.md)).
 
 **Serving:** images are served through the storefront's own domain (proxied and cached by the storefront servers), with long cache lifetimes and content-hashed names, so a page never sends visitors to another host.
 
@@ -392,7 +392,7 @@ A verification is a record with who did it, how and when, and appears in the aud
 ### 7.5 Abuse of forms
 
 - **Rate limits:**
-  - per page and per visitor IP, in buckets: 5 submissions in 10 minutes, 30 a day;
+  - per page and per visitor IP, in buckets: 20 submissions in 10 minutes, 100 a day. These are deliberately generous: Nigerian mobile networks put thousands of phones behind one IP address (carrier-grade NAT), so an IP is not a person. The per-form token, the bot defences and phone codes are the real controls;
   - per phone number on orders;
   - per page per hour, with alerts to the owner and operators when one trips.
 - **Bot defences without third-party trackers:**
@@ -410,7 +410,8 @@ A verification is a record with who did it, how and when, and appears in the aud
 | --- | --- |
 | `storefronts` | One per tenant: slug, status, template, accent, business card fields, hours, language, catalogue table id, orders table id, services table id, bookings table id, Xenibase bucket, verification level, published snapshot version, closed-until |
 | `storefront_actions` | Per storefront: kind, label, workflow id, enabled, sort, form options (prefill, OTP) |
-| `storefront_snapshots` | Published versions: the rendered page model (business card, actions, catalogue *structure*), content-hashed; the catalogue *rows* are read live with a short cache |
+| `storefront_snapshots` | Published versions: the rendered page model (business card, actions, catalogue *structure*), content-hashed |
+| `storefront_catalogue` | A copy of the catalogue's **public columns** only (name, price, photo, availability, sort), per storefront and row, with the Xenibase row's version. Pages read this, never Xenibase |
 | `storefront_submissions` | Reference, action, idempotency token hash, sealed personal fields, basket, totals, the run it started, IP hash, status |
 | `storefront_media` | Upload records: hashes, sizes, moderation state, and the object's key in the business's Xenibase storage |
 | `storefront_domains` | The business's domain: name, source (the domain platform, or one the business brings), the platform's registration id, DNS and certificate state, renewal date |
@@ -423,7 +424,14 @@ A verification is a record with who did it, how and when, and appears in the aud
 | `storefront_onboarding` (platform) | A sign-up an agent runs: agent, tenant, the owner's number, consent code hash, consent time, expiry. The agent's access to the tenant ends at expiry or when the owner takes over |
 | `storefront_slugs` (platform) | Slug → tenant, reserved and blocked names; read by the public host through a narrow `SECURITY DEFINER` function, as other cross-tenant lookups are |
 
-Orders and bookings live in the tenant's `orders` and `bookings` **data tables** on Xenibase, and services in its `services` table, so owners and workflows use them like any table. Photos are objects in the same Xenibase project's storage. The `storefront_submissions` row is Taskiem's own record and link to the run.
+Orders and bookings live in the tenant's `orders` and `bookings` **data tables** on Xenibase, and services in its `services` table, so owners and workflows use them like any table. Photos are objects in the same Xenibase project's storage.
+
+**Why the catalogue is copied:** a page view must not reach Xenibase. It would count against the business's Xenibase rate limits, add a network hop to every view, and fail while a project is paused (`503 project_resuming`). So Taskiem keeps the copy above:
+- **refreshed** on publish, and when Xenibase reports a row change through the data table's change webhook (deduplicated on the event id, as the Xenibase connector's triggers are);
+- **reconciled** every 15 minutes against the table, in case a change event was missed;
+- **stale but served** when Xenibase is down: the page shows the last known prices, never an error.
+
+Order and booking forms check prices and stock against Xenibase when the workflow runs, so a stale copy can never undercharge silently. If a price changed, the order is held and the customer is told the new price. The `storefront_submissions` row is Taskiem's own record and link to the run.
 
 ### 8.2 The storefront trigger
 
@@ -448,13 +456,15 @@ New trigger type `storefront` in wd/v1:
 - **Separate domains:** pages and forms are served on the business's own domain and the preview domain only. That host serves nothing of the app or the API, the same rule as custom embed domains.
 - **No cookies:** a form's idempotency token is in the form itself, so there is nothing for a page to steal or confuse.
 - **Strict CSP:** `default-src 'self'`, no inline scripts except the hashed basket script, `frame-ancestors 'none'`, `form-action 'self'`. The `/embed/` pages alone name the storefront's verified websites in `frame-ancestors` instead, and are the only ones without `X-Frame-Options: DENY`.
-- **Where it runs:** pages are rendered by the `edge` role (or a new `storefront` route group on it). They read through narrow functions, never with a tenant's broad scope, so a page can only ever see its own published snapshot and catalogue's public columns.
+- **Where it runs:** a new **`public` role** of the same binary (`--role public`), deployed and scaled on its own. Not the `edge` role: `edge` takes payment, WhatsApp, Telegram and USSD webhooks, which must answer within their budget, and a viral page or a flood must never delay them. A small install still runs every role in one process.
+- **Its own database access:** the `public` role connects as a Postgres role (`taskiem_public`) that can execute only narrow `SECURITY DEFINER` functions: look up a host, read a published snapshot and catalogue copy, record a submission. It cannot read tenant tables at all, so even a bug in it can only ever see published pages. It has its own capped connection pool, so it cannot exhaust Postgres for the app and the engine.
 
 ### 8.4 Rendering, caching and performance
 
 - **Rendering:** on the server (Go templates), as HTML that works without JavaScript. Page weight is **under 60 KB before images**, and the basket script under 10 KB.
 - **Images:** lazy-loaded, sized for the screen, WebP with fallback.
-- **Caching:** the published snapshot is cached for a long time and invalidated on publish; catalogue rows are cached for 60 seconds; responses carry `ETag`s. A CDN or caching proxy in front is optional, and the design does not depend on one.
+- **Caching:** each replica keeps popular storefronts' snapshots and catalogue copies in a bounded LRU cache keyed by version, so a publish replaces them at once; misses read the read replica, not the primary. Responses carry `ETag`s. Static files have content-hashed names and are cached forever.
+- **A CDN** is optional at first and needed beyond roughly 10,000 storefronts ([8.7](#87-at-scale)). It must support custom hostnames (one certificate per business domain).
 - **Target:** the first view is usable in under 3 seconds on a 3G connection with a low-end Android phone. A page budget test in CI enforces the sizes.
 
 ### 8.5 API
@@ -486,6 +496,26 @@ New trigger type `storefront` in wd/v1:
 
 What is new: the public renderer, the `storefront` trigger, media, bookings and slots, field-agent onboarding, moderation, and abuse controls.
 
+### 8.7 At scale
+
+Page views far outnumber submissions and arrive in bursts (a status shared to 2,000 contacts, market days). As a planning model, 10,000 storefronts at 50 views a day each is about 6 requests a second on average, with peaks 50 to 100 times that; 100,000 storefronts reach thousands of requests a second at peak.
+
+| Pressure | Design |
+| --- | --- |
+| Page views | A view costs at most one indexed read on the read replica, usually none ([8.4](#84-rendering-caching-and-performance)). Nothing reaches the primary or Xenibase. The `public` role autoscales on its own |
+| Memory | Caches are bounded (self-review S34): replicas hold popular storefronts; the read replica and the CDN serve the rest |
+| One viral storefront | The CDN serves it; plan limits on orders keep its workflows from swamping the workers |
+| Shared mobile IPs | Generous per-IP limits ([7.5](#75-abuse-of-forms)); tokens, proof-of-work and phone codes do the real work. False blocks are measured in the pilot |
+| Certificates | Preview addresses share one wildcard certificate. Business domains are issued once, at verification, by the proxy's on-demand TLS (which asks Taskiem whether a domain is verified before issuing), with renewals spread out and a second certificate authority as a fallback for Let's Encrypt's rate limits |
+| Floods | A firewall at the CDN, proof-of-work switched on automatically per page, and autoscaling. Because the `public` role and its pool are separate, the app, approvals and webhooks keep working |
+| Limits across replicas | In-memory buckets per replica for speed; anything that must hold exactly (orders per plan per day) is counted in Postgres, where submissions are written anyway. Valkey, already optional in the stack, when that gets hot |
+| SMS | Through the outbox with a rate limit per provider and Africa's Talking as the fallback for Termii; metered per plan |
+| Xenibase | Pages never depend on it ([8.1](#81-data-model-new-tenant-data-under-forced-row-level-security)); orders it records are written by workflow steps, which retry, so an outage delays them and never loses them |
+| Moderation | The AI check runs before publishing; people see only what it flags; the queue's size and age are alerts |
+| Hosting | Storefront traffic is a likely trigger for moving from one VM to Kubernetes ([decision 0032](../decisions/0032-deployment-target.md)). The `public` role scales separately already, so the move is configuration |
+
+**Two rules that do not bend:** page views never reach the primary database or Xenibase, and the `public` role stays isolated (own process, Postgres role and pool).
+
 ## 9. Privacy (NDPA)
 
 - **Roles:** the business is the **data controller** for its customers' details, and Taskiem the processor. The storefront terms, which owners accept before publishing, say so.
@@ -514,6 +544,8 @@ There is **no free plan**. A storefront comes in paid plans, each including the 
 - **Metering:** SMS costs money per message, so the allowance is metered like WhatsApp templates (`plans.yaml` gains `storefront_items`, `storefront_orders_monthly`, `storefront_bookings_monthly` and `sms_monthly`), with top-ups.
 
 ## 12. Phasing
+
+The build order, milestones and gate for v1 are Phase 5 of the [build plan](build-plan.md#phase-5--storefronts-and-forms-about-20-weeks), tracked in [Phase 5 status](../phase-5-status.md).
 
 | Phase | Scope |
 | --- | --- |
