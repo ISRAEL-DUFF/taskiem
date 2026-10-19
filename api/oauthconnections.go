@@ -173,7 +173,7 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		"code_challenge":        {base64.RawURLEncoding.EncodeToString(sum[:])},
 		"code_challenge_method": {"S256"},
 	}
-	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: browser, Path: oauthCallbackPath, MaxAge: int(secrets.OAuthRequestTTL.Seconds()),
+	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: browser, Path: oauthCallbackPath, MaxAge: int(secrets.OAuthRequestTTL.Seconds()), //nolint:gosec // Secure is TASKIEM_SECURE_COOKIES (on by default), as for the session cookie
 		HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode})
 	writeJSON(w, http.StatusOK, map[string]any{"url": prov.authorize + "?" + q.Encode(), "expires_in": int(secrets.OAuthRequestTTL.Seconds())})
 }
@@ -197,7 +197,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	q := r.URL.Query()
 	ctx := r.Context()
 	cookie, _ := r.Cookie(oauthBrowserCookie)
-	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: "", Path: oauthCallbackPath, MaxAge: -1, HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: "", Path: oauthCallbackPath, MaxAge: -1, HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode}) //nolint:gosec // as when it is set
 	if cookie == nil {
 		s.oauthDone(w, r, "", fmt.Errorf("%w: finish linking in the browser where you started it (start again from Connections)", errOAuthGrant))
 		return
