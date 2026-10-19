@@ -89,6 +89,8 @@ Usage:
                                      declare incidents and maintenance on the public status page (operators; recorded)
   taskiem operators [add|enrol|reset|disable EMAIL]
                                      operator accounts for the operator console: passkey enrolment links (audited)
+  taskiem messages test --sms NUMBER|--email ADDRESS
+                                     send one test message through the platform's SMS or mail (docs/messages.md)
   taskiem canary setup|probe|run     set up and run the synthetic end-to-end probe (docs/reliability.md)
   taskiem healthcheck                probe the local API (container health checks)
   taskiem version                    print the version
