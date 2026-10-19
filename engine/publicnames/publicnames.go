@@ -40,7 +40,7 @@ var (
 // Slug length bounds, in characters.
 const (
 	MinSlugLen = 3
-	MaxSlugLen = 40
+	MaxSlugLen = 30
 )
 
 // MaxDisplayNameLen bounds a display name, in characters.
@@ -296,8 +296,10 @@ func matchProtected(s string) (string, bool) {
 			}
 		}
 	}
-	for sk, p := range protectedSkel {
-		if p.mode != affix {
+	// In list order, so the name an error reports is always the same.
+	for _, p := range protected {
+		sk := squash(p.name)
+		if p.mode != affix || len(p.name) <= 3 {
 			continue
 		}
 		if strings.HasPrefix(whole, sk) || strings.HasSuffix(whole, sk) {
@@ -366,7 +368,7 @@ func CheckDisplayName(name string) error {
 // Any other domain's suffix is its last label.
 var multiSuffixes = map[string]bool{
 	"com.ng": true, "org.ng": true, "gov.ng": true, "edu.ng": true,
-	"net.ng": true, "name.ng": true, "sch.ng": true, "mil.ng": true,
+	"net.ng": true, "name.ng": true, "co.ng": true, "sch.ng": true, "mil.ng": true,
 	"co.uk": true, "com.gh": true, "co.ke": true, "co.za": true,
 }
 

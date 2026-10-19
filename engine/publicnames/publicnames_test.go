@@ -86,10 +86,10 @@ func TestNormalizeSlug(t *testing.T) {
 		{"  Ada-Kitchen  ", "ada-kitchen", true},
 		{"abc", "abc", true},
 		{"a1b2c3", "a1b2c3", true},
-		{strings.Repeat("a", 40), strings.Repeat("a", 40), true},
+		{strings.Repeat("a", 30), strings.Repeat("a", 30), true},
 		{"ab", "", false},
 		{"", "", false},
-		{strings.Repeat("a", 41), "", false},
+		{strings.Repeat("a", 31), "", false},
 		{"-ada", "", false},
 		{"ada-", "", false},
 		{"ada--kitchen", "", false},
@@ -348,7 +348,7 @@ func TestPublicSuffix(t *testing.T) {
 		{"ada.com.ng", 2},
 		{"ada.sch.ng", 2},
 		{"ada.co.za", 2},
-		{"ada.co.ng", 1}, // not in the list, so ng alone
+		{"ada.co.ng", 2},
 		{"com.ng", 2},
 	}
 	for _, c := range cases {
@@ -371,5 +371,16 @@ func TestProtectedList(t *testing.T) {
 	}
 	if len(reservedSkel) != len(Reserved) {
 		t.Errorf("%d reserved words share skeletons", len(Reserved)-len(reservedSkel))
+	}
+}
+
+// TestMatchIsDeterministic: a slug that holds several protected names
+// always reports the same one.
+func TestMatchIsDeterministic(t *testing.T) {
+	first := CheckSlug("paystackxopay").Error()
+	for range 50 {
+		if got := CheckSlug("paystackxopay").Error(); got != first {
+			t.Fatalf("CheckSlug reported %q, then %q", first, got)
+		}
 	}
 }
