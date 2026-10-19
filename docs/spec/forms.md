@@ -313,6 +313,8 @@ The limits per plan are for the pricing work (B1), like the others.
 
 ## 12. Phasing
 
+v1 is milestone S7 of Phase 5 in the [build plan](build-plan.md#phase-5--storefronts-and-forms-about-20-weeks), on the public host built in S1.
+
 | Phase | Scope |
 | --- | --- |
 | **v1** | The `form` trigger with `public`, `link` and `members` access; the field types of 6.2 including files; pages and conditions; prefill; verification by SMS or email code; the three `after` modes and the status link; the `form` step with SMS and email delivery; embedding; the form editor and preview in the canvas; the AI builder drafting forms; the trust-and-safety controls |

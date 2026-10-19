@@ -515,6 +515,8 @@ There is **no free plan**. A storefront comes in paid plans, each including the 
 
 ## 12. Phasing
 
+The build order, milestones and gate for v1 are Phase 5 of the [build plan](build-plan.md#phase-5--storefronts-and-forms-about-20-weeks), tracked in [Phase 5 status](../phase-5-status.md).
+
 | Phase | Scope |
 | --- | --- |
 | **v1** | Page (card, catalogue, 2 templates) on the business's own domain from the domain platform; `order`, `booking`, `enquiry` and `callback` actions; both payment timings (Paystack first); the `storefront` trigger; default workflows with owner approval in chat; SMS and email to customers; booking reminders and reschedule or cancel links; setup and management from chat and web; field agents and onboarding sessions; phone and agent verification; the trust-and-safety controls in section 7; media on Xenibase storage; QR and sharing; embedding on the business's website (link, script, frame); the Shop plans |

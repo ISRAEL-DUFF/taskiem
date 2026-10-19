@@ -4,6 +4,8 @@ Oct 5, 2026 · @EaziDeFi
 
 Taskiem (working name) reaches public launch in five gated phases over roughly 16 months (68 weeks), with the trust and compliance core proven inside holdco products before anything is sold. Each phase ends at a gate with measurable criteria; the next phase starts only when the gate passes. Phase durations include the time each gate's own soak or availability window needs, so a gate is never scheduled to pass before its criteria can be measured.
 
+Phase 5, added on 2026-10-19, is the first phase after launch: a public front door for businesses without a website ([storefronts](storefronts.md)) and hosted forms for every workflow ([forms](forms.md)).
+
 ## Roadmap
 
 ```mermaid
@@ -13,6 +15,7 @@ flowchart LR
   G1 --> P2["Phase 2 · Hardening<br/>weeks 25–36"] --> G2{{G2}}
   G2 --> P3["Phase 3 · Differentiators<br/>weeks 37–52"] --> G3{{G3}}
   G3 --> P4["Phase 4 · Public launch<br/>weeks 53–68<br/>incl. 60-day SLO window"] --> G4{{G4 · GA}}
+  G4 --> P5["Phase 5 · Storefronts and forms<br/>weeks 69–88<br/>incl. 6-week pilot"] --> G5{{G5}}
 ```
 
 | Phase | Weeks | Duration |
@@ -22,6 +25,7 @@ flowchart LR
 | 2 — Hardening | 25–36 | 12 |
 | 3 — Differentiators | 37–52 | 16 |
 | 4 — Public launch | 53–68 | 16 (6 build, 10 public beta covering the 60-day SLO window) |
+| 5 — Storefronts and forms | 69–88 | 20 (14 build, 6 pilot with field agents) |
 
 Phase 1 is the critical one: if the engine cannot prove zero duplicate effects under chaos testing, nothing after it is worth building. Architecture references in this plan point to sections of the companion Architecture Specification.
 
@@ -219,6 +223,47 @@ Phase 4 turns a hand-held product into a self-serve cloud: Nigeria-hosted, highl
 - [ ] At least 10 paying external tenants across at least two tiers
 - [ ] Counsel IP review and trademark filing complete
 
+## Phase 5 — Storefronts and forms (about 20 weeks)
+
+Phase 5 gives Taskiem a public front door. A street business or SME without a website gets a storefront: a one-page site on its own domain with a catalogue and order and booking forms, each starting a workflow the owner runs from WhatsApp or Telegram. Most are signed up in person by field agents. Any organisation gets hosted forms: a `form` trigger and a `form` step that asks someone for input mid-run. The designs are [storefronts](storefronts.md) (decision 0036) and [forms](forms.md) (decision 0037); this phase builds storefronts v1 and forms v1.
+
+It comes after launch because it rests on what Phases 3 and 4 finish: chat approvals, data tables on Xenibase, templates, billing and plans, the operator console, and a production cloud. It also opens a new public attack surface (pages anyone can open, forms anyone can submit), which should not land on the platform while G4's availability window is being measured.
+
+**Starting early:** S0 and the parts of S1 with no customer-facing scope (the public host skeleton, the page budget test, abuse controls) can start during Phase 4's public beta if the platform team has room. Nothing of Phase 5 ships to customers before G4.
+
+### Milestones
+
+| # | Milestone | Deliverables | Spec | Needs |
+| --- | --- | --- | --- | --- |
+| S0 | Decisions | Decisions 0036 and 0037 accepted; moderation model chosen; preview and form host domains; the domain platform's integration contract; Shop plan prices and trial; field agent model (staff or commission); refunds | Storefronts 13, forms 13 | Product owner. No code |
+| S1 | Shared public foundation | The public host on the `edge` role: its own domains, no cookies, strict CSP, server-rendered pages without JavaScript, a page budget test in CI. Xenibase storage integration (P4-T1) with image processing. SMS (Termii) and email senders for people outside a tenant. Abuse controls: rate limits by IP hash, honeypot, timing, proof-of-work, codes under attack. Reserved and look-alike names. `embed_sites` with verification | Storefronts 7, 8.3, 8.4; forms 7.3, 8.3 | S0 domains; Xenibase storage; a Termii sender ID |
+| S2 | The storefront page | Storefronts, drafts and published snapshots; business card and hours; catalogue from a data table; photo upload to Xenibase storage with moderation hooks; two templates; preview address; the web editor; QR and printable card | Storefronts 6.1, 6.2, 6.7 | S1 |
+| S3 | Orders | `order`, `enquiry` and `callback` actions with hosted forms and the basket; the `storefront` trigger and submissions; default workflows with Accept and Decline in chat; customer SMS and email; Paystack, paying at order time or after acceptance; stock | Storefronts 6.3–6.5, 8.2 | S2 |
+| S4 | Bookings | Services, availability and slots; holds while paying, with no double booking; the booking workflow; reminders; reschedule and cancel links; owner commands in chat | Storefronts 6.9 | S3 |
+| S5 | Chat set-up and field agents | `make my page` and the storefront commands in WhatsApp and Telegram; agent identities; onboarding sessions with the owner's consent code; handover; agent verification and accountability | Storefronts 6.8, 6.10 | S3; S0 agent model |
+| S6 | Domains and embedding | Domain search, registration, DNS and renewal through the domain platform; certificates; a business's own existing domain; the embed script, frames and overlay button on verified sites | Storefronts 6.6, 6.11 | S1; S0 domain contract. Runs alongside S2–S5 |
+| S7 | Forms | The `form` trigger (public, link and members access; pages and conditions; files with malware scanning; prefill; codes; the three after-submit modes) and the `form` step on signals; the form editor and preview in the canvas; the AI builder drafting forms | Forms 6, 8 | S1; a malware scanner. Runs alongside S3–S6 |
+| S8 | Trust, plans and pilot | Moderation pipeline and review queue; reports and suspension in the operator console; verification levels; Shop and Shop Plus plans with SMS metering; a security review of the public host; then a **6-week pilot** in one market with a small team of field agents | Storefronts 7, 11, 12 | All of the above |
+
+S3 is the heart of the phase: it proves the loop of a customer ordering, the owner accepting in chat, and the customer being sent a payment link. It is shown to real traders before S4 starts. S6 depends on the domain platform's API, the least certain dependency; storefronts work on the preview address until it is ready, so it never blocks S2 to S5.
+
+### Staffing
+
+The Phase 4 team carries on, with these additions:
+- a field operations lead to recruit, train and manage agents for the pilot;
+- a trust-and-safety reviewer for the moderation queue and reports (part-time during the pilot);
+- a frontend engineer for the public pages and the editor.
+
+### Exit gate G5
+
+- [ ] At least 100 storefronts published in the pilot market, the median within 10 minutes of starting
+- [ ] At least 40% of pilot storefronts receive an order or booking in their first week
+- [ ] At least 25 organisations outside the pilot using hosted forms, with at least one `form` step in production
+- [ ] p75 first view under 3 seconds on 3G on a low-end Android phone, enforced by the page budget test
+- [ ] No phishing or scam page live for more than 24 hours after a report, and none that reached a customer's money
+- [ ] A security review of the public host, uploads, embedding and agent sessions, with no open high findings
+- [ ] At least 60% of businesses signed up by agents still active after 30 days
+
 ## Pillar coverage by phase
 
 Every pillar is designed in from Phase 0, but each one becomes complete in a specific phase. The trust and compliance pillars come first because the others build on them.
@@ -233,6 +278,7 @@ Every pillar is designed in from Phase 0, but each one becomes complete in a spe
 | 6. AI build and repair | — | — | Builder, repair, eval suite | Template gallery | Phase 3 |
 | 7. Embedding | Tenant model ready | — | Sub-tenants, web component, partner API | White-label tier | Phase 3 |
 | 8. Flat pricing | — | — | — | Plans and capacity enforcement | Phase 4 |
+| 9. Public front door | — | — | — | — | Phase 5: storefronts, hosted forms, field agents |
 
 ## Team and staffing
 
@@ -252,7 +298,7 @@ The durations in this plan assume a core team of 4 engineers in Phases 0–1, gr
 
 ### Estimated timeline
 
-Phase 0 about 4 weeks, Phase 1 about 20 (including the 4-week soak), Phase 2 about 12, Phase 3 about 16, Phase 4 about 16 (including the 60-day SLO window): 68 weeks, roughly 16 months from start to public launch. These are planning estimates, not commitments; Phase 1's chaos and load results are the first real checkpoint for re-planning.
+Phase 0 about 4 weeks, Phase 1 about 20 (including the 4-week soak), Phase 2 about 12, Phase 3 about 16, Phase 4 about 16 (including the 60-day SLO window): 68 weeks, roughly 16 months from start to public launch. Phase 5 adds about 20 weeks after launch (14 build, 6 pilot). These are planning estimates, not commitments; Phase 1's chaos and load results are the first real checkpoint for re-planning.
 
 ### Budget items to cost
 
