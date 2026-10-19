@@ -89,6 +89,7 @@ Requests flow top to bottom: clients and providers hit the edge, the edge record
 | Public API | `api` | REST API for UI, CLI, SDKs, partners; auth, RBAC, rate limits |
 | Trigger ingest | `edge` | Verify, deduplicate, and record inbound events; acknowledge fast |
 | Fast path | `edge` | Low-latency USSD menus and chat sessions |
+| Public pages (proposed) | `public` | Storefronts and hosted forms, isolated from `edge` and the app, with their own Postgres role and pool ([storefronts](storefronts.md#83-isolation-from-the-app)) |
 | Orchestrator | `orchestrator` | Sweep runs with undecided events and run `decide()`; most decisions run inline where the event is appended (section 4.2) |
 | Scheduler | `scheduler` | Fire timers and cron, recover expired leases, run retention jobs |
 | Workers | `worker` | Execute steps: connector calls, sandboxed code, AI calls |
@@ -1003,7 +1004,7 @@ Two audiences need visibility: tenants need to see what their workflows did, and
 
 ### 15.4 Deployment and upgrades
 
-- One Go binary runs any role by flag (`--role=api|orchestrator|worker|scheduler|edge`); a small install runs all roles in one process.
+- One Go binary runs any role by flag (`--role=api|orchestrator|worker|scheduler|edge`, and `public` when storefronts and forms are built); a small install runs all roles in one process.
 - Kubernetes manifests and a Helm chart for the cloud; a single Docker Compose file for self-hosted and dev.
 - Schema migrations are forward-only and backward-compatible for one release, so rolling upgrades never stop running workflows.
 - Workers drain gracefully: finish or release leases before shutdown.
