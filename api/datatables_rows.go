@@ -1,8 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +23,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/engine/pii"
 )
 
 // Rows go through the connector's actions on the data_tables connection,
@@ -322,6 +326,7 @@ func (s *Server) insertTableRows(w http.ResponseWriter, r *http.Request) {
 		s.failTables(w, r, err)
 		return
 	}
+	s.auditRows(r, tr, "table.row.insert", map[string]any{"rows": len(checked), "affected": out["affected"], "replayed": out["replayed"] == true})
 	writeJSON(w, http.StatusCreated, map[string]any{"affected": out["affected"], "rows": rowsOf(out), "replayed": out["replayed"] == true})
 }
 
@@ -377,6 +382,7 @@ func (s *Server) updateTableRow(w http.ResponseWriter, r *http.Request) {
 	if len(rows) > 0 {
 		row = rows[0]
 	}
+	s.auditRows(r, tr, "table.row.update", map[string]any{"row_id": id, "replayed": out["replayed"] == true})
 	writeJSON(w, http.StatusOK, map[string]any{"affected": out["affected"], "row": row, "replayed": out["replayed"] == true})
 }
 
@@ -405,6 +411,7 @@ func (s *Server) deleteTableRow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "no row "+strconv.FormatInt(id, 10))
 		return
 	}
+	s.auditRows(r, tr, "table.row.delete", map[string]any{"row_id": id, "replayed": out["replayed"] == true})
 	writeJSON(w, http.StatusOK, map[string]any{"affected": out["affected"], "replayed": out["replayed"] == true})
 }
 
@@ -413,12 +420,21 @@ func (s *Server) deleteTableRow(w http.ResponseWriter, r *http.Request) {
 // importTableRows takes a CSV file (multipart field file) whose header
 // names columns, up to 5,000 rows, in batches of 500 upserted on id when
 // the file has an id column and inserted otherwise, each batch under its
-// own key from the import id and the batch's index, so a retried import
-// writes nothing twice.
+// own key from the import id and the batch's index. The import id is
+// derived from the request's Idempotency-Key, or without one from the
+// file itself, and the table: a retried import (a timeout, a batch that
+// failed) sends the same keys, and the batches that already went in are
+// answered from Xenibase's replay instead of being written again. Sending
+// the same file again on purpose needs a new Idempotency-Key.
 func (s *Server) importTableRows(w http.ResponseWriter, r *http.Request) {
 	tr, err := s.tableRows(r)
 	if err != nil {
 		s.failTables(w, r, err)
+		return
+	}
+	given := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if given != "" && !keyCharset.MatchString(given) {
+		s.fail(w, r, fmt.Errorf("%w: Idempotency-Key is 1 to 255 letters, digits, dashes and underscores", errBadRequest))
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxImportBytes)
@@ -432,12 +448,17 @@ func (s *Server) importTableRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = f.Close() }()
-	rows, hasID, err := readCSV(f, tr.table.Columns)
+	data, err := io.ReadAll(f)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "the file could not be read")
+		return
+	}
+	rows, hasID, err := readCSV(bytes.NewReader(data), tr.table.Columns)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	importID := uuid.Must(uuid.NewV7()).String()
+	importID := importIDFor(tr.table.ID, given, data)
 	action := "insert_rows"
 	imported, replayed, batches := 0, 0, 0
 	for start := 0; start < len(rows); start += importBatch {
@@ -471,6 +492,20 @@ func (s *Server) importTableRows(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"import_id": importID, "rows": len(rows), "imported": imported, "batches": batches, "replayed_batches": replayed, "mode": action})
 }
 
+// importIDFor is an import's id: from the caller's Idempotency-Key when
+// given, else from the file's contents, and always the table's.
+func importIDFor(table uuid.UUID, key string, file []byte) string {
+	h := sha256.New()
+	h.Write(table[:])
+	if key != "" {
+		h.Write([]byte("key\x00" + key))
+	} else {
+		h.Write([]byte("file\x00"))
+		h.Write(file)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:32]
+}
+
 // readCSV parses a CSV whose header row names the table's columns (id
 // allowed; created_at and updated_at ignored) into checked rows.
 func readCSV(rd io.Reader, cols []datatables.Column) (rows []any, hasID bool, err error) {
@@ -486,8 +521,10 @@ func readCSV(rd io.Reader, cols []datatables.Column) (rows []any, hasID bool, er
 		names[i] = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(h, "\uFEFF")))
 	}
 	known := map[string]bool{"id": true, "created_at": true, "updated_at": true}
+	types := map[string]string{}
 	for _, c := range cols {
 		known[c.Name] = true
+		types[c.Name] = c.Type
 	}
 	for _, n := range names {
 		if !known[n] {
@@ -518,7 +555,7 @@ func readCSV(rd io.Reader, cols []datatables.Column) (rows []any, hasID bool, er
 			if strings.TrimSpace(v) != "" {
 				empty = false
 			}
-			raw[names[i]] = v
+			raw[names[i]] = csvUnescape(types[names[i]], v)
 		}
 		if empty {
 			continue
@@ -549,8 +586,10 @@ func (s *Server) exportTableRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	header := []string{"id"}
+	types := map[string]string{}
 	for _, c := range tr.table.Columns {
 		header = append(header, c.Name)
+		types[c.Name] = c.Type
 	}
 	header = append(header, "created_at", "updated_at")
 	w.Header().Set("Content-Type", mime.FormatMediaType("text/csv", map[string]string{"charset": "utf-8"}))
@@ -570,8 +609,11 @@ func (s *Server) exportTableRows(w http.ResponseWriter, r *http.Request) {
 				s.failTables(w, r, err)
 				return
 			}
-			s.Logger.Warn("data tables: export stopped early", "table", tr.table.Name, "written", written, "err", err)
-			break
+			// The 200 and the first rows are out: abort the response, so
+			// the download fails rather than looking complete.
+			s.Logger.Warn("data tables: export stopped early", "table", tr.table.Name, "written", written, "err", pii.Redact(err.Error()))
+			s.auditRows(r, tr, "table.export", map[string]any{"rows": written, "complete": false})
+			panic(http.ErrAbortHandler)
 		}
 		if first {
 			_ = cw.Write(header)
@@ -582,7 +624,7 @@ func (s *Server) exportTableRows(w http.ResponseWriter, r *http.Request) {
 			m, _ := row.(map[string]any)
 			rec := make([]string, len(header))
 			for i, h := range header {
-				rec[i] = cell(m[h])
+				rec[i] = csvSafe(types[h], cell(m[h]))
 			}
 			_ = cw.Write(rec)
 			written++
@@ -593,6 +635,47 @@ func (s *Server) exportTableRows(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cw.Flush()
+	s.auditRows(r, tr, "table.export", map[string]any{"rows": written, "complete": true, "capped": written >= exportMaxRows})
+}
+
+// auditRows records a change to a table's rows, or an export, in the
+// tenant's audit chain: the table, counts and row ids, never values. The
+// write has happened by then, so a failure to record it is logged, not
+// answered as a failure (a retry would not undo it).
+func (s *Server) auditRows(r *http.Request, tr tableRows, action string, detail map[string]any) {
+	detail["table_id"] = tr.table.ID
+	if err := s.tx(r, func(tx pgx.Tx) error { return auditTx(r, tx, action, tr.table.Name, detail) }); err != nil {
+		s.Logger.Error("data tables: recording the audit entry", "action", action, "table", tr.table.Name, "err", err)
+	}
+}
+
+// csvFormulaStart are the first characters spreadsheets read as a formula.
+const csvFormulaStart = "=+-@\t\r"
+
+// csvSafe guards an exported text cell against formula injection (CSV
+// injection): a value a spreadsheet would run as a formula gets a leading
+// apostrophe, which spreadsheets show as text and hide. Only text-like
+// columns: a number stays a number. Import takes the apostrophe off again
+// (csvUnescape), so an export imports back unchanged.
+func csvSafe(colType, v string) string {
+	switch colType {
+	case "text", "phone", "email", "json":
+		if v != "" && strings.ContainsRune(csvFormulaStart, rune(v[0])) {
+			return "'" + v
+		}
+	}
+	return v
+}
+
+// csvUnescape undoes csvSafe on an imported text cell.
+func csvUnescape(colType, v string) string {
+	switch colType {
+	case "text", "phone", "email", "json":
+		if len(v) > 1 && v[0] == '\'' && strings.ContainsRune(csvFormulaStart, rune(v[1])) {
+			return v[1:]
+		}
+	}
+	return v
 }
 
 // cell renders a value as a CSV cell.
