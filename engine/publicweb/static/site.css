@@ -1,0 +1,26 @@
+/* Public pages: small, readable on a cheap phone, no web fonts. */
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #5c5c5c;
+  --line: #e4e4e4;
+  --accent: #0b6e4f;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #121212; --fg: #f2f2f2; --muted: #a8a8a8; --line: #2c2c2c; --accent: #4cc39a; }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.page { max-width: 40rem; margin: 0 auto; padding: 2rem 1rem; }
+h1 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 .75rem; }
+p { margin: 0 0 1rem; }
+a { color: var(--accent); }
+.foot { max-width: 40rem; margin: 0 auto; padding: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .875rem; }
+.safety { margin: 0; }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }

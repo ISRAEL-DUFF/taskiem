@@ -1,0 +1,19 @@
+{{define "head"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{{.Title}}</title>
+<link rel="stylesheet" href="{{asset "site.css"}}">
+</head>
+<body>
+<main class="page">{{end}}
+
+{{define "foot"}}</main>
+<footer class="foot">
+<p class="safety">Never enter a password or card PIN on this page.</p>
+</footer>
+</body>
+</html>
+{{end}}

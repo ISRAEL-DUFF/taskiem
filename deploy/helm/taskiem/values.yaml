@@ -133,6 +133,24 @@ migrations:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { memory: 256Mi }
 
+# The public host: storefronts and hosted forms (docs/public-host.md),
+# off until Phase 5 ships. Its pods get no platform secret: only
+# public.existingSecret, which must hold TASKIEM_PUBLIC_DATABASE_URL, a
+# login that is a member of taskiem_public and of nothing else.
+public:
+  enabled: false
+  existingSecret: taskiem-public
+  replicas: 2
+  databasePool: 5
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 256Mi }
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
 service:
   type: ClusterIP
 
@@ -207,6 +225,9 @@ containerSteps:
 networkPolicy:
   enabled: false
   monitoringNamespace: monitoring
+  # The namespace of the proxy that issues the public host's certificates
+  # on demand, which calls /tls/ask on its metrics port (docs/public-host.md).
+  tlsProxyNamespace: ""
 
 serviceMonitor:
   # Needs the Prometheus Operator CRDs.

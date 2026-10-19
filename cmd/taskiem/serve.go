@@ -41,6 +41,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
@@ -53,7 +54,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
-var roles = map[string]bool{"api": true, "edge": true, "orchestrator": true, "scheduler": true, "worker": true, "all": true}
+var roles = map[string]bool{"api": true, "edge": true, "orchestrator": true, "scheduler": true, "worker": true, "public": true, "all": true}
 
 // config is read from the environment (twelve-factor); see docs/operations.md.
 type config struct {
@@ -85,6 +86,8 @@ type config struct {
 	SignupPerAddress     int
 	SignupBlockedDomains []string
 	DocsURL              string
+	// Public is the public host for storefronts and forms (public.go).
+	Public publicConfig
 	// Limits are the platform's default plan limits (TASKIEM_DEFAULT_*).
 	Limits runtime.Limits
 	// WhatsApp is the platform number (TASKIEM_WHATSAPP_*); nil: off.
@@ -395,6 +398,9 @@ func loadConfig() (config, error) {
 	if c.Cloud, err = cloudConfigFromEnv(); err != nil {
 		return c, err
 	}
+	if c.Public, err = publicConfigFromEnv(); err != nil {
+		return c, err
+	}
 	if c.DSN == "" {
 		return c, errors.New("TASKIEM_DATABASE_URL is required")
 	}
@@ -596,14 +602,22 @@ func edgeServer(e *engine, cfg config, log *slog.Logger) (*api.Server, error) {
 // serve runs one role, or all of them in one process, until ctx ends.
 func serve(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	role := fs.String("role", env("TASKIEM_ROLE", "all"), "api, edge, orchestrator, scheduler, worker, or all")
+	role := fs.String("role", env("TASKIEM_ROLE", "all"), "api, edge, orchestrator, scheduler, worker, public, or all")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if !roles[*role] {
 		return fmt.Errorf("serve: unknown role %q", *role)
 	}
-	cfg, err := loadConfig()
+	var cfg config
+	var err error
+	if *role == "public" {
+		// The public host runs on its own database login and nothing else
+		// of the platform's configuration (public.go).
+		cfg, err = loadPublicConfig()
+	} else {
+		cfg, err = loadConfig()
+	}
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
@@ -617,6 +631,11 @@ func serve(ctx context.Context, args []string) error {
 		return err
 	}
 	defer func() { _ = shutdownTracing(context.Background()) }()
+	if *role == "public" {
+		// The public host needs nothing of the engine, and must not hold a
+		// pool as taskiem_app: it connects as taskiem_public alone.
+		return servePublic(ctx, cfg, log)
+	}
 	e, err := newEngine(ctx, cfg, log)
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
@@ -629,31 +648,8 @@ func serve(ctx context.Context, args []string) error {
 	db.RetryWindow = cfg.Cloud.RetryWindow
 
 	is := func(r string) bool { return *role == r || *role == "all" }
-	// Graceful shutdown (spec 15.4, docs/reliability.md): SIGTERM ends ctx;
-	// readiness flips at once, the process keeps serving for the shutdown
-	// delay so load balancers stop routing to it, and only then does runCtx
-	// end, stopping servers and letting workers drain.
-	var draining atomic.Bool
-	telemetry.Draining.Set(0)
-	runCtx, stopRun := context.WithCancel(context.WithoutCancel(ctx))
+	runCtx, stopRun, draining := drainOnShutdown(ctx, cfg, log)
 	defer stopRun()
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-runCtx.Done():
-			return
-		}
-		draining.Store(true)
-		telemetry.Draining.Set(1)
-		log.Info("shutting down: not ready; draining", "delay", cfg.Shutdown.Delay.String(), "worker_drain", cfg.Shutdown.WorkerDrain.String())
-		t := time.NewTimer(cfg.Shutdown.Delay)
-		defer t.Stop()
-		select {
-		case <-t.C:
-		case <-runCtx.Done():
-		}
-		stopRun()
-	}()
 	ready := func(w http.ResponseWriter, r *http.Request) {
 		if draining.Load() {
 			http.Error(w, "draining", http.StatusServiceUnavailable)
@@ -777,6 +773,16 @@ func serve(ctx context.Context, args []string) error {
 		mux.HandleFunc("/readyz", ready)
 		tasks = append(tasks, httpTask("edge", cfg.EdgeListen, httpsec.Headers(mux), log))
 	}
+	var pub *publicweb.Server
+	if *role == "all" && cfg.Public.Enabled {
+		var task func(context.Context) error
+		var closePool func()
+		if pub, task, closePool, err = publicTask(ctx, cfg, log); err != nil {
+			return fmt.Errorf("serve: %w", err)
+		}
+		defer closePool()
+		tasks = append(tasks, task)
+	}
 	if is("scheduler") {
 		s := &runtime.Scheduler{Store: e.store, Logger: log}
 		if cfg.ArchiveDir != "" {
@@ -857,9 +863,46 @@ func serve(ctx context.Context, args []string) error {
 	metrics.Handle("/metrics", promhttp.Handler())
 	metrics.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	metrics.HandleFunc("/readyz", ready)
+	if pub != nil {
+		metrics.HandleFunc("/tls/ask", pub.TLSAsk) // the proxy's on-demand TLS check (public.go)
+	}
 	profiling(metrics, log) // TASKIEM_PPROF (pprof.go)
 	tasks = append(tasks, httpTask("metrics", cfg.MetricsListen, metrics, log))
 
+	return runTasks(runCtx, stopRun, tasks, log)
+}
+
+// drainOnShutdown is graceful shutdown (spec 15.4, docs/reliability.md):
+// when ctx ends (SIGTERM), draining is set at once so readiness fails, the
+// process keeps serving for the shutdown delay so load balancers stop
+// routing to it, and only then does runCtx end, stopping servers and
+// letting workers drain.
+func drainOnShutdown(ctx context.Context, cfg config, log *slog.Logger) (context.Context, context.CancelFunc, *atomic.Bool) {
+	draining := new(atomic.Bool)
+	telemetry.Draining.Set(0)
+	runCtx, stopRun := context.WithCancel(context.WithoutCancel(ctx))
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-runCtx.Done():
+			return
+		}
+		draining.Store(true)
+		telemetry.Draining.Set(1)
+		log.Info("shutting down: not ready; draining", "delay", cfg.Shutdown.Delay.String(), "worker_drain", cfg.Shutdown.WorkerDrain.String())
+		t := time.NewTimer(cfg.Shutdown.Delay)
+		defer t.Stop()
+		select {
+		case <-t.C:
+		case <-runCtx.Done():
+		}
+		stopRun()
+	}()
+	return runCtx, stopRun, draining
+}
+
+// runTasks runs every task until runCtx ends; one failing stops them all.
+func runTasks(runCtx context.Context, stopRun context.CancelFunc, tasks []func(context.Context) error, log *slog.Logger) error {
 	log.Info("taskiem starting")
 	var wg sync.WaitGroup
 	errs := make(chan error, len(tasks))
