@@ -112,6 +112,26 @@
       "text": "We dey check your request {reference}. We go let you know.",
       "reviewed": false
     },
+    "tg.button_expired": {
+      "text": "That button don expire. Send *approvals* make you get your open approvals again.",
+      "reviewed": false
+    },
+    "tg.link_invalid": {
+      "text": "That link don expire or dem don use am before. Make new one for Telegram for {where}.",
+      "reviewed": false
+    },
+    "tg.link_taken": {
+      "text": "This Telegram account don join another Taskiem account. Comot am from there first.",
+      "reviewed": false
+    },
+    "tg.linked": {
+      "text": "This Telegram account don join your Taskiem account now. Send *help* make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "tg.unbound": {
+      "text": "This Telegram account never join any Taskiem account. To use Taskiem here, sign in, open {where}, come press Link Telegram: e go open this chat with one-time link.",
+      "reviewed": false
+    },
     "ussd.busy": {
       "text": "This service dey busy. Abeg try again soon.",
       "reviewed": false

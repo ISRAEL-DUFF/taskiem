@@ -112,6 +112,26 @@
       "text": "Ana duba bukatarka {reference}. Za mu sanar da kai.",
       "reviewed": false
     },
+    "tg.button_expired": {
+      "text": "Wannan maɓallin ya ƙare. Aika *approvals* don sake samun amincewarka da ke buɗe.",
+      "reviewed": false
+    },
+    "tg.link_invalid": {
+      "text": "Wannan hanyar haɗi ta ƙare ko an riga an yi amfani da ita. Ƙirƙiri sabuwa a ƙarƙashin Telegram a {where}.",
+      "reviewed": false
+    },
+    "tg.link_taken": {
+      "text": "An haɗa wannan asusun Telegram da wani asusun Taskiem. Cire shi daga can tukuna.",
+      "reviewed": false
+    },
+    "tg.linked": {
+      "text": "An haɗa wannan asusun Telegram da asusun Taskiem ɗinka yanzu. Aika *help* don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "tg.unbound": {
+      "text": "Wannan asusun Telegram ba a haɗa shi da wani asusun Taskiem ba. Don amfani da Taskiem a nan, shiga, buɗe {where}, ka zaɓi Link Telegram: zai buɗe wannan hira da hanyar haɗi ta sau ɗaya.",
+      "reviewed": false
+    },
     "ussd.busy": {
       "text": "Wannan sabis yana da aiki. Don Allah sake gwadawa nan ba da jimawa ba.",
       "reviewed": false

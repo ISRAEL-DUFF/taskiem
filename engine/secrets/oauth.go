@@ -59,49 +59,57 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b[:]), nil
 }
 
-func hashState(state string) []byte {
-	h := sha256.Sum256([]byte(state))
+// hashState is what a request is kept under: the state together with the
+// browser binding, so a state carried back by any other browser (one the
+// consent link was sent to) finds nothing.
+func hashState(state, browser string) []byte {
+	h := sha256.Sum256([]byte(state + "\x00" + browser))
 	return h[:]
 }
 
 // BeginOAuthRequestTx records a request in a transaction scoped to tenant
-// and returns the state for the browser and the PKCE verifier (the caller
-// derives the challenge; the verifier is not kept in the clear). The
-// start is audited as connection.oauth_start.
-func (v *Vault) BeginOAuthRequestTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, connector, env, name, by string) (state, verifier string, err error) {
+// and returns the state for the provider, the browser binding (the caller
+// sets it as a cookie only the starting browser holds) and the PKCE
+// verifier (the caller derives the challenge; the verifier is not kept in
+// the clear). The start is audited as connection.oauth_start.
+func (v *Vault) BeginOAuthRequestTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, connector, env, name, by string) (state, browser, verifier string, err error) {
 	if state, err = randomToken(); err != nil {
-		return "", "", err
+		return "", "", "", err
+	}
+	if browser, err = randomToken(); err != nil {
+		return "", "", "", err
 	}
 	if verifier, err = randomToken(); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	id := uuid.Must(uuid.NewV7())
 	ct, wdek, ver, err := v.encrypt(ctx, tx, tenant, id, oauthEnv, oauthBinding(id), []byte(verifier))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	// Requests nobody completed are kept an hour past their expiry, for
 	// an operator's look, then dropped with the next start.
 	if _, err := tx.Exec(ctx, `DELETE FROM oauth_connection_requests WHERE tenant_id = $1 AND expires_at < now() - interval '1 hour'`, tenant); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO oauth_connection_requests (id, tenant_id, state_hash, person, connector, environment, name, verifier, verifier_key, kek_version, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now() + $11)`,
-		id, tenant, hashState(state), by, connector, env, name, ct, wdek, ver, OAuthRequestTTL); err != nil {
-		return "", "", err
+		id, tenant, hashState(state, browser), by, connector, env, name, ct, wdek, ver, OAuthRequestTTL); err != nil {
+		return "", "", "", err
 	}
-	return state, verifier, audit(ctx, tx, tenant, by, "connection.oauth_start", connector+"/"+name, map[string]any{"request_id": id, "environment": env})
+	return state, browser, verifier, audit(ctx, tx, tenant, by, "connection.oauth_start", connector+"/"+name, map[string]any{"request_id": id, "environment": env})
 }
 
-// TakeOAuthRequest finds the request a state names and marks it used, in
-// one statement, without a tenant scope: the callback has none yet. It
-// returns ErrOAuthRequest when the state names nothing usable.
-func (v *Vault) TakeOAuthRequest(ctx context.Context, state string) (*OAuthRequest, error) {
-	if len(state) != 43 {
+// TakeOAuthRequest finds the request a state names, for the browser that
+// started it, and marks it used, in one statement, without a tenant
+// scope: the callback has none yet. It returns ErrOAuthRequest when the
+// state and binding name nothing usable.
+func (v *Vault) TakeOAuthRequest(ctx context.Context, state, browser string) (*OAuthRequest, error) {
+	if len(state) != 43 || len(browser) != 43 {
 		return nil, ErrOAuthRequest
 	}
 	var q OAuthRequest
-	err := v.Pool.QueryRow(ctx, `SELECT id, tenant_id, person, connector, environment, name, verifier, verifier_key, kek_version FROM taskiem_oauth_request_take($1)`, hashState(state)).
+	err := v.Pool.QueryRow(ctx, `SELECT id, tenant_id, person, connector, environment, name, verifier, verifier_key, kek_version FROM taskiem_oauth_request_take($1)`, hashState(state, browser)).
 		Scan(&q.ID, &q.Tenant, &q.Person, &q.Connector, &q.Environment, &q.Name, &q.verifier, &q.verifierKey, &q.kekVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrOAuthRequest

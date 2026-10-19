@@ -193,7 +193,7 @@ cmd_setup() {
 
   # ALERT_EMAIL and ALERT_WEBHOOK are read indirectly (${!f}) when saved below.
   # shellcheck disable=SC2034
-  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET
+  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME
   echo "Taskiem setup. Press Enter to keep the value in brackets." >&2
   ask DOMAIN "Public host name (DNS must point here)" "$(conf DOMAIN)"
   ask OWNER_EMAIL "Owner's email (receives the set-your-password link)" "$(conf OWNER_EMAIL)"
@@ -201,6 +201,12 @@ cmd_setup() {
   ask_secret DATABASE_URL "Postgres 16 URL of an empty database, as its owner (needs CREATEROLE)" "$(env_get "$KIT/migrate.env" TASKIEM_DATABASE_URL)"
   ask_secret SMTP_URL "SMTP URL (smtps://user:pass@host:465)" "$(env_get "$KIT/taskiem.env" TASKIEM_SMTP_URL)"
   ask MAIL_FROM "Sender address for email" "$(env_get "$KIT/taskiem.env" TASKIEM_ALERT_FROM)"
+  ask_secret TELEGRAM_BOT_TOKEN "Telegram bot token from @BotFather (empty: no Telegram)" "$(env_get "$KIT/taskiem.env" TASKIEM_TELEGRAM_BOT_TOKEN)"
+  if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+    ask TELEGRAM_BOT_USERNAME "Telegram bot username, without @" "$(env_get "$KIT/taskiem.env" TASKIEM_TELEGRAM_BOT_USERNAME)"
+    TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME#@}
+    [ -n "$TELEGRAM_BOT_USERNAME" ] || die "the bot's username is required with its token"
+  fi
   local first_run=""
   [ -n "$(conf CHANNEL)" ] || first_run=1
   ask CHANNEL "Release channel: staging (upgrades on every merge) or production (upgrades on approved versions)" "$(conf CHANNEL)"
@@ -262,6 +268,14 @@ cmd_setup() {
   env_set "$t" TASKIEM_SMTP_URL "$SMTP_URL"
   env_set "$t" TASKIEM_ALERT_FROM "$MAIL_FROM"
   env_set "$t" TASKIEM_ALLOW_SIGNUP false
+  # Telegram (docs/telegram.md): Taskiem registers its webhook at start.
+  env_set "$t" TASKIEM_TELEGRAM_BOT_TOKEN "$TELEGRAM_BOT_TOKEN"
+  env_set "$t" TASKIEM_TELEGRAM_BOT_USERNAME "${TELEGRAM_BOT_USERNAME:-}"
+  if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+    [ -n "$(env_get "$t" TASKIEM_TELEGRAM_WEBHOOK_SECRET)" ] || env_set "$t" TASKIEM_TELEGRAM_WEBHOOK_SECRET "$(hex 32)"
+    # Signs approval buttons while WhatsApp is off.
+    [ -n "$(env_get "$t" TASKIEM_CHAT_TOKEN_KEY)" ] || env_set "$t" TASKIEM_CHAT_TOKEN_KEY "$(openssl rand -base64 32)"
+  fi
   touch "$KIT/openbao.env" && chmod 600 "$KIT/openbao.env"
   env_set "$KIT/.env" TASKIEM_DOMAIN "$DOMAIN"
   env_set "$KIT/.env" OPENBAO_VERSION "${OPENBAO_IMAGE#*:}"

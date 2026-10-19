@@ -36,7 +36,7 @@ const waDecisionTTL = 24 * time.Hour
 // RunWhatsApp sends approval requests and run outcomes until ctx ends
 // (role api, with the platform number configured).
 func (s *Server) RunWhatsApp(ctx context.Context) error {
-	if s.WhatsApp == nil {
+	if len(s.chatChannelsOn()) == 0 {
 		return nil
 	}
 	for {
@@ -55,7 +55,7 @@ func (s *Server) RunWhatsApp(ctx context.Context) error {
 // bound number who have not had them, and how runs started from WhatsApp
 // ended.
 func (s *Server) WhatsAppTick(ctx context.Context) error {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants()`)
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants()`)
 	if err != nil {
 		return err
 	}
@@ -84,11 +84,14 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 }
 
 type approvalTarget struct {
-	run    uuid.UUID
-	step   string
-	level  int
-	user   uuid.UUID
-	number string
+	run   uuid.UUID
+	step  string
+	level int
+	user  uuid.UUID
+	// channel is where the request goes ("whatsapp" or "telegram"), addr
+	// the person's number or account there.
+	channel string
+	addr    string
 }
 
 // waNotifyApprovals finds open approvals (requested in the last week) and
@@ -96,6 +99,18 @@ type approvalTarget struct {
 // those it is delegated to, who have not voted, are not its makers, hold
 // approval.decide and have a bound number.
 func (s *Server) waNotifyApprovals(ctx context.Context, tenant uuid.UUID) error {
+	var errs []error
+	for _, channel := range s.chatChannelsOn() {
+		if err := s.notifyApprovalsOn(ctx, tenant, channel); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", channel, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// notifyApprovalsOn queues requests to the approvers linked on one channel
+// who have not had them there.
+func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channel string) error {
 	var targets []approvalTarget
 	var name string
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -116,12 +131,13 @@ func (s *Server) waNotifyApprovals(ctx context.Context, tenant uuid.UUID) error 
 			     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = o.role))
 			SELECT DISTINCT c.run_id, c.step_id, c.level, c.user_id FROM cand c
 			  JOIN runs r ON r.id = c.run_id JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
-			 WHERE NOT EXISTS (SELECT 1 FROM whatsapp_notices n WHERE n.run_id = c.run_id AND n.step_id = c.step_id AND n.level = c.level AND n.user_id = c.user_id)
+			 WHERE NOT EXISTS (SELECT 1 FROM whatsapp_notices n WHERE n.run_id = c.run_id AND n.step_id = c.step_id AND n.level = c.level AND n.user_id = c.user_id
+			                     AND n.channel = $1)
 			   AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = c.run_id AND d.step_id = c.step_id
 			                     AND (d.level = c.level OR c.distinct_ap) AND (d.user_id = c.user_id OR d.on_behalf_of = c.user_id))
 			   AND NOT (c.forbid_self AND c.user_id::text IN (COALESCE(taskiem_actor_human(r.started_by), ''),
 			                COALESCE(taskiem_actor_human(wv.created_by), ''), COALESCE(taskiem_actor_human(wv.published_by::text), '')))
-			 LIMIT 200`)
+			 LIMIT 200`, channel)
 		if err != nil {
 			return err
 		}
@@ -136,30 +152,19 @@ func (s *Server) waNotifyApprovals(ctx context.Context, tenant uuid.UUID) error 
 		for _, t := range targets {
 			users = append(users, t.user)
 		}
-		rows, err = tx.Query(ctx, `SELECT user_id, number FROM taskiem_wa_numbers($1)`, users)
+		addrs, err := chatAddrsTx(ctx, tx, channel, users)
 		if err != nil {
 			return err
 		}
-		numbers := map[uuid.UUID]string{}
-		for rows.Next() {
-			var u uuid.UUID
-			var n string
-			if err := rows.Scan(&u, &n); err != nil {
-				rows.Close()
-				return err
-			}
-			numbers[u] = n
-		}
-		rows.Close()
 		kept := targets[:0]
 		for _, t := range targets {
-			if n, ok := numbers[t.user]; ok {
-				t.number = n
+			if a, ok := addrs[t.user]; ok {
+				t.channel, t.addr = channel, a
 				kept = append(kept, t)
 			}
 		}
 		targets = kept
-		return rows.Err()
+		return nil
 	})
 	if err != nil {
 		return err
@@ -189,14 +194,14 @@ func (s *Server) waNotifyApprovals(ctx context.Context, tenant uuid.UUID) error 
 // outbox sends it, and retries it if sending fails.
 func (s *Server) waQueueApproval(ctx context.Context, tenant uuid.UUID, t approvalTarget) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
-			tenant, t.run, t.step, t.level, t.user)
+		tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+			tenant, t.run, t.step, t.level, t.user, t.channel)
 		if err != nil || tag.RowsAffected() == 0 {
 			return err // another notifier has it
 		}
 		run, step, level := t.run, t.step, t.level
-		_, err = whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Kind: whatsapp.OutboxApproval, User: t.user, Run: &run, Step: &step, Level: &level},
-			fmt.Sprintf("approval:%s:%s:%d:%s", t.run, t.step, t.level, t.user))
+		_, err = whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Channel: t.channel, Kind: whatsapp.OutboxApproval, User: t.user, Run: &run, Step: &step, Level: &level},
+			outboxKey(t.channel, fmt.Sprintf("approval:%s:%s:%d:%s", t.run, t.step, t.level, t.user)))
 		return err
 	})
 }
@@ -219,7 +224,7 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 		case whatsapp.OutboxRunOutcome:
 			sendErr = s.waSendRunOutcome(ctx, it)
 		case whatsapp.OutboxAlert:
-			sendErr = s.WhatsApp.SendAlertItem(ctx, it)
+			sendErr = s.sendAlertItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}
@@ -248,11 +253,11 @@ func (s *Server) waSendApprovalItem(ctx context.Context, it whatsapp.OutboxItem)
 	if p, _ := s.principalOf(ctx, it.Tenant, it.User); p == nil || !p.Can(PermApprovalDecide) {
 		return fmt.Errorf("%w: the person no longer decides approvals", whatsapp.ErrNothingToSend)
 	}
-	number, err := s.WhatsApp.NumberOf(ctx, it.Tenant, it.User)
+	_, addr, err := s.chatAddrOf(ctx, it.Channel, it.Tenant, it.User)
 	if err != nil {
 		return err
 	}
-	t := approvalTarget{run: *it.Run, step: *it.Step, level: *it.Level, user: it.User, number: number}
+	t := approvalTarget{run: *it.Run, step: *it.Step, level: *it.Level, user: it.User, channel: it.Channel, addr: addr}
 	return s.waSendApproval(ctx, tenantRef{it.Tenant, name}, t, false)
 }
 
@@ -275,7 +280,7 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	if err != nil {
 		return err
 	}
-	number, err := s.WhatsApp.NumberOf(ctx, it.Tenant, it.User)
+	ch, number, err := s.chatAddrOf(ctx, it.Channel, it.Tenant, it.User)
 	if err != nil {
 		return err
 	}
@@ -298,14 +303,10 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	title := tr(l, outcome, "workflow", wf, "env", env)
 	m := whatsapp.AlertMessage(name, kind, title, tr(l, "wa.outcome.body"), link, map[string]any{"workflow": wf, "environment": env})
 	m.Tenant = it.Tenant
-	wa, err := s.WhatsApp.ForTenant(ctx, it.Tenant)
-	if err != nil {
-		return err
-	}
-	if wa.Own() {
+	if ch.OwnTenant() != uuid.Nil {
 		m.Text = strings.TrimPrefix(m.Text, "["+name+"] ")
 	}
-	if _, err := wa.Send(ctx, number, m); err != nil {
+	if _, err := ch.Send(ctx, number, m); err != nil {
 		return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(number), err)
 	}
 	return nil
@@ -316,18 +317,18 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approvalTarget, resend bool) error {
 	var msg whatsapp.Message
 	sent := false
-	// From the tenant's own number when it has one.
-	wa, err := s.WhatsApp.ForTenant(ctx, tenant.ID)
+	// On WhatsApp, from the tenant's own number when it has one.
+	wa, err := s.chatChannelFor(ctx, t.channel, tenant.ID)
 	if err != nil {
 		return err
 	}
-	l := s.chooseLang(ctx, tenant.ID, t.number, "").Tag
+	l := s.chooseLang(ctx, tenant.ID, t.addr, "").Tag
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
 		// The queued path recorded the notice when it queued the request;
 		// a resend (the approver asked) records it now.
 		if resend {
-			if _, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id) VALUES ($1, $2, $3, $4, $5)
-				ON CONFLICT (run_id, step_id, level, user_id) DO UPDATE SET sent_at = now(), error = NULL`, tenant.ID, t.run, t.step, t.level, t.user); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, $6)
+				ON CONFLICT (run_id, step_id, level, user_id, channel) DO UPDATE SET sent_at = now(), error = NULL`, tenant.ID, t.run, t.step, t.level, t.user, t.channel); err != nil {
 				return err
 			}
 		}
@@ -364,11 +365,11 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 		for _, d := range []string{"approved", "rejected"} {
 			c := whatsapp.Claims{Tenant: tenant.ID, Nonce: whatsapp.NewNonce(), Purpose: whatsapp.PurposeDecide, Decision: d, Expires: exp,
 				Run: t.run, Step: t.step, Level: t.level, User: t.user}
-			if _, err := tx.Exec(ctx, `INSERT INTO whatsapp_tokens (nonce, tenant_id, purpose, run_id, step_id, level, user_id, decision, notice, expires_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, c.Nonce[:], tenant.ID, c.Purpose, t.run, t.step, t.level, t.user, d, notice, exp); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO whatsapp_tokens (nonce, tenant_id, purpose, run_id, step_id, level, user_id, decision, notice, expires_at, channel)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, c.Nonce[:], tenant.ID, c.Purpose, t.run, t.step, t.level, t.user, d, notice, exp, t.channel); err != nil {
 				return err
 			}
-			tokens[d] = s.WhatsApp.Signer.Sign(c)
+			tokens[d] = s.chatSigner().Sign(c)
 		}
 		title := whatsapp.SafeText(wf) + " · " + t.step
 		where := env
@@ -404,14 +405,14 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 	if err != nil || !sent {
 		return err
 	}
-	_, sendErr := wa.Send(ctx, t.number, msg)
+	_, sendErr := wa.Send(ctx, t.addr, msg)
 	if sendErr != nil {
 		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE whatsapp_notices SET error = $5 WHERE run_id = $1 AND step_id = $2 AND level = $3 AND user_id = $4`,
-				t.run, t.step, t.level, t.user, truncateErr(sendErr))
+			_, err := tx.Exec(ctx, `UPDATE whatsapp_notices SET error = $5 WHERE run_id = $1 AND step_id = $2 AND level = $3 AND user_id = $4 AND channel = $6`,
+				t.run, t.step, t.level, t.user, truncateErr(sendErr), t.channel)
 			return err
 		})
-		return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(t.number), sendErr)
+		return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(t.addr), sendErr)
 	}
 	return nil
 }
@@ -444,7 +445,7 @@ func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
 			return err
 		}
 		targets, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (approvalTarget, error) {
-			t := approvalTarget{user: c.p.UserID, number: c.number}
+			t := approvalTarget{user: c.p.UserID, channel: c.ch.Name(), addr: c.addr}
 			return t, r.Scan(&t.run, &t.step, &t.level)
 		})
 		return err
@@ -465,9 +466,10 @@ func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
 
 // tokenRow is a decision token's stored claims.
 type tokenRow struct {
-	claims whatsapp.Claims
-	notice uuid.UUID
-	used   bool
+	claims  whatsapp.Claims
+	notice  uuid.UUID
+	used    bool
+	channel string // the chat channel it was sent on
 }
 
 var errTokenRefused = errors.New("this button or link is not valid any more")
@@ -481,15 +483,15 @@ func (s *Server) loadToken(ctx context.Context, tx pgx.Tx, tok string, purpose s
 		return row, errTokenRefused
 	}
 	var p string
-	err = tx.QueryRow(ctx, `SELECT purpose, run_id, step_id, level, user_id, notice, used_at IS NOT NULL FROM whatsapp_tokens WHERE nonce = $1 AND tenant_id = $2`,
-		c.Nonce[:], c.Tenant).Scan(&p, &c.Run, &c.Step, &c.Level, &c.User, &row.notice, &row.used)
+	err = tx.QueryRow(ctx, `SELECT purpose, run_id, step_id, level, user_id, notice, used_at IS NOT NULL, channel FROM whatsapp_tokens WHERE nonce = $1 AND tenant_id = $2`,
+		c.Nonce[:], c.Tenant).Scan(&p, &c.Run, &c.Step, &c.Level, &c.User, &row.notice, &row.used, &row.channel)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row, errTokenRefused
 	}
 	if err != nil {
 		return row, err
 	}
-	if p != c.Purpose || p != purpose || s.WhatsApp.Signer.Verify(c, mac, time.Now()) != nil {
+	if p != c.Purpose || p != purpose || s.chatSigner().Verify(c, mac, time.Now()) != nil {
 		return row, errTokenRefused
 	}
 	row.claims = c
@@ -518,10 +520,10 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 		}
 		tenant = c.tenants[i]
 		if p, err = s.principalOf(ctx, tenant.ID, c.p.UserID); err != nil {
-			return s.waSay(ctx, c.wa, c.number, tenant.Name, c.t("wa.cannot_act", "org", tenant.Name))
+			return s.waSay(ctx, c.ch, c.addr, tenant.Name, c.t("wa.cannot_act", "org", tenant.Name))
 		}
 	}
-	say := func(text string) error { return s.waSay(ctx, c.wa, c.number, tenant.Name, text) }
+	say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, tenant.Name, text) }
 	var row tokenRow
 	refusal := ""
 	var level int
@@ -556,7 +558,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	if refusal != "" {
 		if refusal != "invalid" {
 			_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-				return waAudit(ctx, tx, p, "approval.token.refused", row.claims.Run.String()+"/"+row.claims.Step, map[string]any{"reason": refusal})
+				return waAudit(ctx, tx, c.ch.Name(), p, "approval.token.refused", row.claims.Run.String()+"/"+row.claims.Step, map[string]any{"reason": refusal})
 			})
 		}
 		switch refusal {
@@ -581,9 +583,9 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 // waVote records a decision made over WhatsApp, or hands it off for
 // step-up.
 func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Principal, cl whatsapp.Claims, stepUp, via string) error {
-	say := func(text string) error { return s.waSay(ctx, c.wa, c.number, tenant.Name, text) }
+	say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, tenant.Name, text) }
 	ref := runtime.RunRef{ID: cl.Run, TenantID: tenant.ID}
-	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: "whatsapp", StepUp: stepUp})
+	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: c.ch.Name(), StepUp: stepUp})
 	var su *runtime.StepUpError
 	switch {
 	case errors.As(err, &su):
@@ -597,7 +599,7 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 		return s.waHandoff(ctx, c, tenant, cl)
 	case errors.Is(err, runtime.ErrNotAllowed):
 		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-			return waAudit(ctx, tx, p, "approval.decide.refused", cl.Run.String()+"/"+cl.Step, map[string]any{"decision": cl.Decision, "reason": err.Error(), "via": via})
+			return waAudit(ctx, tx, c.ch.Name(), p, "approval.decide.refused", cl.Run.String()+"/"+cl.Step, map[string]any{"decision": cl.Decision, "reason": err.Error(), "via": via})
 		})
 		reason := err.Error()
 		if i := strings.LastIndex(reason, ": not allowed"); i > 0 {
@@ -612,7 +614,7 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 		return err
 	}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-		return waAudit(ctx, tx, p, "approval.decide", cl.Run.String()+"/"+cl.Step, map[string]any{"decision": cl.Decision, "result": res.Status,
+		return waAudit(ctx, tx, c.ch.Name(), p, "approval.decide", cl.Run.String()+"/"+cl.Step, map[string]any{"decision": cl.Decision, "result": res.Status,
 			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "via": via})
 	}); err != nil {
 		return err
@@ -636,14 +638,14 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 // app with a passkey or authenticator code (step-up; spec 11.2).
 func (s *Server) waHandoff(ctx context.Context, c *chat, tenant tenantRef, cl whatsapp.Claims) error {
 	if s.PublicURL == "" {
-		return s.waSay(ctx, c.wa, c.number, tenant.Name, c.t("wa.handoff.no_link"))
+		return s.waSay(ctx, c.ch, c.addr, tenant.Name, c.t("wa.handoff.no_link"))
 	}
 	h := cl
 	h.Purpose, h.Nonce = whatsapp.PurposeHandoff, whatsapp.NewNonce()
 	h.Expires = time.Unix(time.Now().Add(waHandoffTTL).Unix(), 0)
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO whatsapp_tokens (nonce, tenant_id, purpose, run_id, step_id, level, user_id, decision, notice, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, h.Nonce[:], tenant.ID, h.Purpose, h.Run, h.Step, h.Level, h.User, h.Decision, uuid.New(), h.Expires)
+		_, err := tx.Exec(ctx, `INSERT INTO whatsapp_tokens (nonce, tenant_id, purpose, run_id, step_id, level, user_id, decision, notice, expires_at, channel)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, h.Nonce[:], tenant.ID, h.Purpose, h.Run, h.Step, h.Level, h.User, h.Decision, uuid.New(), h.Expires, c.ch.Name())
 		return err
 	})
 	if err != nil {
@@ -656,15 +658,15 @@ func (s *Server) waHandoff(ctx context.Context, c *chat, tenant tenantRef, cl wh
 	}
 	// The token travels in the fragment: browsers do not send it to
 	// servers, so it stays out of access logs and Referer headers.
-	link := s.PublicURL + "/handoff#" + s.WhatsApp.Signer.Sign(h)
+	link := s.PublicURL + "/handoff#" + s.chatSigner().Sign(h)
 	verb := "approve"
 	if h.Decision == "rejected" {
 		verb = "reject"
 	}
 	what := verb + " " + h.Step
 	tpl := whatsapp.TplStepUpLink
-	_, err = c.wa.Send(ctx, c.number, whatsapp.Message{
-		Text:     c.wa.Prefix(tenant.Name) + c.t("wa.handoff."+verb, "step", h.Step, "link", link),
+	_, err = c.ch.Send(ctx, c.addr, whatsapp.Message{
+		Text:     c.ch.Prefix(tenant.Name) + c.t("wa.handoff."+verb, "step", h.Step, "link", link),
 		Template: &tpl, Vars: map[string]string{"tenant": tenant.Name, "what": what, "link": link}, Tenant: tenant.ID})
 	return err
 }
@@ -675,7 +677,7 @@ func (s *Server) waHandoff(ctx context.Context, c *chat, tenant tenantRef, cl wh
 func (s *Server) handoffFor(r *http.Request) (tokenRow, error) {
 	p := principalFrom(r.Context())
 	var row tokenRow
-	if s.WhatsApp == nil {
+	if len(s.chatChannelsOn()) == 0 {
 		return row, errWhatsAppOff
 	}
 	if p.UserID == uuid.Nil {
@@ -776,7 +778,7 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.Store.VoteApproval(r.Context(), runtime.RunRef{ID: cl.Run, TenantID: p.TenantID}, cl.Step,
-		runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: "whatsapp", IP: clientIP(r), StepUp: stepUp})
+		runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: row.channel, IP: clientIP(r), StepUp: stepUp})
 	var su *runtime.StepUpError
 	switch {
 	case errors.As(err, &su):
@@ -792,7 +794,7 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var number *string
+	var addr string
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(r.Context(), `UPDATE whatsapp_tokens SET used_at = now() WHERE nonce = $1`, cl.Nonce[:]); err != nil {
 			return err
@@ -800,25 +802,28 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(r.Context(), `DELETE FROM chat_sessions WHERE tenant_id = $1 AND user_id = $2 AND state = $3`, p.TenantID, p.UserID, stateStepUp); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(r.Context(), `SELECT number FROM taskiem_wa_numbers($1)`, []uuid.UUID{p.UserID}).Scan(&number); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		addrs, err := chatAddrsTx(r.Context(), tx, row.channel, []uuid.UUID{p.UserID})
+		if err != nil {
 			return err
 		}
+		addr = addrs[p.UserID]
 		return auditTx(r, tx, "approval.decide", cl.Run.String()+"/"+cl.Step, map[string]any{"decision": cl.Decision, "result": res.Status,
-			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "channel": "whatsapp", "via": "handoff"})
+			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "channel": row.channel, "via": "handoff"})
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if number != nil {
+	if addr != "" {
 		var name string
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			return tx.QueryRow(r.Context(), `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&name)
 		})
-		// Inside the window only: a confirmation is not worth a template.
-		if wa, err := s.WhatsApp.ForTenant(r.Context(), p.TenantID); err == nil {
-			l := s.chooseLang(r.Context(), p.TenantID, *number, "").Tag
-			_, _ = wa.Send(r.Context(), *number, whatsapp.Message{Text: wa.Prefix(name) + tr(l, "wa.handoff.recorded", "step", cl.Step, "status", tr(l, "approval.status."+res.Status))})
+		// On WhatsApp inside the window only: a confirmation is not worth a
+		// template.
+		if ch, err := s.chatChannelFor(r.Context(), row.channel, p.TenantID); err == nil {
+			l := s.chooseLang(r.Context(), p.TenantID, addr, "").Tag
+			_, _ = ch.Send(r.Context(), addr, whatsapp.Message{Text: ch.Prefix(name) + tr(l, "wa.handoff.recorded", "step", cl.Step, "status", tr(l, "approval.status."+res.Status))})
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"run_id": cl.Run, "step_id": cl.Step, "decision": cl.Decision, "status": res.Status, "level": res.Level + 1, "levels": res.Levels})
@@ -832,22 +837,25 @@ func (s *Server) waNotifyRuns(ctx context.Context, tenant uuid.UUID) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `UPDATE whatsapp_run_watches w SET notified_at = now() FROM runs r
 			WHERE r.id = w.run_id AND w.notified_at IS NULL AND r.status IN ('completed', 'failed', 'cancelled', 'needs_reconciliation')
-			RETURNING w.run_id, w.user_id`)
+			RETURNING w.run_id, w.user_id, w.channel`)
 		if err != nil {
 			return err
 		}
-		type ended struct{ run, user uuid.UUID }
+		type ended struct {
+			run, user uuid.UUID
+			channel   string
+		}
 		done, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ended, error) {
 			var e ended
-			return e, r.Scan(&e.run, &e.user)
+			return e, r.Scan(&e.run, &e.user, &e.channel)
 		})
 		if err != nil {
 			return err
 		}
 		for _, e := range done {
 			run := e.run
-			if _, err := whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Kind: whatsapp.OutboxRunOutcome, User: e.user, Run: &run},
-				"run:"+e.run.String()+":"+e.user.String()); err != nil {
+			if _, err := whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Channel: e.channel, Kind: whatsapp.OutboxRunOutcome, User: e.user, Run: &run},
+				outboxKey(e.channel, "run:"+e.run.String()+":"+e.user.String())); err != nil {
 				return err
 			}
 		}

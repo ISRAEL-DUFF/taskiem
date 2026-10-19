@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -340,29 +341,36 @@ func audit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, action, target stri
 
 // SetOwnProject records an existing xenibase connection's project as the
 // organisation's (Settings > Data tables). The caller checked the
-// connection (test_connection, a secret key and a data API URL) and
-// that no table exists yet; here its credentials are copied into the
-// data_tables connection, so workflows and the API find the project
-// under the one name, and the record is marked own: Taskiem then never
-// provisions, renews or deletes anything for it.
-func (s *Service) SetOwnProject(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, creds map[string]string, projectName, ref, apiURL string, expires *time.Time) (Project, error) {
+// connection (test_connection, a secret key and a data API URL); here its
+// credentials are copied into the data_tables connection, so workflows and
+// the API find the project under the one name, and the record is marked
+// own: Taskiem then never provisions, renews or deletes anything for it.
+//
+// While tables exist the project cannot change, but the organisation's own
+// project can be set again from a connection to the same project: that is
+// how its credentials are renewed when the old token expires or is revoked
+// (Taskiem renews only projects it made), without which its tables could
+// be neither used nor deleted. renewed reports that case.
+func (s *Service) SetOwnProject(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, creds map[string]string, projectName, ref, apiURL string, expires *time.Time) (p Project, renewed bool, err error) {
+	if p, err = loadProject(ctx, tx, tenant); err != nil {
+		return p, false, err
+	}
 	n, err := CountTables(ctx, tx)
 	if err != nil {
-		return Project{}, err
+		return p, false, err
 	}
 	if n > 0 {
-		return Project{}, fmt.Errorf("%w: the organisation already has %d data tables in its current project; delete them first", ErrConflict, n)
-	}
-	p, err := loadProject(ctx, tx, tenant)
-	if err != nil {
-		return p, err
+		if !p.Own || p.ProjectID == "" || p.ProjectID != strings.TrimSpace(creds["project_id"]) {
+			return p, false, fmt.Errorf("%w: the organisation already has %d data tables in its current project; delete them first (a connection to the same project of your own renews its credentials)", ErrConflict, n)
+		}
+		renewed = true
 	}
 	if p.leaseUntil != nil && p.leaseUntil.After(s.now()) && !p.Ready() {
-		return p, ErrProvisioning
+		return p, false, ErrProvisioning
 	}
 	id, err := s.storeConnection(ctx, tx, tenant, creds)
 	if err != nil {
-		return p, err
+		return p, false, err
 	}
 	p = Project{Status: "ready", Own: true, ProjectName: projectName, ProjectID: creds["project_id"], Ref: ref, APIURL: apiURL, ConnectionID: id, TokenExpiresAt: expires}
 	_, err = tx.Exec(ctx, `INSERT INTO data_table_projects (tenant_id, status, own, project_name, project_id, ref, api_url, connection_id, token_expires_at)
@@ -371,7 +379,7 @@ func (s *Service) SetOwnProject(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		  operation_id = NULL, ref = EXCLUDED.ref, api_url = EXCLUDED.api_url, connection_id = EXCLUDED.connection_id,
 		  token_expires_at = EXCLUDED.token_expires_at, lease_until = NULL, error = NULL, updated_at = now()`,
 		tenant, projectName, p.ProjectID, ref, apiURL, id, expires)
-	return p, err
+	return p, renewed, err
 }
 
 // Credentials reads the data_tables connection's credentials with the

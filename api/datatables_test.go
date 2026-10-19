@@ -51,7 +51,7 @@ var debtorsTable = map[string]any{"name": "debtors", "title": "Debtors", "column
 }}
 
 // upload posts a CSV as a multipart form.
-func (c *client) uploadCSV(t *testing.T, path, filename, body string) (int, map[string]any) {
+func (c *client) uploadCSV(t *testing.T, path, filename, body string, hdr ...string) (int, map[string]any) {
 	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -61,6 +61,9 @@ func (c *client) uploadCSV(t *testing.T, path, filename, body string) (int, map[
 	req, _ := http.NewRequest(http.MethodPost, c.base+path, &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	for i := 0; i+1 < len(hdr); i += 2 {
+		req.Header.Set(hdr[i], hdr[i+1])
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -284,6 +287,26 @@ func TestDataTables(t *testing.T) {
 	if s != 200 || imp["rows"] != float64(2) || imp["imported"] != float64(2) || imp["mode"] != "insert_rows" || imp["batches"] != float64(1) {
 		t.Fatalf("import %d %v", s, imp)
 	}
+	// The same file sent again (a retry after a timeout) writes nothing
+	// twice: its batches are answered from the replay.
+	s, imp = builder.uploadCSV(t, "/v1/tables/"+id+"/import", "more.csv", "name,phone,balance_kobo,paid\nDayo,08012345679,300,false\nEfe,,0,true\n\n")
+	if s != 200 || imp["replayed_batches"] != float64(1) {
+		t.Fatalf("retried import %d %v", s, imp)
+	}
+	if n := len(w.pg.Rows(projects[0], "debtors")); n != 4 {
+		t.Fatalf("rows after a retried import: %d", n)
+	}
+	// On purpose, with a new key: imported again.
+	s, imp = builder.uploadCSV(t, "/v1/tables/"+id+"/import", "more.csv", "name\nFola\n", "Idempotency-Key", "second-batch-1")
+	if s != 200 || imp["replayed_batches"] != float64(0) || len(w.pg.Rows(projects[0], "debtors")) != 5 {
+		t.Fatalf("keyed import %d %v", s, imp)
+	}
+	s2, imp2 := builder.uploadCSV(t, "/v1/tables/"+id+"/import", "more.csv", "name\nFola\n", "Idempotency-Key", "second-batch-1")
+	if s2 != 200 || imp2["replayed_batches"] != float64(1) || len(w.pg.Rows(projects[0], "debtors")) != 5 {
+		t.Fatalf("keyed import retried %d %v", s2, imp2)
+	}
+	// A formula in a text cell (CSV injection) is exported inert.
+	builder.must(201, "POST", "/v1/tables/"+id+"/rows", map[string]any{"row": map[string]any{"name": "=HYPERLINK(\"https://x.test\")", "phone": "+2348012345670"}})
 	if s, out := builder.uploadCSV(t, "/v1/tables/"+id+"/import", "bad.csv", "name,colour\nX,red\n"); s != 400 || !strings.Contains(out["error"].(string), "colour") {
 		t.Errorf("unknown column import: %d %v", s, out)
 	}
@@ -295,14 +318,36 @@ func TestDataTables(t *testing.T) {
 		t.Fatalf("export %d %v", status, hdr)
 	}
 	recs, err := csv.NewReader(strings.NewReader(body)).ReadAll()
-	if err != nil || len(recs) != 5 || strings.Join(recs[0], ",") != "id,name,phone,balance_kobo,paid,created_at,updated_at" {
+	if err != nil || len(recs) != 7 || strings.Join(recs[0], ",") != "id,name,phone,balance_kobo,paid,created_at,updated_at" {
 		t.Fatalf("export body %v %v", err, recs)
 	}
-	var dayo []string
+	var dayo, formula []string
 	for _, r := range recs[1:] {
-		if r[1] == "Dayo" {
+		switch {
+		case r[1] == "Dayo":
 			dayo = r
+		case strings.Contains(r[1], "HYPERLINK"):
+			formula = r
 		}
+		if c := r[1]; c != "" && strings.ContainsRune("=+-@", rune(c[0])) {
+			t.Errorf("a text cell starts a formula: %q", c)
+		}
+	}
+	if formula == nil || formula[1] != `'=HYPERLINK("https://x.test")` || formula[2] != "'+2348012345670" {
+		t.Fatalf("formula row exported as %v", formula)
+	}
+	// Imported back, the apostrophes come off: the values are unchanged.
+	var fb strings.Builder
+	fw := csv.NewWriter(&fb)
+	_ = fw.Write(recs[0])
+	_ = fw.Write(formula)
+	fw.Flush()
+	if s, imp := builder.uploadCSV(t, "/v1/tables/"+id+"/import", "formula.csv", fb.String()); s != 200 || imp["mode"] != "upsert_rows" {
+		t.Fatalf("formula re-import %d %v", s, imp)
+	}
+	fq := viewer.must(200, "POST", "/v1/tables/"+id+"/rows/query", map[string]any{"filters": []map[string]any{{"column": "phone", "op": "eq", "value": "+2348012345670"}}})
+	if rs := fq["rows"].([]any); len(rs) != 1 || rs[0].(map[string]any)["name"] != `=HYPERLINK("https://x.test")` {
+		t.Fatalf("formula row after re-import %v", fq["rows"])
 	}
 	if dayo == nil || dayo[2] != "08012345679" || dayo[3] != "300" || dayo[4] != "false" {
 		t.Fatalf("Dayo exported as %v", dayo)
@@ -318,7 +363,7 @@ func TestDataTables(t *testing.T) {
 	if s != 200 || imp["mode"] != "upsert_rows" || imp["rows"] != float64(1) {
 		t.Fatalf("re-import %d %v", s, imp)
 	}
-	if n := len(w.pg.Rows(projects[0], "debtors")); n != 4 {
+	if n := len(w.pg.Rows(projects[0], "debtors")); n != 6 {
 		t.Fatalf("rows after re-import: %d", n)
 	}
 	q = viewer.must(200, "POST", "/v1/tables/"+id+"/rows/query", map[string]any{"filters": []map[string]any{{"column": "name", "op": "eq", "value": "Dayo"}}})
@@ -342,7 +387,8 @@ func TestDataTables(t *testing.T) {
 	}
 	viewer.must(404, "GET", "/v1/tables/"+id, nil)
 	acts := w.auditActions(t, "Acme")
-	for _, a := range []string{"table.create", "table.delete", "table.column.add", "table.column.drop", "table.import", "table.project.provision"} {
+	for _, a := range []string{"table.create", "table.delete", "table.column.add", "table.column.drop", "table.import", "table.project.provision",
+		"table.row.insert", "table.row.update", "table.row.delete", "table.export"} {
 		if acts[a] == 0 {
 			t.Errorf("no audit entry %s: %v", a, acts)
 		}
@@ -419,6 +465,28 @@ func TestDataTablesLimitsAndOwnProject(t *testing.T) {
 	}
 	if acts := w.auditActions(t, "Beta"); acts["table.project.set"] != 1 {
 		t.Errorf("audit %v", acts)
+	}
+	// Its token expires: a new connection to the same project renews the
+	// credentials while tables exist; another project is still refused.
+	w.pg.AddToken(xenibasetest.Token{Secret: "xb_shop_2", Scopes: []string{"read", "write"}, ProjectIDs: []string{shop}})
+	renewed := other.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "xenibase@1", "name": "shop2",
+		"credentials": map[string]string{"token": "xb_shop_2", "project_id": shop, "secret_key": "xb_sec_shop", "api_url": w.pg.APIURL(shop)}})
+	if st := other.must(200, "PUT", "/v1/tables/project", map[string]any{"connection_id": renewed["id"]}); st["own"] != true || st["project_id"] != shop {
+		t.Fatalf("renewed %v", st)
+	}
+	other.must(201, "POST", "/v1/tables/"+tbl["id"].(string)+"/rows", map[string]any{"row": map[string]any{"item": "beans", "qty": 1}})
+	blog := "7d2c9a10-5b4e-4f00-9c11-0000000000c3"
+	w.pg.AddProject(blog, "Blog")
+	w.pg.AddSecretKey(blog, "xb_sec_blog")
+	w.pg.AddToken(xenibasetest.Token{Secret: "xb_blog", Scopes: []string{"read", "write"}, ProjectIDs: []string{blog}})
+	elsewhere := other.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "xenibase@1", "name": "blog",
+		"credentials": map[string]string{"token": "xb_blog", "project_id": blog, "secret_key": "xb_sec_blog", "api_url": w.pg.APIURL(blog)}})
+	if s, out := other.do("PUT", "/v1/tables/project", map[string]any{"connection_id": elsewhere["id"]}); s != 409 {
+		t.Errorf("another project with tables: %d %v", s, out)
+	}
+	var renewedAudit int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM audit_log WHERE action = 'table.project.set' AND detail->>'renewed_credentials' = 'true'`).Scan(&renewedAudit); err != nil || renewedAudit != 1 {
+		t.Errorf("renewal audit: %d %v", renewedAudit, err)
 	}
 
 	// The quota at Xenibase: a clear 409 naming it.

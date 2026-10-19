@@ -167,6 +167,84 @@ function WhatsAppPin({ pin, onChange }: { pin: NonNullable<WhatsAppBinding["pin"
 
 /** The member's WhatsApp number: linked by a code sent to it, it lets them
  * approve, check status and start runs from WhatsApp. */
+interface TelegramLink {
+  enabled: boolean;
+  bot_username?: string;
+  linked: boolean;
+  username?: string;
+  verified_at?: string;
+  pending_expires_at?: string;
+}
+
+/** Linking Telegram: a one-time t.me link opens the bot, and the Telegram
+ * account that opens it is linked (docs/telegram.md). */
+function Telegram() {
+  const { me } = useAuth();
+  const b = useLoad(() => get<TelegramLink>("/v1/me/telegram"), []);
+  const [typed, setTyped] = useState("");
+  const [link, setLink] = useState<string | null>(null);
+  const act = useAction();
+  if (!b.data?.enabled) return b.error ? <ErrorBox error={b.error} /> : null;
+  const bot = b.data.bot_username;
+  return (
+    <section className="card" data-testid="telegram">
+      <h2 style={{ marginTop: 0 }}>Telegram</h2>
+      <p className="hint">
+        Link your Telegram account to approve requests, check what ran and start workflows by chat
+        {bot && (
+          <>
+            {" "}
+            with <strong>@{bot}</strong>
+          </>
+        )}
+        . Your roles and approval policies apply exactly as here; some approvals still ask for your passkey or authenticator code.
+      </p>
+      <ErrorBox error={act.error} />
+      {b.data.linked && (
+        <div className="row">
+          <p className="grow">
+            Linked: <strong data-testid="telegram-account">{b.data.username ? "@" + b.data.username : "your Telegram account"}</strong>{" "}
+            {b.data.verified_at && <span className="hint">since {fmtTime(b.data.verified_at)}</span>}
+          </p>
+          <button className="danger" disabled={act.busy} onClick={() => confirm("Unlink Telegram?") && void act.run(async () => (await del("/v1/me/telegram"), setLink(null), b.reload()))}>
+            Unlink
+          </button>
+        </div>
+      )}
+      <form
+        className="row"
+        style={{ alignItems: "flex-end" }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act.run(async () => {
+            const r = await post<{ url: string }>("/v1/me/telegram", { ...(await proof(me?.factors, typed, "telegram.link")) });
+            setTyped("");
+            setLink(r.url);
+          });
+        }}
+      >
+        <ProofField to="link Telegram" value={typed} onChange={setTyped} />
+        <button type="submit" disabled={act.busy}>
+          {b.data.linked ? "Link another account instead" : "Link Telegram"}
+        </button>
+      </form>
+      {link && (
+        <div className="row" style={{ alignItems: "center" }}>
+          <p className="grow hint">
+            Open this link on the phone or computer where you use Telegram, then press <strong>Start</strong>. It works once, for 10 minutes.
+          </p>
+          <a className="button primary" href={link} target="_blank" rel="noopener noreferrer" data-testid="telegram-link">
+            Open Telegram
+          </a>
+          <button disabled={act.busy} onClick={() => void act.run(async () => (setLink(null), b.reload()))}>
+            Done
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function WhatsApp() {
   const { me } = useAuth();
   const b = useLoad(() => get<WhatsAppBinding>("/v1/me/whatsapp"), []);
@@ -299,11 +377,12 @@ export function Account() {
   const act = useAction();
   return (
     <>
-      <PageHeader title="Account" description="Your sign-in methods, invitations and linked WhatsApp number." />
+      <PageHeader title="Account" description="Your sign-in methods, invitations, and linked WhatsApp number and Telegram account." />
       <Invitations />
       <ChangePassword />
       <Passkeys />
       <WhatsApp />
+      <Telegram />
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Authenticator app</h2>
         <p className="hint">

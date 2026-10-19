@@ -167,8 +167,11 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 
 // chat is one inbound message being handled.
 type chat struct {
-	wa      *whatsapp.Platform // the number it was sent to; replies go from it
-	number  string
+	ch chatChannel // the channel it came in on; replies go out on it
+	// wa is the WhatsApp number it was sent to, for what only WhatsApp has
+	// (Flows, its media API, own numbers); nil on other channels.
+	wa      *whatsapp.Platform
+	addr    string // the sender: a WhatsApp number, or tg:<id> on Telegram
 	in      whatsapp.Inbound
 	p       *Principal // nil until resolved
 	tenant  tenantRef
@@ -240,12 +243,20 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 	if user == uuid.Nil {
 		return s.waUnbound(ctx, wa, number, in)
 	}
-	c := &chat{wa: wa, number: number, in: in}
-	c.lang = s.chooseLang(ctx, wa.Tenant, number, "")
+	return s.converse(ctx, &chat{ch: wa, wa: wa, addr: number, in: in}, user)
+}
+
+// converse handles a message from a bound person on any channel: picks
+// the tenant it speaks to, then the language, then what the message is
+// (a decision, a form, a voice note, a command or a request in words).
+func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
+	var err error
+	ch, number, in := c.ch, c.addr, c.in
+	c.lang = s.chooseLang(ctx, ch.OwnTenant(), number, "")
 	if c.tenants, err = s.tenantsOf(ctx, user); err != nil {
 		return err
 	}
-	if wa.Own() {
+	if wa := c.wa; wa != nil && wa.Own() {
 		// A tenant's own number speaks for that tenant only.
 		i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == wa.Tenant })
 		if i < 0 {
@@ -254,9 +265,9 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		c.tenant, c.tenants = c.tenants[i], c.tenants[i:i+1]
 	} else {
 		if len(c.tenants) == 0 {
-			return s.waSay(ctx, wa, number, "", c.t("wa.no_org"))
+			return s.waSay(ctx, ch, number, "", c.t("wa.no_org"))
 		}
-		contact, err := wa.Contact(ctx, number)
+		contact, err := ch.Contact(ctx, number)
 		if err != nil {
 			return err
 		}
@@ -267,13 +278,13 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 			}
 		}
 		if contact.Tenant == nil || *contact.Tenant != c.tenant.ID {
-			if err := wa.Touch(ctx, number, false, true, &c.tenant.ID); err != nil {
+			if err := ch.Touch(ctx, number, false, true, &c.tenant.ID); err != nil {
 				return err
 			}
 		}
 	}
 	if c.p, err = s.principalOf(ctx, c.tenant.ID, user); err != nil {
-		return s.waSay(ctx, wa, number, "", c.t("wa.cannot_act", "org", c.tenant.Name))
+		return s.waSay(ctx, ch, number, "", c.t("wa.cannot_act", "org", c.tenant.Name))
 	}
 	// The language of this tenant's conversation: chosen, detected from
 	// what is written, or the tenant's default (languages.go).
@@ -345,8 +356,8 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 
 // waSay replies inside the conversation window from wa, in the tenant's
 // name (on the shared number).
-func (s *Server) waSay(ctx context.Context, wa *whatsapp.Platform, number, tenant, text string, buttons ...whatsapp.Button) error {
-	_, err := wa.Send(ctx, number, whatsapp.Message{Text: wa.Prefix(tenant) + text, Buttons: buttons})
+func (s *Server) waSay(ctx context.Context, ch chatChannel, addr, tenant, text string, buttons ...whatsapp.Button) error {
+	_, err := ch.Send(ctx, addr, whatsapp.Message{Text: ch.Prefix(tenant) + text, Buttons: buttons})
 	return err
 }
 
@@ -354,7 +365,7 @@ func (c *chat) say(ctx context.Context, s *Server, text string, buttons ...whats
 	if c.note != "" {
 		text, c.note = c.note+"\n\n"+text, ""
 	}
-	return s.waSay(ctx, c.wa, c.number, c.tenant.Name, text, buttons...)
+	return s.waSay(ctx, c.ch, c.addr, c.tenant.Name, text, buttons...)
 }
 
 // loadSession reads the number's session in its current tenant; an
@@ -364,7 +375,7 @@ func (s *Server) loadSession(ctx context.Context, c *chat) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var raw []byte
 		err := tx.QueryRow(ctx, `SELECT state, data FROM chat_sessions WHERE tenant_id = $1 AND number = $2 AND user_id = $3 AND expires_at > now()`,
-			c.tenant.ID, c.number, c.p.UserID).Scan(&c.state, &raw)
+			c.tenant.ID, c.addr, c.p.UserID).Scan(&c.state, &raw)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -380,7 +391,7 @@ func (s *Server) saveSession(ctx context.Context, c *chat, state string, data ch
 	c.state, c.data = state, data
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		if state == stateIdle {
-			_, err := tx.Exec(ctx, `DELETE FROM chat_sessions WHERE tenant_id = $1 AND number = $2`, c.tenant.ID, c.number)
+			_, err := tx.Exec(ctx, `DELETE FROM chat_sessions WHERE tenant_id = $1 AND number = $2`, c.tenant.ID, c.addr)
 			return err
 		}
 		raw, _ := json.Marshal(data)
@@ -388,7 +399,7 @@ func (s *Server) saveSession(ctx context.Context, c *chat, state string, data ch
 		ttl = min(ttl, whatsapp.Window)
 		_, err := tx.Exec(ctx, `INSERT INTO chat_sessions (tenant_id, number, user_id, state, data, expires_at) VALUES ($1, $2, $3, $4, $5, now() + $6::interval)
 			ON CONFLICT (tenant_id, number) DO UPDATE SET user_id = EXCLUDED.user_id, state = EXCLUDED.state, data = EXCLUDED.data,
-			  expires_at = EXCLUDED.expires_at, updated_at = now()`, c.tenant.ID, c.number, c.p.UserID, state, raw, ttl.String())
+			  expires_at = EXCLUDED.expires_at, updated_at = now()`, c.tenant.ID, c.addr, c.p.UserID, state, raw, ttl.String())
 		return err
 	})
 }
@@ -580,7 +591,7 @@ func (s *Server) waSwitch(ctx context.Context, c *chat, name string) error {
 		return err
 	}
 	t := match[0]
-	if err := c.wa.Touch(ctx, c.number, false, true, &t.ID); err != nil {
+	if err := c.ch.Touch(ctx, c.addr, false, true, &t.ID); err != nil {
 		return err
 	}
 	c.tenant = t
@@ -914,7 +925,7 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 	if !c.p.Can(PermRunStart) {
 		return c.say(ctx, s, c.t("wa.run.denied_now", "org", c.tenant.Name))
 	}
-	if !s.limiter("wa-run:"+c.number, 20*time.Second, 3).Allow() {
+	if !s.limiter("wa-run:"+c.addr, 20*time.Second, 3).Allow() {
 		return c.say(ctx, s, c.t("wa.run.too_many"))
 	}
 	var input any
@@ -947,7 +958,7 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 	}
 	ref, created, err := s.Store.StartRun(ctx, runtime.StartRequest{
 		TenantID: c.tenant.ID, WorkflowID: data.Workflow, Version: data.Version, Environment: data.Environment,
-		Trigger:   map[string]any{"type": "manual", "channel": "whatsapp", "body": input},
+		Trigger:   map[string]any{"type": "manual", "channel": c.ch.Name(), "body": input},
 		StartedBy: c.p.Actor(), TriggerID: "whatsapp/" + data.Workflow.String(), DedupKey: data.Nonce,
 	})
 	if le, ok := runtime.IsLimit(err); ok {
@@ -957,11 +968,11 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 		return err
 	}
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO whatsapp_run_watches (tenant_id, run_id, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-			c.tenant.ID, ref.ID, c.p.UserID); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO whatsapp_run_watches (tenant_id, run_id, user_id, channel) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+			c.tenant.ID, ref.ID, c.p.UserID, c.ch.Name()); err != nil {
 			return err
 		}
-		return waAudit(ctx, tx, c.p, "run.start", ref.ID.String(), map[string]any{"workflow": data.Workflow, "version": data.Version,
+		return waAudit(ctx, tx, c.ch.Name(), c.p, "run.start", ref.ID.String(), map[string]any{"workflow": data.Workflow, "version": data.Version,
 			"environment": data.Environment, "created": created})
 	})
 	if err != nil {
