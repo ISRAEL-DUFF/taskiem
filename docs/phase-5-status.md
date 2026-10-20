@@ -17,7 +17,7 @@ Nothing of Phase 5 ships to customers before gate G4.
 | S4 | Bookings | **Built**, one PR in review: [bookings](storefronts.md#bookings): services from a data table (duration, capacity, buffer), availability (booking hours, days off, the window, a change cut-off, automatic confirmation), slots held in the same transaction as the booking so none is taken twice, the booking workflow (confirm in chat, reminders a day and two hours before as wait steps, attended or no-show), moves and cancels by the customer from their link and by the owner in chat or the web app, the day's bookings each morning; and [the price check](storefronts.md#the-price-check) before every order's and booking's run. One calendar per business; several staff calendars are v2 |
 | S5 | Chat set-up and field agents | Not started |
 | S6 | Domains and embedding | Not started; waits for the domain platform contract |
-| S7 | Forms | Not started |
+| S7 | Forms | **Built**, one PR in review: [forms](forms.md): the `form` trigger (public, link and members access; pages with conditions; prefill from the link; verification by SMS or email code; once per respondent; the message, redirect and result modes and the status link) and the `form` step (a one-time link by SMS or email, or members of a role in the app; reminders; a timeout), on the form host with no cookies; files scanned (a clamd the operator runs) and kept in Xenibase storage, read through `form@1`; one-time links; submissions masked; members forms and form steps in the app; the form editor in the canvas; the AI builder drafting forms. Not yet: options from a data table, text blocks, proof-of-work, the organisation's logo on forms, report handling (S8), forms in chat (v2) |
 | S8 | Trust, plans and pilot | Not started |
 
 ## S0: decisions
@@ -31,7 +31,7 @@ Nothing of Phase 5 ships to customers before gate G4.
 | Shop and Shop Plus prices, annual pricing, a trial | Product owner, finance | Open | S8 |
 | Field agents: staff or paid per business, who registers them, commission | Product owner, operations | Open | S5 |
 | Refunds when an owner declines a paid order or cancels a booking | Product owner | Open | S3 |
-| The malware scanner for form uploads: run by Taskiem, or a service | Security | Open | S7 |
+| The malware scanner for form uploads: run by Taskiem, or a service | Security | Open: S7 speaks to a ClamAV daemon the operator runs (`TASKIEM_CLAMD_ADDR`); without one, forms take no files | S7 |
 | The feature names customers see | Product owner | Open | S8 |
 
 Already answered (2026-10-19): own domains from the domain platform; photos in Xenibase storage; SMS, or email when given, to customers; no free plan; new businesses first; both payment timings; bookings in v1; field agents; embedding on the business's own website.
