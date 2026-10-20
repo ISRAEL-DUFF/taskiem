@@ -238,6 +238,10 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		}
 		return nil
 	}
+	// An owner agreeing to a field agent, or ending their sessions (agents.go).
+	if done, err := s.waAgentMessage(ctx, wa, number, in); done || err != nil {
+		return err
+	}
 	user, err := s.WhatsApp.UserOf(ctx, number)
 	if err != nil {
 		return err

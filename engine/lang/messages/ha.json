@@ -4,6 +4,38 @@
   "status": "DRAFT, NOT REVIEWED. Machine-assisted draft written without a native speaker. Do not treat as accurate; shown only where an operator or tenant turns this language on. A native speaker reviews each entry and sets reviewed to true (docs/languages.md).",
   "reviewers": [],
   "messages": {
+    "agent.consent_locked": {
+      "text": "Lambobi marasa daidai sun yi yawa. Tambayi wakilin sabuwar lamba.",
+      "reviewed": false
+    },
+    "agent.consent_none": {
+      "text": "Babu kasuwancin da ke jiran amincewarka. Tambayi wakilin ya sake farawa.",
+      "reviewed": false
+    },
+    "agent.consent_ok": {
+      "text": "Na gode. {agent} ({code}), wakilin Taskiem, zai iya shirya shafin {business} na awa 24 masu zuwa. Aika STOP AGENT nan a kowane lokaci don dakatar da shi.",
+      "reviewed": false
+    },
+    "agent.consent_taken": {
+      "text": "An haɗa wannan lambar da wani asusun Taskiem, don haka ba za ta iya amincewa da wannan kasuwancin ba.",
+      "reviewed": false
+    },
+    "agent.consent_wrong": {
+      "text": "Lambar ba daidai ba ce. Duba lambar da ke kan allon wakilin, sannan ka sake aika AGREE da lambar.",
+      "reviewed": false
+    },
+    "agent.none_to_stop": {
+      "text": "Babu wakilin da ke aiki a kan kasuwancinka yanzu.",
+      "reviewed": false
+    },
+    "agent.page_live": {
+      "text": "Shafin {business} ya fara aiki: {link}\nAika MY PAGE nan a kowane lokaci don canza farashi, ƙara kaya ko ganin oda.",
+      "reviewed": false
+    },
+    "agent.stopped": {
+      "text": "An gama. {agents} ba za su iya aiki a kan kasuwancinka ba yanzu.",
+      "reviewed": false
+    },
     "approval.status.approved": {
       "text": "amince",
       "reviewed": false

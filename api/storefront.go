@@ -147,7 +147,12 @@ func (s *Server) publishStorefront(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.storefrontOut(sf))
+	out := s.storefrontOut(sf)
+	if p := principalFrom(r.Context()); p.Agent != nil && p.Agent.Kind == "onboarding" {
+		// Published: the onboarding is done (agents.go).
+		s.agentPublished(r.Context(), p, sf.Draft.Name, out.PreviewURL)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) closeStorefront(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,46 @@
   "status": "Source. Every message Taskiem sends people over WhatsApp, USSD and SMS; context says where.",
   "reviewers": [],
   "messages": {
+    "agent.consent_locked": {
+      "text": "Too many wrong codes. Ask the agent for a new code.",
+      "reviewed": true,
+      "context": "Five wrong consent codes: the onboarding is locked until the agent makes a new code"
+    },
+    "agent.consent_none": {
+      "text": "No business is waiting for your agreement. Ask the agent to start again.",
+      "reviewed": true,
+      "context": "AGREE and a code arrived, but no onboarding is waiting for this number"
+    },
+    "agent.consent_ok": {
+      "text": "Thank you. {agent} ({code}), a Taskiem field agent, can now set up the page of {business} for the next 24 hours. Send STOP AGENT here to end it at any time.",
+      "reviewed": true,
+      "context": "The owner agreed (sent AGREE and the code) to a field agent setting up their business"
+    },
+    "agent.consent_taken": {
+      "text": "This number is linked to another Taskiem account, so it cannot agree for this business.",
+      "reviewed": true,
+      "context": "The owner's number belongs to someone else's account"
+    },
+    "agent.consent_wrong": {
+      "text": "That code is not right. Check the code on the agent's screen and send AGREE and the code again.",
+      "reviewed": true,
+      "context": "A consent code sent from WhatsApp did not match"
+    },
+    "agent.none_to_stop": {
+      "text": "No agent is working on your business now.",
+      "reviewed": true,
+      "context": "The owner sent STOP AGENT with no agent session open"
+    },
+    "agent.page_live": {
+      "text": "The page of {business} is live: {link}\nSend MY PAGE here at any time to change prices, add products or see orders.",
+      "reviewed": true,
+      "context": "Sent to the owner when the agent publishes the page they set up together"
+    },
+    "agent.stopped": {
+      "text": "Done. {agents} can no longer work on your business.",
+      "reviewed": true,
+      "context": "The owner sent STOP AGENT; {agents} names the agents whose sessions ended"
+    },
     "approval.status.approved": {
       "text": "approved",
       "reviewed": true,

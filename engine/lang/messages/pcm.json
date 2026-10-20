@@ -4,6 +4,38 @@
   "status": "DRAFT, NOT REVIEWED. Machine-assisted draft written without a native speaker. Do not treat as accurate; shown only where an operator or tenant turns this language on. A native speaker reviews each entry and sets reviewed to true (docs/languages.md).",
   "reviewers": [],
   "messages": {
+    "agent.consent_locked": {
+      "text": "Too many wrong codes. Ask the agent make e give you new code.",
+      "reviewed": false
+    },
+    "agent.consent_none": {
+      "text": "No business dey wait for your agreement. Ask the agent make e start again.",
+      "reviewed": false
+    },
+    "agent.consent_ok": {
+      "text": "Thank you. {agent} ({code}), Taskiem field agent, fit set up the page of {business} for the next 24 hours. Send STOP AGENT here anytime to end am.",
+      "reviewed": false
+    },
+    "agent.consent_taken": {
+      "text": "This number don link to another Taskiem account, so e no fit agree for this business.",
+      "reviewed": false
+    },
+    "agent.consent_wrong": {
+      "text": "That code no correct. Check the code wey dey the agent screen, then send AGREE and the code again.",
+      "reviewed": false
+    },
+    "agent.none_to_stop": {
+      "text": "No agent dey work on your business now.",
+      "reviewed": false
+    },
+    "agent.page_live": {
+      "text": "The page of {business} don go live: {link}\nSend MY PAGE here anytime to change price, add product or see orders.",
+      "reviewed": false
+    },
+    "agent.stopped": {
+      "text": "E don do. {agents} no fit work on your business again.",
+      "reviewed": false
+    },
     "approval.status.approved": {
       "text": "approved",
       "reviewed": false

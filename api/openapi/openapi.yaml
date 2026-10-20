@@ -103,6 +103,9 @@ tags:
 - name: Storefront
   description: The organisation's one-page public storefront, its catalogue and its photos.
   x-taskiem-guide: storefronts
+- name: Field agents
+  description: Agents who sign businesses up in person, the owner's consent, and support visits the owner invites.
+  x-taskiem-guide: agents
 - name: Forms
   description: Hosted forms that start a workflow, form steps that ask someone mid-run, one-time links, submissions and their files.
   x-taskiem-guide: forms
@@ -11521,6 +11524,369 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/agent/me:
+    get:
+      operationId: agentMe
+      tags:
+      - Field agents
+      summary: The signed-in field agent
+      description: The agent's code, name, region and status. Anyone who is not an active agent is refused (403).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The agent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent]
+                properties:
+                  agent:
+                    $ref: '#/components/schemas/Agent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/agent/businesses:
+    post:
+      operationId: agentNewBusiness
+      tags:
+      - Field agents
+      summary: Sign a business up for its owner
+      description: Makes the business, with the owner as its owner (their account too, if their WhatsApp number has none), and an onboarding
+        that waits for the owner to send the consent code from that number. The agent shows the code, or the link that opens WhatsApp with
+        it written. It is good for 30 minutes.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, owner_name, owner_phone]
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                owner_name:
+                  type: string
+                  maxLength: 100
+                owner_phone:
+                  type: string
+                  description: The owner's WhatsApp number
+      responses:
+        '201':
+          description: The business, waiting for the owner's consent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOnboarding'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/agent/sessions:
+    get:
+      operationId: agentSessions
+      tags:
+      - Field agents
+      summary: The agent's sessions
+      description: Onboardings and support visits, newest first (at most 100).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentSessionEntry'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/agent/sessions/{id}:
+    get:
+      operationId: agentSession
+      tags:
+      - Field agents
+      summary: One of the agent's sessions
+      description: Its status, to see when the owner has agreed (pending, then active).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: '#/components/schemas/AgentSession'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/agent/sessions/{id}/code:
+    post:
+      operationId: agentNewCode
+      tags:
+      - Field agents
+      summary: A new consent code
+      description: For an onboarding still waiting for the owner. The earlier code stops working.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The new code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOnboarding'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/agent/sessions/{id}/attest:
+    post:
+      operationId: agentAttest
+      tags:
+      - Field agents
+      summary: Record the visit
+      description: A photo of the shop or stall, kept in the business's private storage without its metadata, and where it was taken. The
+        business is then agent onboarded.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: number
+      - name: lng
+        in: query
+        required: true
+        schema:
+          type: number
+      - name: note
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [verification]
+                properties:
+                  verification:
+                    type: object
+                    required: [id, level, method]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      level:
+                        type: string
+                        enum: [agent_onboarded]
+                      method:
+                        type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/agent/sessions/{id}/end:
+    post:
+      operationId: agentEndSession
+      tags:
+      - Field agents
+      summary: End a session
+      description: The agent leaves the business. Publishing the page ends an onboarding too.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: '#/components/schemas/AgentSession'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/agent-visits:
+    get:
+      operationId: listAgentVisits
+      tags:
+      - Field agents
+      summary: Agents' sessions on the organisation
+      description: Who came, when, for what, and how each session ended.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      responses:
+        '200':
+          description: The sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [visits]
+                properties:
+                  visits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentVisit'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: inviteAgent
+      tags:
+      - Field agents
+      summary: Invite an agent back
+      description: A support visit of 1 to 8 hours (default 2), by the code on the agent's card. The agent then works on the page and its tables
+        only.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [agent_code]
+              properties:
+                agent_code:
+                  type: string
+                  example: AG-7KQ2M
+                hours:
+                  type: integer
+                  minimum: 1
+                  maximum: 8
+      responses:
+        '201':
+          description: The visit
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [visit]
+                properties:
+                  visit:
+                    $ref: '#/components/schemas/AgentVisit'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/agent-visits/{id}/end:
+    post:
+      operationId: endAgentVisit
+      tags:
+      - Field agents
+      summary: End an agent's session
+      description: An onboarding or a support visit; the agent loses access at once.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [ended]
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     sessionCookie:
@@ -11566,6 +11932,138 @@ components:
     NoContent:
       description: Done; no body.
   schemas:
+    Agent:
+      type: object
+      required: [id, code, name, status, region, workspace_id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          pattern: '^AG-[A-Z2-9]{5}$'
+        name:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended, retired]
+        region:
+          type: string
+        workspace_id:
+          type: string
+          format: uuid
+    AgentSession:
+      type: object
+      required: [id, tenant_id, business, kind, status, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        business:
+          type: string
+        kind:
+          type: string
+          enum: [onboarding, support]
+        status:
+          type: string
+          enum: [pending, active, ended]
+        expires_at:
+          type: string
+          format: date-time
+    AgentSessionEntry:
+      type: object
+      required: [id, tenant_id, business, kind, status, consent_at, expires_at, ended_at, end_reason, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        business:
+          type: string
+        kind:
+          type: string
+          enum: [onboarding, support]
+        status:
+          type: string
+          enum: [pending, active, ended]
+        consent_at:
+          type: [string, 'null']
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        end_reason:
+          type: [string, 'null']
+          description: published, agent_ended, owner_ended, replaced, expired, agent_suspended or agent_retired
+        created_at:
+          type: string
+          format: date-time
+    AgentOnboarding:
+      type: object
+      required: [session, consent]
+      properties:
+        session:
+          $ref: '#/components/schemas/AgentSession'
+        consent:
+          type: object
+          required: [code, text, expires_at]
+          description: What the owner sends from their WhatsApp number to agree. Shown once.
+          properties:
+            code:
+              type: string
+              pattern: '^[0-9]{6}$'
+            text:
+              type: string
+              example: AGREE 123456
+            whatsapp_number:
+              type: string
+              description: The number to send it to
+            link:
+              type: string
+              format: uri
+              description: Opens WhatsApp with the text written (a QR code of it suits a phone held up)
+            expires_at:
+              type: string
+              format: date-time
+    AgentVisit:
+      type: object
+      required: [id, agent_name, agent_code, kind, status, consent_at, expires_at, ended_at, end_reason, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        agent_name:
+          type: string
+        agent_code:
+          type: string
+        kind:
+          type: string
+          enum: [onboarding, support]
+        status:
+          type: string
+          enum: [pending, active, ended]
+        consent_at:
+          type: [string, 'null']
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        end_reason:
+          type: [string, 'null']
+        created_at:
+          type: string
+          format: date-time
     Error:
       type: object
       required:

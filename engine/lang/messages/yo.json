@@ -4,6 +4,38 @@
   "status": "DRAFT, NOT REVIEWED. Machine-assisted draft written without a native speaker. Do not treat as accurate; shown only where an operator or tenant turns this language on. A native speaker reviews each entry and sets reviewed to true (docs/languages.md).",
   "reviewers": [],
   "messages": {
+    "agent.consent_locked": {
+      "text": "Kóòdù tí kò tọ́ ti pọ̀ jù. Béèrè kóòdù tuntun lọ́wọ́ aṣojú náà.",
+      "reviewed": false
+    },
+    "agent.consent_none": {
+      "text": "Kò sí iṣẹ́ òwò tó ń dúró de ìfọwọ́sí rẹ. Ní kí aṣojú náà bẹ̀rẹ̀ lẹ́ẹ̀kan sí i.",
+      "reviewed": false
+    },
+    "agent.consent_ok": {
+      "text": "O ṣeun. {agent} ({code}), aṣojú Taskiem, lè ṣètò ojú-ewé {business} fún wákàtí 24 tó ń bọ̀. Fi STOP AGENT ránṣẹ́ síbí nígbàkígbà láti dá a dúró.",
+      "reviewed": false
+    },
+    "agent.consent_taken": {
+      "text": "Nọ́mbà yìí ti so mọ́ àkọọ́lẹ̀ Taskiem mìíràn, nítorí náà kò lè fọwọ́sí fún iṣẹ́ òwò yìí.",
+      "reviewed": false
+    },
+    "agent.consent_wrong": {
+      "text": "Kóòdù yẹn kò tọ́. Wo kóòdù tó wà lórí ẹ̀rọ aṣojú náà, kí o sì tún fi AGREE àti kóòdù náà ránṣẹ́.",
+      "reviewed": false
+    },
+    "agent.none_to_stop": {
+      "text": "Kò sí aṣojú tó ń ṣiṣẹ́ lórí iṣẹ́ òwò rẹ báyìí.",
+      "reviewed": false
+    },
+    "agent.page_live": {
+      "text": "Ojú-ewé {business} ti wà lórí ayélujára: {link}\nFi MY PAGE ránṣẹ́ síbí nígbàkígbà láti yí iye owó padà, fi ọjà kún un tàbí wo àwọn ìbéèrè.",
+      "reviewed": false
+    },
+    "agent.stopped": {
+      "text": "Ó ti parí. {agents} kò lè ṣiṣẹ́ lórí iṣẹ́ òwò rẹ mọ́.",
+      "reviewed": false
+    },
     "approval.status.approved": {
       "text": "fọwọ́ sí",
       "reviewed": false

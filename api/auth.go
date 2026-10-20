@@ -97,6 +97,10 @@ type Principal struct {
 	Invitee                   bool
 	inviteeEmail, inviteeName string
 	viaCookie                 bool
+	// Agent is set when a field agent acts in a business through a session
+	// (agents.go): TenantID is the business, UserID the agent's user, who
+	// is not a member; the permissions are agentPermissions.
+	Agent *AgentAccess
 }
 
 func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
@@ -108,6 +112,9 @@ func (p *Principal) HasRole(role string) bool {
 }
 
 func (p *Principal) Actor() string {
+	if p.Agent != nil {
+		return "agent:" + p.Agent.Code
+	}
 	if p.EndUser != nil {
 		return p.EndUser.Actor()
 	}
@@ -129,6 +136,9 @@ func (p *Principal) Human() uuid.UUID {
 }
 
 func (p *Principal) ActorType() string {
+	if p.Agent != nil {
+		return "agent"
+	}
 	if p.EndUser != nil {
 		return "end_user"
 	}
@@ -207,6 +217,10 @@ var dummyHash = hashPassword(newToken())
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.resolve(r)
+		if errors.Is(err, errAgentSession) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": err.Error(), "agent_session_ended": true})
+			return
+		}
 		if err != nil || p == nil {
 			writeErr(w, http.StatusUnauthorized, "authentication required")
 			return
@@ -215,7 +229,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "you belong to no organisation yet: accept an invitation first", "invitations_only": true})
 			return
 		}
-		if p.EnrolOnly && !enrolOnly[r.Method+" "+r.URL.Path] {
+		if p.Agent != nil && !agentAllowed(r.Method, r.URL.Path) {
+			writeErr(w, http.StatusForbidden, "in a business, a field agent works on its page and the tables behind it only")
+			return
+		}
+		if p.Agent == nil && p.EnrolOnly && !enrolOnly[r.Method+" "+r.URL.Path] {
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "administrators sign in with a passkey: add one to continue", "enrol_passkey": true})
 			return
 		}
@@ -293,6 +311,10 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return nil, errors.New("no membership")
 	}
 	p.EnrolOnly = s.RequireAdminPasskeys && p.AuthMethod == "password" && isAdmin(p.Permissions)
+	if h := r.Header.Get(agentSessionHeader); h != "" {
+		// A field agent acting in a business (agents.go).
+		return s.agentPrincipal(ctx, &p, h)
+	}
 	return &p, nil
 }
 

@@ -4,6 +4,38 @@
   "status": "DRAFT, NOT REVIEWED. Machine-assisted draft written without a native speaker. Do not treat as accurate; shown only where an operator or tenant turns this language on. A native speaker reviews each entry and sets reviewed to true (docs/languages.md).",
   "reviewers": [],
   "messages": {
+    "agent.consent_locked": {
+      "text": "Koodu ezighi ezi dị ọtụtụ. Rịọ onye ọrụ ahụ ka o nye gị koodu ọhụrụ.",
+      "reviewed": false
+    },
+    "agent.consent_none": {
+      "text": "Ọ dịghị azụmahịa na-echere nkwenye gị. Rịọ onye ọrụ ahụ ka ọ malite ọzọ.",
+      "reviewed": false
+    },
+    "agent.consent_ok": {
+      "text": "Daalụ. {agent} ({code}), onye ọrụ Taskiem, nwere ike ịhazi peeji {business} n'ime awa 24 na-abịa. Ziga STOP AGENT ebe a mgbe ọ bụla ka ịkwụsị ya.",
+      "reviewed": false
+    },
+    "agent.consent_taken": {
+      "text": "Ejikọtala nọmba a na akaụntụ Taskiem ọzọ, ya mere ọ pụghị ikwenye maka azụmahịa a.",
+      "reviewed": false
+    },
+    "agent.consent_wrong": {
+      "text": "Koodu ahụ ezighi ezi. Lee koodu dị na ihuenyo onye ọrụ ahụ, ma ziga AGREE na koodu ahụ ọzọ.",
+      "reviewed": false
+    },
+    "agent.none_to_stop": {
+      "text": "Ọ dịghị onye ọrụ na-arụ ọrụ na azụmahịa gị ugbu a.",
+      "reviewed": false
+    },
+    "agent.page_live": {
+      "text": "Peeji {business} adịla ndụ: {link}\nZiga MY PAGE ebe a mgbe ọ bụla iji gbanwee ọnụahịa, tinye ngwaahịa ma ọ bụ hụ ịtụ.",
+      "reviewed": false
+    },
+    "agent.stopped": {
+      "text": "O mechaala. {agents} enweghịzi ike ịrụ ọrụ na azụmahịa gị.",
+      "reviewed": false
+    },
     "approval.status.approved": {
       "text": "kwadoro",
       "reviewed": false
