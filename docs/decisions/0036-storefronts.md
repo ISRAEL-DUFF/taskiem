@@ -1,21 +1,21 @@
 # 0036 — Storefronts: a public page whose forms start workflows
 
-Date: 2026-10-19 · Status: Proposed (spec under review: [storefronts](../spec/storefronts.md))
+Date: 2026-10-19 · Status: **Accepted** 2026-10-20, as amended below (spec: [storefronts](../spec/storefronts.md); built: S1 to S4, [storefronts](../storefronts.md))
 
 ## Context
 
 The chat-first strategy targets small Nigerian businesses that run on WhatsApp and have no website. They need to be found and ordered from, but a website is out of reach, and the forms and automations behind one more so. Taskiem has no hosted forms (open question Q10 in the Xenibase plan), though it has most of what a small public page needs behind it: data tables, schema-generated forms, approvals in chat, payment and SMS connectors, PII sealing and custom-domain verification.
 
-## Decision (proposed)
+## Decision
 
 1. **A one-page storefront per tenant, as the front door to workflows**, not a website builder: fixed mobile-first templates, a business card, a catalogue and actions. No custom HTML, CSS or JavaScript, ever.
-2. **The catalogue and orders are data tables.** Owners edit them as they already edit tables, from the web app or chat, and workflows read and write them.
+2. **The catalogue and the services are data tables.** Owners edit them as they already edit tables, from the web app or chat, and workflows read and write them. **Orders and bookings are Taskiem's own records** (amended 2026-10-20): they hold sealed customer details, the status link's key, payments and held booking slots, which a data table the owner can edit cannot keep safely; workflows move them through the `storefront@1` connector, and the web app and chat show them.
 3. **Actions are hosted forms generated from the action workflow's input schema**, starting runs through a new `storefront` trigger in wd/v1, deduplicated per submission. The customer gets an immediate reference; the outcome arrives by message, never by holding a page open.
 4. **Each business on its own domain**, registered and pointed by the group's domain platform as part of its plan, with a dedicated preview domain beside it. Pages are isolated from the app's origin and cookies, rendered on the server by a separate `public` role with its own Postgres role and pool, and small enough for 3G and cheap phones. Page views read a copy of the catalogue kept in Taskiem, never Xenibase or the primary database.
 5. **Trust and safety in v1:**
    - verification levels gate what a page can do;
    - look-alike and reserved names are refused;
-   - forms can never ask for card details, PINs, passwords, OTPs, BVN or NIN;
+   - storefront forms can never ask for card details, PINs, passwords, OTPs, BVN or NIN (general [forms](0037-forms.md) may ask for BVN, NIN and account numbers, marked as personal data, and not anonymously);
    - payments go only through the business's provider link;
    - content is moderated, with public reports and operator suspension;
    - rate limits and tracker-free bot defences protect the forms.
@@ -26,7 +26,14 @@ The chat-first strategy targets small Nigerian businesses that run on WhatsApp a
 10. **Photos in Xenibase storage**, in the business's own Xenibase project beside its data tables.
 11. **Customers hear back by SMS, and by email when they give one.** WhatsApp to customers is a later phase.
 12. **Embeddable on the business's own website**: the catalogue, a form or a button that opens an overlay. Each is a frame from the storefront's domain, allowed only on websites the owner has verified.
-13. **Moderation (proposed, awaiting decision):** every upload and text change is checked by a model through the AI layer against a written policy, and anything flagged waits for a person in an operator review queue.
+13. **Moderation:** a word list, a price check (₦0, absurd prices) and a model check through the AI layer against a written policy.
+    - On a page's first publish, anything flagged waits for a person in the operator review queue; a page from an agent-verified business waits only when flagged.
+    - Later edits are checked the same way, but the page stays up unless the check blocks the change.
+    - Three or more reports suspend a page pending review.
+    - Public forms' titles and descriptions are checked too; they have no catalogue or photos.
+    - At pilot scale, one person in operations staffs the queue part-time, aiming at a decision within 4 working hours.
+14. **Refunds:** the owner confirms, Taskiem refunds. A paid order or booking that is declined or cancelled is left *refund due*, and the owner is asked "Refund ₦X to the customer?" in chat, in the default workflows' approval, or in the web app. Confirmed, the payment is refunded in full through the business's own Paystack connection, from its balance, and the customer is told it takes 5 to 10 working days. A refund Paystack refuses (too little balance) stays due, with the reason. Money never moves without someone approving it. A booking form chooses what a customer cancelling a paid booking gets back: everything (the default) or all but the deposit.
+15. **Field agents** (amends 9): for the pilot, a small contracted team (5 to 10 in one market) registered by operators, with BVN or NIN checks and a referee or guarantor. They are paid a small base and a bonus for each business that *activates* (publishes and pays for its first month, better its second too), never per sign-up, with the bonus clawed back if the business is suspended for fraud within 90 days. Partners such as cooperatives and traders' associations run agents after the pilot.
 
 ## Where the ideas come from
 

@@ -316,6 +316,10 @@
       "text": "Sinmi ní {day}? A kò ní fún ẹnikẹ́ni ní àkókò lọ́jọ́ náà. Àwọn ìfiṣúra tó ti wà lórí rẹ̀: {count}. Wọ́n á dúró títí ẹ ó fi gbé wọn tàbí fagilé wọn.",
       "reviewed": false
     },
+    "wa.booking.confirm_refund": {
+      "text": "Dá {total} padà fún oníbàárà fún {ref}? Láti inú owó Paystack yín ni, yóò sì dé ọ̀dọ̀ wọn láàárín ọjọ́ iṣẹ́ 5 sí 10.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Fèsì *yes* láti fi àyípadà náà pamọ́, tàbí *cancel*.",
       "reviewed": false
@@ -352,12 +356,28 @@
       "text": "Kò sí ìfiṣúra {ref} tí a lè yí padà.",
       "reviewed": false
     },
+    "wa.booking.nothing_to_refund": {
+      "text": "Kò sí owó tí a lè dá padà fún {ref}.",
+      "reviewed": false
+    },
     "wa.booking.off_already": {
       "text": "{day} ti jẹ́ ọjọ́ ìsinmi tẹ́lẹ̀.",
       "reviewed": false
     },
     "wa.booking.off_done": {
       "text": "{day} jẹ́ ọjọ́ ìsinmi: a kò ní fún ẹnikẹ́ni ní àkókò.",
+      "reviewed": false
+    },
+    "wa.booking.refund_failed": {
+      "text": "Paystack kò dá {ref} padà: {why}. Owó náà ṣì wà ní gbèsè; ẹ lè tún gbìyànjú, tàbí kí ẹ dá a padà ní Paystack.",
+      "reviewed": false
+    },
+    "wa.booking.refund_hint": {
+      "text": "Wọ́n ti sanwó rẹ̀: fèsì *refund {ref}* láti dá owó oníbàárà padà.",
+      "reviewed": false
+    },
+    "wa.booking.refunded": {
+      "text": "A ti bẹ̀rẹ̀ sí í dá {total} padà fún {ref}. A ó sọ fún oníbàárà.",
       "reviewed": false
     },
     "wa.booking.taken": {
@@ -597,7 +617,7 @@
       "reviewed": false
     },
     "wa.help.bookings": {
-      "text": "• *bookings* tàbí *today*: wo àwọn ìfiṣúra; *booking*, nọ́mbà àti *cancel*; *move* nọ́mbà *to Sat 11:00*; *off 25 Dec*: sinmi ọjọ́ kan",
+      "text": "• *bookings* tàbí *today*: wo àwọn ìfiṣúra; *booking*, nọ́mbà àti *cancel*; *move* nọ́mbà *to Sat 11:00*; *off 25 Dec*: sinmi ọjọ́ kan; *refund*",
       "reviewed": false
     },
     "wa.help.build": {

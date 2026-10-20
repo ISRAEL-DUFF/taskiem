@@ -41,6 +41,9 @@ type ActionOptions struct {
 	// DepositPercent is how much of a service's price a booking pays
 	// online (1 to 100; unset is the full price).
 	DepositPercent int `json:"deposit_percent,omitempty"`
+	// CancelRefund is what a customer cancelling a paid booking gets back:
+	// full (the default) or keep_deposit.
+	CancelRefund string `json:"cancel_refund,omitempty"`
 }
 
 // takesPayment reports whether a form's kind may ask for payment.
@@ -147,7 +150,10 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
 			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
 		}
-		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent}
+		if c := a.Options.CancelRefund; c != "" && c != "full" && c != "keep_deposit" {
+			return Action{}, fmt.Errorf("%w: cancel_refund is full or keep_deposit", ErrInvalid)
+		}
+		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent, CancelRefund: a.Options.CancelRefund}
 	default:
 		a.Options = ActionOptions{}
 	}

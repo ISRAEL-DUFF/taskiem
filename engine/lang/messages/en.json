@@ -394,6 +394,11 @@
       "reviewed": true,
       "context": "Asks to confirm a day off; {count} is a number"
     },
+    "wa.booking.confirm_refund": {
+      "text": "Refund {total} to the customer for {ref}? It comes from your Paystack balance, and reaches them in about 5 to 10 working days.",
+      "reviewed": true,
+      "context": "Asks to confirm a refund"
+    },
     "wa.booking.confirm_reminder": {
       "text": "Reply *yes* to save the change, or *cancel*.",
       "reviewed": true,
@@ -439,6 +444,11 @@
       "reviewed": true,
       "context": "No such booking, or it is cancelled or past; {ref} is its reference"
     },
+    "wa.booking.nothing_to_refund": {
+      "text": "There is no payment to refund for {ref}.",
+      "reviewed": true,
+      "context": "The order or booking has no refund due"
+    },
     "wa.booking.off_already": {
       "text": "{day} is already off.",
       "reviewed": true,
@@ -448,6 +458,21 @@
       "text": "{day} is off: no times will be offered.",
       "reviewed": true,
       "context": "Done: a day off was added"
+    },
+    "wa.booking.refund_failed": {
+      "text": "Paystack did not refund {ref}: {why}. The refund is still due; you can try again, or refund it in Paystack.",
+      "reviewed": true,
+      "context": "A refund was refused; {why} is Paystack's reason"
+    },
+    "wa.booking.refund_hint": {
+      "text": "It was paid: reply *refund {ref}* to refund the customer.",
+      "reviewed": true,
+      "context": "Added after cancelling a paid booking"
+    },
+    "wa.booking.refunded": {
+      "text": "The refund of {total} for {ref} has been started. The customer will be told.",
+      "reviewed": true,
+      "context": "Done: a refund was made"
     },
     "wa.booking.taken": {
       "text": "{to} is not free. Choose another time.",
@@ -745,7 +770,7 @@
       "context": "Help line"
     },
     "wa.help.bookings": {
-      "text": "• *bookings* or *today*: see bookings; *booking* and a reference and *cancel*; *move* a reference *to Sat 11:00*; *off 25 Dec*: take a day off",
+      "text": "• *bookings* or *today*: see bookings; *booking* and a reference and *cancel*; *move* a reference *to Sat 11:00*; *off 25 Dec*: take a day off; *refund* and a reference: refund a paid order or booking",
       "reviewed": true,
       "context": "Help line; keep the command words in English"
     },

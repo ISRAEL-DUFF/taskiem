@@ -24,17 +24,17 @@ Nothing of Phase 5 ships to customers before gate G4.
 
 | Decision | Who | Status | Blocks |
 | --- | --- | --- | --- |
-| Accept decisions 0036 (storefronts) and 0037 (forms) | Product owner | Proposed | Everything after S1's groundwork |
-| Moderation: an AI check with a review queue, an image-safety service, or people only | Product owner | Proposed: AI check plus queue | S2 (uploads), S8 |
+| Accept decisions 0036 (storefronts) and 0037 (forms) | Product owner | **Accepted** 2026-10-20, amended to what was built | — |
+| Moderation: an AI check with a review queue, an image-safety service, or people only | Product owner | **Decided** 2026-10-20: word list, price check and model check, with the review queue staffed part-time at pilot scale (0036, 13) | S8 |
 | The preview domain and the form host's domain | Product owner, infra | Open | S1 |
 | The domain platform's integration contract: API, renewals with the plan, the domain if a business leaves, transfers | Product owner, domain platform team | Open | S6 |
 | Shop and Shop Plus prices, annual pricing, a trial | Product owner, finance | Open | S8 |
-| Field agents: staff or paid per business, who registers them, commission | Product owner, operations | Open | S5 |
-| Refunds when an owner declines a paid order or cancels a booking | Product owner | Open | S3 |
-| The malware scanner for form uploads: run by Taskiem, or a service | Security | Open: S7 speaks to a ClamAV daemon the operator runs (`TASKIEM_CLAMD_ADDR`); without one, forms take no files | S7 |
+| Field agents: staff or paid per business, who registers them, commission | Product owner, operations | **Decided** 2026-10-20: a contracted pilot team, a base and a bonus per activated business, clawback (0036, 15) | — |
+| Refunds when an owner declines a paid order or cancels a booking | Product owner | **Decided and built** 2026-10-20: the owner confirms, Taskiem refunds through Paystack; a booking form may keep the deposit (0036, 14) | — |
+| The malware scanner for form uploads: run by Taskiem, or a service | Security | **Decided** 2026-10-20: ClamAV run by Taskiem, started by the VM kit and the Helm chart (0037, 6) | — |
 | The feature names customers see | Product owner | Open | S8 |
 
-Already answered (2026-10-19): own domains from the domain platform; photos in Xenibase storage; SMS, or email when given, to customers; no free plan; new businesses first; both payment timings; bookings in v1; field agents; embedding on the business's own website.
+Answered 2026-10-20: the decisions, moderation, field agents, refunds and the scanner (above). Already answered (2026-10-19): own domains from the domain platform; photos in Xenibase storage; SMS, or email when given, to customers; no free plan; new businesses first; both payment timings; bookings in v1; field agents; embedding on the business's own website.
 
 ## Dependencies outside Taskiem
 

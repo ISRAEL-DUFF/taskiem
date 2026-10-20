@@ -188,3 +188,7 @@ Workers need the most memory. Each running Python step can use up to 256 MiB of 
 ## Values
 
 [`values.yaml`](../deploy/helm/taskiem/values.yaml) documents every value. `config` becomes a ConfigMap of environment variables, and empty strings are left out. Every variable is described in [operations.md](operations.md). `extraEnv` adds raw `env` entries to every pod, for example `valueFrom` references to other Secrets.
+
+## The malware scanner for form files
+
+Files sent in [forms](forms.md#files) are scanned before they are accepted. `clamav.enabled: true` runs a ClamAV daemon in the release (a Deployment and a Service on port 3310) and sets `TASKIEM_CLAMD_ADDR` on the `api` role; with `networkPolicy.enabled`, only the `api` (or `all`) pods may reach it, never the public host. It needs about 1.5 GB of memory (`clamav.resources`) and outbound HTTPS to the ClamAV mirrors for its signatures, which a new pod downloads before it is ready. Off, forms that ask for files cannot be deployed. An operator running their own clamd sets `TASKIEM_CLAMD_ADDR` in `extraEnv` instead.

@@ -221,6 +221,12 @@ function PaymentOptions({ kind, form, set }: { kind: FormKind; form: ActionForm;
           />
         </Field>
       )}
+      {kind === "booking" && form.payment !== "none" && (
+        <label className="sf-radio">
+          <input type="checkbox" checked={form.keepDeposit} onChange={(e) => set({ keepDeposit: e.target.checked })} />
+          Keep the deposit when a customer cancels a paid booking (otherwise they are refunded in full)
+        </label>
+      )}
     </>
   );
 }

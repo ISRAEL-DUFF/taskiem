@@ -78,6 +78,27 @@ actions:
       properties:
         reference: { type: string }
         queued:    { type: array, items: { type: string } }
+  refund:
+    title: Refund the customer
+    description: Refunds a paid order or booking that was declined or cancelled (refund_due) in full, through the business's Paystack connection, and tells the customer. Put an approval before it so the owner confirms. A refund Paystack refuses (too little balance) fails the step and leaves the order refund due with the reason.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        status:    { type: string }
+        total:     { type: string }
   get_booking:
     title: Read a booking
     description: The booking's status, service and time, when its reminders fall, and its payment page. A booking moved by the customer or the owner starts a new run, so a run's times are the booking's.

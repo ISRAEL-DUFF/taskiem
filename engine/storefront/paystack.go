@@ -100,3 +100,17 @@ func (p *PaystackPayments) Verify(ctx context.Context, tenant uuid.UUID, connect
 	}
 	return "pending", amount, nil
 }
+
+// Refund refunds a payment in full with the tenant's Paystack connection.
+func (p *PaystackPayments) Refund(ctx context.Context, tenant uuid.UUID, connection, ref, note string) (string, error) {
+	in := map[string]any{"reference": ref}
+	if note != "" {
+		in["customer_note"] = note
+	}
+	out, err := p.call(ctx, tenant, connection, "refund_transaction", in, "")
+	if err != nil {
+		return "", err
+	}
+	st, _ := out["status"].(string)
+	return st, nil
+}

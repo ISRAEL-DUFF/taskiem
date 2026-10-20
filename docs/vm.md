@@ -98,6 +98,7 @@ The [public host](public-host.md) serves storefronts and hosted forms (Phase 5).
 - It creates a second database login, `<database>_public`, a member of `taskiem_public` only, which can read no table.
 - It writes `/opt/taskiem/public.env` holding that login alone: no OpenBao token and no other secret.
 - It starts `taskiem-public` (`--role public`; metrics on `127.0.0.1:9091`) and puts `public.caddy` in `/opt/taskiem/caddy.d/` so Caddy routes it.
+- It starts `clamav`, the malware scanner for files sent in [forms](forms.md#files), and points Taskiem at it (`TASKIEM_CLAMD_ADDR=clamav:3310`). It is reachable only on the Compose network, keeps its signatures on the `clamav_db` volume and updates them itself from the ClamAV mirrors. It needs about **1.5 GB of memory**: on a 4 GB server, public pages and forms with files fit beside Taskiem. Its first start downloads the signatures (a few minutes); until then, form files wait and are tried again.
 
 Answering **no** later stops the service, removes the route and disables the login.
 

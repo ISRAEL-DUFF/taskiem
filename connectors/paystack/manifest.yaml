@@ -110,6 +110,39 @@ actions:
         reference: { type: string }
         amount:    { type: integer }
         status:    { type: string }
+  refund_transaction:
+    title: Refund a payment
+    description: Refunds a customer's payment in full, from the business's Paystack balance. Paystack refuses a second refund of the same payment, so a retry reports the first. The money reaches the customer in about 5 to 10 working days.
+    class: reconcilable_write
+    reconcile: refund_status
+    compensate: null
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference:     { type: string, description: The payment's reference }
+        customer_note: { type: string }
+        merchant_note: { type: string }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        refund_id: { type: integer }
+        amount:    { type: integer, description: Kobo }
+        status:    { type: string, description: "pending, processing, processed or failed; already when it had been refunded" }
+  refund_status:
+    title: Check whether a payment was refunded
+    description: Reads the payment; not found while it has not been refunded (reversed).
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties: { reference: { type: string } }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        status:    { type: string }
 triggers:
   transfer_event:
     type: webhook

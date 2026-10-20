@@ -231,6 +231,40 @@
         "when": "=steps.state.output.status in ['declined', 'refund_due']"
       },
       {
+        "id": "ask_refund",
+        "type": "approval",
+        "name": "Refund the customer?",
+        "needs": [
+          "state"
+        ],
+        "when": "=steps.state.output.status == 'refund_due'",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "72h",
+          "on_timeout": "reject",
+          "subject": {
+            "order": "=trigger.body.reference",
+            "total": "=trigger.body.total",
+            "action": "Approve to refund the customer now through Paystack; reject if you will refund them yourself"
+          }
+        }
+      },
+      {
+        "id": "refund",
+        "type": "connector",
+        "name": "Refund through Paystack",
+        "connector": "storefront@1",
+        "action": "refund",
+        "needs": [
+          "ask_refund"
+        ],
+        "when": "=steps.ask_refund.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
         "id": "tell_confirmed",
         "type": "connector",
         "name": "Tell the customer it is booked",

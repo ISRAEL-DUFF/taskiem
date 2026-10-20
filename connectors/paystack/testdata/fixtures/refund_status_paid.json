@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/transaction/verify/tsk_ab12cd34ef56gh78ij90kl12mn34op56"},
+ "response":{"status":200,"body":{"status":true,"message":"Verification successful","data":{"reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","status":"success","amount":300000}}}}

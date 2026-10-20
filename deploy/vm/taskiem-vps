@@ -326,10 +326,13 @@ cmd_setup() {
     env_set "$p" TASKIEM_PUBLIC_DOMAINS "$PREVIEW_DOMAIN"
     env_set "$p" TASKIEM_PUBLIC_KEY "$pubkey"
     env_set "$t" TASKIEM_PUBLIC_DOMAINS "$PREVIEW_DOMAIN"
+    # Files sent in forms are scanned by the clamav container (docs/forms.md#files).
+    env_set "$t" TASKIEM_CLAMD_ADDR clamav:3310
     env_set "$KIT/.env" COMPOSE_PROFILES public
     install -m 0644 "$KIT/public.caddy" "$KIT/caddy.d/public.caddy"
   else
     env_set "$t" TASKIEM_PUBLIC_DOMAINS ""
+    env_set "$t" TASKIEM_CLAMD_ADDR ""
     env_set "$KIT/.env" COMPOSE_PROFILES ""
     rm -f "$KIT/caddy.d/public.caddy"
   fi

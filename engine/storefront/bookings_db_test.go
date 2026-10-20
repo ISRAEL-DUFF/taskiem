@@ -458,3 +458,38 @@ func TestPricesCheckedBeforeTheRun(t *testing.T) {
 		t.Fatalf("its time was not freed: %v", err)
 	}
 }
+
+// A customer cancelling a paid booking is owed a refund, unless the
+// booking form keeps the deposit.
+func TestCancelPaidBooking(t *testing.T) {
+	w := bookingWorld(t, true, "none")
+	ctx := context.Background()
+	for _, c := range []struct{ policy, want string }{{"", "refund_due"}, {"keep_deposit", "cancelled"}} {
+		w.in(func(tx pgx.Tx) error {
+			_, err := storefront.SaveAction(ctx, tx, w.env.Tenant, storefront.Action{Kind: "booking", Enabled: true, Payment: "at_order",
+				Options: storefront.ActionOptions{CancelRefund: c.policy}})
+			return err
+		})
+		ref, key, err := w.book(haircut, slot(4, 9, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.drain()
+		if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_orders SET status = 'paid', paid_at = now() WHERE reference = $1`, ref); err != nil {
+			t.Fatal(err)
+		}
+		if got := w.change(ref, key, "cancel", 120, haircut, time.Time{}); got != "ok" {
+			t.Fatalf("%q: cancel: %s", c.policy, got)
+		}
+		if o := w.order(ref); o.Status != c.want {
+			t.Fatalf("%q: %s, want %s", c.policy, o.Status, c.want)
+		}
+	}
+	w.in(func(tx pgx.Tx) error {
+		_, err := storefront.SaveAction(ctx, tx, w.env.Tenant, storefront.Action{Kind: "booking", Enabled: true, Options: storefront.ActionOptions{CancelRefund: "half"}})
+		if !errors.Is(err, storefront.ErrInvalid) {
+			t.Errorf("a made-up policy: %v", err)
+		}
+		return nil
+	})
+}

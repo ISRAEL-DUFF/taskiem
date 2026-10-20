@@ -160,6 +160,33 @@ func TestWhatsAppBookings(t *testing.T) {
 	if r := w.say(t, on, "no"); !strings.Contains(r, "Nothing was changed") {
 		t.Errorf("no: %q", r)
 	}
+	// A paid booking cancelled: the owner refunds it from chat, once.
+	pay := &refundPay{}
+	w.srv.Orders.Payments = pay
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_orders SET status = 'refund_due', payment_ref = 'pay-9', paid_at = now() WHERE reference = $1`, second); err != nil {
+		t.Fatal(err)
+	}
+	if r := w.say(t, on, "refund "+first); !strings.Contains(r, "no payment to refund") {
+		t.Errorf("nothing due: %q", r)
+	}
+	if r := w.say(t, on, "refund "+strings.ToLower(second)); !strings.Contains(r, "Refund ₦0 to the customer for "+second) && !strings.Contains(r, "Refund") {
+		t.Fatalf("refund asked: %q", r)
+	}
+	if got := w.send(t, on, whatsapptest.ButtonReply("yes", "Yes, save")); len(got) != 1 || !strings.Contains(got[0].Text, "has been started") || pay.n != 1 {
+		t.Fatalf("refunded: %+v %d", got, pay.n)
+	}
+	o := owner.must(200, "GET", "/v1/storefront/orders/"+second, nil)["order"].(map[string]any)
+	if o["status"] != "refunded" {
+		t.Fatalf("after the refund: %v", o)
+	}
+	owner.must(200, "POST", "/v1/storefront/orders/"+second+"/refund", nil) // done already: nothing more
+	owner.must(409, "POST", "/v1/storefront/orders/"+first+"/refund", nil)
+	owner.must(404, "POST", "/v1/storefront/orders/AD-NOPE00/refund", nil)
+	if pay.n != 1 {
+		t.Fatalf("refunds sent: %d", pay.n)
+	}
+	viewer.must(403, "POST", "/v1/storefront/orders/"+second+"/refund", nil)
+
 	sf := owner.must(200, "GET", "/v1/storefront", nil)
 	if off := sf["availability"].(map[string]any)["off"].([]any); len(off) != 1 || off[0] != day.Format("2006-01-02") {
 		t.Fatalf("days off: %v", off)
@@ -167,4 +194,18 @@ func TestWhatsAppBookings(t *testing.T) {
 	if !strings.Contains(toJSON(owner.must(200, "GET", "/v1/audit", nil)), "storefront.day_off") {
 		t.Error("the day off was not audited")
 	}
+}
+
+// refundPay is a payment provider that only refunds.
+type refundPay struct{ n int }
+
+func (p *refundPay) Create(context.Context, uuid.UUID, string, storefront.PaymentRequest) (string, string, error) {
+	return "", "", nil
+}
+func (p *refundPay) Verify(context.Context, uuid.UUID, string, string) (string, int64, error) {
+	return "pending", 0, nil
+}
+func (p *refundPay) Refund(context.Context, uuid.UUID, string, string, string) (string, error) {
+	p.n++
+	return "pending", nil
 }

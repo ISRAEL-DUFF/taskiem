@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ApiError, get } from "../api";
+import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import { formatPrice, type Storefront } from "../lib/storefront";
@@ -178,6 +178,7 @@ export function StorefrontOrder() {
   const [revealed, setRevealed] = useState<Order>();
   const [changed, setChanged] = useState("");
   const reveal = useAction();
+  const refund = useAction();
   const { data, error, reload } = useLoad(() => get<{ order: Order; revealed: boolean }>(`/v1/storefront/orders/${encodeURIComponent(reference)}`), [reference]);
   useLiveRefresh(reload);
   const o = data?.order;
@@ -193,7 +194,21 @@ export function StorefrontOrder() {
         <>
           {o.status === "refund_due" && (
             <div className="sf-refund-note" role="status">
-              {refundLine(o.total_kobo)}
+              {refundLine(o.deposit_kobo ?? o.total_kobo)}
+              {o.note && <div className="hint">{o.note}</div>}
+              <div>
+                <button
+                  type="button"
+                  disabled={refund.busy}
+                  onClick={() =>
+                    confirm(`Refund ${formatPrice(o.deposit_kobo ?? o.total_kobo)} to the customer now? It comes from your Paystack balance.`) &&
+                    void refund.run(async () => (await post(`/v1/storefront/orders/${encodeURIComponent(o.reference)}/refund`), reload()))
+                  }
+                >
+                  Refund through Paystack
+                </button>
+              </div>
+              <ErrorBox error={refund.error} />
             </div>
           )}
           <section className="card" aria-labelledby="order-summary">

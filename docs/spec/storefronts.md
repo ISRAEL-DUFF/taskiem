@@ -1,6 +1,6 @@
 # Storefronts: a public page and order forms for businesses without a website
 
-Status: **draft for review** (proposed in [decision 0036](../decisions/0036-storefronts.md)). Nothing here is built. Revised 2026-10-19 with the first answers to the open questions ([section 13](#13-open-questions)): own domains from the domain platform, Xenibase storage, SMS or email to customers, no free plan, new businesses only, both payment timings, bookings in v1, field agents. Revised again the same day: storefronts can be embedded on a website the business already has ([6.11](#611-on-a-website-the-business-already-has)).
+Status: **accepted** ([decision 0036](../decisions/0036-storefronts.md), 2026-10-20, with its amendments); S1 to S4 are built ([storefronts](../storefronts.md)). Revised 2026-10-19 with the first answers to the open questions ([section 13](#13-open-questions)): own domains from the domain platform, Xenibase storage, SMS or email to customers, no free plan, new businesses only, both payment timings, bookings in v1, field agents. Revised again the same day: storefronts can be embedded on a website the business already has ([6.11](#611-on-a-website-the-business-already-has)).
 
 *Storefront* is a working name, like Taskiem itself. It is a generic word, and is checked against competitors' marks before it ships (clean-room policy, rule 3).
 
@@ -295,13 +295,13 @@ Most businesses are signed up in person. A **field agent** is someone who visits
 
 | Part | Design |
 | --- | --- |
-| Who | People an operator (or, later, a partner) registers as agents; whether they are staff or paid per business is open ([13](#13-open-questions)) |
+| Who | People an operator registers as agents, after BVN or NIN checks and a referee or guarantor: for the pilot, a small contracted team in one market; partners (cooperatives, traders' associations) after it |
 | Role | A platform-level `agent` identity, apart from tenant roles: it can create a business (tenant), set up its storefront and catalogue, and publish, only during an **onboarding session** for that business |
 | Consent | The owner's WhatsApp number receives a code; the session starts only when the owner gives it to the agent. The owner then owns the tenant; the agent is never a member of it |
 | Handover | Publishing (or 24 hours) ends the session; after that the agent cannot see or change the business. The owner can invite the agent back (a support visit) for a time-limited session |
 | Accountability | Every business records its agent; every action of an onboarding session is in the business's audit chain under the agent's name; operators see agents' businesses, their verification outcomes and reports against them |
 | Verification | An agent attests that they met the business at its address and saw its owner (with a photo of the stall, location attached), which counts as business verification ([7.1](#71-verification)) |
-| Commission (if adopted) | Counted from businesses that publish and pay; payouts are outside this spec |
+| Pay | A small base and a bonus for each business that activates (publishes and pays for its first month, better its second), never per sign-up; clawed back if the business is suspended for fraud within 90 days. Payouts are outside this spec |
 
 ### 6.11 On a website the business already has
 
@@ -373,11 +373,11 @@ A verification is a record with who did it, how and when, and appears in the aud
 
 ### 7.4 Content and moderation
 
-- **Automatic checks** on publish and on every change of text or images. **Proposed (awaiting decision, [13](#13-open-questions)):**
+- **Automatic checks** on publish and on every change of text or images (**accepted**, decision 0036, 13; built in S8):
   - every upload and text change is checked by a model through Taskiem's existing AI layer, against a written content policy, in the five languages; it answers allowed, flagged or blocked, with a reason;
   - a cheap word list catches the obvious first;
   - price sanity flags a ₦0 item or a price above a ceiling.
-  Anything flagged waits in a **review queue** in the operator console instead of going public. The alternatives (a dedicated image-safety service, which cannot judge scams or counterfeits; or people only, which does not scale) are recorded in decision 0036.
+  On a first publish, anything flagged waits in a **review queue** in the operator console instead of going public (a page from an agent-verified business only when flagged); later edits stay up unless blocked. One person in operations staffs the queue part-time at pilot scale, aiming at 4 working hours. The alternatives (a dedicated image-safety service, which cannot judge scams or counterfeits; or people only, which does not scale) are recorded in decision 0036.
 - **Prohibited categories**, from a list Taskiem publishes:
   - weapons, drugs, counterfeit goods;
   - "investment" and "doubling" schemes;
@@ -582,11 +582,8 @@ The build order, milestones and gate for v1 are Phase 5 of the [build plan](buil
 
 **Still open:**
 
-1. **Field agents:**
-   - staff, or independent and paid per business?
-   - do partners (cooperatives, traders' associations) run agents?
-   - is there commission?
-2. **Moderation:** the AI layer with a human review queue (proposed in [7.4](#74-content-and-moderation)), a dedicated image service, or people only? Who staffs the review queue?
+1. ~~**Field agents**~~ (answered 2026-10-20, decision 0036, 15): a contracted pilot team paid a base and a bonus per activated business, never per sign-up, with a clawback; partners after the pilot.
+2. ~~**Moderation**~~ (answered 2026-10-20, decision 0036, 13): the word list, price check and model check with the review queue, staffed part-time by operations at pilot scale.
 3. **The domain platform integration:**
    - its API (search, register, DNS, renew, transfer);
    - whose name the domain is registered in;
@@ -595,7 +592,7 @@ The build order, milestones and gate for v1 are Phase 5 of the [build plan](buil
 4. **The preview domain:** which registrable domain previews and fallbacks use (after the trademark search, L3).
 5. **The name** of the feature as owners and customers see it. *Storefront* is a working name; it could share a brand with the domain platform.
 6. **Plans:** the prices, SMS allowances and a trial.
-7. **Refunds** when a paid order is declined: automatic through the provider where possible, or always by the owner?
+7. ~~**Refunds**~~ (answered 2026-10-20, decision 0036, 14): the owner confirms, Taskiem refunds in full through the business's Paystack connection; a booking form may keep the deposit when the customer cancels.
 
 ## 14. Where the ideas come from
 

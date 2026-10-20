@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -27,6 +29,9 @@ type fakePay struct {
 	mu      sync.Mutex
 	created map[string]storefront.PaymentRequest
 	paid    map[string]bool
+	// refunded counts refunds per payment; refuse makes them fail.
+	refunded map[string]int
+	refuse   string
 }
 
 func (f *fakePay) Create(_ context.Context, _ uuid.UUID, _ string, r storefront.PaymentRequest) (string, string, error) {
@@ -46,6 +51,22 @@ func (f *fakePay) Verify(_ context.Context, _ uuid.UUID, _ string, ref string) (
 }
 
 func (f *fakePay) pay(ref string) { f.mu.Lock(); f.paid[ref] = true; f.mu.Unlock() }
+
+func (f *fakePay) Refund(_ context.Context, _ uuid.UUID, _ string, ref, _ string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.refuse != "" {
+		return "", fmt.Errorf("paystack: %s: %w", f.refuse, effects.ErrFatal)
+	}
+	if f.refunded == nil {
+		f.refunded = map[string]int{}
+	}
+	f.refunded[ref]++
+	if f.refunded[ref] > 1 {
+		return "already", nil
+	}
+	return "pending", nil
+}
 
 type world struct {
 	t      *testing.T
@@ -284,6 +305,11 @@ func TestOrderDeclinedAndPaidAtOnce(t *testing.T) {
 	w.decide(ref, "decide", "rejected")
 	if o = w.order(ref); o.Status != "refund_due" {
 		t.Fatalf("declined after paying: %+v", o)
+	}
+	// The owner is asked; approving refunds it through the provider.
+	w.decide(ref, "ask_refund", "approved")
+	if o = w.order(ref); o.Status != "refunded" || w.pay.refunded[storefront.PaymentKey(o.ID)] != 1 {
+		t.Fatalf("refunded: %+v %v", o, w.pay.refunded)
 	}
 
 	// Unpaid past its time: expired, and no run.

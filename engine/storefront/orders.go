@@ -42,6 +42,9 @@ type Payments interface {
 	Create(ctx context.Context, tenant uuid.UUID, connection string, r PaymentRequest) (url, providerRef string, err error)
 	// Verify reports "paid", "pending" or "failed", and what was paid.
 	Verify(ctx context.Context, tenant uuid.UUID, connection, providerRef string) (status string, paidKobo int64, err error)
+	// Refund returns a payment in full; a second refund of the same
+	// payment reports the first.
+	Refund(ctx context.Context, tenant uuid.UUID, connection, providerRef, note string) (status string, err error)
 }
 
 // PaymentRequest is one checkout page.

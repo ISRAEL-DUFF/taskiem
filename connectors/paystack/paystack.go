@@ -4,6 +4,7 @@ package paystack
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -34,6 +35,8 @@ func New(o Options) *connector.Connector {
 		"verify_transfer":        connector.ActionFunc(c.verifyTransfer),
 		"verify_charge":          connector.ActionFunc(c.verifyCharge),
 		"initialize_transaction": connector.ActionFunc(c.checkout),
+		"refund_transaction":     connector.ActionFunc(c.refund),
+		"refund_status":          connector.ActionFunc(c.refundStatus),
 	}}
 }
 
@@ -162,6 +165,75 @@ func (c *client) verifyCharge(ctx context.Context, req connector.Request) (conne
 	}
 	d := env.Data
 	return connector.Response{Output: map[string]any{"reference": d["reference"], "amount": d["amount"], "status": d["status"], "currency": d["currency"]}}, nil
+}
+
+// refund refunds a payment in full (Paystack's POST /refund, no amount).
+// Paystack refuses to refund a payment twice; that refusal is reported as
+// the refund already made (status "already"), so a retry never pays twice.
+func (c *client) refund(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	ref, _ := in["reference"].(string)
+	if ref == "" {
+		return connector.Response{}, fmt.Errorf("refund_transaction needs a reference: %w", effects.ErrFatal)
+	}
+	body := map[string]any{"transaction": ref}
+	for _, k := range []string{"customer_note", "merchant_note"} {
+		if v, ok := in[k].(string); ok && v != "" {
+			body[k] = v
+		}
+	}
+	var env envelope
+	err := c.do(ctx, req, http.MethodPost, "/refund", body, &env)
+	if err != nil && connector.StatusOf(err) == http.StatusBadRequest && alreadyRefunded(errBody(err)) {
+		return connector.Response{Output: map[string]any{"reference": ref, "status": "already"}}, nil
+	}
+	if err != nil && connector.StatusOf(err) == http.StatusBadRequest {
+		// Not enough balance, a payment not refundable: retrying will not help.
+		return connector.Response{}, fmt.Errorf("paystack: %s: %w", paystackMessage(err), effects.ErrFatal)
+	}
+	if err != nil {
+		return connector.Response{}, err
+	}
+	if !env.Status {
+		return connector.Response{}, fmt.Errorf("paystack: %s: %w", env.Message, effects.ErrFatal)
+	}
+	out := map[string]any{"reference": ref, "status": env.Data["status"], "amount": env.Data["amount"]}
+	if id, ok := env.Data["id"]; ok {
+		out["refund_id"] = id
+	}
+	return connector.Response{Output: out}, nil
+}
+
+// refundStatus is refund_transaction's reconcile: a payment shown as
+// reversed was refunded; one that was not is not found, so the refund is
+// sent (again).
+func (c *client) refundStatus(ctx context.Context, req connector.Request) (connector.Response, error) {
+	ref, _ := req.Input["reference"].(string)
+	var env envelope
+	err := c.do(ctx, req, http.MethodGet, "/transaction/verify/"+url.PathEscape(ref), nil, &env)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	st, _ := env.Data["status"].(string)
+	if !strings.Contains(st, "reversed") {
+		return connector.Response{}, connector.ErrNotFound
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "status": st}}, nil
+}
+
+func alreadyRefunded(body string) bool {
+	b := strings.ToLower(body)
+	return strings.Contains(b, "fully reversed") || strings.Contains(b, "already been refunded") || strings.Contains(b, "pending refund") ||
+		strings.Contains(b, "refund already")
+}
+
+// paystackMessage is the message of Paystack's error body.
+func paystackMessage(err error) string {
+	var e envelope
+	if json.Unmarshal([]byte(errBody(err)), &e) == nil && e.Message != "" {
+		return e.Message
+	}
+	return "refused"
 }
 
 func isNotFound(err error) bool {

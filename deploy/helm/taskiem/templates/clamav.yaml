@@ -1,0 +1,96 @@
+{{- if .Values.clamav.enabled }}
+{{- $c := .Values.clamav }}
+{{- $name := printf "%s-clamav" (include "taskiem.fullname" .) }}
+# The malware scanner for files sent in forms (docs/forms.md#files): a
+# ClamAV daemon only Taskiem's api pods reach (TASKIEM_CLAMD_ADDR). Its
+# freshclam fetches signature updates from the ClamAV mirrors, into an
+# emptyDir: a new pod downloads them before it is ready.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  replicas: {{ $c.replicas }}
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: clamav
+  template:
+    metadata:
+      labels:
+        {{- include "taskiem.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: clamav
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: clamav
+          image: "{{ $c.image }}:{{ $c.tag }}"
+          securityContext:
+            allowPrivilegeEscalation: false
+          ports:
+            - name: clamd
+              containerPort: 3310
+          readinessProbe:
+            exec: { command: ["clamdcheck.sh"] }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 20
+          livenessProbe:
+            exec: { command: ["clamdcheck.sh"] }
+            initialDelaySeconds: 600
+            periodSeconds: 60
+          resources:
+            {{- toYaml $c.resources | nindent 12 }}
+          volumeMounts:
+            - { name: db, mountPath: /var/lib/clamav }
+      volumes:
+        - name: db
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  selector:
+    {{- include "taskiem.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+  ports:
+    - name: clamd
+      port: 3310
+      targetPort: clamd
+{{- if .Values.networkPolicy.enabled }}
+---
+# Only Taskiem's api pods (which scan form files) may send it files: never
+# the public host.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: clamav
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "taskiem.selectorLabels" . | nindent 14 }}
+            matchExpressions:
+              - { key: app.kubernetes.io/component, operator: In, values: [api, all] }
+      ports: [{ port: 3310 }]
+{{- end }}
+{{- end }}

@@ -83,6 +83,10 @@ describe("a form's settings", () => {
     // Blank is the full price; paying at the appointment drops the online options.
     expect(actionRequest("booking", { ...f, deposit: "" }).options).toEqual({ connection: "shop" });
     expect(actionRequest("booking", { ...f, payment: "none", pickup: true })).toEqual({ enabled: true, label: "Book", payment: "none", options: {} });
+    // Keeping the deposit on a customer's cancellation, only when paying online.
+    expect(actionForm({ ...booking, options: { cancel_refund: "keep_deposit" } }).keepDeposit).toBe(true);
+    expect(actionRequest("booking", { ...f, keepDeposit: true }).options.cancel_refund).toBe("keep_deposit");
+    expect(actionRequest("booking", { ...f, keepDeposit: true, payment: "none" }).options).toEqual({});
   });
 
   it("holds a deposit to 1 to 100 per cent", () => {
@@ -128,7 +132,7 @@ describe("order statuses", () => {
     expect(ordersPath("")).toBe("/v1/storefront/orders?status=open");
     expect(ordersPath("all")).toBe("/v1/storefront/orders");
     expect(ordersPath("refund_due")).toBe("/v1/storefront/orders?status=refund_due");
-    expect(ORDER_FILTERS.map((f) => f.label)).toEqual(["Open", "All", "Completed", "Declined", "Expired", "Refund due", "New prices to confirm", "Cancelled", "No-show"]);
+    expect(ORDER_FILTERS.map((f) => f.label)).toEqual(["Open", "All", "Completed", "Declined", "Expired", "Refund due", "New prices to confirm", "Cancelled", "No-show", "Refunded"]);
   });
 
   it("labels the booking and price statuses", () => {
@@ -194,7 +198,7 @@ describe("an order as the list reads it", () => {
   });
 
   it("says what to refund", () => {
-    expect(refundLine(450000)).toBe("Refund ₦4,500 to the customer in Paystack.");
+    expect(refundLine(450000)).toBe("₦4,500 is due back to the customer. Refund it here through Paystack, or refund it yourself in Paystack.");
   });
 });
 
