@@ -11,8 +11,15 @@
   }
   var site = document.querySelector("[data-site]");
   if (site) {
-    var anc = location.ancestorOrigins && location.ancestorOrigins[0];
-    if (!anc && document.referrer) { try { anc = new URL(document.referrer).origin; } catch (e) {} }
+    var loc = window.location;
+    var anc = loc.ancestorOrigins && loc.ancestorOrigins[0];
+    if (!anc && document.referrer) {
+      try {
+        anc = new window.URL(document.referrer).origin;
+      } catch {
+        anc = ""; // no usable referrer: the site is left unset
+      }
+    }
     if (anc) site.value = anc;
   }
   var last = 0;
@@ -21,7 +28,7 @@
     if (h !== last) { last = h; send({ type: "form:height", height: h }); }
   }
   height();
-  if (window.ResizeObserver) new ResizeObserver(height).observe(document.body);
+  if (window.ResizeObserver) new window.ResizeObserver(height).observe(document.body);
   else window.addEventListener("resize", height);
   var ref = el.getAttribute("data-submitted");
   if (ref) send({ type: "form:submitted", reference: ref });
