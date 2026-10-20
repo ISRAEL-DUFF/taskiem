@@ -40,9 +40,9 @@ type Case struct {
 
 var difficulties = []string{"easy", "medium", "hard"}
 
-var stepTypes = []string{"connector", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "approval"}
+var stepTypes = []string{"connector", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "approval", "form"}
 
-var triggerTypes = []string{"webhook", "schedule", "connector_event", "polling", "database_change", "manual", "whatsapp", "ussd", "email", "subflow"}
+var triggerTypes = []string{"webhook", "schedule", "connector_event", "polling", "database_change", "manual", "whatsapp", "ussd", "email", "subflow", "storefront", "form"}
 
 // check reports what is wrong with a case's own shape.
 func (c *Case) check() error {

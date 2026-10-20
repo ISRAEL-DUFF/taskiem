@@ -26,6 +26,9 @@ func TestDescribeInLanguages(t *testing.T) {
 		    "default":{"steps":[{"id":"h","type":"http","config":{"method":"GET","url":"=env.u","class":"read"}}]}}},
 		  {"id":"t","type":"transform","needs":["b"],"when":"=true","config":{"output":{}}}]}`,
 		`{"schema":"wd/v1","id":"wf_b","version":1,"name":"b","trigger":{"type":"manual"},"steps":[{"id":"t","type":"transform","config":{"output":{}}}]}`,
+		formDoc("members", `{"phone":"=trigger.body.phone"}`, `"timeout":"72h"`),
+		formDoc("link", `{"email":"=trigger.body.email"}`, `"on_timeout":"fail"`),
+		formDoc("public", `{"role":"credit_officer"}`, `"on_timeout":"fail"`),
 	}
 	triggers := []string{"manual", "whatsapp", "ussd", "email", "database_change", "subflow"}
 	crons := []string{"0 10 * * 5", "30 8 * * 1-5", "0 20 * * *", "0 9 25 * *", "0 9 L * *", "*/15 * * * *", "5 */3 * * *", "0 * * * *", "7 * * * *",

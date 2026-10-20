@@ -16,7 +16,7 @@ import (
 // real orchestrator over an in-memory history, every task step mocked, so
 // nothing is sent anywhere. It runs a generated happy path (every step
 // succeeds with an output sampled from its action's output schema, every
-// approval approved) and the cases the model proposed.
+// approval approved, every form answered) and the cases the model proposed.
 
 // TestResult is one dry-run case's outcome.
 type TestResult struct {
@@ -42,6 +42,7 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 		Mocks:     map[string]wdtest.Mocks{},
 		Approvals: map[string]wdtest.ApprovalMock{},
 		Signals:   map[string]wdtest.SignalMock{},
+		Forms:     map[string]wdtest.FormMock{},
 		Expect:    wdtest.Expect{Status: "completed"},
 	}
 	types := map[string]any{}
@@ -96,6 +97,16 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}
 			case "signal":
 				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{}}
+			case "form":
+				answers := map[string]any{}
+				if st.Form != nil {
+					// Through JSON, so numbers are float64 as sample reads them.
+					raw, _ := json.Marshal(st.Form.Schema)
+					if a, ok := sample(rawAny(raw), types, nil, 0).(map[string]any); ok {
+						answers = a
+					}
+				}
+				c.Forms[st.ID] = wdtest.FormMock{Answers: answers}
 			}
 			for _, sub := range st.Children() {
 				walk(sub)

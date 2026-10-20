@@ -13,7 +13,7 @@ import { Badge, ErrorBox, Field, JsonInput, Modal, Skeleton, fmtTime, useAction,
 import { AIBuilder } from "./AIBuild";
 
 const nodeTypes = { step: StepNode };
-const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "signal", "wait", "branch", "parallel", "foreach"];
+const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
 
 interface Loaded {
   workflow: WorkflowSummary;

@@ -66,6 +66,13 @@ describe("timeline", () => {
     expect(rows.map((r) => [r.id, r.status, r.attempts])).toEqual([["pay", "completed", 2], ["ok", "waiting", 0]]);
     expect(rows[1]?.waitingFor).toBe("approval by cfo");
   });
+  it("says a form step waits for the form", () => {
+    const rows = timeline([
+      { seq: 2, type: "StepScheduled", step_id: "ask", attempt: 1, payload: { kind: "signal", event: "form.submitted", form: { title: "Bank" } }, recorded_at: "2026-10-05T10:00:00Z", origin: "decide" },
+      { seq: 3, type: "StepScheduled", step_id: "paid", attempt: 1, payload: { kind: "signal", event: "paystack@1:charge" }, recorded_at: "2026-10-05T10:00:00Z", origin: "decide" },
+    ]);
+    expect(rows.map((r) => [r.status, r.waitingFor])).toEqual([["waiting", "the form to be filled in"], ["waiting", "signal paystack@1:charge"]]);
+  });
   it("redacts sealed values", () => {
     expect(redact({ bvn: { $pii: "bvn", ct: "x", subject: "s" }, n: [1] })).toEqual({ bvn: "🔒 bvn", n: [1] });
   });

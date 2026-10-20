@@ -73,7 +73,7 @@ Answer with JSON matching the response schema:
 - assumptions: everything the reviewer must confirm or create (connection names, variables, secrets, payload fields).
 - workflow: the complete wd/v1 document serialised as a JSON string. It must be valid against the schema below and the rules that follow.
 - template, template_params: see "Starting templates" below; empty strings when no template is used.
-- tests: up to 3 wd-test/v1 cases (each serialised as a JSON object string with "trigger", "mocks", "approvals", "signals" and "expect"; no "name" inside: the name goes in the name field). Mock every connector, http and code step; decide every approval; deliver every signal.
+- tests: up to 3 wd-test/v1 cases (each serialised as a JSON object string with "trigger", "mocks", "approvals", "signals", "forms" and "expect"; no "name" inside: the name goes in the name field). Mock every connector, http and code step; decide every approval; deliver every signal; answer every form step ("forms": {"<step id>": {"answers": {...}}} or {"timeout": true}).
 
 # wd/v1 rules
 
@@ -85,10 +85,11 @@ Answer with JSON matching the response schema:
 6. Connector steps put "connector" (an exact ref such as "paystack@1" from the catalogue), "action" (an action of that connector), "input" (matching the action's input schema), and optionally "connection", "effect" ({"idempotency_seed": expression of a business id}), "compensate" at the step level. Other step types keep their settings in "config".
 7. http steps with POST, PUT, PATCH or DELETE must set config.class (idempotent_write, reconcilable_write or unsafe_write).
 8. Any step that moves money (a write action of a payments connector) must come after an "approval" step it needs, unless the goal explicitly rules approval out; an approval step uses either {"policy": "<one of the tenant's policies>", "subject": {...}} or {"role": "...", "count": n}. Gate the payment with "when": "=steps.<approval>.output.decision == 'approved'".
-9. Approval outputs {decision, decided_by}; signal outputs the signal payload; branch outputs {path, steps}; foreach outputs a list of objects keyed by body step id; transform outputs its config.output.
+9. Approval outputs {decision, decided_by}; signal outputs the signal payload; form outputs the answers plus respondent ({timed_out: true} after a timeout with on_timeout continue); branch outputs {path, steps}; foreach outputs a list of objects keyed by body step id; transform outputs its config.output.
 10. Durations are like 90s, 15m, 24h, 7d.
 11. Use only connectors and actions from the catalogue. Prefer the tenant's existing connections (by name) and variables (by name). Keep the workflow as small as the goal allows.
 12. Data tables (the context's data_tables, with their columns) are read and written with xenibase@1 actions (read_rows, insert_rows, upsert_rows, update_rows, delete_rows) on the connection named data_tables, with input.table the table's name; every table also has id, created_at and updated_at.
+13. Forms: when people fill something in to start the work (a form, an application, an intake, a registration), use a "form" trigger ({"title", "access": public|link|members, optional "pages"}); its fields are inputs.schema, with display hints in "x-form", and trigger.body holds the answers. To ask someone for answers mid-run, use a "form" step ({"title", "to": {"phone"|"email": expression} or {"role"}, "schema"}). Never ask for passwords, PINs, card details or one-time codes; mark BVN, NIN and account number fields with "x-pii" (bvn, nin, account_number), and such forms are not public without "verify".
 
 # Starting templates
 
