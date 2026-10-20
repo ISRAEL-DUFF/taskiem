@@ -35,6 +35,7 @@ import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
 import { get } from "./api";
+import { AgentApp, AgentWorkspace, useAgentSession } from "./pages/Agent";
 
 export function App() {
   return (
@@ -93,6 +94,7 @@ function InviteeHome() {
 function Shell() {
   const { me } = useAuth();
   const loc = useLocation();
+  const agentSession = useAgentSession();
   // Signed-out pages are a single card; it is the page's main landmark.
   const alone = (page: ReactNode) => <main className="signed-out">{page}</main>;
   // Password recovery works signed in or out.
@@ -109,6 +111,10 @@ function Shell() {
   if (me.enrol_passkey) return alone(<EnrolPasskey />);
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || "/workflows"} replace />;
   if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
+  // Field agents (docs/agents.md): their own pages, and a business's page
+  // and tables while they work in it.
+  if (loc.pathname === "/agent" || loc.pathname.startsWith("/agent/")) return <AgentApp />;
+  if (agentSession) return <AgentWorkspace session={agentSession} />;
   return (
     <OnboardingProvider>
       <SignedIn />

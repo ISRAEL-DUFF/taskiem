@@ -550,3 +550,30 @@ button.small { padding: 2px 8px; font-size: 0.85em; box-shadow: none; }
   .form-editor { grid-template-columns: 1fr; }
   .form-editor .form-preview { position: static; max-height: none; }
 }
+
+/* Field agents (/agent, docs/agents.md): one column for cheap phones, big buttons. */
+.agent-app { max-width: 560px; margin: 0 auto; padding: 0 16px 40px; }
+.agent-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
+.agent-top .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; color: var(--text); text-decoration: none; }
+.agent-big { display: flex; width: 100%; padding: 12px 16px; font-size: 16px; margin: 12px 0; }
+.agent-qr { display: block; margin: 12px auto; width: 240px; height: 240px; image-rendering: pixelated; background: #fff; padding: 8px; border-radius: 8px; }
+.agent-list { list-style: none; margin: 0; padding: 0; }
+.agent-list .card { padding: 14px 16px; }
+.agent-list .button { margin-top: 8px; }
+.agent-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.agent-code { font-size: 44px; font-weight: 750; letter-spacing: 0.18em; text-align: center; font-variant-numeric: tabular-nums; padding: 14px 0; border: 2px dashed var(--border-strong); border-radius: var(--radius); margin: 12px 0; }
+.agent-text { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; align-items: baseline; font-size: 18px; }
+.agent-text .hint { font-size: 13px; }
+.agent-photo { display: block; max-width: 100%; max-height: 260px; border-radius: var(--radius-sm); margin: 0 0 14px; }
+.agent-done { border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: color-mix(in srgb, var(--ok) 8%, var(--panel)); }
+.agent-work { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+.agent-work .tabs { margin: 12px 0 0; }
+.agent-banner {
+  position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  margin: 0 -16px; padding: 10px 16px; background: var(--nav-bg); color: #fff;
+}
+.agent-banner-text { display: flex; flex-direction: column; min-width: 0; }
+.agent-banner-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-banner-text span { font-size: 13px; color: var(--nav-text); font-variant-numeric: tabular-nums; }
+.agent-banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.main.agent-main { padding: 16px 0 48px; }

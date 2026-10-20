@@ -159,3 +159,29 @@ export interface AuditEntry {
   detail: Record<string, unknown>;
   at: string;
 }
+
+/** A field agent, with what they have done (docs/agents.md). */
+export interface OpsAgent {
+  id: string;
+  code: string;
+  name: string;
+  phone: string;
+  region: string;
+  status: "active" | "suspended" | "retired";
+  checks: { id_type?: string; id_checked?: boolean; referee_name?: string; referee_phone?: string };
+  registered_by: string;
+  created_at: string;
+  businesses: number;
+  published: number;
+  verified: number;
+  live_sessions: number;
+}
+
+export interface OpsAgentBusiness {
+  tenant_id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  published: boolean;
+  verified: boolean;
+}

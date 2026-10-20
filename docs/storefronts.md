@@ -1,6 +1,6 @@
 # Storefronts
 
-A storefront is a business's one-page public page: who it is, what it sells, and how to reach it ([spec](spec/storefronts.md), decision 0036). This is Phase 5, S2 and S3: the page, its catalogue, and ordering, questions and call-backs. Booking comes with S4; setting up from chat and with field agents with S5; the business's own domain and embedding with S6.
+A storefront is a business's one-page public page: who it is, what it sells, and how to reach it ([spec](spec/storefronts.md), decision 0036). This is Phase 5, S2 and S3: the page, its catalogue, and ordering, questions and call-backs. Booking came with S4 ([below](#bookings)); setting up and running it [from chat](#from-chat) with S5, and field agents later in S5; the business's own domain and embedding with S6.
 
 It is built and off by default: pages are served only by the [public host](public-host.md), and the web app's **Storefront** page needs `storefront.manage` (owners and admins).
 
@@ -214,6 +214,31 @@ A booking run's `trigger.body` also holds `booking` (`service_id`, `service`, `s
 ## QR code and printable card
 
 The web app shows the storefront's address as a QR code (`GET /v1/storefront/qr`, SVG or PNG) and prints an A6 card with the name, the QR code, the address and the phone, for the stall, the counter or the bag.
+
+The public host serves the same code as `https://<host>/qr.png` on every published storefront's host: a PNG of the page's preview address (`<slug>.<preview domain>`, whichever of the storefront's hosts is asked), cacheable for an hour, holding nothing but the address. A draft has none. That is the image the chat sends.
+
+## From chat
+
+The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefronts.md#51-the-owner-sets-up-from-chat) and [6.8](spec/storefronts.md#68-managing-it-from-chat)). Every command needs `storefront.manage`; those that change the catalogue's rows also need `table.edit`. Every change is shown and waits for **yes** (**no** or `cancel` drops it), goes through the same code as the web app's, and is audited with `channel` set to the chat.
+
+| Message | What happens |
+| --- | --- |
+| `make my page` | With no storefront yet, five questions, one at a time: the business's name, one line of what it sells, the area or address, opening hours, a photo for the top of the page (`skip` leaves any but the name out). Each answer is checked as publishing checks it. Then the draft is saved at the first free address the name gives (`adas-kitchen`, then `adas-kitchen-yaba`, then `adas-kitchen-2`…), a **products** table (`name`, `price` in naira, `photo`, `available`, `stock`) is made in the organisation's Xenibase project and mapped as the catalogue, and Taskiem shows the summary and asks to publish. Where data tables are not available, it says so and the page is saved without a catalogue. On **yes**: the catalogue copy is refreshed, the draft published, and Taskiem sends the link, the QR code image and a status text to paste (`Order from Ada's Kitchen here: https://…`) |
+| `my page`, `make my page` (once there is one) | The link, whether it is a draft, published or closed, and today's orders |
+| `publish` | Publishes the draft as it is, on **yes** |
+| `qr` | The QR code image, its address, and where the printable card is in the web app |
+| `add product Jollof rice 2000`, or a photo captioned `Jollof rice ₦2,000` | Prices are read forgivingly (`2000`, `₦2,000`, `N2000`, `2k`, `2.5k`). Shown, then added to the catalogue table on **yes**, the photo stored as an upload is (resized, stripped, moderated: a rejected photo adds nothing) and its id written to the photo column; the copy is refreshed. A storefront without a catalogue gets the products table then. A name already there is refused with a hint to change its price |
+| `price <item> <price>`, `hide <item>`, `show <item>`, `stock <item> <n>` | The item is found by name, case-insensitively: the exact name, else the one the words start, else one containing them; when several match, a numbered list to pick from. Shown old to new, then written by row id on **yes** to the mapped columns (an owner's own table keeps its own column names; a mapping without the column is refused), and the copy refreshed. `hide` marks the item unavailable |
+| `hours mon-sat 8-6` | Opening hours, read forgivingly: `mon-sat 8-6`, `daily 9am-9pm`, `weekdays 8:30-17:30, weekends 2-6`, `mon-fri 9-1 2-6`, `mon-sat 8-6, closed sunday`, `open 24 hours`. Times without am or pm are a day's opening (`8-6` is 08:00 to 18:00). Saved in the draft, and a published page is published again |
+| `add service Haircut 30 2000` | The name, the minutes (`30`, `45min`, `1h`) and the price. A storefront without a services table gets a **services** table (`name`, `price`, `duration_minutes`, `capacity`), mapped for [bookings](#bookings) with the availability kept; the service is added, the copies refreshed and a published page published again. Customers book it once the booking form is on |
+| `close shop`, `close shop back on monday`, `close shop today` | [Close](#editing-and-publishing) with that message (or the default one). `close shop today` closes with "Closed today. We open again tomorrow."; nothing reopens it by itself: the owner sends `open shop` |
+| `open shop` | Reopen |
+| `orders` | The ten newest open orders, questions and call-backs: reference, items (or the service and time), total, status in words, the customer masked |
+| `order AK-7QX4KD` | One order, the customer masked |
+| `order AK-7QX4KD ready` | For an accepted or paid order: texts the customer that it is ready (by SMS, and email when they gave one), and leaves its status: it is not done until it is collected |
+| `order AK-7QX4KD delivered` (or `collected`, `done`) | Completes it, as the order workflow's "mark it delivered or collected" step does. A run still waiting on that step finds it completed |
+
+Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), at most 10 MB, held in memory only. A photo sent while something else is being answered is refused.
 
 ## API
 

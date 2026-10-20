@@ -297,7 +297,7 @@ Most businesses are signed up in person. A **field agent** is someone who visits
 | --- | --- |
 | Who | People an operator registers as agents, after BVN or NIN checks and a referee or guarantor: for the pilot, a small contracted team in one market; partners (cooperatives, traders' associations) after it |
 | Role | A platform-level `agent` identity, apart from tenant roles: it can create a business (tenant), set up its storefront and catalogue, and publish, only during an **onboarding session** for that business |
-| Consent | The owner's WhatsApp number receives a code; the session starts only when the owner gives it to the agent. The owner then owns the tenant; the agent is never a member of it |
+| Consent | The agent's screen shows a code; the session starts only when the owner sends it to Taskiem from their own WhatsApp number (decision 0036, 16). The owner then owns the tenant; the agent is never a member of it |
 | Handover | Publishing (or 24 hours) ends the session; after that the agent cannot see or change the business. The owner can invite the agent back (a support visit) for a time-limited session |
 | Accountability | Every business records its agent; every action of an onboarding session is in the business's audit chain under the agent's name; operators see agents' businesses, their verification outcomes and reports against them |
 | Verification | An agent attests that they met the business at its address and saw its owner (with a photo of the stall, location attached), which counts as business verification ([7.1](#71-verification)) |

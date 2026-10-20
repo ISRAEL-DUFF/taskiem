@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"rsc.io/qr"
 
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -45,9 +44,7 @@ func (s *Server) storefrontOut(sf storefront.Storefront) storefrontOut {
 	out := storefrontOut{Storefront: sf, Templates: storefront.Templates, Accents: storefront.Accents}
 	// Where the published version serves: a slug changed in the draft
 	// serves only once published.
-	if d := s.previewDomain(); d != "" && sf.PublishedSlug != nil {
-		out.PreviewURL = "https://" + *sf.PublishedSlug + "." + d
-	}
+	out.PreviewURL = storefront.PreviewURL(sf.PublishedSlug, s.previewDomain())
 	return out
 }
 
@@ -147,7 +144,12 @@ func (s *Server) publishStorefront(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.storefrontOut(sf))
+	out := s.storefrontOut(sf)
+	if p := principalFrom(r.Context()); p.Agent != nil && p.Agent.Kind == "onboarding" {
+		// Published: the onboarding is done (agents.go).
+		s.agentPublished(r.Context(), p, sf.Draft.Name, out.PreviewURL)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) closeStorefront(w http.ResponseWriter, r *http.Request) {
@@ -372,30 +374,50 @@ func (s *Server) storeStorefrontImage(r *http.Request) (storefront.Media, error)
 	if err != nil || len(data) > media.MaxImageBytes {
 		return storefront.Media{}, fmt.Errorf("%w: an image is at most %d MB", errBadRequest, media.MaxImageBytes>>20)
 	}
-	p := principalFrom(r.Context())
-	img, err := s.Media.PutImage(r.Context(), p.TenantID, data)
-	if errors.Is(err, media.ErrImage) {
-		return storefront.Media{}, fmt.Errorf("%w: %s", errBadRequest, plainError(err))
+	m, err := s.putStorefrontImage(r.Context(), principalFrom(r.Context()), data, func(tx pgx.Tx, m storefront.Media) error {
+		return auditTx(r, tx, "storefront.media_add", m.ID.String(), map[string]any{"moderation": m.Moderation})
+	})
+	switch {
+	case errors.Is(err, media.ErrImage):
+		return m, fmt.Errorf("%w: %s", errBadRequest, plainError(err))
+	case errors.Is(err, errImageRejected):
+		return m, fmt.Errorf("%w: this image was not accepted for a public page", errBadRequest)
 	}
+	return m, err
+}
+
+// errImageRejected: the moderator refused an image for a public page.
+var errImageRejected = errors.New("the image was not accepted for a public page")
+
+// putStorefrontImage stores an image for the storefront, from the web app
+// or a chat (a logo or a product photo): resized and stripped
+// (media.PutImage, media.ErrImage when it is not a usable image), checked
+// by the moderator when there is one, and recorded, audited by audit. A
+// rejected image is recorded, and errImageRejected returned with it.
+func (s *Server) putStorefrontImage(ctx context.Context, p *Principal, data []byte, audit func(pgx.Tx, storefront.Media) error) (storefront.Media, error) {
+	if s.Media == nil {
+		return storefront.Media{}, errors.New("storage for photos is not configured")
+	}
+	img, err := s.Media.PutImage(ctx, p.TenantID, data)
 	if err != nil {
 		return storefront.Media{}, err
 	}
 	verdict, reason := "", ""
 	if s.Moderator != nil {
-		if verdict, reason, err = s.Moderator.Check(r.Context(), p.TenantID, img); err != nil {
+		if verdict, reason, err = s.Moderator.Check(ctx, p.TenantID, img); err != nil {
 			return storefront.Media{}, err
 		}
 	}
 	var m storefront.Media
-	err = s.tx(r, func(tx pgx.Tx) error {
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		var err error
-		if m, err = storefront.AddMedia(r.Context(), tx, p.TenantID, img, verdict, reason, p.Actor()); err != nil {
+		if m, err = storefront.AddMedia(ctx, tx, p.TenantID, img, verdict, reason, p.Actor()); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "storefront.media_add", m.ID.String(), map[string]any{"moderation": m.Moderation})
+		return audit(tx, m)
 	})
 	if err == nil && m.Moderation == "rejected" {
-		err = fmt.Errorf("%w: this image was not accepted for a public page", errBadRequest)
+		err = errImageRejected
 	}
 	return m, err
 }
@@ -464,34 +486,22 @@ func (s *Server) storefrontQR(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: the public host has no preview domain (TASKIEM_PUBLIC_DOMAINS)", errConflict))
 		return
 	}
-	code, err := qr.Encode(u, qr.M)
+	w.Header().Set("Cache-Control", "no-store")
+	if r.URL.Query().Get("format") == "png" {
+		png, err := storefront.QRPNG(u)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(png)
+		return
+	}
+	svg, err := storefront.QRSVG(u)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	if r.URL.Query().Get("format") == "png" {
-		code.Scale = 12
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(code.PNG())
-		return
-	}
 	w.Header().Set("Content-Type", "image/svg+xml")
-	_, _ = io.WriteString(w, qrSVG(code))
-}
-
-// qrSVG draws a code as SVG with a four-module quiet zone.
-func qrSVG(c *qr.Code) string {
-	n := c.Size + 8
-	var b strings.Builder
-	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" shape-rendering="crispEdges"><rect width="%d" height="%d" fill="#fff"/><path fill="#000" d="`, n, n, n, n)
-	for y := range c.Size {
-		for x := range c.Size {
-			if c.Black(x, y) {
-				fmt.Fprintf(&b, "M%d %dh1v1h-1z", x+4, y+4)
-			}
-		}
-	}
-	b.WriteString(`"/></svg>`)
-	return b.String()
+	_, _ = io.WriteString(w, svg)
 }

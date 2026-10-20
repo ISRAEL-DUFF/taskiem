@@ -152,11 +152,14 @@ func (p *Platform) now() time.Time {
 	return time.Now()
 }
 
-// Message is something to send: Text (with optional Buttons) inside the
-// window, otherwise Template with Vars (and quick-reply Payloads).
+// Message is something to send: Text (with optional Buttons, or as an
+// Image's caption) inside the window, otherwise Template with Vars (and quick-reply Payloads).
 type Message struct {
-	Text     string
-	Buttons  []Button
+	Text    string
+	Buttons []Button
+	// Image, when set, is a photo's public https link, sent with Text as
+	// its caption (and no buttons) inside the window.
+	Image    string
 	Template *Template
 	Vars     map[string]string
 	Payloads []string
@@ -170,7 +173,7 @@ type Message struct {
 // a reply, inside the window.
 func (p *Platform) Send(ctx context.Context, number string, m Message) (string, error) {
 	open := false
-	if m.Text != "" {
+	if m.Text != "" || m.Image != "" {
 		c, err := p.Contact(ctx, number)
 		if err != nil {
 			return "", err
@@ -180,9 +183,12 @@ func (p *Platform) Send(ctx context.Context, number string, m Message) (string, 
 	if open {
 		var id string
 		var err error
-		if len(m.Buttons) > 0 {
+		switch {
+		case m.Image != "":
+			id, err = p.Client.SendImage(ctx, number, m.Image, m.Text)
+		case len(m.Buttons) > 0:
 			id, err = p.Client.SendButtons(ctx, number, m.Text, m.Buttons)
-		} else {
+		default:
 			id, err = p.Client.SendText(ctx, number, m.Text)
 		}
 		if !errors.Is(err, ErrWindowClosed) || m.Template == nil {

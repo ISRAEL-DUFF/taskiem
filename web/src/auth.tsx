@@ -47,3 +47,11 @@ export function useAuth(): Auth {
   if (!a) throw new Error("useAuth outside AuthProvider");
   return a;
 }
+
+/** Inside a field agent's session in a business, the pages see what the
+ * agent may do there rather than what they may do in their own workspace. */
+export function AgentPermissions({ allowed, children }: { allowed: string[]; children: ReactNode }) {
+  const outer = useAuth();
+  const value: Auth = { ...outer, can: (perm) => allowed.includes(perm) };
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}

@@ -208,18 +208,11 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, row
 		body["entities"] = ents
 	}
 	if len(rows) > 0 {
-		kb := make([][]map[string]string, 0, len(rows))
-		for _, r := range rows {
-			row := make([]map[string]string, 0, len(r))
-			for _, b := range r {
-				if b.Data == "" || len(b.Data) > 64 || b.Text == "" {
-					return 0, errors.New("telegram: sendMessage: a button needs text and 1-64 bytes of data")
-				}
-				row = append(row, map[string]string{"text": b.Text, "callback_data": b.Data})
-			}
-			kb = append(kb, row)
+		kb, err := keyboard(rows)
+		if err != nil {
+			return 0, fmt.Errorf("telegram: sendMessage: %w", err)
 		}
-		body["reply_markup"] = map[string]any{"inline_keyboard": kb}
+		body["reply_markup"] = kb
 	}
 	var m struct {
 		MessageID int64 `json:"message_id"`
@@ -231,6 +224,56 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, row
 		return 0, errors.New("telegram: sendMessage: accepted without a message id")
 	}
 	return m.MessageID, nil
+}
+
+// SendPhoto sends a photo by its public https URL (Telegram fetches it)
+// with a caption, its *bold* as entities as in SendMessage, and an inline
+// keyboard of rows when given. It returns the message id.
+func (c *Client) SendPhoto(ctx context.Context, chatID int64, photoURL, caption string, rows [][]InlineButton) (int64, error) {
+	if !strings.HasPrefix(photoURL, "https://") {
+		return 0, errors.New("telegram: sendPhoto: a photo is sent by its https URL")
+	}
+	body := map[string]any{"chat_id": chatID, "photo": photoURL}
+	if strings.TrimSpace(caption) != "" {
+		plain, ents := Bold(caption)
+		body["caption"] = clip(plain, 1024)
+		if ents = clipEntities(ents, 1023); len(ents) > 0 {
+			body["caption_entities"] = ents
+		}
+	}
+	if len(rows) > 0 {
+		kb, err := keyboard(rows)
+		if err != nil {
+			return 0, fmt.Errorf("telegram: sendPhoto: %w", err)
+		}
+		body["reply_markup"] = kb
+	}
+	var m struct {
+		MessageID int64 `json:"message_id"`
+	}
+	if err := c.call(ctx, "sendPhoto", body, &m); err != nil {
+		return 0, err
+	}
+	if m.MessageID == 0 {
+		return 0, errors.New("telegram: sendPhoto: accepted without a message id")
+	}
+	return m.MessageID, nil
+}
+
+// keyboard is an inline keyboard's reply_markup.
+func keyboard(rows [][]InlineButton) (map[string]any, error) {
+	kb := make([][]map[string]string, 0, len(rows))
+	for _, r := range rows {
+		row := make([]map[string]string, 0, len(r))
+		for _, b := range r {
+			if b.Data == "" || len(b.Data) > 64 || b.Text == "" {
+				return nil, errors.New("a button needs text and 1-64 bytes of data")
+			}
+			row = append(row, map[string]string{"text": b.Text, "callback_data": b.Data})
+		}
+		kb = append(kb, row)
+	}
+	return map[string]any{"inline_keyboard": kb}, nil
 }
 
 // RemoveKeyboard takes the inline keyboard off a sent message, so a

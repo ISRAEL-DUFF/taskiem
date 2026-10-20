@@ -110,6 +110,10 @@ func (s *Server) opsRoutes(r chi.Router) {
 		r.Get("/status/incidents", s.opsIncidents)
 		r.Post("/status/incidents", s.opsOpenIncident)
 		r.Post("/status/incidents/{id}/updates", s.opsUpdateIncident)
+		r.Get("/agents", s.opsAgents) // field agents (agents.go)
+		r.Post("/agents", s.opsAddAgent)
+		r.Get("/agents/{id}/businesses", s.opsAgentBusinesses)
+		r.Post("/agents/{id}/{action}", s.opsAgentAction)
 		r.Get("/tenants", s.opsTenants)
 		r.Get("/tenants/{id}", s.opsTenant)
 		r.Get("/audit", s.opsAudit)
@@ -524,6 +528,7 @@ var opsStepUpOps = map[string]bool{
 	"ops.catalogue.review": true, "ops.catalogue.revoke": true,
 	"ops.publisher.verify": true, "ops.publisher.suspend": true, "ops.publisher.reinstate": true,
 	"ops.status.open": true, "ops.status.update": true,
+	"ops.agent.add": true, "ops.agent.suspend": true, "ops.agent.reactivate": true, "ops.agent.retire": true,
 }
 
 func (s *Server) opsStepUpOptions(w http.ResponseWriter, r *http.Request) {

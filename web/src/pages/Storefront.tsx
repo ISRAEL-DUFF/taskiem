@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, NavLink } from "react-router-dom";
-import { ApiError, get, getBlob, post, put, uploadFile } from "../api";
+import { ApiError, currentAgentSession, get, getBlob, post, put, uploadFile } from "../api";
 import { useAuth } from "../auth";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
@@ -662,9 +662,12 @@ function Share({ sf, form }: { sf: SF; form: Form }) {
       <div className="sf-share">
         {qr ? <img className="sf-qr" src={qr} alt={`QR code for ${sf.preview_url}`} width={180} height={180} /> : !error && <Skeleton rows={1} label="Loading the QR code…" />}
         <div className="toolbar">
-          <a className="button" href="/v1/storefront/qr?format=png" download={`${sf.slug}-qr.png`}>
-            Download PNG
-          </a>
+          {/* A plain link carries no agent session header: an agent prints the card instead. */}
+          {!currentAgentSession() && (
+            <a className="button" href="/v1/storefront/qr?format=png" download={`${sf.slug}-qr.png`}>
+              Download PNG
+            </a>
+          )}
           <button disabled={!qr} onClick={print}>
             Print card
           </button>
@@ -745,6 +748,8 @@ function CloseDialog({ onClose, onClosed }: { onClose: () => void; onClosed: (sf
 
 /** The storefront's pages: the page itself, the orders it brings, and its bookings. */
 export function StorefrontTabs() {
+  // A field agent never sees customers' orders or bookings (docs/agents.md).
+  if (currentAgentSession()) return null;
   return (
     <nav className="tabs" aria-label="Storefront">
       <NavLink to="/storefront" end>
