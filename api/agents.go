@@ -29,7 +29,9 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/ops"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -95,6 +97,7 @@ func (s *Server) agentPrincipal(ctx context.Context, p *Principal, header string
 func agentAllowed(method, path string) bool {
 	switch {
 	case strings.HasPrefix(path, "/v1/storefront/orders"), strings.HasPrefix(path, "/v1/storefront/bookings/"),
+		path == "/v1/storefront/appeal", path == "/v1/storefront/verification",
 		path == "/v1/storefront/bookings" && method != http.MethodPut:
 		return false
 	case path == "/v1/storefront", strings.HasPrefix(path, "/v1/storefront/"):
@@ -251,6 +254,17 @@ func consentHash(number, code string) []byte {
 func (s *Server) consentOut(code string, expires time.Time) map[string]any {
 	text := "AGREE " + code
 	out := map[string]any{"code": code, "text": text, "expires_at": expires.UTC()}
+	// On Telegram the link opens the bot with the code; the bot then asks
+	// the owner to share their own number (tgAgentMessage).
+	if s.Telegram != nil && s.Telegram.Config.BotUsername != "" {
+		out["telegram_link"] = "https://t.me/" + s.Telegram.Config.BotUsername + "?start=agree_" + code
+		if png, err := storefront.QRPNG(out["telegram_link"].(string)); err == nil {
+			out["telegram_qr"] = "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+		}
+	}
+	if s.WhatsApp == nil {
+		return out
+	}
 	if n := strings.Trim(s.WhatsApp.Config.DisplayNumber, "+ "); n != "" {
 		out["whatsapp_number"] = s.WhatsApp.Config.DisplayNumber
 		out["link"] = "https://wa.me/" + strings.ReplaceAll(n, " ", "") + "?text=" + url.QueryEscape(text)
@@ -283,11 +297,11 @@ func (s *Server) agentNewBusiness(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: the business's name and the owner's name are needed, each at most 100 characters", errBadRequest))
 		return
 	}
-	if s.WhatsApp == nil {
-		s.fail(w, r, fmt.Errorf("%w: field agents need WhatsApp on this deployment: the owner agrees from their number", errConflict))
+	if s.WhatsApp == nil && s.Telegram == nil {
+		s.fail(w, r, fmt.Errorf("%w: field agents need WhatsApp or Telegram on this deployment: the owner agrees from their phone", errConflict))
 		return
 	}
-	number, err := whatsapp.Normalise(req.OwnerPhone, s.WhatsApp.Config.DefaultCountry)
+	number, err := whatsapp.Normalise(req.OwnerPhone, s.defaultCountry())
 	if err != nil {
 		s.fail(w, r, fmt.Errorf("%w: %w", errBadRequest, err))
 		return
@@ -296,10 +310,12 @@ func (s *Server) agentNewBusiness(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "too many businesses signed up at once; wait a while")
 		return
 	}
-	owner, err := s.WhatsApp.UserOf(ctx, number)
-	if err != nil {
-		s.fail(w, r, err)
-		return
+	owner := uuid.Nil
+	if s.WhatsApp != nil {
+		if owner, err = s.WhatsApp.UserOf(ctx, number); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	newOwner := false
 	if owner == uuid.Nil {
@@ -365,10 +381,6 @@ func (s *Server) agentNewCode(w http.ResponseWriter, r *http.Request) {
 	}
 	if x.Kind != "onboarding" || x.Status != "pending" || x.OwnerNumber == nil {
 		s.fail(w, r, fmt.Errorf("%w: only an onboarding waiting for the owner takes a new code", errConflict))
-		return
-	}
-	if s.WhatsApp == nil {
-		s.fail(w, r, fmt.Errorf("%w: WhatsApp is off on this deployment", errConflict))
 		return
 	}
 	if !s.limiter("agent-code:"+x.ID.String(), 10*time.Minute, 3).Allow() {
@@ -486,8 +498,9 @@ func agentAudit(r *http.Request, tx pgx.Tx, tenant uuid.UUID, a *agentInfo, acti
 func (s *Server) agentPublished(ctx context.Context, p *Principal, business, link string) {
 	var ended bool
 	var number *string
+	var owner uuid.UUID
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT owner_number FROM taskiem_agent_session_get($1, $2)`, p.Agent.Session, p.Agent.ID).Scan(&number); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT owner_number, owner_user FROM taskiem_agent_session_get($1, $2)`, p.Agent.Session, p.Agent.ID).Scan(&number, &owner); err != nil {
 			return err
 		}
 		if err := tx.QueryRow(ctx, `SELECT taskiem_agent_session_end($1, $2, 'published')`, p.Agent.Session, p.TenantID).Scan(&ended); err != nil || !ended {
@@ -500,14 +513,28 @@ func (s *Server) agentPublished(ctx context.Context, p *Principal, business, lin
 		s.Logger.Error("agents: ending an onboarding at publish", "err", err)
 		return
 	}
-	if !ended || number == nil || s.WhatsApp == nil || link == "" {
+	if !ended || number == nil || link == "" {
 		return
 	}
-	// The owner wrote to the platform number to agree, so this is inside
-	// their conversation window.
-	l := s.chooseLang(ctx, p.TenantID, *number, "").Tag
-	if err := s.waSay(ctx, s.WhatsApp, *number, "", tr(l, "agent.page_live", "business", business, "link", link)); err != nil {
-		s.Logger.Warn("agents: telling the owner their page is live", "err", err)
+	// The owner wrote to agree, from WhatsApp (so this is inside their
+	// conversation window) or Telegram: told where they agreed.
+	if s.WhatsApp != nil {
+		if bound, err := s.WhatsApp.UserOf(ctx, *number); err == nil && bound == owner {
+			l := s.chooseLang(ctx, p.TenantID, *number, "").Tag
+			if err := s.waSay(ctx, s.WhatsApp, *number, "", tr(l, "agent.page_live", "business", business, "link", link)); err != nil {
+				s.Logger.Warn("agents: telling the owner their page is live", "err", err)
+			}
+		}
+	}
+	if s.Telegram != nil {
+		var id *int64
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT telegram_id FROM taskiem_tg_binding($1)`, owner).Scan(&id); err == nil && id != nil {
+			addr := telegram.Address(*id)
+			l := s.chooseLang(ctx, p.TenantID, addr, "").Tag
+			if err := s.waSay(ctx, s.Telegram, addr, "", tr(l, "agent.page_live", "business", business, "link", link)); err != nil {
+				s.Logger.Warn("agents: telling the owner their page is live", "err", err)
+			}
+		}
 	}
 }
 
@@ -530,34 +557,7 @@ func (s *Server) waAgentMessage(ctx context.Context, wa *whatsapp.Platform, numb
 	text := strings.Join(strings.Fields(in.Text), " ")
 	l := s.chooseLang(ctx, wa.Tenant, number, "").Tag
 	if m := agreeRe.FindStringSubmatch(text); m != nil {
-		var outcome string
-		var session, tenant, owner *uuid.UUID
-		var business, agent, code *string
-		var expires *time.Time
-		if err := s.Store.Pool.QueryRow(ctx, `SELECT outcome, session_id, tenant_id, tenant_name, agent_name, agent_code, owner_user, expires_at
-			FROM taskiem_agent_session_consent($1, $2)`, number, m[1]).Scan(&outcome, &session, &tenant, &business, &agent, &code, &owner, &expires); err != nil {
-			return true, err
-		}
-		if outcome != "ok" {
-			msg, ok := consentReplies[outcome]
-			if !ok {
-				msg = "agent.consent_none"
-			}
-			return true, s.waSay(ctx, wa, number, "", tr(l, msg))
-		}
-		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{*tenant}, func(tx pgx.Tx) error {
-			raw, _ := json.Marshal(map[string]any{"number": whatsapp.MaskNumber(number), "session": session, "agent": *code})
-			if _, err := tx.Exec(ctx, `INSERT INTO tenant_verifications (id, tenant_id, level, method, actor, detail) VALUES ($1, $2, 'phone', 'whatsapp', $3, $4)`,
-				uuid.Must(uuid.NewV7()), *tenant, owner.String(), raw); err != nil {
-				return err
-			}
-			_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'agent.session_consent', $3, $4)`, *tenant, owner.String(), session.String(), raw)
-			return err
-		})
-		if err != nil {
-			return true, err
-		}
-		return true, s.waSay(ctx, wa, number, "", tr(l, "agent.consent_ok", "agent", *agent, "code", *code, "business", *business))
+		return true, s.agentConsent(ctx, wa, number, l, number, m[1], nil)
 	}
 	if !strings.EqualFold(text, "stop agent") {
 		return false, nil
@@ -566,9 +566,65 @@ func (s *Server) waAgentMessage(ctx context.Context, wa *whatsapp.Platform, numb
 	if err != nil || owner == uuid.Nil {
 		return false, err
 	}
+	return true, s.agentStop(ctx, wa, number, l, owner, "whatsapp")
+}
+
+// agentConsent takes an owner's consent code for an onboarding waiting on
+// number, and answers on ch at addr. From Telegram, telegramID is the
+// account that shared number as its own contact: it is bound to the owner
+// instead of the WhatsApp number.
+func (s *Server) agentConsent(ctx context.Context, ch chatChannel, addr string, l lang.Tag, number, code string, telegramID *int64) error {
+	var outcome string
+	var session, tenant, owner *uuid.UUID
+	var business, agent, agentCode *string
+	var expires *time.Time
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT outcome, session_id, tenant_id, tenant_name, agent_name, agent_code, owner_user, expires_at
+		FROM taskiem_agent_session_consent($1, $2, $3)`, number, code, telegramID).Scan(&outcome, &session, &tenant, &business, &agent, &agentCode, &owner, &expires); err != nil {
+		return err
+	}
+	if outcome != "ok" {
+		msg, ok := consentReplies[outcome]
+		if !ok {
+			msg = "agent.consent_none"
+		}
+		return s.agentReply(ctx, ch, addr, tr(l, msg))
+	}
+	method := "whatsapp"
+	if telegramID != nil {
+		method = "telegram_contact"
+	}
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{*tenant}, func(tx pgx.Tx) error {
+		raw, _ := json.Marshal(map[string]any{"number": whatsapp.MaskNumber(number), "session": session, "agent": *agentCode, "via": method})
+		if _, err := tx.Exec(ctx, `INSERT INTO tenant_verifications (id, tenant_id, level, method, actor, detail) VALUES ($1, $2, 'phone', $3, $4, $5)`,
+			uuid.Must(uuid.NewV7()), *tenant, method, owner.String(), raw); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'agent.session_consent', $3, $4)`, *tenant, owner.String(), session.String(), raw)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return s.agentReply(ctx, ch, addr, tr(l, "agent.consent_ok", "agent", *agent, "code", *agentCode, "business", *business))
+}
+
+// agentReply answers on ch; on Telegram it also takes away the "share my
+// number" keyboard, if one was sent.
+func (s *Server) agentReply(ctx context.Context, ch chatChannel, addr, text string) error {
+	if ch.Name() == "telegram" && s.Telegram != nil {
+		if id, ok := telegram.ParseAddress(addr); ok {
+			return s.Telegram.Client.SendClearing(ctx, id, text)
+		}
+	}
+	return s.waSay(ctx, ch, addr, "", text)
+}
+
+// agentStop ends every live agent session on the businesses owner owns
+// (STOP AGENT), answering on ch.
+func (s *Server) agentStop(ctx context.Context, ch chatChannel, addr string, l lang.Tag, owner uuid.UUID, via string) error {
 	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, agent_name FROM taskiem_agent_sessions_end_for_owner($1)`, owner)
 	if err != nil {
-		return true, err
+		return err
 	}
 	type ended struct {
 		Tenant uuid.UUID
@@ -576,24 +632,84 @@ func (s *Server) waAgentMessage(ctx context.Context, wa *whatsapp.Platform, numb
 	}
 	list, err := pgx.CollectRows(rows, pgx.RowToStructByPos[ended])
 	if err != nil {
-		return true, err
+		return err
 	}
 	if len(list) == 0 {
-		return true, s.waSay(ctx, wa, number, "", tr(l, "agent.none_to_stop"))
+		return s.waSay(ctx, ch, addr, "", tr(l, "agent.none_to_stop"))
 	}
 	var names []string
+	detail, _ := json.Marshal(map[string]any{"reason": "owner_ended", "via": via})
 	for _, e := range list {
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'agent.session_end', $3, '{"reason": "owner_ended", "via": "whatsapp"}')`, e.Tenant, owner.String(), e.Tenant.String())
+			_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'agent.session_end', $3, $4)`, e.Tenant, owner.String(), e.Tenant.String(), detail)
 			return err
 		}); err != nil {
-			return true, err
+			return err
 		}
 		if !slices.Contains(names, e.Agent) {
 			names = append(names, e.Agent)
 		}
 	}
-	return true, s.waSay(ctx, wa, number, "", tr(l, "agent.stopped", "agents", strings.Join(names, ", ")))
+	return s.waSay(ctx, ch, addr, "", tr(l, "agent.stopped", "agents", strings.Join(names, ", ")))
+}
+
+// --- Telegram: the owner's side ---
+
+// tgAgentMessage handles an owner agreeing from Telegram: AGREE <code>
+// (or the t.me/<bot>?start=agree_<code> link) keeps the code and asks them
+// to share their own number with Telegram's button; the contact then
+// completes the consent, the number checked against the one the agent
+// entered. STOP AGENT ends their agent sessions. Other messages go on.
+func (s *Server) tgAgentMessage(ctx context.Context, u telegram.Update, user uuid.UUID) (bool, error) {
+	tg := s.Telegram
+	addr := telegram.Address(u.FromID)
+	l := s.chooseLang(ctx, uuid.Nil, addr, "").Tag
+	text := strings.Join(strings.Fields(u.Text), " ")
+	code := ""
+	if c, ok := strings.CutPrefix(text, "/start agree_"); ok && sixDigitsOnly(c) {
+		code = c
+	} else if m := agreeRe.FindStringSubmatch(text); m != nil {
+		code = m[1]
+	}
+	switch {
+	case code != "":
+		if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_tg_agree_put($1, $2)`, u.FromID, code); err != nil {
+			return true, err
+		}
+		return true, tg.Client.AskContact(ctx, u.FromID, tr(l, "agent.share_number"), tr(l, "agent.share_button"))
+	case u.Contact != nil:
+		var pending *string
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_tg_agree_take($1)`, u.FromID).Scan(&pending); err != nil {
+			return true, err
+		}
+		if pending == nil {
+			return true, s.agentReply(ctx, tg, addr, tr(l, "agent.consent_none"))
+		}
+		if !u.Contact.Own {
+			return true, s.agentReply(ctx, tg, addr, tr(l, "agent.share_own"))
+		}
+		number, err := whatsapp.Normalise(u.Contact.Phone, s.defaultCountry())
+		if err != nil {
+			return true, s.agentReply(ctx, tg, addr, tr(l, "agent.consent_none"))
+		}
+		id := u.FromID
+		return true, s.agentConsent(ctx, tg, addr, l, number, *pending, &id)
+	case user != uuid.Nil && strings.EqualFold(text, "stop agent"):
+		return true, s.agentStop(ctx, tg, addr, l, user, "telegram")
+	}
+	return false, nil
+}
+
+// defaultCountry is the calling code for national numbers.
+func (s *Server) defaultCountry() string {
+	if s.WhatsApp != nil && s.WhatsApp.Config.DefaultCountry != "" {
+		return s.WhatsApp.Config.DefaultCountry
+	}
+	return "234"
+}
+
+func sixDigitsOnly(s string) bool {
+	return len(s) == 6 && strings.Trim(s, "0123456789") == ""
 }
 
 // --- the owner's side, in the app ---

@@ -593,6 +593,163 @@ paths:
                 $ref: '#/components/schemas/StorefrontMedia'
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/trust:
+    get:
+      operationId: getStorefrontTrust
+      tags:
+      - Storefront
+      summary: Verification, reviews and suspension
+      description: What the business has proved, what waits for Taskiem, and why the page is held, suspended or has orders paused (docs/moderation.md).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The page's trust
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, verification, reviews]
+                properties:
+                  status:
+                    type: string
+                  verification:
+                    type: object
+                    required: [phone, business, agent_onboarded]
+                    properties:
+                      phone:
+                        type: boolean
+                      business:
+                        type: boolean
+                        description: Checked by Taskiem, or onboarded by a field agent
+                      agent_onboarded:
+                        type: boolean
+                  reviews:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, kind, status, findings, decision_note, created_at, decided_at]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        kind:
+                          type: string
+                          enum: [first_publish, edit, catalogue, appeal, business]
+                        status:
+                          type: string
+                          enum: [pending, approved, rejected]
+                        findings:
+                          type: array
+                          items:
+                            type: object
+                        decision_note:
+                          type: [string, 'null']
+                        created_at:
+                          type: string
+                          format: date-time
+                        decided_at:
+                          $ref: '#/components/schemas/NullableTimestamp'
+                  review_note:
+                    type: [string, 'null']
+                  suspended_reason:
+                    type: [string, 'null']
+                  orders_paused:
+                    type: [string, 'null']
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/verification:
+    post:
+      operationId: requestBusinessVerification
+      tags:
+      - Storefront
+      summary: Ask Taskiem to verify the business
+      description: Its legal name and address, and a CAC number if it has one. A person at Taskiem checks it; verified, the page shows a badge and may take payment when customers order.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [legal_name, address]
+              properties:
+                legal_name:
+                  type: string
+                  maxLength: 200
+                address:
+                  type: string
+                  maxLength: 300
+                cac_number:
+                  type: string
+                  maxLength: 20
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '202':
+          description: Waiting for Taskiem
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [pending]
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/appeal:
+    post:
+      operationId: appealStorefront
+      tags:
+      - Storefront
+      summary: Appeal a suspension or a turned-down page
+      description: Taskiem looks at the page again. Owners can also reply APPEAL and their message in chat.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '202':
+          description: Waiting for Taskiem
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [pending]
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/qr:
     get:
       operationId: storefrontQR
@@ -12033,6 +12190,13 @@ components:
             qr:
               type: string
               description: The link as a QR code (a PNG data URL), for the owner to scan with their own phone
+            telegram_link:
+              type: string
+              format: uri
+              description: Opens Taskiem's Telegram bot with the code; the bot then asks the owner to share their own number
+            telegram_qr:
+              type: string
+              description: The Telegram link as a QR code (a PNG data URL)
             expires_at:
               type: string
               format: date-time
@@ -13965,7 +14129,8 @@ components:
           type: string
         status:
           type: string
-          enum: [draft, published, closed]
+          enum: [draft, in_review, published, closed, suspended]
+          description: in_review waits for Taskiem before a first publish goes live; suspended is taken down (docs/moderation.md)
         draft:
           $ref: '#/components/schemas/StorefrontCard'
         catalogue_table:
@@ -14006,6 +14171,14 @@ components:
         updated_at:
           type: string
           format: date-time
+        review_note:
+          type: [string, 'null']
+          description: Why a first publish was turned down
+        suspended_reason:
+          type: [string, 'null']
+        orders_paused:
+          type: [string, 'null']
+          description: Why orders and bookings are paused (the plan's month, or the unverified daily limit), when they are
         preview_url:
           type: string
           description: Where the published version is served; empty before publishing or when the public host has no preview domain
@@ -15181,6 +15354,16 @@ components:
         max_data_tables:
           type: integer
         max_data_table_columns:
+          type: integer
+        storefront_items:
+          type: integer
+        storefront_orders_monthly:
+          type: integer
+        storefront_bookings_monthly:
+          type: integer
+        sms_monthly:
+          type: integer
+        embed_sites:
           type: integer
       additionalProperties: false
     Usage:

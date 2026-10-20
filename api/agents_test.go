@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/telegram/telegramtest"
 	"github.com/israel-duff/taskiem/engine/webauthn"
 )
 
@@ -255,5 +256,91 @@ func TestFieldAgents(t *testing.T) {
 		if !strings.Contains(audit, x) {
 			t.Errorf("no %s in the platform chain", x)
 		}
+	}
+}
+
+// TestFieldAgentsOnTelegram: with no WhatsApp on the deployment, the owner
+// agrees from Telegram by sharing their own number.
+func TestFieldAgentsOnTelegram(t *testing.T) {
+	ctx := context.Background()
+	w := newTGWorld(t)
+	w.srv.PublicHosts = []string{"shops.taskiem.test"}
+	store := fakeStorage(t)
+	w.srv.Media = &media.Service{
+		Credentials: func(context.Context, uuid.UUID) (map[string]string, error) {
+			return map[string]string{"token": "xb_tok", "project_id": "prj_1", "base_url": store.URL, "api_url": store.URL}, nil
+		},
+		Guard: &egress.Guard{Blocked: func(netip.Addr) bool { return false }},
+	}
+	agent := w.tenant(t, "Tunde's workspace", "tunde@agents.test")
+	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_ops_agent_add(gen_random_uuid(), u.id, m.tenant_id, 'AG-TGTST', 'Tunde Bello', '+2348020001111', 'Lagos', '{}', 'test')
+		FROM users u JOIN memberships m ON m.user_id = u.id WHERE u.email = 'tunde@agents.test'`); err != nil {
+		t.Fatal(err)
+	}
+	ob := agent.must(201, "POST", "/v1/agent/businesses", map[string]any{"name": "Mama Bisi Foods", "owner_name": "Bisi Ade", "owner_phone": "0803 123 4567"})
+	sid, consent := ob["session"].(map[string]any)["id"].(string), ob["consent"].(map[string]any)
+	code := consent["code"].(string)
+	if consent["telegram_link"] != "https://t.me/"+tgBot+"?start=agree_"+code || consent["link"] != nil ||
+		!strings.HasPrefix(consent["telegram_qr"].(string), "data:image/png;base64,") {
+		t.Fatalf("consent: %v", consent)
+	}
+	const owner = int64(7001)
+	contact := func(phone string, of int64) []telegramtest.Call {
+		return w.update(t, owner, func(id int64) []byte { return telegramtest.ContactMessage(id, owner, phone, of) })
+	}
+	// The link asks for the owner's own number; a code is never enough.
+	got := w.update(t, owner, func(id int64) []byte { return telegramtest.Start(id, owner, "", "agree_"+code) })
+	if len(got) != 1 || !got[0].AskContact || !strings.Contains(got[0].Text, "Share my number") {
+		t.Fatalf("asked: %+v", got)
+	}
+	// Someone else's contact is refused, and the code must be sent again.
+	if got := contact("+2348031234567", 9999); len(got) != 1 || !strings.Contains(got[0].Text, "your own number") {
+		t.Fatalf("another's contact: %+v", got)
+	}
+	if got := contact("+2348031234567", owner); len(got) != 1 || !strings.Contains(got[0].Text, "No business is waiting") {
+		t.Fatalf("no code waiting: %+v", got)
+	}
+	// Their own number, but not the one the agent entered.
+	if c := w.say(t, owner, "AGREE "+code); !c.AskContact {
+		t.Fatalf("again: %+v", c)
+	}
+	if got := contact("+2348000000000", owner); len(got) != 1 || !strings.Contains(got[0].Text, "No business is waiting") {
+		t.Fatalf("another number: %+v", got)
+	}
+	agentIn := func(want int, method, path string, body any) map[string]any {
+		t.Helper()
+		st, out := agentDo(t, agent, sid, method, path, body)
+		if st != want {
+			t.Fatalf("as the agent, %s %s: %d, want %d: %v", method, path, st, want, out)
+		}
+		return out
+	}
+	agentIn(403, "GET", "/v1/storefront", nil)
+	// The right number, shared as Telegram sends it (no +): agreed.
+	w.say(t, owner, "agree "+code)
+	if got := contact("2348031234567", owner); len(got) != 1 || !strings.Contains(got[0].Text, "Tunde Bello (AG-TGTST)") {
+		t.Fatalf("agreed: %+v", got)
+	}
+	if user, err := w.tg.UserOf(ctx, owner); err != nil || user == uuid.Nil {
+		t.Fatalf("the owner's Telegram is linked: %v %v", user, err)
+	}
+	agentIn(404, "GET", "/v1/storefront", nil)
+	agentIn(200, "PUT", "/v1/storefront", map[string]any{"slug": "mama-bisi", "draft": map[string]any{"name": "Mama Bisi Foods", "phone": "0803 123 4567",
+		"template": "bold", "accent": "orange"}})
+	if st, out := agentRaw(t, agent, "/v1/agent/sessions/"+sid+"/attest?lat=6.4541&lng=3.3947", photo(t)); st != 201 {
+		t.Fatalf("attest: %d %v", st, out)
+	}
+	// Published (the business is agent onboarded, so it goes live): the
+	// owner hears on Telegram.
+	before := len(w.bot.Sent(owner))
+	if pub := agentIn(200, "POST", "/v1/storefront/publish", nil); pub["status"] != "published" {
+		t.Fatalf("published: %v", pub)
+	}
+	sent := w.bot.Sent(owner)[before:]
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "https://mama-bisi.shops.taskiem.test") {
+		t.Fatalf("the owner told: %+v", sent)
+	}
+	if c := w.say(t, owner, "STOP AGENT"); !strings.Contains(c.Text, "No agent is working") {
+		t.Fatalf("stop: %+v", c)
 	}
 }

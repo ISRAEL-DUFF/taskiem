@@ -57,7 +57,7 @@ Mapping an integer **stock** column tracks how many of each item are left:
 - the form offers no more of an item than is left, and refuses an order for more;
 - **accepting** an order lowers the stock in the table (never below zero), and the copy at once.
 
-The table is changed only while it still holds the count that was read, so two orders accepted at the same moment both count; each change carries an Idempotency-Key and is recorded on the order before it is sent, so a retried step changes the stock once. An order accepted with too little left lowers it to zero, and its note says which items were short (`decide` returns them as `short`). Declining or cancelling puts nothing back: change the table if the items return to the shelf. Stock is lowered only on Accept, so an order paid when ordering holds none while it waits. A catalogue holds at most 500 items until the storefront plans set their own (S8).
+The table is changed only while it still holds the count that was read, so two orders accepted at the same moment both count; each change carries an Idempotency-Key and is recorded on the order before it is sent, so a retried step changes the stock once. An order accepted with too little left lowers it to zero, and its note says which items were short (`decide` returns them as `short`). Declining or cancelling puts nothing back: change the table if the items return to the shelf. Stock is lowered only on Accept, so an order paid when ordering holds none while it waits. A catalogue holds at most 500 items, and the plan's `storefront_items` ([moderation](moderation.md#plans)).
 
 ## Photos
 
@@ -71,7 +71,7 @@ Pages load the size the screen needs, lazily.
 
 **Moderation.** Each photo is recorded with a moderation state: `unreviewed`, `approved` or `rejected`.
 - A rejected photo is never shown, and uploading it again does not clear it.
-- The moderation pipeline that sets these states is S8's (storefronts 7.4). Until it exists, photos are recorded as unreviewed and shown.
+- Photos are recorded as unreviewed and shown; a reviewer approves them with the page, or rejects single ones ([trust and safety](moderation.md)). Publishing, and every catalogue item, also goes through the checks there: a page needs a verified phone, and a first publish waits for review unless the business is verified.
 
 **Add photo** on a catalogue item stores the photo and writes its id into the item's row.
 

@@ -65,7 +65,7 @@ func TestWhatsAppBookings(t *testing.T) {
 	owner.must(200, "PUT", "/v1/storefront/actions/booking", map[string]any{"enabled": true, "payment": "none"})
 	// Published as the API does, without reading the (absent) Xenibase table.
 	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := storefront.Publish(ctx, tx, tenant, "shops.taskiem.test", "user:ada")
+		_, err := storefront.Publish(ctx, tx, tenant, "shops.taskiem.test", "user:ada", false)
 		return err
 	}); err != nil {
 		t.Fatal(err)

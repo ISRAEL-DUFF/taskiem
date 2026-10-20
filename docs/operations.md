@@ -174,6 +174,10 @@ Every tenant has plan limits (spec 8.3, 16): the platform defaults below, change
 | `container_concurrency` | 2 | A tenant's container steps running at once, enforced when the `container` queue's tasks are claimed (the lower of a sub-tenant's and its partner's; 0 is the platform default) |
 | `max_data_tables` | 20 | Creating another [data table](data-tables.md#limits) gets 429 `limit_exceeded`. Plans: starter 10, growth 50, business and above no limit |
 | `max_data_table_columns` | 50 | Columns one data table may have: a wider table is refused and adding a column past it gets 429 `limit_exceeded` |
+| `storefront_items` | 0 (no limit) | Products and services a storefront shows: a publish with more is refused, and the copied catalogue stops at it ([moderation](moderation.md#plans)). Plans: shop 50, shop plus 500, starter and above 2,000 |
+| `storefront_orders_monthly`, `storefront_bookings_monthly` | 0 (no limit) | Storefront orders and bookings per UTC month: beyond them the forms say orders are paused. Plans: shop 300, shop plus 1,500 |
+| `sms_monthly` | 0 (no limit) | SMS to customers per UTC month: beyond it only verification codes are sent. Plans: shop 100, shop plus 500, starter and above 1,000 |
+| `embed_sites` | 10 | Websites that may embed the storefront and forms ([embed sites](embed-sites.md)). Plans: shop 1, shop plus 3 |
 
 ```sh
 taskiem tenants limits 0190f0c2-... --set runs_per_month=100000 --set max_running_runs=25

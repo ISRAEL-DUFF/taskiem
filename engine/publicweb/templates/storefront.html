@@ -16,6 +16,7 @@
 <header class="sf-card">
   {{with .M.Logo}}<img class="sf-logo" src="{{index . "320"}}" alt="" width="96" height="96">{{end}}
   <h1>{{.M.Card.Name}}</h1>
+  {{if .Verified}}<p class="sf-verified">Verified business</p>{{end}}
   {{with .M.Card.Tagline}}<p class="sf-tagline">{{.}}</p>{{end}}
   {{if .OpenKnown}}<p class="sf-open {{if .OpenNow}}is-open{{else}}is-closed{{end}}">{{if .OpenNow}}Open now{{else}}Closed now{{end}}</p>{{end}}
   {{with .M.Card.Area}}<p class="sf-area">{{.}}</p>{{end}}
@@ -80,8 +81,8 @@
   {{with .M.Card.Address}}<section class="sf-address"><h2>Where to find us</h2><p>{{.}}</p></section>{{end}}
 </main>
 <footer class="foot">
-<p class="safety">Never enter a password or card PIN on this page.</p>
-<p>Powered by Taskiem</p>
+<p class="safety">Taskiem never asks for card details, PINs or OTPs. Never enter a password or card PIN on this page.</p>
+<p>Powered by Taskiem · <a href="/report">Report this page</a></p>
 </footer>
 </body>
 </html>

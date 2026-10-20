@@ -15,6 +15,7 @@ func TestStorefrontStock(t *testing.T) {
 	w := newTablesWorld(t)
 	w.srv.PublicHosts = []string{"shops.taskiem.test"}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	tbl := owner.must(201, "POST", "/v1/tables", map[string]any{"name": "menu", "columns": []map[string]any{
 		{"name": "name", "type": "text", "required": true}, {"name": "price", "type": "number"}, {"name": "left", "type": "integer"}, {"name": "note", "type": "text"}}})
 	table := tbl["id"].(string)

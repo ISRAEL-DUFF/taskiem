@@ -59,7 +59,7 @@ func bookingWorld(t *testing.T, auto bool, payment string) *world {
 		if _, err := storefront.SaveAction(ctx, tx, w.env.Tenant, storefront.Action{Kind: "booking", Enabled: true, Payment: payment}); err != nil {
 			return err
 		}
-		w.sf, err = storefront.Publish(ctx, tx, w.env.Tenant, "shops.test", "user:ada")
+		w.sf, err = storefront.Publish(ctx, tx, w.env.Tenant, "shops.test", "user:ada", false)
 		return err
 	})
 	return w

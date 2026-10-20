@@ -91,6 +91,7 @@ func storefrontRow(t *testing.T, w *world, slug string) (status string, version 
 func TestWhatsAppMakeMyPage(t *testing.T) {
 	w := shopWorld(t)
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	const on, vn, an, bn, cn = "+2348010000009", "+2348010000005", "+2348010000006", "+2348010000007", "+2348010000008"
 	w.bind(t, owner, on)
 	viewer := w.member(t, owner, "vic@ada.test", "viewer")
@@ -364,6 +365,7 @@ func TestWhatsAppMakeMyPageWithoutTables(t *testing.T) {
 	w := newWAWorld(t)
 	w.srv.PublicHosts = []string{shopDomain}
 	owner := w.tenant(t, "Bola Bakes", "bola@bola.test")
+	verifyPhone(t, w.world, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	const on = "+2348010000019"
 	w.bind(t, owner, on)
 	w.say(t, on, "make my page")
@@ -406,6 +408,7 @@ func TestWhatsAppShopOrders(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	const on, vn = "+2348010000029", "+2348010000025"
 	w.bind(t, owner, on)
 	viewer := w.member(t, owner, "vic@ada.test", "viewer")
@@ -515,6 +518,7 @@ func TestTelegramShop(t *testing.T) {
 	w.srv.Tables = &datatables.Service{Pool: w.env.DB.App, Vault: w.env.Vault, Egress: w.env.Egress, Logger: w.srv.Logger,
 		Platform: datatables.Platform{URL: pg.URL, Token: tablesPlatformToken, Org: pg.OrgID}, ConnectorURL: pg.URL, PollInterval: time.Millisecond}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	const ada = int64(6001)
 	w.link(t, owner, ada, "ada")
 	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": map[string]any{"name": "Ada's Kitchen"}})

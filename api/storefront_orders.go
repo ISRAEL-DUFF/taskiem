@@ -48,6 +48,16 @@ func (s *Server) putStorefrontAction(w http.ResponseWriter, r *http.Request) {
 	var a storefront.Action
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
+		if req.Enabled && req.Payment == "at_order" {
+			// Payment when ordering: a verified business on a plan with it.
+			v, err := verificationOf(r.Context(), tx, p.TenantID)
+			if err != nil {
+				return err
+			}
+			if err := s.payOnOrderAllowed(r.Context(), p.TenantID, v); err != nil {
+				return storefrontErr(err)
+			}
+		}
 		a, err = storefront.SaveAction(r.Context(), tx, p.TenantID, storefront.Action{Kind: chi.URLParam(r, "kind"), Enabled: req.Enabled, Label: req.Label,
 			Payment: req.Payment, Options: req.Options})
 		if errors.Is(err, storefront.ErrNoWorkflow) {
@@ -61,7 +71,7 @@ func (s *Server) putStorefrontAction(w http.ResponseWriter, r *http.Request) {
 			return storefrontErr(err)
 		}
 		if sf.PublishedVersion > 0 {
-			if _, err := storefront.Publish(r.Context(), tx, p.TenantID, s.previewDomain(), p.Actor()); err != nil {
+			if _, err := s.publishGated(r.Context(), tx, p.TenantID, p.Actor()); err != nil {
 				return storefrontErr(err)
 			}
 		}

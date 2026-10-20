@@ -927,6 +927,7 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 		return nil, fmt.Errorf("%w: no text", sender.ErrInvalid)
 	}
 	var channels []string
+	overAllowance := false
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		ord, err := o.GetOrder(ctx, tx, tenant, reference)
 		if err != nil {
@@ -948,10 +949,12 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 		if ord.Customer.Phone != "" {
 			queued, err := o.Messages.Enqueue(ctx, tx, sender.Message{Tenant: tenant, Channel: sender.SMS, Purpose: sender.PurposeConfirmation,
 				To: ord.Customer.Phone, SenderName: c.Name, Text: text, Key: key + ":sms"})
-			if err != nil {
+			switch {
+			case errors.Is(err, sender.ErrAllowance):
+				overAllowance = true // the email, if any, still goes
+			case err != nil:
 				return err
-			}
-			if queued {
+			case queued:
 				channels = append(channels, "sms")
 			}
 		}
@@ -973,7 +976,11 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 	if channels == nil {
 		channels = []string{}
 	}
-	return map[string]any{"reference": reference, "queued": channels}, err
+	out := map[string]any{"reference": reference, "queued": channels}
+	if overAllowance {
+		out["sms_over_allowance"] = true
+	}
+	return out, err
 }
 
 func audit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, action, target string, detail map[string]any) error {

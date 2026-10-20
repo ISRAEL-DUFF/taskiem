@@ -177,6 +177,12 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		}
 		s.renderPrivate(w, r, refuse, "formclosed.html", closedData{pageData: pageData{Title: "Closed", Lang: f.Lang}, Business: f.Business, Accent: f.Accent, Message: msg, Home: f.Home})
 		return
+	case p.OrdersPaused && (kind == "order" || kind == "booking"):
+		// The plan's month, or the unverified daily limit (docs/moderation.md).
+		what := map[string]string{"order": "orders", "booking": "bookings"}[kind]
+		s.renderPrivate(w, r, refuse, "formclosed.html", closedData{pageData: pageData{Title: "Paused", Lang: f.Lang}, Business: f.Business, Accent: f.Accent,
+			Message: f.Business + " is not taking " + what + " online right now. Please contact them directly.", Home: f.Home})
+		return
 	case !s.formsOpen() || (kind == "booking" && !s.bookingsOpen()):
 		// Without TASKIEM_PUBLIC_KEY; the server warns once, at start.
 		what := "Orders"

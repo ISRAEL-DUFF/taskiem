@@ -117,7 +117,7 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_form(text)": true, "taskiem_public_form_link(bytea)": true, "taskiem_public_form_request(bytea)": true,
 		"taskiem_public_form_submit(uuid,uuid,uuid,bytea,text,bytea,bytea,bytea)": true, "taskiem_public_form_upload(uuid,text,bytea)": true,
 		"taskiem_public_form_code(uuid,bytea,bytea,bytea)": true, "taskiem_public_form_code_check(uuid,bytea,bytea)": true,
-		"taskiem_public_form_status(text,bytea)": true}
+		"taskiem_public_form_status(text,bytea)": true, "taskiem_public_report(text,text,text,text,bytea,bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

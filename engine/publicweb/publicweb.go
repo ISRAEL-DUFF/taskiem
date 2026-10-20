@@ -108,6 +108,8 @@ type Server struct {
 	Origins Origins
 	// Storefronts read storefront pages; nil serves "Coming soon".
 	Storefronts Storefronts
+	// Reports records "Report this page" (report.go); nil takes none.
+	Reports Reports
 	// PreviewDomain is where storefronts serve as <slug>.<domain> (the
 	// first public domain): a storefront's /qr.png is that address. Without
 	// one, the address the page was asked for.
@@ -312,7 +314,12 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 		httpsec.SetPublicEmbed(w.Header(), origins)
 		path = strings.TrimPrefix(path, "/embed")
 	}
+	if site.Kind == "storefront" && s.storefrontSuspended(w, r, site) {
+		return
+	}
 	switch {
+	case site.Kind == "storefront" && path == "/report" && !embed:
+		s.serveReport(w, r, site)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/a/") && formKinds[path[len("/a/"):]]:
 		s.serveForm(w, r, site, path[len("/a/"):], embed)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && !strings.Contains(path[len("/o/"):], "/"):

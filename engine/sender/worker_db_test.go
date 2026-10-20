@@ -319,3 +319,32 @@ func TestEmail(t *testing.T) {
 		t.Fatalf("usage %d %v", mails, err)
 	}
 }
+
+func TestSMSAllowance(t *testing.T) {
+	e := setup(t)
+	e.q.Allowance = func(context.Context, uuid.UUID) (int64, error) { return 2, nil }
+	for i, to := range []string{"08031234561", "08031234562"} {
+		if ok, err := e.enqueue(t, e.t1, sms(fmt.Sprint("a", i), to)); err != nil || !ok {
+			t.Fatalf("within the allowance: %v %v", ok, err)
+		}
+	}
+	// The month's allowance is used: notices are refused, codes still go,
+	// and email is not counted.
+	if _, err := e.enqueue(t, e.t1, sms("a3", "08031234563")); !errors.Is(err, ErrAllowance) {
+		t.Fatalf("beyond the allowance: %v", err)
+	}
+	code := sms("code", "08031234563")
+	code.Purpose, code.Text = PurposeCode, "Your code is 123456."
+	if ok, err := e.enqueue(t, e.t1, code); err != nil || !ok {
+		t.Fatalf("a code: %v %v", ok, err)
+	}
+	mail := Message{Channel: Email, Purpose: PurposeConfirmation, To: "ada@example.com", SenderName: "Ada's Kitchen", Subject: "Order", Text: "Confirmed.", Key: "mail"}
+	if ok, err := e.enqueue(t, e.t1, mail); err != nil || !ok {
+		t.Fatalf("an email: %v %v", ok, err)
+	}
+	// No limit (0) takes everything.
+	e.q.Allowance = func(context.Context, uuid.UUID) (int64, error) { return 0, nil }
+	if ok, err := e.enqueue(t, e.t1, sms("a4", "08031234564")); err != nil || !ok {
+		t.Fatalf("no limit: %v %v", ok, err)
+	}
+}

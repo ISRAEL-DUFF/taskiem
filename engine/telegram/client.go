@@ -226,6 +226,23 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, row
 	return m.MessageID, nil
 }
 
+// AskContact sends text with a one-time keyboard holding one button that
+// shares the person's own phone number (request_contact): Telegram sends
+// the number registered to the account, which a bot cannot see otherwise.
+func (c *Client) AskContact(ctx context.Context, chatID int64, text, button string) error {
+	plain, _ := Bold(text)
+	body := map[string]any{"chat_id": chatID, "text": clip(plain, 4096), "reply_markup": map[string]any{
+		"keyboard": [][]any{{map[string]any{"text": button, "request_contact": true}}}, "one_time_keyboard": true, "resize_keyboard": true}}
+	return c.call(ctx, "sendMessage", body, nil)
+}
+
+// SendClearing sends text and takes away a keyboard sent with AskContact.
+func (c *Client) SendClearing(ctx context.Context, chatID int64, text string) error {
+	plain, _ := Bold(text)
+	return c.call(ctx, "sendMessage", map[string]any{"chat_id": chatID, "text": clip(plain, 4096),
+		"reply_markup": map[string]any{"remove_keyboard": true}}, nil)
+}
+
 // SendPhoto sends a photo by its public https URL (Telegram fetches it)
 // with a caption, its *bold* as entities as in SendMessage, and an inline
 // keyboard of rows when given. It returns the message id.

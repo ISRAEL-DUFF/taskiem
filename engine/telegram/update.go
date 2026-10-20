@@ -42,6 +42,16 @@ type Update struct {
 	// Photo is a photo (message.photo, its largest size, or an image sent
 	// as a file), its caption in Text: fetched with getFile too.
 	Photo *Photo
+	// Contact is a shared contact (message.contact). Own reports whether it
+	// is the sender's own, shared with Telegram's "share my number"
+	// button: then Telegram vouches for the number.
+	Contact *Contact
+}
+
+// Contact is a shared phone contact.
+type Contact struct {
+	Phone string
+	Own   bool
 }
 
 // Photo is a photo's reference.
@@ -100,6 +110,10 @@ type tgMessage struct {
 	Audio    *tgFile       `json:"audio"`
 	Photo    []tgPhotoSize `json:"photo"`
 	Document *tgFile       `json:"document"`
+	Contact  *struct {
+		Phone  string `json:"phone_number"`
+		UserID int64  `json:"user_id"`
+	} `json:"contact"`
 }
 
 // imageTypes are the files read as photos when sent uncompressed.
@@ -165,6 +179,8 @@ func Parse(body []byte) (Update, error) {
 			}
 		case m.Document != nil && m.Document.FileID != "" && imageTypes[m.Document.MimeType]:
 			u.Photo = &Photo{FileID: m.Document.FileID, MimeType: m.Document.MimeType, Size: m.Document.Size}
+		case m.Contact != nil && m.Contact.Phone != "":
+			u.Contact = &Contact{Phone: m.Contact.Phone, Own: m.Contact.UserID == u.FromID}
 		}
 	case d.Callback != nil:
 		c := d.Callback

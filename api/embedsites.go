@@ -52,7 +52,12 @@ func (s *Server) listEmbedSites(w http.ResponseWriter, r *http.Request) {
 	for _, x := range sites {
 		out = append(out, siteOut(x))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sites": out, "max": embedsites.MaxSites})
+	lim, err := s.Store.LimitsFor(r.Context(), principalFrom(r.Context()).TenantID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sites": out, "max": lim.EmbedSites})
 }
 
 func (s *Server) addEmbedSite(w http.ResponseWriter, r *http.Request) {
@@ -78,10 +83,15 @@ func (s *Server) addEmbedSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	lim, err := s.Store.LimitsFor(r.Context(), p.TenantID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var site embedsites.Site
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if site, err = embedsites.Add(r.Context(), tx, p.TenantID, origin, req.Method, p.Actor()); err != nil {
+		if site, err = embedsites.Add(r.Context(), tx, p.TenantID, origin, req.Method, p.Actor(), lim.EmbedSites); err != nil {
 			return siteErr(err)
 		}
 		return auditTx(r, tx, "embed_site.add", origin, map[string]any{"method": req.Method})

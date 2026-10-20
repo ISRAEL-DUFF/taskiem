@@ -125,5 +125,7 @@ func limitsMap(l runtime.Limits) map[string]any {
 		"ai_monthly_tokens": l.AIMonthlyTokens, "whatsapp_templates_monthly": l.WhatsAppTemplatesMonthly,
 		"container_minutes_monthly": l.ContainerMinutesMonthly, "container_concurrency": l.ContainerConcurrency,
 		"max_data_tables": l.MaxDataTables, "max_data_table_columns": l.MaxDataTableColumns,
+		"storefront_items": l.StorefrontItems, "storefront_orders_monthly": l.StorefrontOrdersMonthly,
+		"storefront_bookings_monthly": l.StorefrontBookingsMonthly, "sms_monthly": l.SMSMonthly, "embed_sites": l.EmbedSites,
 	}
 }

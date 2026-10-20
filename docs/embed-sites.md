@@ -19,7 +19,7 @@ The `frame-ancestors` policy names only proven sites.
    - government and protected names;
    - the platform's own domains (`TASKIEM_PUBLIC_URL`'s host and `TASKIEM_PUBLIC_DOMAINS`).
 
-   An organisation can add up to 10 sites; the storefront plans set their own limits (S8).
+   An organisation can add up to its plan's `embed_sites`: 10 by default, 1 on Shop and 3 on Shop Plus ([moderation](moderation.md#plans)).
 2. **Publish the proof** the answer gives, one of:
    - **DNS:** a TXT record `_taskiem-verify.adakitchen.ng` with the value `taskiem-site-verify=…`.
    - **File:** `https://adakitchen.ng/.well-known/taskiem-site.txt` containing that value on a line of its own. This suits site builders that do not give DNS access. The file is fetched through the egress guard: public addresses and the site's own host only.

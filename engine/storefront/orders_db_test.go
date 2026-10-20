@@ -127,7 +127,7 @@ func newWorld(t *testing.T) *world {
 			return err
 		}
 		var err error
-		w.sf, err = storefront.Publish(ctx, tx, env.Tenant, "shops.test", "user:ada")
+		w.sf, err = storefront.Publish(ctx, tx, env.Tenant, "shops.test", "user:ada", false)
 		return err
 	})
 	return w

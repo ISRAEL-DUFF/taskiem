@@ -54,6 +54,9 @@ var (
 	// ErrRecipientLimit refuses a message to someone who has had too many
 	// in the last hour or day, from any tenant.
 	ErrRecipientLimit = errors.New("sender: too many messages to this recipient")
+	// ErrAllowance refuses an SMS beyond the tenant's monthly allowance
+	// (the plan's sms_monthly). Codes are never refused for it.
+	ErrAllowance = errors.New("sender: this month's SMS allowance is used up")
 )
 
 // Message is one SMS or email to queue.
@@ -89,6 +92,9 @@ type Queue struct {
 	// PerHour and PerDay limit messages to one recipient across tenants
 	// (default 5 and 20).
 	PerHour, PerDay int
+	// Allowance is the tenant's monthly SMS allowance (0: no limit); nil
+	// counts none.
+	Allowance func(ctx context.Context, tenant uuid.UUID) (int64, error)
 	// Countries are the calling codes SMS may go to (default 234):
 	// international premium routes are where SMS-pumping fraud makes money.
 	Countries []string
@@ -109,6 +115,22 @@ func (q *Queue) Enqueue(ctx context.Context, tx pgx.Tx, m Message) (bool, error)
 	}
 	if exists {
 		return false, nil
+	}
+	if m.Channel == SMS && m.Purpose != PurposeCode && q.Allowance != nil {
+		allowed, err := q.Allowance(ctx, m.Tenant)
+		if err != nil {
+			return false, err
+		}
+		if allowed > 0 {
+			var used int64
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE tenant_id = $1 AND channel = 'sms'
+				AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, m.Tenant).Scan(&used); err != nil {
+				return false, err
+			}
+			if used >= allowed {
+				return false, ErrAllowance
+			}
+		}
 	}
 	perHour, perDay := q.PerHour, q.PerDay
 	if perHour <= 0 {

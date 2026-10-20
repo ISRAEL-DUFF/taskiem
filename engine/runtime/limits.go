@@ -76,6 +76,15 @@ type Limits struct {
 	MaxDataTables       int `json:"max_data_tables"`
 	MaxDataTableColumns int `json:"max_data_table_columns"`
 
+	// The storefront plans' limits (storefronts spec 11): products and
+	// services shown, orders and bookings taken per UTC month, SMS to
+	// customers per UTC month, and websites that may embed the pages.
+	StorefrontItems           int   `json:"storefront_items"`
+	StorefrontOrdersMonthly   int64 `json:"storefront_orders_monthly"`
+	StorefrontBookingsMonthly int64 `json:"storefront_bookings_monthly"`
+	SMSMonthly                int64 `json:"sms_monthly"`
+	EmbedSites                int   `json:"embed_sites"`
+
 	// The plan (when billing is on) and its subscription status: a
 	// sub-tenant's are its partner's. Set by the store.
 	plan, billing string
@@ -172,7 +181,16 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"max_retention_days", "days an ended run's history is kept at most, whatever a workflow asks (0: no cap)"},
 	{"max_data_tables", "data tables (0: no limit)"},
 	{"max_data_table_columns", "columns one data table may have (0: no limit)"},
+	{"storefront_items", "products and services a storefront shows; more are left off the page (0: no limit)"},
+	{"storefront_orders_monthly", "storefront orders per UTC month; beyond it the order forms say orders are paused (0: no limit)"},
+	{"storefront_bookings_monthly", "storefront bookings per UTC month; beyond it bookings are paused (0: no limit)"},
+	{"sms_monthly", "SMS to customers per UTC month; beyond it only verification codes are sent (0: no limit)"},
+	{"embed_sites", "websites that may embed the storefront and forms (0: no limit)"},
 }
+
+// DefaultEmbedSites is the platform's default number of websites that
+// may embed one organisation's pages.
+const DefaultEmbedSites = 10
 
 // DefaultContainerConcurrency is the platform's default cap on one
 // tenant's container steps running at once.
@@ -211,6 +229,7 @@ func DefaultLimits() Limits {
 		ContainerConcurrency:     DefaultContainerConcurrency,
 		MaxDataTables:            DefaultMaxDataTables,
 		MaxDataTableColumns:      DefaultMaxDataTableColumns,
+		EmbedSites:               DefaultEmbedSites,
 	}
 }
 

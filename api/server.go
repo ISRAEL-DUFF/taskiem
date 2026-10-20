@@ -340,6 +340,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/refresh", s.refreshStorefrontCatalogue)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/rows/{row}/photo", s.setStorefrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/media", s.uploadStorefrontMedia)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/trust", s.getStorefrontTrust) // trust and safety (trust.go)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/verification", s.requestBusinessVerification)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/appeal", s.appealStorefront)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/qr", s.storefrontQR)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/image", s.storefrontImage)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/actions", s.listStorefrontActions)
@@ -568,6 +571,10 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 
 // fail maps engine errors to responses without leaking internals.
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if fe := (*billing.FeatureError)(nil); errors.As(err, &fe) {
+		s.billingFail(w, r, err) // 402 plan_feature_required
+		return
+	}
 	if le, ok := runtime.IsLimit(err); ok && le.Code == "billing_degraded" {
 		// Unpaid or cancelled: payment, not waiting, lifts it.
 		writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": le.Message, "code": le.Code, "limit": le.Limit})

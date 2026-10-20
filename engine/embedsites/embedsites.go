@@ -46,8 +46,8 @@ const (
 // WellKnownPath is the file a site serves for the file method.
 const WellKnownPath = "/.well-known/taskiem-site.txt"
 
-// MaxSites is how many sites an organisation may add. Plans set their own
-// with the storefront plans (S8).
+// MaxSites is how many sites an organisation may add by default; the
+// plan's embed_sites sets it (runtime.Limits.EmbedSites).
 const MaxSites = 10
 
 var (
@@ -203,8 +203,9 @@ func NewToken() string {
 	return "taskiem-site-verify=" + base64.RawURLEncoding.EncodeToString(b)
 }
 
-// Add adds an unverified site in tx (the tenant's scope).
-func Add(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, origin, method, actor string) (Site, error) {
+// Add adds an unverified site in tx (the tenant's scope); max is how many
+// the organisation may have (0: no limit).
+func Add(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, origin, method, actor string, max int) (Site, error) {
 	if method != DNS && method != File {
 		return Site{}, fmt.Errorf("%w: method must be dns or file", ErrInvalid)
 	}
@@ -212,8 +213,8 @@ func Add(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, origin, method, actor
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM embed_sites WHERE tenant_id = $1`, tenant).Scan(&n); err != nil {
 		return Site{}, err
 	}
-	if n >= MaxSites {
-		return Site{}, fmt.Errorf("%w: at most %d", ErrLimit, MaxSites)
+	if max > 0 && n >= max {
+		return Site{}, fmt.Errorf("%w: your plan allows %d", ErrLimit, max)
 	}
 	s := Site{ID: uuid.Must(uuid.NewV7()), Origin: origin, Method: method, Token: NewToken(), CreatedBy: actor}
 	err := tx.QueryRow(ctx, `INSERT INTO embed_sites (id, tenant_id, origin, method, token, created_by) VALUES ($1, $2, $3, $4, $5, $6)
