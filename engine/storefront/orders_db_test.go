@@ -155,7 +155,9 @@ func (w *world) decide(ref, step, decision string) {
 	w.env.Drain(w.t)
 }
 
-func runRef(w *world, id uuid.UUID) runtime.RunRef { return runtime.RunRef{ID: id, TenantID: w.env.Tenant} }
+func runRef(w *world, id uuid.UUID) runtime.RunRef {
+	return runtime.RunRef{ID: id, TenantID: w.env.Tenant}
+}
 
 func (w *world) messages(ref string) int {
 	w.t.Helper()

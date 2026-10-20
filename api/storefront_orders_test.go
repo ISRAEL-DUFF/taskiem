@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +42,9 @@ func TestStorefrontOrders(t *testing.T) {
 		t.Fatal(err)
 	}
 	wf := publishFlow(t, owner, string(def))
+	// One workflow per form: a second one for enquiries is refused.
+	dup := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "dup", "definition": json.RawMessage(def)})
+	owner.must(409, "POST", "/v1/workflows/"+dup["id"].(string)+"/versions/1/publish", nil)
 	a := owner.must(200, "PUT", "/v1/storefront/actions/enquiry", map[string]any{"enabled": true, "label": "Ask us"})
 	if a["enabled"] != true || a["workflow_id"] != wf || a["payment"] != "none" || a["label"] != "Ask us" {
 		t.Fatalf("%v", a)

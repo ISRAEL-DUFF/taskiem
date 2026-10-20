@@ -33,7 +33,7 @@ func New(o Options) *connector.Connector {
 		"transfer":               connector.ActionFunc(c.transfer),
 		"verify_transfer":        connector.ActionFunc(c.verifyTransfer),
 		"verify_charge":          connector.ActionFunc(c.verifyCharge),
-		"initialize_transaction": connector.ActionFunc(c.initialize),
+		"initialize_transaction": connector.ActionFunc(c.checkout),
 	}}
 }
 
@@ -120,8 +120,9 @@ func (c *client) verifyTransfer(ctx context.Context, req connector.Request) (con
 	return connector.Response{Output: transferOutput(env.Data)}, nil
 }
 
-// initialize creates a checkout page under the request's reference.
-func (c *client) initialize(ctx context.Context, req connector.Request) (connector.Response, error) {
+// checkout creates a checkout page under the request's reference
+// (Paystack's /transaction/initialize).
+func (c *client) checkout(ctx context.Context, req connector.Request) (connector.Response, error) {
 	in := req.Input
 	ref, _ := in["reference"].(string)
 	if ref == "" {

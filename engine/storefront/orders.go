@@ -550,9 +550,10 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 		next := ""
 		switch decision {
 		case "accept":
-			if ord.Status == "accepted" || ord.Status == "paid" {
+			switch ord.Status {
+			case "accepted", "paid":
 				next = ord.Status // already
-			} else if ord.Status == "received" {
+			case "received":
 				next = "accepted"
 			}
 		case "decline":
