@@ -92,7 +92,7 @@ func publishedShop(t *testing.T, d *dbtest.DB, tenant uuid.UUID, slug string) st
 			return err
 		}
 		var err error
-		sf, err = storefront.Publish(ctx, tx, tenant, "shops.test", "user:o")
+		sf, err = storefront.Publish(ctx, tx, tenant, "shops.test", "user:o", false)
 		return err
 	}); err != nil {
 		t.Fatal(err)

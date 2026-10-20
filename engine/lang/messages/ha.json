@@ -32,6 +32,18 @@
       "text": "Shafin {business} ya fara aiki: {link}\nAika MY PAGE nan a kowane lokaci don canza farashi, ƙara kaya ko ganin oda.",
       "reviewed": false
     },
+    "agent.share_button": {
+      "text": "Aika lambata",
+      "reviewed": false
+    },
+    "agent.share_number": {
+      "text": "Don amincewa, danna Share my number a ƙasa. Telegram za ta aika wa Taskiem lambar da ke kan asusunka, don Taskiem ta san naka ne.",
+      "reviewed": false
+    },
+    "agent.share_own": {
+      "text": "Aika lambarka da maɓallin, ba ta wani ba. Sake aika AGREE da lambar don farawa.",
+      "reviewed": false
+    },
     "agent.stopped": {
       "text": "An gama. {agents} ba za su iya aiki a kan kasuwancinka ba yanzu.",
       "reviewed": false
@@ -888,6 +900,18 @@
       "text": "Shagonka a buɗe yake tuni.",
       "reviewed": false
     },
+    "wa.shop.appeal_how": {
+      "text": "Aika APPEAL da saƙonka, misali: APPEAL wayoyi ne na asali masu rasidi.",
+      "reviewed": false
+    },
+    "wa.shop.appeal_none": {
+      "text": "Babu abin da za a ɗaukaka: ba a dakatar da shafinka ko ƙi shi ba.",
+      "reviewed": false
+    },
+    "wa.shop.appeal_sent": {
+      "text": "Na gode. Taskiem za ta sake duba shafinka ta amsa nan, yawanci cikin ranar aiki ɗaya.",
+      "reviewed": false
+    },
     "wa.shop.ask_area": {
       "text": "3/5. Unguwarka ko adireshinka? Misali: Yaba, Lagos. Amsa *skip* don barin sa.",
       "reviewed": false
@@ -1020,6 +1044,10 @@
       "text": "Rubuta shi kamar *stock Jollof rice 20*: sunan, sannan nawa suka rage.",
       "reviewed": false
     },
+    "wa.shop.in_review": {
+      "text": "Shafin {name} yana wurin Taskiem don ɗan dubawa kafin ya fara aiki, yawanci cikin ranar aiki ɗaya. Za a aiko maka da saƙo idan ya fara aiki.",
+      "reviewed": false
+    },
     "wa.shop.kind.callback": {
       "text": "buƙatar kira",
       "reviewed": false
@@ -1110,6 +1138,14 @@
     },
     "wa.shop.page_live": {
       "text": "An wallafa *{name}*: {link}\nOdar yau: {count}",
+      "reviewed": false
+    },
+    "wa.shop.page_suspended": {
+      "text": "An dakatar da shafin {name}: {reason}\nDon bayani, aika APPEAL da saƙonka.",
+      "reviewed": false
+    },
+    "wa.shop.page_turned_down": {
+      "text": "Taskiem ba ta iya sanya shafin {name} ya fara aiki ba: {reason}\nGyara shi ka sake aika PUBLISH, ko ka aika APPEAL da saƙonka.",
       "reviewed": false
     },
     "wa.shop.photo_bad": {

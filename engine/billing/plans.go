@@ -39,13 +39,16 @@ const (
 	FeatureGit         = "git"          // Git-connected environments
 	FeatureAI          = "ai"           // AI building and repair
 	FeatureEmbedded    = "embedded"     // partner API: sub-tenants, embed apps
+	// FeatureStorefrontPayOnOrder: a storefront taking payment when the
+	// customer orders or books, rather than after the owner accepts.
+	FeatureStorefrontPayOnOrder = "storefront_pay_on_order"
 )
 
 // AllFeatures in display order.
-var AllFeatures = []string{FeatureSSO, FeatureSCIM, FeatureCustomRoles, FeatureWhiteLabel, FeatureBYOK, FeatureGit, FeatureAI, FeatureEmbedded}
+var AllFeatures = []string{FeatureSSO, FeatureSCIM, FeatureCustomRoles, FeatureWhiteLabel, FeatureBYOK, FeatureGit, FeatureAI, FeatureEmbedded, FeatureStorefrontPayOnOrder}
 
 // Tiers, cheapest first (spec 16.1). internal is the self-hosted plan.
-var Tiers = []string{"internal", "starter", "growth", "business", "enterprise"}
+var Tiers = []string{"internal", "shop", "starter", "growth", "business", "enterprise"}
 
 // InternalPlanID is the plan of every tenant without a subscription: on a
 // self-hosted deployment (billing off) that is every tenant.

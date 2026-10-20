@@ -491,6 +491,13 @@ type engine struct {
 // platform's Xenibase when TASKIEM_XENIBASE_URL, _TOKEN and _ORG are
 // set; otherwise only organisations that brought their own project
 // have tables. The platform token stays in this process.
+// smsAllowance is a tenant's monthly SMS allowance (the plan's
+// sms_monthly; 0: no limit), for the message queues.
+func (e *engine) smsAllowance(ctx context.Context, tenant uuid.UUID) (int64, error) {
+	l, err := e.store.LimitsFor(ctx, tenant)
+	return l.SMSMonthly, err
+}
+
 func (e *engine) tables() *datatables.Service {
 	if !e.cfg.Xenibase.Configured() {
 		e.log.Info("data tables: TASKIEM_XENIBASE_URL, TASKIEM_XENIBASE_TOKEN and TASKIEM_XENIBASE_ORG unset; tables are available only to organisations with their own Xenibase project")

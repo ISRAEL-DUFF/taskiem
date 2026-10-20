@@ -29,7 +29,7 @@ func storefrontOrders(cfg config, e *engine, log *slog.Logger) (*storefront.Orde
 		o.PreviewDomain = cfg.Public.Domains[0]
 	}
 	if len(cfg.Messages.HashKey) == 32 {
-		o.Messages = &sender.Queue{Vault: e.vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries}
+		o.Messages = &sender.Queue{Vault: e.vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries, Allowance: e.smsAllowance}
 	} else {
 		log.Warn("TASKIEM_MESSAGE_HASH_KEY is unset: storefront customers get no SMS or email")
 	}

@@ -21,10 +21,15 @@ import (
 // StorefrontPage is what the public host renders for a storefront: its
 // newest snapshot and catalogue copy.
 type StorefrontPage struct {
-	Status        string // published or closed
+	Status        string // published, closed or suspended
 	Model         storefront.Model
 	ClosedMessage string
 	Items         []storefront.Item
+	// Verified: the business was checked, or onboarded by a field agent
+	// (the badge). OrdersPaused: orders and bookings are not taken now
+	// (the plan's month, or the unverified daily limit).
+	Verified     bool
+	OrdersPaused bool
 }
 
 // Storefronts reads a storefront's page; ok is false when it is not
@@ -38,9 +43,9 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 		var p StorefrontPage
 		var version int
 		var model []byte
-		var closed *string
-		err := pool.QueryRow(ctx, `SELECT status, version, model, closed_message FROM taskiem_public_storefront($1)`, id).
-			Scan(&p.Status, &version, &model, &closed)
+		var closed, paused *string
+		err := pool.QueryRow(ctx, `SELECT status, version, model, closed_message, verified, orders_paused FROM taskiem_public_storefront($1)`, id).
+			Scan(&p.Status, &version, &model, &closed, &p.Verified, &paused)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return StorefrontPage{}, false, nil
 		}
@@ -52,6 +57,10 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 		}
 		if closed != nil {
 			p.ClosedMessage = *closed
+		}
+		p.OrdersPaused = paused != nil
+		if p.Status == "suspended" {
+			return p, true, nil // nothing of it is shown
 		}
 		var items []byte
 		if err := pool.QueryRow(ctx, `SELECT taskiem_public_storefront_catalogue($1)`, id).Scan(&items); err != nil {
@@ -94,6 +103,7 @@ type storefrontData struct {
 	pageData
 	M           storefront.Model
 	Closed      string
+	Verified    bool
 	Sections    []section
 	OpenKnown   bool
 	OpenNow     bool
@@ -211,6 +221,7 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 	if p.Status == "closed" {
 		d.Closed = p.ClosedMessage
 	}
+	d.Verified = p.Verified
 	d.OpenNow, d.OpenKnown = c.Hours.OpenNow(now)
 	today := (int(now.In(storefront.Lagos).Weekday()) + 6) % 7
 	if d.OpenKnown {

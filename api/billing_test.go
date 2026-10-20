@@ -68,7 +68,7 @@ func TestBillingAPI(t *testing.T) {
 	owner := w.tenant(t, "Acme", "owner@acme.test")
 	ov := owner.must(200, "GET", "/v1/billing", nil)
 	sub := ov["subscription"].(map[string]any)
-	if sub["status"] != "trial" || sub["plan"] != "growth" || ov["placeholder_prices"] != true || len(ov["plans"].([]any)) != 3 {
+	if sub["status"] != "trial" || sub["plan"] != "growth" || ov["placeholder_prices"] != true || len(ov["plans"].([]any)) != 5 {
 		t.Fatalf("overview: %v", ov)
 	}
 	if _, leaked := sub["authorization_code"]; leaked {

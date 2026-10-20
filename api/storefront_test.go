@@ -94,6 +94,7 @@ func TestStorefront(t *testing.T) {
 		Guard: &egress.Guard{Blocked: func(netip.Addr) bool { return false }},
 	}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	owner.must(404, "GET", "/v1/storefront", nil)
 
 	tbl := owner.must(201, "POST", "/v1/tables", menuTable)

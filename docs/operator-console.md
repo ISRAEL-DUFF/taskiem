@@ -55,8 +55,13 @@ An operator signed in with single sign-on who has no passkey can read but not ch
 | Status page | Open an incident or schedule maintenance, post updates, resolve; the last 90 days with who posted each update (never shown on the public page) | `taskiem status` |
 | Tenants | Search by name or id: status, plan, subscription state, worker pool; one tenant's subscription dates, effective limits (and which are the tenant's own) and usage. Read-only. | `taskiem tenants limits`, `taskiem pools` |
 | Platform audit | The platform audit chain, whether it verifies, and an export | — |
+| Storefront reviews | Pages waiting for a person: first publishes, flagged changes and catalogue items, pages suspended for reports, appeals, requests to verify a business. Each with the page, its catalogue and photos, what the checks found, its verification, agent and reports. Approve or reject (with a note the owner is told), rejecting single photos ([trust and safety](moderation.md#the-review-queue-operators)) | — |
+| Reports | Reports from pages' and hosted forms' footers, with how many people reported the same page; dismiss, mark acted on, or reveal the reporter's contact (audited) | — |
+| Field agents | Register checked agents, their businesses and reports; suspend, reactivate, retire ([field agents](agents.md)) | — |
 
 **The reviewer is who signed in.** In the console the reviewer is the signed-in operator's email, not an email typed in (`--as` in the CLI). The database still decides: the reviewer must be on the list, must not be the submitter or a member of the publisher's organisation, and needs a note; approving needs every checklist item confirmed, which the database now checks too (migration 00143), for the CLI as well. A revocation from the console alerts every installing organisation, as from the CLI.
+
+**Storefront reviews open a business's page,** its catalogue, photos and reports, and nothing else of it: the review needs them, and every decision is recorded in the platform chain and the business's.
 
 **What the console shows about tenants** is what the CLI already shows: a tenant's id, name, status, plan, subscription state and dates, limits, usage counts and worker pool. Never its members, workflows, runs, secrets, invoices or card details. Opening a tenant is recorded in the platform audit chain.
 

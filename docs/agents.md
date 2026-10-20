@@ -23,6 +23,8 @@ The console lists the agents with what they have done: businesses signed up, pag
 2. **The owner agrees** by sending `AGREE` and the 6-digit code on the agent's screen to Taskiem's WhatsApp number, from their own phone. The agent's app shows a QR code the owner scans with their phone, and a link, each opening WhatsApp with the message written. The code works for 30 minutes; five wrong codes lock it, and the agent can make a new one.
 
    This proves the owner holds the number and agrees, without the owner ever reading a code to anyone: Taskiem's own codes always say never to share them, and this keeps that true.
+
+   **On Telegram** instead: the owner opens the Telegram link (or its QR code), or sends `AGREE` and the code to Taskiem's bot. The bot asks them to tap **Share my number**, which sends the number registered to their Telegram account; it must be their own contact and the number the agent entered. Their Telegram account is then linked to the owner's account, as their WhatsApp number would be. A Telegram bot cannot see a number otherwise, so the code alone is never enough.
 3. **The agent works** on the page for the next 24 hours: the storefront, its catalogue table, photos and opening hours, sending `X-Taskiem-Agent-Session: <session id>` with their own sign-in.
 4. **The agent records the visit** (`POST /v1/agent/sessions/{id}/attest`): a photo of the shop or stall and where it was taken. The photo is kept in the business's private storage, cleaned of its metadata. The business is then **agent onboarded** (one of the verification levels, beside a confirmed phone and a verified business).
 5. **Publishing ends the session.** The owner gets a WhatsApp message with the page's address and how to change it: send `MY PAGE`.
@@ -40,7 +42,7 @@ Everything the agent does is audited in the business's chain as `agent:<code>`, 
 
 ## The owner's side
 
-- **On WhatsApp,** `STOP AGENT` ends every agent session on the businesses the owner owns.
+- **On WhatsApp or Telegram,** `STOP AGENT` ends every agent session on the businesses the owner owns.
 - **In the app,** the owner (or anyone with `member.manage`) sees every agent session on the organisation (who, when, and how it ended), ends one, or **invites an agent back** for a support visit: the code on the agent's card and 1 to 8 hours (default 2). A support visit is active at once, with the same limits.
 
 ## Where it is in the web app
@@ -66,6 +68,6 @@ A request in a session that has ended, or is not the agent's, is refused with `4
 
 ## Not yet
 
-- Owners without WhatsApp: the owner agrees from WhatsApp only.
+- Owners with neither WhatsApp nor Telegram: the owner agrees from one of them.
 - Paying agents (commission on businesses that stay active), and agents' own performance pages.
 - Owners of agent-made businesses signing in to the web app: they have no email or password until they add them.

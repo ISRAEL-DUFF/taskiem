@@ -205,7 +205,7 @@ func TestStorefrontInTheDatabase(t *testing.T) {
 
 	// Publishing needs a preview domain, then claims its host.
 	pub := d.PublicPool(t, 1)
-	if err := in(t, d, t1, func(tx pgx.Tx) error { _, err := Publish(ctx, tx, t1, "", "user:ada"); return err }); !errors.Is(err, ErrInvalid) {
+	if err := in(t, d, t1, func(tx pgx.Tx) error { _, err := Publish(ctx, tx, t1, "", "user:ada", false); return err }); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("no preview domain: %v", err)
 	}
 	card.Logo = rejected.ID.String()
@@ -213,7 +213,7 @@ func TestStorefrontInTheDatabase(t *testing.T) {
 		if _, err := Save(ctx, tx, t1, "ada-kitchen", card, nil, Columns{}, "user:ada"); err != nil {
 			return err
 		}
-		_, err := Publish(ctx, tx, t1, "shops.test", "user:ada")
+		_, err := Publish(ctx, tx, t1, "shops.test", "user:ada", false)
 		return err
 	}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("a rejected logo was published: %v", err)
@@ -224,7 +224,7 @@ func TestStorefrontInTheDatabase(t *testing.T) {
 			return err
 		}
 		var err error
-		sf, err = Publish(ctx, tx, t1, "Shops.Test", "user:ada")
+		sf, err = Publish(ctx, tx, t1, "Shops.Test", "user:ada", false)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -256,7 +256,7 @@ func TestStorefrontInTheDatabase(t *testing.T) {
 		if _, err := Save(ctx, tx, t1, "adas-kitchen", card, nil, Columns{}, "user:ada"); err != nil {
 			return err
 		}
-		_, err := Publish(ctx, tx, t1, "shops.test", "user:ada")
+		_, err := Publish(ctx, tx, t1, "shops.test", "user:ada", false)
 		return err
 	}); err != nil {
 		t.Fatal(err)

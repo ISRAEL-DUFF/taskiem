@@ -156,7 +156,7 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_form(text)": true, "taskiem_public_form_link(bytea)": true, "taskiem_public_form_request(bytea)": true,
 		"taskiem_public_form_submit(uuid,uuid,uuid,bytea,text,bytea,bytea,bytea)": true, "taskiem_public_form_upload(uuid,text,bytea)": true,
 		"taskiem_public_form_code(uuid,bytea,bytea,bytea)": true, "taskiem_public_form_code_check(uuid,bytea,bytea)": true,
-		"taskiem_public_form_status(text,bytea)": true,
+		"taskiem_public_form_status(text,bytea)": true, "taskiem_public_report(text,text,text,text,bytea,bytea)": true,
 		// Own domains (S6): a storefront's primary domain, where its other hosts redirect.
 		"taskiem_public_storefront_domain(uuid)": true}
 	for _, f := range definers {

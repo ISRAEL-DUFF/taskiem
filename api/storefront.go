@@ -56,7 +56,8 @@ func storefrontErr(err error) error {
 	switch {
 	case errors.Is(err, storefront.ErrInvalid):
 		return fmt.Errorf("%w: %s", errBadRequest, plainError(err))
-	case errors.Is(err, storefront.ErrSlugTaken), errors.Is(err, storefront.ErrNotPublished):
+	case errors.Is(err, storefront.ErrSlugTaken), errors.Is(err, storefront.ErrNotPublished), errors.Is(err, storefront.ErrSuspended),
+		errors.Is(err, storefront.ErrNotInReview), errors.Is(err, errNeedsVerification):
 		return fmt.Errorf("%w: %s", errConflict, plainError(err))
 	case errors.Is(err, storefront.ErrNotFound):
 		return pgx.ErrNoRows
@@ -139,18 +140,22 @@ func (s *Server) publishStorefront(w http.ResponseWriter, r *http.Request) {
 	var sf storefront.Storefront
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if sf, err = storefront.Publish(r.Context(), tx, tenant, s.previewDomain(), principalFrom(r.Context()).Actor()); err != nil {
+		res, err := s.publishGated(r.Context(), tx, tenant, principalFrom(r.Context()).Actor())
+		if err != nil {
 			return storefrontErr(err)
 		}
-		return auditTx(r, tx, "storefront.publish", sf.Slug, map[string]any{"version": sf.PublishedVersion})
+		sf = res.Storefront
+		return auditTx(r, tx, "storefront.publish", sf.Slug, map[string]any{"version": sf.PublishedVersion, "held_for_review": res.Held,
+			"checks": res.Checks.Verdict})
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	out := s.storefrontOut(sf)
-	if p := principalFrom(r.Context()); p.Agent != nil && p.Agent.Kind == "onboarding" {
-		// Published: the onboarding is done (agents.go).
+	if p := principalFrom(r.Context()); p.Agent != nil && p.Agent.Kind == "onboarding" && sf.Status != "in_review" {
+		// Live: the onboarding is done (agents.go). Held for review, the
+		// agent may still change it.
 		s.agentPublished(r.Context(), p, sf.Draft.Name, out.URL)
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -262,6 +267,10 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 			_ = storefront.CatalogueFailed(ctx, tx, tenant, err)
 			return err
 		}
+		// A live page's items are checked as they are copied (moderation.go).
+		if items, err = s.moderateItems(ctx, tx, tenant, items); err != nil {
+			return err
+		}
 		return storefront.SyncCatalogue(ctx, tx, tenant, items)
 	})
 	if err != nil {
@@ -314,6 +323,10 @@ func (s *Server) RunStorefronts(ctx context.Context) error {
 					s.Logger.Warn("storefront catalogue refresh", "tenant", t, "err", serr)
 				}
 			}
+		}
+		// Reported pages and paused orders (trust.go).
+		if terr := s.TrustTick(ctx); terr != nil && ctx.Err() == nil {
+			s.Logger.Error("storefront trust checks", "err", terr)
 		}
 		if err != nil && ctx.Err() == nil {
 			s.Logger.Error("storefront catalogue refreshes", "err", err)

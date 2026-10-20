@@ -29,10 +29,72 @@ whatsapp_template_kobo:
   authentication: 1100
 
 plans:
+  # The storefront plans (storefronts spec 11): below Starter, for one
+  # trader or service. Their prices are placeholders like the rest (B1);
+  # the domain from the domain platform joins them with S6.
+  - id: shop
+    name: Shop
+    tier: shop
+    sort: 1
+    public: true
+    active: true
+    monthly_kobo: 500000       # PLACEHOLDER (B1): ₦5,000
+    annual_kobo: 5000000       # PLACEHOLDER (B1): ₦50,000
+    limits:
+      max_running_runs: 2
+      worker_concurrency: 2
+      ingest_rate: 2
+      ingest_burst: 10
+      ingest_ceiling: 5
+      ingest_ceiling_burst: 25
+      max_queued_runs: 200
+      max_workflows: 10
+      max_steps_per_run: 2000
+      max_retention_days: 7
+      ai_monthly_tokens: 0
+      whatsapp_templates_monthly: 300
+      container_minutes_monthly: 0
+      max_data_tables: 3
+      storefront_items: 50
+      storefront_orders_monthly: 300      # PLACEHOLDER (B1): fair use
+      storefront_bookings_monthly: 300    # PLACEHOLDER (B1): fair use
+      sms_monthly: 100                    # PLACEHOLDER (B1)
+      embed_sites: 1
+    features: {}
+
+  - id: shop_plus
+    name: Shop Plus
+    tier: shop
+    sort: 2
+    public: true
+    active: true
+    monthly_kobo: 1000000      # PLACEHOLDER (B1): ₦10,000
+    annual_kobo: 10000000      # PLACEHOLDER (B1): ₦100,000
+    limits:
+      max_running_runs: 3
+      worker_concurrency: 3
+      ingest_rate: 3
+      ingest_burst: 15
+      ingest_ceiling: 10
+      ingest_ceiling_burst: 50
+      max_queued_runs: 500
+      max_workflows: 15
+      max_steps_per_run: 5000
+      max_retention_days: 7
+      ai_monthly_tokens: 0
+      whatsapp_templates_monthly: 500
+      container_minutes_monthly: 0
+      max_data_tables: 5
+      storefront_items: 500
+      storefront_orders_monthly: 1500     # PLACEHOLDER (B1): fair use
+      storefront_bookings_monthly: 1500   # PLACEHOLDER (B1): fair use
+      sms_monthly: 500                    # PLACEHOLDER (B1)
+      embed_sites: 3
+    features: {storefront_pay_on_order: true}
   - id: starter
     name: Starter
     tier: starter
-    sort: 1
+    sort: 3
     public: true
     active: true
     monthly_kobo: 1500000      # PLACEHOLDER (B1): ₦15,000
@@ -52,12 +114,14 @@ plans:
       whatsapp_templates_monthly: 500
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
       max_data_tables: 10
-    features: {ai: true}
+      storefront_items: 2000
+      sms_monthly: 1000                   # PLACEHOLDER (B1)
+    features: {storefront_pay_on_order: true, ai: true}
 
   - id: growth
     name: Growth
     tier: growth
-    sort: 2
+    sort: 4
     public: true
     active: true
     monthly_kobo: 6000000      # PLACEHOLDER (B1): ₦60,000
@@ -77,12 +141,14 @@ plans:
       whatsapp_templates_monthly: 2000
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
       max_data_tables: 50
-    features: {ai: true, git: true}
+      storefront_items: 2000
+      sms_monthly: 1000                   # PLACEHOLDER (B1)
+    features: {storefront_pay_on_order: true, ai: true, git: true}
 
   - id: business
     name: Business
     tier: business
-    sort: 3
+    sort: 5
     public: true
     active: true
     monthly_kobo: 25000000     # PLACEHOLDER (B1): ₦250,000
@@ -102,7 +168,9 @@ plans:
       whatsapp_templates_monthly: 10000
       container_minutes_monthly: 600   # PLACEHOLDER (CS3): 0 = container steps off
       max_data_tables: 0
-    features: {ai: true, git: true, sso: true, embedded: true}
+      storefront_items: 2000
+      sms_monthly: 1000                   # PLACEHOLDER (B1)
+    features: {storefront_pay_on_order: true, ai: true, git: true, sso: true, embedded: true}
     partner:
       max_subtenants: 50
       subtenant_runs_per_month: 200000
@@ -110,7 +178,7 @@ plans:
   - id: enterprise
     name: Enterprise
     tier: enterprise
-    sort: 4
+    sort: 6
     public: false              # sales-led: operators grant it (taskiem billing grant)
     active: true
     monthly_kobo: 100000000    # PLACEHOLDER (B1): ₦1,000,000; usually a custom contract
@@ -124,7 +192,7 @@ plans:
       ai_monthly_tokens: 50000000
       whatsapp_templates_monthly: 100000
       container_minutes_monthly: 3000   # PLACEHOLDER (CS3): 0 = container steps off
-    features: {ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
+    features: {storefront_pay_on_order: true, ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
     partner:
       max_subtenants: 0
     overage:

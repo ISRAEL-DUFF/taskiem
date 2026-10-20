@@ -3,9 +3,11 @@ import { createPortal } from "react-dom";
 import { Link, NavLink } from "react-router-dom";
 import { ApiError, currentAgentSession, get, getBlob, post, put, uploadFile } from "../api";
 import { useAuth } from "../auth";
-import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { StorefrontForms } from "./StorefrontForms";
+import { PageStatusBadge, RefusalBox, TrustNotices, TrustPanel } from "./StorefrontTrust";
+import { publishNotice, type Trust } from "../lib/trust";
 import { StorefrontDomains } from "./StorefrontDomains";
 import type { Table } from "../lib/tables";
 import {
@@ -85,12 +87,17 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
   const [closing, setClosing] = useState(false);
   const [notice, setNotice] = useState("");
   const [catalogueTick, setCatalogueTick] = useState(0);
+  const [trustTick, setTrustTick] = useState(0);
+  const trust = useLoad(() => (saved ? get<Trust>("/v1/storefront/trust") : Promise.resolve(undefined)), [saved === null, trustTick]);
+  const reloadTrust = () => setTrustTick((n) => n + 1);
   const act = useAction();
   const base = formFrom(saved);
   const dirty = saved === null || !sameRequest(form, base);
   const templates = saved?.templates ?? DEFAULT_TEMPLATES;
   const accents = saved?.accents ?? DEFAULT_ACCENTS;
   const published = !!saved && saved.published_version > 0;
+  // Served to customers: not waiting for Taskiem's check, nor suspended.
+  const live = published && (saved.status === "published" || saved.status === "closed");
   const hourProblems = hoursErrors(form.hours);
   const slugBad = slugError(form.slug);
 
@@ -132,11 +139,13 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
   const publish = async () => {
     if (dirty) await save();
     const out = await tidy(post<SF>("/v1/storefront/publish"));
-    changed(out, `Published version ${out.published_version}.`);
+    changed(out, publishNotice(out));
     setCatalogueTick((n) => n + 1);
+    reloadTrust();
   };
 
   const canSave = !slugBad && hourProblems.length === 0;
+  const suspended = saved?.status === "suspended";
 
   return (
     <>
@@ -148,7 +157,12 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
             <button disabled={act.busy || !dirty || !canSave} onClick={() => void act.run(save)}>
               Save draft
             </button>
-            <button className="primary" disabled={act.busy || !canSave} onClick={() => void act.run(publish)}>
+            <button
+              className="primary"
+              disabled={act.busy || !canSave || suspended}
+              title={suspended ? "A suspended page cannot be published until Taskiem restores it" : undefined}
+              onClick={() => void act.run(publish)}
+            >
               {dirty && saved ? "Save and publish" : "Publish"}
             </button>
           </>
@@ -160,7 +174,7 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
           {notice}
         </div>
       )}
-      <ErrorBox error={act.error} />
+      <RefusalBox error={act.error} />
 
       <section className="card" aria-labelledby="sf-status">
         <h2 id="sf-status">Status</h2>
@@ -173,14 +187,14 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
             <dl className="kv">
               <dt>Status</dt>
               <dd>
-                <Badge value={saved.status} />
+                <PageStatusBadge status={saved.status} />
                 {dirty && <span className="hint"> Unsaved changes</span>}
               </dd>
               <dt>Published version</dt>
               <dd>{published ? saved.published_version : "Not published yet"}</dd>
               <dt>Published</dt>
               <dd>{fmtTime(saved.published_at)}</dd>
-              {published && (
+              {live && (
                 <>
                   <dt>Address</dt>
                   <dd>
@@ -201,6 +215,7 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
                 </>
               )}
             </dl>
+            <TrustNotices state={saved} trust={trust.data} onChanged={reloadTrust} />
             {published && (
               <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
                 {saved.status === "published" && (
@@ -325,9 +340,11 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
         )}
       </section>
 
+      {saved && <TrustPanel trust={trust.data} error={trust.error} onChanged={reloadTrust} />}
+
       {saved && <StorefrontForms previewURL={pageURL(saved)} published={published} />}
 
-      {saved && published && pageURL(saved) && <Share sf={saved} form={form} />}
+      {saved && live && pageURL(saved) && <Share sf={saved} form={form} />}
 
       {saved && !currentAgentSession() && (
         <StorefrontDomains

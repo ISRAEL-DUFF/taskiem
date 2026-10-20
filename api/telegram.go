@@ -206,13 +206,19 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		return nil
 	}
 	in := whatsapp.Inbound{ID: strconv.FormatInt(u.ID, 10), Type: "text", Text: strings.TrimSpace(u.Text)}
-	// A link being opened: t.me/<bot>?start=<code> arrives as "/start <code>".
-	if code, ok := strings.CutPrefix(in.Text, "/start "); ok {
-		return s.tgRedeem(ctx, u, strings.TrimSpace(code))
-	}
 	user, err := tg.UserOf(ctx, u.FromID)
 	if err != nil {
 		return err
+	}
+	// An owner agreeing to a field agent, or ending their sessions (agents.go).
+	if u.Kind == "message" {
+		if done, err := s.tgAgentMessage(ctx, u, user); done || err != nil {
+			return err
+		}
+	}
+	// A link being opened: t.me/<bot>?start=<code> arrives as "/start <code>".
+	if code, ok := strings.CutPrefix(in.Text, "/start "); ok {
+		return s.tgRedeem(ctx, u, strings.TrimSpace(code))
 	}
 	if user == uuid.Nil {
 		return s.tgUnbound(ctx, addr, in.Text)

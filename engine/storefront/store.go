@@ -54,6 +54,12 @@ type Storefront struct {
 	CatalogueSynced *time.Time `json:"catalogue_synced_at"`
 	CatalogueError  *string    `json:"catalogue_error"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+	// ReviewNote is why a first publish was turned down (status draft
+	// again); SuspendedReason why the page is suspended; OrdersPaused why
+	// orders and bookings are paused, when they are (docs/moderation.md).
+	ReviewNote      *string `json:"review_note"`
+	SuspendedReason *string `json:"suspended_reason"`
+	OrdersPaused    *string `json:"orders_paused"`
 	// Domain is the primary of the business's own verified domains
 	// (domains.go), where the page is served once published.
 	Domain *string `json:"domain"`
@@ -110,7 +116,7 @@ type Item struct {
 func (it Item) SoldOut() bool { return it.Stock != nil && *it.Stock <= 0 }
 
 const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, published_version, published_slug, published_at, closed_message,
-	catalogue_synced_at, catalogue_error, updated_at, services_table, services_columns, availability,
+	catalogue_synced_at, catalogue_error, updated_at, services_table, services_columns, availability, review_note, suspended_reason, orders_paused,
 	(SELECT m.urls FROM storefront_media m WHERE m.tenant_id = storefronts.tenant_id AND m.id::text = storefronts.draft->>'logo' AND m.moderation <> 'rejected'),
 	(SELECT d.host FROM storefront_domains d WHERE d.storefront_id = storefronts.id AND d.verified_at IS NOT NULL
 	  ORDER BY d.is_primary DESC, d.verified_at, d.host LIMIT 1)`
@@ -119,7 +125,8 @@ func scan(r pgx.Row) (Storefront, error) {
 	var s Storefront
 	var draft, columns, scols, avail, logo []byte
 	err := r.Scan(&s.ID, &s.Slug, &s.Status, &draft, &s.CatalogueTable, &columns, &s.PublishedVersion, &s.PublishedSlug, &s.PublishedAt,
-		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &s.ServicesTable, &scols, &avail, &logo, &s.Domain)
+		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &s.ServicesTable, &scols, &avail,
+		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo, &s.Domain)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Storefront{}, ErrNotFound
 	}
@@ -166,10 +173,17 @@ func Save(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, slug string, card Ca
 // preview host previewDomain gives (<slug>.<previewDomain>) and makes the
 // storefront published. The catalogue must have been synced first
 // (SyncCatalogue), in the same transaction or before.
-func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, actor string) (Storefront, error) {
+//
+// With hold, the version waits for a person (status in_review) instead of
+// going live: a first publish the checks or the business's verification
+// send to the review queue (docs/moderation.md).
+func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, actor string, hold bool) (Storefront, error) {
 	s, err := Get(ctx, tx, tenant)
 	if err != nil {
 		return Storefront{}, err
+	}
+	if s.Status == "suspended" {
+		return Storefront{}, ErrSuspended
 	}
 	card := s.Draft
 	if err := card.Check(); err != nil {
@@ -203,8 +217,9 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 		s.ID, m.Version, tenant, raw, sum[:], actor); err != nil {
 		return Storefront{}, err
 	}
-	return scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = CASE WHEN status = 'closed' THEN 'closed' ELSE 'published' END,
-		published_version = $2, published_slug = slug, published_at = now(), updated_at = now() WHERE tenant_id = $1 RETURNING `+cols, tenant, m.Version))
+	return scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = CASE WHEN $3 THEN 'in_review' WHEN status = 'closed' THEN 'closed' ELSE 'published' END,
+		review_note = NULL, published_version = $2, published_slug = slug, published_at = now(), updated_at = now() WHERE tenant_id = $1 RETURNING `+cols,
+		tenant, m.Version, hold))
 }
 
 // DefaultClosedMessage is what a page closed without a message says.

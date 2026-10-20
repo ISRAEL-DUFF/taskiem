@@ -465,6 +465,16 @@ fieldset.sf-day:last-child { border-bottom: none; }
 .sf-share .toolbar { margin: 0; }
 .sf-qr { width: 180px; height: 180px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm); image-rendering: pixelated; }
 .sf-forms { display: flex; flex-direction: column; gap: 12px; }
+/* Storefront trust (docs/moderation.md): verification levels, the appeal and verification forms. */
+.sf-trust-levels { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.sf-appeal, .sf-verify { margin-top: 12px; }
+.sf-verify { border-top: 1px solid var(--border); padding-top: 12px; }
+/* The operator console's photo grid for a storefront review. */
+.ops-photos { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+.ops-photos li { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.ops-photos img { width: 120px; height: 120px; object-fit: cover; border-radius: var(--radius-sm); background: var(--code-bg); }
+/* The agent's consent screen: WhatsApp or Telegram. */
+.agent-channels { display: flex; gap: 8px; margin: 12px 0; }
 .sf-form { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
 .sf-setup { margin-bottom: 10px; }
 .sf-booking-day h3 { margin: 18px 0 8px; font-size: 15px; }
@@ -577,3 +587,7 @@ button.small { padding: 2px 8px; font-size: 0.85em; box-shadow: none; }
 .agent-banner-text span { font-size: 13px; color: var(--nav-text); font-variant-numeric: tabular-nums; }
 .agent-banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .main.agent-main { padding: 16px 0 48px; }
+
+/* A link inside running text is underlined, so it is told apart without
+   colour (WCAG 1.4.1). */
+a.inline-link { text-decoration: underline; text-underline-offset: 2px; }

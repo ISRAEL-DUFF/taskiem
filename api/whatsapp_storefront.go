@@ -118,6 +118,8 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 		do = func() error { return s.waMyPage(ctx, c) }
 	case cmd == "publish" || cmd == "publish my page" || cmd == "publish my shop":
 		do = func() error { return s.waShopPublishAsk(ctx, c) }
+	case words[0] == "appeal":
+		do = func() error { return s.waShopAppeal(ctx, c, args(1)) }
 	case cmd == "qr" || cmd == "qr code" || cmd == "my qr" || cmd == "my qr code":
 		do = func() error { return s.waShopQR(ctx, c) }
 	case len(words) >= 2 && words[0] == "add" && words[1] == "product":
@@ -257,7 +259,18 @@ func (s *Server) waMyPage(ctx context.Context, c *chat) error {
 		return err
 	}
 	name := whatsapp.SafeText(sf.Draft.Name)
-	if sf.PublishedVersion == 0 {
+	switch {
+	case sf.Status == "in_review":
+		return c.say(ctx, s, c.t("wa.shop.in_review", "name", name))
+	case sf.Status == "suspended":
+		why := ""
+		if sf.SuspendedReason != nil {
+			why = whatsapp.SafeText(*sf.SuspendedReason)
+		}
+		return c.say(ctx, s, c.t("wa.shop.page_suspended", "name", name, "reason", why))
+	case sf.PublishedVersion == 0 && sf.ReviewNote != nil:
+		return c.say(ctx, s, c.t("wa.shop.page_turned_down", "name", name, "reason", whatsapp.SafeText(*sf.ReviewNote)))
+	case sf.PublishedVersion == 0:
 		return c.say(ctx, s, c.t("wa.shop.page_draft", "name", name))
 	}
 	var count int
@@ -570,18 +583,23 @@ func (s *Server) waShopPublish(ctx context.Context, c *chat) error {
 		return c.say(ctx, s, c.t("wa.shop.publish_failed", "reason", tablesChatReason(err)))
 	}
 	var sf storefront.Storefront
+	var held bool
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
-		var err error
-		if sf, err = storefront.Publish(ctx, tx, c.tenant.ID, s.previewDomain(), c.p.Actor()); err != nil {
+		res, err := s.publishGated(ctx, tx, c.tenant.ID, c.p.Actor())
+		if err != nil {
 			return err
 		}
-		return waAudit(ctx, tx, c.ch.Name(), c.p, "storefront.publish", sf.Slug, map[string]any{"version": sf.PublishedVersion})
+		sf, held = res.Storefront, res.Held
+		return waAudit(ctx, tx, c.ch.Name(), c.p, "storefront.publish", sf.Slug, map[string]any{"version": sf.PublishedVersion, "held_for_review": held})
 	})
-	if errors.Is(err, storefront.ErrInvalid) || errors.Is(err, storefront.ErrSlugTaken) {
-		return c.say(ctx, s, c.t("wa.shop.publish_failed", "reason", whatsapp.SafeText(plainError(err))))
+	if reason, ok := publishRefusal(err); ok {
+		return c.say(ctx, s, c.t("wa.shop.publish_failed", "reason", whatsapp.SafeText(reason)))
 	}
 	if err != nil {
 		return err
+	}
+	if held {
+		return c.say(ctx, s, c.t("wa.shop.in_review", "name", whatsapp.SafeText(sf.Draft.Name)))
 	}
 	link := s.shopLink(sf)
 	name := whatsapp.SafeText(sf.Draft.Name)
@@ -1045,9 +1063,11 @@ func (s *Server) shopRepublish(ctx context.Context, c *chat) (storefront.Storefr
 		if sf, err = storefront.Get(ctx, tx, c.tenant.ID); err != nil || sf.PublishedVersion == 0 {
 			return err
 		}
-		if sf, err = storefront.Publish(ctx, tx, c.tenant.ID, s.previewDomain(), c.p.Actor()); err != nil {
+		res, err := s.publishGated(ctx, tx, c.tenant.ID, c.p.Actor())
+		if err != nil {
 			return err
 		}
+		sf = res.Storefront
 		return waAudit(ctx, tx, c.ch.Name(), c.p, "storefront.publish", sf.Slug, map[string]any{"version": sf.PublishedVersion})
 	})
 	return sf, err
@@ -1558,4 +1578,31 @@ func (s *Server) shopComplete(ctx context.Context, c *chat, ref string) error {
 		return err
 	}
 	return c.say(ctx, s, c.t("wa.shop.completed", "ref", ref))
+}
+
+// waShopAppeal answers "appeal <message>": a suspended page, or a first
+// publish turned down, is looked at again (trust.go).
+func (s *Server) waShopAppeal(ctx context.Context, c *chat, message string) error {
+	if !c.p.Can(PermStorefrontManage) {
+		return c.say(ctx, s, c.t("wa.shop.denied", "org", c.tenant.Name))
+	}
+	if strings.TrimSpace(message) == "" {
+		return c.say(ctx, s, c.t("wa.shop.appeal_how"))
+	}
+	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		return s.appeal(ctx, tx, c.tenant.ID, message, c.p.Actor(), func(target string) error {
+			return waAudit(ctx, tx, c.ch.Name(), c.p, "storefront.appeal", target, nil)
+		})
+	})
+	switch {
+	case errors.Is(err, errConflict):
+		return c.say(ctx, s, c.t("wa.shop.appeal_none"))
+	case errors.Is(err, errBadRequest):
+		return c.say(ctx, s, c.t("wa.shop.appeal_how"))
+	case errors.Is(err, storefront.ErrNotFound), errors.Is(err, pgx.ErrNoRows):
+		return c.say(ctx, s, c.t("wa.shop.none_yet", "org", c.tenant.Name))
+	case err != nil:
+		return err
+	}
+	return c.say(ctx, s, c.t("wa.shop.appeal_sent"))
 }

@@ -31,7 +31,7 @@ func formsService(cfg config, e *engine, log *slog.Logger) (*forms.Service, erro
 		s.Scanner = &forms.ClamdScanner{Addr: addr}
 	}
 	if len(cfg.Messages.HashKey) == 32 {
-		s.Messages = &sender.Queue{Vault: e.vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries}
+		s.Messages = &sender.Queue{Vault: e.vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries, Allowance: e.smsAllowance}
 	} else {
 		log.Warn("TASKIEM_MESSAGE_HASH_KEY is unset: form steps' links and codes are not sent")
 	}

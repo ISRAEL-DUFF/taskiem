@@ -26,6 +26,8 @@ type Call struct {
 	Photo     string                    // sendPhoto: the photo's URL
 	Entities  []telegram.Entity         // formatting (bold), as sent
 	Keyboard  [][]telegram.InlineButton // the inline keyboard (empty when removed)
+	// AskContact: a reply keyboard with a "share my number" button.
+	AskContact bool
 	// answerCallbackQuery
 	CallbackID string
 	// setWebhook
@@ -189,6 +191,10 @@ func (b *Bot) serve(w http.ResponseWriter, r *http.Request) {
 				Text         string `json:"text"`
 				CallbackData string `json:"callback_data"`
 			} `json:"inline_keyboard"`
+			Keyboard [][]struct {
+				Text           string `json:"text"`
+				RequestContact bool   `json:"request_contact"`
+			} `json:"keyboard"`
 		} `json:"reply_markup"`
 		CallbackQueryID string   `json:"callback_query_id"`
 		FileID          string   `json:"file_id"`
@@ -205,7 +211,9 @@ func (b *Bot) serve(w http.ResponseWriter, r *http.Request) {
 	if method == "sendPhoto" {
 		c.Text, c.Entities, c.Photo = in.Caption, in.CaptionEnts, in.Photo
 	}
-	if in.ReplyMarkup != nil {
+	if in.ReplyMarkup != nil && len(in.ReplyMarkup.Keyboard) == 1 && len(in.ReplyMarkup.Keyboard[0]) == 1 && in.ReplyMarkup.Keyboard[0][0].RequestContact {
+		c.AskContact = true
+	} else if in.ReplyMarkup != nil {
 		c.Keyboard = [][]telegram.InlineButton{}
 		for _, row := range in.ReplyMarkup.InlineKeyboard {
 			var bs []telegram.InlineButton
@@ -332,6 +340,17 @@ func private(id int64) map[string]any {
 func Message(updateID, userID int64, username, text string) []byte {
 	body, _ := json.Marshal(map[string]any{"update_id": updateID, "message": map[string]any{
 		"message_id": updateID, "from": from(userID, username), "chat": private(userID), "date": 1759800000, "text": text,
+	}})
+	return body
+}
+
+// ContactMessage is an update sharing a contact in the private chat of
+// user id: its own (as the "share my number" button sends) when owner is
+// userID.
+func ContactMessage(updateID, userID int64, phone string, owner int64) []byte {
+	body, _ := json.Marshal(map[string]any{"update_id": updateID, "message": map[string]any{
+		"message_id": updateID, "from": from(userID, ""), "chat": private(userID), "date": 1759800000,
+		"contact": map[string]any{"phone_number": phone, "first_name": "Someone", "user_id": owner},
 	}})
 	return body
 }

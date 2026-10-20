@@ -17,6 +17,7 @@ func TestStorefrontDomains(t *testing.T) {
 	w.srv.PublicHosts = []string{"shops.taskiem.test"}
 	w.srv.DomainTarget = storefront.DomainTarget{Addresses: []string{"203.0.113.7"}}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w, owner, "phone", "business") // publishing goes live at once (moderation.md)
 
 	// A domain needs a storefront first.
 	owner.must(409, "POST", "/v1/storefront/domains", map[string]any{"domain": "adakitchen.ng"})
@@ -54,6 +55,7 @@ func TestStorefrontDomains(t *testing.T) {
 
 	// Another organisation adds it too and proves it first: it serves it.
 	other := w.tenant(t, "Bola Bakes", "bola@bola.test")
+	verifyPhone(t, w, other, "phone", "business") // publishing goes live at once (moderation.md)
 	other.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "bola-bakes", "draft": map[string]any{"name": "Bola Bakes", "template": "classic", "accent": "green"}})
 	theirs := other.must(201, "POST", "/v1/storefront/domains", map[string]any{"domain": "adakitchen.ng"})
 	txt["_taskiem-verify.adakitchen.ng"] = []string{token, theirs["token"].(string)}

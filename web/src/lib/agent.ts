@@ -119,3 +119,15 @@ export function visitHours(text: string): number | null {
 export function agentCodeOK(code: string): boolean {
   return /^AG-[0-9A-Z]{5}$/i.test(code.trim());
 }
+
+export type ConsentChannel = "whatsapp" | "telegram";
+
+/** Where the owner can agree from, by what the consent offers: WhatsApp
+ * (a wa.me link or its QR) and Telegram (a t.me link). With neither link,
+ * WhatsApp: the owner sends the message to the number shown. */
+export function consentChannels(c: { link?: string; qr?: string; telegram_link?: string }): ConsentChannel[] {
+  const out: ConsentChannel[] = [];
+  if (c.link || c.qr || !c.telegram_link) out.push("whatsapp");
+  if (c.telegram_link) out.push("telegram");
+  return out;
+}

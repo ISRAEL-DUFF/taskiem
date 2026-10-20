@@ -31,6 +31,8 @@ Taskiem sells flat-priced plans (spec 16): a monthly or annual fee per tier, nev
 
 ### The catalogue
 
+The tiers, cheapest first: `shop` (the storefront plans **Shop** and **Shop Plus**, [moderation](moderation.md#plans)), `starter`, `growth`, `business`, `enterprise`.
+
 `deploy/plans.yaml` has the commercial terms and the plans. Amounts are kobo. Limits use the keys of `taskiem tenants limits` ([plan limits](operations.md#plan-limits)); a key left out keeps the platform default, and `0` is no limit.
 
 | Field | Meaning |
@@ -44,7 +46,7 @@ Taskiem sells flat-priced plans (spec 16): a monthly or annual fee per tier, nev
 | `due_days` | Invoice payment terms |
 | `whatsapp_template_kobo` | Meta's price per template beyond the allowance, by category (marketing, utility, authentication), passed through at cost |
 | `plans[].limits` | Any `tenant_limits` key, including `max_retention_days` (history kept at most this long after a run ends) |
-| `plans[].features` | `sso`, `scim`, `custom_roles`, `white_label`, `byok`, `git`, `ai`, `embedded` |
+| `plans[].features` | `sso`, `scim`, `custom_roles`, `white_label`, `byok`, `git`, `ai`, `embedded`, `storefront_pay_on_order` (a storefront taking payment when customers order; every plan but Shop) |
 | `plans[].partner` | Embedded tiers: `subtenant_runs_per_day`, `subtenant_runs_per_month` (used when the operator set none with `taskiem tenants partner`), `max_subtenants` (a downgrade below the partner's count is refused) |
 | `plans[].overage.ai_kobo_per_million_tokens` | Bill AI beyond the budget instead of refusing it (0: the budget is a hard cap) |
 | `plans[].public`, `active` | Offered self-serve; retired (subscribers keep it). A plan removed from the file is retired, never deleted |

@@ -5,6 +5,8 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -133,6 +135,59 @@ func TestStorefrontQR(t *testing.T) {
 	if w := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/qr.png"); w.Code != 404 {
 		t.Errorf("draft: %d", w.Code)
 	}
+}
+
+func TestStorefrontTrustStates(t *testing.T) {
+	// Suspended: every path says the page is unavailable.
+	p := samplePage("classic", 2)
+	p.Status = "suspended"
+	s, _ := storefrontServer(t, p, true)
+	for _, path := range []string{"/", "/a/order", "/qr.png", "/report"} {
+		w := get(s.Handler(), "GET", "ada-kitchen.shops.test", path)
+		if w.Code != 410 || !strings.Contains(w.Body.String(), "This page is unavailable") || strings.Contains(w.Body.String(), "Dish number") {
+			t.Fatalf("suspended %s: %d %s", path, w.Code, w.Body.String())
+		}
+	}
+	// Verified: the badge. And the footer's report link and safety line.
+	p = samplePage("bold", 2)
+	p.Verified = true
+	s, _ = storefrontServer(t, p, true)
+	body := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/").Body.String()
+	for _, want := range []string{"Verified business", `href="/report"`, "never asks for card details, PINs or OTPs"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %q", want)
+		}
+	}
+	// The report form, and a report taken.
+	var got Report
+	s.Reports = func(_ context.Context, r Report) (bool, error) { got = r; return true, nil }
+	if w := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/report"); w.Code != 200 || !strings.Contains(w.Body.String(), "It looks like a scam") {
+		t.Fatalf("report form: %d", w.Code)
+	}
+	w := post(s.Handler(), "ada-kitchen.shops.test", "/report", "reason=scam&message=asked+for+my+OTP")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "Thank you") || got.Reason != "scam" || got.Kind != "storefront" || len(got.IPHash) != 32 {
+		t.Fatalf("report: %d %+v", w.Code, got)
+	}
+	if w := post(s.Handler(), "ada-kitchen.shops.test", "/report", "reason=nonsense"); w.Code != 400 {
+		t.Fatalf("a made-up reason: %d", w.Code)
+	}
+	// Orders paused: the order form says so instead of taking orders.
+	p = samplePage("classic", 2)
+	p.OrdersPaused = true
+	p.Model.Actions = []storefront.PublicAction{{Kind: "order", Label: "Order"}}
+	s, _ = storefrontServer(t, p, true)
+	if w := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/a/order"); !strings.Contains(w.Body.String(), "not taking orders online right now") {
+		t.Fatalf("paused: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func post(h http.Handler, host, path, form string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(http.MethodPost, "https://"+host+path, strings.NewReader(form))
+	r.Host = host
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
 }
 
 // TestOwnDomain: once the storefront's own domain is live, its other

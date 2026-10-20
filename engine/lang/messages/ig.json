@@ -32,6 +32,18 @@
       "text": "Peeji {business} adịla ndụ: {link}\nZiga MY PAGE ebe a mgbe ọ bụla iji gbanwee ọnụahịa, tinye ngwaahịa ma ọ bụ hụ ịtụ.",
       "reviewed": false
     },
+    "agent.share_button": {
+      "text": "Kesaa nọmba m",
+      "reviewed": false
+    },
+    "agent.share_number": {
+      "text": "Iji kwenye, pịa Share my number n'okpuru. Telegram ga-ezitere Taskiem nọmba dị na akaụntụ gị, ka Taskiem mara na ọ bụ nke gị.",
+      "reviewed": false
+    },
+    "agent.share_own": {
+      "text": "Kesaa nọmba nke gị site na bọtịnụ ahụ, ọ bụghị nke onye ọzọ. Ziga AGREE na koodu ahụ ọzọ ka ịmalite ọzọ.",
+      "reviewed": false
+    },
     "agent.stopped": {
       "text": "O mechaala. {agents} enweghịzi ike ịrụ ọrụ na azụmahịa gị.",
       "reviewed": false
@@ -888,6 +900,18 @@
       "text": "Ụlọ ahịa gị emeghelarị.",
       "reviewed": false
     },
+    "wa.shop.appeal_how": {
+      "text": "Ziga APPEAL na ozi gị, dịka: APPEAL ndị a bụ ekwentị mbụ nwere akwụkwọ ịnata ego.",
+      "reviewed": false
+    },
+    "wa.shop.appeal_none": {
+      "text": "Ọ dịghị ihe ị ga-arịọ: akwụsịtụghị peeji gị ma ọ bụ jụ ya.",
+      "reviewed": false
+    },
+    "wa.shop.appeal_sent": {
+      "text": "Daalụ. Taskiem ga-eleba peeji gị anya ọzọ ma zaa ebe a, na-abụkarị n'ime otu ụbọchị ọrụ.",
+      "reviewed": false
+    },
     "wa.shop.ask_area": {
       "text": "3/5. Mpaghara gị ma ọ bụ adreesị gị? Dịka ọmụmaatụ: Yaba, Lagos. Zaa *skip* ịhapụ ya.",
       "reviewed": false
@@ -1020,6 +1044,10 @@
       "text": "Dee ya dịka *stock Jollof rice 20*: aha, mgbe ahụ ole fọdụrụ.",
       "reviewed": false
     },
+    "wa.shop.in_review": {
+      "text": "Peeji {name} nọ n'aka Taskiem maka nlele nta tupu ọ malite, na-abụkarị n'ime otu ụbọchị ọrụ. Ị ga-enweta ozi mgbe ọ malitere.",
+      "reviewed": false
+    },
     "wa.shop.kind.callback": {
       "text": "arịrịọ ịkpọghachi",
       "reviewed": false
@@ -1110,6 +1138,14 @@
     },
     "wa.shop.page_live": {
       "text": "Ebipụtala *{name}*: {link}\nỌda taa: {count}",
+      "reviewed": false
+    },
+    "wa.shop.page_suspended": {
+      "text": "Akwụsịtụla peeji {name}: {reason}\nIji kọwaa, ziga APPEAL na ozi gị.",
+      "reviewed": false
+    },
+    "wa.shop.page_turned_down": {
+      "text": "Taskiem enweghị ike ime ka peeji {name} malite: {reason}\nGbanwee ya ma ziga PUBLISH ọzọ, ma ọ bụ ziga APPEAL na ozi gị.",
       "reviewed": false
     },
     "wa.shop.photo_bad": {

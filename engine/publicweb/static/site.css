@@ -34,6 +34,8 @@ a { color: var(--accent); }
 .sf-logo { width: 96px; height: 96px; object-fit: cover; border-radius: 50%; }
 .sf-card h1 { margin: .5rem 0 .25rem; }
 .sf-tagline { color: var(--muted); margin: 0 0 .5rem; }
+.sf-verified { display: inline-block; margin: 0 0 .5rem; padding: .1rem .5rem; border-radius: 999px; font-size: .85rem; font-weight: 600; color: #0b5d2a; background: #e3f5e9; }
+.sf-verified::before { content: "✓ "; }
 .sf-open { display: inline-block; margin: 0 0 .5rem; padding: .125rem .5rem; border-radius: 1rem; font-size: .875rem; font-weight: 600; }
 .sf-open.is-open { background: #dcfce7; color: #14532d; }
 .sf-open.is-closed { background: #fee2e2; color: #7f1d1d; }

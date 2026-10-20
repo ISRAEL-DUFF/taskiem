@@ -32,6 +32,18 @@
       "text": "The page of {business} don go live: {link}\nSend MY PAGE here anytime to change price, add product or see orders.",
       "reviewed": false
     },
+    "agent.share_button": {
+      "text": "Share my number",
+      "reviewed": false
+    },
+    "agent.share_number": {
+      "text": "To agree, tap Share my number for down. Telegram go send Taskiem the number wey dey your account, so Taskiem go know say na your own.",
+      "reviewed": false
+    },
+    "agent.share_own": {
+      "text": "Share your own number with the button, no be another person own. Send AGREE and the code again to start again.",
+      "reviewed": false
+    },
     "agent.stopped": {
       "text": "E don do. {agents} no fit work on your business again.",
       "reviewed": false
@@ -888,6 +900,18 @@
       "text": "Your shop don already open.",
       "reviewed": false
     },
+    "wa.shop.appeal_how": {
+      "text": "Send APPEAL and your message, like: APPEAL na original phones with receipt.",
+      "reviewed": false
+    },
+    "wa.shop.appeal_none": {
+      "text": "Nothing dey to appeal: your page no suspend and dem no turn am down.",
+      "reviewed": false
+    },
+    "wa.shop.appeal_sent": {
+      "text": "Thank you. Taskiem go look your page again and reply here, usually inside one working day.",
+      "reviewed": false
+    },
     "wa.shop.ask_area": {
       "text": "3/5. Your area or address? Example: Yaba, Lagos. Reply *skip* to leave am.",
       "reviewed": false
@@ -1020,6 +1044,10 @@
       "text": "Write am like *stock Jollof rice 20*: di name, then how many remain.",
       "reviewed": false
     },
+    "wa.shop.in_review": {
+      "text": "The page of {name} dey with Taskiem for small check before e go live, usually inside one working day. We go message you when e don live.",
+      "reviewed": false
+    },
     "wa.shop.kind.callback": {
       "text": "call-back request",
       "reviewed": false
@@ -1110,6 +1138,14 @@
     },
     "wa.shop.page_live": {
       "text": "*{name}* don publish: {link}\nOrders today: {count}",
+      "reviewed": false
+    },
+    "wa.shop.page_suspended": {
+      "text": "The page of {name} don suspend: {reason}\nTo explain, send APPEAL and your message.",
+      "reviewed": false
+    },
+    "wa.shop.page_turned_down": {
+      "text": "Taskiem no fit put the page of {name} live: {reason}\nChange am and send PUBLISH again, or send APPEAL and your message.",
       "reviewed": false
     },
     "wa.shop.photo_bad": {

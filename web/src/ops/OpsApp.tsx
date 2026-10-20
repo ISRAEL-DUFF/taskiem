@@ -11,6 +11,7 @@ import { ErrorBox, Field, useAction } from "../ui";
 import { opsEnrol, opsGet, opsPasskeySignIn, opsPost, type OpsMe } from "./client";
 import { Queue, Submission } from "./Review";
 import { Agents } from "./Agents";
+import { Reports, StorefrontReview, StorefrontReviews } from "./Trust";
 import { Audit, Publishers, Reviewers, Status, Tenant, Tenants } from "./Pages";
 
 export function OpsApp() {
@@ -135,6 +136,8 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
     ["/ops/reviewers", "Reviewers", "members"],
     ["/ops/status", "Status page", "alerts"],
     ["/ops/tenants", "Tenants", "dashboard"],
+    ["/ops/storefront-reviews", "Storefront reviews", "approvals"],
+    ["/ops/reports", "Reports", "inbox"],
     ["/ops/agents", "Field agents", "storefront"],
     ["/ops/audit", "Platform audit", "audit"],
   ];
@@ -190,6 +193,9 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
           <Route path="/ops/status" element={<Status />} />
           <Route path="/ops/tenants" element={<Tenants />} />
           <Route path="/ops/tenants/:id" element={<Tenant />} />
+          <Route path="/ops/storefront-reviews" element={<StorefrontReviews />} />
+          <Route path="/ops/storefront-reviews/:id" element={<StorefrontReview />} />
+          <Route path="/ops/reports" element={<Reports />} />
           <Route path="/ops/agents" element={<Agents />} />
           <Route path="/ops/audit" element={<Audit />} />
           <Route path="*" element={<Navigate to="/ops/catalogue" replace />} />

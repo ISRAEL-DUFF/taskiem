@@ -32,6 +32,18 @@
       "text": "Ojú-ewé {business} ti wà lórí ayélujára: {link}\nFi MY PAGE ránṣẹ́ síbí nígbàkígbà láti yí iye owó padà, fi ọjà kún un tàbí wo àwọn ìbéèrè.",
       "reviewed": false
     },
+    "agent.share_button": {
+      "text": "Fi nọ́mbà mi ránṣẹ́",
+      "reviewed": false
+    },
+    "agent.share_number": {
+      "text": "Láti fọwọ́sí, tẹ Share my number nísàlẹ̀. Telegram yóò fi nọ́mbà tó wà lórí àkọọ́lẹ̀ rẹ ránṣẹ́ sí Taskiem, kí Taskiem lè mọ̀ pé tìrẹ ni.",
+      "reviewed": false
+    },
+    "agent.share_own": {
+      "text": "Fi nọ́mbà tìrẹ ránṣẹ́ pẹ̀lú bọ́tìnnì náà, kì í ṣe ti ẹlòmíràn. Tún fi AGREE àti kóòdù náà ránṣẹ́ láti bẹ̀rẹ̀ lẹ́ẹ̀kan sí i.",
+      "reviewed": false
+    },
     "agent.stopped": {
       "text": "Ó ti parí. {agents} kò lè ṣiṣẹ́ lórí iṣẹ́ òwò rẹ mọ́.",
       "reviewed": false
@@ -888,6 +900,18 @@
       "text": "Ṣọ́ọ̀bù rẹ ti ṣí sílẹ̀ tẹ́lẹ̀.",
       "reviewed": false
     },
+    "wa.shop.appeal_how": {
+      "text": "Fi APPEAL àti ìránṣẹ́ rẹ ránṣẹ́, fún àpẹẹrẹ: APPEAL fóònù àtilẹ̀wá ni wọ́n pẹ̀lú ìwé-ẹ̀rí.",
+      "reviewed": false
+    },
+    "wa.shop.appeal_none": {
+      "text": "Kò sí ohun tí o lè bẹ̀bẹ̀ fún: a kò dá ojú-ewé rẹ dúró, a kò sì kọ̀ ọ́.",
+      "reviewed": false
+    },
+    "wa.shop.appeal_sent": {
+      "text": "O ṣeun. Taskiem yóò tún wo ojú-ewé rẹ, yóò sì dáhùn níbí, nígbà gbogbo láàárín ọjọ́ iṣẹ́ kan.",
+      "reviewed": false
+    },
     "wa.shop.ask_area": {
       "text": "3/5. Agbègbè tàbí àdírẹ́sì rẹ? Fún àpẹẹrẹ: Yaba, Lagos. Fèsì *skip* láti fi sílẹ̀.",
       "reviewed": false
@@ -1020,6 +1044,10 @@
       "text": "Kọ ọ́ bíi *stock Jollof rice 20*: orúkọ, lẹ́yìn náà iye tó kù.",
       "reviewed": false
     },
+    "wa.shop.in_review": {
+      "text": "Ojú-ewé {name} wà lọ́dọ̀ Taskiem fún àyẹ̀wò kékeré kí ó tó bẹ̀rẹ̀, nígbà gbogbo láàárín ọjọ́ iṣẹ́ kan. A ó fi ìránṣẹ́ ránṣẹ́ sí ọ nígbà tí ó bá bẹ̀rẹ̀.",
+      "reviewed": false
+    },
     "wa.shop.kind.callback": {
       "text": "ìbéèrè ìpè padà",
       "reviewed": false
@@ -1110,6 +1138,14 @@
     },
     "wa.shop.page_live": {
       "text": "A ti gbé *{name}* jáde: {link}\nÌbéèrè òní: {count}",
+      "reviewed": false
+    },
+    "wa.shop.page_suspended": {
+      "text": "A ti dá ojú-ewé {name} dúró: {reason}\nLáti ṣàlàyé, fi APPEAL àti ìránṣẹ́ rẹ ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.shop.page_turned_down": {
+      "text": "Taskiem kò lè jẹ́ kí ojú-ewé {name} bẹ̀rẹ̀: {reason}\nYí i padà kí o sì tún fi PUBLISH ránṣẹ́, tàbí fi APPEAL àti ìránṣẹ́ rẹ ránṣẹ́.",
       "reviewed": false
     },
     "wa.shop.photo_bad": {

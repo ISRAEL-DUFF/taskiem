@@ -135,20 +135,20 @@ func TestSitesInTheDatabase(t *testing.T) {
 	var site Site
 	if err := scoped(t, d, t1, func(tx pgx.Tx) error {
 		var err error
-		site, err = Add(ctx, tx, t1, "https://adakitchen.ng", DNS, "user:ada")
+		site, err = Add(ctx, tx, t1, "https://adakitchen.ng", DNS, "user:ada", MaxSites)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := scoped(t, d, t1, func(tx pgx.Tx) error {
-		_, err := Add(ctx, tx, t1, "https://adakitchen.ng", File, "user:ada")
+		_, err := Add(ctx, tx, t1, "https://adakitchen.ng", File, "user:ada", MaxSites)
 		return err
 	}); !errors.Is(err, ErrExists) {
 		t.Fatalf("a site twice: %v", err)
 	}
 	// Another tenant may claim the same site; each proves it for itself.
 	if err := scoped(t, d, t2, func(tx pgx.Tx) error {
-		_, err := Add(ctx, tx, t2, "https://adakitchen.ng", DNS, "user:bob")
+		_, err := Add(ctx, tx, t2, "https://adakitchen.ng", DNS, "user:bob", MaxSites)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -161,11 +161,11 @@ func TestSitesInTheDatabase(t *testing.T) {
 	}
 	if err := scoped(t, d, t1, func(tx pgx.Tx) error {
 		for i := range MaxSites - 1 {
-			if _, err := Add(ctx, tx, t1, fmt.Sprintf("https://site%d.ng", i), DNS, "user:ada"); err != nil {
+			if _, err := Add(ctx, tx, t1, fmt.Sprintf("https://site%d.ng", i), DNS, "user:ada", MaxSites); err != nil {
 				return err
 			}
 		}
-		_, err := Add(ctx, tx, t1, "https://onemore.ng", DNS, "user:ada")
+		_, err := Add(ctx, tx, t1, "https://onemore.ng", DNS, "user:ada", MaxSites)
 		return err
 	}); !errors.Is(err, ErrLimit) {
 		t.Fatalf("past the limit: %v", err)
@@ -219,7 +219,7 @@ func TestCheckerUnverifiesAfterGrace(t *testing.T) {
 	var site Site
 	if err := scoped(t, d, tenant, func(tx pgx.Tx) error {
 		var err error
-		if site, err = Add(ctx, tx, tenant, "https://adakitchen.ng", DNS, "user:ada"); err != nil {
+		if site, err = Add(ctx, tx, tenant, "https://adakitchen.ng", DNS, "user:ada", MaxSites); err != nil {
 			return err
 		}
 		return MarkVerified(ctx, tx, tenant, site.ID)

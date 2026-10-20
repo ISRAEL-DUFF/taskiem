@@ -24,6 +24,7 @@ func TestStorefrontBookings(t *testing.T) {
 	}
 	ctx := context.Background()
 	owner := w.tenant(t, "Ada's Salon", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	tbl := owner.must(201, "POST", "/v1/tables", map[string]any{"name": "services", "columns": []map[string]any{
 		{"name": "name", "type": "text", "required": true}, {"name": "price", "type": "number"}, {"name": "minutes", "type": "integer"},
 		{"name": "seats", "type": "integer"}, {"name": "stylist_phone", "type": "phone"}}})

@@ -82,7 +82,8 @@ func (s *Server) putStorefrontBookings(w http.ResponseWriter, r *http.Request) {
 		if sf, err = storefront.Get(r.Context(), tx, p.TenantID); err != nil || sf.PublishedVersion == 0 {
 			return storefrontErr(err)
 		}
-		sf, err = storefront.Publish(r.Context(), tx, p.TenantID, s.previewDomain(), p.Actor())
+		res, err := s.publishGated(r.Context(), tx, p.TenantID, p.Actor())
+		sf = res.Storefront
 		return storefrontErr(err)
 	})
 	if err != nil {
@@ -227,6 +228,9 @@ func (s *Server) syncServices(ctx context.Context, tenant uuid.UUID, sf storefro
 		items, err := storefront.Items(ctx, tx, tenant, rows, sf.ServicesColumns)
 		if err != nil {
 			_ = storefront.CatalogueFailed(ctx, tx, tenant, fmt.Errorf("the services: %w", err))
+			return err
+		}
+		if items, err = s.moderateItems(ctx, tx, tenant, items); err != nil {
 			return err
 		}
 		return storefront.SyncServices(ctx, tx, tenant, items)

@@ -39,6 +39,21 @@
       "reviewed": true,
       "context": "Sent to the owner when the agent publishes the page they set up together"
     },
+    "agent.share_button": {
+      "text": "Share my number",
+      "reviewed": true,
+      "context": "The button that shares the owner's own Telegram number (keep it short)"
+    },
+    "agent.share_number": {
+      "text": "To agree, tap Share my number below. Telegram sends Taskiem the number on your account, so Taskiem knows it is yours.",
+      "reviewed": true,
+      "context": "The owner sent AGREE and a code on Telegram; next they share their own number"
+    },
+    "agent.share_own": {
+      "text": "Share your own number with the button, not someone else's. Send AGREE and the code again to start over.",
+      "reviewed": true,
+      "context": "A contact shared on Telegram that is not the sender's own"
+    },
     "agent.stopped": {
       "text": "Done. {agents} can no longer work on your business.",
       "reviewed": true,
@@ -1109,6 +1124,21 @@
       "reviewed": true,
       "context": "open shop, when it is not closed"
     },
+    "wa.shop.appeal_how": {
+      "text": "Send APPEAL and your message, for example: APPEAL these are original phones with receipts.",
+      "reviewed": true,
+      "context": "How to appeal"
+    },
+    "wa.shop.appeal_none": {
+      "text": "There is nothing to appeal: your page is not suspended or turned down.",
+      "reviewed": true,
+      "context": "APPEAL with nothing to appeal"
+    },
+    "wa.shop.appeal_sent": {
+      "text": "Thank you. Taskiem will look at your page again and reply here, usually within a working day.",
+      "reviewed": true,
+      "context": "The appeal was sent to Taskiem's review queue"
+    },
     "wa.shop.ask_area": {
       "text": "3/5. Your area or address? For example: Yaba, Lagos. Reply *skip* to leave it out.",
       "reviewed": true,
@@ -1274,6 +1304,11 @@
       "reviewed": true,
       "context": "stock without a readable count; keep the example in English"
     },
+    "wa.shop.in_review": {
+      "text": "The page of {name} is with Taskiem for a quick check before it goes live, usually within a working day. You will get a message when it is live.",
+      "reviewed": true,
+      "context": "A first publish waits for a person at Taskiem (business not yet verified, or something flagged)"
+    },
     "wa.shop.kind.callback": {
       "text": "call-back request",
       "reviewed": true,
@@ -1388,6 +1423,16 @@
       "text": "*{name}* is published: {link}\nOrders today: {count}",
       "reviewed": true,
       "context": "my page, a published storefront"
+    },
+    "wa.shop.page_suspended": {
+      "text": "The page of {name} is suspended: {reason}\nTo explain, send APPEAL and your message.",
+      "reviewed": true,
+      "context": "My page, while the page is suspended"
+    },
+    "wa.shop.page_turned_down": {
+      "text": "Taskiem could not put the page of {name} live: {reason}\nChange it and send PUBLISH again, or send APPEAL and your message.",
+      "reviewed": true,
+      "context": "My page, after a first publish was turned down"
     },
     "wa.shop.photo_bad": {
       "text": "That photo could not be used ({reason}). Send a JPEG or PNG of up to 10 MB.",

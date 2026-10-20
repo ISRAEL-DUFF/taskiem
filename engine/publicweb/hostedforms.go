@@ -1523,8 +1523,18 @@ func (s *Server) formReport(w http.ResponseWriter, r *http.Request) {
 	if len(form) > 60 {
 		form = form[:60]
 	}
-	reason, _ := text(r.PostForm.Get("reason"), 500, true)
-	s.Logger.Warn("form host: a form was reported", "form", form, "reason", reason)
+	// A hosted form's report ("f:<public id>") reaches the operator console
+	// (report.go); a form step's ("q:<request>") is only logged.
+	if id, ok := strings.CutPrefix(form, "f:"); ok {
+		if r.PostForm.Get("reason") == "" {
+			r.PostForm.Set("reason", "other")
+		}
+		if _, err := s.takeReport(r, "form", id); err != nil && !errors.Is(err, errReportInvalid) {
+			s.Logger.Error("form host: a report", "form", form, "err", err)
+		}
+	} else {
+		s.Logger.Warn("form host: a form step was reported", "form", form)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

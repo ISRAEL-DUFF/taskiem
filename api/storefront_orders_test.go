@@ -25,6 +25,7 @@ func TestStorefrontOrders(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": map[string]any{"name": "Ada's Kitchen"}})
 
 	acts := owner.must(200, "GET", "/v1/storefront/actions", nil)["actions"].([]any)
