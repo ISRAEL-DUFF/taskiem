@@ -38,4 +38,6 @@ export TASKIEM_LOGIN_BURST=100
 # Self-serve signup, and Termii pointed at the fake onboarding.spec.ts runs
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
+# Storefront orders (storefront.spec.ts): the public host's key turns on the inbox.
+export TASKIEM_PUBLIC_KEY=ZTJlLXB1YmxpYy1rZXktMzItYnl0ZXMtbG9uZy0hISE=
 exec bin/taskiem serve --role all
