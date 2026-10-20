@@ -488,7 +488,14 @@ func (s *Server) serveHosted(w http.ResponseWriter, r *http.Request, hf *hform, 
 		s.showHosted(w, r, http.StatusOK, hf, st, "", "", "")
 		return
 	}
-	if err := parseBody(w, r, hf.bodyLimit()); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, hf.bodyLimit())
+	var perr error
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		perr = r.ParseMultipartForm(32 << 20) //nolint:gosec // G120: bounded by http.MaxBytesReader just above; gosec's rule knows no sanitiser
+	} else {
+		perr = r.ParseForm()
+	}
+	if err := perr; err != nil {
 		st := &hstate{}
 		hf.seed(st, prefill)
 		if hf.verify == "" {
@@ -565,15 +572,6 @@ func channelWord(c string) string {
 		return "email address"
 	}
 	return "phone number"
-}
-
-// parseBody reads a form's POST, at most limit bytes of it.
-func parseBody(w http.ResponseWriter, r *http.Request, limit int64) error {
-	r.Body = http.MaxBytesReader(w, r.Body, limit)
-	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
-		return r.ParseMultipartForm(32 << 20)
-	}
-	return r.ParseForm()
 }
 
 // bodyLimit is the most a page's POST may carry: the answers, the files
