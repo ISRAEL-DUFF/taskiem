@@ -180,17 +180,21 @@ func (o *Orders) GetOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, refe
 }
 
 // ListOrders reads the newest orders, with the customer opened. Status
-// "open" is every order still needing the owner.
-func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, status string, limit int) ([]Order, error) {
+// "open" is every order still needing the owner; kind narrows to one form.
+func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, status, kind string, limit int) ([]Order, error) {
 	q := `SELECT ` + orderCols + ` FROM storefront_orders WHERE tenant_id = $1`
 	args := []any{tenant}
+	if kind != "" {
+		args = append(args, kind)
+		q += fmt.Sprintf(` AND kind = $%d`, len(args))
+	}
 	switch status {
 	case "":
 	case "open":
 		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed')`
 	default:
-		q += ` AND status = $2`
 		args = append(args, status)
+		q += fmt.Sprintf(` AND status = $%d`, len(args))
 	}
 	rows, err := tx.Query(ctx, q+fmt.Sprintf(` ORDER BY created_at DESC LIMIT %d`, max(1, min(limit, 200))), args...)
 	if err != nil {

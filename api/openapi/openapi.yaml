@@ -743,6 +743,11 @@ paths:
         schema:
           type: string
         description: A status, or open for every order still needing the business
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [order, enquiry, callback, booking]
       - name: limit
         in: query
         schema:

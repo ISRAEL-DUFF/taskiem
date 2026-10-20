@@ -86,7 +86,7 @@ func (s *Server) listStorefrontOrders(w http.ResponseWriter, r *http.Request) {
 	var list []storefront.Order
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		list, err = s.Orders.ListOrders(r.Context(), tx, principalFrom(r.Context()).TenantID, r.URL.Query().Get("status"), limit)
+		list, err = s.Orders.ListOrders(r.Context(), tx, principalFrom(r.Context()).TenantID, r.URL.Query().Get("status"), r.URL.Query().Get("kind"), limit)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)

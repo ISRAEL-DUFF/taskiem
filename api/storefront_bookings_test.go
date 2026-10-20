@@ -105,6 +105,12 @@ func TestStorefrontBookings(t *testing.T) {
 		t.Fatalf("listed: %v", b)
 	}
 	owner.must(400, "GET", "/v1/storefront/bookings?from=tomorrow", nil)
+	if l := owner.must(200, "GET", "/v1/storefront/orders?kind=booking", nil)["orders"].([]any); len(l) != 2 {
+		t.Fatalf("kind=booking: %v", l)
+	}
+	if l := owner.must(200, "GET", "/v1/storefront/orders?kind=order&status=open", nil)["orders"].([]any); len(l) != 0 {
+		t.Fatalf("kind=order: %v", l)
+	}
 
 	// The owner moves and cancels from the web app as from chat.
 	owner.must(409, "POST", "/v1/storefront/bookings/"+first+"/move", map[string]any{"starts_at": day.Add(11 * time.Hour)})
