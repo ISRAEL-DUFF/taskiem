@@ -48,7 +48,16 @@ Page views never reach Xenibase. Taskiem keeps a copy of the mapped columns of e
 - when the owner presses **Refresh**;
 - every 15 minutes for every published storefront, which catches rows changed in Xenibase, in workflows or from chat.
 
-If the table cannot be read, the old copy stays, the page keeps showing it, and the error is shown to the owner. A catalogue holds at most 500 items until the storefront plans set their own (S8).
+If the table cannot be read, the old copy stays, the page keeps showing it, and the error is shown to the owner.
+
+### Stock
+
+Mapping an integer **stock** column tracks how many of each item are left:
+- the page shows an item with none left as **sold out**, and the order form refuses it;
+- the form offers no more of an item than is left, and refuses an order for more;
+- **accepting** an order lowers the stock in the table (never below zero), and the copy at once.
+
+The table is changed only while it still holds the count that was read, so two orders accepted at the same moment both count; each change carries an Idempotency-Key and is recorded on the order before it is sent, so a retried step changes the stock once. An order accepted with too little left lowers it to zero, and its note says which items were short (`decide` returns them as `short`). Declining or cancelling puts nothing back: change the table if the items return to the shelf. Stock is lowered only on Accept, so an order paid when ordering holds none while it waits. A catalogue holds at most 500 items until the storefront plans set their own (S8).
 
 ## Photos
 
@@ -88,7 +97,7 @@ Saving a form re-publishes a published page, so its buttons match.
 
 1. **The customer sends the form.**
    - The public host checks it: a signed one-time token, the honeypot, the time taken, the per-address limit, a Nigerian phone number, no card numbers.
-   - It prices the basket from the **catalogue copy**, never from the form.
+   - It prices the basket from the **catalogue copy**, never from the form, and refuses more than the stock left ([stock](#stock)).
    - It writes the submission, **encrypted**, to an inbox, and shows the customer a status page.
 
    The public host holds no key to the vault, so it cannot seal personal data itself.
@@ -119,7 +128,7 @@ The **storefront** platform connector (`storefront@1`, no connection needed) is 
 
 | Action | Does |
 | --- | --- |
-| `decide` | `accept`, `decline`, `complete` or `cancel` the order (`reference`, optional `note`). A decision the order's status does not allow fails the step |
+| `decide` | `accept`, `decline`, `complete` or `cancel` the order (`reference`, optional `note`). Accepting lowers the [stock](#stock), returning the items that were `short`. A decision the order's status does not allow fails the step |
 | `payment_link` | The checkout page for an accepted order paid after acceptance, made once. The run can then wait for the `storefront.payment` signal, correlated by the reference, whose payload's `status` is `paid` or `expired` |
 | `notify_customer` | An SMS, and an email when there is one, to the order's customer (`reference`, `text`, optional `subject`) |
 

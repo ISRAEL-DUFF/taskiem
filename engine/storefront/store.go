@@ -79,7 +79,12 @@ type Item struct {
 	Photo       Image  `json:"photo,omitempty"`
 	Available   bool   `json:"available"`
 	Category    string `json:"category,omitempty"`
+	// Stock is how many are left, when the catalogue tracks it.
+	Stock *int64 `json:"stock,omitempty"`
 }
+
+// SoldOut reports whether the item tracks stock and has none left.
+func (it Item) SoldOut() bool { return it.Stock != nil && *it.Stock <= 0 }
 
 const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, published_version, published_slug, published_at, closed_message,
 	catalogue_synced_at, catalogue_error, updated_at,
@@ -293,6 +298,12 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		if m.Available != "" {
 			if b, ok := r[m.Available].(bool); ok {
 				it.Available = b
+			}
+		}
+		if m.Stock != "" {
+			if f, ok := num(r[m.Stock]); ok {
+				n := max(0, int64(f))
+				it.Stock = &n
 			}
 		}
 		if m.Price != "" {

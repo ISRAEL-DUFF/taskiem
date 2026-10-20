@@ -12,7 +12,7 @@ auth:
 actions:
   decide:
     title: Accept, decline or complete an order
-    description: Moves the order from the storefront form that started the run. Declining one already paid leaves it refund_due.
+    description: Moves the order from the storefront form that started the run. Accepting lowers the stock where the catalogue tracks it; declining one already paid leaves it refund_due.
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -34,6 +34,7 @@ actions:
         status:     { type: string }
         refund_due: { type: boolean }
         total:      { type: string }
+        short:      { type: array, items: { type: string }, description: "On accept, the items there was too little stock of (stock is lowered to zero)" }
   payment_link:
     title: Make the order's payment link
     description: A payment page for an accepted order the customer pays after acceptance; the run can then wait for the storefront.payment signal.

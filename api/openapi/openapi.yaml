@@ -12728,6 +12728,9 @@ components:
           type: string
         category:
           type: string
+        stock:
+          type: string
+          description: An integer column of how many are left; lowered when an order is accepted
         sort:
           type: string
     StorefrontRequest:
@@ -12825,6 +12828,9 @@ components:
           type: boolean
         category:
           type: string
+        stock:
+          type: integer
+          description: How many are left, when the catalogue tracks stock
     StorefrontCatalogue:
       type: object
       required: [items, synced_at, error]

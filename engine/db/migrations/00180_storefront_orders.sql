@@ -69,6 +69,9 @@ CREATE TABLE storefront_orders (
   paid_at         timestamptz,
   run_id          uuid,
   note            text,
+  -- Stock lowered on Accept, by catalogue row: {"<row>": {"from": 5, "to": 3, "done": true}}.
+  -- Each change is recorded before it is sent, so a retry sends the same change.
+  stock           jsonb,
   decided_by      text,
   decided_at      timestamptz,
   expires_at      timestamptz,

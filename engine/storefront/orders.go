@@ -60,6 +60,8 @@ type Orders struct {
 	Vault    *secrets.Vault
 	InboxKey []byte
 	Payments Payments
+	// Stock lowers the catalogue's stock on Accept (nil: not tracked).
+	Stock    Stock
 	Messages *sender.Queue
 	// Start starts a run (runtime.Store.Start); Signal delivers a signal
 	// (runtime.Store.DeliverSignalOnce).
@@ -540,8 +542,11 @@ func (o *Orders) markPaid(ctx context.Context, tenant uuid.UUID, d due) error {
 // Decide moves an order: accept, decline, complete or cancel. Declining
 // an order already paid leaves it refund_due: refunds are the owner's to
 // make at the payment provider until the refund policy is decided.
+// Accepting lowers the stock where the catalogue tracks it (short names
+// the items there were too few of); a retry finishes what is left.
 func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decision, note, actor string) (map[string]any, error) {
 	var out map[string]any
+	var accepted *Order
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		ord, err := scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND reference = $2 FOR UPDATE`, tenant, reference))
 		if err != nil {
@@ -551,7 +556,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 		switch decision {
 		case "accept":
 			switch ord.Status {
-			case "accepted", "paid":
+			case "accepted", "awaiting_payment", "paid":
 				next = ord.Status // already
 			case "received":
 				next = "accepted"
@@ -600,10 +605,31 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 				return err
 			}
 		}
-		out = map[string]any{"reference": reference, "status": next, "refund_due": next == "refund_due", "total": FormatNaira(ord.TotalKobo)}
+		out = map[string]any{"reference": reference, "status": next, "refund_due": next == "refund_due", "total": FormatNaira(ord.TotalKobo), "short": []string{}}
+		if decision == "accept" {
+			accepted = &ord
+		}
 		return nil
 	})
-	return out, err
+	if err != nil || accepted == nil {
+		return out, err
+	}
+	short, err := o.lowerStock(ctx, tenant, *accepted)
+	if err != nil {
+		return nil, err
+	}
+	if len(short) > 0 {
+		note := "Accepted with too little stock of " + strings.Join(short, ", ")
+		err = db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE storefront_orders SET note = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, accepted.ID, note)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	out["short"] = short
+	return out, nil
 }
 
 // PaymentLink makes the payment page for an accepted order paid after

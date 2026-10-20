@@ -566,3 +566,38 @@ func TestSensitive(t *testing.T) {
 		}
 	}
 }
+
+// Where the catalogue tracks stock, a form offers no more than is left
+// and a sold-out item cannot be ordered.
+func TestFormStock(t *testing.T) {
+	p := orderPage()
+	one, none := int64(1), int64(0)
+	p.Items[1].Stock, p.Items[2].Stock = &one, &none // dishes 2 and 3
+	e := formServer(t, p)
+	body, _ := e.form(t, "/a/order")
+	if !strings.Contains(body, `name="q.2" value="0" min="0" max="1"`) || !strings.Contains(body, `<span>Dish number 3</span> <span class="sf-badge">Sold out</span>`) {
+		t.Fatalf("the form does not show the stock:\n%s", body)
+	}
+	if page := get(e.h, "GET", sfHost, "/").Body.String(); !strings.Contains(page, `<span class="sf-badge">Sold out</span>`) {
+		t.Fatalf("the page does not show sold out:\n%s", page)
+	}
+	for _, c := range []struct {
+		q2, q3 string
+		status int
+		msg    string
+	}{
+		{"2", "0", 422, "Only 1 of Dish number 2 left"},
+		{"1", "1", 422, "Dish number 3 is sold out"},
+		{"1", "0", 303, ""},
+	} {
+		_, tok := e.form(t, "/a/order")
+		*e.now = e.now.Add(10 * time.Second)
+		v := goodOrder(tok)
+		v.Set("q.2", c.q2)
+		v.Set("q.3", c.q3)
+		w := e.post("/a/order", v)
+		if w.Code != c.status || !strings.Contains(w.Body.String(), c.msg) {
+			t.Fatalf("%s and %s: %d, want %d %q\n%s", c.q2, c.q3, w.Code, c.status, c.msg, w.Body.String())
+		}
+	}
+}

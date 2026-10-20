@@ -16,7 +16,8 @@
     for (var i = 0; i < inputs.length; i++) {
       var q = parseInt(inputs[i].value, 10);
       var p = parseInt(inputs[i].getAttribute("data-price"), 10);
-      if (q > 0 && q <= 20 && p >= 0) total += q * p;
+      var most = parseInt(inputs[i].getAttribute("max"), 10) || 20;
+      if (q > 0 && q <= most && p >= 0) total += q * p;
     }
     out.textContent = total > 0 ? "Total: " + naira(total) : "";
   }

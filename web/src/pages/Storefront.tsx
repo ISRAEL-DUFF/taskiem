@@ -574,6 +574,9 @@ function CatalogueCopy({ tick, photoColumn, stale }: { tick: number; photoColumn
                   <div className="sf-item-side">
                     {item.price_kobo !== undefined && item.price_kobo !== null && <span className="sf-price">{formatPrice(item.price_kobo)}</span>}
                     {!item.available && <span className="badge">unavailable</span>}
+                    {item.available && item.stock !== undefined && item.stock !== null && (
+                      <span className={item.stock > 0 ? "hint" : "badge"}>{item.stock > 0 ? `${item.stock} left` : "sold out"}</span>
+                    )}
                     {photoColumn && (
                       <button
                         type="button"

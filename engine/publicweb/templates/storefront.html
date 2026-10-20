@@ -40,12 +40,12 @@
     {{if .Title}}<h2>{{.Title}}</h2>{{end}}
     <ul class="sf-items">
       {{range .Items}}
-      <li class="sf-item{{if not .Available}} is-unavailable{{end}}">
+      <li class="sf-item{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
         {{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 40rem) 12rem, 40vw" alt="{{.Name}}" loading="lazy" decoding="async">{{end}}
         <div class="sf-item-text">
           <h3>{{.Name}}</h3>
           {{with .Description}}<p>{{.}}</p>{{end}}
-          <p class="sf-price">{{.Price}}{{if not .Available}} <span class="sf-badge">Unavailable</span>{{end}}</p>
+          <p class="sf-price">{{.Price}}{{if not .Available}} <span class="sf-badge">Unavailable</span>{{else if .SoldOut}} <span class="sf-badge">Sold out</span>{{end}}</p>
           {{if and $.Ordering .Orderable}}<a class="btn btn-small" href="/a/order?item={{.ID}}" aria-label="Add {{.Name}}">Add</a>{{end}}
         </div>
       </li>

@@ -106,7 +106,9 @@ type formItem struct {
 	Price     string
 	PriceKobo int64
 	Qty       int
+	Max       int // the most one order may take: maxQuantity, or the stock left
 	Orderable bool
+	SoldOut   bool
 }
 
 // closedData is the page a form answers with when it takes nothing.
@@ -129,9 +131,19 @@ func findAction(list []storefront.PublicAction, kind string) (storefront.PublicA
 	return storefront.PublicAction{}, false
 }
 
-// orderable reports whether an item can be put in a basket: available and
-// priced.
-func orderable(it storefront.Item) bool { return it.Available && it.PriceKobo != nil && it.ID != "" }
+// orderable reports whether an item can be put in a basket: available,
+// priced and not sold out.
+func orderable(it storefront.Item) bool {
+	return it.Available && it.PriceKobo != nil && it.ID != "" && !it.SoldOut()
+}
+
+// most is how many of an item one order may take.
+func most(it storefront.Item) int {
+	if it.Stock != nil && *it.Stock < maxQuantity {
+		return int(*it.Stock)
+	}
+	return maxQuantity
+}
 
 func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, kind string, embed bool) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
@@ -218,7 +230,7 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 				continue
 			}
 			seen[it.ID] = true
-			x := formItem{N: len(f.Items), ID: it.ID, Name: it.Name, Orderable: orderable(it)}
+			x := formItem{N: len(f.Items), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut()}
 			if it.PriceKobo != nil {
 				x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
 			}
@@ -347,7 +359,7 @@ func (f *formData) keep(v url.Values) {
 		f.Fulfilment = fl
 	}
 	for i := range f.Items {
-		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= maxQuantity && f.Items[i].Orderable {
+		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= f.Items[i].Max && f.Items[i].Orderable {
 			f.Items[i].Qty = n
 		}
 	}
@@ -446,9 +458,17 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 		if n == 0 {
 			continue
 		}
+		if it.SoldOut() {
+			f.clearQty(it.ID)
+			return it.Name + " is sold out. Please choose something else."
+		}
 		if !orderable(it) {
 			f.clearQty(it.ID)
 			return it.Name + " is not available right now. Please choose something else."
+		}
+		if n > most(it) {
+			f.clearQty(it.ID)
+			return fmt.Sprintf("Only %d of %s left. Please choose fewer.", most(it), it.Name)
 		}
 		if len(sub.Basket) == maxLines {
 			return fmt.Sprintf("An order can have up to %d different items.", maxLines)
