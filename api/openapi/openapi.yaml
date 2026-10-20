@@ -698,7 +698,7 @@ paths:
         required: true
         schema:
           type: string
-          enum: [order, enquiry, callback]
+          enum: [order, enquiry, callback, booking]
       requestBody:
         required: true
         content:
@@ -799,6 +799,195 @@ paths:
                     $ref: '#/components/schemas/StorefrontOrder'
                   revealed:
                     type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/bookings:
+    put:
+      operationId: putStorefrontBookings
+      tags:
+      - Storefront
+      summary: Set the services table and when bookings are taken
+      description: The services table's mapping needs a duration column. The services copy is refreshed, and a published storefront is published again so its page lists them.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                services_table:
+                  type:
+                  - string
+                  - 'null'
+                  format: uuid
+                services_columns:
+                  $ref: '#/components/schemas/StorefrontColumns'
+                availability:
+                  $ref: '#/components/schemas/StorefrontAvailability'
+      responses:
+        '200':
+          description: The storefront
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Storefront'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listStorefrontBookings
+      tags:
+      - Storefront
+      summary: The bookings holding their time between two dates
+      description: Soonest first, the customer's details masked. Dates are in Lagos; the default is today and the next 30 days, at most 92 days.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The bookings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bookings]
+                properties:
+                  bookings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/services:
+    get:
+      operationId: getStorefrontServices
+      tags:
+      - Storefront
+      summary: The services as booking pages show them, and the availability in effect
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The services copy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, availability]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StorefrontItem'
+                  availability:
+                    $ref: '#/components/schemas/StorefrontAvailability'
+                  synced_at:
+                    $ref: '#/components/schemas/NullableTimestamp'
+                  error:
+                    type:
+                    - string
+                    - 'null'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/bookings/{reference}/cancel:
+    post:
+      operationId: cancelStorefrontBooking
+      tags:
+      - Storefront
+      summary: Cancel a booking for the business
+      description: The time is freed at once; the booking's run is ended and the customer told shortly after. A paid booking is left refund_due. 409 when it cannot be cancelled.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The booking
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [booking]
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/bookings/{reference}/move:
+    post:
+      operationId: moveStorefrontBooking
+      tags:
+      - Storefront
+      summary: Move a booking for the business
+      description: To any free time, even outside the booking hours; 409 when it is not free. The booking's run is ended and a new one started at the new time, which tells the customer.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [starts_at]
+              additionalProperties: false
+              properties:
+                starts_at:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: The booking
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [booking]
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/StorefrontOrder'
         default:
           $ref: '#/components/responses/Error'
   /v1/embed-sites:
@@ -12677,6 +12866,16 @@ components:
                   pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
         note:
           type: string
+    StorefrontSpan:
+      type: object
+      required: [open, close]
+      properties:
+        open:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        close:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
     StorefrontCard:
       type: object
       additionalProperties: false
@@ -12733,6 +12932,15 @@ components:
           description: An integer column of how many are left; lowered when an order is accepted
         sort:
           type: string
+        duration:
+          type: string
+          description: A services table's length in minutes (required there)
+        capacity:
+          type: string
+          description: Customers a service takes at once (default 1)
+        buffer:
+          type: string
+          description: Minutes kept free after each booking (default 0)
     StorefrontRequest:
       type: object
       required: [slug, draft]
@@ -12770,6 +12978,14 @@ components:
           - 'null'
         catalogue_columns:
           $ref: '#/components/schemas/StorefrontColumns'
+        services_table:
+          type:
+          - string
+          - 'null'
+        services_columns:
+          $ref: '#/components/schemas/StorefrontColumns'
+        availability:
+          $ref: '#/components/schemas/StorefrontAvailability'
         published_version:
           type: integer
         published_slug:
@@ -12831,6 +13047,12 @@ components:
         stock:
           type: integer
           description: How many are left, when the catalogue tracks stock
+        duration_minutes:
+          type: integer
+        capacity:
+          type: integer
+        buffer_minutes:
+          type: integer
     StorefrontCatalogue:
       type: object
       required: [items, synced_at, error]
@@ -12874,13 +13096,46 @@ components:
           type: boolean
         delivery_note:
           type: string
+        deposit_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: What a booking pays online of the price (unset is the full price)
+    StorefrontAvailability:
+      type: object
+      additionalProperties: false
+      properties:
+        days:
+          type: array
+          minItems: 7
+          maxItems: 7
+          description: Booking hours, Monday first; every day empty means the opening hours
+          items:
+            type:
+            - array
+            - 'null'
+            items:
+              $ref: '#/components/schemas/StorefrontSpan'
+        "off":
+          type: array
+          items:
+            type: string
+            format: date
+        ahead_days:
+          type: integer
+        soonest_minutes:
+          type: integer
+        cutoff_minutes:
+          type: integer
+        auto_confirm:
+          type: boolean
     StorefrontAction:
       type: object
       required: [kind, enabled, label, payment, options, workflow_id]
       properties:
         kind:
           type: string
-          enum: [order, enquiry, callback]
+          enum: [order, enquiry, callback, booking]
         enabled:
           type: boolean
         label:
@@ -12919,10 +13174,10 @@ components:
           type: string
         kind:
           type: string
-          enum: [order, enquiry, callback]
+          enum: [order, enquiry, callback, booking]
         status:
           type: string
-          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due]
+          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed]
         customer:
           type: object
           properties:
@@ -12968,6 +13223,37 @@ components:
         created_at:
           type: string
           format: date-time
+        service_id:
+          type: string
+        service_name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          description: How often the booking was moved
+        deposit_kobo:
+          type: integer
+        price_change:
+          type: object
+          description: The order at the table's prices, while the customer is asked to confirm it (price_changed)
+          properties:
+            basket:
+              type: array
+              items:
+                $ref: '#/components/schemas/StorefrontOrderLine'
+            total_kobo:
+              type: integer
+            deposit_kobo:
+              type: integer
+            gone:
+              type: array
+              items:
+                type: string
     EmbedSiteRequest:
       type: object
       required: [origin]

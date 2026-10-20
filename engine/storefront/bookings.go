@@ -105,7 +105,18 @@ func (o *Orders) endBooking(ctx context.Context, tenant uuid.UUID, reference str
 			return err
 		}
 	}
+	return o.tell(ctx, tenant, reference, text, key)
+}
+
+// tell is a message the engine sends the customer itself; without
+// customer messages on the deployment it is skipped, never retried for
+// ever.
+func (o *Orders) tell(ctx context.Context, tenant uuid.UUID, reference, text, key string) error {
 	if text == "" {
+		return nil
+	}
+	if o.Messages == nil {
+		o.log().Warn("storefront: customer messages are not configured; not sent", "reference", reference)
 		return nil
 	}
 	_, err := o.NotifyCustomer(ctx, tenant, reference, text, "", key)

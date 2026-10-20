@@ -28,7 +28,7 @@ func TestStorefrontOrders(t *testing.T) {
 	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": map[string]any{"name": "Ada's Kitchen"}})
 
 	acts := owner.must(200, "GET", "/v1/storefront/actions", nil)["actions"].([]any)
-	if len(acts) != 3 || acts[0].(map[string]any)["kind"] != "order" || acts[0].(map[string]any)["enabled"] != false || acts[0].(map[string]any)["workflow_id"] != nil {
+	if len(acts) != 4 || acts[0].(map[string]any)["kind"] != "order" || acts[0].(map[string]any)["enabled"] != false || acts[0].(map[string]any)["workflow_id"] != nil {
 		t.Fatalf("%v", acts)
 	}
 	// No workflow yet: the form cannot be enabled.

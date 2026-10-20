@@ -301,14 +301,12 @@ func (o *Orders) process(ctx context.Context, x inboxRow) error {
 func (o *Orders) carryOn(ctx context.Context, tenant uuid.UUID, ord Order, slug, connection string, c Customer, statusKey string) error {
 	switch {
 	case ord.Status == "price_changed":
-		_, err := o.NotifyCustomer(ctx, tenant, ord.Reference, priceChangedText(ord), "", "price:"+ord.Reference)
-		return err
+		return o.tell(ctx, tenant, ord.Reference, priceChangedText(ord), "price:"+ord.Reference)
 	case ord.Status == "cancelled" || ord.Status == "expired":
 		if ord.Note == "" {
 			return nil
 		}
-		_, err := o.NotifyCustomer(ctx, tenant, ord.Reference, "Sorry, "+ord.Reference+" cannot go ahead: "+ord.Note+".", "", "gone:"+ord.Reference)
-		return err
+		return o.tell(ctx, tenant, ord.Reference, "Sorry, "+ord.Reference+" cannot go ahead: "+ord.Note+".", "gone:"+ord.Reference)
 	case ord.Status == "awaiting_payment" && ord.PaymentURL == "":
 		return o.createPayment(ctx, tenant, ord, c, statusKey, slug, connection) // the run starts once it is paid (CheckPayments)
 	case ord.Status == "received" && ord.RunID == nil:
