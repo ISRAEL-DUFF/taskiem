@@ -206,6 +206,14 @@ func (d describer) trigger(t wd.Trigger) string {
 			"action", d.actionTitle(str("connector"), str("action")))
 	case "storefront":
 		return d.t("wd.trigger.storefront", "form", str("action"))
+	case "form":
+		switch str("access") {
+		case "members":
+			return d.t("wd.trigger.form_members", "title", plain(str("title")))
+		case "link":
+			return d.t("wd.trigger.form_link", "title", plain(str("title")))
+		}
+		return d.t("wd.trigger.form", "title", plain(str("title")))
 	case "manual", "whatsapp", "ussd", "email", "database_change", "subflow":
 		return d.t("wd.trigger." + t.Type)
 	}
@@ -272,6 +280,27 @@ func (d describer) what(st *wd.Step) string {
 			return d.t("wd.wait_for", "duration", DurationIn(w.Duration, d.lang))
 		}
 		return d.t("wd.wait_until")
+	case "form":
+		f := st.Form
+		if f == nil {
+			return d.t("wd.form", "title", "")
+		}
+		title := plain(f.Title)
+		var s string
+		switch {
+		case f.To.Role != "":
+			s = d.t("wd.form.role", "role", plain(f.To.Role), "title", title)
+		case f.To.Phone != "":
+			s = d.t("wd.form.phone", "title", title)
+		case f.To.Email != "":
+			s = d.t("wd.form.email", "title", title)
+		default:
+			s = d.t("wd.form", "title", title)
+		}
+		if f.Timeout != "" {
+			s = d.t("wd.form.timeout", "form", s, "duration", DurationIn(f.Timeout, d.lang))
+		}
+		return s
 	case "signal":
 		if s := st.Signal; s != nil {
 			return d.t("wd.signal_named", "event", plain(s.Event))

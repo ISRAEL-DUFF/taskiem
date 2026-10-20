@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/formguard"
+	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/lru"
 )
@@ -135,7 +136,23 @@ type Server struct {
 	Change      Change
 	PriceChange PriceChange
 
+	// Hosted forms (S7, docs/spec/forms.md). FormHost is the form host's
+	// name (forms.<first public domain>, or TASKIEM_PUBLIC_FORM_HOST):
+	// requests for it are served the forms, not a public_hosts row. Forms
+	// reads and writes them; FormKeys are forms.NewKeys of the public key.
+	// Without both, the form host answers "forms are not open yet".
+	FormHost string
+	Forms    FormStore
+	FormKeys *forms.Keys
+	// AppURL is the web app's, where members' forms open.
+	AppURL string
+	// FormSubmissions limits form submissions and code requests per
+	// client address; nil uses FormSubmissionsPerIP (50 an hour).
+	FormSubmissions *formguard.Limiter
+
 	hosts         *lru.Cache[string, hostEntry]
+	formCache     *lru.Cache[string, formEntry]
+	fguard, fstep *formguard.Guard
 	origins       *lru.Cache[uuid.UUID, []string]
 	pages         *lru.Cache[uuid.UUID, pageEntry]
 	servicesCache *lru.Cache[uuid.UUID, servicesEntry]
@@ -171,6 +188,25 @@ func (s *Server) Handler() http.Handler {
 	if s.Submissions == nil {
 		b := formguard.SubmissionsPerIP
 		s.Submissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 30*time.Minute)
+	}
+	if s.formCache == nil {
+		s.formCache = lru.New[string, formEntry](2000, HostTTL)
+	}
+	if s.FormSubmissions == nil {
+		b := FormSubmissionsPerIP
+		s.FormSubmissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	s.FormHost = strings.ToLower(strings.TrimSuffix(s.FormHost, "."))
+	if s.fguard == nil && s.FormKeys != nil {
+		// The same tokens, checked for the fill time only when a form is
+		// sent: going from page to page may be quick.
+		g, err := formguard.New(s.FormKeys.Guard)
+		step, err2 := formguard.New(s.FormKeys.Guard, formguard.WithMinFill(0))
+		if err != nil || err2 != nil {
+			s.Logger.Error("public host: the form keys are unusable; hosted forms are off", "err", errors.Join(err, err2))
+		} else {
+			s.fguard, s.fstep = g, step
+		}
 	}
 	if s.guard == nil && len(s.FormKey) > 0 {
 		g, err := formguard.New(s.FormKey)
@@ -235,6 +271,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	host := hostOf(r)
+	if s.FormHost != "" && host == s.FormHost {
+		s.routeForms(w, r)
+		return
+	}
 	site, ok, err := s.site(r.Context(), host)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
@@ -336,6 +376,10 @@ func (s *Server) TLSAsk(w http.ResponseWriter, r *http.Request) {
 	host := strings.ToLower(strings.TrimSuffix(r.URL.Query().Get("domain"), "."))
 	if host == "" {
 		http.Error(w, "domain is required", http.StatusBadRequest)
+		return
+	}
+	if s.FormHost != "" && strings.EqualFold(host, strings.TrimSuffix(s.FormHost, ".")) {
+		_, _ = w.Write([]byte("ok"))
 		return
 	}
 	_, ok, err := s.Lookup(r.Context(), host)

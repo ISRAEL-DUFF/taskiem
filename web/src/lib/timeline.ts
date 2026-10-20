@@ -26,6 +26,7 @@ interface Payload {
   event?: string;
   role?: string;
   queue?: string;
+  form?: { title?: string };
 }
 
 export function timeline(events: RunEvent[]): StepRow[] {
@@ -45,7 +46,7 @@ export function timeline(events: RunEvent[]): StepRow[] {
         r.attempts = Math.max(r.attempts, ev.attempt ?? 1);
         r.input = p.input;
         r.status = p.kind === "signal" ? "waiting" : p.kind === "timer" ? "waiting" : "scheduled";
-        if (p.kind === "signal") r.waitingFor = `signal ${p.event ?? ""}`;
+        if (p.kind === "signal") r.waitingFor = p.form ? "the form to be filled in" : `signal ${p.event ?? ""}`;
         if (p.kind === "timer") r.waitingFor = "timer";
         break;
       case "StepStarted":

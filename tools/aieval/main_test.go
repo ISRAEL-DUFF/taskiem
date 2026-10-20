@@ -376,3 +376,14 @@ func TestCostAndSkip(t *testing.T) {
 		t.Fatalf("skip: %v %s", err, out.String())
 	}
 }
+
+// A form trigger deduplicates on its submission id, as a connector event
+// does on its connector's.
+func TestFormTriggerDedups(t *testing.T) {
+	def := mustLoad(t, `{"schema":"wd/v1","id":"wf_f","version":1,"name":"f","trigger":{"type":"form","config":{"title":"Quote"}},
+	 "inputs":{"schema":{"type":"object","properties":{"guests":{"type":"integer"}}}},
+	 "steps":[{"id":"t","type":"transform","config":{"output":{}}}]}`)
+	if ok, why := rules["dedup"](def, registry(t)); !ok {
+		t.Errorf("dedup: %s", why)
+	}
+}

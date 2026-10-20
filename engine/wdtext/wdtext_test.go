@@ -66,3 +66,35 @@ func TestDescribe(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
 }
+
+// formDoc is a form trigger with access and a form step to someone.
+func formDoc(access, to, extra string) string {
+	verify := ""
+	if access == "link" {
+		verify = `"verify":"phone",`
+	}
+	return `{"schema":"wd/v1","id":"wf_f","version":1,"name":"f",
+	 "trigger":{"type":"form","config":{"title":"Apply for a loan","access":"` + access + `",` + verify + `"after":{"mode":"message","message":"Thanks"}}},
+	 "inputs":{"schema":{"type":"object","properties":{"phone":{"type":"string","x-pii":"phone"},"email":{"type":"string","x-pii":"email"}}}},
+	 "steps":[{"id":"ask","type":"form","config":{"title":"Confirm your bank","to":` + to + `,` + extra + `,
+	   "schema":{"type":"object","properties":{"bank":{"type":"string"}}}}}]}`
+}
+
+func TestDescribeForms(t *testing.T) {
+	for _, c := range []struct{ access, to, extra, want string }{
+		{"public", `{"phone":"=trigger.body.phone"}`, `"timeout":"72h"`,
+			"1. When someone fills in the form “Apply for a loan”\n2. Ask someone, by their phone number, to fill in “Confirm your bank” (waits up to 72 hours)"},
+		{"members", `{"email":"=trigger.body.email"}`, `"on_timeout":"continue"`,
+			"1. When someone fills in the form “Apply for a loan” (members only)\n2. Ask someone, by their email address, to fill in “Confirm your bank”"},
+		{"link", `{"role":"credit_officer"}`, `"on_timeout":"fail"`,
+			"1. When someone fills in the form “Apply for a loan” (only with a link sent to them)\n2. Ask members with the credit officer role to fill in “Confirm your bank”"},
+	} {
+		def, err := wd.Load([]byte(formDoc(c.access, c.to, c.extra)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := wdtext.Text(wdtext.Describe(def, nil)); got != c.want {
+			t.Errorf("got\n%s\nwant\n%s", got, c.want)
+		}
+	}
+}

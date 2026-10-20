@@ -1096,6 +1096,26 @@
       "text": "Fún ohun kọ̀ọ̀kan nínú àkójọ (kò ju {count} lẹ́ẹ̀kan):",
       "reviewed": false
     },
+    "wd.form": {
+      "text": "Bèèrè lọ́wọ́ ẹnìkan láti kún “{title}”",
+      "reviewed": false
+    },
+    "wd.form.email": {
+      "text": "Bèèrè lọ́wọ́ ẹnìkan, nípasẹ̀ àdírẹ́sì ímeèlì rẹ̀, láti kún “{title}”",
+      "reviewed": false
+    },
+    "wd.form.phone": {
+      "text": "Bèèrè lọ́wọ́ ẹnìkan, nípasẹ̀ nọ́ńbà fóònù rẹ̀, láti kún “{title}”",
+      "reviewed": false
+    },
+    "wd.form.role": {
+      "text": "Bèèrè lọ́wọ́ àwọn ọmọ ẹgbẹ́ tí wọ́n ní ipa {role} láti kún “{title}”",
+      "reviewed": false
+    },
+    "wd.form.timeout": {
+      "text": "{form} (yóò dúró tó {duration})",
+      "reviewed": false
+    },
     "wd.http": {
       "text": "Pe iṣẹ́ ìta kan",
       "reviewed": false
@@ -1202,6 +1222,18 @@
     },
     "wd.trigger.event_reports": {
       "text": "Nígbà tí {connector} bá ròyìn {events}",
+      "reviewed": false
+    },
+    "wd.trigger.form": {
+      "text": "Nígbà tí ẹnìkan bá kún fọ́ọ̀mù “{title}”",
+      "reviewed": false
+    },
+    "wd.trigger.form_link": {
+      "text": "Nígbà tí ẹnìkan bá kún fọ́ọ̀mù “{title}” (pẹ̀lú ìjápọ̀ tí a fi ránṣẹ́ sí i nìkan)",
+      "reviewed": false
+    },
+    "wd.trigger.form_members": {
+      "text": "Nígbà tí ẹnìkan bá kún fọ́ọ̀mù “{title}” (àwọn ọmọ ẹgbẹ́ nìkan)",
       "reviewed": false
     },
     "wd.trigger.manual": {

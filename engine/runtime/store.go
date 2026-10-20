@@ -580,6 +580,11 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 					return nil, err
 				}
 			}
+			if p.Form != nil {
+				if err := insertFormRequest(ctx, tx, run, ev.StepID, p, sealed); err != nil {
+					return nil, err
+				}
+			}
 			return s.registerWait(ctx, tx, run.ref, run.env, ev.StepID, p.Event, p.Correlation)
 		}
 	case history.ApprovalRequested:
@@ -652,6 +657,7 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
 			`DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`,
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
+			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
 		} {
 			if _, err := tx.Exec(ctx, q, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
@@ -766,6 +772,10 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1`, run); err != nil {
+		return err
+	}
+	// A form step's link is withdrawn with its run (forms 6.7).
+	if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND status = 'pending'`, run); err != nil {
 		return err
 	}
 	return s.promote(ctx, tx, r.ref.TenantID, r.workflowID)

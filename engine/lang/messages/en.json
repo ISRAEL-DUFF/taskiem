@@ -1369,6 +1369,31 @@
       "reviewed": true,
       "context": "Read-back: steps repeated for each item, {count} at a time at most"
     },
+    "wd.form": {
+      "text": "Ask someone to fill in “{title}”",
+      "reviewed": true,
+      "context": "Read-back: a form step that sends someone a form and waits for the answers; {title} is the tenant's"
+    },
+    "wd.form.email": {
+      "text": "Ask someone, by their email address, to fill in “{title}”",
+      "reviewed": true,
+      "context": "Read-back: a form step whose link goes to an email address from the run; {title} is the tenant's"
+    },
+    "wd.form.phone": {
+      "text": "Ask someone, by their phone number, to fill in “{title}”",
+      "reviewed": true,
+      "context": "Read-back: a form step whose link goes to a phone number from the run; {title} is the tenant's"
+    },
+    "wd.form.role": {
+      "text": "Ask members with the {role} role to fill in “{title}”",
+      "reviewed": true,
+      "context": "Read-back: a form step for members with a role; {role} and {title} are the tenant's"
+    },
+    "wd.form.timeout": {
+      "text": "{form} (waits up to {duration})",
+      "reviewed": true,
+      "context": "Read-back: how long a form step waits for the answers; {form} is the form step's line"
+    },
     "wd.http": {
       "text": "Call an external service",
       "reviewed": true,
@@ -1503,6 +1528,21 @@
       "text": "When {connector} reports {events}",
       "reviewed": true,
       "context": "Read-back: started by a connector's events; {connector} and {events} are names"
+    },
+    "wd.trigger.form": {
+      "text": "When someone fills in the form “{title}”",
+      "reviewed": true,
+      "context": "Read-back: started by a hosted form anyone with its link can fill in; {title} is the tenant's"
+    },
+    "wd.trigger.form_link": {
+      "text": "When someone fills in the form “{title}” (only with a link sent to them)",
+      "reviewed": true,
+      "context": "Read-back: started by a hosted form opened by one-time links; {title} is the tenant's"
+    },
+    "wd.trigger.form_members": {
+      "text": "When someone fills in the form “{title}” (members only)",
+      "reviewed": true,
+      "context": "Read-back: started by a hosted form only signed-in members can fill in; {title} is the tenant's"
     },
     "wd.trigger.manual": {
       "text": "When someone starts it",

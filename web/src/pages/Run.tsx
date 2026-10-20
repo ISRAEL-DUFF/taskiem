@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { RunCanvas } from "../canvas/RunCanvas";
 import { RepairPanel } from "./RepairPanel";
 import { duration, timeline, type StepRow } from "../lib/timeline";
+import { respondentText } from "./Forms";
 import { Badge, ErrorBox, Field, Json, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 interface RunDoc {
@@ -81,6 +82,9 @@ export function RunPage() {
   const ended = events.find((e) => ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type));
   const ENDED: Record<string, string> = { RunCompleted: "completed", RunFailed: "failed", RunCancelled: "cancelled" };
   const shownStatus = (ended && ENDED[ended.type]) || r.status;
+  // A run a form started: the submission, masked (trigger.form).
+  const started = events.find((e) => e.type === "RunStarted")?.payload as { trigger?: { type?: string; form?: Record<string, unknown> } } | undefined;
+  const form = started?.trigger?.form;
   return (
     <>
       <div className="toolbar">
@@ -119,6 +123,16 @@ export function RunPage() {
           <dd>
             {fmtTime(r.started_at)} by {r.started_by ?? "—"}
           </dd>
+          {form && (
+            <>
+              <dt>Form answers</dt>
+              <dd data-testid="run-form">
+                Reference <strong>{String(form.reference ?? form.submission_id ?? "—")}</strong>
+                {typeof form.submitted_at === "string" && <span className="hint"> · sent {fmtTime(form.submitted_at)}</span>}
+                <div className="hint">From: {respondentText((form.respondent ?? {}) as Record<string, unknown>, typeof form.channel === "string" ? form.channel : undefined)}</div>
+              </dd>
+            </>
+          )}
           <dt>Ended</dt>
           <dd>{r.ended_at ? `${fmtTime(r.ended_at)} (${duration(r.started_at, r.ended_at)})` : "—"}</dd>
           {data.forks?.parent_run_id && (

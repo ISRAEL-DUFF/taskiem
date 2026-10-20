@@ -1096,6 +1096,26 @@
       "text": "Ga kowane abu a cikin jerin (ba fiye da {count} a lokaci guda ba):",
       "reviewed": false
     },
+    "wd.form": {
+      "text": "Nemi wani ya cike “{title}”",
+      "reviewed": false
+    },
+    "wd.form.email": {
+      "text": "Nemi wani, ta adireshin imel ɗinsa, ya cike “{title}”",
+      "reviewed": false
+    },
+    "wd.form.phone": {
+      "text": "Nemi wani, ta lambar wayarsa, ya cike “{title}”",
+      "reviewed": false
+    },
+    "wd.form.role": {
+      "text": "Nemi mambobi masu matsayin {role} su cike “{title}”",
+      "reviewed": false
+    },
+    "wd.form.timeout": {
+      "text": "{form} (yana jira har zuwa {duration})",
+      "reviewed": false
+    },
     "wd.http": {
       "text": "Kira sabis na waje",
       "reviewed": false
@@ -1202,6 +1222,18 @@
     },
     "wd.trigger.event_reports": {
       "text": "Lokacin da {connector} ya ba da rahoton {events}",
+      "reviewed": false
+    },
+    "wd.trigger.form": {
+      "text": "Lokacin da wani ya cike fom ɗin “{title}”",
+      "reviewed": false
+    },
+    "wd.trigger.form_link": {
+      "text": "Lokacin da wani ya cike fom ɗin “{title}” (sai da hanyar haɗin da aka aika masa)",
+      "reviewed": false
+    },
+    "wd.trigger.form_members": {
+      "text": "Lokacin da wani ya cike fom ɗin “{title}” (mambobi kawai)",
       "reviewed": false
     },
     "wd.trigger.manual": {

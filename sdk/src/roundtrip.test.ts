@@ -171,3 +171,34 @@ describe("container steps", () => {
     expect(sdk.generate(evaluate(code))).toBe(code);
   });
 });
+
+describe("forms", () => {
+  it("build a form trigger and a form step and print back to them", () => {
+    const def = sdk
+      .workflow({
+        id: "wf_apply",
+        name: "apply",
+        trigger: sdk.formTrigger({ title: "Apply for a loan", access: "link", verify: "phone", pages: [{ title: "About you", fields: ["full_name", "phone"] }] }),
+        inputs: { schema: { type: "object", required: ["phone"], properties: { full_name: { type: "string" }, phone: { type: "string", "x-pii": "phone" } } } },
+      })
+      .step(
+        "ask",
+        sdk.form({
+          title: "Confirm your bank",
+          to: { phone: ({ trigger }) => trigger.body.phone },
+          schema: { type: "object", properties: { bank: { type: "string" } } },
+          prefill: { bank: "=trigger.body.full_name" },
+          timeout: "72h",
+          on_timeout: "continue",
+        }),
+      )
+      .build();
+    expect(def.trigger).toEqual({ type: "form", config: { title: "Apply for a loan", access: "link", verify: "phone", pages: [{ title: "About you", fields: ["full_name", "phone"] }] } });
+    expect(def.steps[0]).toMatchObject({ type: "form", config: { to: { phone: "=trigger.body.phone" }, prefill: { bank: "=trigger.body.full_name" } } });
+    const code = sdk.generate(def);
+    expect(code).toContain("formTrigger(");
+    expect(code).toContain("form(");
+    expect(evaluate(code)).toEqual(def);
+    expect(sdk.generate(evaluate(code))).toBe(code);
+  });
+});

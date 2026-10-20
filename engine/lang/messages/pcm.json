@@ -1096,6 +1096,26 @@
       "text": "For each thing for the list (no pass {count} at once):",
       "reviewed": false
     },
+    "wd.form": {
+      "text": "Ask person make e fill “{title}”",
+      "reviewed": false
+    },
+    "wd.form.email": {
+      "text": "Ask person for him email address make e fill “{title}”",
+      "reviewed": false
+    },
+    "wd.form.phone": {
+      "text": "Ask person for him phone number make e fill “{title}”",
+      "reviewed": false
+    },
+    "wd.form.role": {
+      "text": "Ask members wey get {role} role make dem fill “{title}”",
+      "reviewed": false
+    },
+    "wd.form.timeout": {
+      "text": "{form} (e go wait reach {duration})",
+      "reviewed": false
+    },
     "wd.http": {
       "text": "Call outside service",
       "reviewed": false
@@ -1202,6 +1222,18 @@
     },
     "wd.trigger.event_reports": {
       "text": "When {connector} report {events}",
+      "reviewed": false
+    },
+    "wd.trigger.form": {
+      "text": "When person fill the form “{title}”",
+      "reviewed": false
+    },
+    "wd.trigger.form_link": {
+      "text": "When person fill the form “{title}” (only with link wey we send am)",
+      "reviewed": false
+    },
+    "wd.trigger.form_members": {
+      "text": "When person fill the form “{title}” (na only members)",
       "reviewed": false
     },
     "wd.trigger.manual": {

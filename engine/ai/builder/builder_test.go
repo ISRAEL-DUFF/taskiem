@@ -320,3 +320,19 @@ func TestRankAndCatalogueAreDeterministic(t *testing.T) {
 		t.Fatal("catalogue differs between calls")
 	}
 }
+
+// The generated happy path answers a form trigger's inputs and a form
+// step's questions with samples, and the draft completes.
+func TestDryRunAnswersForms(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_f","version":1,"name":"f","trigger":{"type":"form","config":{"title":"Quote"}},
+	 "inputs":{"schema":{"type":"object","required":["guests"],"properties":{"guests":{"type":"integer","minimum":10}}}},
+	 "steps":[{"id":"ask","type":"form","config":{"title":"Menu","to":{"role":"chef"},
+	   "schema":{"type":"object","required":["dishes"],"properties":{"dishes":{"type":"integer","minimum":2,"maximum":5}}}}}]}`
+	_, results, err := builder.DryRun([]byte(doc), connector.NewRegistry(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || !results[0].Passed {
+		t.Fatalf("%+v", results)
+	}
+}

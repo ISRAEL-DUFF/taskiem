@@ -25,6 +25,15 @@ func TestPageBudget(t *testing.T) {
 			t.Errorf("%s: page is %d bytes, budget %d", host, n, maxPageHTML)
 		}
 	}
+	// A hosted form, with every kind of field.
+	e := newFormHost(t)
+	e.add("widgets00001", `{"title":"Everything"}`, widgetSchema)
+	e.add("loan00000001", loanTrigger, loanSchema)
+	for _, path := range []string{"/f/widgets00001", "/f/loan00000001", "/embed/f/loan00000001"} {
+		if n := e.get(path).Body.Len(); n > maxPageHTML {
+			t.Errorf("%s: page is %d bytes, budget %d", path, n, maxPageHTML)
+		}
+	}
 	var css, js int
 	for name, a := range assets {
 		switch {

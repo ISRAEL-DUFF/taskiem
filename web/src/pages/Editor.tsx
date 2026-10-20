@@ -6,6 +6,7 @@ import { ApiError, get, post, put, type ConnectorInfo, type MergeConflict, type 
 import { useAuth } from "../auth";
 import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
+import { FormTriggerEditor, startFormTrigger } from "../canvas/FormEditor";
 import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph, type Layout } from "../lib/graph";
 import { merge } from "../lib/schema";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
@@ -13,7 +14,7 @@ import { Badge, ErrorBox, Field, JsonInput, Modal, Skeleton, fmtTime, useAction,
 import { AIBuilder } from "./AIBuild";
 
 const nodeTypes = { step: StepNode };
-const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "signal", "wait", "branch", "parallel", "foreach"];
+const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
 
 interface Loaded {
   workflow: WorkflowSummary;
@@ -335,6 +336,7 @@ export function Editor() {
                   editSteps(removeStep(def.steps, sel.id));
                   setSelected(null);
                 }}
+                problems={stepProblemsOf(def, problems, sel.id)}
               />
             ) : (
               <p className="hint">Select a step to edit it. Drag from a step's right handle to another step to make it run after; select an arrow and press Delete to remove it.</p>
@@ -342,7 +344,7 @@ export function Editor() {
           </div>
         </div>
       )}
-      {tab === "settings" && <SettingsTab def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} />}
+      {tab === "settings" && <SettingsTab def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} problems={problems} />}
       {tab === "code" && (
         <CodeTab
           def={def}
@@ -422,7 +424,22 @@ function FitOnChange({ count }: { count: number }) {
   return null;
 }
 
-function SettingsTab({ def, onChange, connectors }: { def: WorkflowDefinition; onChange: (d: WorkflowDefinition) => void; connectors: ConnectorInfo[] }) {
+/** The validator's problems with one top-level step, at paths relative to it. */
+function stepProblemsOf(def: WorkflowDefinition, problems: Problem[], id: string): Problem[] {
+  const idx = def.steps.findIndex((s) => s.id === id);
+  const out: Problem[] = [];
+  for (const p of problems) {
+    for (const pre of [`/steps/${idx}`, `/steps/${id}`]) {
+      if (p.path === pre || p.path.startsWith(pre + "/")) {
+        out.push({ ...p, path: p.path.slice(pre.length) });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDefinition; onChange: (d: WorkflowDefinition) => void; connectors: ConnectorInfo[]; problems: Problem[] }) {
   const t = def.trigger;
   const cfg = (t.config ?? {}) as Record<string, unknown>;
   const setCfg = (patch: Record<string, unknown>) => onChange({ ...def, trigger: { ...t, config: merge(cfg, patch) } });
@@ -433,6 +450,7 @@ function SettingsTab({ def, onChange, connectors }: { def: WorkflowDefinition; o
   };
   const conn = connectors.find((c) => c.ref === cfg.connector);
   return (
+    <>
     <div className="card" style={{ maxWidth: 760 }}>
       <Field label="Name">
         <input value={def.name} onChange={(e) => onChange({ ...def, name: e.target.value })} />
@@ -446,6 +464,7 @@ function SettingsTab({ def, onChange, connectors }: { def: WorkflowDefinition; o
           value={t.type}
           onChange={(e) => {
             const type = e.target.value as typeof t.type;
+            if (type === "form") return onChange(startFormTrigger(def));
             const config: Record<string, unknown> | undefined =
               type === "webhook" ? { path: "/" + def.id.replace(/^wf_/, ""), auth: "hmac" } : type === "schedule" ? { cron: "0 9 * * 1-5" } : type === "connector_event" ? { connector: "paystack@1", trigger: "transfer_event" } : undefined;
             onChange({ ...def, trigger: config ? { type, config } : { type } });
@@ -455,6 +474,8 @@ function SettingsTab({ def, onChange, connectors }: { def: WorkflowDefinition; o
           <option value="webhook">Webhook</option>
           <option value="schedule">Schedule</option>
           <option value="connector_event">Connector event</option>
+          <option value="form">Form</option>
+          {!["manual", "webhook", "schedule", "connector_event", "form"].includes(t.type) && <option value={t.type}>{t.type.replaceAll("_", " ")}</option>}
         </select>
       </Field>
       {t.type === "webhook" && (
@@ -519,9 +540,13 @@ function SettingsTab({ def, onChange, connectors }: { def: WorkflowDefinition; o
           </Field>
         </>
       )}
-      <h2>Inputs schema</h2>
-      <p className="hint">JSON Schema for trigger.body; fields marked "x-pii" are encrypted per data subject.</p>
-      <JsonInput value={def.inputs?.schema} onChange={(v) => onChange({ ...def, inputs: v === undefined ? undefined : { schema: v as object } } as WorkflowDefinition)} rows={8} />
+      {t.type !== "form" && (
+        <>
+          <h2>Inputs schema</h2>
+          <p className="hint">JSON Schema for trigger.body; fields marked "x-pii" are encrypted per data subject.</p>
+          <JsonInput value={def.inputs?.schema} onChange={(v) => onChange({ ...def, inputs: v === undefined ? undefined : { schema: v as object } } as WorkflowDefinition)} rows={8} />
+        </>
+      )}
       <h2>Run settings</h2>
       <div className="row">
         <Field label="Run timeout">
@@ -540,6 +565,8 @@ function SettingsTab({ def, onChange, connectors }: { def: WorkflowDefinition; o
         </Field>
       </div>
     </div>
+    {t.type === "form" && <FormTriggerEditor def={def} onChange={onChange} problems={problems} />}
+    </>
   );
 }
 

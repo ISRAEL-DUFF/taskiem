@@ -10,7 +10,7 @@
 // functions over the expression context, compiled to CEL by build().
 
 import { compileFunction, ExpressionError } from "./expr.js";
-import type { ActionClass, ContainerLimits, Duration, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
+import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
 
 /** What an expression can read (wd/v1 rule 10). Values are untyped. */
 export interface Context {
@@ -91,6 +91,10 @@ export type UssdMenuSpec = Omit<UssdMenu, "screens"> & {
 /** A USSD menu walked at the edge; confirming starts the workflow with the inputs collected (docs/ussd.md). */
 export function ussd(config: UssdMenuSpec): Trigger {
   return { type: "ussd", config: config as unknown as Record<string, unknown> };
+}
+/** A hosted form whose fields are the workflow's inputs schema; trigger.body is the answers (docs/spec/forms.md). */
+export function formTrigger(config: FormTriggerConfig): Trigger {
+  return { type: "form", config: config as unknown as Record<string, unknown> };
 }
 /** Any trigger type, for those without a helper. */
 export function trigger(type: Trigger["type"], config?: Values): Trigger {
@@ -192,6 +196,26 @@ export interface ApprovalConfig {
 
 export function approval(config: ApprovalConfig): StepSpec {
   return { type: "approval", config };
+}
+
+export interface FormConfig {
+  title: string;
+  description?: string;
+  /** Exactly one: a phone or email (usually an expression over the run), or members with a role. */
+  to: { phone: Val<string> } | { email: Val<string> } | { role: string };
+  via?: ("sms" | "email")[];
+  verify?: boolean;
+  /** The questions, as an inputs schema. */
+  schema: object;
+  prefill?: Values;
+  timeout?: Duration;
+  remind?: Duration[];
+  on_timeout?: "fail" | "continue";
+}
+
+/** A form step: asks someone for answers mid-run; its output is the answers and respondent (docs/spec/forms.md 6.7). */
+export function form(config: FormConfig): StepSpec {
+  return { type: "form", config };
 }
 
 export function branch(config: { paths: { name: string; when: Expr<boolean>; steps: Steps }[]; default?: Steps }): StepSpec {

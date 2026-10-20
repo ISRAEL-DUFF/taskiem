@@ -203,7 +203,8 @@
             "approval",
             "subflow",
             "transform",
-            "ai"
+            "ai",
+            "form"
           ]
         },
         "name": {
@@ -434,6 +435,21 @@
           },
           "then": {
             "$ref": "#/$defs/aiStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "form"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/formStep"
           }
         }
       ]
@@ -1255,7 +1271,8 @@
             "ussd",
             "email",
             "subflow",
-            "storefront"
+            "storefront",
+            "form"
           ]
         },
         "config": {
@@ -1475,6 +1492,121 @@
                       "enquiry",
                       "callback",
                       "booking"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "form"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "access": {
+                    "enum": [
+                      "public",
+                      "link",
+                      "members"
+                    ],
+                    "default": "public"
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                    }
+                  },
+                  "verify": {
+                    "enum": [
+                      "phone",
+                      "email"
+                    ]
+                  },
+                  "pages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "fields"
+                      ],
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "maxLength": 120
+                        },
+                        "fields": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1
+                        },
+                        "show_if": {
+                          "type": "string",
+                          "description": "CEL over the answers of earlier pages"
+                        }
+                      }
+                    },
+                    "maxItems": 20
+                  },
+                  "after": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "mode": {
+                        "enum": [
+                          "message",
+                          "redirect",
+                          "result"
+                        ],
+                        "default": "message"
+                      },
+                      "message": {
+                        "type": "string",
+                        "maxLength": 2000
+                      },
+                      "url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "status": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "once_per": {
+                    "enum": [
+                      "phone",
+                      "email",
+                      "member"
                     ]
                   }
                 }
@@ -1706,6 +1838,100 @@
           "$ref": "#/$defs/expr"
         }
       }
+    },
+    "formStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "form"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "title",
+            "to",
+            "schema"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "to": {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1,
+              "description": "Who is asked: a phone or email from the run (expressions), or a role of members",
+              "properties": {
+                "phone": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                }
+              }
+            },
+            "via": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "sms",
+                  "email"
+                ]
+              },
+              "uniqueItems": true
+            },
+            "verify": {
+              "type": "boolean",
+              "description": "Ask for a code sent to the same phone or email first"
+            },
+            "schema": {
+              "$ref": "#/$defs/jsonSchema",
+              "description": "The questions, as an inputs schema; the answers are the step's output"
+            },
+            "prefill": {
+              "$ref": "#/$defs/values"
+            },
+            "timeout": {
+              "$ref": "#/$defs/duration"
+            },
+            "remind": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/duration"
+              },
+              "maxItems": 5
+            },
+            "on_timeout": {
+              "enum": [
+                "fail",
+                "continue"
+              ]
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
     }
   }
 }

@@ -90,3 +90,18 @@ a { color: var(--accent); }
 .sf-pay { font-weight: 700; }
 .sf-services li { margin: .5rem 0; }
 .sf-change { display: inline-block; margin-right: .5rem; }
+
+/* Hosted forms (hostedform.html, formdone.html). */
+.ff { margin: .25rem 0 .75rem; }
+.sf-form select, .sf-form input[type=number], .sf-form input[type=url], .sf-form input[type=date], .sf-form input[type=time], .sf-form input[type=datetime-local], .sf-form input[type=file] {
+  display: block; width: 100%; padding: .5rem; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--muted); border-radius: .375rem; min-height: 44px;
+}
+.sf-form .ff-check { display: flex; gap: .5rem; align-items: flex-start; font-weight: 400; margin: .375rem 0; }
+.ff-check input { min-width: 1.25rem; min-height: 1.25rem; margin-top: .125rem; }
+.ff-num { display: flex; align-items: center; gap: .375rem; }
+.ff-unit { font-weight: 700; }
+.req { color: #b91c1c; }
+.ff-error { color: #b91c1c; font-size: .875rem; margin: .25rem 0 0; }
+.has-error input, .has-error textarea, .has-error select { border-color: #b91c1c; }
+.ff-report { margin: 1.5rem 0 0; }
+.btn-link { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: .875rem; text-decoration: underline; cursor: pointer; }

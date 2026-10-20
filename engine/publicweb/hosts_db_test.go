@@ -112,7 +112,12 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_storefront_services(uuid)": true, "taskiem_public_busy(uuid,timestamp with time zone,timestamp with time zone)": true,
 		"taskiem_public_book(uuid,text,bytea,bytea,bytea,text,timestamp with time zone,timestamp with time zone,integer)": true,
 		"taskiem_public_booking(text,bytea)": true, "taskiem_public_price_change(text,bytea)": true,
-		"taskiem_public_change(text,bytea,text,integer,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer)": true}
+		"taskiem_public_change(text,bytea,text,integer,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer)": true,
+		// Hosted forms (S7): a form, a one-time link, a form step's request, a submission and its files, codes and status links.
+		"taskiem_public_form(text)": true, "taskiem_public_form_link(bytea)": true, "taskiem_public_form_request(bytea)": true,
+		"taskiem_public_form_submit(uuid,uuid,uuid,bytea,text,bytea,bytea,bytea)": true, "taskiem_public_form_upload(uuid,text,bytea)": true,
+		"taskiem_public_form_code(uuid,bytea,bytea,bytea)": true, "taskiem_public_form_code_check(uuid,bytea,bytea)": true,
+		"taskiem_public_form_status(text,bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

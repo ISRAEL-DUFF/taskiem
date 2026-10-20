@@ -20,6 +20,10 @@ export function summary(s: Step): string {
       return s.config.event;
     case "approval":
       return [s.config.role && `role ${s.config.role}`, s.config.count && s.config.count > 1 && `${s.config.count} approvers`].filter(Boolean).join(", ") || "approval";
+    case "form": {
+      const to = s.config.to;
+      return `${s.config.title} · ${"role" in to ? `role ${to.role}` : "phone" in to ? to.phone || "phone" : to.email || "email"}`;
+    }
     case "foreach":
       return `each of ${s.config.items} · ${s.config.steps.length} steps`;
     case "branch":

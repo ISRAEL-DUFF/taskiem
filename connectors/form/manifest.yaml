@@ -1,0 +1,50 @@
+# The forms platform connector (docs/forms.md): what a workflow started by
+# a form, or holding a form's files, does with them. It acts on Taskiem's
+# own records, for the run's tenant only, and needs no connection.
+manifest: connector/v1
+id: form
+version: 1.0.0
+name: Forms
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  respond:
+    title: Tell the respondent
+    description: Sets the message the person who filled in the form that started this run sees, on the page after submitting (after mode result) and on their status link. A later message replaces it.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 1000, description: "Plain text, such as: Your application is with our credit team" }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        message:   { type: string }
+  file_url:
+    title: Get a link to a file from a form
+    description: A short-lived download link for a file someone sent in a form (a file field's value is its id, name, type, size and sha256). The file's content never goes into the run.
+    class: read
+    input:
+      type: object
+      required: [file]
+      properties:
+        file:        { type: string, description: "The file's id (steps.<id>.output.<field>.id or trigger.body.<field>.id)" }
+        ttl_minutes: { type: integer, minimum: 1, maximum: 60, default: 15 }
+    output:
+      type: object
+      properties:
+        url:        { type: string }
+        expires_at: { type: string }
+        name:       { type: string }
+        type:       { type: string }
+        size:       { type: integer }

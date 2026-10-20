@@ -147,6 +147,10 @@ func (c *exprChecker) step(s *Step) {
 			switch k {
 			case "steps", "default", "branches":
 				continue
+			case "schema":
+				if s.Type == "form" {
+					continue // a form step's questions are data, not expressions
+				}
 			case "paths":
 				for i, p := range v.([]any) {
 					check(fmt.Sprintf("config.paths[%d].when", i), p.(map[string]any)["when"], allowed)

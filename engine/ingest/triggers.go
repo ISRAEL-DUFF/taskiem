@@ -5,6 +5,7 @@ package ingest
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -168,6 +169,10 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 			return nil
 		}
 		return fmt.Errorf("a storefront trigger's action is order, enquiry, callback or booking")
+	case "form":
+		// The pages, conditions and fields are checked by wd.Validate.
+		_, err := def.FormTriggerConfig()
+		return err
 	}
 	return fmt.Errorf("%s triggers are not available yet", def.Trigger.Type)
 }
@@ -209,6 +214,13 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 	}
 	if !ev.remote {
 		if err := remote.Release(ctx, tx, wf, envs); err != nil {
+			return err
+		}
+	}
+	// A workflow that no longer has a form trigger closes its form.
+	if def.Trigger.Type != "form" {
+		if _, err := tx.Exec(ctx, `UPDATE form_endpoints SET status = 'closed', updated_at = now()
+			WHERE workflow_id = $1 AND environment = ANY ($2) AND status IN ('live', 'paused')`, wf, envs); err != nil {
 			return err
 		}
 	}
@@ -268,10 +280,56 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			}
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action)
 				VALUES ($1, $2, $3, $4, $5, 'storefront', $6)`, id, tenant, wf, version, env, action)
+		case "form":
+			// The form is live at its endpoint's public id, which stays
+			// the same across versions; a paused or closed form stays so.
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type)
+				VALUES ($1, $2, $3, $4, $5, 'form')`, id, tenant, wf, version, env)
+			if err == nil {
+				_, err = tx.Exec(ctx, `INSERT INTO form_endpoints (id, tenant_id, workflow_id, environment, public_id, version, form)
+					VALUES ($1, $2, $3, $4, $5, $6, $7)
+					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version, form = EXCLUDED.form, updated_at = now()`,
+					uuid.Must(uuid.NewV7()), tenant, wf, env, NewFormID(), version, formCopy(def))
+			}
 		}
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// NewFormID is a form's public id: 12 random lowercase letters and digits
+// (60 bits; 32 letters, so unbiased), in the form's address.
+func NewFormID() string {
+	const alphabet = "abcdefghijkmnpqrstuvwxyz23456789"
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	for i := range b {
+		b[i] = alphabet[int(b[i])%len(alphabet)]
+	}
+	return string(b)
+}
+
+// formCopy is what the form host may read of a form's definition: its
+// trigger, inputs schema and the types it uses, never the steps.
+func formCopy(def *wd.Definition) []byte {
+	out := map[string]json.RawMessage{}
+	if t, err := json.Marshal(def.Trigger); err == nil {
+		out["trigger"] = t
+	}
+	if def.RawInputs != nil {
+		if in, err := json.Marshal(def.RawInputs); err == nil {
+			out["inputs"] = in
+		}
+	}
+	if len(def.RawTypes) > 0 {
+		if ty, err := json.Marshal(def.RawTypes); err == nil {
+			out["types"] = ty
+		}
+	}
+	raw, _ := json.Marshal(out)
+	return raw
 }

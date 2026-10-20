@@ -1,8 +1,9 @@
 // Package wdtest runs workflow tests (spec 10.5): a test declares a trigger,
-// mocked step outcomes, signals and approval decisions, then asserts the
-// path the run took and its outputs. Runs execute the real orchestrator
-// (decide) over an in-memory history on a virtual clock, so a test of a
-// 72-hour signal timeout takes milliseconds and never calls a provider.
+// mocked step outcomes, signals, approval decisions and form answers, then
+// asserts the path the run took and its outputs. Runs execute the real
+// orchestrator (decide) over an in-memory history on a virtual clock, so a
+// test of a 72-hour signal timeout takes milliseconds and never calls a
+// provider.
 package wdtest
 
 import (
@@ -20,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -53,7 +55,9 @@ type Case struct {
 	Signals map[string]SignalMock `json:"signals,omitempty"`
 	// Approvals answer approval steps, keyed the same way.
 	Approvals map[string]ApprovalMock `json:"approvals,omitempty"`
-	Expect    Expect                  `json:"expect"`
+	// Forms answer form steps, keyed the same way.
+	Forms  map[string]FormMock `json:"forms,omitempty"`
+	Expect Expect              `json:"expect"`
 }
 
 // Mock is one attempt's outcome: an output (values may be expressions over
@@ -103,6 +107,16 @@ type ApprovalMock struct {
 	Decision string `json:"decision,omitempty"` // approved | rejected
 	By       string `json:"by,omitempty"`
 	Timeout  bool   `json:"timeout,omitempty"`
+}
+
+// FormMock submits a form step's answers, or lets its timeout fire. The
+// answers are checked against the step's schema; the step's output is
+// them plus respondent: Respondent when given, else who the step asked
+// ({kind: link, phone|email} or {kind: member, member_id}).
+type FormMock struct {
+	Answers    map[string]any `json:"answers,omitempty"`
+	Respondent map[string]any `json:"respondent,omitempty"`
+	Timeout    bool           `json:"timeout,omitempty"`
 }
 
 // Expect is what the run must have done. Every field is optional.
@@ -497,6 +511,13 @@ func (r *runner) act() bool {
 			if s.signal {
 				continue
 			}
+			if p.Form != nil {
+				if m, ok := r.formMock(s.id); ok && !m.Timeout {
+					r.submitForm(s.id, p, m)
+					return true
+				}
+				continue
+			}
 			if m, ok := r.signalMock(s.id); ok && !m.Timeout {
 				r.append(history.SignalReceived, s.id, 0, map[string]any{"event": p.Event, "payload": m.Payload}, history.OriginSignal)
 				return true
@@ -619,6 +640,40 @@ func (r *runner) mock(id string, attempt int) (Mock, bool) {
 
 func (r *runner) signalMock(id string) (SignalMock, bool)     { return lookup(r.c.Signals, id) }
 func (r *runner) approvalMock(id string) (ApprovalMock, bool) { return lookup(r.c.Approvals, id) }
+func (r *runner) formMock(id string) (FormMock, bool)         { return lookup(r.c.Forms, id) }
+
+// submitForm delivers a mocked submission as the form host would: the
+// answers checked against the step's schema, and who answered.
+func (r *runner) submitForm(id string, p history.ScheduledPayload, m FormMock) {
+	if raw, err := json.Marshal(p.Form.Schema); err == nil && len(p.Form.Schema) > 0 {
+		answers := m.Answers
+		if answers == nil {
+			answers = map[string]any{}
+		}
+		body, _ := json.Marshal(answers)
+		for _, prob := range schemacheck.New("https://schemas.taskiem.dev/forms/test/"+stepKey(id)+".json", raw).Validate(body) {
+			r.setup = append(r.setup, "forms."+id+": the answers do not match the step's schema: "+prob)
+		}
+	}
+	out := map[string]any{}
+	for k, v := range m.Answers {
+		out[k] = v
+	}
+	resp := m.Respondent
+	if resp == nil {
+		resp = map[string]any{"kind": "link"}
+		switch {
+		case p.Form.To["role"] != nil:
+			resp = map[string]any{"kind": "member", "member_id": "test-member"}
+		case p.Form.To["phone"] != nil:
+			resp["phone"] = p.Form.To["phone"]
+		case p.Form.To["email"] != nil:
+			resp["email"] = p.Form.To["email"]
+		}
+	}
+	out["respondent"] = resp
+	r.append(history.SignalReceived, id, 0, map[string]any{"event": history.FormEvent, "payload": out}, history.OriginSignal)
+}
 
 // nextTimer finds the earliest pending timer or delayed task, and returns
 // how to fire it. A zero time means nothing is pending: the run is blocked.
