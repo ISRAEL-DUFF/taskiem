@@ -489,7 +489,13 @@ func (s *Server) serveHosted(w http.ResponseWriter, r *http.Request, hf *hform, 
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, hf.bodyLimit())
-	if err := parseBody(r); err != nil {
+	var perr error
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		perr = r.ParseMultipartForm(32 << 20) //nolint:gosec // G120: bounded by http.MaxBytesReader just above; gosec's rule knows no sanitiser
+	} else {
+		perr = r.ParseForm()
+	}
+	if err := perr; err != nil {
 		st := &hstate{}
 		hf.seed(st, prefill)
 		if hf.verify == "" {
@@ -566,13 +572,6 @@ func channelWord(c string) string {
 		return "email address"
 	}
 	return "phone number"
-}
-
-func parseBody(r *http.Request) error {
-	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
-		return r.ParseMultipartForm(32 << 20)
-	}
-	return r.ParseForm()
 }
 
 // bodyLimit is the most a page's POST may carry: the answers, the files
@@ -1136,7 +1135,7 @@ func (s *Server) formReference(idem [32]byte, n int) string {
 	m := hmac.New(sha256.New, s.FormKeys.Guard)
 	m.Write([]byte("form reference\x00"))
 	m.Write(idem[:])
-	m.Write([]byte{byte(n)})
+	m.Write([]byte{byte(n)}) //nolint:gosec // n is an attempt number, below 3
 	return "F-" + refEncoding.EncodeToString(m.Sum(nil)[:5])
 }
 
