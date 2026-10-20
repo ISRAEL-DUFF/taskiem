@@ -31,6 +31,7 @@ import { Keys } from "./pages/Keys";
 import { TablePage, Tables } from "./pages/Tables";
 import { Storefront } from "./pages/Storefront";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
+import { StorefrontBookings } from "./pages/StorefrontBookings";
 
 export function App() {
   return (
@@ -259,6 +260,7 @@ function SignedIn() {
           <Route path="/storefront" element={<Storefront />} />
           <Route path="/storefront/orders" element={<StorefrontOrders />} />
           <Route path="/storefront/orders/:reference" element={<StorefrontOrder />} />
+          <Route path="/storefront/bookings" element={<StorefrontBookings />} />
           <Route path="/start" element={<Start />} />
           <Route path="/start/guide" element={<Guide />} />
           <Route path="/verify-email" element={<VerifyEmail />} />

@@ -7,26 +7,29 @@ import { tidy } from "../lib/storefront";
 import {
   ACTION_LIMITS,
   FORM_INFO,
-  PAYMENT_CHOICES,
   actionForm,
   actionProblem,
   actionRequest,
   formURL,
+  paymentChoices,
   setupRequest,
   type ActionForm,
+  type FormKind,
   type StorefrontAction,
 } from "../lib/orders";
 
-/** The storefront's forms (order, question, call-back): each needs a
- * workflow in prod before it can be switched on. */
+/** The storefront's forms (order, question, call-back, booking): each needs
+ * a workflow in prod before it can be switched on; a booking also needs the
+ * services table (under Bookings). */
 export function StorefrontForms({ previewURL, published }: { previewURL: string; published: boolean }) {
   const actions = useLoad(() => get<{ actions: StorefrontAction[] }>("/v1/storefront/actions"), []);
   return (
     <section className="card sf-links" aria-labelledby="sf-forms">
       <h2 id="sf-forms">Forms</h2>
       <p className="hint">
-        Buttons on your page for customers to order, ask a question or ask for a call back. Each form runs a workflow, which asks you to accept in WhatsApp or
-        Telegram. See what comes in under <Link to="/storefront/orders">Orders</Link>.
+        Buttons on your page for customers to order, book, ask a question or ask for a call back. Each form runs a workflow, which asks you to accept in
+        WhatsApp or Telegram. See what comes in under <Link to="/storefront/orders">Orders</Link>; set your services and booking hours under{" "}
+        <Link to="/storefront/bookings">Bookings</Link>.
       </p>
       <ErrorBox error={actions.error} />
       {!actions.data && !actions.error && <Skeleton rows={3} label="Loading your forms…" />}
@@ -124,7 +127,11 @@ function FormCard({ action, previewURL, published, onReload }: { action: Storefr
       )}
       {showSetup && (
         <div className="sf-setup">
-          <p style={{ margin: "0 0 8px" }}>Adds a workflow that asks you in WhatsApp or Telegram to accept each order and texts the customer.</p>
+          <p style={{ margin: "0 0 8px" }}>
+            {kind === "booking"
+              ? "Adds a workflow that asks you in WhatsApp or Telegram to confirm each booking, texts and reminds the customer, and asks you afterwards whether they came."
+              : "Adds a workflow that asks you in WhatsApp or Telegram to accept each order and texts the customer."}
+          </p>
           <ErrorBox error={setup.error} />
           {canSetup ? (
             <button className="primary" disabled={setup.busy} onClick={() => void setUp()}>
@@ -150,7 +157,13 @@ function FormCard({ action, previewURL, published, onReload }: { action: Storefr
           <Field label="Button label" hint={<span className={form.label.length > ACTION_LIMITS.label ? "error-text" : undefined}>{`${form.label.length}/${ACTION_LIMITS.label}`}</span>}>
             <input value={form.label} onChange={(e) => set({ label: e.target.value })} aria-invalid={form.label.length > ACTION_LIMITS.label} />
           </Field>
+          {(kind === "order" || kind === "booking") && <PaymentOptions kind={kind} form={form} set={set} />}
           {kind === "order" && <OrderOptions form={form} set={set} />}
+          {kind === "booking" && (
+            <p className="hint sf-links">
+              Bookings need your services table and booking hours, set under <Link to="/storefront/bookings">Bookings</Link>.
+            </p>
+          )}
           {problem && <p className="error-text">{problem}</p>}
           <ErrorBox error={act.error} />
           <div className="toolbar" style={{ marginBottom: 0 }}>
@@ -164,14 +177,16 @@ function FormCard({ action, previewURL, published, onReload }: { action: Storefr
   );
 }
 
-function OrderOptions({ form, set }: { form: ActionForm; set: (p: Partial<ActionForm>) => void }) {
+/** How the customer pays: for an order or a booking, with the Paystack connection, and a booking's deposit. */
+function PaymentOptions({ kind, form, set }: { kind: FormKind; form: ActionForm; set: (p: Partial<ActionForm>) => void }) {
+  const depositBad = kind === "booking" && form.deposit.trim() !== "" && !/^(100|[1-9][0-9]?)$/.test(form.deposit.trim());
   return (
     <>
       <fieldset className="sf-choices">
         <legend>Payment</legend>
-        {PAYMENT_CHOICES.map((c) => (
+        {paymentChoices(kind).map((c) => (
           <label key={c.value} className="sf-radio">
-            <input type="radio" name="sf-payment" value={c.value} checked={form.payment === c.value} onChange={() => set({ payment: c.value })} />
+            <input type="radio" name={`sf-payment-${kind}`} value={c.value} checked={form.payment === c.value} onChange={() => set({ payment: c.value })} />
             <span>
               {c.label}
               <span className="hint"> {c.help}</span>
@@ -191,6 +206,28 @@ function OrderOptions({ form, set }: { form: ActionForm; set: (p: Partial<Action
           <input value={form.connection} placeholder="main" autoComplete="off" spellCheck={false} onChange={(e) => set({ connection: e.target.value })} />
         </Field>
       )}
+      {kind === "booking" && form.payment !== "none" && (
+        <Field label="Deposit (per cent)" hint={<span className={depositBad ? "error-text" : undefined}>Paid online when booking; the rest at the appointment. Leave it empty for the full price.</span>}>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            step={1}
+            inputMode="numeric"
+            value={form.deposit}
+            placeholder="100"
+            onChange={(e) => set({ deposit: e.target.value })}
+            aria-invalid={depositBad}
+          />
+        </Field>
+      )}
+    </>
+  );
+}
+
+function OrderOptions({ form, set }: { form: ActionForm; set: (p: Partial<ActionForm>) => void }) {
+  return (
+    <>
       <fieldset className="sf-choices">
         <legend>How customers get their order</legend>
         <label className="sf-radio">
