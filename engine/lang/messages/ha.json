@@ -316,6 +316,10 @@
       "text": "A huta ranar {day}? Ba za a bayar da lokaci a wannan rana ba. Ajiyar lokacin da ke kanta: {count}. Za su kasance har sai kun matsar ko soke su.",
       "reviewed": false
     },
+    "wa.booking.confirm_refund": {
+      "text": "A mayar wa abokin ciniki {total} na {ref}? Daga ma'aunin Paystack ɗinku ne, kuma zai isa gare su cikin kwanakin aiki 5 zuwa 10.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Amsa *yes* don ajiye canjin, ko *cancel*.",
       "reviewed": false
@@ -352,12 +356,28 @@
       "text": "Babu ajiyar lokaci {ref} da za a iya canzawa.",
       "reviewed": false
     },
+    "wa.booking.nothing_to_refund": {
+      "text": "Babu biyan kuɗi da za a mayar wa {ref}.",
+      "reviewed": false
+    },
     "wa.booking.off_already": {
       "text": "Ranar {day} dama hutu ce.",
       "reviewed": false
     },
     "wa.booking.off_done": {
       "text": "An huta ranar {day}: ba za a bayar da lokaci ba.",
+      "reviewed": false
+    },
+    "wa.booking.refund_failed": {
+      "text": "Paystack bai mayar da {ref} ba: {why}. Har yanzu ana bin kuɗin; za ku iya sake gwadawa, ko ku mayar a Paystack.",
+      "reviewed": false
+    },
+    "wa.booking.refund_hint": {
+      "text": "An biya shi: amsa *refund {ref}* don mayar wa abokin ciniki kuɗinsa.",
+      "reviewed": false
+    },
+    "wa.booking.refunded": {
+      "text": "An fara mayar da {total} na {ref}. Za a sanar da abokin ciniki.",
       "reviewed": false
     },
     "wa.booking.taken": {
@@ -597,7 +617,7 @@
       "reviewed": false
     },
     "wa.help.bookings": {
-      "text": "• *bookings* ko *today*: duba ajiyar lokaci; *booking* da lamba da *cancel*; *move* lamba *to Sat 11:00*; *off 25 Dec*: hutun rana",
+      "text": "• *bookings* ko *today*: duba ajiyar lokaci; *booking* da lamba da *cancel*; *move* lamba *to Sat 11:00*; *off 25 Dec*: hutun rana; *refund*",
       "reviewed": false
     },
     "wa.help.build": {

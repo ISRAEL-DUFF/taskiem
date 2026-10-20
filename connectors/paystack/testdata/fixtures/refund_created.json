@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/refund"},
+ "response":{"status":200,"body":{"status":true,"message":"Refund has been queued for processing","data":{"id":3018284,"amount":300000,"currency":"NGN","status":"pending","transaction":{"reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}}}}}

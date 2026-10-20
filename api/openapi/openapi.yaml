@@ -809,6 +809,39 @@ paths:
                     type: boolean
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/refund:
+    post:
+      operationId: refundStorefrontOrder
+      tags:
+      - Storefront
+      summary: Refund a paid order or booking that was declined or cancelled
+      description: In full, through the business's Paystack connection, from its balance; the customer is told. Refunding an order already refunded does nothing more. 409 when there is nothing to refund, or Paystack refused (the reason is kept on the order, which stays refund_due).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/bookings:
     put:
       operationId: putStorefrontBookings
@@ -13563,6 +13596,10 @@ components:
           minimum: 0
           maximum: 100
           description: What a booking pays online of the price (unset is the full price)
+        cancel_refund:
+          type: string
+          enum: [full, keep_deposit, '']
+          description: What a customer cancelling a paid booking gets back (default full)
     StorefrontAvailability:
       type: object
       additionalProperties: false
@@ -13639,7 +13676,7 @@ components:
           enum: [order, enquiry, callback, booking]
         status:
           type: string
-          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed]
+          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded]
         customer:
           type: object
           properties:

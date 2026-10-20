@@ -232,3 +232,27 @@ func (s *Server) syncServices(ctx context.Context, tenant uuid.UUID, sf storefro
 		return storefront.SyncServices(ctx, tx, tenant, items)
 	})
 }
+
+// refundStorefrontOrder refunds a paid order or booking that was declined
+// or cancelled, in full through the business's Paystack connection: the
+// owner's confirmation, as from chat.
+func (s *Server) refundStorefrontOrder(w http.ResponseWriter, r *http.Request) {
+	if s.Orders == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	p := principalFrom(r.Context())
+	o, err := s.Orders.Refund(r.Context(), p.TenantID, chi.URLParam(r, "reference"), p.Actor())
+	switch {
+	case errors.Is(err, storefront.ErrNoOrder):
+		err = pgx.ErrNoRows
+	case errors.Is(err, storefront.ErrDecision), errors.Is(err, storefront.ErrRefund):
+		err = fmt.Errorf("%w: %s", errConflict, plainError(err))
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	maskCustomer(&o.Customer)
+	writeJSON(w, http.StatusOK, map[string]any{"order": o})
+}

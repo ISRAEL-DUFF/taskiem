@@ -1,0 +1,2 @@
+{"request":{"method":"POST","path":"/refund"},
+ "response":{"status":400,"body":{"status":false,"message":"Transaction has been fully reversed"}}}

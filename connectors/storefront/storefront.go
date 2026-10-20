@@ -30,6 +30,7 @@ type Ops interface {
 	PaymentLink(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error)
 	GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
+	Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -41,6 +42,7 @@ func New(ops Ops) *connector.Connector {
 		"payment_link":    connector.ActionFunc(a.paymentLink),
 		"notify_customer": connector.ActionFunc(a.notify),
 		"get_booking":     connector.ActionFunc(a.getBooking),
+		"refund":          connector.ActionFunc(a.refund),
 	}}
 }
 
@@ -105,6 +107,18 @@ func (a *actions) getBooking(ctx context.Context, req connector.Request) (connec
 	return connector.Response{Output: out}, classify(err)
 }
 
+func (a *actions) refund(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ref, err := a.caller(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	o, err := a.ops.Refund(ctx, c.Tenant, ref, "workflow:"+c.Run.String())
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.Payable())}}, nil
+}
+
 // classify makes refusals fatal: retrying an order the tenant does not
 // have, or a decision its status does not allow, cannot help.
 func classify(err error) error {
@@ -112,7 +126,7 @@ func classify(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, sf.ErrNoOrder), errors.Is(err, sf.ErrDecision), errors.Is(err, sf.ErrInvalid),
-		errors.Is(err, sender.ErrInvalid), errors.Is(err, sender.ErrRecipientLimit):
+		errors.Is(err, sender.ErrInvalid), errors.Is(err, sender.ErrRecipientLimit), errors.Is(err, sf.ErrRefund):
 		return fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
 	return err
@@ -167,4 +181,12 @@ func (l *Late) GetBooking(ctx context.Context, tenant uuid.UUID, reference strin
 		return nil, err
 	}
 	return ops.GetBooking(ctx, tenant, reference)
+}
+
+func (l *Late) Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error) {
+	ops, err := l.get()
+	if err != nil {
+		return sf.Order{}, err
+	}
+	return ops.Refund(ctx, tenant, reference, actor)
 }

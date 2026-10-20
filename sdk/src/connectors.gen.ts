@@ -1222,6 +1222,15 @@ export interface PaystackInitializeTransactionInput {
   email: Val<string>;
   metadata?: Value;
 }
+export interface PaystackRefundStatusInput {
+  reference: Val<string>;
+}
+export interface PaystackRefundTransactionInput {
+  customer_note?: Val<string>;
+  merchant_note?: Val<string>;
+  /** The payment's reference */
+  reference: Val<string>;
+}
 export interface PaystackTransferInput {
   /** Amount in kobo */
   amount: Val<number>;
@@ -1241,6 +1250,10 @@ export const paystack = {
   check_balance: (input?: PaystackCheckBalanceInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "check_balance", input, extra),
   /** Create a payment page (idempotent_write) */
   initialize_transaction: (input: PaystackInitializeTransactionInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "initialize_transaction", input, extra),
+  /** Check whether a payment was refunded (read) */
+  refund_status: (input: PaystackRefundStatusInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "refund_status", input, extra),
+  /** Refund a payment (reconcilable_write) */
+  refund_transaction: (input: PaystackRefundTransactionInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "refund_transaction", input, extra),
   /** Send transfer (idempotent_write) */
   transfer: (input: PaystackTransferInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "transfer", input, extra),
   /** Verify charge (read) */
@@ -1755,6 +1768,9 @@ export interface StorefrontNotifyCustomerInput {
 export interface StorefrontPaymentLinkInput {
   reference: Val<string>;
 }
+export interface StorefrontRefundInput {
+  reference: Val<string>;
+}
 export const storefront = {
   /** Accept, decline or complete an order or booking (idempotent_write) */
   decide: (input: StorefrontDecideInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "decide", input, extra),
@@ -1764,6 +1780,8 @@ export const storefront = {
   notify_customer: (input: StorefrontNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "notify_customer", input, extra),
   /** Make the order's payment link (idempotent_write) */
   payment_link: (input: StorefrontPaymentLinkInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "payment_link", input, extra),
+  /** Refund the customer (idempotent_write) */
+  refund: (input: StorefrontRefundInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "refund", input, extra),
 };
 
 // Telegram (telegram@1)
@@ -2245,14 +2263,14 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "mtnmomo@1": ["get_account_holder_name", "get_balance", "get_payment", "get_transfer", "request_to_pay", "transfer", "validate_account_holder"],
   "mysql@1": ["execute", "query"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
-  "paystack@1": ["check_balance", "initialize_transaction", "transfer", "verify_charge", "verify_transfer"],
+  "paystack@1": ["check_balance", "initialize_transaction", "refund_status", "refund_transaction", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
-  "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link"],
+  "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_phone_number", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],

@@ -316,6 +316,10 @@
       "text": "Take {day} off? We no go show any time for dat day. Bookings wey don already dey: {count}. Dem go stay until you move or cancel dem.",
       "reviewed": false
     },
+    "wa.booking.confirm_refund": {
+      "text": "Refund {total} give di customer for {ref}? E go comot from your Paystack balance, and e go reach dem for like 5 to 10 working days.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Reply *yes* make we save di change, or *cancel*.",
       "reviewed": false
@@ -352,12 +356,28 @@
       "text": "No booking {ref} wey you fit change.",
       "reviewed": false
     },
+    "wa.booking.nothing_to_refund": {
+      "text": "No payment to refund for {ref}.",
+      "reviewed": false
+    },
     "wa.booking.off_already": {
       "text": "{day} don already be off day.",
       "reviewed": false
     },
     "wa.booking.off_done": {
       "text": "{day} na off day: we no go show any time.",
+      "reviewed": false
+    },
+    "wa.booking.refund_failed": {
+      "text": "Paystack no refund {ref}: {why}. Di refund still dey due; you fit try again, or refund am for Paystack.",
+      "reviewed": false
+    },
+    "wa.booking.refund_hint": {
+      "text": "Dem don pay for am: reply *refund {ref}* to refund di customer.",
+      "reviewed": false
+    },
+    "wa.booking.refunded": {
+      "text": "Di refund of {total} for {ref} don start. We go tell di customer.",
       "reviewed": false
     },
     "wa.booking.taken": {
@@ -597,7 +617,7 @@
       "reviewed": false
     },
     "wa.help.bookings": {
-      "text": "• *bookings* or *today*: see bookings; *booking*, di reference and *cancel*; *move* reference *to Sat 11:00*; *off 25 Dec*: take one day off",
+      "text": "• *bookings* or *today*: see bookings; *booking*, di reference and *cancel*; *move* reference *to Sat 11:00*; *off 25 Dec*: take one day off; *refund*",
       "reviewed": false
     },
     "wa.help.build": {

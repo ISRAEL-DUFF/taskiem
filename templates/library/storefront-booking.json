@@ -2,7 +2,7 @@
   "id": "storefront-booking",
   "title": "Storefront bookings: confirm in chat, remind, mark attended",
   "summary": "Each booking from your storefront comes to you in WhatsApp or Telegram to accept or decline (or is confirmed at once); the customer is texted, reminded a day and two hours before, and you mark whether they came.",
-  "description": "Starts when a customer books a time on your storefront. You get the booking (service and time) to accept or decline; if nobody answers in a day it is declined. With confirmation set to automatic it is confirmed at once. The customer is texted when it is booked, with a link to move or cancel it, and a payment link when they pay after you accept. They are reminded a day before and two hours before. After the appointment you are asked whether they came. Messages go from your business's name, by SMS, and by email when the customer gave one. A moved booking starts this again with the new time; a cancelled one ends it.",
+  "description": "Starts when a customer books a time on your storefront. You get the booking (service and time) to accept or decline; if nobody answers in a day it is declined. With confirmation set to automatic it is confirmed at once. The customer is texted when it is booked, with a link to move or cancel it, and a payment link when they pay after you accept. They are reminded a day before and two hours before. After the appointment you are asked whether they came. Messages go from your business's name, by SMS, and by email when the customer gave one. A moved booking starts this again with the new time; a cancelled one ends it. When a paid booking is declined, you are asked whether to refund it now through Paystack (or refund it yourself).",
   "category": "storefront",
   "tags": [
     "storefront"
@@ -229,6 +229,40 @@
           "text": "='Sorry, we cannot take your booking ' + trigger.body.reference + ' (' + steps.state.output.service + ', ' + steps.state.output.when + ')' + (steps.state.output.status == 'refund_due' ? '. Your payment will be refunded.' : '. Please choose another time: you are welcome to book again.')"
         },
         "when": "=steps.state.output.status in ['declined', 'refund_due']"
+      },
+      {
+        "id": "ask_refund",
+        "type": "approval",
+        "name": "Refund the customer?",
+        "needs": [
+          "state"
+        ],
+        "when": "=steps.state.output.status == 'refund_due'",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "72h",
+          "on_timeout": "reject",
+          "subject": {
+            "order": "=trigger.body.reference",
+            "total": "=trigger.body.total",
+            "action": "Approve to refund the customer now through Paystack; reject if you will refund them yourself"
+          }
+        }
+      },
+      {
+        "id": "refund",
+        "type": "connector",
+        "name": "Refund through Paystack",
+        "connector": "storefront@1",
+        "action": "refund",
+        "needs": [
+          "ask_refund"
+        ],
+        "when": "=steps.ask_refund.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
       },
       {
         "id": "tell_confirmed",

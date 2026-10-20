@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/israel-duff/taskiem/connectors/internal/fixture"
@@ -128,5 +129,32 @@ func TestInitializeTransaction(t *testing.T) {
 	}
 	if _, err := call(t, "initialize_transaction", map[string]any{"amount": 300000, "email": "bola@example.com"}); err == nil {
 		t.Fatal("a payment page without a reference")
+	}
+}
+
+// A refund is made once: Paystack refusing a second refund of the same
+// payment is reported as the first; its other refusals are final.
+func TestRefund(t *testing.T) {
+	r, err := call(t, "refund_transaction", map[string]any{"reference": ref, "customer_note": "Order declined"}, "refund_created")
+	out, _ := r.Output.(map[string]any)
+	if err != nil || out["status"] != "pending" || out["reference"] != ref || out["refund_id"] == nil {
+		t.Fatalf("created: %v %v", out, err)
+	}
+	r, err = call(t, "refund_transaction", map[string]any{"reference": ref}, "refund_already")
+	if out, _ := r.Output.(map[string]any); err != nil || out["status"] != "already" {
+		t.Fatalf("again: %v %v", out, err)
+	}
+	if _, err := call(t, "refund_transaction", map[string]any{"reference": ref}, "refund_insufficient"); !errors.Is(err, effects.ErrFatal) ||
+		!strings.Contains(err.Error(), "Insufficient balance") {
+		t.Fatalf("no balance: %v", err)
+	}
+	if _, err := call(t, "refund_transaction", map[string]any{}); !errors.Is(err, effects.ErrFatal) {
+		t.Fatalf("no reference: %v", err)
+	}
+	if r, err := call(t, "refund_status", map[string]any{"reference": ref}, "refund_status_reversed"); err != nil || r.Output.(map[string]any)["status"] != "reversed" {
+		t.Fatalf("reversed: %v %v", r.Output, err)
+	}
+	if _, err := call(t, "refund_status", map[string]any{"reference": ref}, "refund_status_paid"); !errors.Is(err, connector.ErrNotFound) {
+		t.Fatalf("not refunded: %v", err)
 	}
 }

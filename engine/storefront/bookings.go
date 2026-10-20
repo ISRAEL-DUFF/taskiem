@@ -355,7 +355,7 @@ func (o *Orders) applyChange(ctx context.Context, c change) error {
 		if c.by == "customer" {
 			body := ord.ServiceName + ", " + When(*ord.StartsAt) + "."
 			if ord.Status == "refund_due" {
-				body += " It was paid: refund it in Paystack."
+				body += " It was paid: reply *refund " + ord.Reference + "* in chat, or refund it from the order in the web app."
 			}
 			return o.tellOwner(ctx, c.tenant, c.id, "Booking "+ord.Reference+" cancelled by the customer", body)
 		}

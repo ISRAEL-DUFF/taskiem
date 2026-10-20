@@ -316,6 +316,10 @@
       "text": "Zuo ike na {day}? A gaghị enye oge n'ụbọchị ahụ. Ndebanye oge dị na ya: {count}. Ha ga-anọ ruo mgbe ị bugharịrị ma ọ bụ kagbuo ha.",
       "reviewed": false
     },
+    "wa.booking.confirm_refund": {
+      "text": "Laghachi {total} nye onye ahịa maka {ref}? Ọ si n'ego Paystack gị, ọ ga-eru ha n'ime ụbọchị ọrụ 5 ruo 10.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Zaa *yes* iji chekwaa mgbanwe ahụ, ma ọ bụ *cancel*.",
       "reviewed": false
@@ -352,12 +356,28 @@
       "text": "Enweghị ndebanye oge {ref} a ga-agbanwe.",
       "reviewed": false
     },
+    "wa.booking.nothing_to_refund": {
+      "text": "Enweghị ịkwụ ụgwọ a ga-alaghachi maka {ref}.",
+      "reviewed": false
+    },
     "wa.booking.off_already": {
       "text": "{day} bụbu ụbọchị izu ike.",
       "reviewed": false
     },
     "wa.booking.off_done": {
       "text": "{day} bụ ụbọchị izu ike: a gaghị enye oge.",
+      "reviewed": false
+    },
+    "wa.booking.refund_failed": {
+      "text": "Paystack alaghachighị {ref}: {why}. Ego ahụ ka dị; ị nwere ike ịnwa ọzọ, ma ọ bụ laghachi ya na Paystack.",
+      "reviewed": false
+    },
+    "wa.booking.refund_hint": {
+      "text": "A kwụrụ ụgwọ ya: zaa *refund {ref}* iji laghachi ego onye ahịa.",
+      "reviewed": false
+    },
+    "wa.booking.refunded": {
+      "text": "Amalitela ịlaghachi {total} maka {ref}. A ga-agwa onye ahịa.",
       "reviewed": false
     },
     "wa.booking.taken": {
@@ -597,7 +617,7 @@
       "reviewed": false
     },
     "wa.help.bookings": {
-      "text": "• *bookings* ma ọ bụ *today*: hụ ndebanye oge; *booking* na nọmba na *cancel*; *move* nọmba *to Sat 11:00*; *off 25 Dec*: zuo ike otu ụbọchị",
+      "text": "• *bookings* ma ọ bụ *today*: hụ ndebanye oge; *booking* na nọmba na *cancel*; *move* nọmba *to Sat 11:00*; *off 25 Dec*: zuo ike otu ụbọchị; *refund*",
       "reviewed": false
     },
     "wa.help.build": {
