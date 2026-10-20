@@ -1,0 +1,138 @@
+{
+  "id": "storefront-enquiry",
+  "title": "Storefront questions: acknowledge and follow up",
+  "summary": "A question from your storefront is acknowledged to the customer by text, and comes to you in chat to mark answered once you have replied.",
+  "description": "Starts when a customer sends the question form on your storefront. The customer is texted that their question arrived. You are asked in WhatsApp or Telegram to approve once you have answered them; open Storefront > Orders in Taskiem to see their question and number. Messages go from your business's name.",
+  "category": "storefront",
+  "tags": [
+    "storefront",
+    "enquiry",
+    "approval",
+    "sms"
+  ],
+  "keywords": [
+    "storefront",
+    "shop",
+    "customer",
+    "enquiry",
+    "question",
+    "reply"
+  ],
+  "connectors": [
+    "storefront@1"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who accepts orders",
+      "description": "The role that accepts or declines orders.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_storefrontEnquiry",
+    "version": 1,
+    "name": "Storefront questions",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "enquiry"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference",
+          "customer"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              },
+              "email": {
+                "type": "string",
+                "x-pii": "email"
+              },
+              "message": {
+                "type": "string",
+                "x-pii": "free_text"
+              },
+              "best_time": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "acknowledge",
+        "type": "connector",
+        "name": "Tell the customer it arrived",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "text": "='We have your question (' + trigger.body.reference + ') and will reply soon.'"
+        }
+      },
+      {
+        "id": "answered",
+        "type": "approval",
+        "name": "Mark the question answered",
+        "needs": [
+          "acknowledge"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "72h",
+          "subject": {
+            "enquiry": "=trigger.body.reference",
+            "action": "Open Storefront > Orders to see it; approve once answered"
+          }
+        }
+      },
+      {
+        "id": "complete",
+        "type": "connector",
+        "name": "Record it as done",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "answered"
+        ],
+        "when": "=steps.answered.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "96h"
+    }
+  }
+}

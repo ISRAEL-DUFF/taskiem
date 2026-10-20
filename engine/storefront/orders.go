@@ -483,14 +483,27 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 				errs = append(errs, err)
 			}
 		case d.expires != nil && o.now().After(*d.expires):
+			var decided bool
 			if err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-				tag, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = 'expired', updated_at = now() WHERE tenant_id = $1 AND id = $2 AND status = 'awaiting_payment'`, tenant, d.id)
-				if err != nil || tag.RowsAffected() == 0 {
+				err := tx.QueryRow(ctx, `UPDATE storefront_orders SET status = 'expired', updated_at = now() WHERE tenant_id = $1 AND id = $2 AND status = 'awaiting_payment'
+					RETURNING decided_at IS NOT NULL`, tenant, d.id).Scan(&decided)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return nil
+				}
+				if err != nil {
 					return err
 				}
 				return audit(ctx, tx, tenant, "storefront.order_expired", d.reference, nil)
 			}); err != nil {
 				errs = append(errs, err)
+				continue
+			}
+			// A run waiting for the payment of an accepted order hears it
+			// expired, and takes its expired path.
+			if decided {
+				if _, _, err := o.Signal(ctx, tenant, "prod", PaymentSignal, d.reference, "expired:"+d.reference, map[string]any{"reference": d.reference, "status": "expired"}); err != nil {
+					errs = append(errs, err)
+				}
 			}
 		}
 	}
