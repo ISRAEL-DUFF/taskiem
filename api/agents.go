@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/ops"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -252,6 +254,10 @@ func (s *Server) consentOut(code string, expires time.Time) map[string]any {
 	if n := strings.Trim(s.WhatsApp.Config.DisplayNumber, "+ "); n != "" {
 		out["whatsapp_number"] = s.WhatsApp.Config.DisplayNumber
 		out["link"] = "https://wa.me/" + strings.ReplaceAll(n, " ", "") + "?text=" + url.QueryEscape(text)
+		// The owner scans it with their own phone, which sends from their number.
+		if png, err := storefront.QRPNG(out["link"].(string)); err == nil {
+			out["qr"] = "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+		}
 	}
 	return out
 }

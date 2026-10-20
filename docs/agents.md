@@ -20,7 +20,7 @@ The console lists the agents with what they have done: businesses signed up, pag
 ## Signing a business up
 
 1. **The agent enters** the business's name, the owner's name and the owner's WhatsApp number (`POST /v1/agent/businesses`). The business is made there and then, with the owner as its owner. An owner with no Taskiem account gets one, with no password: they work through WhatsApp.
-2. **The owner agrees** by sending `AGREE` and the 6-digit code on the agent's screen to Taskiem's WhatsApp number, from their own phone. The agent's app shows a link (or its QR code) that opens WhatsApp with the message written. The code works for 30 minutes; five wrong codes lock it, and the agent can make a new one.
+2. **The owner agrees** by sending `AGREE` and the 6-digit code on the agent's screen to Taskiem's WhatsApp number, from their own phone. The agent's app shows a QR code the owner scans with their phone, and a link, each opening WhatsApp with the message written. The code works for 30 minutes; five wrong codes lock it, and the agent can make a new one.
 
    This proves the owner holds the number and agrees, without the owner ever reading a code to anyone: Taskiem's own codes always say never to share them, and this keeps that true.
 3. **The agent works** on the page for the next 24 hours: the storefront, its catalogue table, photos and opening hours, sending `X-Taskiem-Agent-Session: <session id>` with their own sign-in.

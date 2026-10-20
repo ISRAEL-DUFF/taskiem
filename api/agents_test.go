@@ -106,7 +106,8 @@ func TestFieldAgents(t *testing.T) {
 	ob := agent.must(201, "POST", "/v1/agent/businesses", map[string]any{"name": "Mama Bisi Foods", "owner_name": "Bisi Ade", "owner_phone": "0803 123 4567"})
 	sess, consent := ob["session"].(map[string]any), ob["consent"].(map[string]any)
 	sid, business := sess["id"].(string), sess["tenant_id"].(string)
-	if sess["status"] != "pending" || !strings.HasPrefix(consent["link"].(string), "https://wa.me/15550001111?text=AGREE+") || consent["text"] != "AGREE "+consent["code"].(string) {
+	if sess["status"] != "pending" || !strings.HasPrefix(consent["link"].(string), "https://wa.me/15550001111?text=AGREE+") || consent["text"] != "AGREE "+consent["code"].(string) ||
+		!strings.HasPrefix(consent["qr"].(string), "data:image/png;base64,") {
 		t.Fatalf("onboarding: %v", ob)
 	}
 	// Until the owner agrees, the agent cannot act in it.

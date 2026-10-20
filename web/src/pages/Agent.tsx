@@ -37,6 +37,8 @@ interface Consent {
   code: string;
   text: string;
   link?: string;
+  /** The link as a QR code (a PNG data URL). */
+  qr?: string;
   whatsapp_number?: string;
   expires_at: string;
 }
@@ -334,6 +336,9 @@ function SessionPage() {
               </>
             )}
           </p>
+          {consent.qr && (
+            <img className="agent-qr" src={consent.qr} width={240} height={240} alt="QR code: the owner scans it with their own phone to send the message" />
+          )}
           {consent.link && (
             <>
               <a className="button primary agent-big" href={consent.link} target="_blank" rel="noreferrer">

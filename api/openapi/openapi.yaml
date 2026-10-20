@@ -12029,7 +12029,10 @@ components:
             link:
               type: string
               format: uri
-              description: Opens WhatsApp with the text written (a QR code of it suits a phone held up)
+              description: Opens WhatsApp with the text written
+            qr:
+              type: string
+              description: The link as a QR code (a PNG data URL), for the owner to scan with their own phone
             expires_at:
               type: string
               format: date-time
