@@ -85,3 +85,8 @@ a { color: var(--accent); }
 .sf-privacy { margin-top: 1rem; }
 .form-error { padding: .75rem 1rem; border-left: 4px solid #b91c1c; background: #fee2e2; color: #7f1d1d; }
 .sf-ref { color: var(--muted); }
+.sf-days { display: flex; flex-wrap: wrap; gap: .375rem; margin: .75rem 0; }
+.sf-slots label { margin: .25rem .75rem .25rem 0; }
+.sf-pay { font-weight: 700; }
+.sf-services li { margin: .5rem 0; }
+.sf-change { display: inline-block; margin-right: .5rem; }

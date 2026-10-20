@@ -120,7 +120,7 @@ type closedData struct {
 	Home     string
 }
 
-var purposes = map[string]string{"order": "handle your order", "enquiry": "answer your question", "callback": "call you back"}
+var purposes = map[string]string{"order": "handle your order", "enquiry": "answer your question", "callback": "call you back", "booking": "handle your booking"}
 
 func findAction(list []storefront.PublicAction, kind string) (storefront.PublicAction, bool) {
 	for _, a := range list {
@@ -160,7 +160,7 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		return
 	}
 	act, enabled := findAction(p.Model.Actions, kind)
-	if !ok || !enabled {
+	if !ok || !enabled || (kind == "booking" && !p.Model.HasServices) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}
@@ -177,10 +177,17 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		}
 		s.renderPrivate(w, r, refuse, "formclosed.html", closedData{pageData: pageData{Title: "Closed", Lang: f.Lang}, Business: f.Business, Accent: f.Accent, Message: msg, Home: f.Home})
 		return
-	case !s.formsOpen():
+	case !s.formsOpen() || (kind == "booking" && !s.bookingsOpen()):
 		// Without TASKIEM_PUBLIC_KEY; the server warns once, at start.
+		what := "Orders"
+		if kind == "booking" {
+			what = "Bookings"
+		}
 		s.renderPrivate(w, r, http.StatusServiceUnavailable, "formclosed.html", closedData{pageData: pageData{Title: "Not open yet", Lang: f.Lang}, Business: f.Business, Accent: f.Accent,
-			Message: "Orders are not open yet. Please try again later, or contact " + f.Business + " directly.", Home: f.Home})
+			Message: what + " are not open yet. Please try again later, or contact " + f.Business + " directly.", Home: f.Home})
+		return
+	case kind == "booking":
+		s.serveBooking(w, r, site, p, act, embed)
 		return
 	}
 	if r.Method != http.MethodPost {

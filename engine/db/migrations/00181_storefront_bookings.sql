@@ -58,7 +58,7 @@ ALTER TABLE storefront_orders
   ADD COLUMN status_key    jsonb,
   ADD CONSTRAINT storefront_orders_booking_time CHECK (kind <> 'booking' OR (starts_at IS NOT NULL AND ends_at > starts_at));
 CREATE INDEX storefront_orders_bookings ON storefront_orders (tenant_id, starts_at) WHERE kind = 'booking';
-GRANT SELECT (service_id, service_name, starts_at, ends_at, version, price_change, id, created_at) ON storefront_orders TO taskiem_dispatch;
+GRANT SELECT (service_id, service_name, starts_at, ends_at, version, price_change, deposit_kobo, id, created_at) ON storefront_orders TO taskiem_dispatch;
 GRANT UPDATE (status, starts_at, ends_at, version, updated_at) ON storefront_orders TO taskiem_dispatch;
 CREATE POLICY dispatch_change ON storefront_orders FOR UPDATE TO taskiem_dispatch USING (true) WITH CHECK (true);
 
@@ -212,11 +212,25 @@ $$;
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_public_booking(p_reference text, p_status_hash bytea)
 RETURNS TABLE (status text, service_id text, service_name text, starts_at timestamptz, ends_at timestamptz, total_kobo bigint,
-  payment text, payment_url text, storefront_id uuid)
+  payment text, payment_url text, storefront_id uuid, deposit_kobo bigint)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT o.status, o.service_id, o.service_name, o.starts_at, o.ends_at, o.total_kobo, o.payment, o.payment_url, o.storefront_id
+  SELECT o.status, o.service_id, o.service_name, o.starts_at, o.ends_at, o.total_kobo, o.payment, o.payment_url, o.storefront_id, o.deposit_kobo
     FROM storefront_orders o
    WHERE o.reference = p_reference AND o.status_hash = p_status_hash AND o.kind = 'booking'
+$$;
+-- +goose StatementEnd
+
+-- The new total of an order or booking waiting on its customer to confirm
+-- changed prices (price_changed), for its status page: what is gone by
+-- name, nothing personal.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_public_price_change(p_reference text, p_status_hash bytea)
+RETURNS TABLE (total_kobo bigint, deposit_kobo bigint, gone text[])
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT COALESCE((o.price_change->>'total_kobo')::bigint, 0), COALESCE((o.price_change->>'deposit_kobo')::bigint, 0),
+         ARRAY(SELECT jsonb_array_elements_text(COALESCE(o.price_change->'gone', '[]')))
+    FROM storefront_orders o
+   WHERE o.reference = p_reference AND o.status_hash = p_status_hash AND o.status = 'price_changed' AND o.price_change IS NOT NULL
 $$;
 -- +goose StatementEnd
 
@@ -327,6 +341,7 @@ ALTER FUNCTION taskiem_public_book(uuid, text, bytea, bytea, bytea, text, timest
 ALTER FUNCTION taskiem_public_busy(uuid, timestamptz, timestamptz) OWNER TO taskiem_dispatch;
 ALTER FUNCTION taskiem_public_storefront_services(uuid) OWNER TO taskiem_dispatch;
 ALTER FUNCTION taskiem_public_booking(text, bytea) OWNER TO taskiem_dispatch;
+ALTER FUNCTION taskiem_public_price_change(text, bytea) OWNER TO taskiem_dispatch;
 ALTER FUNCTION taskiem_public_change(text, bytea, text, int, timestamptz, timestamptz, timestamptz, int) OWNER TO taskiem_dispatch;
 ALTER FUNCTION taskiem_storefront_changes_claim(int) OWNER TO taskiem_dispatch;
 ALTER FUNCTION taskiem_storefront_change_done(uuid) OWNER TO taskiem_dispatch;
@@ -334,11 +349,12 @@ ALTER FUNCTION taskiem_storefront_booking_tenants() OWNER TO taskiem_dispatch;
 ALTER FUNCTION taskiem_storefront_holds_sweep() OWNER TO taskiem_dispatch;
 REVOKE EXECUTE ON FUNCTION taskiem_storefront_slot_free(uuid, text, text, timestamptz, timestamptz, int), taskiem_storefront_lock(uuid),
   taskiem_public_book(uuid, text, bytea, bytea, bytea, text, timestamptz, timestamptz, int), taskiem_public_busy(uuid, timestamptz, timestamptz),
-  taskiem_public_storefront_services(uuid), taskiem_public_booking(text, bytea), taskiem_public_change(text, bytea, text, int, timestamptz, timestamptz, timestamptz, int),
-  taskiem_storefront_changes_claim(int), taskiem_storefront_change_done(uuid), taskiem_storefront_booking_tenants(),
+  taskiem_public_storefront_services(uuid), taskiem_public_booking(text, bytea), taskiem_public_price_change(text, bytea),
+  taskiem_public_change(text, bytea, text, int, timestamptz, timestamptz, timestamptz, int), taskiem_storefront_changes_claim(int), taskiem_storefront_change_done(uuid), taskiem_storefront_booking_tenants(),
   taskiem_storefront_holds_sweep() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_public_book(uuid, text, bytea, bytea, bytea, text, timestamptz, timestamptz, int), taskiem_public_busy(uuid, timestamptz, timestamptz),
-  taskiem_public_storefront_services(uuid), taskiem_public_booking(text, bytea), taskiem_public_change(text, bytea, text, int, timestamptz, timestamptz, timestamptz, int) TO taskiem_public;
+  taskiem_public_storefront_services(uuid), taskiem_public_booking(text, bytea), taskiem_public_price_change(text, bytea),
+  taskiem_public_change(text, bytea, text, int, timestamptz, timestamptz, timestamptz, int) TO taskiem_public;
 GRANT EXECUTE ON FUNCTION taskiem_storefront_slot_free(uuid, text, text, timestamptz, timestamptz, int), taskiem_storefront_lock(uuid),
   taskiem_storefront_changes_claim(int), taskiem_storefront_change_done(uuid), taskiem_storefront_booking_tenants(),
   taskiem_storefront_holds_sweep() TO taskiem_app;
@@ -349,6 +365,7 @@ DROP FUNCTION taskiem_storefront_booking_tenants();
 DROP FUNCTION taskiem_storefront_change_done(uuid);
 DROP FUNCTION taskiem_storefront_changes_claim(int);
 DROP FUNCTION taskiem_public_change(text, bytea, text, int, timestamptz, timestamptz, timestamptz, int);
+DROP FUNCTION taskiem_public_price_change(text, bytea);
 DROP FUNCTION taskiem_public_booking(text, bytea);
 DROP FUNCTION taskiem_public_storefront_services(uuid);
 DROP FUNCTION taskiem_public_busy(uuid, timestamptz, timestamptz);
