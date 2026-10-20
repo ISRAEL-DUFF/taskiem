@@ -57,16 +57,18 @@ func Words(s string) []string {
 	return out
 }
 
-// index is each template's keyword weights and how many templates use
-// each word, computed once per library.
+// index is each template's keyword weights, how many templates use
+// each word anywhere (df) and how many name it as a keyword or tag
+// (kdf), computed once per library.
 type index struct {
 	weights []map[string]int
 	df      map[string]int
+	kdf     map[string]int
 }
 
 func (l *Library) index() *index {
 	l.idxOnce.Do(func() {
-		ix := &index{df: map[string]int{}}
+		ix := &index{df: map[string]int{}, kdf: map[string]int{}}
 		for _, t := range l.list {
 			w := map[string]int{}
 			add := func(text string, v int) {
@@ -79,8 +81,11 @@ func (l *Library) index() *index {
 			add(t.Title, 2)
 			add(strings.Join(t.Tags, " "), 3)
 			add(strings.Join(t.Keywords, " "), 3)
-			for x := range w {
+			for x, v := range w {
 				ix.df[x]++
+				if v == 3 {
+					ix.kdf[x]++
+				}
 			}
 			ix.weights = append(ix.weights, w)
 		}
@@ -108,12 +113,14 @@ func (l *Library) Match(goal string, n int) []Match {
 		var matched []string
 		// At least one word must be a keyword or tag few templates share:
 		// common words alone (pay, email, customer) never pick a template.
+		// Only keywords and tags count here, so another template merely
+		// mentioning the word in its description does not take it away.
 		distinctive := false
 		for w := range goalWords {
 			if v := ix.weights[i][w]; v > 0 {
 				score += float64(v) * math.Log(1+total/float64(ix.df[w]))
 				matched = append(matched, w)
-				if v == 3 && ix.df[w] <= 3 {
+				if v == 3 && ix.kdf[w] <= 3 {
 					distinctive = true
 				}
 			}

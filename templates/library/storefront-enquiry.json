@@ -5,18 +5,13 @@
   "description": "Starts when a customer sends the question form on your storefront. The customer is texted that their question arrived. You are asked in WhatsApp or Telegram to approve once you have answered them; open Storefront > Orders in Taskiem to see their question and number. Messages go from your business's name.",
   "category": "storefront",
   "tags": [
-    "storefront",
-    "enquiry",
-    "approval",
-    "sms"
+    "storefront"
   ],
   "keywords": [
     "storefront",
-    "shop",
-    "customer",
-    "enquiry",
-    "question",
-    "reply"
+    "storefront question",
+    "enquiry form",
+    "question form"
   ],
   "connectors": [
     "storefront@1"

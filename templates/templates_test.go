@@ -328,3 +328,29 @@ func TestMatch(t *testing.T) {
 		t.Errorf("an unrelated goal matched %s", m[0].Template.ID)
 	}
 }
+
+// A keyword stays distinctive however many other templates mention the
+// word in their prose: only keywords and tags make a word common.
+func TestMatchKeywordsOutweighProse(t *testing.T) {
+	tpl := func(id, keywords, desc string) *fstest.MapFile {
+		return &fstest.MapFile{Data: []byte(`{"id":"` + id + `","title":"T","summary":"S","description":"` + desc + `","category":"c",
+		 "tags":[],"keywords":[` + keywords + `],"connectors":[],"params":[],
+		 "definition":{"schema":"wd/v1","id":"wf_` + id + `","version":1,"name":"N","trigger":{"type":"manual"},
+		  "steps":[{"id":"t","type":"transform","config":{"output":{"ok":true}}}]}}`)}
+	}
+	fs := fstest.MapFS{"library/esusu.json": tpl("esusu", `"esusu","contribution","rota","thrift"`, "Collects esusu contributions.")}
+	for _, id := range []string{"a", "b", "c", "d", "e", "f"} {
+		fs["library/"+id+".json"] = tpl(id, `"other"`, "Sends a note on whatsapp about the esusu contribution, the rota and the thrift.")
+	}
+	for _, id := range []string{"g", "h", "i", "j", "k", "l", "m", "n", "o", "p"} {
+		fs["library/"+id+".json"] = tpl(id, `"unrelated"`, "Does something else.")
+	}
+	lib, err := templates.Load(fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := lib.Match("collect every member's esusu contribution by the rota for our thrift group", 1)
+	if len(m) == 0 || m[0].Template.ID != "esusu" {
+		t.Fatalf("got %v, want esusu", m)
+	}
+}

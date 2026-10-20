@@ -5,18 +5,13 @@
   "description": "Starts when a customer asks for a call back on your storefront. The customer is texted that you will call. You are asked in WhatsApp or Telegram to approve once you have called them; open Storefront > Orders in Taskiem to see their number and best time. Messages go from your business's name.",
   "category": "storefront",
   "tags": [
-    "storefront",
-    "callback",
-    "approval",
-    "sms"
+    "storefront"
   ],
   "keywords": [
     "storefront",
-    "shop",
-    "customer",
+    "call back",
     "callback",
-    "call",
-    "reply"
+    "call-back form"
   ],
   "connectors": [
     "storefront@1"
