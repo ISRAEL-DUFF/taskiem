@@ -10,6 +10,7 @@ import { passkeysSupported } from "../passkeys";
 import { ErrorBox, Field, useAction } from "../ui";
 import { opsEnrol, opsGet, opsPasskeySignIn, opsPost, type OpsMe } from "./client";
 import { Queue, Submission } from "./Review";
+import { Agents } from "./Agents";
 import { Audit, Publishers, Reviewers, Status, Tenant, Tenants } from "./Pages";
 
 export function OpsApp() {
@@ -134,6 +135,7 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
     ["/ops/reviewers", "Reviewers", "members"],
     ["/ops/status", "Status page", "alerts"],
     ["/ops/tenants", "Tenants", "dashboard"],
+    ["/ops/agents", "Field agents", "storefront"],
     ["/ops/audit", "Platform audit", "audit"],
   ];
   const signOut = async () => {
@@ -188,6 +190,7 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
           <Route path="/ops/status" element={<Status />} />
           <Route path="/ops/tenants" element={<Tenants />} />
           <Route path="/ops/tenants/:id" element={<Tenant />} />
+          <Route path="/ops/agents" element={<Agents />} />
           <Route path="/ops/audit" element={<Audit />} />
           <Route path="*" element={<Navigate to="/ops/catalogue" replace />} />
         </Routes>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { del, get, patch, post, put, upload } from "../api";
+import { currentAgentSession, del, get, patch, post, put, upload } from "../api";
 import { useAuth } from "../auth";
 import { Help } from "../onboarding";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
@@ -486,9 +486,12 @@ function Rows({ table, edit, onChanged }: { table: Table; edit: boolean; onChang
             Add a row
           </button>
         )}
-        <a className="button" href={`/v1/tables/${table.id}/export`} download={`${table.name}.csv`}>
-          Export CSV
-        </a>
+        {/* Agents may not export a business's table (docs/agents.md). */}
+        {!currentAgentSession() && (
+          <a className="button" href={`/v1/tables/${table.id}/export`} download={`${table.name}.csv`}>
+            Export CSV
+          </a>
+        )}
         {edit && (
           <form
             className="row"

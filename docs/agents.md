@@ -43,6 +43,12 @@ Everything the agent does is audited in the business's chain as `agent:<code>`, 
 - **On WhatsApp,** `STOP AGENT` ends every agent session on the businesses the owner owns.
 - **In the app,** the owner (or anyone with `member.manage`) sees every agent session on the organisation (who, when, and how it ended), ends one, or **invites an agent back** for a support visit: the code on the agent's card and 1 to 8 hours (default 2). A support visit is active at once, with the same limits.
 
+## Where it is in the web app
+
+- **Agents** use `/agent` on their phone: who they are, their businesses, **New business**, the owner's code to send (with a link that opens WhatsApp with the message written, a countdown and **New code**), and **Record visit** (the phone's camera and location). Once the owner agrees, the business's page and tables open under a banner with the business's name, the time left and **End session**; every request there carries the session header. Publishing hands the page over and brings the agent back home.
+- **Owners** see their agent sessions under **Members**: **End** one, or **Invite an agent back**.
+- **Operators** register, suspend, reactivate and retire agents under **Field agents** in the operator console, and see each agent's businesses.
+
 ## API
 
 | Endpoint | |
