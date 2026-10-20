@@ -85,7 +85,7 @@ A data table is an ordinary Xenibase table to a workflow: the connector is `xeni
  "needs": ["read_debtors"], "input": {"table": "debtors", "key": "=item.id", "set": {"paid": true}}}
 ```
 
-The template [`debtor-reminder-table`](templates.md) is the weekly debtor reminder over a `debtors` table (`name`, `phone`, `balance_kobo`) instead of a sheet. The AI builder's context lists the organisation's tables with their columns and types (never rows), so a goal such as "remind my customers who owe me" names the table rather than a spreadsheet; `wdtext` reads such a step as any Xenibase step ("Read rows (data API) (Xenibase)"), since it never prints a step's inputs.
+The template [`debtor-reminder-table`](templates.md) is the weekly debtor reminder over a `debtors` table (`name`, `phone`, `balance_kobo`) instead of a sheet. The AI builder's context lists the organisation's tables with their columns and types (never rows), so a goal such as "remind my customers who owe me" names the table rather than a spreadsheet, and a goal that needs a table that does not exist proposes it, to be made when the draft is saved ([AI](ai.md)); `wdtext` reads such a step as any Xenibase step ("Read rows (data API) (Xenibase)"), since it never prints a step's inputs.
 
 ### The row-changed trigger
 

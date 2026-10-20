@@ -528,6 +528,10 @@
       "text": "Ana m ede usoro ọrụ gị; aga m eziga ya mgbe ọ dị njikere. Ziga *cancel* ka ịkwụsị.",
       "reviewed": false
     },
+    "wa.build.tables_needed": {
+      "text": "Tupu ị bipụta ya, mepụta tebụl ndị ọ chọrọ n'ime ngwa ahụ: {tables} ({link}).",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "Nke ahụ dị ogologo nke ukwuu; kọwaa ya n'ihe na-erughị mkpụrụedemede {max}.",
       "reviewed": false

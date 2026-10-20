@@ -227,6 +227,9 @@ body:has(.login) {
 @media (prefers-reduced-motion: reduce) { .modal, .modal-backdrop { animation: none; } }
 .modal:has(.ai-builder) { width: min(880px, 94vw); }
 .ai-preview { height: 300px; margin-bottom: 12px; }
+.ai-table { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 4px; margin: 0 0 12px; }
+.ai-table legend { padding: 0 4px; }
+.ai-table input:not([type]), .ai-table select { width: 100%; }
 .secret-once { word-break: break-all; font-weight: 600; }
 
 /* Page furniture: header, empty states, loading skeletons, list filters. */

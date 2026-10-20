@@ -13811,6 +13811,13 @@ components:
       properties:
         definition:
           $ref: '#/components/schemas/Definition'
+        tables:
+          description: New data tables the draft uses, to be made when it is saved (send them, as reviewed, with the save).
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/AIProposedTable'
         summary:
           type: string
         assumptions:
@@ -13844,6 +13851,7 @@ components:
                 - budget
                 - refusal
                 - truncated
+                - table
               rule:
                 type: string
               path:
@@ -14062,7 +14070,35 @@ components:
         name:
           type: string
           description: The new workflow's name; defaults to the definition's. Ignored when the build changes a workflow.
+        tables:
+          type: array
+          description: Data tables to make with the draft (the proposal's, as reviewed), as POST /v1/tables takes them. Needs table.edit; each is reported in the answer, and the draft is saved whatever becomes of them.
+          items:
+            $ref: '#/components/schemas/TableRequest'
       additionalProperties: false
+    AIProposedTable:
+      type: object
+      required: [name, title, columns]
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        columns:
+          type: array
+          items:
+            type: object
+            required: [name, title, type, required]
+            properties:
+              name:
+                type: string
+              title:
+                type: string
+              type:
+                type: string
+                enum: [text, integer, number, boolean, date, datetime, phone, email, json]
+              required:
+                type: boolean
     DraftSaved:
       type: object
       required:
@@ -14085,6 +14121,20 @@ components:
           type: boolean
         problems:
           $ref: '#/components/schemas/Problems'
+        tables:
+          type: array
+          description: What became of the tables sent with an AI draft.
+          items:
+            type: object
+            required: [name, status]
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+                enum: [created, exists, skipped, failed]
+              error:
+                type: string
     AlertChannelKind:
       type: string
       enum:

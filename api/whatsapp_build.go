@@ -417,6 +417,7 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 	}
 	var wf uuid.UUID
 	var name string
+	var tables []string
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		var doc []byte
@@ -429,6 +430,10 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 			}
 			_ = json.Unmarshal(doc, &d)
 			name = d.Name
+			// New tables the draft needs: made in the app, where their
+			// columns can be checked (chat cannot show them well).
+			err = tx.QueryRow(ctx, `SELECT COALESCE(ARRAY(SELECT t->>'name' FROM jsonb_array_elements(COALESCE(proposal->'tables', '[]')) t), '{}')
+				FROM ai_builds WHERE id = $1`, b.ID).Scan(&tables)
 		}
 		return err
 	})
@@ -441,5 +446,9 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 	if err != nil {
 		return err
 	}
-	return c.say(ctx, s, c.t("wa.build.saved", "name", whatsapp.SafeText(name), "link", s.waLink(c, "/workflows/"+wf.String())))
+	msg := c.t("wa.build.saved", "name", whatsapp.SafeText(name), "link", s.waLink(c, "/workflows/"+wf.String()))
+	if len(tables) > 0 {
+		msg += "\n\n" + c.t("wa.build.tables_needed", "tables", whatsapp.SafeText(strings.Join(tables, ", ")), "link", s.waLink(c, "/tables"))
+	}
+	return c.say(ctx, s, msg)
 }

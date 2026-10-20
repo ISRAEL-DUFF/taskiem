@@ -659,6 +659,11 @@
       "reviewed": true,
       "context": "A message while the model drafts"
     },
+    "wa.build.tables_needed": {
+      "text": "Before publishing it, create the tables it needs in the app: {tables} ({link}).",
+      "reviewed": true,
+      "context": "After an AI draft is saved from chat: the new data tables it uses, to create in the web app"
+    },
     "wa.build.too_long": {
       "text": "That is too long for me; describe it in under {max} characters.",
       "reviewed": true,

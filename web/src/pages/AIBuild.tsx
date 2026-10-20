@@ -5,6 +5,16 @@ import { get, post, type Problem } from "../api";
 import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { toGraph } from "../lib/graph";
 import { Badge, ErrorBox, Field, Modal, useAction } from "../ui";
+import { useAuth } from "../auth";
+import {
+  COLUMN_TYPES,
+  tableProblem,
+  tablesToSave,
+  tableTroubles,
+  type ProposedTable,
+  type ReviewedTable,
+  type TableResult,
+} from "../lib/aitables";
 
 // "Build with AI" (docs/ai.md): describe a goal, the server drafts,
 // validates, self-corrects and dry-runs a workflow, and the person reviews
@@ -47,6 +57,8 @@ interface Proposal {
   template?: { id: string; title: string; instantiated: boolean; params: Record<string, unknown>; missing: string[] };
   usage: { input_tokens: number; output_tokens: number; cache_creation_tokens: number; cache_read_tokens: number };
   model: string;
+  /** New data tables the draft uses, made when it is saved. */
+  tables?: ProposedTable[];
 }
 
 interface Build {
@@ -78,7 +90,17 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
   const [goal, setGoal] = useState("");
   const [name, setName] = useState("");
   const [build, setBuild] = useState<Build>();
+  const [tables, setTables] = useState<ReviewedTable[]>([]);
+  // Saved, with tables that could not be made: shown before moving on.
+  const [saved, setSaved] = useState<{ id: string; version: number; troubles: TableResult[] }>();
+  const { can } = useAuth();
   const act = useAction();
+
+  // The proposal's tables, to review: all ticked to be made.
+  const proposal = build?.status === "proposed" ? build.proposal : null;
+  useEffect(() => {
+    setTables((proposal?.tables ?? []).map((t) => ({ ...t, create: true })));
+  }, [proposal]);
 
   useEffect(() => {
     void get<AIStatus>("/v1/ai/status").then(setStatus, () => setStatus({ enabled: false }));
@@ -102,8 +124,17 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
   const save = () =>
     act.run(async () => {
       if (!build) return;
-      const r = await post<{ id: string; version: number }>(`/v1/ai/builds/${build.id}/save`, workflow ? {} : { name: name || undefined });
-      onSaved(r.id, r.version);
+      const toMake = tablesToSave(tables);
+      for (const t of toMake) {
+        const problem = tableProblem(t);
+        if (problem) throw new Error(problem);
+      }
+      const body: Record<string, unknown> = workflow ? {} : { name: name || undefined };
+      if (toMake.length > 0) body.tables = toMake;
+      const r = await post<{ id: string; version: number; tables?: TableResult[] }>(`/v1/ai/builds/${build.id}/save`, body);
+      const troubles = tableTroubles(r.tables);
+      if (troubles.length > 0) setSaved({ id: r.id, version: r.version, troubles });
+      else onSaved(r.id, r.version);
     });
 
   const p = build?.proposal;
@@ -158,10 +189,31 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
             </div>
           </>
         )}
-        {p && build && build.status !== "running" && (
+        {saved && (
+          <>
+            <div className="notice" role="status">
+              The draft is saved, but not every table it needs could be made:
+              <ul>
+                {saved.troubles.map((t) => (
+                  <li key={t.name}>
+                    <strong>{t.name}</strong>: {t.error ?? t.status}
+                  </li>
+                ))}
+              </ul>
+              Create them on the <a href="/tables">Tables</a> page before publishing the workflow.
+            </div>
+            <div className="toolbar">
+              <button className="primary" onClick={() => onSaved(saved.id, saved.version)}>
+                Open the workflow
+              </button>
+            </div>
+          </>
+        )}
+        {!saved && p && build && build.status !== "running" && (
           <Review proposal={p}>
             {build.status === "proposed" && p.definition && (
               <>
+                {tables.length > 0 && <TablesReview tables={tables} onChange={setTables} canMake={can("table.edit")} />}
                 {!workflow && (
                   <Field label="Name">
                     <input value={name} placeholder={p.definition.name} onChange={(e) => setName(e.target.value)} />
@@ -293,5 +345,96 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
       </p>
       {children}
     </>
+  );
+}
+
+/** The new tables a draft needs: the person may rename, retype, add or drop
+ * columns, or leave a table out, before they are made with the draft. */
+function TablesReview({ tables, onChange, canMake }: { tables: ReviewedTable[]; onChange: (t: ReviewedTable[]) => void; canMake: boolean }) {
+  const set = (i: number, t: ReviewedTable) => onChange(tables.map((x, j) => (j === i ? t : x)));
+  return (
+    <section aria-label="New tables">
+      <h3>New tables</h3>
+      <p className="hint">
+        The workflow keeps its records in {tables.length === 1 ? "a table that does not exist yet" : "tables that do not exist yet"}. Check the columns: they
+        are made when you save the draft.
+        {!canMake && " You cannot make tables yourself: an owner or admin can make them on the Tables page."}
+      </p>
+      {tables.map((t, i) => {
+        const problem = t.create ? tableProblem(t) : "";
+        return (
+          <fieldset key={i} className="ai-table">
+            <legend>
+              <label className="inline">
+                <input type="checkbox" checked={t.create} disabled={!canMake} onChange={(e) => set(i, { ...t, create: e.target.checked })} /> Make the
+                table <code>{t.name}</code>
+              </label>
+            </legend>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Column</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Required</th>
+                  <th scope="col">
+                    <span className="sr-only">Remove</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {t.columns.map((c, k) => {
+                  const setCol = (v: Partial<typeof c>) => set(i, { ...t, columns: t.columns.map((x, m) => (m === k ? { ...x, ...v } : x)) });
+                  return (
+                    <tr key={k}>
+                      <td>
+                        <input
+                          aria-label={`Column ${k + 1} name`}
+                          value={c.name}
+                          disabled={!t.create}
+                          onChange={(e) => setCol({ name: e.target.value, title: !c.title || c.title === c.name ? e.target.value : c.title })}
+                        />
+                      </td>
+                      <td>
+                        <select aria-label={`Column ${k + 1} type`} value={c.type} disabled={!t.create} onChange={(e) => setCol({ type: e.target.value })}>
+                          {COLUMN_TYPES.map((ty) => (
+                            <option key={ty} value={ty}>
+                              {ty}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Column ${k + 1} required`}
+                          checked={c.required}
+                          disabled={!t.create}
+                          onChange={(e) => setCol({ required: e.target.checked })}
+                        />
+                      </td>
+                      <td>
+                        <button type="button" disabled={!t.create} onClick={() => set(i, { ...t, columns: t.columns.filter((_, m) => m !== k) })}>
+                          Remove<span className="sr-only"> column {c.name}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="toolbar">
+              <button
+                type="button"
+                disabled={!t.create}
+                onClick={() => set(i, { ...t, columns: [...t.columns, { name: "", title: "", type: "text", required: false }] })}
+              >
+                Add a column
+              </button>
+            </div>
+            {problem && <p className="error-text">{problem}</p>}
+          </fieldset>
+        );
+      })}
+    </section>
   );
 }
