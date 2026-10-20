@@ -35,6 +35,9 @@ type Site struct {
 	Kind      string // storefront or form
 	ID        uuid.UUID
 	Suspended bool
+	// Primary is a live storefront's own primary domain
+	// (taskiem_public_storefront_domain): its other hosts redirect there.
+	Primary string
 }
 
 // Lookup resolves a lower-case host name to its site; ok is false for a
@@ -56,6 +59,15 @@ func DBLookup(pool *pgxpool.Pool) Lookup {
 			return Site{}, false, err
 		}
 		s.Suspended = status != "active"
+		if s.Kind == "storefront" && !s.Suspended {
+			var primary *string
+			if err := pool.QueryRow(ctx, `SELECT taskiem_public_storefront_domain($1)`, s.ID).Scan(&primary); err != nil {
+				return Site{}, false, err
+			}
+			if primary != nil {
+				s.Primary = *primary
+			}
+		}
 		return s, true, nil
 	}
 }
@@ -292,6 +304,12 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 	case site.Suspended:
 		s.page(w, r, http.StatusGone, "unavailable", pageData{Title: "This page is unavailable"})
+	case redirects(r, host, site):
+		// The page lives on its own domain now: the preview address, the
+		// www. twin and any other domain send visitors there. Kept for an
+		// hour only, so an unverified domain stops being followed soon.
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		http.Redirect(w, r, "https://"+site.Primary+r.URL.RequestURI(), http.StatusMovedPermanently) //nolint:gosec // the storefront's own verified domain, read from the database, never from the request
 	default:
 		s.route(w, r, site)
 	}
@@ -337,6 +355,17 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 		// being set up.
 		s.page(w, r, http.StatusOK, "setup", pageData{Title: "Coming soon"})
 	}
+}
+
+// redirects reports whether a request goes to the site's primary domain
+// instead: a page view (GET or HEAD) on another of its hosts. Forms being
+// sent (POST) and /embed/ pages are served where they are, so a page open
+// when the domain went live still works and frames keep their address.
+func redirects(r *http.Request, host string, site Site) bool {
+	if site.Primary == "" || host == site.Primary || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+		return false
+	}
+	return r.URL.Path != "/embed" && !strings.HasPrefix(r.URL.Path, "/embed/")
 }
 
 // formKinds are the storefront forms served under /a/.

@@ -784,6 +784,7 @@ func serve(ctx context.Context, args []string) error {
 		srv.Billing = bill
 		srv.Tables = e.tables()
 		srv.PublicHosts = cfg.Public.Domains
+		srv.DomainTarget = storefront.DomainTarget{CNAME: cfg.Public.CNAME, Addresses: cfg.Public.Addresses}
 		// Storefront photos in tenants' Xenibase storage (docs/media.md).
 		srv.Orders = e.orders
 		srv.Forms = e.forms
@@ -849,6 +850,9 @@ func serve(ctx context.Context, args []string) error {
 		// Websites allowed to embed storefronts and forms, proven again
 		// every few hours (docs/embed-sites.md).
 		sites := &embedsites.Checker{Pool: e.pool, Prover: &embedsites.Prover{Guard: &egress.Guard{Logger: log}}, Logger: log}
+		// Storefronts' own domains, proven again the same way
+		// (docs/storefronts.md#your-own-domain).
+		sfDomains := &storefront.DomainChecker{Pool: e.pool, Prover: &embedsites.Prover{}, Logger: log}
 		// Tenant keys: customer key health, re-wrapping after rotations,
 		// and resuming steps parked while a key was unavailable (docs/byok.md).
 		keys := &secrets.KeyJob{Vault: e.vault, Interval: cfg.Keys.CheckInterval, Resume: e.store.ResumeKeyParked, Logger: log,
@@ -861,7 +865,7 @@ func serve(ctx context.Context, args []string) error {
 			}}
 		// Data tables: the data_tables connections' tokens, renewed before
 		// they expire (docs/data-tables.md#token-renewal).
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, e.remote().Run, keys.Run, e.tables().RunRenewals)
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

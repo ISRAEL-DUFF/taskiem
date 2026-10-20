@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { StorefrontForms } from "./StorefrontForms";
+import { StorefrontDomains } from "./StorefrontDomains";
 import type { Table } from "../lib/tables";
 import {
   DAYS,
@@ -23,6 +24,7 @@ import {
   guessColumns,
   hoursErrors,
   imageProblem,
+  pageURL,
   pastMidnight,
   requestFrom,
   sameAsMonday,
@@ -182,9 +184,9 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
                 <>
                   <dt>Address</dt>
                   <dd>
-                    {saved.preview_url ? (
-                      <a href={saved.preview_url} target="_blank" rel="noreferrer">
-                        {saved.preview_url.replace(/^https:\/\//, "")}
+                    {pageURL(saved) ? (
+                      <a href={pageURL(saved)} target="_blank" rel="noreferrer">
+                        {pageURL(saved).replace(/^https:\/\//, "")}
                       </a>
                     ) : (
                       <span className="hint">This Taskiem has no public address for storefronts yet.</span>
@@ -323,9 +325,16 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
         )}
       </section>
 
-      {saved && <StorefrontForms previewURL={saved.preview_url} published={published} />}
+      {saved && <StorefrontForms previewURL={pageURL(saved)} published={published} />}
 
-      {saved && published && saved.preview_url && <Share sf={saved} form={form} />}
+      {saved && published && pageURL(saved) && <Share sf={saved} form={form} />}
+
+      {saved && !currentAgentSession() && (
+        <StorefrontDomains
+          published={published}
+          onChange={() => void get<SF>("/v1/storefront").then(setSaved, () => undefined)}
+        />
+      )}
 
       {closing && (
         <CloseDialog
@@ -640,7 +649,7 @@ function Share({ sf, form }: { sf: SF; form: Form }) {
     return () => {
       live = false;
     };
-  }, [sf.slug, sf.published_version, sf.preview_url]);
+  }, [sf.slug, sf.published_version, sf.preview_url, sf.url]);
   const print = () => {
     document.body.classList.add("printing-card");
     const done = () => {
@@ -660,7 +669,7 @@ function Share({ sf, form }: { sf: SF; form: Form }) {
       <p className="hint">Customers scan the code to open your page. Print the card for your counter or door, or share the picture on WhatsApp.</p>
       <ErrorBox error={error} />
       <div className="sf-share">
-        {qr ? <img className="sf-qr" src={qr} alt={`QR code for ${sf.preview_url}`} width={180} height={180} /> : !error && <Skeleton rows={1} label="Loading the QR code…" />}
+        {qr ? <img className="sf-qr" src={qr} alt={`QR code for ${pageURL(sf)}`} width={180} height={180} /> : !error && <Skeleton rows={1} label="Loading the QR code…" />}
         <div className="toolbar">
           {/* A plain link carries no agent session header: an agent prints the card instead. */}
           {!currentAgentSession() && (
@@ -680,7 +689,7 @@ function Share({ sf, form }: { sf: SF; form: Form }) {
             {card.tagline && <div className="print-tagline">{card.tagline}</div>}
             <img src={qr} alt="" className="print-qr" />
             <div className="print-scan">Scan to order</div>
-            <div className="print-url">{sf.preview_url.replace(/^https:\/\//, "")}</div>
+            <div className="print-url">{pageURL(sf).replace(/^https:\/\//, "")}</div>
             {where && <div className="print-where">{where}</div>}
             {card.phone && <div className="print-phone">{card.phone}</div>}
           </PrintCard>,

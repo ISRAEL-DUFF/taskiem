@@ -76,6 +76,25 @@ func TestFormHost(t *testing.T) {
 	}
 }
 
+func TestDomainTarget(t *testing.T) {
+	t.Setenv("TASKIEM_PUBLIC_DATABASE_URL", "postgres://pub@db/taskiem")
+	t.Setenv("TASKIEM_PUBLIC_DOMAINS", "shops.example.com")
+	t.Setenv("TASKIEM_PUBLIC_CNAME", "")
+	t.Setenv("TASKIEM_PUBLIC_ADDRESSES", " 203.0.113.7, 2001:db8::7 ")
+	c, err := loadPublicConfig()
+	if err != nil || c.Public.CNAME != "pages.shops.example.com" || len(c.Public.Addresses) != 2 || c.Public.Addresses[1] != "2001:db8::7" {
+		t.Fatalf("default: %v %+v", err, c.Public)
+	}
+	t.Setenv("TASKIEM_PUBLIC_CNAME", "Edge.Example.net.")
+	if c, err := loadPublicConfig(); err != nil || c.Public.CNAME != "edge.example.net" {
+		t.Fatalf("set: %v %+v", err, c.Public)
+	}
+	t.Setenv("TASKIEM_PUBLIC_ADDRESSES", "not-an-ip")
+	if _, err := loadPublicConfig(); err == nil {
+		t.Fatal("a bad address was accepted")
+	}
+}
+
 func TestSameLogin(t *testing.T) {
 	if !sameLogin("postgres://app:x@db:5432/taskiem", "postgres://app:y@db:5432/taskiem") {
 		t.Error("same user, host and database")

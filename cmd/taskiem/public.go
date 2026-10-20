@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -54,6 +55,15 @@ type publicConfig struct {
 	// AppURL is the web app's (TASKIEM_PUBLIC_URL), where members' forms
 	// open.
 	AppURL string
+	// CNAME is the name businesses point their own subdomains at
+	// (TASKIEM_PUBLIC_CNAME, default pages.<first of Domains>, which the
+	// preview domain's wildcard record covers).
+	CNAME string
+	// Addresses are the public host's IPv4 and IPv6 addresses
+	// (TASKIEM_PUBLIC_ADDRESSES, comma-separated), for businesses'
+	// registrable domains, which cannot be a CNAME. Unset, owners are told
+	// to use their DNS provider's ALIAS or CNAME flattening.
+	Addresses []string
 }
 
 func publicConfigFromEnv() (publicConfig, error) {
@@ -82,6 +92,20 @@ func publicConfigFromEnv() (publicConfig, error) {
 	c.FormHost = strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_PUBLIC_FORM_HOST")))
 	if c.FormHost == "" && len(c.Domains) > 0 {
 		c.FormHost = "forms." + c.Domains[0]
+	}
+	c.CNAME = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_PUBLIC_CNAME"))), ".")
+	if c.CNAME == "" && len(c.Domains) > 0 {
+		c.CNAME = "pages." + c.Domains[0]
+	}
+	for _, a := range strings.Split(os.Getenv("TASKIEM_PUBLIC_ADDRESSES"), ",") {
+		if a = strings.TrimSpace(a); a == "" {
+			continue
+		}
+		ip, err := netip.ParseAddr(a)
+		if err != nil {
+			return c, fmt.Errorf("TASKIEM_PUBLIC_ADDRESSES: %q is not an IP address", a)
+		}
+		c.Addresses = append(c.Addresses, ip.String())
 	}
 	c.AppURL = strings.TrimRight(strings.TrimSpace(os.Getenv("TASKIEM_PUBLIC_URL")), "/")
 	if c.DSN == "" { // unset or empty: the platform's

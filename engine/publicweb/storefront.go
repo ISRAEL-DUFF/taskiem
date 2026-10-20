@@ -102,7 +102,9 @@ type storefrontData struct {
 	Accent      string
 	Description string
 	Image       string
-	HasItems    bool
+	// URL is the page's public address (og:url and canonical).
+	URL      string
+	HasItems bool
 	// Forms are the enabled forms' buttons; Ordering is true when the
 	// order form is one, so items get an Add link.
 	Forms    []storefront.PublicAction
@@ -147,6 +149,7 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 		return
 	}
 	d := storefrontView(p, s.now())
+	d.URL = s.address(r, site, p)
 	if !s.formsOpen() {
 		d.Forms, d.Ordering = nil, false
 	}
@@ -172,11 +175,7 @@ func (s *Server) serveQR(w http.ResponseWriter, r *http.Request, site Site) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}
-	address := "https://" + hostOf(r)
-	if s.PreviewDomain != "" {
-		address = "https://" + p.Model.Slug + "." + strings.ToLower(s.PreviewDomain)
-	}
-	png, err := storefront.QRPNG(address)
+	png, err := storefront.QRPNG(s.address(r, site, p))
 	if err != nil {
 		s.Logger.Error("public host: storefront QR", "storefront", site.ID, "err", err)
 		s.page(w, r, http.StatusInternalServerError, "unavailable", pageData{Title: "Try again shortly"})
@@ -189,6 +188,18 @@ func (s *Server) serveQR(w http.ResponseWriter, r *http.Request, site Site) {
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(png) //nolint:gosec // a PNG made here from the storefront's own address, sent as image/png with nosniff
 	}
+}
+
+// address is the page's public address: its own primary domain, else the
+// preview address, else the host asked for.
+func (s *Server) address(r *http.Request, site Site, p StorefrontPage) string {
+	switch {
+	case site.Primary != "":
+		return "https://" + site.Primary
+	case s.PreviewDomain != "" && p.Model.Slug != "":
+		return "https://" + p.Model.Slug + "." + strings.ToLower(s.PreviewDomain)
+	}
+	return "https://" + hostOf(r)
 }
 
 func storefrontView(p StorefrontPage, now time.Time) storefrontData {

@@ -2,11 +2,14 @@ package publicweb_test
 
 import (
 	"context"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 )
@@ -45,6 +48,42 @@ func TestHostLookup(t *testing.T) {
 	}
 	if s, ok, _ := lookup(ctx, "ada-kitchen.shops.test"); !ok || !s.Suspended {
 		t.Fatalf("a suspended tenant's host must answer as suspended: %+v %v", s, ok)
+	}
+}
+
+// TestTLSAskOwnDomain: the proxy may obtain a certificate for a business's
+// own domain only while it is verified.
+func TestTLSAskOwnDomain(t *testing.T) {
+	d := dbtest.New(t)
+	ctx := context.Background()
+	tn := d.SeedTenant(t, nil)
+	sf := uuid.New()
+	if _, err := d.Admin.Exec(ctx, `INSERT INTO storefronts (id, tenant_id, slug, created_by) VALUES ($1, $2, 'ada-kitchen', 'user:ada')`, sf, tn.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Admin.Exec(ctx, `INSERT INTO storefront_domains (id, tenant_id, storefront_id, host, token, created_by) VALUES
+		($1, $2, $3, 'adakitchen.ng', 'taskiem-domain-verify=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'user:ada'),
+		($4, $2, $3, 'pending.example.com', 'taskiem-domain-verify=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'user:ada')`, uuid.New(), tn.ID, sf, uuid.New()); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.InTenantTx(ctx, d.App, []uuid.UUID{tn.ID}, func(tx pgx.Tx) error {
+		var ok bool
+		return tx.QueryRow(ctx, `SELECT taskiem_storefront_claim_domain(id) FROM storefront_domains WHERE host = 'adakitchen.ng'`).Scan(&ok)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s := &publicweb.Server{Lookup: publicweb.DBLookup(d.PublicPool(t, 2))}
+	s.Handler()
+	for host, want := range map[string]int{"adakitchen.ng": 200, "pending.example.com": 404, "nobody.example.com": 404} {
+		w := httptest.NewRecorder()
+		s.TLSAsk(w, httptest.NewRequest("GET", "/tls/ask?domain="+host, nil))
+		if w.Code != want {
+			t.Errorf("%s: %d, want %d", host, w.Code, want)
+		}
+	}
+	// A draft page has no primary domain to redirect to.
+	if site, ok, err := publicweb.DBLookup(d.PublicPool(t, 1))(ctx, "adakitchen.ng"); err != nil || !ok || site.Primary != "" {
+		t.Fatalf("draft: %+v %v %v", site, ok, err)
 	}
 }
 
@@ -117,7 +156,9 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_form(text)": true, "taskiem_public_form_link(bytea)": true, "taskiem_public_form_request(bytea)": true,
 		"taskiem_public_form_submit(uuid,uuid,uuid,bytea,text,bytea,bytea,bytea)": true, "taskiem_public_form_upload(uuid,text,bytea)": true,
 		"taskiem_public_form_code(uuid,bytea,bytea,bytea)": true, "taskiem_public_form_code_check(uuid,bytea,bytea)": true,
-		"taskiem_public_form_status(text,bytea)": true}
+		"taskiem_public_form_status(text,bytea)": true,
+		// Own domains (S6): a storefront's primary domain, where its other hosts redirect.
+		"taskiem_public_storefront_domain(uuid)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)
