@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ORDER_FILTERS,
   ORDER_STATUS,
+  BOOKING_PAYMENT_CHOICES,
   actionForm,
   actionProblem,
   actionRequest,
@@ -10,7 +11,11 @@ import {
   isMasked,
   itemsSummary,
   orderStatus,
+  orderTotal,
+  orderWhat,
   ordersPath,
+  paymentChoices,
+  priceChangeLine,
   paymentSummary,
   refundLine,
   relativeAge,
@@ -36,6 +41,7 @@ describe("setting a form up", () => {
     expect(setupRequest("enquiry")).toEqual({ path: "/v1/templates/storefront-enquiry/instantiate", body: { params: {}, name: "Storefront questions" } });
     expect(setupRequest("callback").body.name).toBe("Storefront call-backs");
     expect(setupRequest("callback").path).toBe("/v1/templates/storefront-callback/instantiate");
+    expect(setupRequest("booking")).toEqual({ path: "/v1/templates/storefront-booking/instantiate", body: { params: {}, name: "Storefront bookings" } });
   });
 });
 
@@ -69,6 +75,32 @@ describe("a form's settings", () => {
     expect(actionProblem("enquiry", { ...f, pickup: false, deliveryNote: "x".repeat(200) })).toBeNull();
   });
 
+  it("sends a booking's payment, connection and deposit", () => {
+    const booking: StorefrontAction = { kind: "booking", enabled: true, label: "Book", payment: "at_order", options: { connection: "shop", deposit_percent: 30 }, workflow_id: "wf-2" };
+    const f = actionForm(booking);
+    expect(f.deposit).toBe("30");
+    expect(actionRequest("booking", f)).toEqual({ enabled: true, label: "Book", payment: "at_order", options: { connection: "shop", deposit_percent: 30 } });
+    // Blank is the full price; paying at the appointment drops the online options.
+    expect(actionRequest("booking", { ...f, deposit: "" }).options).toEqual({ connection: "shop" });
+    expect(actionRequest("booking", { ...f, payment: "none", pickup: true })).toEqual({ enabled: true, label: "Book", payment: "none", options: {} });
+  });
+
+  it("holds a deposit to 1 to 100 per cent", () => {
+    const f = actionForm({ kind: "booking", enabled: false, label: "Book", payment: "after_accept", options: {}, workflow_id: null });
+    expect(actionProblem("booking", f)).toBeNull();
+    expect(actionProblem("booking", { ...f, deposit: "100" })).toBeNull();
+    expect(actionProblem("booking", { ...f, deposit: "1" })).toBeNull();
+    for (const bad of ["0", "101", "12.5", "half"]) expect(actionProblem("booking", { ...f, deposit: bad })).toMatch(/1 to 100/);
+    // No deposit when paying at the appointment.
+    expect(actionProblem("booking", { ...f, payment: "none", deposit: "0" })).toBeNull();
+  });
+
+  it("words a booking's payment choices for appointments", () => {
+    expect(BOOKING_PAYMENT_CHOICES.map((c) => c.label)).toEqual(["Pay when booking", "Pay after I confirm", "Pay at the appointment"]);
+    expect(paymentChoices("booking")).toBe(BOOKING_PAYMENT_CHOICES);
+    expect(paymentChoices("order")[0]?.label).toMatch(/after you accept/);
+  });
+
   it("links to the public form", () => {
     expect(formURL("https://mama.taskiem.page", "order")).toBe("https://mama.taskiem.page/a/order");
     expect(formURL("https://mama.taskiem.page/", "callback")).toBe("https://mama.taskiem.page/a/callback");
@@ -96,7 +128,12 @@ describe("order statuses", () => {
     expect(ordersPath("")).toBe("/v1/storefront/orders?status=open");
     expect(ordersPath("all")).toBe("/v1/storefront/orders");
     expect(ordersPath("refund_due")).toBe("/v1/storefront/orders?status=refund_due");
-    expect(ORDER_FILTERS.map((f) => f.label)).toEqual(["Open", "All", "Completed", "Declined", "Expired", "Refund due"]);
+    expect(ORDER_FILTERS.map((f) => f.label)).toEqual(["Open", "All", "Completed", "Declined", "Expired", "Refund due", "New prices to confirm", "Cancelled", "No-show"]);
+  });
+
+  it("labels the booking and price statuses", () => {
+    expect(orderStatus("no_show")).toEqual({ label: "No-show", tone: "muted" });
+    expect(orderStatus("price_changed")).toEqual({ label: "Waiting for the customer to confirm new prices", tone: "warn" });
   });
 });
 
@@ -133,6 +170,27 @@ describe("an order as the list reads it", () => {
     expect(paymentSummary({ kind: "order", payment: "at_order", paid_at: "2026-10-20T12:00:00Z" })).toBe("Pays when ordering · paid");
     expect(paymentSummary({ kind: "order", payment: "none" })).toBe("No online payment");
     expect(paymentSummary({ kind: "enquiry", payment: "after_accept" })).toBe("No online payment");
+  });
+
+  it("shows a booking's service and time instead of a basket", () => {
+    const booking = { kind: "booking" as const, basket: null, service_name: "Haircut", starts_at: "2026-10-24T09:30:00Z", total_kobo: 0 };
+    expect(orderWhat(booking)).toBe("Haircut · Sat 24 Oct, 10:30");
+    expect(orderWhat({ kind: "order", basket: [{ name: "Chapman", quantity: 2 }] })).toBe("2 × Chapman");
+    expect(orderTotal(booking)).toBe("Price on the day");
+    expect(orderTotal({ ...booking, total_kobo: 500000 })).toBe("₦5,000");
+    expect(orderTotal({ kind: "enquiry", total_kobo: 0 })).toBe("—");
+  });
+
+  it("says how a booking is paid", () => {
+    expect(paymentSummary({ kind: "booking", payment: "none" })).toBe("Pays at the appointment");
+    expect(paymentSummary({ kind: "booking", payment: "at_order", paid_at: null, deposit_kobo: 150000 })).toBe("Pays when booking · deposit ₦1,500 · not paid");
+    expect(paymentSummary({ kind: "booking", payment: "after_accept", paid_at: "2026-10-20T12:00:00Z" })).toBe("Pays after you confirm · paid");
+  });
+
+  it("shows the new prices", () => {
+    expect(priceChangeLine({ basket: [], total_kobo: 520000 })).toBe("New total ₦5,200.");
+    expect(priceChangeLine({ basket: [], total_kobo: 520000, gone: ["Chapman"] })).toBe("New total ₦5,200. No longer offered: Chapman.");
+    expect(priceChangeLine(null)).toBe("");
   });
 
   it("says what to refund", () => {

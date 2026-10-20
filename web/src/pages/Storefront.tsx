@@ -743,7 +743,7 @@ function CloseDialog({ onClose, onClosed }: { onClose: () => void; onClosed: (sf
   );
 }
 
-/** The storefront's two pages: the page itself, and the orders it brings. */
+/** The storefront's pages: the page itself, the orders it brings, and its bookings. */
 export function StorefrontTabs() {
   return (
     <nav className="tabs" aria-label="Storefront">
@@ -751,6 +751,7 @@ export function StorefrontTabs() {
         Page
       </NavLink>
       <NavLink to="/storefront/orders">Orders</NavLink>
+      <NavLink to="/storefront/bookings">Bookings</NavLink>
     </nav>
   );
 }

@@ -223,6 +223,21 @@ export function Skeleton({ rows = 4, label = "Loading…" }: { rows?: number; la
   );
 }
 
+/** Reloads every 30 seconds while the page is visible, and when the window gets focus again. */
+export function useLiveRefresh(reload: () => void) {
+  useEffect(() => {
+    const every = setInterval(() => document.visibilityState === "visible" && reload(), 30_000);
+    const back = () => document.visibilityState === "visible" && reload();
+    window.addEventListener("focus", back);
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      clearInterval(every);
+      window.removeEventListener("focus", back);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [reload]);
+}
+
 /** Runs an async action with a busy flag and an error. */
 export function useAction(): { busy: boolean; error: unknown; run: (fn: () => Promise<unknown>) => Promise<boolean>; clear: () => void } {
   const [busy, setBusy] = useState(false);

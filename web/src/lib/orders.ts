@@ -1,10 +1,12 @@
 // The storefront's forms and the orders they bring (Phase 5, S3;
 // GET/PUT /v1/storefront/actions, GET /v1/storefront/orders): the API's
 // shapes, setting a form up from its template, and how an order reads.
+// Bookings (S4) are orders of kind booking, with a service and a time.
 
+import { whenLabel } from "./bookings";
 import { formatPrice } from "./storefront";
 
-export type FormKind = "order" | "enquiry" | "callback";
+export type FormKind = "order" | "enquiry" | "callback" | "booking";
 export type PaymentMode = "after_accept" | "at_order" | "none";
 
 export interface ActionOptions {
@@ -13,6 +15,8 @@ export interface ActionOptions {
   pickup?: boolean;
   delivery?: boolean;
   delivery_note?: string;
+  /** A booking's online part of the price, 1 to 100 per cent; unset is all of it. */
+  deposit_percent?: number;
 }
 
 /** One of the storefront's forms (StorefrontAction). */
@@ -34,7 +38,27 @@ export interface OrderLine {
   line_kobo?: number;
 }
 
-export type OrderStatus = "received" | "awaiting_payment" | "paid" | "accepted" | "declined" | "expired" | "completed" | "cancelled" | "refund_due";
+export type OrderStatus =
+  | "received"
+  | "awaiting_payment"
+  | "paid"
+  | "accepted"
+  | "declined"
+  | "expired"
+  | "completed"
+  | "cancelled"
+  | "refund_due"
+  | "no_show"
+  | "price_changed";
+
+/** What an order costs at the table's prices now, waiting for the customer to agree (status price_changed). */
+export interface PriceChange {
+  basket: OrderLine[] | null;
+  total_kobo: number;
+  deposit_kobo?: number;
+  /** Items no longer offered, by name. */
+  gone?: string[];
+}
 
 export interface Customer {
   name?: string;
@@ -64,9 +88,18 @@ export interface Order {
   decided_at?: string | null;
   expires_at?: string | null;
   created_at: string;
+  /** A booking's service and time. */
+  service_id?: string;
+  service_name?: string;
+  starts_at?: string;
+  ends_at?: string;
+  version?: number;
+  /** What a booking pays online when that is a deposit. */
+  deposit_kobo?: number;
+  price_change?: PriceChange | null;
 }
 
-export const FORM_KINDS: FormKind[] = ["order", "enquiry", "callback"];
+export const FORM_KINDS: FormKind[] = ["order", "enquiry", "callback", "booking"];
 
 /** The limits the server holds a form's text to (engine/storefront SaveAction). */
 export const ACTION_LIMITS = { label: 40, delivery_note: 120 } as const;
@@ -76,6 +109,7 @@ export const FORM_INFO: Record<FormKind, { title: string; help: string; template
   order: { title: "Orders", help: "Customers order from your catalogue.", template: "storefront-order", workflow: "Storefront orders" },
   enquiry: { title: "Questions", help: "Customers send you a question.", template: "storefront-enquiry", workflow: "Storefront questions" },
   callback: { title: "Call-backs", help: "Customers ask you to call them back.", template: "storefront-callback", workflow: "Storefront call-backs" },
+  booking: { title: "Bookings", help: "Customers book a time for one of your services.", template: "storefront-booking", workflow: "Storefront bookings" },
 };
 
 export const PAYMENT_CHOICES: { value: PaymentMode; label: string; help: string }[] = [
@@ -83,6 +117,16 @@ export const PAYMENT_CHOICES: { value: PaymentMode; label: string; help: string 
   { value: "at_order", label: "Customer pays when ordering", help: "A declined paid order needs a refund in Paystack." },
   { value: "none", label: "No online payment", help: "Take payment yourself, in cash or by transfer." },
 ];
+
+/** A booking's payment choices: the same modes, said for appointments. */
+export const BOOKING_PAYMENT_CHOICES: { value: PaymentMode; label: string; help: string }[] = [
+  { value: "at_order", label: "Pay when booking", help: "The time is held until they pay. A booking you decline needs a refund in Paystack." },
+  { value: "after_accept", label: "Pay after I confirm", help: "Nobody pays for a time you cannot take." },
+  { value: "none", label: "Pay at the appointment", help: "Take payment yourself, in cash or by transfer." },
+];
+
+/** The payment choices for a form. */
+export const paymentChoices = (kind: FormKind) => (kind === "booking" ? BOOKING_PAYMENT_CHOICES : PAYMENT_CHOICES);
 
 /** The POST /v1/templates/{id}/instantiate call that sets a form up: its
  * default template, named for the form. approver_role is left to the
@@ -101,6 +145,8 @@ export interface ActionForm {
   pickup: boolean;
   delivery: boolean;
   deliveryNote: string;
+  /** A booking's deposit in per cent; blank is the full price. */
+  deposit: string;
 }
 
 export function actionForm(a: StorefrontAction): ActionForm {
@@ -112,6 +158,7 @@ export function actionForm(a: StorefrontAction): ActionForm {
     pickup: !!a.options.pickup,
     delivery: !!a.options.delivery,
     deliveryNote: a.options.delivery_note ?? "",
+    deposit: a.options.deposit_percent ? String(a.options.deposit_percent) : "",
   };
 }
 
@@ -123,8 +170,18 @@ export interface ActionRequest {
 }
 
 /** The PUT /v1/storefront/actions/{kind} body: the whole form, as the
- * server replaces it. Only an order has payment and options. */
+ * server replaces it. Only an order and a booking have payment and options. */
 export function actionRequest(kind: FormKind, f: ActionForm): ActionRequest {
+  if (kind === "booking") {
+    const options: ActionOptions = {};
+    if (f.payment !== "none") {
+      const connection = f.connection.trim();
+      if (connection) options.connection = connection;
+      const deposit = Number(f.deposit.trim());
+      if (f.deposit.trim() && Number.isInteger(deposit) && deposit >= 1 && deposit <= 100) options.deposit_percent = deposit;
+    }
+    return { enabled: f.enabled, label: f.label.trim(), payment: f.payment, options };
+  }
   if (kind !== "order") return { enabled: f.enabled, label: f.label.trim(), payment: "none", options: {} };
   const options: ActionOptions = {};
   const connection = f.connection.trim();
@@ -141,6 +198,7 @@ export function actionProblem(kind: FormKind, f: ActionForm): string | null {
   if (f.label.trim().length > ACTION_LIMITS.label) return `The button's label is at most ${ACTION_LIMITS.label} characters.`;
   if (kind === "order" && f.deliveryNote.trim().length > ACTION_LIMITS.delivery_note) return `The delivery note is at most ${ACTION_LIMITS.delivery_note} characters.`;
   if (kind === "order" && f.enabled && !f.pickup && !f.delivery) return "Choose pickup, delivery or both.";
+  if (kind === "booking" && f.payment !== "none" && f.deposit.trim() && !/^(100|[1-9][0-9]?)$/.test(f.deposit.trim())) return "The deposit is 1 to 100 per cent, or leave it empty for the full price.";
   return null;
 }
 
@@ -161,6 +219,8 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: Tone }> = 
   completed: { label: "Completed", tone: "ok" },
   cancelled: { label: "Cancelled", tone: "muted" },
   refund_due: { label: "Refund due", tone: "danger" },
+  no_show: { label: "No-show", tone: "muted" },
+  price_changed: { label: "Waiting for the customer to confirm new prices", tone: "warn" },
 };
 
 /** A status as the list shows it, with the badge's colour. */
@@ -176,6 +236,9 @@ export const ORDER_FILTERS: { value: string; label: string }[] = [
   { value: "declined", label: "Declined" },
   { value: "expired", label: "Expired" },
   { value: "refund_due", label: "Refund due" },
+  { value: "price_changed", label: "New prices to confirm" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "no_show", label: "No-show" },
 ];
 
 /** The GET /v1/storefront/orders call for a filter: "all" asks with no status. */
@@ -184,7 +247,7 @@ export function ordersPath(filter: string): string {
   return status ? `/v1/storefront/orders?${new URLSearchParams({ status })}` : "/v1/storefront/orders";
 }
 
-export const KIND_LABEL: Record<FormKind, string> = { order: "Order", enquiry: "Question", callback: "Call-back" };
+export const KIND_LABEL: Record<FormKind, string> = { order: "Order", enquiry: "Question", callback: "Call-back", booking: "Booking" };
 
 /** How long ago, in words: "just now", "5 min ago", "2 hours ago", "yesterday", "3 days ago", then the date. */
 export function relativeAge(iso: string, now: number = Date.now()): string {
@@ -221,8 +284,33 @@ export function itemsSummary(basket: OrderLine[] | null | undefined): string {
     .join(", ");
 }
 
+/** What an order is for, as the list shows it: the basket, or a booking's service and time ("Haircut · Sat 24 Oct, 10:30"). */
+export function orderWhat(o: Pick<Order, "kind" | "basket" | "service_name" | "starts_at">): string {
+  if (o.kind === "booking") return [o.service_name, o.starts_at ? whenLabel(o.starts_at) : ""].filter(Boolean).join(" · ");
+  return itemsSummary(o.basket);
+}
+
+/** An order's total as the list shows it: a booking without a price is paid on the day. */
+export function orderTotal(o: Pick<Order, "kind" | "total_kobo">): string {
+  if (o.kind === "booking") return o.total_kobo > 0 ? formatPrice(o.total_kobo) : "Price on the day";
+  return o.kind === "order" ? formatPrice(o.total_kobo) : "—";
+}
+
+/** The line a price_changed order carries: the new total, and what is no longer offered. */
+export function priceChangeLine(pc: PriceChange | null | undefined): string {
+  if (!pc) return "";
+  const gone = pc.gone?.length ? ` No longer offered: ${pc.gone.join(", ")}.` : "";
+  return `New total ${formatPrice(pc.total_kobo)}.${gone}`;
+}
+
 /** How the customer pays, and whether they have. */
-export function paymentSummary(o: Pick<Order, "payment" | "paid_at" | "kind">): string {
+export function paymentSummary(o: Pick<Order, "payment" | "paid_at" | "kind"> & Partial<Pick<Order, "deposit_kobo">>): string {
+  if (o.kind === "booking") {
+    if (o.payment === "none") return "Pays at the appointment";
+    const when = o.payment === "at_order" ? "Pays when booking" : "Pays after you confirm";
+    const deposit = o.deposit_kobo ? ` · deposit ${formatPrice(o.deposit_kobo)}` : "";
+    return `${when}${deposit} · ${o.paid_at ? "paid" : "not paid"}`;
+  }
   if (o.kind !== "order" || o.payment === "none") return "No online payment";
   const when = o.payment === "at_order" ? "Pays when ordering" : "Pays after you accept";
   return `${when} · ${o.paid_at ? "paid" : "not paid"}`;

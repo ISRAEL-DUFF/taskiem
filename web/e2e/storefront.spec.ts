@@ -86,3 +86,74 @@ test("an owner sets up the question form and finds the orders", async ({ page })
   await page.getByLabel("Show").selectOption("All");
   await expect(page).toHaveURL(/status=all/);
 });
+
+test("an owner sets booking hours and the booking form", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("owner@e2e.test");
+  await page.getByLabel("Password").fill("correct horse battery");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("link", { name: "Storefront", exact: true }).click();
+  await page.getByRole("navigation", { name: "Storefront" }).getByRole("link", { name: "Bookings" }).click();
+  await expect(page.getByRole("heading", { name: "Bookings", exact: true })).toBeVisible();
+  await expect(page.getByText("No bookings in the next 30 days.")).toBeVisible();
+  await page.getByRole("search", { name: "Filter bookings" }).getByLabel("Show").selectOption("This week");
+  await expect(page).toHaveURL(/range=week/);
+  await expect(page.getByText("No bookings this week.")).toBeVisible();
+
+  // Bookings follow the opening hours from the draft until told otherwise.
+  const hours = page.getByRole("region", { name: "Booking hours" });
+  const same = hours.getByRole("switch", { name: /Same as opening hours/ });
+  await expect(same).toBeChecked();
+  await expect(hours.getByText("08:00 to 18:30").first()).toBeVisible();
+  await same.uncheck();
+  await hours.getByLabel("Monday bookings from").fill("09:00");
+  await hours.getByLabel("Monday bookings until").fill("13:00");
+  await hours.getByRole("button", { name: "Add a booking period on Monday" }).click();
+  await hours.getByLabel("Monday bookings from (period 2)").fill("14:00");
+  await hours.getByLabel("Monday bookings until (period 2)").fill("18:00");
+  await hours.getByRole("checkbox", { name: "Saturday takes bookings" }).check();
+  // A period must end after it starts.
+  await hours.getByLabel("Saturday bookings until").fill("08:00");
+  await expect(page.getByText("Booking hours on Saturday must end after they start, the same day.")).toBeVisible();
+  await hours.getByLabel("Saturday bookings until").fill("15:00");
+  await hours.getByLabel("Add a day off").fill("2026-12-25");
+  await hours.getByRole("button", { name: "Add day off" }).click();
+  await expect(hours.getByText("Fri 25 Dec")).toBeVisible();
+
+  const rules = page.getByRole("region", { name: "Booking rules" });
+  await rules.getByLabel("How far ahead (days)").fill("60");
+  await rules.getByLabel("How soon, amount").fill("1");
+  await rules.getByRole("switch", { name: /Confirm bookings automatically/ }).check();
+
+  const vs = await axe(page);
+  expect(vs, describe("/storefront/bookings", vs)).toEqual([]);
+
+  await rules.getByRole("button", { name: "Save booking settings" }).click();
+  await expect(rules.getByRole("status")).toContainText("Saved.");
+
+  // It comes back as saved.
+  await page.reload();
+  await expect(hours.getByRole("switch", { name: /Same as opening hours/ })).not.toBeChecked();
+  await expect(hours.getByLabel("Monday bookings from (period 2)")).toHaveValue("14:00");
+  await expect(hours.getByLabel("Saturday bookings until")).toHaveValue("15:00");
+  await expect(hours.getByText("Fri 25 Dec")).toBeVisible();
+  await expect(rules.getByLabel("How far ahead (days)")).toHaveValue("60");
+  await expect(rules.getByLabel("How soon, amount")).toHaveValue("1");
+  await expect(rules.getByRole("switch", { name: /Confirm bookings automatically/ })).toBeChecked();
+
+  // The booking form: payment said for appointments, a deposit, and the
+  // server's refusal without a services table.
+  await page.getByRole("navigation", { name: "Storefront" }).getByRole("link", { name: "Page" }).click();
+  const booking = page.getByRole("region", { name: "Forms" }).getByRole("article", { name: "Bookings" });
+  await booking.getByRole("button", { name: "Set up bookings" }).click();
+  await expect(booking.getByRole("radio", { name: /Pay after I confirm/ })).toBeChecked();
+  await booking.getByRole("radio", { name: /Pay when booking/ }).check();
+  await booking.getByLabel("Deposit (per cent)").fill("150");
+  await expect(booking.getByText("The deposit is 1 to 100 per cent, or leave it empty for the full price.")).toBeVisible();
+  await booking.getByLabel("Deposit (per cent)").fill("30");
+  await booking.getByRole("radio", { name: /Pay at the appointment/ }).check();
+  await expect(booking.getByLabel("Deposit (per cent)")).toHaveCount(0);
+  await booking.getByRole("switch", { name: "Show this form on your page" }).check();
+  await booking.getByRole("button", { name: "Save bookings" }).click();
+  await expect(booking.getByRole("alert")).toContainText("Choose the services table before taking bookings");
+});
