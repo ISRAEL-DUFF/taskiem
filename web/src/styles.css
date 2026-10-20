@@ -508,3 +508,45 @@ table.cards tr.sf-refund td:first-child { box-shadow: none; }
   .print-url, .print-where, .print-phone { font-size: 10pt; }
   .print-phone { font-weight: 600; }
 }
+
+/* Forms (docs/forms.md): the editor, the renderer, the Forms page. */
+button.small { padding: 2px 8px; font-size: 0.85em; box-shadow: none; }
+.badge.live, .badge.started, .badge.answered { color: var(--ok); }
+.badge.closed, .badge.received { color: var(--muted); }
+.badge.suspended, .badge.refused { color: var(--danger); }
+.form-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); gap: 14px; align-items: start; margin-top: 14px; max-width: 1240px; }
+.form-editor .form-preview { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+.form-editor fieldset, .form-step-editor fieldset, .form-view fieldset, .modal fieldset:not(.card) { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px 10px; margin: 0 0 14px; }
+.form-editor legend, .form-step-editor legend, .form-view legend, .modal fieldset:not(.card) > legend { font-size: 12.5px; font-weight: 500; padding: 0 4px; }
+.fe-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; align-items: flex-start; }
+.fe-field { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; width: 100%; background: var(--panel); }
+.fe-field.invalid { border-color: var(--danger); }
+.fe-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.fe-head > .hint { min-width: 0; }
+.fe-head .grow { flex: 1; }
+.fe-title { border: none; background: none; box-shadow: none; padding: 2px 0; font-weight: 600; }
+.fe-caret { margin-right: 6px; color: var(--muted); }
+.fe-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.fe-check { align-self: center; }
+.fe-pages { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; align-items: flex-start; }
+.fe-page { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 10px; width: 100%; }
+.fe-live { margin: 0 0 12px; padding-left: 18px; }
+.form-view .form-title { margin-top: 0; }
+.form-view .form-field { margin: 0 0 14px; }
+.form-view .form-field > label:not(.choice) { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; }
+.choice { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; }
+.choice input { margin-top: 3px; }
+.field-error { color: var(--danger); font-size: 12.5px; margin-top: 4px; }
+.form-view input[aria-invalid="true"], .form-view textarea[aria-invalid="true"], .form-view select[aria-invalid="true"] { border-color: var(--danger); }
+.money-input { display: flex; align-items: center; gap: 6px; }
+.money-input > span { font-weight: 600; color: var(--muted); }
+.form-buttons { margin-top: 8px; }
+.form-page { max-width: 680px; }
+.form-done { max-width: 680px; }
+.form-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 14px; }
+.form-card .kv { margin-bottom: 12px; }
+.embed-code { display: block; word-break: break-all; font-size: 12px; margin: 2px 0 4px; }
+@media (max-width: 1100px) {
+  .form-editor { grid-template-columns: 1fr; }
+  .form-editor .form-preview { position: static; max-height: none; }
+}

@@ -32,6 +32,9 @@ import { TablePage, Tables } from "./pages/Tables";
 import { Storefront } from "./pages/Storefront";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
+import { FormSubmissions, Forms } from "./pages/Forms";
+import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
+import { get } from "./api";
 
 export function App() {
   return (
@@ -132,6 +135,18 @@ function SignedIn() {
     return () => wide.removeEventListener("change", close);
   }, []);
   useFocusTrap(navRef, drawer, () => setDrawer(false));
+  // Form steps waiting for someone with my roles: an entry while there are any.
+  const [toFill, setToFill] = useState(0);
+  useEffect(() => {
+    let live = true;
+    get<{ requests: FormRequest[] }>("/v1/form-requests").then(
+      (r) => live && setToFill(r.requests.length),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [pathname]);
   if (!me) return null;
   // Grouped as the sidebar shows them; [path, label, icon, visible].
   const groups: [string, [string, string, string, boolean][]][] = [
@@ -146,6 +161,8 @@ function SignedIn() {
         ["/templates", "Templates", "templates", true],
         ["/tables", "Tables", "tables", can("table.read")],
         ["/storefront", "Storefront", "storefront", can("storefront.manage")],
+        ["/forms", "Forms", "forms", can("workflow.read")],
+        ["/forms/requests", `To fill in (${toFill})`, "inbox", toFill > 0],
         ["/runs", "Runs", "runs", can("run.read")],
         ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish")],
       ],
@@ -226,7 +243,7 @@ function SignedIn() {
                 {section}
               </div>
               {shown.map(([to, label, icon]) => (
-                <NavLink key={to} to={to} end={to === "/settings"}>
+                <NavLink key={to} to={to} end={to === "/settings" || to === "/forms"}>
                   <Icon name={icon} />
                   {label}
                 </NavLink>
@@ -261,6 +278,11 @@ function SignedIn() {
           <Route path="/storefront/orders" element={<StorefrontOrders />} />
           <Route path="/storefront/orders/:reference" element={<StorefrontOrder />} />
           <Route path="/storefront/bookings" element={<StorefrontBookings />} />
+          <Route path="/forms" element={<Forms />} />
+          <Route path="/forms/requests" element={<FormRequests />} />
+          <Route path="/forms/requests/:id" element={<FormRequestPage />} />
+          <Route path="/forms/:id" element={<MemberForm />} />
+          <Route path="/forms/:id/submissions" element={<FormSubmissions />} />
           <Route path="/start" element={<Start />} />
           <Route path="/start/guide" element={<Guide />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
