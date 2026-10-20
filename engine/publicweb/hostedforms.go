@@ -488,8 +488,7 @@ func (s *Server) serveHosted(w http.ResponseWriter, r *http.Request, hf *hform, 
 		s.showHosted(w, r, http.StatusOK, hf, st, "", "", "")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, hf.bodyLimit())
-	if err := parseBody(r); err != nil {
+	if err := parseBody(w, r, hf.bodyLimit()); err != nil {
 		st := &hstate{}
 		hf.seed(st, prefill)
 		if hf.verify == "" {
@@ -568,7 +567,9 @@ func channelWord(c string) string {
 	return "phone number"
 }
 
-func parseBody(r *http.Request) error {
+// parseBody reads a form's POST, at most limit bytes of it.
+func parseBody(w http.ResponseWriter, r *http.Request, limit int64) error {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 		return r.ParseMultipartForm(32 << 20)
 	}
@@ -1136,7 +1137,7 @@ func (s *Server) formReference(idem [32]byte, n int) string {
 	m := hmac.New(sha256.New, s.FormKeys.Guard)
 	m.Write([]byte("form reference\x00"))
 	m.Write(idem[:])
-	m.Write([]byte{byte(n)})
+	m.Write([]byte{byte(n)}) //nolint:gosec // n is an attempt number, below 3
 	return "F-" + refEncoding.EncodeToString(m.Sum(nil)[:5])
 }
 
