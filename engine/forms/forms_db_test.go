@@ -320,3 +320,36 @@ func TestFormStepLinkAndAnswer(t *testing.T) {
 func decodeB64(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(strings.ReplaceAll(s, "\n", ""))
 }
+
+const pagedForm = `{"schema":"wd/v1","id":"wf_loan","version":1,"name":"Loan",
+ "trigger":{"type":"form","config":{"title":"Loan","pages":[{"fields":["employed"]},{"fields":["employer"],"show_if":"answers.employed == true"}]}},
+ "inputs":{"schema":{"type":"object","required":["employed","employer"],"properties":{"employed":{"type":"boolean"},"employer":{"type":"string"}}}},
+ "steps":[{"id":"n","type":"transform","config":{"output":{"x":1}}}]}`
+
+// A required field on a page its condition hides is not asked, so not
+// required; an answer to it is dropped.
+func TestHiddenPagesAreNotRequired(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.deploy(pagedForm)
+	var endpoint uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM form_endpoints WHERE workflow_id = $1`, wf).Scan(&endpoint); err != nil {
+		t.Fatal(err)
+	}
+	ref, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"employed": false, "employer": "sneaked in"}, Respondent: forms.Respondent{Kind: "anonymous"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"employed": true}, Respondent: forms.Respondent{Kind: "anonymous"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	var status, answers string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status, answers::text FROM form_submissions WHERE reference = $1`, ref).Scan(&status, &answers); err != nil || status != "started" || strings.Contains(answers, "sneaked") {
+		t.Fatalf("hidden page: %s %s %v", status, answers, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status FROM form_submissions WHERE reference = $1`, refused).Scan(&status); err != nil || status != "refused" {
+		t.Fatalf("shown page, not answered: %s %v", status, err)
+	}
+}

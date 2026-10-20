@@ -286,10 +286,10 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type)
 				VALUES ($1, $2, $3, $4, $5, 'form')`, id, tenant, wf, version, env)
 			if err == nil {
-				_, err = tx.Exec(ctx, `INSERT INTO form_endpoints (id, tenant_id, workflow_id, environment, public_id, version)
-					VALUES ($1, $2, $3, $4, $5, $6)
-					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version, updated_at = now()`,
-					uuid.Must(uuid.NewV7()), tenant, wf, env, NewFormID(), version)
+				_, err = tx.Exec(ctx, `INSERT INTO form_endpoints (id, tenant_id, workflow_id, environment, public_id, version, form)
+					VALUES ($1, $2, $3, $4, $5, $6, $7)
+					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version, form = EXCLUDED.form, updated_at = now()`,
+					uuid.Must(uuid.NewV7()), tenant, wf, env, NewFormID(), version, formCopy(def))
 			}
 		}
 		if err != nil {
@@ -311,4 +311,25 @@ func NewFormID() string {
 		b[i] = alphabet[int(b[i])%len(alphabet)]
 	}
 	return string(b)
+}
+
+// formCopy is what the form host may read of a form's definition: its
+// trigger, inputs schema and the types it uses, never the steps.
+func formCopy(def *wd.Definition) []byte {
+	out := map[string]json.RawMessage{}
+	if t, err := json.Marshal(def.Trigger); err == nil {
+		out["trigger"] = t
+	}
+	if def.RawInputs != nil {
+		if in, err := json.Marshal(def.RawInputs); err == nil {
+			out["inputs"] = in
+		}
+	}
+	if len(def.RawTypes) > 0 {
+		if ty, err := json.Marshal(def.RawTypes); err == nil {
+			out["types"] = ty
+		}
+	}
+	raw, _ := json.Marshal(out)
+	return raw
 }

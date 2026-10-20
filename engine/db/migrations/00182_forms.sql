@@ -18,6 +18,9 @@ CREATE TABLE form_endpoints (
   environment     text NOT NULL,
   public_id       text NOT NULL UNIQUE CHECK (public_id ~ '^[a-z0-9]{12}$'),
   version         int NOT NULL,
+  -- The deployed version's form, copied at deploy (trigger, inputs, types):
+  -- the form host reads this, never workflow definitions.
+  form            jsonb NOT NULL DEFAULT '{}',
   status          text NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'paused', 'closed', 'suspended')),
   opens_at        timestamptz,
   closes_at       timestamptz,
@@ -204,11 +207,6 @@ CREATE POLICY tenant_isolation ON form_files TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT ON form_files TO taskiem_app;
 
--- The form host reads only the versions deployed behind a form.
-CREATE POLICY form_host ON workflow_versions FOR SELECT TO taskiem_dispatch
-  USING (EXISTS (SELECT 1 FROM form_endpoints e WHERE e.workflow_id = workflow_versions.workflow_id AND e.version = workflow_versions.version));
-GRANT SELECT (workflow_id, version, definition) ON workflow_versions TO taskiem_dispatch;
-
 -- +goose StatementBegin
 -- A live form for the form host: its definition's form parts, its
 -- organisation's name and id (for the websites that may frame it), and
@@ -220,10 +218,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
            'open', e.status = 'live' AND (e.opens_at IS NULL OR e.opens_at <= now()) AND (e.closes_at IS NULL OR e.closes_at > now())
              AND (e.max_submissions IS NULL OR e.submissions < e.max_submissions),
            'closed_message', e.closed_message, 'business', t.name,
-           'trigger', v.definition->'trigger', 'inputs', v.definition->'inputs', 'types', v.definition->'types')
+           'trigger', e.form->'trigger', 'inputs', e.form->'inputs', 'types', e.form->'types')
     FROM form_endpoints e
     JOIN tenants t ON t.id = e.tenant_id AND t.status = 'active'
-    JOIN workflow_versions v ON v.workflow_id = e.workflow_id AND v.version = e.version
    WHERE e.public_id = p_public_id AND e.status <> 'suspended'
 $$;
 -- +goose StatementEnd
@@ -478,8 +475,6 @@ DROP FUNCTION taskiem_public_form_submit(uuid, uuid, uuid, bytea, text, bytea, b
 DROP FUNCTION taskiem_public_form_request(bytea);
 DROP FUNCTION taskiem_public_form_link(bytea);
 DROP FUNCTION taskiem_public_form(text);
-REVOKE SELECT (workflow_id, version, definition) ON workflow_versions FROM taskiem_dispatch;
-DROP POLICY form_host ON workflow_versions;
 DROP TABLE form_files;
 DROP TABLE form_submissions;
 DROP TABLE form_once;

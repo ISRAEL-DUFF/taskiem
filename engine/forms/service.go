@@ -445,6 +445,57 @@ func clipName(n string) string {
 	return n
 }
 
+// formEngine evaluates pages' show_if over the answers, as the form
+// host does.
+var formEngine = expr.MustNewWithRoots("answers")
+
+// withoutHidden drops the fields of pages the answers hide (a show_if
+// false, or one that cannot be evaluated, as on the form host) from the
+// answers and from the schema's required list.
+func withoutHidden(tg target, probe, answers map[string]any) map[string]any {
+	f, err := tg.def.FormTriggerConfig()
+	if err != nil {
+		return tg.schema
+	}
+	hidden := map[string]bool{}
+	for _, pg := range wd.FormPages(f.Pages, tg.schema) {
+		c := wd.FormCondition(pg.ShowIf)
+		if c == "" {
+			continue
+		}
+		if ok, err := formEngine.EvalBool(c, map[string]any{"answers": answers}); err == nil && ok {
+			continue
+		}
+		for _, name := range pg.Fields {
+			hidden[name] = true
+		}
+	}
+	if len(hidden) == 0 {
+		return tg.schema
+	}
+	out := map[string]any{}
+	for k, v := range tg.schema {
+		out[k] = v
+	}
+	if req, ok := tg.schema["required"].([]any); ok {
+		var keep []any
+		for _, r := range req {
+			if name, _ := r.(string); !hidden[name] {
+				keep = append(keep, r)
+			}
+		}
+		out["required"] = keep
+		if keep == nil {
+			delete(out, "required")
+		}
+	}
+	for name := range hidden {
+		delete(probe, name)
+		delete(answers, name)
+	}
+	return out
+}
+
 // check validates the answers against the schema again: the form host
 // checked them, but a form changed in between must not start a run with
 // answers it does not take. File fields are checked holding their id.
@@ -456,11 +507,21 @@ func (s *Service) check(tg target, answers map[string]any, files []storedFile) s
 	for _, f := range files {
 		probe[f.field] = f.ref.ID
 	}
-	body, _ := json.Marshal(probe)
 	var msgs []string
 	if tg.def != nil {
-		msgs = tg.def.ValidateInputs(body)
+		schema := withoutHidden(tg, probe, answers)
+		root := map[string]any{}
+		for k, v := range schema {
+			root[k] = v
+		}
+		if len(tg.types) > 0 {
+			root["types"] = tg.types
+		}
+		raw, _ := json.Marshal(root)
+		body, _ := json.Marshal(probe)
+		msgs = schemacheck.New("https://schemas.taskiem.dev/forms/"+tg.def.ID+".json", raw).Validate(body)
 	} else {
+		body, _ := json.Marshal(probe)
 		raw, _ := json.Marshal(tg.schema)
 		msgs = schemacheck.New("https://schemas.taskiem.dev/forms/request.json", raw).Validate(body)
 	}
