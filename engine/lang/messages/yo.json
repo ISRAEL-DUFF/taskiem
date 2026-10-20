@@ -48,8 +48,16 @@
       "text": "Kọ̀ ọ́",
       "reviewed": false
     },
+    "button.yes": {
+      "text": "Bẹ́ẹ̀ni",
+      "reviewed": false
+    },
     "button.yes_add": {
       "text": "Bẹ́ẹ̀ni, fi kún",
+      "reviewed": false
+    },
+    "button.yes_publish": {
+      "text": "Bẹ́ẹ̀ni, gbé e jáde",
       "reviewed": false
     },
     "button.yes_run": {
@@ -644,6 +652,18 @@
       "text": "• *run* àti orúkọ iṣẹ́ kan: láti bẹ̀rẹ̀ rẹ̀ (ẹ ó kọ́kọ́ fìdí rẹ̀ múlẹ̀)",
       "reviewed": false
     },
+    "wa.help.shop": {
+      "text": "• *make my page* tàbí *my page*: ṣètò tàbí wo ojú-ìwé rẹ; *publish*; *qr*: kóòdù QR rẹ̀; *hours mon-sat 8-6*; *add service Haircut 30 2000*; *close shop* tàbí *open shop*",
+      "reviewed": false
+    },
+    "wa.help.shop_catalogue": {
+      "text": "• *add product Jollof rice 2000*, tàbí fọ́tò pẹ̀lú àkọlé yẹn; *price*, *hide*, *show* tàbí *stock* àti orúkọ ọjà kan",
+      "reviewed": false
+    },
+    "wa.help.shop_orders": {
+      "text": "• *orders*: àwọn ìbéèrè tó ṣí sílẹ̀; *order* àti nọ́mbà ìtọ́kasí: ìbéèrè kan; àti *ready* tàbí *delivered* lẹ́yìn rẹ̀ láti tẹ̀ síwájú",
+      "reviewed": false
+    },
     "wa.help.status": {
       "text": "• *status*: ohun tó ṣiṣẹ́ àti ohun tó kùnà lónìí",
       "reviewed": false
@@ -822,6 +842,406 @@
     },
     "wa.run.which": {
       "text": "Èwo?\n{list}\nẸ fi *run* àti orúkọ rẹ̀ ní kíkún ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.shop.add_failed": {
+      "text": "A kò lè fi èyí pamọ́ ({reason}). Fèsì *yes* láti tún gbìyànjú, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.address": {
+      "text": "Yóò wà ní {link}",
+      "reviewed": false
+    },
+    "wa.shop.already_open": {
+      "text": "Ṣọ́ọ̀bù rẹ ti ṣí sílẹ̀ tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.ask_area": {
+      "text": "3/5. Agbègbè tàbí àdírẹ́sì rẹ? Fún àpẹẹrẹ: Yaba, Lagos. Fèsì *skip* láti fi sílẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.ask_hours": {
+      "text": "4/5. Àkókò tí o máa ń ṣí? Fún àpẹẹrẹ: *mon-sat 8-6*, *daily 9am-9pm* tàbí *mon-fri 9-5, sat 10-2, closed sunday*. Fèsì *skip* láti fi sílẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.ask_name": {
+      "text": "1/5. Kí ni orúkọ iṣẹ́ òwò rẹ?",
+      "reviewed": false
+    },
+    "wa.shop.ask_photo": {
+      "text": "5/5. Fi fọ́tò tàbí àmì rẹ ránṣẹ́ fún òkè ojú-ìwé náà, tàbí fèsì *skip*.",
+      "reviewed": false
+    },
+    "wa.shop.ask_tagline": {
+      "text": "2/5. Ní ìlà kan, kí lò ń tà? Fún àpẹẹrẹ: Jollof ilé àti small chops. Fèsì *skip* láti fi sílẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.bad_answer": {
+      "text": "Èyí kò bá a mu: {reason}\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.shop.cannot_complete": {
+      "text": "Ìbéèrè {ref} wà ní {status}, a kò sì lè parí rẹ̀ báyìí.",
+      "reviewed": false
+    },
+    "wa.shop.changed": {
+      "text": "Ó ti parí: a ti ṣe àtúnṣe *{name}*.",
+      "reviewed": false
+    },
+    "wa.shop.close_how": {
+      "text": "Ìfiránṣẹ́ títì jẹ́ ó pọ̀jù lẹ́tà 200, láìsí ìjápọ̀. Fún àpẹẹrẹ: *close shop back on monday*.",
+      "reviewed": false
+    },
+    "wa.shop.closed": {
+      "text": "A ti ti ṣọ́ọ̀bù rẹ: ojú-ìwé rẹ ń fi ìfiránṣẹ́ rẹ hàn dípò àwọn ọjà. Fèsì *open shop* láti tún gba ìbéèrè.",
+      "reviewed": false
+    },
+    "wa.shop.completed": {
+      "text": "A ti parí ìbéèrè {ref}.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_close": {
+      "text": "Ṣé kí a ti ṣọ́ọ̀bù rẹ? Ojú-ìwé rẹ yóò sọ pé: {message}\nÀwọn oníbàárà kò ní lè béèrè títí o fi fèsì *open shop*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_complete": {
+      "text": "Ṣé kí a sàmì sí ìbéèrè {ref} pé a ti fi jíṣẹ́ tàbí gbà á? Èyí yóò parí rẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_hide": {
+      "text": "Ṣé kí a fi *{name}* pamọ́? Ojú-ìwé rẹ yóò fi hàn pé kò sí títí o fi *show* rẹ̀ padà.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_hours": {
+      "text": "Ṣé kí a ṣètò àkókò ìṣísílẹ̀ rẹ sí:\n{hours}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_open": {
+      "text": "Ṣé kí a tún ṣí ṣọ́ọ̀bù rẹ? Àwọn oníbàárà yóò lè béèrè.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_price": {
+      "text": "Ṣé kí a yí iye owó *{name}* padà láti {from} sí {to}?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_product": {
+      "text": "Ṣé kí a fi ọjà yìí kún?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_publish": {
+      "text": "Ṣé kí a gbé e jáde báyìí? Tí o bá sọ bẹ́ẹ̀ni, màá fi ìjápọ̀, kóòdù QR àti ọ̀rọ̀ status ránṣẹ́ sí ọ. Lẹ́yìn náà fi ọjà kún pẹ̀lú *add product Jollof rice 2000*, tàbí fi fọ́tò ránṣẹ́ pẹ̀lú orúkọ àti iye owó gẹ́gẹ́ bí àkọlé rẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_publish_again": {
+      "text": "Ṣé kí a gbé *{name}* jáde bí ó ṣe wà báyìí?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_ready": {
+      "text": "Ṣé kí a sọ fún oníbàárà pé ìbéèrè {ref} ti ṣetán? Wọn yóò gba àtẹ̀jíṣẹ́.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_reminder": {
+      "text": "Fèsì *yes* láti tẹ̀ síwájú, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_service": {
+      "text": "Ṣé kí a fi iṣẹ́ yìí kún?\n*{name}*, ìṣẹ́jú {minutes}, {price}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_show": {
+      "text": "Ṣé kí a tún fi *{name}* hàn lórí ojú-ìwé rẹ?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_stock": {
+      "text": "Ṣé kí a ṣètò iye *{name}* tó kù láti {from} sí {to}?",
+      "reviewed": false
+    },
+    "wa.shop.created": {
+      "text": "A ti fi ojú-ìwé rẹ pamọ́ gẹ́gẹ́ bí àkọsílẹ̀:\n{details}",
+      "reviewed": false
+    },
+    "wa.shop.denied": {
+      "text": "Ipò rẹ ní {org} kò ní ìṣàkóso ṣọ́ọ̀bù (storefront.manage).",
+      "reviewed": false
+    },
+    "wa.shop.denied_table": {
+      "text": "Yíyí àwọn ọjà padà tún nílò table.edit, èyí tí ipò rẹ ní {org} kò ní.",
+      "reviewed": false
+    },
+    "wa.shop.hours_how": {
+      "text": "Mi ò lè ka àkókò yẹn ({reason}). Kọ ọ́ bíi *mon-sat 8-6*, *daily 9am-9pm* tàbí *mon-fri 9-5, sat 10-2, closed sunday*.",
+      "reviewed": false
+    },
+    "wa.shop.hours_saved": {
+      "text": "A ti fi àkókò ìṣísílẹ̀ pamọ́.",
+      "reviewed": false
+    },
+    "wa.shop.how_item": {
+      "text": "Kọ orúkọ ọjà náà lẹ́yìn àṣẹ náà, bíi *hide Jollof rice*.",
+      "reviewed": false
+    },
+    "wa.shop.how_price": {
+      "text": "Kọ ọ́ bíi *price Jollof rice 2500*: orúkọ, lẹ́yìn náà iye owó tuntun.",
+      "reviewed": false
+    },
+    "wa.shop.how_stock": {
+      "text": "Kọ ọ́ bíi *stock Jollof rice 20*: orúkọ, lẹ́yìn náà iye tó kù.",
+      "reviewed": false
+    },
+    "wa.shop.kind.callback": {
+      "text": "ìbéèrè ìpè padà",
+      "reviewed": false
+    },
+    "wa.shop.kind.enquiry": {
+      "text": "ìbéèrè",
+      "reviewed": false
+    },
+    "wa.shop.left": {
+      "text": "Kò sí ohun tí a yí padà.",
+      "reviewed": false
+    },
+    "wa.shop.no_address": {
+      "text": "A kò rí àdírẹ́sì tó ṣófo fún {name}. Yan ọ̀kan lábẹ́ Storefront nínú ètò wẹ́ẹ̀bù.",
+      "reviewed": false
+    },
+    "wa.shop.no_catalogue": {
+      "text": "Ojú-ìwé rẹ kò tíì ní àkójọ ọjà. Fi ọjà àkọ́kọ́ kún pẹ̀lú *add product Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.no_column": {
+      "text": "Àkójọ ọjà rẹ kò ní ọ̀wọ̀n *{what}*. Yan ọ̀kan lábẹ́ Storefront nínú ètò wẹ́ẹ̀bù.",
+      "reviewed": false
+    },
+    "wa.shop.no_item": {
+      "text": "Kò sí ohunkóhun nínú àkójọ ọjà rẹ tí a ń pè ní {name}.",
+      "reviewed": false
+    },
+    "wa.shop.no_order": {
+      "text": "Kò sí ìbéèrè {ref}.",
+      "reviewed": false
+    },
+    "wa.shop.no_orders": {
+      "text": "Kò sí ìbéèrè tó ṣí sílẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.no_table_edit": {
+      "text": "Ojú-ìwé rẹ kò ní àkójọ ọjà: ṣíṣe ọ̀kan nílò table.edit, èyí tí ipò rẹ kò ní.",
+      "reviewed": false
+    },
+    "wa.shop.no_tables": {
+      "text": "A kò lè ṣe àkójọ ọjà síbẹ̀: kò sí tábìlì dátà fún àjọ rẹ ({reason}). A ti fi ojú-ìwé rẹ pamọ́ láìsí àkójọ ọjà.",
+      "reviewed": false
+    },
+    "wa.shop.none_yet": {
+      "text": "{org} kò tíì ní ojú-ìwé. Fèsì *make my page* láti ṣètò ọ̀kan.",
+      "reviewed": false
+    },
+    "wa.shop.not_published": {
+      "text": "A kò tíì gbé ojú-ìwé rẹ jáde. Fèsì *publish* láti gbé e sórí ayélujára.",
+      "reviewed": false
+    },
+    "wa.shop.not_ready_now": {
+      "text": "Ìbéèrè {ref} wà ní {status}: ìbéèrè tí a gbà tàbí tí a sanwó fún nìkan ni a lè sàmì sí pé ó ti ṣetán.",
+      "reviewed": false
+    },
+    "wa.shop.not_saved": {
+      "text": "A kò lè fi èyí pamọ́: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.on_page": {
+      "text": "Ó ti wà lórí ojú-ìwé rẹ báyìí.",
+      "reviewed": false
+    },
+    "wa.shop.opened": {
+      "text": "A ti tún ṣí ṣọ́ọ̀bù rẹ.",
+      "reviewed": false
+    },
+    "wa.shop.order_detail": {
+      "text": "*{ref}*: {status}\n{items}\nÀpapọ̀: {total}\nOníbàárà: {customer}\nA gbà á {when}",
+      "reviewed": false
+    },
+    "wa.shop.orders_head": {
+      "text": "Àwọn ìbéèrè tó ṣí sílẹ̀, tuntun jùlọ ní àkọ́kọ́:",
+      "reviewed": false
+    },
+    "wa.shop.orders_tail": {
+      "text": "Fèsì *order* àti nọ́mbà ìtọ́kasí fún ọ̀kan.",
+      "reviewed": false
+    },
+    "wa.shop.page_closed": {
+      "text": "*{name}* ti tì ({message}): {link}\nÌbéèrè òní: {count}\nFèsì *open shop* láti tún gba ìbéèrè.",
+      "reviewed": false
+    },
+    "wa.shop.page_draft": {
+      "text": "*{name}* jẹ́ àkọsílẹ̀, a kò tíì gbé e jáde. Fèsì *publish* láti gbé e sórí ayélujára.",
+      "reviewed": false
+    },
+    "wa.shop.page_live": {
+      "text": "A ti gbé *{name}* jáde: {link}\nÌbéèrè òní: {count}",
+      "reviewed": false
+    },
+    "wa.shop.photo_bad": {
+      "text": "A kò lè lo fọ́tò yẹn ({reason}). Fi JPEG tàbí PNG tí kò ju MB 10 lọ ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.shop.photo_caption": {
+      "text": "Láti fi ọjà kún pẹ̀lú fọ́tò yìí, tún fi ránṣẹ́ pẹ̀lú orúkọ àti iye owó gẹ́gẹ́ bí àkọlé rẹ̀, bíi *Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_failed": {
+      "text": "A kò lè fi fọ́tò yẹn pamọ́ báyìí. Tún gbìyànjú ní ìṣẹ́jú kan.",
+      "reviewed": false
+    },
+    "wa.shop.photo_not_now": {
+      "text": "Mi ò lè gba fọ́tò báyìí. Parí ohun tí a ń ṣe, tàbí fèsì *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_or_skip": {
+      "text": "Fi fọ́tò ránṣẹ́, tàbí fèsì *skip*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_rejected": {
+      "text": "A kò gba fọ́tò yẹn fún ojú-ìwé gbogbo ènìyàn. Kò sí ohun tí a fi kún.",
+      "reviewed": false
+    },
+    "wa.shop.photos_off": {
+      "text": "A kò lè fi fọ́tò pamọ́ níbí síbẹ̀, nítorí náà kò sí ohun tí a fi kún. Fi ọjà ránṣẹ́ láìsí fọ́tò: *add product Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.pick_again": {
+      "text": "Fèsì pẹ̀lú nọ́mbà kan láti inú àkójọ:\n{list}",
+      "reviewed": false
+    },
+    "wa.shop.price_none": {
+      "text": "kò sí iye owó",
+      "reviewed": false
+    },
+    "wa.shop.product_added": {
+      "text": "A ti fi *{name}* kún ní {price}.",
+      "reviewed": false
+    },
+    "wa.shop.product_exists": {
+      "text": "*{name}* ti wà nínú àkójọ ọjà rẹ ní {price}. Yí iye owó rẹ̀ padà pẹ̀lú *price* àti orúkọ rẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.product_how": {
+      "text": "Kọ ọ́ bíi *add product Jollof rice 2000*: orúkọ, lẹ́yìn náà iye owó (2000, ₦2,000 tàbí 2k).",
+      "reviewed": false
+    },
+    "wa.shop.publish_failed": {
+      "text": "A kò lè gbé ojú-ìwé rẹ jáde: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.publish_hint": {
+      "text": "Fèsì *publish* láti gbé ojú-ìwé rẹ sórí ayélujára.",
+      "reviewed": false
+    },
+    "wa.shop.published": {
+      "text": "Ojú-ìwé rẹ ti wà lórí ayélujára: {link}\nKóòdù QR àti ọ̀rọ̀ status láti lẹ̀ ń bọ̀. Fi ọjà kún pẹ̀lú *add product Jollof rice 2000*, tàbí fi fọ́tò ránṣẹ́ pẹ̀lú àkọlé *Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.qr_caption": {
+      "text": "Ṣàyẹ̀wò láti ṣí {name}: {link}",
+      "reviewed": false
+    },
+    "wa.shop.qr_print": {
+      "text": "Tẹ káàdì pẹ̀lú kóòdù yìí fún kọ̀ǹtà rẹ: {url}",
+      "reviewed": false
+    },
+    "wa.shop.ready_failed": {
+      "text": "A kò lè sọ fún oníbàárà pé ìbéèrè {ref} ti ṣetán: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.ready_sent": {
+      "text": "A ń sọ fún oníbàárà pé ìbéèrè {ref} ti ṣetán. Fèsì *order {ref} delivered* nígbà tí wọ́n bá gbà á.",
+      "reviewed": false
+    },
+    "wa.shop.service_added": {
+      "text": "A ti fi iṣẹ́ *{name}* kún.",
+      "reviewed": false
+    },
+    "wa.shop.service_hint": {
+      "text": "Àwọn oníbàárà lè ṣe ìforúkọsílẹ̀ rẹ̀ ní kété tí fọ́ọ̀mù ìforúkọsílẹ̀ bá wà ní títàn, lábẹ́ Storefront nínú ètò wẹ́ẹ̀bù.",
+      "reviewed": false
+    },
+    "wa.shop.service_how": {
+      "text": "Kọ ọ́ bíi *add service Haircut 30 2000*: orúkọ, ìṣẹ́jú tí ó gbà, lẹ́yìn náà iye owó.",
+      "reviewed": false
+    },
+    "wa.shop.setup_start": {
+      "text": "Jẹ́ ká ṣe ojú-ìwé rẹ. Ìbéèrè kúkúrú márùn-ún; fèsì *cancel* láti dá dúró nígbàkígbà.",
+      "reviewed": false
+    },
+    "wa.shop.status.accepted": {
+      "text": "a ti gbà á",
+      "reviewed": false
+    },
+    "wa.shop.status.awaiting_payment": {
+      "text": "ń dúró de ìsanwó",
+      "reviewed": false
+    },
+    "wa.shop.status.cancelled": {
+      "text": "a ti fagilé",
+      "reviewed": false
+    },
+    "wa.shop.status.completed": {
+      "text": "a ti parí",
+      "reviewed": false
+    },
+    "wa.shop.status.declined": {
+      "text": "a kọ̀ ọ́",
+      "reviewed": false
+    },
+    "wa.shop.status.expired": {
+      "text": "ó ti parí àkókò",
+      "reviewed": false
+    },
+    "wa.shop.status.no_show": {
+      "text": "kò wá",
+      "reviewed": false
+    },
+    "wa.shop.status.paid": {
+      "text": "a ti sanwó",
+      "reviewed": false
+    },
+    "wa.shop.status.price_changed": {
+      "text": "ń dúró kí oníbàárà gbà sí iye owó tuntun",
+      "reviewed": false
+    },
+    "wa.shop.status.received": {
+      "text": "ń dúró kí o gbà á",
+      "reviewed": false
+    },
+    "wa.shop.status.refund_due": {
+      "text": "ó yẹ kí a dá owó padà",
+      "reviewed": false
+    },
+    "wa.shop.status.refunded": {
+      "text": "a ti dá owó padà",
+      "reviewed": false
+    },
+    "wa.shop.status_post": {
+      "text": "Béèrè lọ́wọ́ {name} níbí: {link}",
+      "reviewed": false
+    },
+    "wa.shop.stock_untracked": {
+      "text": "a kò kà á",
+      "reviewed": false
+    },
+    "wa.shop.too_many": {
+      "text": "Àyípadà pọ̀ jù lẹ́ẹ̀kan náà. Dúró díẹ̀, lẹ́yìn náà fèsì *yes* lẹ́ẹ̀kan sí i.",
+      "reviewed": false
+    },
+    "wa.shop.which_item": {
+      "text": "Ju ọ̀kan lọ ló bá a mu. Èwo?\n{list}\nFèsì pẹ̀lú nọ́mbà rẹ̀.",
+      "reviewed": false
+    },
+    "wa.shop.with_logo": {
+      "text": "(pẹ̀lú fọ́tò rẹ lókè)",
+      "reviewed": false
+    },
+    "wa.shop.with_photo": {
+      "text": " (pẹ̀lú fọ́tò náà)",
       "reviewed": false
     },
     "wa.status.denied": {

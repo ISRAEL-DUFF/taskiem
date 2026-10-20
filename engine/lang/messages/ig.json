@@ -48,8 +48,16 @@
       "text": "Jụ",
       "reviewed": false
     },
+    "button.yes": {
+      "text": "Ee",
+      "reviewed": false
+    },
     "button.yes_add": {
       "text": "Ee, tinye ya",
+      "reviewed": false
+    },
+    "button.yes_publish": {
+      "text": "Ee, bipụta ya",
       "reviewed": false
     },
     "button.yes_run": {
@@ -644,6 +652,18 @@
       "text": "• *run* na aha usoro ọrụ: malite ya (ị ga-ebu ụzọ kwado)",
       "reviewed": false
     },
+    "wa.help.shop": {
+      "text": "• *make my page* ma ọ bụ *my page*: hiwe ma ọ bụ lee peeji gị; *publish*; *qr*: koodu QR ya; *hours mon-sat 8-6*; *add service Haircut 30 2000*; *close shop* ma ọ bụ *open shop*",
+      "reviewed": false
+    },
+    "wa.help.shop_catalogue": {
+      "text": "• *add product Jollof rice 2000*, ma ọ bụ foto nwere ederede ahụ; *price*, *hide*, *show* ma ọ bụ *stock* na aha ngwaahịa",
+      "reviewed": false
+    },
+    "wa.help.shop_orders": {
+      "text": "• *orders*: ọda ndị meghere emeghe; *order* na nọmba ya: otu ọda; na *ready* ma ọ bụ *delivered* n'azụ ya iji gaa n'ihu",
+      "reviewed": false
+    },
     "wa.help.status": {
       "text": "• *status*: ihe rụrụ ọrụ na ihe dara taa",
       "reviewed": false
@@ -822,6 +842,406 @@
     },
     "wa.run.which": {
       "text": "Kedu nke?\n{list}\nZiga *run* na aha ya zuru oke.",
+      "reviewed": false
+    },
+    "wa.shop.add_failed": {
+      "text": "Enweghị ike ichekwa nke a ({reason}). Zaa *yes* iji nwaa ọzọ, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.address": {
+      "text": "Ọ ga-adị na {link}",
+      "reviewed": false
+    },
+    "wa.shop.already_open": {
+      "text": "Ụlọ ahịa gị emeghelarị.",
+      "reviewed": false
+    },
+    "wa.shop.ask_area": {
+      "text": "3/5. Mpaghara gị ma ọ bụ adreesị gị? Dịka ọmụmaatụ: Yaba, Lagos. Zaa *skip* ịhapụ ya.",
+      "reviewed": false
+    },
+    "wa.shop.ask_hours": {
+      "text": "4/5. Oge ị na-emeghe? Dịka ọmụmaatụ: *mon-sat 8-6*, *daily 9am-9pm* ma ọ bụ *mon-fri 9-5, sat 10-2, closed sunday*. Zaa *skip* ịhapụ ha.",
+      "reviewed": false
+    },
+    "wa.shop.ask_name": {
+      "text": "1/5. Gịnị bụ aha azụmahịa gị?",
+      "reviewed": false
+    },
+    "wa.shop.ask_photo": {
+      "text": "5/5. Zitere foto ma ọ bụ akara gị maka n'elu peeji ahụ, ma ọ bụ zaa *skip*.",
+      "reviewed": false
+    },
+    "wa.shop.ask_tagline": {
+      "text": "2/5. N'otu ahịrị, gịnị ka ị na-ere? Dịka ọmụmaatụ: Jollof esiri n'ụlọ na small chops. Zaa *skip* ịhapụ ya.",
+      "reviewed": false
+    },
+    "wa.shop.bad_answer": {
+      "text": "Nke a adabaghị: {reason}\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.shop.cannot_complete": {
+      "text": "Ọda {ref} nọ na {status}, enweghị ike imecha ya ugbu a.",
+      "reviewed": false
+    },
+    "wa.shop.changed": {
+      "text": "Emechaala: emelitere *{name}*.",
+      "reviewed": false
+    },
+    "wa.shop.close_how": {
+      "text": "Ozi mmechi bụ mkpụrụ edemede 200 kacha, na-enweghị njikọ. Dịka ọmụmaatụ: *close shop back on monday*.",
+      "reviewed": false
+    },
+    "wa.shop.closed": {
+      "text": "Emechiela ụlọ ahịa gị: peeji gị na-egosi ozi gị kama ngwaahịa. Zaa *open shop* iji nabata ọda ọzọ.",
+      "reviewed": false
+    },
+    "wa.shop.completed": {
+      "text": "Emechaala ọda {ref}.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_close": {
+      "text": "Mechie ụlọ ahịa gị? Peeji gị ga-ekwu: {message}\nNdị ahịa agaghị enwe ike ịtụ ọda ruo mgbe ị zara *open shop*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_complete": {
+      "text": "Kaa ọda {ref} dịka ewegara ma ọ bụ anatara? Nke a ga-emecha ya.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_hide": {
+      "text": "Zoo *{name}*? Peeji gị ga-egosi na ọ dịghị ruo mgbe ị *show* ya ọzọ.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_hours": {
+      "text": "Tọọ oge mmeghe gị ka ọ bụrụ:\n{hours}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_open": {
+      "text": "Meghee ụlọ ahịa gị ọzọ? Ndị ahịa ga-enwe ike ịtụ ọda.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_price": {
+      "text": "Gbanwee ọnụahịa *{name}* site na {from} gaa na {to}?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_product": {
+      "text": "Tinye ngwaahịa a?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_publish": {
+      "text": "Bipụta ya ugbu a? Ọ bụrụ ee, m ga-ezitere gị njikọ, koodu QR na ederede status. Mgbe ahụ tinye ngwaahịa site na *add product Jollof rice 2000*, ma ọ bụ zitere foto nwere aha na ọnụahịa dịka ederede ya.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_publish_again": {
+      "text": "Bipụta *{name}* dịka ọ dị ugbu a?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_ready": {
+      "text": "Gwa onye ahịa na ọda {ref} adịla njikere? Ha ga-enweta ozi ederede.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_reminder": {
+      "text": "Zaa *yes* iji gaa n'ihu, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_service": {
+      "text": "Tinye ọrụ a?\n*{name}*, nkeji {minutes}, {price}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_show": {
+      "text": "Gosi *{name}* na peeji gị ọzọ?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_stock": {
+      "text": "Tọọ ọnụọgụ *{name}* site na {from} gaa na {to}?",
+      "reviewed": false
+    },
+    "wa.shop.created": {
+      "text": "Echekwala peeji gị dịka ndepụta:\n{details}",
+      "reviewed": false
+    },
+    "wa.shop.denied": {
+      "text": "Ọrụ gị na {org} anaghị agụnye ijikwa ụlọ ahịa (storefront.manage).",
+      "reviewed": false
+    },
+    "wa.shop.denied_table": {
+      "text": "Ịgbanwe ngwaahịa chọkwara table.edit, nke ọrụ gị na {org} anaghị agụnye.",
+      "reviewed": false
+    },
+    "wa.shop.hours_how": {
+      "text": "Enweghị m ike ịgụ oge ndị ahụ ({reason}). Dee ha dịka *mon-sat 8-6*, *daily 9am-9pm* ma ọ bụ *mon-fri 9-5, sat 10-2, closed sunday*.",
+      "reviewed": false
+    },
+    "wa.shop.hours_saved": {
+      "text": "Echekwala oge mmeghe.",
+      "reviewed": false
+    },
+    "wa.shop.how_item": {
+      "text": "Dee aha ngwaahịa ahụ n'azụ iwu ahụ, dịka *hide Jollof rice*.",
+      "reviewed": false
+    },
+    "wa.shop.how_price": {
+      "text": "Dee ya dịka *price Jollof rice 2500*: aha, mgbe ahụ ọnụahịa ọhụrụ.",
+      "reviewed": false
+    },
+    "wa.shop.how_stock": {
+      "text": "Dee ya dịka *stock Jollof rice 20*: aha, mgbe ahụ ole fọdụrụ.",
+      "reviewed": false
+    },
+    "wa.shop.kind.callback": {
+      "text": "arịrịọ ịkpọghachi",
+      "reviewed": false
+    },
+    "wa.shop.kind.enquiry": {
+      "text": "ajụjụ",
+      "reviewed": false
+    },
+    "wa.shop.left": {
+      "text": "Ọ dịghị ihe agbanwere.",
+      "reviewed": false
+    },
+    "wa.shop.no_address": {
+      "text": "Ahụghị adreesị efu maka {name}. Họrọ otu n'okpuru Storefront na ngwa weebụ.",
+      "reviewed": false
+    },
+    "wa.shop.no_catalogue": {
+      "text": "Peeji gị enwebeghị ndepụta ngwaahịa. Tinye ngwaahịa mbụ site na *add product Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.no_column": {
+      "text": "Ndepụta ngwaahịa gị enweghị kọlụm *{what}*. Họrọ otu n'okpuru Storefront na ngwa weebụ.",
+      "reviewed": false
+    },
+    "wa.shop.no_item": {
+      "text": "Ọ dịghị ihe dị na ndepụta ngwaahịa gị aha ya bụ {name}.",
+      "reviewed": false
+    },
+    "wa.shop.no_order": {
+      "text": "Enweghị ọda {ref}.",
+      "reviewed": false
+    },
+    "wa.shop.no_orders": {
+      "text": "Enweghị ọda meghere emeghe.",
+      "reviewed": false
+    },
+    "wa.shop.no_table_edit": {
+      "text": "Peeji gị enweghị ndepụta ngwaahịa: ime otu chọrọ table.edit, nke ọrụ gị anaghị agụnye.",
+      "reviewed": false
+    },
+    "wa.shop.no_tables": {
+      "text": "Enweghị ike idepụta ngwaahịa ugbu a: tebụl data adịghị maka nzukọ gị ({reason}). Echekwala peeji gị na-enweghị ndepụta ngwaahịa.",
+      "reviewed": false
+    },
+    "wa.shop.none_yet": {
+      "text": "{org} enwebeghị peeji. Zaa *make my page* iji hiwe otu.",
+      "reviewed": false
+    },
+    "wa.shop.not_published": {
+      "text": "Ebipụtabeghị peeji gị. Zaa *publish* iji tinye ya n'ịntanetị.",
+      "reviewed": false
+    },
+    "wa.shop.not_ready_now": {
+      "text": "Ọda {ref} nọ na {status}: naanị ọda anabatara ma ọ bụ akwụrụ ụgwọ ka a ga-akara dịka njikere.",
+      "reviewed": false
+    },
+    "wa.shop.not_saved": {
+      "text": "Enweghị ike ichekwa nke a: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.on_page": {
+      "text": "Ọ dị na peeji gị ugbu a.",
+      "reviewed": false
+    },
+    "wa.shop.opened": {
+      "text": "Emeghela ụlọ ahịa gị ọzọ.",
+      "reviewed": false
+    },
+    "wa.shop.order_detail": {
+      "text": "*{ref}*: {status}\n{items}\nNgụkọta: {total}\nOnye ahịa: {customer}\nAnatara {when}",
+      "reviewed": false
+    },
+    "wa.shop.orders_head": {
+      "text": "Ọda ndị meghere emeghe, nke kachasị ọhụrụ na mbụ:",
+      "reviewed": false
+    },
+    "wa.shop.orders_tail": {
+      "text": "Zaa *order* na nọmba ya maka otu.",
+      "reviewed": false
+    },
+    "wa.shop.page_closed": {
+      "text": "*{name}* emechiela ({message}): {link}\nỌda taa: {count}\nZaa *open shop* iji nabata ọda ọzọ.",
+      "reviewed": false
+    },
+    "wa.shop.page_draft": {
+      "text": "*{name}* bụ ndepụta, ebipụtabeghị ya. Zaa *publish* iji tinye ya n'ịntanetị.",
+      "reviewed": false
+    },
+    "wa.shop.page_live": {
+      "text": "Ebipụtala *{name}*: {link}\nỌda taa: {count}",
+      "reviewed": false
+    },
+    "wa.shop.photo_bad": {
+      "text": "Enweghị ike iji foto ahụ ({reason}). Zitere JPEG ma ọ bụ PNG ruru MB 10.",
+      "reviewed": false
+    },
+    "wa.shop.photo_caption": {
+      "text": "Iji tinye ngwaahịa na foto a, zitere ya ọzọ ya na aha na ọnụahịa dịka ederede ya, dịka *Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_failed": {
+      "text": "Enweghị ike ichekwa foto ahụ ugbu a. Nwaa ọzọ n'otu nkeji.",
+      "reviewed": false
+    },
+    "wa.shop.photo_not_now": {
+      "text": "Enweghị m ike ịnara foto ugbu a. Mechaa ihe anyị na-eme, ma ọ bụ zaa *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_or_skip": {
+      "text": "Zitere foto, ma ọ bụ zaa *skip*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_rejected": {
+      "text": "Anabataghị foto ahụ maka peeji ọha. Ọ dịghị ihe etinyere.",
+      "reviewed": false
+    },
+    "wa.shop.photos_off": {
+      "text": "Enweghị ike ichekwa foto ebe a ugbu a, ya mere ọ dịghị ihe etinyere. Zitere ngwaahịa ahụ na-enweghị foto: *add product Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.pick_again": {
+      "text": "Zaa na nọmba sitere na ndepụta:\n{list}",
+      "reviewed": false
+    },
+    "wa.shop.price_none": {
+      "text": "enweghị ọnụahịa",
+      "reviewed": false
+    },
+    "wa.shop.product_added": {
+      "text": "Etinyela *{name}* na {price}.",
+      "reviewed": false
+    },
+    "wa.shop.product_exists": {
+      "text": "*{name}* dịlarị na ndepụta ngwaahịa gị na {price}. Gbanwee ọnụahịa ya site na *price* na aha ya.",
+      "reviewed": false
+    },
+    "wa.shop.product_how": {
+      "text": "Dee ya dịka *add product Jollof rice 2000*: aha, mgbe ahụ ọnụahịa (2000, ₦2,000 ma ọ bụ 2k).",
+      "reviewed": false
+    },
+    "wa.shop.publish_failed": {
+      "text": "Enweghị ike ibipụta peeji gị: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.publish_hint": {
+      "text": "Zaa *publish* iji tinye peeji gị n'ịntanetị.",
+      "reviewed": false
+    },
+    "wa.shop.published": {
+      "text": "Peeji gị dị n'ịntanetị: {link}\nKoodu QR na ederede status ị ga-amado na-esote. Tinye ngwaahịa site na *add product Jollof rice 2000*, ma ọ bụ zitere foto nwere ederede *Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.qr_caption": {
+      "text": "Nyochaa iji mepee {name}: {link}",
+      "reviewed": false
+    },
+    "wa.shop.qr_print": {
+      "text": "Bipụta kaadị nwere koodu a maka tebụl gị: {url}",
+      "reviewed": false
+    },
+    "wa.shop.ready_failed": {
+      "text": "Enweghị ike ịgwa onye ahịa na ọda {ref} adịla njikere: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.ready_sent": {
+      "text": "A na-agwa onye ahịa na ọda {ref} adịla njikere. Zaa *order {ref} delivered* ozugbo anatara ya.",
+      "reviewed": false
+    },
+    "wa.shop.service_added": {
+      "text": "Etinyela ọrụ *{name}*.",
+      "reviewed": false
+    },
+    "wa.shop.service_hint": {
+      "text": "Ndị ahịa nwere ike idebe ya ozugbo fọm ndebe gbanyere, n'okpuru Storefront na ngwa weebụ.",
+      "reviewed": false
+    },
+    "wa.shop.service_how": {
+      "text": "Dee ya dịka *add service Haircut 30 2000*: aha, nkeji ọ na-ewe, mgbe ahụ ọnụahịa.",
+      "reviewed": false
+    },
+    "wa.shop.setup_start": {
+      "text": "Ka anyị mee peeji gị. Ajụjụ ise dị mkpirikpi; zaa *cancel* ịkwụsị oge ọ bụla.",
+      "reviewed": false
+    },
+    "wa.shop.status.accepted": {
+      "text": "anabatara",
+      "reviewed": false
+    },
+    "wa.shop.status.awaiting_payment": {
+      "text": "na-eche ịkwụ ụgwọ",
+      "reviewed": false
+    },
+    "wa.shop.status.cancelled": {
+      "text": "akagburu",
+      "reviewed": false
+    },
+    "wa.shop.status.completed": {
+      "text": "emechara",
+      "reviewed": false
+    },
+    "wa.shop.status.declined": {
+      "text": "ajụrụ",
+      "reviewed": false
+    },
+    "wa.shop.status.expired": {
+      "text": "agwụla",
+      "reviewed": false
+    },
+    "wa.shop.status.no_show": {
+      "text": "abịaghị",
+      "reviewed": false
+    },
+    "wa.shop.status.paid": {
+      "text": "akwụrụ ụgwọ",
+      "reviewed": false
+    },
+    "wa.shop.status.price_changed": {
+      "text": "na-eche ka onye ahịa kwenye na ọnụahịa ọhụrụ",
+      "reviewed": false
+    },
+    "wa.shop.status.received": {
+      "text": "na-eche ka ị nabata ya",
+      "reviewed": false
+    },
+    "wa.shop.status.refund_due": {
+      "text": "a ga-akwụghachi ego",
+      "reviewed": false
+    },
+    "wa.shop.status.refunded": {
+      "text": "akwụghachiri ego",
+      "reviewed": false
+    },
+    "wa.shop.status_post": {
+      "text": "Tụọ ọda n'aka {name} ebe a: {link}",
+      "reviewed": false
+    },
+    "wa.shop.stock_untracked": {
+      "text": "agụghị ya",
+      "reviewed": false
+    },
+    "wa.shop.too_many": {
+      "text": "Mgbanwe ndị a dị ọtụtụ n'otu oge. Chere ntakịrị, mgbe ahụ zaa *yes* ọzọ.",
+      "reviewed": false
+    },
+    "wa.shop.which_item": {
+      "text": "Ihe karịrị otu dabara. Kedu nke?\n{list}\nZaa na nọmba ya.",
+      "reviewed": false
+    },
+    "wa.shop.with_logo": {
+      "text": "(ya na foto gị n'elu)",
+      "reviewed": false
+    },
+    "wa.shop.with_photo": {
+      "text": " (ya na foto ahụ)",
       "reviewed": false
     },
     "wa.status.denied": {

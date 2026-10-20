@@ -213,6 +213,9 @@ type chatData struct {
 	Pick  []uuid.UUID    `json:"pick,omitempty"`
 	// Booking is a booking change being confirmed (whatsapp_bookings.go).
 	Booking *chatBooking `json:"booking,omitempty"`
+	// Shop is the storefront being set up, or a change to it being
+	// confirmed (whatsapp_storefront.go).
+	Shop *chatShop `json:"shop,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -308,6 +311,11 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
 		return s.waFlowCompleted(ctx, c)
+	}
+	// A photo: a product to add, or the logo the set-up asked for
+	// (whatsapp_storefront.go).
+	if in.Image != nil {
+		return s.waPhoto(ctx, c)
 	}
 	// A voice note is transcribed (a beta) and then read as if typed.
 	if in.Media != nil {
@@ -442,6 +450,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
 	}
+	if c.data.Shop != nil && c.state != stateIdle {
+		return s.waShopReply(ctx, c, text, cmd)
+	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
 	case stateCollecting:
@@ -484,6 +495,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.state == stateIdle {
 		if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
+			return err
+		}
+		if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
 	}
@@ -565,6 +579,12 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermTableRead) {
 		lines = append(lines, c.t("wa.help.find"))
+	}
+	if c.p.Can(PermStorefrontManage) {
+		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"))
+		if s.Orders != nil {
+			lines = append(lines, c.t("wa.help.shop_orders"))
+		}
 	}
 	if c.p.Can(PermStorefrontManage) && s.Orders != nil {
 		lines = append(lines, c.t("wa.help.bookings"))

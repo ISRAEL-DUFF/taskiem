@@ -44,6 +44,7 @@ An alert channel of kind `telegram` names members by email; each alert goes to t
 | Forms (Flows) for inputs and the approval PIN | Inputs in chat; step-up by the web link |
 | Own numbers and public menus per organisation | One platform bot; not yet per organisation |
 | Phone number as identity | The Telegram user id (never the username, which can change) |
+| Photos (a product's, a logo) through the media API; images sent by link | Photos (the largest size, or an image sent as a file) through `getFile`; images sent with `sendPhoto` by link |
 
 ## Security model
 

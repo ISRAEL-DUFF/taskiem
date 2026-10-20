@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,6 +154,41 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 		s.bookingOffer(r.Context(), site, p, &d)
 	}
 	s.render(w, r, http.StatusOK, "storefront.html", d)
+}
+
+// serveQR answers /qr.png: the storefront's address as a QR code, the
+// same one the web app prints (storefront.QRPNG), for the owner to share
+// from chat. It holds nothing but the address.
+func (s *Server) serveQR(w http.ResponseWriter, r *http.Request, site Site) {
+	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			s.Logger.Error("public host: storefront QR", "storefront", site.ID, "err", err)
+		}
+		s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
+		return
+	}
+	if !ok || p.Model.Slug == "" {
+		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
+		return
+	}
+	address := "https://" + hostOf(r)
+	if s.PreviewDomain != "" {
+		address = "https://" + p.Model.Slug + "." + strings.ToLower(s.PreviewDomain)
+	}
+	png, err := storefront.QRPNG(address)
+	if err != nil {
+		s.Logger.Error("public host: storefront QR", "storefront", site.ID, "err", err)
+		s.page(w, r, http.StatusInternalServerError, "unavailable", pageData{Title: "Try again shortly"})
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Content-Length", strconv.Itoa(len(png)))
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodGet {
+		_, _ = w.Write(png) //nolint:gosec // a PNG made here from the storefront's own address, sent as image/png with nosniff
+	}
 }
 
 func storefrontView(p StorefrontPage, now time.Time) storefrontData {

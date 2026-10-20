@@ -70,7 +70,8 @@ func (p *Platform) Name() string { return "telegram" }
 func (p *Platform) OwnTenant() uuid.UUID { return uuid.Nil }
 
 // Send delivers m to a tg: address. Telegram has no service window, so
-// only m.Text is sent (Template, Vars and Payloads are WhatsApp's); each
+// only m.Text is sent (Template, Vars and Payloads are WhatsApp's), as
+// m.Image's caption when there is one; each
 // button becomes a row of the inline keyboard. A button carries c:<id>
 // and its ID stays in the database, usable only from this account
 // (callback_data holds 64 bytes, decision tokens are longer). It returns
@@ -99,7 +100,13 @@ func (p *Platform) Send(ctx context.Context, addr string, m whatsapp.Message) (s
 		}
 		rows = append(rows, []InlineButton{{Text: title, Data: "c:" + id}})
 	}
-	id, err := p.Client.SendMessage(ctx, chat, m.Text, rows)
+	var id int64
+	var err error
+	if m.Image != "" {
+		id, err = p.Client.SendPhoto(ctx, chat, m.Image, m.Text, rows)
+	} else {
+		id, err = p.Client.SendMessage(ctx, chat, m.Text, rows)
+	}
 	if err != nil {
 		return "", err
 	}

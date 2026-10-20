@@ -114,6 +114,19 @@ func (c *Client) SendButtons(ctx context.Context, to, body string, buttons []But
 	return c.send(ctx, to, "interactive", map[string]any{"type": "button", "body": map[string]any{"text": clip(body, 1024)}, "action": map[string]any{"buttons": bs}})
 }
 
+// SendImage sends a photo by its public https link, with a caption
+// (inside the window only). Meta fetches the link itself.
+func (c *Client) SendImage(ctx context.Context, to, link, caption string) (string, error) {
+	if !strings.HasPrefix(link, "https://") {
+		return "", errors.New("whatsapp: an image is sent by its https link")
+	}
+	img := map[string]any{"link": link}
+	if caption != "" {
+		img["caption"] = clip(caption, 1024)
+	}
+	return c.send(ctx, to, "image", img)
+}
+
 // SendTemplate sends an approved template with its body variables and,
 // for quick-reply buttons, their payloads in order.
 func (c *Client) SendTemplate(ctx context.Context, to string, t Template, lang string, vars map[string]string, payloads []string) (string, error) {

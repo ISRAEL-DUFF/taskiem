@@ -22,6 +22,42 @@ func TestParseAudio(t *testing.T) {
 	}
 }
 
+func TestParseImage(t *testing.T) {
+	body := whatsapptest.Delivery("PN", "+2348010000001", "wamid.i", whatsapptest.Image("media-2", "image/jpeg", "Jollof rice ₦2,000"))
+	ins, err := whatsapp.Parse(body)
+	if err != nil || len(ins) != 1 {
+		t.Fatal(ins, err)
+	}
+	in := ins[0]
+	if in.Type != "image" || in.Text != "Jollof rice ₦2,000" || in.Media != nil || in.Image == nil || in.Image.ID != "media-2" || in.Image.MimeType != "image/jpeg" {
+		t.Fatalf("%+v %+v", in, in.Image)
+	}
+	// Without a caption, and an image without an id (nothing to fetch).
+	ins, _ = whatsapp.Parse(whatsapptest.Delivery("PN", "+2348010000001", "wamid.j", whatsapptest.Image("media-3", "image/png", "")))
+	if len(ins) != 1 || ins[0].Text != "" || ins[0].Image == nil {
+		t.Fatalf("%+v", ins)
+	}
+	ins, _ = whatsapp.Parse(whatsapptest.Delivery("PN", "+2348010000001", "wamid.k", map[string]any{"type": "image", "image": map[string]any{"caption": "x"}}))
+	if len(ins) != 1 || ins[0].Image != nil {
+		t.Fatalf("%+v", ins)
+	}
+}
+
+func TestSendImage(t *testing.T) {
+	g := whatsapptest.New(t, "PN", "tok")
+	c := &whatsapp.Client{BaseURL: g.URL, PhoneNumberID: "PN", Token: "tok", HTTP: g.Client()}
+	ctx := context.Background()
+	if _, err := c.SendImage(ctx, "+2348010000001", "https://ada.shops.test/qr.png", "https://ada.shops.test"); err != nil {
+		t.Fatal(err)
+	}
+	if s := g.Last(t, "+2348010000001"); s.Type != "image" || s.Image != "https://ada.shops.test/qr.png" || s.Text != "https://ada.shops.test" {
+		t.Fatalf("%+v", s)
+	}
+	if _, err := c.SendImage(ctx, "+2348010000001", "http://ada.shops.test/qr.png", ""); err == nil {
+		t.Error("a link that is not https")
+	}
+}
+
 func TestMediaDownload(t *testing.T) {
 	g := whatsapptest.New(t, "PN", "tok")
 	g.AddMedia("m1", "audio/ogg", []byte("OggS fake audio"), 0)

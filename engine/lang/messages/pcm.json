@@ -48,8 +48,16 @@
       "text": "Reject",
       "reviewed": false
     },
+    "button.yes": {
+      "text": "Yes",
+      "reviewed": false
+    },
     "button.yes_add": {
       "text": "Yes, add am",
+      "reviewed": false
+    },
+    "button.yes_publish": {
+      "text": "Yes, publish am",
       "reviewed": false
     },
     "button.yes_run": {
@@ -644,6 +652,18 @@
       "text": "• *run* and the workflow name: start am (you go confirm first)",
       "reviewed": false
     },
+    "wa.help.shop": {
+      "text": "• *make my page* or *my page*: set up or see your page; *publish*; *qr*: di QR code; *hours mon-sat 8-6*; *add service Haircut 30 2000*; *close shop* or *open shop*",
+      "reviewed": false
+    },
+    "wa.help.shop_catalogue": {
+      "text": "• *add product Jollof rice 2000*, or photo wey get dat caption; *price*, *hide*, *show* or *stock* and di product name",
+      "reviewed": false
+    },
+    "wa.help.shop_orders": {
+      "text": "• *orders*: open orders; *order* and di reference: one order; add *ready* or *delivered* to move am forward",
+      "reviewed": false
+    },
     "wa.help.status": {
       "text": "• *status*: wetin run and wetin fail today",
       "reviewed": false
@@ -822,6 +842,406 @@
     },
     "wa.run.which": {
       "text": "Which one?\n{list}\nSend *run* and the full name.",
+      "reviewed": false
+    },
+    "wa.shop.add_failed": {
+      "text": "We no fit save am ({reason}). Reply *yes* to try again, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.address": {
+      "text": "E go dey for {link}",
+      "reviewed": false
+    },
+    "wa.shop.already_open": {
+      "text": "Your shop don already open.",
+      "reviewed": false
+    },
+    "wa.shop.ask_area": {
+      "text": "3/5. Your area or address? Example: Yaba, Lagos. Reply *skip* to leave am.",
+      "reviewed": false
+    },
+    "wa.shop.ask_hours": {
+      "text": "4/5. Wetin be your opening hours? Example: *mon-sat 8-6*, *daily 9am-9pm* or *mon-fri 9-5, sat 10-2, closed sunday*. Reply *skip* to leave am.",
+      "reviewed": false
+    },
+    "wa.shop.ask_name": {
+      "text": "1/5. Wetin be di name of your business?",
+      "reviewed": false
+    },
+    "wa.shop.ask_photo": {
+      "text": "5/5. Send photo or your logo for di top of di page, or reply *skip*.",
+      "reviewed": false
+    },
+    "wa.shop.ask_tagline": {
+      "text": "2/5. For one line, wetin you dey sell? Example: Home-cooked jollof and small chops. Reply *skip* to leave am.",
+      "reviewed": false
+    },
+    "wa.shop.bad_answer": {
+      "text": "Dat one no fit: {reason}\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.shop.cannot_complete": {
+      "text": "Order {ref} dey {status}, e no fit complete now.",
+      "reviewed": false
+    },
+    "wa.shop.changed": {
+      "text": "Done: we don update *{name}*.",
+      "reviewed": false
+    },
+    "wa.shop.close_how": {
+      "text": "Close message suppose no pass 200 letters, and no link. Example: *close shop back on monday*.",
+      "reviewed": false
+    },
+    "wa.shop.closed": {
+      "text": "Your shop don close: your page dey show your message instead of di products. Reply *open shop* to take orders again.",
+      "reviewed": false
+    },
+    "wa.shop.completed": {
+      "text": "Order {ref} don complete.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_close": {
+      "text": "Make we close your shop? Your page go talk: {message}\nCustomers no go fit order until you reply *open shop*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_complete": {
+      "text": "Mark order {ref} as delivered or collected? Dis one go complete am.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_hide": {
+      "text": "Hide *{name}*? Your page go show am as not available until you *show* am again.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_hours": {
+      "text": "Set your opening hours to:\n{hours}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_open": {
+      "text": "Open your shop again? Customers go fit order.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_price": {
+      "text": "Change di price of *{name}* from {from} to {to}?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_product": {
+      "text": "Add dis product?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_publish": {
+      "text": "Make we publish am now? If you talk yes, I go send you di link, QR code and status text. Then add products with *add product Jollof rice 2000*, or send photo wey get di name and price as caption.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_publish_again": {
+      "text": "Publish *{name}* as e be now?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_ready": {
+      "text": "Tell di customer say order {ref} don ready? Dem go get text message.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_reminder": {
+      "text": "Reply *yes* to continue, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_service": {
+      "text": "Add dis service?\n*{name}*, {minutes} minutes, {price}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_show": {
+      "text": "Show *{name}* for your page again?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_stock": {
+      "text": "Set di stock of *{name}* from {from} to {to}?",
+      "reviewed": false
+    },
+    "wa.shop.created": {
+      "text": "We don save your page as draft:\n{details}",
+      "reviewed": false
+    },
+    "wa.shop.denied": {
+      "text": "Your role for {org} no include to manage di storefront (storefront.manage).",
+      "reviewed": false
+    },
+    "wa.shop.denied_table": {
+      "text": "To change di products still need table.edit, and your role for {org} no get am.",
+      "reviewed": false
+    },
+    "wa.shop.hours_how": {
+      "text": "I no fit read dat hours ({reason}). Write am like *mon-sat 8-6*, *daily 9am-9pm* or *mon-fri 9-5, sat 10-2, closed sunday*.",
+      "reviewed": false
+    },
+    "wa.shop.hours_saved": {
+      "text": "We don save di opening hours.",
+      "reviewed": false
+    },
+    "wa.shop.how_item": {
+      "text": "Write di product name after di command, like *hide Jollof rice*.",
+      "reviewed": false
+    },
+    "wa.shop.how_price": {
+      "text": "Write am like *price Jollof rice 2500*: di name, then di new price.",
+      "reviewed": false
+    },
+    "wa.shop.how_stock": {
+      "text": "Write am like *stock Jollof rice 20*: di name, then how many remain.",
+      "reviewed": false
+    },
+    "wa.shop.kind.callback": {
+      "text": "call-back request",
+      "reviewed": false
+    },
+    "wa.shop.kind.enquiry": {
+      "text": "question",
+      "reviewed": false
+    },
+    "wa.shop.left": {
+      "text": "Nothing change.",
+      "reviewed": false
+    },
+    "wa.shop.no_address": {
+      "text": "We no see free address for {name}. Choose one under Storefront for di web app.",
+      "reviewed": false
+    },
+    "wa.shop.no_catalogue": {
+      "text": "Your page never get product list. Add di first product with *add product Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.no_column": {
+      "text": "Your product list no get *{what}* column. Choose one under Storefront for di web app.",
+      "reviewed": false
+    },
+    "wa.shop.no_item": {
+      "text": "Nothing for your product list dey called {name}.",
+      "reviewed": false
+    },
+    "wa.shop.no_order": {
+      "text": "Order {ref} no dey.",
+      "reviewed": false
+    },
+    "wa.shop.no_orders": {
+      "text": "No open order.",
+      "reviewed": false
+    },
+    "wa.shop.no_table_edit": {
+      "text": "Your page no get product list: to make one need table.edit, and your role no get am.",
+      "reviewed": false
+    },
+    "wa.shop.no_tables": {
+      "text": "Products no fit list yet: data tables no dey for your organisation ({reason}). We save your page without product list.",
+      "reviewed": false
+    },
+    "wa.shop.none_yet": {
+      "text": "{org} never get page. Reply *make my page* to set one up.",
+      "reviewed": false
+    },
+    "wa.shop.not_published": {
+      "text": "Your page never publish. Reply *publish* to put am online.",
+      "reviewed": false
+    },
+    "wa.shop.not_ready_now": {
+      "text": "Order {ref} dey {status}: na only order wey dem accept or pay fit mark ready.",
+      "reviewed": false
+    },
+    "wa.shop.not_saved": {
+      "text": "We no fit save am: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.on_page": {
+      "text": "E don dey for your page now.",
+      "reviewed": false
+    },
+    "wa.shop.opened": {
+      "text": "Your shop don open again.",
+      "reviewed": false
+    },
+    "wa.shop.order_detail": {
+      "text": "*{ref}*: {status}\n{items}\nTotal: {total}\nCustomer: {customer}\nReceived {when}",
+      "reviewed": false
+    },
+    "wa.shop.orders_head": {
+      "text": "Open orders, di newest first:",
+      "reviewed": false
+    },
+    "wa.shop.orders_tail": {
+      "text": "Reply *order* and di reference for one.",
+      "reviewed": false
+    },
+    "wa.shop.page_closed": {
+      "text": "*{name}* don close ({message}): {link}\nOrders today: {count}\nReply *open shop* to take orders again.",
+      "reviewed": false
+    },
+    "wa.shop.page_draft": {
+      "text": "*{name}* na draft, e never publish. Reply *publish* to put am online.",
+      "reviewed": false
+    },
+    "wa.shop.page_live": {
+      "text": "*{name}* don publish: {link}\nOrders today: {count}",
+      "reviewed": false
+    },
+    "wa.shop.photo_bad": {
+      "text": "We no fit use dat photo ({reason}). Send JPEG or PNG wey no pass 10 MB.",
+      "reviewed": false
+    },
+    "wa.shop.photo_caption": {
+      "text": "To add product with dis photo, send am again with di name and price as caption, like *Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_failed": {
+      "text": "We no fit store dat photo now. Try again after one minute.",
+      "reviewed": false
+    },
+    "wa.shop.photo_not_now": {
+      "text": "I no fit take photo now. Finish wetin we dey do, or reply *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_or_skip": {
+      "text": "Send photo, or reply *skip*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_rejected": {
+      "text": "Dem no accept dat photo for public page. Nothing add.",
+      "reviewed": false
+    },
+    "wa.shop.photos_off": {
+      "text": "Photos no fit store here yet, so nothing add. Send di product without photo: *add product Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.pick_again": {
+      "text": "Reply with one number from di list:\n{list}",
+      "reviewed": false
+    },
+    "wa.shop.price_none": {
+      "text": "no price",
+      "reviewed": false
+    },
+    "wa.shop.product_added": {
+      "text": "We don add *{name}* for {price}.",
+      "reviewed": false
+    },
+    "wa.shop.product_exists": {
+      "text": "*{name}* don already dey your product list for {price}. Change di price with *price* and di name.",
+      "reviewed": false
+    },
+    "wa.shop.product_how": {
+      "text": "Write am like *add product Jollof rice 2000*: di name, then di price (2000, ₦2,000 or 2k).",
+      "reviewed": false
+    },
+    "wa.shop.publish_failed": {
+      "text": "We no fit publish your page: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.publish_hint": {
+      "text": "Reply *publish* to put your page online.",
+      "reviewed": false
+    },
+    "wa.shop.published": {
+      "text": "Your page don dey online: {link}\nQR code and status text to paste dey come. Add products with *add product Jollof rice 2000*, or send photo with caption *Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.qr_caption": {
+      "text": "Scan am to open {name}: {link}",
+      "reviewed": false
+    },
+    "wa.shop.qr_print": {
+      "text": "Print card wey get dis code for your counter: {url}",
+      "reviewed": false
+    },
+    "wa.shop.ready_failed": {
+      "text": "We no fit tell di customer say order {ref} don ready: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.ready_sent": {
+      "text": "We dey tell di customer say order {ref} don ready. Reply *order {ref} delivered* when dem collect am.",
+      "reviewed": false
+    },
+    "wa.shop.service_added": {
+      "text": "We don add di service *{name}*.",
+      "reviewed": false
+    },
+    "wa.shop.service_hint": {
+      "text": "Customers fit book am once di booking form dey on, under Storefront for di web app.",
+      "reviewed": false
+    },
+    "wa.shop.service_how": {
+      "text": "Write am like *add service Haircut 30 2000*: di name, di minutes e dey take, then di price.",
+      "reviewed": false
+    },
+    "wa.shop.setup_start": {
+      "text": "Make we create your page. Five short questions; reply *cancel* to stop anytime.",
+      "reviewed": false
+    },
+    "wa.shop.status.accepted": {
+      "text": "accepted",
+      "reviewed": false
+    },
+    "wa.shop.status.awaiting_payment": {
+      "text": "dey wait for payment",
+      "reviewed": false
+    },
+    "wa.shop.status.cancelled": {
+      "text": "cancelled",
+      "reviewed": false
+    },
+    "wa.shop.status.completed": {
+      "text": "completed",
+      "reviewed": false
+    },
+    "wa.shop.status.declined": {
+      "text": "declined",
+      "reviewed": false
+    },
+    "wa.shop.status.expired": {
+      "text": "expired",
+      "reviewed": false
+    },
+    "wa.shop.status.no_show": {
+      "text": "no come",
+      "reviewed": false
+    },
+    "wa.shop.status.paid": {
+      "text": "paid",
+      "reviewed": false
+    },
+    "wa.shop.status.price_changed": {
+      "text": "dey wait make customer agree di new prices",
+      "reviewed": false
+    },
+    "wa.shop.status.received": {
+      "text": "dey wait make you accept",
+      "reviewed": false
+    },
+    "wa.shop.status.refund_due": {
+      "text": "refund dey due",
+      "reviewed": false
+    },
+    "wa.shop.status.refunded": {
+      "text": "refunded",
+      "reviewed": false
+    },
+    "wa.shop.status_post": {
+      "text": "Order from {name} here: {link}",
+      "reviewed": false
+    },
+    "wa.shop.stock_untracked": {
+      "text": "dem no dey count am",
+      "reviewed": false
+    },
+    "wa.shop.too_many": {
+      "text": "Na plenty changes at once. Wait small, then reply *yes* again.",
+      "reviewed": false
+    },
+    "wa.shop.which_item": {
+      "text": "Pass one match. Which one?\n{list}\nReply with di number.",
+      "reviewed": false
+    },
+    "wa.shop.with_logo": {
+      "text": "(with your photo for top)",
+      "reviewed": false
+    },
+    "wa.shop.with_photo": {
+      "text": " (with di photo)",
       "reviewed": false
     },
     "wa.status.denied": {

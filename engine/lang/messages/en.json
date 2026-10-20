@@ -59,10 +59,20 @@
       "reviewed": true,
       "context": "Reply button, at most 20 characters"
     },
+    "button.yes": {
+      "text": "Yes",
+      "reviewed": true,
+      "context": "Reply button confirming a storefront change (20 characters at most)"
+    },
     "button.yes_add": {
       "text": "Yes, add it",
       "reviewed": true,
       "context": "Reply button, at most 20 characters"
+    },
+    "button.yes_publish": {
+      "text": "Yes, publish",
+      "reviewed": true,
+      "context": "Reply button publishing the storefront (20 characters at most)"
     },
     "button.yes_run": {
       "text": "Yes, run it",
@@ -804,6 +814,21 @@
       "reviewed": true,
       "context": "Help line"
     },
+    "wa.help.shop": {
+      "text": "• *make my page* or *my page*: set up or see your page; *publish*; *qr*: its QR code; *hours mon-sat 8-6*; *add service Haircut 30 2000*; *close shop* or *open shop*",
+      "reviewed": true,
+      "context": "Help line, with storefront.manage; keep the command words in English"
+    },
+    "wa.help.shop_catalogue": {
+      "text": "• *add product Jollof rice 2000*, or a photo with that caption; *price*, *hide*, *show* or *stock* and a product's name",
+      "reviewed": true,
+      "context": "Help line, with storefront.manage; keep the command words in English"
+    },
+    "wa.help.shop_orders": {
+      "text": "• *orders*: open orders; *order* and a reference: one order; and *ready* or *delivered* after it to move it on",
+      "reviewed": true,
+      "context": "Help line, with storefront.manage; keep the command words in English"
+    },
     "wa.help.status": {
       "text": "• *status*: what ran and what failed today",
       "reviewed": true,
@@ -1028,6 +1053,506 @@
       "text": "Which one?\n{list}\nSend *run* and the full name.",
       "reviewed": true,
       "context": "run: several workflows match"
+    },
+    "wa.shop.add_failed": {
+      "text": "That could not be saved ({reason}). Reply *yes* to try again, or *cancel*.",
+      "reviewed": true,
+      "context": "A catalogue row was refused by Xenibase; the change waits"
+    },
+    "wa.shop.address": {
+      "text": "It will be at {link}",
+      "reviewed": true,
+      "context": "After the set-up: the page's address once published"
+    },
+    "wa.shop.already_open": {
+      "text": "Your shop is already open.",
+      "reviewed": true,
+      "context": "open shop, when it is not closed"
+    },
+    "wa.shop.ask_area": {
+      "text": "3/5. Your area or address? For example: Yaba, Lagos. Reply *skip* to leave it out.",
+      "reviewed": true,
+      "context": "Set-up question 3"
+    },
+    "wa.shop.ask_hours": {
+      "text": "4/5. Your opening hours? For example: *mon-sat 8-6*, *daily 9am-9pm* or *mon-fri 9-5, sat 10-2, closed sunday*. Reply *skip* to leave them out.",
+      "reviewed": true,
+      "context": "Set-up question 4; keep the examples in English"
+    },
+    "wa.shop.ask_name": {
+      "text": "1/5. What is your business called?",
+      "reviewed": true,
+      "context": "Set-up question 1"
+    },
+    "wa.shop.ask_photo": {
+      "text": "5/5. Send a photo or your logo for the top of the page, or reply *skip*.",
+      "reviewed": true,
+      "context": "Set-up question 5"
+    },
+    "wa.shop.ask_tagline": {
+      "text": "2/5. In one line, what do you sell? For example: Home-cooked jollof and small chops. Reply *skip* to leave it out.",
+      "reviewed": true,
+      "context": "Set-up question 2"
+    },
+    "wa.shop.bad_answer": {
+      "text": "That does not fit: {reason}\n\n{prompt}",
+      "reviewed": true,
+      "context": "A set-up answer was refused; the question again"
+    },
+    "wa.shop.cannot_complete": {
+      "text": "Order {ref} is {status} and cannot be completed now.",
+      "reviewed": true,
+      "context": "order <ref> delivered, refused"
+    },
+    "wa.shop.changed": {
+      "text": "Done: *{name}* is updated.",
+      "reviewed": true,
+      "context": "A catalogue item was changed"
+    },
+    "wa.shop.close_how": {
+      "text": "A closed message is up to 200 characters, with no links. For example: *close shop back on monday*.",
+      "reviewed": true,
+      "context": "close shop with a message that is refused; keep the example in English"
+    },
+    "wa.shop.closed": {
+      "text": "Your shop is closed: your page shows your message instead of the catalogue. Reply *open shop* to take orders again.",
+      "reviewed": true,
+      "context": "Done: the storefront was closed"
+    },
+    "wa.shop.completed": {
+      "text": "Order {ref} is completed.",
+      "reviewed": true,
+      "context": "Done: an order was marked delivered or collected"
+    },
+    "wa.shop.confirm_close": {
+      "text": "Close your shop? Your page will say: {message}\nCustomers cannot order until you reply *open shop*.",
+      "reviewed": true,
+      "context": "Confirming close shop"
+    },
+    "wa.shop.confirm_complete": {
+      "text": "Mark order {ref} as delivered or collected? This completes it.",
+      "reviewed": true,
+      "context": "Confirming order <ref> delivered"
+    },
+    "wa.shop.confirm_hide": {
+      "text": "Hide *{name}*? Your page will show it as unavailable until you *show* it again.",
+      "reviewed": true,
+      "context": "Confirming hide <item>"
+    },
+    "wa.shop.confirm_hours": {
+      "text": "Set your opening hours to:\n{hours}",
+      "reviewed": true,
+      "context": "Confirming hours <...>"
+    },
+    "wa.shop.confirm_open": {
+      "text": "Open your shop again? Customers will be able to order.",
+      "reviewed": true,
+      "context": "Confirming open shop"
+    },
+    "wa.shop.confirm_price": {
+      "text": "Change the price of *{name}* from {from} to {to}?",
+      "reviewed": true,
+      "context": "Confirming price <item> <price>"
+    },
+    "wa.shop.confirm_product": {
+      "text": "Add this product?\n*{name}* {price}{photo}",
+      "reviewed": true,
+      "context": "Confirming add product, or a photo with a caption"
+    },
+    "wa.shop.confirm_publish": {
+      "text": "Publish it now? On yes I will send you the link, a QR code and a status text. Then add products with *add product Jollof rice 2000*, or send a photo with the name and price as its caption.",
+      "reviewed": true,
+      "context": "After the set-up; keep the command words in English"
+    },
+    "wa.shop.confirm_publish_again": {
+      "text": "Publish *{name}* as it is now?",
+      "reviewed": true,
+      "context": "publish, asked"
+    },
+    "wa.shop.confirm_ready": {
+      "text": "Tell the customer that order {ref} is ready? They get a text message.",
+      "reviewed": true,
+      "context": "Confirming order <ref> ready"
+    },
+    "wa.shop.confirm_reminder": {
+      "text": "Reply *yes* to go ahead, or *cancel*.",
+      "reviewed": true,
+      "context": "Waiting for yes on a storefront change"
+    },
+    "wa.shop.confirm_service": {
+      "text": "Add this service?\n*{name}*, {minutes} minutes, {price}",
+      "reviewed": true,
+      "context": "Confirming add service"
+    },
+    "wa.shop.confirm_show": {
+      "text": "Show *{name}* on your page again?",
+      "reviewed": true,
+      "context": "Confirming show <item>"
+    },
+    "wa.shop.confirm_stock": {
+      "text": "Set the stock of *{name}* from {from} to {to}?",
+      "reviewed": true,
+      "context": "Confirming stock <item> <n>"
+    },
+    "wa.shop.created": {
+      "text": "Your page is saved as a draft:\n{details}",
+      "reviewed": true,
+      "context": "After the set-up's last answer"
+    },
+    "wa.shop.denied": {
+      "text": "Your role in {org} does not include managing the storefront (storefront.manage).",
+      "reviewed": true,
+      "context": "A storefront command without storefront.manage"
+    },
+    "wa.shop.denied_table": {
+      "text": "Changing the catalogue also needs table.edit, which your role in {org} does not include.",
+      "reviewed": true,
+      "context": "A catalogue change without table.edit"
+    },
+    "wa.shop.hours_how": {
+      "text": "I could not read those hours ({reason}). Write them like *mon-sat 8-6*, *daily 9am-9pm* or *mon-fri 9-5, sat 10-2, closed sunday*.",
+      "reviewed": true,
+      "context": "Opening hours not understood; keep the examples in English"
+    },
+    "wa.shop.hours_saved": {
+      "text": "Opening hours saved.",
+      "reviewed": true,
+      "context": "Done: opening hours were changed"
+    },
+    "wa.shop.how_item": {
+      "text": "Write the product's name after the command, like *hide Jollof rice*.",
+      "reviewed": true,
+      "context": "hide, show, price or stock without a name; keep the example in English"
+    },
+    "wa.shop.how_price": {
+      "text": "Write it like *price Jollof rice 2500*: the name, then the new price.",
+      "reviewed": true,
+      "context": "price without a readable price; keep the example in English"
+    },
+    "wa.shop.how_stock": {
+      "text": "Write it like *stock Jollof rice 20*: the name, then how many are left.",
+      "reviewed": true,
+      "context": "stock without a readable count; keep the example in English"
+    },
+    "wa.shop.kind.callback": {
+      "text": "call-back request",
+      "reviewed": true,
+      "context": "What an order is, in a list: a call-back request"
+    },
+    "wa.shop.kind.enquiry": {
+      "text": "question",
+      "reviewed": true,
+      "context": "What an order is, in a list: a customer's question"
+    },
+    "wa.shop.left": {
+      "text": "Nothing was changed.",
+      "reviewed": true,
+      "context": "No to a storefront change"
+    },
+    "wa.shop.no_address": {
+      "text": "No free address was found for {name}. Choose one under Storefront in the web app.",
+      "reviewed": true,
+      "context": "The set-up found no free slug"
+    },
+    "wa.shop.no_catalogue": {
+      "text": "Your page has no product list yet. Add the first product with *add product Jollof rice 2000*.",
+      "reviewed": true,
+      "context": "A catalogue change with no catalogue table"
+    },
+    "wa.shop.no_column": {
+      "text": "Your catalogue has no *{what}* column. Choose one under Storefront in the web app.",
+      "reviewed": true,
+      "context": "The mapped catalogue table lacks a column for the change; {what} is a column's role in English"
+    },
+    "wa.shop.no_item": {
+      "text": "Nothing in your catalogue is called {name}.",
+      "reviewed": true,
+      "context": "No item matches the name"
+    },
+    "wa.shop.no_order": {
+      "text": "There is no order {ref}.",
+      "reviewed": true,
+      "context": "order <ref> not found"
+    },
+    "wa.shop.no_orders": {
+      "text": "No open orders.",
+      "reviewed": true,
+      "context": "orders, none open"
+    },
+    "wa.shop.no_table_edit": {
+      "text": "Your page has no product list: making one needs table.edit, which your role does not include.",
+      "reviewed": true,
+      "context": "The set-up could not make the catalogue table for lack of table.edit"
+    },
+    "wa.shop.no_tables": {
+      "text": "Products cannot be listed yet: data tables are not available for your organisation ({reason}). Your page is saved without a product list.",
+      "reviewed": true,
+      "context": "The catalogue table could not be made"
+    },
+    "wa.shop.none_yet": {
+      "text": "{org} has no page yet. Reply *make my page* to set one up.",
+      "reviewed": true,
+      "context": "A storefront command with no storefront"
+    },
+    "wa.shop.not_published": {
+      "text": "Your page is not published yet. Reply *publish* to put it online.",
+      "reviewed": true,
+      "context": "A command that needs a published storefront"
+    },
+    "wa.shop.not_ready_now": {
+      "text": "Order {ref} is {status}: only an accepted or paid order can be marked ready.",
+      "reviewed": true,
+      "context": "order <ref> ready, refused"
+    },
+    "wa.shop.not_saved": {
+      "text": "That could not be saved: {reason}",
+      "reviewed": true,
+      "context": "A catalogue row was refused by the table's checks"
+    },
+    "wa.shop.on_page": {
+      "text": "It is on your page now.",
+      "reviewed": true,
+      "context": "After a catalogue change on a published storefront"
+    },
+    "wa.shop.opened": {
+      "text": "Your shop is open again.",
+      "reviewed": true,
+      "context": "Done: the storefront was reopened"
+    },
+    "wa.shop.order_detail": {
+      "text": "*{ref}*: {status}\n{items}\nTotal: {total}\nCustomer: {customer}\nReceived {when}",
+      "reviewed": true,
+      "context": "order <ref>: one order, the customer masked"
+    },
+    "wa.shop.orders_head": {
+      "text": "Open orders, newest first:",
+      "reviewed": true,
+      "context": "orders, the list's heading"
+    },
+    "wa.shop.orders_tail": {
+      "text": "Reply *order* and a reference for one.",
+      "reviewed": true,
+      "context": "orders, after the list"
+    },
+    "wa.shop.page_closed": {
+      "text": "*{name}* is closed ({message}): {link}\nOrders today: {count}\nReply *open shop* to take orders again.",
+      "reviewed": true,
+      "context": "my page, a closed storefront"
+    },
+    "wa.shop.page_draft": {
+      "text": "*{name}* is a draft, not published yet. Reply *publish* to put it online.",
+      "reviewed": true,
+      "context": "my page, a draft storefront"
+    },
+    "wa.shop.page_live": {
+      "text": "*{name}* is published: {link}\nOrders today: {count}",
+      "reviewed": true,
+      "context": "my page, a published storefront"
+    },
+    "wa.shop.photo_bad": {
+      "text": "That photo could not be used ({reason}). Send a JPEG or PNG of up to 10 MB.",
+      "reviewed": true,
+      "context": "A photo was not a usable image"
+    },
+    "wa.shop.photo_caption": {
+      "text": "To add a product with this photo, send it again with the name and price as its caption, like *Jollof rice 2000*.",
+      "reviewed": true,
+      "context": "A photo without a usable caption; keep the example in English"
+    },
+    "wa.shop.photo_failed": {
+      "text": "That photo could not be stored just now. Try again in a minute.",
+      "reviewed": true,
+      "context": "A photo could not be fetched or stored"
+    },
+    "wa.shop.photo_not_now": {
+      "text": "I cannot take a photo now. Finish what we were doing, or reply *cancel*.",
+      "reviewed": true,
+      "context": "A photo while something else is being answered"
+    },
+    "wa.shop.photo_or_skip": {
+      "text": "Send a photo, or reply *skip*.",
+      "reviewed": true,
+      "context": "Set-up's photo step, answered with words"
+    },
+    "wa.shop.photo_rejected": {
+      "text": "That photo was not accepted for a public page. Nothing was added.",
+      "reviewed": true,
+      "context": "The moderator refused a photo"
+    },
+    "wa.shop.photos_off": {
+      "text": "Photos cannot be stored here yet, so nothing was added. Send the product without a photo: *add product Jollof rice 2000*.",
+      "reviewed": true,
+      "context": "No photo storage on this deployment"
+    },
+    "wa.shop.pick_again": {
+      "text": "Reply with a number from the list:\n{list}",
+      "reviewed": true,
+      "context": "A numbered pick, answered with something else"
+    },
+    "wa.shop.price_none": {
+      "text": "no price",
+      "reviewed": true,
+      "context": "An item without a price"
+    },
+    "wa.shop.product_added": {
+      "text": "Added *{name}* at {price}.",
+      "reviewed": true,
+      "context": "Done: a product was added"
+    },
+    "wa.shop.product_exists": {
+      "text": "*{name}* is already in your catalogue at {price}. Change its price with *price* and its name.",
+      "reviewed": true,
+      "context": "add product with a name already there"
+    },
+    "wa.shop.product_how": {
+      "text": "Write it like *add product Jollof rice 2000*: the name, then the price (2000, ₦2,000 or 2k).",
+      "reviewed": true,
+      "context": "add product without a readable price; keep the example in English"
+    },
+    "wa.shop.publish_failed": {
+      "text": "Your page could not be published: {reason}",
+      "reviewed": true,
+      "context": "Publishing refused"
+    },
+    "wa.shop.publish_hint": {
+      "text": "Reply *publish* to put your page online.",
+      "reviewed": true,
+      "context": "After a change to a draft storefront"
+    },
+    "wa.shop.published": {
+      "text": "Your page is live: {link}\nThe QR code and a status text to paste follow. Add products with *add product Jollof rice 2000*, or send a photo captioned *Jollof rice 2000*.",
+      "reviewed": true,
+      "context": "Done: the storefront was published; keep the command words in English"
+    },
+    "wa.shop.qr_caption": {
+      "text": "Scan to open {name}: {link}",
+      "reviewed": true,
+      "context": "The QR code image's caption"
+    },
+    "wa.shop.qr_print": {
+      "text": "Print a card with this code for your counter: {url}",
+      "reviewed": true,
+      "context": "Under the QR code: where the printable card is"
+    },
+    "wa.shop.ready_failed": {
+      "text": "The customer could not be told that order {ref} is ready: {reason}",
+      "reviewed": true,
+      "context": "order <ref> ready, the message could not be queued"
+    },
+    "wa.shop.ready_sent": {
+      "text": "The customer is being told that order {ref} is ready. Reply *order {ref} delivered* once it is collected.",
+      "reviewed": true,
+      "context": "Done: the customer is told an order is ready; keep the command words in English"
+    },
+    "wa.shop.service_added": {
+      "text": "Added the service *{name}*.",
+      "reviewed": true,
+      "context": "Done: a service was added"
+    },
+    "wa.shop.service_hint": {
+      "text": "Customers can book it once the booking form is on, under Storefront in the web app.",
+      "reviewed": true,
+      "context": "After add service"
+    },
+    "wa.shop.service_how": {
+      "text": "Write it like *add service Haircut 30 2000*: the name, the minutes it takes, then the price.",
+      "reviewed": true,
+      "context": "add service not understood; keep the example in English"
+    },
+    "wa.shop.setup_start": {
+      "text": "Let's make your page. Five short questions; reply *cancel* to stop at any time.",
+      "reviewed": true,
+      "context": "make my page, starting the set-up"
+    },
+    "wa.shop.status.accepted": {
+      "text": "accepted",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.awaiting_payment": {
+      "text": "waiting for payment",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.cancelled": {
+      "text": "cancelled",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.completed": {
+      "text": "completed",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.declined": {
+      "text": "declined",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.expired": {
+      "text": "expired",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.no_show": {
+      "text": "did not come",
+      "reviewed": true,
+      "context": "A booking's status: the customer did not come"
+    },
+    "wa.shop.status.paid": {
+      "text": "paid",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.price_changed": {
+      "text": "waiting for the customer to agree new prices",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.received": {
+      "text": "waiting for you to accept",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.refund_due": {
+      "text": "refund due",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status.refunded": {
+      "text": "refunded",
+      "reviewed": true,
+      "context": "An order's status"
+    },
+    "wa.shop.status_post": {
+      "text": "Order from {name} here: {link}",
+      "reviewed": true,
+      "context": "A status text the owner pastes in their WhatsApp status; short"
+    },
+    "wa.shop.stock_untracked": {
+      "text": "not counted",
+      "reviewed": true,
+      "context": "An item whose stock is not tracked"
+    },
+    "wa.shop.too_many": {
+      "text": "That is a lot of changes at once. Wait a moment, then reply *yes* again.",
+      "reviewed": true,
+      "context": "Rate limit on storefront changes from chat"
+    },
+    "wa.shop.which_item": {
+      "text": "More than one matches. Which one?\n{list}\nReply with its number.",
+      "reviewed": true,
+      "context": "A name matched several items"
+    },
+    "wa.shop.with_logo": {
+      "text": "(with your photo at the top)",
+      "reviewed": true,
+      "context": "After the set-up: a logo was sent"
+    },
+    "wa.shop.with_photo": {
+      "text": " (with the photo)",
+      "reviewed": true,
+      "context": "Confirming a product sent as a photo; starts with a space"
     },
     "wa.status.denied": {
       "text": "You cannot see runs in {org} (it takes run.read).",

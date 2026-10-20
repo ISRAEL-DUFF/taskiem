@@ -192,14 +192,26 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 		published_version = $2, published_slug = slug, published_at = now(), updated_at = now() WHERE tenant_id = $1 RETURNING `+cols, tenant, m.Version))
 }
 
+// DefaultClosedMessage is what a page closed without a message says.
+const DefaultClosedMessage = "We are closed for now. Please check back soon."
+
+// CheckClosedMessage refuses a closed message longer than 200 characters
+// or holding a link.
+func CheckClosedMessage(message string) error {
+	if len([]rune(message)) > 200 || hasLink(message) {
+		return fmt.Errorf("%w: a closed message is up to 200 characters, with no links", ErrInvalid)
+	}
+	return nil
+}
+
 // Close shows message instead of the catalogue until reopened.
 func Close(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, message string) (Storefront, error) {
 	message = strings.TrimSpace(message)
-	if len([]rune(message)) > 200 || hasLink(message) {
-		return Storefront{}, fmt.Errorf("%w: a closed message is up to 200 characters, with no links", ErrInvalid)
+	if err := CheckClosedMessage(message); err != nil {
+		return Storefront{}, err
 	}
 	if message == "" {
-		message = "We are closed for now. Please check back soon."
+		message = DefaultClosedMessage
 	}
 	s, err := scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = 'closed', closed_message = $2, updated_at = now()
 		WHERE tenant_id = $1 AND status IN ('published', 'closed') RETURNING `+cols, tenant, message))

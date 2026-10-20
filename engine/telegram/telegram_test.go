@@ -115,6 +115,24 @@ func TestParse(t *testing.T) {
 	if err != nil || u.Text != "hear this" || u.Voice == nil || u.Voice.Voice || u.Voice.MimeType != "audio/mpeg" || u.Voice.Size != 2048 {
 		t.Fatalf("audio: %+v %v", u, err)
 	}
+	u, err = telegram.Parse(telegramtest.PhotoMessage(19, 777, "P1", "Jollof rice 2000"))
+	if err != nil || u.Kind != "message" || u.Text != "Jollof rice 2000" || u.Voice != nil || u.Photo == nil || u.Photo.FileID != "P1" || u.Photo.MimeType != "image/jpeg" {
+		t.Fatalf("photo: %+v %+v %v", u, u.Photo, err)
+	}
+	u, err = telegram.Parse(telegramtest.PhotoMessage(20, 777, "P2", ""))
+	if err != nil || u.Text != "" || u.Photo == nil || u.Photo.FileID != "P2" {
+		t.Fatalf("photo without a caption: %+v %v", u, err)
+	}
+	u, err = telegram.Parse([]byte(`{"update_id":21,"message":{"message_id":7,"from":{"id":777},"chat":{"id":777,"type":"private"},
+		"caption":"logo","document":{"file_id":"D1","mime_type":"image/png","file_size":4096}}}`))
+	if err != nil || u.Text != "logo" || u.Photo == nil || u.Photo.FileID != "D1" || u.Photo.MimeType != "image/png" || u.Photo.Size != 4096 {
+		t.Fatalf("image as a file: %+v %v", u, err)
+	}
+	u, err = telegram.Parse([]byte(`{"update_id":22,"message":{"message_id":8,"from":{"id":777},"chat":{"id":777,"type":"private"},
+		"document":{"file_id":"D2","mime_type":"application/pdf"}}}`))
+	if err != nil || u.Photo != nil {
+		t.Fatalf("a PDF is not a photo: %+v %v", u, err)
+	}
 	u, err = telegram.Parse([]byte(`{"update_id":14,"message":{"message_id":6,"from":{"id":777,"username":"ada"},"chat":{"id":-100123,"type":"supergroup"},"text":"hi"}}`))
 	if err != nil || u.Kind != "message" || u.ChatType != "supergroup" || u.ChatID != -100123 || u.Private() {
 		t.Fatalf("group: %+v %v", u, err)

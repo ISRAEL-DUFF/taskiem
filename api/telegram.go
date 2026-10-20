@@ -230,8 +230,12 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 	case u.Voice != nil:
 		in.Type, in.Text = "audio", ""
 		in.Media = &whatsapp.Media{ID: u.Voice.FileID, MimeType: u.Voice.MimeType, Voice: u.Voice.Voice}
+	case u.Photo != nil:
+		// A photo, its caption as the text (a product to add, a logo).
+		in.Type = "image"
+		in.Image = &whatsapp.Media{ID: u.Photo.FileID, MimeType: u.Photo.MimeType}
 	case in.Text == "":
-		return nil // a photo, a sticker, a location: nothing to act on
+		return nil // a sticker, a location: nothing to act on
 	default:
 		// Telegram's commands are /help, /approvals...: read as the words.
 		in.Text = tgCommandWords(in.Text, tg.Config.BotUsername)
