@@ -109,6 +109,27 @@ type ScheduledPayload struct {
 	Event       string `json:"event,omitempty"`
 	Correlation string `json:"correlation,omitempty"`
 	TimeoutAt   string `json:"timeout_at,omitempty"`
+	// Form is a form step's request, waited for as a signal (FormEvent,
+	// correlated by Form.Request).
+	Form *FormScheduled `json:"form,omitempty"`
+}
+
+// FormEvent is the signal a form step waits for: its answers.
+const FormEvent = "form.submitted"
+
+// FormScheduled is what a form step asks, and of whom (docs/spec/forms.md
+// 6.7). The recipient and prefill are sealed in history like any value
+// derived from personal data.
+type FormScheduled struct {
+	Request     string         `json:"request"`
+	Title       string         `json:"title"`
+	Description string         `json:"description,omitempty"`
+	To          map[string]any `json:"to"`
+	Via         []string       `json:"via,omitempty"`
+	Verify      bool           `json:"verify,omitempty"`
+	Schema      map[string]any `json:"schema"`
+	Prefill     map[string]any `json:"prefill,omitempty"`
+	Remind      []string       `json:"remind,omitempty"`
 }
 
 // Error is a classified failure.

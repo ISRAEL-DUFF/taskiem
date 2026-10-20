@@ -99,6 +99,7 @@ type Step struct {
 	Wait      *WaitConfig      `json:"-"`
 	Signal    *SignalConfig    `json:"-"`
 	Approval  *ApprovalConfig  `json:"-"`
+	Form      *FormConfig      `json:"-"`
 	Transform *TransformConfig `json:"-"`
 }
 
@@ -178,6 +179,39 @@ type ApprovalConfig struct {
 	OnTimeout string          `json:"on_timeout,omitempty"`
 	Subject   map[string]any  `json:"-"`
 	RawSubj   json.RawMessage `json:"subject,omitempty"`
+}
+
+// FormConfig is a form step (docs/spec/forms.md 6.7): a one-time link to
+// a person found in the run's data, and a wait for their answers, which
+// are the step's output.
+type FormConfig struct {
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	// To is who is asked: a phone or email expression, or a role of
+	// members (whose link opens in the app).
+	To FormTo `json:"to"`
+	// Via are the channels, in order: sms, email.
+	Via []string `json:"via,omitempty"`
+	// Verify asks for a code sent to the same phone or email first.
+	Verify bool `json:"verify,omitempty"`
+	// Schema is the questions, as an inputs schema.
+	Schema    map[string]any  `json:"-"`
+	RawSchema json.RawMessage `json:"schema"`
+	// Prefill sets fields from the run (expressions).
+	Prefill map[string]any `json:"-"`
+	Timeout string         `json:"timeout,omitempty"`
+	// Remind are durations after the link is sent to send it again.
+	Remind []string `json:"remind,omitempty"`
+	// OnTimeout is fail (the default) or continue (the step completes with
+	// timed_out true).
+	OnTimeout string `json:"on_timeout,omitempty"`
+}
+
+// FormTo is a form step's recipient: exactly one of the three.
+type FormTo struct {
+	Phone string `json:"phone,omitempty"`
+	Email string `json:"email,omitempty"`
+	Role  string `json:"role,omitempty"`
 }
 
 type TransformConfig struct {
@@ -279,6 +313,9 @@ func (s *Step) parse() error {
 	case "approval":
 		s.Approval = &ApprovalConfig{}
 		target = s.Approval
+	case "form":
+		s.Form = &FormConfig{}
+		target = s.Form
 	case "transform":
 		v, err := expr.DecodeJSON(s.RawConfig)
 		if err != nil {
@@ -305,6 +342,9 @@ func (s *Step) parse() error {
 		s.HTTP.Body = m["body"]
 	case "approval":
 		s.Approval.Subject, _ = m["subject"].(map[string]any)
+	case "form":
+		s.Form.Schema, _ = m["schema"].(map[string]any)
+		s.Form.Prefill, _ = m["prefill"].(map[string]any)
 	}
 	return nil
 }

@@ -496,6 +496,8 @@ func (d *decider) begin(sc scope, s *wd.Step, inst string, act map[string]any) s
 		}
 		d.emit(history.StepScheduled, inst, 1, p)
 		return running
+	case s.Type == "form":
+		return d.formBegin(sc, s, inst, act)
 	case s.Type == "approval":
 		subj, err := engine.Resolve(s.Approval.Subject, act, false)
 		if err != nil {
@@ -582,6 +584,8 @@ func (d *decider) progress(sc scope, s *wd.Step, inst string, f *facts, start bo
 			}
 		}
 		return running
+	case s.Type == "form":
+		return d.formProgress(s, inst, f)
 	case s.Type == "approval":
 		return d.approvalProgress(s, inst, f)
 	case s.Type == "branch":
