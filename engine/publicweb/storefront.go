@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -105,6 +106,9 @@ type storefrontData struct {
 	// order form is one, so items get an Add link.
 	Forms    []storefront.PublicAction
 	Ordering bool
+	// Services are what can be booked, each with a Book link, when the
+	// booking form is one of Forms.
+	Services []serviceView
 }
 
 type section struct {
@@ -144,6 +148,9 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 	d := storefrontView(p, s.now())
 	if !s.formsOpen() {
 		d.Forms, d.Ordering = nil, false
+	}
+	if _, ok := findAction(d.Forms, "booking"); ok {
+		s.bookingOffer(r.Context(), site, p, &d)
 	}
 	s.render(w, r, http.StatusOK, "storefront.html", d)
 }
@@ -214,4 +221,29 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 		d.HasItems = true
 	}
 	return d
+}
+
+// bookingOffer lists the services on the page, or takes the booking form
+// off it when nothing can be booked.
+func (s *Server) bookingOffer(ctx context.Context, site Site, p StorefrontPage, d *storefrontData) {
+	sp, ok, err := s.services(ctx, site.ID)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		s.Logger.Error("public host: services", "storefront", site.ID, "err", err)
+	}
+	if ok && err == nil && s.bookingsOpen() && p.Model.HasServices {
+		for _, it := range bookable(sp.Services) {
+			d.Services = append(d.Services, serviceView{ID: it.ID, Name: it.Name, Length: length(it.DurationMinutes), Price: servicePrice(it),
+				Href: "/a/booking?service=" + url.QueryEscape(it.ID)})
+		}
+	}
+	if len(d.Services) > 0 {
+		return
+	}
+	forms := d.Forms[:0:0]
+	for _, a := range d.Forms {
+		if a.Kind != "booking" {
+			forms = append(forms, a)
+		}
+	}
+	d.Forms = forms
 }

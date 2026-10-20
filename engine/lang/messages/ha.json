@@ -292,6 +292,82 @@
       "text": "Babu abin da ke jiran ka.",
       "reviewed": false
     },
+    "wa.booking.bad_day": {
+      "text": "Ban gane wannan ranar ba. Gwada: *off 25 Dec*",
+      "reviewed": false
+    },
+    "wa.booking.bad_time": {
+      "text": "Ban gane wannan lokacin ba. Gwada: *move AD-7QX4KD to Sat 11:00*",
+      "reviewed": false
+    },
+    "wa.booking.cancelled": {
+      "text": "An soke ajiyar lokaci {ref}. Za a sanar da abokin ciniki.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_cancel": {
+      "text": "A soke ajiyar lokaci {ref}: {service}, {when}? Za a sanar da abokin ciniki ta saƙo.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_move": {
+      "text": "A matsar da ajiyar lokaci {ref} ({service}) daga {from} zuwa {to}? Za a sanar da abokin ciniki ta saƙo.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_off": {
+      "text": "A huta ranar {day}? Ba za a bayar da lokaci a wannan rana ba. Ajiyar lokacin da ke kanta: {count}. Za su kasance har sai kun matsar ko soke su.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_reminder": {
+      "text": "Amsa *yes* don ajiye canjin, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.booking.denied": {
+      "text": "Canza ajiyar lokaci yana bukatar izinin shago (storefront.manage).",
+      "reviewed": false
+    },
+    "wa.booking.left": {
+      "text": "Ba a canza komai ba.",
+      "reviewed": false
+    },
+    "wa.booking.list_today": {
+      "text": "Ajiyar lokacin yau:",
+      "reviewed": false
+    },
+    "wa.booking.list_week": {
+      "text": "Ajiyar lokaci a kwanaki 7 masu zuwa:",
+      "reviewed": false
+    },
+    "wa.booking.moved": {
+      "text": "An matsar da ajiyar lokaci {ref} zuwa {to}. Za a sanar da abokin ciniki.",
+      "reviewed": false
+    },
+    "wa.booking.none_today": {
+      "text": "Babu ajiyar lokaci yau.",
+      "reviewed": false
+    },
+    "wa.booking.none_week": {
+      "text": "Babu ajiyar lokaci a kwanaki 7 masu zuwa.",
+      "reviewed": false
+    },
+    "wa.booking.not_found": {
+      "text": "Babu ajiyar lokaci {ref} da za a iya canzawa.",
+      "reviewed": false
+    },
+    "wa.booking.off_already": {
+      "text": "Ranar {day} dama hutu ce.",
+      "reviewed": false
+    },
+    "wa.booking.off_done": {
+      "text": "An huta ranar {day}: ba za a bayar da lokaci ba.",
+      "reviewed": false
+    },
+    "wa.booking.taken": {
+      "text": "{to} ba a samu ba. Zaɓi wani lokaci.",
+      "reviewed": false
+    },
+    "wa.booking.unconfirmed": {
+      "text": "(ba a tabbatar ba tukuna)",
+      "reviewed": false
+    },
     "wa.build.budget": {
       "text": "Kasafin AI na wannan wata na {org} ya ƙare, don haka ba zan iya gina wannan yanzu ba. Har yanzu za ka iya gina ayyuka a manhajar yanar gizo.",
       "reviewed": false
@@ -518,6 +594,10 @@
     },
     "wa.help.approvals": {
       "text": "• *approvals*: buƙatun da ke jiran ka",
+      "reviewed": false
+    },
+    "wa.help.bookings": {
+      "text": "• *bookings* ko *today*: duba ajiyar lokaci; *booking* da lamba da *cancel*; *move* lamba *to Sat 11:00*; *off 25 Dec*: hutun rana",
       "reviewed": false
     },
     "wa.help.build": {

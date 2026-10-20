@@ -77,7 +77,9 @@ type Span struct {
 // Price is a number in PriceUnit (naira, or kobo); Photo holds a
 // storefront_media id; Available is a boolean (absent: available);
 // Stock is an integer count (absent: not tracked), lowered when an order
-// is accepted; Sort orders items (absent: the table's order).
+// is accepted; Sort orders items (absent: the table's order). A services
+// table also maps Duration (minutes, required), Capacity (customers at
+// once, default 1) and Buffer (minutes kept free after, default 0).
 type Columns struct {
 	Name        string `json:"name"`
 	Price       string `json:"price,omitempty"`
@@ -88,6 +90,9 @@ type Columns struct {
 	Category    string `json:"category,omitempty"`
 	Stock       string `json:"stock,omitempty"`
 	Sort        string `json:"sort,omitempty"`
+	Duration    string `json:"duration,omitempty"`
+	Capacity    string `json:"capacity,omitempty"`
+	Buffer      string `json:"buffer,omitempty"`
 }
 
 var hhmm = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
@@ -176,6 +181,7 @@ func (m *Columns) Check(known func(string) (typ string, ok bool)) error {
 	want := map[string][]string{
 		m.Name: {"text"}, m.Description: {"text"}, m.Category: {"text"}, m.Photo: {"text"},
 		m.Price: {"integer", "number"}, m.Sort: {"integer", "number"}, m.Available: {"boolean"}, m.Stock: {"integer"},
+		m.Duration: {"integer", "number"}, m.Capacity: {"integer", "number"}, m.Buffer: {"integer", "number"},
 	}
 	for col, types := range want {
 		if col == "" {

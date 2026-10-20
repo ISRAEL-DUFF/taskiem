@@ -292,6 +292,82 @@
       "text": "Nothing dey wait for you.",
       "reviewed": false
     },
+    "wa.booking.bad_day": {
+      "text": "I no fit read dat day. Try: *off 25 Dec*",
+      "reviewed": false
+    },
+    "wa.booking.bad_time": {
+      "text": "I no fit read dat time. Try: *move AD-7QX4KD to Sat 11:00*",
+      "reviewed": false
+    },
+    "wa.booking.cancelled": {
+      "text": "Booking {ref} don cancel. We go tell di customer.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_cancel": {
+      "text": "Cancel booking {ref}: {service}, {when}? We go text di customer.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_move": {
+      "text": "Move booking {ref} ({service}) from {from} go {to}? We go text di customer.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_off": {
+      "text": "Take {day} off? We no go show any time for dat day. Bookings wey don already dey: {count}. Dem go stay until you move or cancel dem.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_reminder": {
+      "text": "Reply *yes* make we save di change, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.booking.denied": {
+      "text": "To change booking, you need storefront permission (storefront.manage).",
+      "reviewed": false
+    },
+    "wa.booking.left": {
+      "text": "Nothing change.",
+      "reviewed": false
+    },
+    "wa.booking.list_today": {
+      "text": "Today bookings:",
+      "reviewed": false
+    },
+    "wa.booking.list_week": {
+      "text": "Bookings for di next 7 days:",
+      "reviewed": false
+    },
+    "wa.booking.moved": {
+      "text": "Booking {ref} don move go {to}. We go tell di customer.",
+      "reviewed": false
+    },
+    "wa.booking.none_today": {
+      "text": "No booking today.",
+      "reviewed": false
+    },
+    "wa.booking.none_week": {
+      "text": "No booking for di next 7 days.",
+      "reviewed": false
+    },
+    "wa.booking.not_found": {
+      "text": "No booking {ref} wey you fit change.",
+      "reviewed": false
+    },
+    "wa.booking.off_already": {
+      "text": "{day} don already be off day.",
+      "reviewed": false
+    },
+    "wa.booking.off_done": {
+      "text": "{day} na off day: we no go show any time.",
+      "reviewed": false
+    },
+    "wa.booking.taken": {
+      "text": "{to} no free. Choose another time.",
+      "reviewed": false
+    },
+    "wa.booking.unconfirmed": {
+      "text": "(dem never confirm am)",
+      "reviewed": false
+    },
     "wa.build.budget": {
       "text": "The AI budget for {org} for this month don finish, so I no fit build am now. You still fit build workflows for the web app.",
       "reviewed": false
@@ -518,6 +594,10 @@
     },
     "wa.help.approvals": {
       "text": "• *approvals*: request wey dey wait for you",
+      "reviewed": false
+    },
+    "wa.help.bookings": {
+      "text": "• *bookings* or *today*: see bookings; *booking*, di reference and *cancel*; *move* reference *to Sat 11:00*; *off 25 Dec*: take one day off",
       "reviewed": false
     },
     "wa.help.build": {

@@ -211,6 +211,8 @@ type chatData struct {
 	Table uuid.UUID      `json:"table,omitempty"`
 	Row   map[string]any `json:"row,omitempty"`
 	Pick  []uuid.UUID    `json:"pick,omitempty"`
+	// Booking is a booking change being confirmed (whatsapp_bookings.go).
+	Booking *chatBooking `json:"booking,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -448,6 +450,18 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		return s.waCollect(ctx, c, text)
 	case stateConfirming:
+		if c.data.Booking != nil {
+			switch cmd {
+			case "yes", "y", "confirm":
+				return s.waBookingApply(ctx, c)
+			case "no", "n":
+				if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+					return err
+				}
+				return c.say(ctx, s, c.t("wa.booking.left"))
+			}
+			return c.say(ctx, s, c.t("wa.booking.confirm_reminder"), bookingButtons(c)...)
+		}
 		switch cmd {
 		case "yes", "y", "confirm", "run it", "go":
 			if table {
@@ -467,6 +481,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return c.say(ctx, s, c.t("wa.table.confirm_reminder", "table", whatsapp.SafeText(c.data.Name)), addButtons(c)...)
 		}
 		return c.say(ctx, s, c.t("wa.confirm_reminder", "workflow", c.data.Name), confirmButtons(c)...)
+	}
+	if c.state == stateIdle {
+		if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
+			return err
+		}
 	}
 	if matched {
 		if done, err := s.waIntent(ctx, c, m); done || err != nil {
@@ -546,6 +565,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermTableRead) {
 		lines = append(lines, c.t("wa.help.find"))
+	}
+	if c.p.Can(PermStorefrontManage) && s.Orders != nil {
+		lines = append(lines, c.t("wa.help.bookings"))
 	}
 	if len(c.tenants) > 1 {
 		lines = append(lines, c.t("wa.help.switch"))

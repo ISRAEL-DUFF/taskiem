@@ -122,11 +122,25 @@ type Server struct {
 	// formguard.SubmissionsPerIP.
 	Submissions *formguard.Limiter
 
-	hosts   *lru.Cache[string, hostEntry]
-	origins *lru.Cache[uuid.UUID, []string]
-	pages   *lru.Cache[uuid.UUID, pageEntry]
-	now     func() time.Time
-	guard   *formguard.Guard
+	// Bookings (S4). Services reads the services and availability, Busy
+	// the calendar, Book holds a slot and records the booking; Booking
+	// reads a booking for its status page, Change applies the customer's
+	// changes from it and PriceChange reads new prices waiting on them.
+	// Without Services, Busy and Book the booking form is not open;
+	// without Change the status page offers no changes.
+	Services    Services
+	Busy        BusyTimes
+	Book        Book
+	Booking     BookingStatus
+	Change      Change
+	PriceChange PriceChange
+
+	hosts         *lru.Cache[string, hostEntry]
+	origins       *lru.Cache[uuid.UUID, []string]
+	pages         *lru.Cache[uuid.UUID, pageEntry]
+	servicesCache *lru.Cache[uuid.UUID, servicesEntry]
+	now           func() time.Time
+	guard         *formguard.Guard
 }
 
 // Handler is the public listener's handler.
@@ -137,6 +151,12 @@ func (s *Server) Handler() http.Handler {
 	if s.origins == nil {
 		// As hosts: a site unverified stops framing within HostTTL.
 		s.origins = lru.New[uuid.UUID, []string](HostCacheSize, HostTTL)
+	}
+	if s.pages == nil {
+		s.pages = lru.New[uuid.UUID, pageEntry](2000, HostTTL)
+	}
+	if s.servicesCache == nil {
+		s.servicesCache = lru.New[uuid.UUID, servicesEntry](2000, HostTTL)
 	}
 	if s.now == nil {
 		s.now = time.Now
@@ -253,6 +273,9 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 		s.serveForm(w, r, site, path[len("/a/"):], embed)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && !strings.Contains(path[len("/o/"):], "/"):
 		s.serveStatus(w, r, site, path[len("/o/"):], embed)
+	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && changePages[path[strings.LastIndex(path, "/")+1:]] &&
+		strings.Count(path, "/") == 3:
+		s.serveChange(w, r, site, path[len("/o/"):strings.LastIndex(path, "/")], path[strings.LastIndex(path, "/")+1:], embed)
 	case r.Method != http.MethodGet && r.Method != http.MethodHead:
 		w.Header().Set("Allow", "GET, HEAD")
 		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
@@ -271,7 +294,11 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 }
 
 // formKinds are the storefront forms served under /a/.
-var formKinds = map[string]bool{"order": true, "enquiry": true, "callback": true}
+var formKinds = map[string]bool{"order": true, "enquiry": true, "callback": true, "booking": true}
+
+// changePages are a status link's pages for changing what was sent:
+// /o/{reference}/{page}.
+var changePages = map[string]bool{"move": true, "cancel": true, "prices": true}
 
 // site resolves host through the cache.
 func (s *Server) site(ctx context.Context, host string) (Site, bool, error) {

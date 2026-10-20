@@ -39,7 +39,11 @@ type Storefront struct {
 	Draft            Card       `json:"draft"`
 	CatalogueTable   *uuid.UUID `json:"catalogue_table"`
 	CatalogueColumns Columns    `json:"catalogue_columns"`
-	PublishedVersion int        `json:"published_version"`
+	// The services table and its mapping, and when bookings are taken.
+	ServicesTable    *uuid.UUID   `json:"services_table"`
+	ServicesColumns  Columns      `json:"services_columns"`
+	Availability     Availability `json:"availability"`
+	PublishedVersion int          `json:"published_version"`
 	// PublishedSlug is the slug the published version serves at (the
 	// draft's may differ until it is published).
 	PublishedSlug *string `json:"published_slug"`
@@ -65,6 +69,8 @@ type Model struct {
 	MapLink    string `json:"map_link,omitempty"`
 	WhatsLink  string `json:"whatsapp_link,omitempty"`
 	HasCatalog bool   `json:"has_catalogue"`
+	// HasServices: the page lists services to book.
+	HasServices bool `json:"has_services,omitempty"`
 	// Actions are the forms the page offers.
 	Actions     []PublicAction `json:"actions,omitempty"`
 	PublishedAt time.Time      `json:"published_at"`
@@ -81,20 +87,24 @@ type Item struct {
 	Category    string `json:"category,omitempty"`
 	// Stock is how many are left, when the catalogue tracks it.
 	Stock *int64 `json:"stock,omitempty"`
+	// A service's length, customers at once and time kept free after.
+	DurationMinutes int `json:"duration_minutes,omitempty"`
+	Capacity        int `json:"capacity,omitempty"`
+	BufferMinutes   int `json:"buffer_minutes,omitempty"`
 }
 
 // SoldOut reports whether the item tracks stock and has none left.
 func (it Item) SoldOut() bool { return it.Stock != nil && *it.Stock <= 0 }
 
 const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, published_version, published_slug, published_at, closed_message,
-	catalogue_synced_at, catalogue_error, updated_at,
+	catalogue_synced_at, catalogue_error, updated_at, services_table, services_columns, availability,
 	(SELECT m.urls FROM storefront_media m WHERE m.tenant_id = storefronts.tenant_id AND m.id::text = storefronts.draft->>'logo' AND m.moderation <> 'rejected')`
 
 func scan(r pgx.Row) (Storefront, error) {
 	var s Storefront
-	var draft, columns, logo []byte
+	var draft, columns, scols, avail, logo []byte
 	err := r.Scan(&s.ID, &s.Slug, &s.Status, &draft, &s.CatalogueTable, &columns, &s.PublishedVersion, &s.PublishedSlug, &s.PublishedAt,
-		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &logo)
+		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &s.ServicesTable, &scols, &avail, &logo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Storefront{}, ErrNotFound
 	}
@@ -103,6 +113,8 @@ func scan(r pgx.Row) (Storefront, error) {
 	}
 	_ = json.Unmarshal(draft, &s.Draft)
 	_ = json.Unmarshal(columns, &s.CatalogueColumns)
+	_ = json.Unmarshal(scols, &s.ServicesColumns)
+	_ = json.Unmarshal(avail, &s.Availability)
 	if logo != nil {
 		_ = json.Unmarshal(logo, &s.LogoURLs)
 	}
@@ -152,7 +164,7 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 		return Storefront{}, fmt.Errorf("%w: the public host has no preview domain (TASKIEM_PUBLIC_DOMAINS)", ErrInvalid)
 	}
 	m := Model{Version: s.PublishedVersion + 1, Slug: s.Slug, Card: card, MapLink: card.MapLink(), WhatsLink: card.WhatsAppLink(),
-		HasCatalog: s.CatalogueTable != nil, PublishedAt: time.Now().UTC()}
+		HasCatalog: s.CatalogueTable != nil, HasServices: s.ServicesTable != nil, PublishedAt: time.Now().UTC()}
 	if card.Logo != "" {
 		img, err := mediaImage(ctx, tx, tenant, card.Logo)
 		if err != nil {
@@ -304,6 +316,18 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 			if f, ok := num(r[m.Stock]); ok {
 				n := max(0, int64(f))
 				it.Stock = &n
+			}
+		}
+		for _, f := range []struct {
+			col      string
+			v        *int
+			min, max int
+		}{{m.Duration, &it.DurationMinutes, 5, 480}, {m.Capacity, &it.Capacity, 1, 1000}, {m.Buffer, &it.BufferMinutes, 0, 480}} {
+			if f.col == "" {
+				continue
+			}
+			if n, ok := num(r[f.col]); ok && int(n) >= f.min && int(n) <= f.max {
+				*f.v = int(n)
 			}
 		}
 		if m.Price != "" {

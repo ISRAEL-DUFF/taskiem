@@ -1719,25 +1719,30 @@ export const slack = {
 
 // Storefront (storefront@1)
 export interface StorefrontDecideInput {
-  decision: Val<"accept" | "decline" | "complete" | "cancel">;
+  decision: Val<"accept" | "decline" | "complete" | "cancel" | "no_show">;
   /** Why */
   note?: Val<string>;
   /** The order's reference (trigger.body.reference) */
+  reference: Val<string>;
+}
+export interface StorefrontGetBookingInput {
   reference: Val<string>;
 }
 export interface StorefrontNotifyCustomerInput {
   reference: Val<string>;
   /** The email's subject */
   subject?: Val<string>;
-  /** The message; an SMS starts with the business's name and is at most three parts */
+  /** The message; an SMS starts with the business's name and is at most three parts. {link} becomes the customer's status link, where a booking is moved or cancelled */
   text: Val<string>;
 }
 export interface StorefrontPaymentLinkInput {
   reference: Val<string>;
 }
 export const storefront = {
-  /** Accept, decline or complete an order (idempotent_write) */
+  /** Accept, decline or complete an order or booking (idempotent_write) */
   decide: (input: StorefrontDecideInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "decide", input, extra),
+  /** Read a booking (read) */
+  get_booking: (input: StorefrontGetBookingInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "get_booking", input, extra),
   /** Message the customer (idempotent_write) */
   notify_customer: (input: StorefrontNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "notify_customer", input, extra),
   /** Make the order's payment link (idempotent_write) */
@@ -2228,7 +2233,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
-  "storefront@1": ["decide", "notify_customer", "payment_link"],
+  "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_phone_number", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],

@@ -441,7 +441,11 @@ func TestStatusPage(t *testing.T) {
 
 	// A wrong key and an unknown reference are the same 404.
 	key := strings.Split(loc, "k=")[1]
-	wrong := get(e.h, "GET", sfHost, "/o/"+ref+"?k=a"+key[1:])
+	other := "a"
+	if key[0] == 'a' {
+		other = "b" // never the key itself
+	}
+	wrong := get(e.h, "GET", sfHost, "/o/"+ref+"?k="+other+key[1:])
 	unknown := get(e.h, "GET", sfHost, "/o/AD-ZZZZZZ?k="+key)
 	if wrong.Code != 404 || unknown.Code != 404 || wrong.Body.String() != unknown.Body.String() {
 		t.Fatalf("wrong key %d, unknown %d", wrong.Code, unknown.Code)

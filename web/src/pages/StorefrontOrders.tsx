@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import { formatPrice, type Storefront } from "../lib/storefront";
 import {
   KIND_LABEL,
@@ -10,9 +10,11 @@ import {
   ordersPath,
   customerLine,
   isMasked,
-  itemsSummary,
   orderStatus,
+  orderTotal,
+  orderWhat,
   paymentSummary,
+  priceChangeLine,
   refundLine,
   relativeAge,
   telLink,
@@ -21,22 +23,9 @@ import {
   type Customer,
   type Order,
 } from "../lib/orders";
+import { timeSpan, whenLabel } from "../lib/bookings";
 import { StorefrontTabs } from "./Storefront";
-
-/** Reloads every 30 seconds while the page is visible, and when the window gets focus again. */
-function useLiveRefresh(reload: () => void) {
-  useEffect(() => {
-    const every = setInterval(() => document.visibilityState === "visible" && reload(), 30_000);
-    const back = () => document.visibilityState === "visible" && reload();
-    window.addEventListener("focus", back);
-    document.addEventListener("visibilitychange", back);
-    return () => {
-      clearInterval(every);
-      window.removeEventListener("focus", back);
-      document.removeEventListener("visibilitychange", back);
-    };
-  }, [reload]);
-}
+import { BookingActions } from "./StorefrontBookings";
 
 function StatusBadge({ status }: { status: string }) {
   const s = orderStatus(status);
@@ -46,7 +35,7 @@ function StatusBadge({ status }: { status: string }) {
 const header = (
   <PageHeader
     title="Orders"
-    description="Orders, questions and call-back requests from your storefront, newest first. The list refreshes itself."
+    description="Orders, bookings, questions and call-back requests from your storefront, newest first. The list refreshes itself."
   />
 );
 
@@ -159,12 +148,13 @@ export function StorefrontOrders() {
                 </td>
                 <td data-label="Customer">{customerLine(o.customer)}</td>
                 <td data-label="What">
-                  {itemsSummary(o.basket) || <span className="hint">—</span>}
+                  {orderWhat(o) || <span className="hint">—</span>}
+                  {o.status === "price_changed" && o.price_change && <div className="hint">{priceChangeLine(o.price_change)}</div>}
                   {o.note && <div className="hint">{o.note}</div>}
                   {o.status === "refund_due" && <div className="sf-refund-line">{refundLine(o.total_kobo)}</div>}
                 </td>
                 <td data-label="Total" className="sf-price">
-                  {o.kind === "order" ? formatPrice(o.total_kobo) : "—"}
+                  {orderTotal(o)}
                 </td>
                 <td data-label="Payment">{paymentSummary(o)}</td>
                 <td data-label="Received">
@@ -186,6 +176,7 @@ export function StorefrontOrder() {
   const { reference = "" } = useParams();
   const { can } = useAuth();
   const [revealed, setRevealed] = useState<Order>();
+  const [changed, setChanged] = useState("");
   const reveal = useAction();
   const { data, error, reload } = useLoad(() => get<{ order: Order; revealed: boolean }>(`/v1/storefront/orders/${encodeURIComponent(reference)}`), [reference]);
   useLiveRefresh(reload);
@@ -216,7 +207,34 @@ export function StorefrontOrder() {
               <dd>
                 {relativeAge(o.created_at)} <span className="hint">({fmtTime(o.created_at)})</span>
               </dd>
-              {o.basket && o.basket.length > 0 && (
+              {o.kind === "booking" && (
+                <>
+                  <dt>Service</dt>
+                  <dd>{o.service_name || <span className="hint">—</span>}</dd>
+                  <dt>When</dt>
+                  <dd>
+                    {o.starts_at ? (
+                      <>
+                        {whenLabel(o.starts_at)} <span className="hint">({timeSpan(o)}, Lagos time)</span>
+                      </>
+                    ) : (
+                      <span className="hint">—</span>
+                    )}
+                  </dd>
+                  <dt>Price</dt>
+                  <dd className="sf-price">{orderTotal(o)}</dd>
+                </>
+              )}
+              {o.status === "price_changed" && o.price_change && (
+                <>
+                  <dt>New prices</dt>
+                  <dd>
+                    {priceChangeLine(o.price_change)}
+                    <div className="hint">The customer is asked to agree to the new total before the order goes on.</div>
+                  </dd>
+                </>
+              )}
+              {o.basket && o.basket.length > 0 && o.kind !== "booking" && (
                 <>
                   <dt>Items</dt>
                   <dd>
@@ -239,7 +257,7 @@ export function StorefrontOrder() {
                   <dd className="capitalize">{o.fulfilment}</dd>
                 </>
               )}
-              {o.kind === "order" && (
+              {(o.kind === "order" || o.kind === "booking") && (
                 <>
                   <dt>Payment</dt>
                   <dd>
@@ -273,6 +291,22 @@ export function StorefrontOrder() {
               <dd>{o.run_id ? <Link to={`/runs/${o.run_id}`}>See where the workflow is</Link> : <span className="hint">Not started yet</span>}</dd>
             </dl>
             <DecideWhere />
+            {o.kind === "booking" && (
+              <>
+                {changed && (
+                  <div className="notice" role="status">
+                    {changed}
+                  </div>
+                )}
+                <BookingActions
+                  booking={o}
+                  onChanged={(msg) => {
+                    setChanged(msg);
+                    reload();
+                  }}
+                />
+              </>
+            )}
           </section>
           <section className="card" aria-labelledby="order-customer">
             <h2 id="order-customer">Customer</h2>

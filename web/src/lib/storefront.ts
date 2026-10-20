@@ -4,6 +4,7 @@
 
 import { ApiError } from "../api";
 import type { Column, ColumnType, Table } from "./tables";
+import type { Availability, ServiceColumns } from "./bookings";
 
 export interface Span {
   open: string;
@@ -52,6 +53,10 @@ export interface Storefront {
   draft: Card;
   catalogue_table: string | null;
   catalogue_columns: Columns;
+  /** The bookings' services table (S4), its mapping, and when bookings are taken. */
+  services_table?: string | null;
+  services_columns?: ServiceColumns;
+  availability?: Availability;
   published_version: number;
   /** The slug the published version serves at. */
   published_slug: string | null;

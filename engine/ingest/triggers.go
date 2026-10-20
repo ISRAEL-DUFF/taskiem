@@ -164,10 +164,10 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 		return nil
 	case "storefront":
 		switch str(c, "action") {
-		case "order", "enquiry", "callback":
+		case "order", "enquiry", "callback", "booking":
 			return nil
 		}
-		return fmt.Errorf("a storefront trigger's action is order, enquiry or callback")
+		return fmt.Errorf("a storefront trigger's action is order, enquiry, callback or booking")
 	}
 	return fmt.Errorf("%s triggers are not available yet", def.Trigger.Type)
 }

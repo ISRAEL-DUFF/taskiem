@@ -44,6 +44,21 @@ type Submission struct {
 	// provider can send the customer back to it; it is not stored.
 	StatusKey string    `json:"status_key"`
 	Submitted time.Time `json:"submitted_at"`
+	// Booking is a booking's service and time, held when it was sent.
+	Booking *Booked `json:"booking,omitempty"`
+	// DepositKobo is what a booking pays online when less than the total.
+	DepositKobo int64 `json:"deposit_kobo,omitempty"`
+}
+
+// Booked is the slot a booking holds: Until is the end plus the service's
+// buffer, Capacity the customers it takes at once.
+type Booked struct {
+	ServiceID   string    `json:"service_id"`
+	ServiceName string    `json:"service_name"`
+	Start       time.Time `json:"start"`
+	End         time.Time `json:"end"`
+	Until       time.Time `json:"until"`
+	Capacity    int       `json:"capacity"`
 }
 
 // Customer is who submitted. Phone is E.164.

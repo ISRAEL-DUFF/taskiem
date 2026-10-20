@@ -215,8 +215,9 @@ func (s *Server) refreshStorefrontCatalogue(w http.ResponseWriter, r *http.Reque
 	s.getStorefrontCatalogue(w, r)
 }
 
-// SyncStorefront refreshes the tenant's catalogue copy from its data
-// table. A failure to read the table keeps the old copy and records why.
+// SyncStorefront refreshes the tenant's catalogue and services copies from
+// their data tables. A failure to read a table keeps the old copy and
+// records why.
 func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 	var sf storefront.Storefront
 	var table datatables.Table
@@ -235,12 +236,15 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		return err
 	}
 	if sf.CatalogueTable == nil {
-		return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 			return storefront.SyncCatalogue(ctx, tx, tenant, nil)
-		})
+		}); err != nil {
+			return err
+		}
+		return s.syncServices(ctx, tenant, sf)
 	}
 	rows, rerr := s.readAllRows(ctx, tenant, table, storefront.MaxItems+1)
-	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if rerr != nil {
 			if err := storefront.CatalogueFailed(ctx, tx, tenant, rerr); err != nil {
 				return err
@@ -254,6 +258,10 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		}
 		return storefront.SyncCatalogue(ctx, tx, tenant, items)
 	})
+	if err != nil {
+		return err
+	}
+	return s.syncServices(ctx, tenant, sf)
 }
 
 // readAllRows reads a table's rows in pages, up to limit.
