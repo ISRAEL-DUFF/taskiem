@@ -161,8 +161,13 @@ tr.clickable:hover td { background: var(--accent-soft); }
 .badge.waiting, .badge.queued, .badge.retrying, .badge.draft, .badge.open, .badge.paused, .badge.failing, .badge.pending, .badge.removing { color: var(--warn); }
 .badge.running, .badge.scheduled, .badge.info { color: var(--info); }
 .badge.skipped, .badge.cancelled, .badge.deprecated { color: var(--muted); }
+.badge.warn { color: var(--warn); }
+/* Darker than --danger: red on its own tint is short of 4.5:1. */
+.badge.danger { color: color-mix(in srgb, var(--danger) 75%, var(--text)); }
+.badge.muted { color: var(--muted); }
+.badge.sf-status { text-transform: none; }
 
-.error { color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--panel)); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); padding: 10px 12px; border-radius: var(--radius-sm); margin: 10px 0; }
+.error { color: color-mix(in srgb, var(--danger) 80%, var(--text)); background: color-mix(in srgb, var(--danger) 7%, var(--panel)); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); padding: 10px 12px; border-radius: var(--radius-sm); margin: 10px 0; }
 .error ul { margin: 4px 0 0 18px; padding: 0; }
 tr.highlight td { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); } /* the connection just linked */
 .notice { background: color-mix(in srgb, var(--info) 7%, var(--panel)); border: 1px solid color-mix(in srgb, var(--info) 28%, transparent); padding: 10px 12px; border-radius: var(--radius-sm); margin: 10px 0; }
@@ -172,6 +177,9 @@ tr.highlight td { background: color-mix(in srgb, var(--accent) 8%, var(--panel))
 .tabs button { border: none; box-shadow: none; background: none; padding: 6px 14px; border-radius: 7px; color: var(--muted); }
 .tabs button:hover:not(:disabled) { background: none; color: var(--text); }
 .tabs button.active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: var(--shadow-md); }
+.tabs a { padding: 6px 14px; border-radius: 7px; color: var(--muted); text-decoration: none; }
+.tabs a:hover { color: var(--text); }
+.tabs a.active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: var(--shadow-md); }
 
 .editor { display: grid; grid-template-columns: 1fr 380px; gap: 12px; height: calc(100vh - 170px); min-height: 480px; }
 .canvas { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; position: relative; }
@@ -440,7 +448,7 @@ fieldset.sf-day:last-child { border-bottom: none; }
 .sf-span .icon-button { width: 32px; height: 32px; padding: 5px; }
 .sf-day-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .sf-day-actions button { padding: 5px 10px; font-size: 12.5px; }
-.sf-catalogue p a { text-decoration: underline; text-underline-offset: 2px; }
+.sf-catalogue p a, .sf-links a { text-decoration: underline; text-underline-offset: 2px; }
 .sf-mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 12px; }
 .sf-mapping-note { grid-column: 1 / -1; margin: 0; }
 .sf-items { list-style: none; padding: 0; margin: 0; border: 1px solid var(--border); border-radius: var(--radius); }
@@ -456,6 +464,17 @@ fieldset.sf-day:last-child { border-bottom: none; }
 .sf-share { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
 .sf-share .toolbar { margin: 0; }
 .sf-qr { width: 180px; height: 180px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm); image-rendering: pixelated; }
+.sf-forms { display: flex; flex-direction: column; gap: 12px; }
+.sf-form { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.sf-setup { margin-bottom: 10px; }
+.sf-toggle, .sf-radio { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; cursor: pointer; }
+.sf-toggle input, .sf-radio input { width: auto; margin-top: 3px; flex: none; }
+.sf-lines { margin: 0; padding-left: 1.2em; }
+tr.sf-refund td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+table.cards tr.sf-refund { border-color: var(--danger); box-shadow: inset 3px 0 0 var(--danger); }
+table.cards tr.sf-refund td:first-child { box-shadow: none; }
+.sf-refund-line { font-weight: 600; }
+.sf-refund-note { font-weight: 600; background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--danger); padding: 10px 12px; border-radius: var(--radius-sm); margin: 10px 0; }
 @media (max-width: 860px) {
   fieldset.sf-day { grid-template-columns: 1fr; }
   .sf-day-actions { justify-content: flex-start; }

@@ -25,6 +25,7 @@ const PAGES = [
   "/settings/keys",
   "/settings/billing",
   "/storefront",
+  "/storefront/orders",
 ];
 
 async function signIn(page: Page) {
@@ -125,7 +126,7 @@ test.describe("on a phone-sized screen", () => {
     await expect(nav).toBeHidden();
 
     // No page scrolls sideways; wide tables scroll inside themselves.
-    for (const path of ["/workflows", "/runs", "/connections", "/audit", "/members", "/alerts", "/settings", "/dashboard", "/storefront"]) {
+    for (const path of ["/workflows", "/runs", "/connections", "/audit", "/members", "/alerts", "/settings", "/dashboard", "/storefront", "/storefront/orders"]) {
       await open(page, path);
       const wide = await page.evaluate(() => document.documentElement.scrollWidth);
       expect(wide, `${path} is ${wide}px wide`).toBeLessThanOrEqual(390);

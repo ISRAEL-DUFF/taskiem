@@ -2,6 +2,7 @@
 // shapes, prices shown in naira, the opening hours editor's form and the
 // catalogue's column mapping.
 
+import { ApiError } from "../api";
 import type { Column, ColumnType, Table } from "./tables";
 
 export interface Span {
@@ -353,4 +354,14 @@ export const sameRequest = (a: Form, b: Form) => JSON.stringify(requestFrom(a)) 
 export function tidyMessage(msg: string): string {
   const m = msg.replace(/^((storefront|publicnames|media|invalid): )+/, "");
   return m ? m.charAt(0).toUpperCase() + m.slice(1) : msg;
+}
+
+/** Runs an API call, giving its refusal back without the server's package prefixes. */
+export async function tidy<T>(p: Promise<T>): Promise<T> {
+  try {
+    return await p;
+  } catch (e) {
+    if (e instanceof ApiError) throw new ApiError(e.status, tidyMessage(e.message), e.problems, e.body);
+    throw e;
+  }
 }

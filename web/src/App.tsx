@@ -30,6 +30,7 @@ import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
 import { TablePage, Tables } from "./pages/Tables";
 import { Storefront } from "./pages/Storefront";
+import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
 
 export function App() {
   return (
@@ -256,6 +257,8 @@ function SignedIn() {
           <Route path="/tables" element={<Tables />} />
           <Route path="/tables/:id" element={<TablePage />} />
           <Route path="/storefront" element={<Storefront />} />
+          <Route path="/storefront/orders" element={<StorefrontOrders />} />
+          <Route path="/storefront/orders/:reference" element={<StorefrontOrder />} />
           <Route path="/start" element={<Start />} />
           <Route path="/start/guide" element={<Guide />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
