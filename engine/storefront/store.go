@@ -58,14 +58,16 @@ type Image map[string]string
 // Model is what a published snapshot holds: everything the page shows
 // but the catalogue's rows, which are read from the copy.
 type Model struct {
-	Version     int       `json:"version"`
-	Slug        string    `json:"slug"`
-	Card        Card      `json:"card"`
-	Logo        Image     `json:"logo,omitempty"`
-	MapLink     string    `json:"map_link,omitempty"`
-	WhatsLink   string    `json:"whatsapp_link,omitempty"`
-	HasCatalog  bool      `json:"has_catalogue"`
-	PublishedAt time.Time `json:"published_at"`
+	Version    int    `json:"version"`
+	Slug       string `json:"slug"`
+	Card       Card   `json:"card"`
+	Logo       Image  `json:"logo,omitempty"`
+	MapLink    string `json:"map_link,omitempty"`
+	WhatsLink  string `json:"whatsapp_link,omitempty"`
+	HasCatalog bool   `json:"has_catalogue"`
+	// Actions are the forms the page offers.
+	Actions     []PublicAction `json:"actions,omitempty"`
+	PublishedAt time.Time      `json:"published_at"`
 }
 
 // Item is one catalogue item as pages show it.
@@ -152,6 +154,9 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 			return Storefront{}, err
 		}
 		m.Logo = img
+	}
+	if m.Actions, err = publicActions(ctx, tx, tenant); err != nil {
+		return Storefront{}, err
 	}
 	raw, _ := json.Marshal(m)
 	sum := sha256.Sum256(raw)

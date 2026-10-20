@@ -14,3 +14,4 @@
 Changes recorded during Phase 1:
 
 - `connector/v1` rule 13, `auth.oauth2` (an addition; nothing existing changed): [decision 0034](../decisions/0034-oauth-connections.md).
+- `wd/v1` trigger type `storefront` (an addition; nothing existing changed): [decision 0036](../decisions/0036-storefronts.md), [storefronts](../storefronts.md).

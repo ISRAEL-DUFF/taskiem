@@ -1136,6 +1136,10 @@
       "text": "Every {interval}, check {connector} ({action}) for new things",
       "reviewed": false
     },
+    "wd.trigger.storefront": {
+      "text": "When person send the shop {form} form",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "When another workflow call am",
       "reviewed": false

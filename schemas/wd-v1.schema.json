@@ -1254,7 +1254,8 @@
             "whatsapp",
             "ussd",
             "email",
-            "subflow"
+            "subflow",
+            "storefront"
           ]
         },
         "config": {
@@ -1443,6 +1444,39 @@
             "properties": {
               "config": {
                 "$ref": "#/$defs/ussdMenu"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "storefront"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "description": "A form on the organisation's public storefront (docs/storefronts.md); its submissions start runs.",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "order",
+                      "enquiry",
+                      "callback"
+                    ]
+                  }
+                }
               }
             }
           }

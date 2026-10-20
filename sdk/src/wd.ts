@@ -153,7 +153,7 @@ export type Step =
 export type StepType = Step["type"];
 
 export interface Trigger {
-  type: "webhook" | "schedule" | "connector_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow";
+  type: "webhook" | "schedule" | "connector_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow" | "storefront";
   config?: Record<string, unknown>;
 }
 

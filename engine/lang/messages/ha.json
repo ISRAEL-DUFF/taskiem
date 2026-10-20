@@ -1136,6 +1136,10 @@
       "text": "Kowane {interval}, duba {connector} ({action}) don sababbin abubuwa",
       "reviewed": false
     },
+    "wd.trigger.storefront": {
+      "text": "Lokacin da wani ya aika fom ɗin {form} na shagon",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "Lokacin da wani aiki ya kira shi",
       "reviewed": false

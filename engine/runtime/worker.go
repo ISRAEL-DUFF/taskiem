@@ -1059,7 +1059,8 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 			return w.secretFailure(p, err)
 		}
 		var resp connector.Response
-		resp, err = p.conn.Actions[p.action].Execute(ctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
+		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
+		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
 		if err != nil {
 			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)

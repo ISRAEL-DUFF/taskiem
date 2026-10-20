@@ -204,6 +204,8 @@ func (d describer) trigger(t wd.Trigger) string {
 	case "polling":
 		return d.t("wd.trigger.polling", "interval", DurationIn(str("interval"), d.lang), "connector", d.connectorName(str("connector")),
 			"action", d.actionTitle(str("connector"), str("action")))
+	case "storefront":
+		return d.t("wd.trigger.storefront", "form", str("action"))
 	case "manual", "whatsapp", "ussd", "email", "database_change", "subflow":
 		return d.t("wd.trigger." + t.Type)
 	}
