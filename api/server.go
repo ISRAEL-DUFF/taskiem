@@ -82,6 +82,9 @@ type Server struct {
 	// PublicHosts are the public host's own domains (the preview domain):
 	// never an embed site. The first is where storefronts are previewed.
 	PublicHosts []string
+	// DomainTarget is where businesses point their own domains
+	// (TASKIEM_PUBLIC_CNAME, TASKIEM_PUBLIC_ADDRESSES; storefront_domains.go).
+	DomainTarget storefront.DomainTarget
 	// Media stores storefront photos in tenants' Xenibase storage
 	// (docs/media.md); nil refuses uploads.
 	Media *media.Service
@@ -363,6 +366,11 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/bookings", s.listStorefrontBookings)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/bookings/{reference}/cancel", s.cancelStorefrontBooking)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/bookings/{reference}/move", s.moveStorefrontBooking)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/domains", s.listStorefrontDomains)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains", s.addStorefrontDomain)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains/{id}/verify", s.verifyStorefrontDomain)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains/{id}/primary", s.primaryStorefrontDomain)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/domains/{id}", s.removeStorefrontDomain)
 			r.With(s.need(PermStorefrontManage)).Get("/embed-sites", s.listEmbedSites)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites", s.addEmbedSite)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites/{id}/verify", s.verifyEmbedSite)

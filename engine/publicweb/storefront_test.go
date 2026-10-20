@@ -134,3 +134,72 @@ func TestStorefrontQR(t *testing.T) {
 		t.Errorf("draft: %d", w.Code)
 	}
 }
+
+// TestOwnDomain: once the storefront's own domain is live, its other
+// hosts send page views there with a 301 kept for an hour; forms being
+// sent and /embed/ pages stay where they are; the page names the domain
+// as its address.
+func TestOwnDomain(t *testing.T) {
+	s, f := storefrontServer(t, samplePage("classic", 2), true)
+	s.PreviewDomain = "shops.test"
+	preview := f.sites["ada-kitchen.shops.test"]
+	h := s.Handler()
+
+	// No domain yet: the preview address serves and is the page's address.
+	w := get(h, "GET", "ada-kitchen.shops.test", "/")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `property="og:url" content="https://ada-kitchen.shops.test"`) {
+		t.Fatalf("preview: %d", w.Code)
+	}
+
+	live := preview
+	live.Primary = "adakitchen.ng"
+	s2, f2 := storefrontServer(t, samplePage("classic", 2), true)
+	s2.PreviewDomain = "shops.test"
+	id := f2.sites["ada-kitchen.shops.test"].ID
+	live.ID = id
+	f2.sites = map[string]Site{"ada-kitchen.shops.test": live, "adakitchen.ng": live, "www.adakitchen.ng": live}
+	h = s2.Handler()
+	for _, host := range []string{"ada-kitchen.shops.test", "www.adakitchen.ng"} {
+		for _, method := range []string{"GET", "HEAD"} {
+			w := get(h, method, host, "/o/ABC123?k=x")
+			if w.Code != 301 || w.Header().Get("Location") != "https://adakitchen.ng/o/ABC123?k=x" || w.Header().Get("Cache-Control") != "public, max-age=3600" {
+				t.Errorf("%s %s: %d %v", method, host, w.Code, w.Header())
+			}
+			if w.Header().Get("Set-Cookie") != "" || w.Header().Get("Content-Security-Policy") == "" {
+				t.Errorf("%s: the redirect lacks the public headers", host)
+			}
+		}
+	}
+	w = get(h, "GET", "adakitchen.ng", "/")
+	body := w.Body.String()
+	if w.Code != 200 || !strings.Contains(body, `property="og:url" content="https://adakitchen.ng"`) || !strings.Contains(body, `rel="canonical" href="https://adakitchen.ng"`) {
+		t.Fatalf("own domain: %d", w.Code)
+	}
+	if w.Header().Get("Set-Cookie") != "" || !strings.Contains(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") {
+		t.Fatalf("own domain headers: %v", w.Header())
+	}
+	// A form sent on the preview address, and an embedded view, stay.
+	if w := get(h, "POST", "ada-kitchen.shops.test", "/a/order"); w.Code == 301 {
+		t.Error("a form sent was redirected")
+	}
+	if w := get(h, "GET", "ada-kitchen.shops.test", "/embed/"); w.Code == 301 {
+		t.Error("an embedded view was redirected")
+	}
+	// The QR code is the own domain's address.
+	if w := get(h, "GET", "adakitchen.ng", "/qr.png"); w.Code != 200 || w.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("qr: %d", w.Code)
+	}
+	want, _ := storefront.QRPNG("https://adakitchen.ng")
+	if w := get(h, "GET", "adakitchen.ng", "/qr.png"); !bytes.Equal(w.Body.Bytes(), want) {
+		t.Error("the QR code is not the own domain's address")
+	}
+	// A suspended page does not redirect.
+	sus := live
+	sus.Suspended = true
+	f2.sites["ada-kitchen.shops.test"] = sus
+	s3, _ := storefrontServer(t, samplePage("classic", 2), true)
+	s3.Lookup = f2.lookup
+	if w := get(s3.Handler(), "GET", "ada-kitchen.shops.test", "/"); w.Code != 410 {
+		t.Errorf("suspended: %d", w.Code)
+	}
+}
