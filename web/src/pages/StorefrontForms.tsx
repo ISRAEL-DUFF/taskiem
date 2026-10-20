@@ -4,6 +4,8 @@ import { ApiError, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field, Skeleton, useAction, useLoad } from "../ui";
 import { tidy } from "../lib/storefront";
+import { refusalOf } from "../lib/trust";
+import { RefusalBox } from "./StorefrontTrust";
 import {
   ACTION_LIMITS,
   FORM_INFO,
@@ -72,7 +74,9 @@ function FormCard({ action, previewURL, published, onReload }: { action: Storefr
         setNoWorkflow(false);
         setNotice(published ? "Saved; your page is updated." : "Saved. It shows on your page once you publish it.");
       } catch (e) {
-        if (e instanceof ApiError && e.status === 409) setNoWorkflow(true);
+        // A 409 is no workflow in prod, unless it says verification is needed
+        // (payment when ordering) or the page is suspended.
+        if (e instanceof ApiError && e.status === 409 && !refusalOf(e)) setNoWorkflow(true);
         throw e;
       }
     });
@@ -165,7 +169,7 @@ function FormCard({ action, previewURL, published, onReload }: { action: Storefr
             </p>
           )}
           {problem && <p className="error-text">{problem}</p>}
-          <ErrorBox error={act.error} />
+          <RefusalBox error={act.error} />
           <div className="toolbar" style={{ marginBottom: 0 }}>
             <button type="submit" className="primary" disabled={act.busy || !dirty || !!problem}>
               Save<span className="sr-only"> {info.title.toLowerCase()}</span>
@@ -194,6 +198,9 @@ function PaymentOptions({ kind, form, set }: { kind: FormKind; form: ActionForm;
           </label>
         ))}
       </fieldset>
+      {form.payment === "at_order" && (
+        <p className="hint">Taking payment {kind === "booking" ? "when booking" : "when ordering"} needs a business verified by Taskiem (see Trust above) and a plan that includes it.</p>
+      )}
       {form.payment !== "none" && (
         <Field
           label="Paystack connection"

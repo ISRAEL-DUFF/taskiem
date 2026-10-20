@@ -4,6 +4,8 @@
 
 import { ApiError } from "../api";
 import { assertFrom, createFrom, type CreationJSON, type RequestJSON } from "../passkeys";
+import type { Card, Image, Item, Storefront } from "../lib/storefront";
+import type { Finding, Verification } from "../lib/trust";
 
 export async function opsApi<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/v1/ops${path}`, {
@@ -184,4 +186,60 @@ export interface OpsAgentBusiness {
   created_at: string;
   published: boolean;
   verified: boolean;
+}
+
+// --- storefront trust and safety (api/trust.go, docs/moderation.md) ---
+
+/** A storefront review in the queue. */
+export interface OpsStorefrontReview {
+  id: string;
+  tenant_id: string;
+  business: string;
+  storefront_id: string;
+  slug: string;
+  page_status: string;
+  kind: string;
+  version: number | null;
+  status: "pending" | "approved" | "rejected";
+  findings: Finding[] | null;
+  /** By kind: business {legal_name, address, cac_number, note}; appeal {message, page_status}; reports {reporters}; first_publish {verified, model_skipped}. */
+  detail: Record<string, unknown> | null;
+  created_by: string;
+  created_at: string;
+  decided_by: string | null;
+  decision_note: string | null;
+  decided_at: string | null;
+  verified: boolean;
+  agent_code: string | null;
+  open_reports: number;
+}
+
+/** What a reviewer needs: the page, its published model, catalogue, photos, reports and verification. */
+export interface OpsStorefrontReviewDetail {
+  review: OpsStorefrontReview;
+  storefront: Storefront;
+  published?: { version: number; slug: string; card: Card; logo?: Image; map_link?: string } & Record<string, unknown>;
+  items: Item[];
+  photos: { id: string; urls: Image | null; moderation: string }[];
+  reports: { id: string; reason: string; message: string; has_contact: boolean; status: string; created_at: string }[];
+  verification: Verification;
+}
+
+/** A visitor's report of a page or form. */
+export interface OpsReport {
+  id: string;
+  tenant_id: string;
+  business: string;
+  kind: string;
+  site_id: string;
+  slug: string | null;
+  reason: string;
+  message: string;
+  has_contact: boolean;
+  status: "open" | "dismissed" | "actioned";
+  created_at: string;
+  handled_by: string | null;
+  handled_at: string | null;
+  reporters_on_site: number;
+  agent_code: string | null;
 }

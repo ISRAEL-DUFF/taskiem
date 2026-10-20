@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, type NavigateFunction } from "react-router-dom";
 import { ApiError, currentAgentSession, get, post, setAgentSession, subscribeAgentSession, uploadFile } from "../api";
 import { AgentPermissions, useAuth } from "../auth";
-import { AGENT_PERMISSIONS, attestPath, endReason, fitWithin, formatLeft, msLeft, type AgentSession } from "../lib/agent";
+import { AGENT_PERMISSIONS, attestPath, consentChannels, endReason, fitWithin, formatLeft, msLeft, type AgentSession, type ConsentChannel } from "../lib/agent";
 import { Badge, ErrorBox, Field, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Storefront } from "./Storefront";
 import { TablePage, Tables } from "./Tables";
@@ -40,6 +40,10 @@ interface Consent {
   /** The link as a QR code (a PNG data URL). */
   qr?: string;
   whatsapp_number?: string;
+  /** Opens Taskiem's Telegram bot with the code; the bot asks the owner to share their number. */
+  telegram_link?: string;
+  /** The Telegram link as a QR code (a PNG data URL). */
+  telegram_qr?: string;
   expires_at: string;
 }
 
@@ -241,7 +245,7 @@ function NewBusiness() {
   );
 }
 
-/** The owner's consent: the code to send from their WhatsApp, until they do. */
+/** The owner's consent: the code to send from their WhatsApp or Telegram, until they do. */
 function SessionPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -252,6 +256,7 @@ function SessionPage() {
   const sawPending = useRef(false);
   const act = useAction();
   const now = useNow(1000);
+  const [channel, setChannel] = useState<ConsentChannel>("whatsapp");
 
   // Ask every 3 seconds while the owner has not agreed.
   const pending = !session || session.status === "pending";
@@ -311,6 +316,8 @@ function SessionPage() {
   }
 
   const left = consent ? msLeft(consent.expires_at, now) : 0;
+  const channels = consent ? consentChannels(consent) : (["whatsapp"] as ConsentChannel[]);
+  const shown: ConsentChannel = channels.includes(channel) ? channel : (channels[0] ?? "whatsapp");
   const newCode = () =>
     act.run(async () => {
       const out = await post<{ session: SessionRow; consent: Consent }>(`/v1/agent/sessions/${id}/code`);
@@ -320,31 +327,63 @@ function SessionPage() {
   return (
     <section className="card">
       <h1>{session.business}</h1>
-      <p>Ask the owner to send this message from their own WhatsApp:</p>
+      {channels.length > 1 && (
+        <div className="tabs agent-channels" role="group" aria-label="Where the owner agrees">
+          {channels.map((c) => (
+            <button key={c} type="button" className={shown === c ? "active" : ""} aria-pressed={shown === c} onClick={() => setChannel(c)}>
+              {c === "whatsapp" ? "WhatsApp" : "Telegram"}
+            </button>
+          ))}
+        </div>
+      )}
+      <p>
+        {shown === "whatsapp"
+          ? "Ask the owner to send this message from their own WhatsApp:"
+          : "Ask the owner to open Taskiem on Telegram, on their own phone, with this code:"}
+      </p>
       {consent && left > 0 ? (
         <>
           <div className="agent-code" aria-label={`Code ${consent.code.split("").join(" ")}`}>
             {consent.code}
           </div>
-          <p className="agent-text">
-            <span className="hint">Message</span>
-            <strong>{consent.text}</strong>
-            {consent.whatsapp_number && (
-              <>
-                <span className="hint">To</span>
-                <strong>{consent.whatsapp_number}</strong>
-              </>
-            )}
-          </p>
-          {consent.qr && (
-            <img className="agent-qr" src={consent.qr} width={240} height={240} alt="QR code: the owner scans it with their own phone to send the message" />
-          )}
-          {consent.link && (
+          {shown === "whatsapp" ? (
             <>
-              <a className="button primary agent-big" href={consent.link} target="_blank" rel="noreferrer">
-                Open WhatsApp with the message
-              </a>
-              <p className="hint">Only on the owner's phone: the message must come from their number. Never read the code aloud for someone else to type.</p>
+              <p className="agent-text">
+                <span className="hint">Message</span>
+                <strong>{consent.text}</strong>
+                {consent.whatsapp_number && (
+                  <>
+                    <span className="hint">To</span>
+                    <strong>{consent.whatsapp_number}</strong>
+                  </>
+                )}
+              </p>
+              {consent.qr && (
+                <img className="agent-qr" src={consent.qr} width={240} height={240} alt="QR code: the owner scans it with their own phone to send the message" />
+              )}
+              {consent.link && (
+                <>
+                  <a className="button primary agent-big" href={consent.link} target="_blank" rel="noreferrer">
+                    Open WhatsApp with the message
+                  </a>
+                  <p className="hint">Only on the owner's phone: the message must come from their number. Never read the code aloud for someone else to type.</p>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {consent.telegram_qr && (
+                <img className="agent-qr" src={consent.telegram_qr} width={240} height={240} alt="QR code: the owner scans it with their own phone to open Taskiem on Telegram" />
+              )}
+              {consent.telegram_link && (
+                <a className="button primary agent-big" href={consent.telegram_link} target="_blank" rel="noreferrer">
+                  Open Telegram
+                </a>
+              )}
+              <p className="hint">
+                The owner taps Start, then “Share my number”: Telegram sends their own number, which must be the one you entered. They can also send{" "}
+                <strong>{consent.text}</strong> to the bot. Only on the owner's phone.
+              </p>
             </>
           )}
           <p aria-live="off">
