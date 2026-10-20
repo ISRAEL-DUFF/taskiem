@@ -2,7 +2,9 @@
 // on_error) are edited as JSON inside their parent.
 import { useState } from "react";
 import type { Step } from "@sdk/wd";
-import type { ConnectorInfo } from "../api";
+import type { ConnectorInfo, Problem } from "../api";
+import { FormStepEditor } from "./FormEditor";
+import type { FormStepConfig } from "../lib/forms";
 import { SchemaForm } from "../forms/SchemaForm";
 import { merge } from "../lib/schema";
 import { Field, JsonInput } from "../ui";
@@ -16,6 +18,8 @@ interface Props {
   onChange: (s: Step) => void;
   onRename: (id: string) => boolean;
   onDelete: () => void;
+  /** The validator's problems with this step, at paths relative to it (/config/...). */
+  problems?: Problem[];
 }
 
 type Any = Record<string, unknown>;
@@ -24,7 +28,7 @@ type Any = Record<string, unknown>;
 const JS_TEMPLATE = "export default (input: Record<string, unknown>) => {\n  return { ok: true };\n};\n";
 const PYTHON_TEMPLATE = "def main(input, host):\n    return {\"ok\": True}\n";
 
-export function StepPanel({ step, others, connectors, onChange, onRename, onDelete }: Props) {
+export function StepPanel({ step, others, connectors, onChange, onRename, onDelete, problems = [] }: Props) {
   const [id, setId] = useState(step.id);
   const [idError, setIdError] = useState("");
   const set = (patch: Any) => onChange(merge(step, patch));
@@ -198,14 +202,11 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
         </>
       )}
       {step.type === "form" && (
-        <>
-          <Field label="Title" hint="What the person is asked to fill in">
-            <input value={String(cfg.title ?? "")} onChange={(e) => setCfg({ title: e.target.value })} />
-          </Field>
-          <Field label="Configuration (JSON)" hint="to ({phone} or {email} as an expression, or {role}), schema (the questions), prefill, timeout, remind, on_timeout.">
-            <JsonInput value={cfg} onChange={(v) => v && set({ config: v })} rows={14} />
-          </Field>
-        </>
+        <FormStepEditor
+          cfg={cfg as FormStepConfig}
+          onChange={(c) => set({ config: c })}
+          problems={problems.filter((p) => p.path.startsWith("/config")).map((p) => ({ ...p, path: p.path.slice("/config".length) }))}
+        />
       )}
       {(step.type === "branch" || step.type === "foreach" || step.type === "parallel") && (
         <Field label="Configuration (JSON)" hint="Nested steps are edited here.">
