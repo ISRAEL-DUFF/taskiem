@@ -2,7 +2,7 @@
   "id": "storefront-order",
   "title": "Storefront orders: accept in chat, take payment, confirm",
   "summary": "Each order from your storefront comes to you in WhatsApp or Telegram to accept or decline; the customer is texted, sent a payment link when they pay after you accept, and told when it is confirmed.",
-  "description": "Starts when a customer sends the order form on your storefront. You get the order (items and total) to accept or decline; if nobody answers in a day it is declined. A declined order is texted to the customer (with a note that a payment will be refunded, when they had paid). An accepted order paid on ordering is confirmed at once; one paid after acceptance gets a payment link by text, and is confirmed when paid or told when the link expires after a day. Then you are asked to mark it delivered or collected. Messages go from your business's name, by SMS, and by email when the customer gave one. When a paid order is declined, you are asked whether to refund it now through Paystack (or refund it yourself).",
+  "description": "Starts when a customer sends the order form on your storefront. You get the order (items and total) to accept or decline; if nobody answers in a day it is declined. A declined order is texted to the customer (with a note that a payment will be refunded, when they had paid). An accepted order paid on ordering is confirmed at once; one paid after acceptance gets a payment link by text, and is confirmed when paid or told when the link expires after a day. Then you are asked to mark it delivered or collected. Messages go from your business's name, by SMS, and by email when the customer gave one.",
   "category": "storefront",
   "tags": [
     "storefront"
