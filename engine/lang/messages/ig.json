@@ -292,6 +292,82 @@
       "text": "Ọ dịghị ihe na-eche gị.",
       "reviewed": false
     },
+    "wa.booking.bad_day": {
+      "text": "Aghọtaghị m ụbọchị ahụ. Nwaa: *off 25 Dec*",
+      "reviewed": false
+    },
+    "wa.booking.bad_time": {
+      "text": "Aghọtaghị m oge ahụ. Nwaa: *move AD-7QX4KD to Sat 11:00*",
+      "reviewed": false
+    },
+    "wa.booking.cancelled": {
+      "text": "A kagburu ndebanye oge {ref}. A ga-agwa onye ahịa.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_cancel": {
+      "text": "Kagbuo ndebanye oge {ref}: {service}, {when}? A ga-agwa onye ahịa site na ozi.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_move": {
+      "text": "Bugharịa ndebanye oge {ref} ({service}) site na {from} gaa {to}? A ga-agwa onye ahịa site na ozi.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_off": {
+      "text": "Zuo ike na {day}? A gaghị enye oge n'ụbọchị ahụ. Ndebanye oge dị na ya: {count}. Ha ga-anọ ruo mgbe ị bugharịrị ma ọ bụ kagbuo ha.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_reminder": {
+      "text": "Zaa *yes* iji chekwaa mgbanwe ahụ, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.booking.denied": {
+      "text": "Ịgbanwe ndebanye oge chọrọ ikike ụlọ ahịa (storefront.manage).",
+      "reviewed": false
+    },
+    "wa.booking.left": {
+      "text": "Ọ dịghị ihe gbanwere.",
+      "reviewed": false
+    },
+    "wa.booking.list_today": {
+      "text": "Ndebanye oge taa:",
+      "reviewed": false
+    },
+    "wa.booking.list_week": {
+      "text": "Ndebanye oge n'ụbọchị 7 na-abịa:",
+      "reviewed": false
+    },
+    "wa.booking.moved": {
+      "text": "A bugharịrị ndebanye oge {ref} gaa {to}. A ga-agwa onye ahịa.",
+      "reviewed": false
+    },
+    "wa.booking.none_today": {
+      "text": "Enweghị ndebanye oge taa.",
+      "reviewed": false
+    },
+    "wa.booking.none_week": {
+      "text": "Enweghị ndebanye oge n'ụbọchị 7 na-abịa.",
+      "reviewed": false
+    },
+    "wa.booking.not_found": {
+      "text": "Enweghị ndebanye oge {ref} a ga-agbanwe.",
+      "reviewed": false
+    },
+    "wa.booking.off_already": {
+      "text": "{day} bụbu ụbọchị izu ike.",
+      "reviewed": false
+    },
+    "wa.booking.off_done": {
+      "text": "{day} bụ ụbọchị izu ike: a gaghị enye oge.",
+      "reviewed": false
+    },
+    "wa.booking.taken": {
+      "text": "{to} adịghị efu. Họrọ oge ọzọ.",
+      "reviewed": false
+    },
+    "wa.booking.unconfirmed": {
+      "text": "(ekwenyebeghị ya)",
+      "reviewed": false
+    },
     "wa.build.budget": {
       "text": "Mmefu AI nke ọnwa a maka {org} agwụla, ya mere enweghị m ike iwu nke a ugbu a. Ị ka nwere ike iwu usoro ọrụ na ngwa weebụ.",
       "reviewed": false
@@ -518,6 +594,10 @@
     },
     "wa.help.approvals": {
       "text": "• *approvals*: arịrịọ na-eche gị",
+      "reviewed": false
+    },
+    "wa.help.bookings": {
+      "text": "• *bookings* ma ọ bụ *today*: hụ ndebanye oge; *booking* na nọmba na *cancel*; *move* nọmba *to Sat 11:00*; *off 25 Dec*: zuo ike otu ụbọchị",
       "reviewed": false
     },
     "wa.help.build": {

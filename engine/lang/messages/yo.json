@@ -292,6 +292,82 @@
       "text": "Kò sí ohun tó ń dúró dè yín.",
       "reviewed": false
     },
+    "wa.booking.bad_day": {
+      "text": "Mi ò lè ka ọjọ́ yẹn. Gbìyànjú: *off 25 Dec*",
+      "reviewed": false
+    },
+    "wa.booking.bad_time": {
+      "text": "Mi ò lè ka àkókò yẹn. Gbìyànjú: *move AD-7QX4KD to Sat 11:00*",
+      "reviewed": false
+    },
+    "wa.booking.cancelled": {
+      "text": "A ti fagilé ìfiṣúra {ref}. A ó sọ fún oníbàárà.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_cancel": {
+      "text": "Fagilé ìfiṣúra {ref}: {service}, {when}? A ó fi ọ̀rọ̀ ránṣẹ́ sí oníbàárà.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_move": {
+      "text": "Gbé ìfiṣúra {ref} ({service}) láti {from} sí {to}? A ó fi ọ̀rọ̀ ránṣẹ́ sí oníbàárà.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_off": {
+      "text": "Sinmi ní {day}? A kò ní fún ẹnikẹ́ni ní àkókò lọ́jọ́ náà. Àwọn ìfiṣúra tó ti wà lórí rẹ̀: {count}. Wọ́n á dúró títí ẹ ó fi gbé wọn tàbí fagilé wọn.",
+      "reviewed": false
+    },
+    "wa.booking.confirm_reminder": {
+      "text": "Fèsì *yes* láti fi àyípadà náà pamọ́, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.booking.denied": {
+      "text": "Láti yí ìfiṣúra padà, ó nílò ààyè ṣọ́ọ̀bù (storefront.manage).",
+      "reviewed": false
+    },
+    "wa.booking.left": {
+      "text": "Kò sí ohun tó yí padà.",
+      "reviewed": false
+    },
+    "wa.booking.list_today": {
+      "text": "Àwọn ìfiṣúra òní:",
+      "reviewed": false
+    },
+    "wa.booking.list_week": {
+      "text": "Àwọn ìfiṣúra ọjọ́ méje tó ń bọ̀:",
+      "reviewed": false
+    },
+    "wa.booking.moved": {
+      "text": "A ti gbé ìfiṣúra {ref} sí {to}. A ó sọ fún oníbàárà.",
+      "reviewed": false
+    },
+    "wa.booking.none_today": {
+      "text": "Kò sí ìfiṣúra lónìí.",
+      "reviewed": false
+    },
+    "wa.booking.none_week": {
+      "text": "Kò sí ìfiṣúra ní ọjọ́ méje tó ń bọ̀.",
+      "reviewed": false
+    },
+    "wa.booking.not_found": {
+      "text": "Kò sí ìfiṣúra {ref} tí a lè yí padà.",
+      "reviewed": false
+    },
+    "wa.booking.off_already": {
+      "text": "{day} ti jẹ́ ọjọ́ ìsinmi tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.booking.off_done": {
+      "text": "{day} jẹ́ ọjọ́ ìsinmi: a kò ní fún ẹnikẹ́ni ní àkókò.",
+      "reviewed": false
+    },
+    "wa.booking.taken": {
+      "text": "{to} kò sí lófo. Yan àkókò mìíràn.",
+      "reviewed": false
+    },
+    "wa.booking.unconfirmed": {
+      "text": "(a kò tíì fìdí rẹ̀ múlẹ̀)",
+      "reviewed": false
+    },
     "wa.build.budget": {
       "text": "Ìnáwó AI oṣù yìí fún {org} ti tán, nítorí náà mi ò lè kọ́ èyí báyìí. Ẹ ṣì lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù.",
       "reviewed": false
@@ -518,6 +594,10 @@
     },
     "wa.help.approvals": {
       "text": "• *approvals*: àwọn ìbéèrè tó ń dúró dè yín",
+      "reviewed": false
+    },
+    "wa.help.bookings": {
+      "text": "• *bookings* tàbí *today*: wo àwọn ìfiṣúra; *booking*, nọ́mbà àti *cancel*; *move* nọ́mbà *to Sat 11:00*; *off 25 Dec*: sinmi ọjọ́ kan",
       "reviewed": false
     },
     "wa.help.build": {

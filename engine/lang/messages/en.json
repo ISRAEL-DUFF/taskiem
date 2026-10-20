@@ -364,6 +364,101 @@
       "reviewed": true,
       "context": "approvals: nothing waiting"
     },
+    "wa.booking.bad_day": {
+      "text": "I could not read that day. Try: *off 25 Dec*",
+      "reviewed": true,
+      "context": "The day off was not understood; keep the example command in English"
+    },
+    "wa.booking.bad_time": {
+      "text": "I could not read that time. Try: *move AD-7QX4KD to Sat 11:00*",
+      "reviewed": true,
+      "context": "The new time of a move was not understood; keep the example command in English"
+    },
+    "wa.booking.cancelled": {
+      "text": "Booking {ref} is cancelled. The customer will be told.",
+      "reviewed": true,
+      "context": "Done: a booking was cancelled"
+    },
+    "wa.booking.confirm_cancel": {
+      "text": "Cancel booking {ref}: {service}, {when}? The customer will be told by text.",
+      "reviewed": true,
+      "context": "Asks to confirm cancelling a booking"
+    },
+    "wa.booking.confirm_move": {
+      "text": "Move booking {ref} ({service}) from {from} to {to}? The customer will be told by text.",
+      "reviewed": true,
+      "context": "Asks to confirm moving a booking"
+    },
+    "wa.booking.confirm_off": {
+      "text": "Take {day} off? No times will be offered that day. Bookings already on it: {count}. They stay until you move or cancel them.",
+      "reviewed": true,
+      "context": "Asks to confirm a day off; {count} is a number"
+    },
+    "wa.booking.confirm_reminder": {
+      "text": "Reply *yes* to save the change, or *cancel*.",
+      "reviewed": true,
+      "context": "Reminder while a booking change waits for yes"
+    },
+    "wa.booking.denied": {
+      "text": "Changing bookings needs the storefront permission (storefront.manage).",
+      "reviewed": true,
+      "context": "Refusal: the person may not see or change storefront bookings"
+    },
+    "wa.booking.left": {
+      "text": "Nothing was changed.",
+      "reviewed": true,
+      "context": "The person said no to a booking change"
+    },
+    "wa.booking.list_today": {
+      "text": "Today's bookings:",
+      "reviewed": true,
+      "context": "Heading of the list of today's bookings"
+    },
+    "wa.booking.list_week": {
+      "text": "Bookings in the next 7 days:",
+      "reviewed": true,
+      "context": "Heading of the list of the week's bookings"
+    },
+    "wa.booking.moved": {
+      "text": "Booking {ref} is moved to {to}. The customer will be told.",
+      "reviewed": true,
+      "context": "Done: a booking was moved"
+    },
+    "wa.booking.none_today": {
+      "text": "No bookings today.",
+      "reviewed": true,
+      "context": "Nothing booked today"
+    },
+    "wa.booking.none_week": {
+      "text": "No bookings in the next 7 days.",
+      "reviewed": true,
+      "context": "Nothing booked this week"
+    },
+    "wa.booking.not_found": {
+      "text": "There is no booking {ref} that can be changed.",
+      "reviewed": true,
+      "context": "No such booking, or it is cancelled or past; {ref} is its reference"
+    },
+    "wa.booking.off_already": {
+      "text": "{day} is already off.",
+      "reviewed": true,
+      "context": "The day was already a day off"
+    },
+    "wa.booking.off_done": {
+      "text": "{day} is off: no times will be offered.",
+      "reviewed": true,
+      "context": "Done: a day off was added"
+    },
+    "wa.booking.taken": {
+      "text": "{to} is not free. Choose another time.",
+      "reviewed": true,
+      "context": "The new time of a move is taken"
+    },
+    "wa.booking.unconfirmed": {
+      "text": "(not confirmed yet)",
+      "reviewed": true,
+      "context": "After a booking the owner has not accepted"
+    },
     "wa.build.budget": {
       "text": "This month's AI budget for {org} is used up, so I cannot build this now. You can still build workflows in the web app.",
       "reviewed": true,
@@ -648,6 +743,11 @@
       "text": "• *approvals*: requests waiting for you",
       "reviewed": true,
       "context": "Help line"
+    },
+    "wa.help.bookings": {
+      "text": "• *bookings* or *today*: see bookings; *booking* and a reference and *cancel*; *move* a reference *to Sat 11:00*; *off 25 Dec*: take a day off",
+      "reviewed": true,
+      "context": "Help line; keep the command words in English"
     },
     "wa.help.build": {
       "text": "• *build* and what to automate, e.g. *build every Friday text my customers who owe me* (saved as a draft after you confirm)",
