@@ -1,0 +1,39 @@
+# Postgres for a STAGING server only (docs/runbooks/staging.md, "A database
+# on the VPS"). Production uses a managed Postgres with backups and
+# point-in-time recovery: this one is not backed up.
+#
+#   sudo mkdir -p /opt/taskiem-postgres
+#   echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" | sudo tee /opt/taskiem-postgres/.env >/dev/null
+#   sudo chmod 600 /opt/taskiem-postgres/.env
+#   sudo cp staging-postgres.yaml /opt/taskiem-postgres/compose.yaml
+#   sudo docker compose --project-directory /opt/taskiem-postgres up -d
+#
+# The database is not named "taskiem": the kit's logins are <database>_app
+# and <database>_public, and taskiem_app and taskiem_public are Taskiem's
+# own roles (taskiem-vps refuses that name).
+name: taskiem-postgres
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    # On the host's network: Taskiem's containers reach it at 172.17.0.1:5432
+    # (allowed by ufw from Docker's private ranges only), and ufw keeps 5432
+    # closed to the internet.
+    network_mode: host
+    environment:
+      POSTGRES_USER: taskiem_owner
+      POSTGRES_DB: taskiem_staging
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U taskiem_owner -d taskiem_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+volumes:
+  pgdata:

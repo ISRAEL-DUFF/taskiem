@@ -4,6 +4,8 @@
 
 What runs: Taskiem with every role in one process, OpenBao (auto-unsealed) for the key that wraps every secret, and Caddy for HTTPS. Postgres is a managed service, outside the VM. Container steps are off (their only safe runner is Kubernetes).
 
+Taskiem's own staging is set up with this kit step by step in the [staging runbook](runbooks/staging.md).
+
 ## Before you start
 
 | You need | Notes |
