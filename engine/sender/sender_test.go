@@ -170,6 +170,12 @@ func TestBuildEmail(t *testing.T) {
 		!strings.Contains(head, `From: "Ada Kitchen via Taskiem" <no-reply@taskiem.test>`) || body != "Hello\r\nthere\r\n" {
 		t.Fatalf("%q", raw)
 	}
+	// The platform's sender written with a name of its own: the business's
+	// name replaces it, around the bare address.
+	raw = string(buildEmail("Taskiem <no-reply@taskiem.test>", "Ada", "c@example.com", "", "Order", "Hi", "id2", time.Unix(0, 0)))
+	if !strings.Contains(raw, "From: \"Ada via Taskiem\" <no-reply@taskiem.test>\r\n") {
+		t.Fatalf("named sender: %q", raw)
+	}
 }
 
 func TestTermii(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"mime"
 	"net"
+	netmail "net/mail"
 	"net/smtp"
 	"net/url"
 	"strings"
@@ -27,6 +28,17 @@ func BuildEmail(from string, to []string, subject, body, id string) []byte {
 	b.WriteString(strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\n", "\r\n"))
 	b.WriteString("\r\n")
 	return []byte(b.String())
+}
+
+// Address is the bare address of a sender written either way, with a
+// display name or without ("Taskiem <noreply@example.com>" or
+// "noreply@example.com"): what SMTP's MAIL FROM takes. The From header
+// keeps the name.
+func Address(from string) string {
+	if a, err := netmail.ParseAddress(strings.TrimSpace(from)); err == nil {
+		return a.Address
+	}
+	return strings.TrimSpace(from)
 }
 
 // SMTPMailer sends through the deployment's mail server:
@@ -89,7 +101,7 @@ func (m *SMTPMailer) Send(ctx context.Context, from string, to []string, msg []b
 			return err
 		}
 	}
-	if err := c.Mail(from); err != nil {
+	if err := c.Mail(Address(from)); err != nil {
 		return err
 	}
 	for _, rcpt := range to {
