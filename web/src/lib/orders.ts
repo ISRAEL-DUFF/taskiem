@@ -17,6 +17,8 @@ export interface ActionOptions {
   delivery_note?: string;
   /** A booking's online part of the price, 1 to 100 per cent; unset is all of it. */
   deposit_percent?: number;
+  /** What a customer cancelling a paid booking gets back. */
+  cancel_refund?: "full" | "keep_deposit";
 }
 
 /** One of the storefront's forms (StorefrontAction). */
@@ -49,7 +51,8 @@ export type OrderStatus =
   | "cancelled"
   | "refund_due"
   | "no_show"
-  | "price_changed";
+  | "price_changed"
+  | "refunded";
 
 /** What an order costs at the table's prices now, waiting for the customer to agree (status price_changed). */
 export interface PriceChange {
@@ -147,6 +150,8 @@ export interface ActionForm {
   deliveryNote: string;
   /** A booking's deposit in per cent; blank is the full price. */
   deposit: string;
+  /** Whether a customer cancelling a paid booking keeps their deposit back. */
+  keepDeposit: boolean;
 }
 
 export function actionForm(a: StorefrontAction): ActionForm {
@@ -159,6 +164,7 @@ export function actionForm(a: StorefrontAction): ActionForm {
     delivery: !!a.options.delivery,
     deliveryNote: a.options.delivery_note ?? "",
     deposit: a.options.deposit_percent ? String(a.options.deposit_percent) : "",
+    keepDeposit: a.options.cancel_refund === "keep_deposit",
   };
 }
 
@@ -179,6 +185,7 @@ export function actionRequest(kind: FormKind, f: ActionForm): ActionRequest {
       if (connection) options.connection = connection;
       const deposit = Number(f.deposit.trim());
       if (f.deposit.trim() && Number.isInteger(deposit) && deposit >= 1 && deposit <= 100) options.deposit_percent = deposit;
+      if (f.keepDeposit) options.cancel_refund = "keep_deposit";
     }
     return { enabled: f.enabled, label: f.label.trim(), payment: f.payment, options };
   }
@@ -221,6 +228,7 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: Tone }> = 
   refund_due: { label: "Refund due", tone: "danger" },
   no_show: { label: "No-show", tone: "muted" },
   price_changed: { label: "Waiting for the customer to confirm new prices", tone: "warn" },
+  refunded: { label: "Refunded", tone: "muted" },
 };
 
 /** A status as the list shows it, with the badge's colour. */
@@ -239,6 +247,7 @@ export const ORDER_FILTERS: { value: string; label: string }[] = [
   { value: "price_changed", label: "New prices to confirm" },
   { value: "cancelled", label: "Cancelled" },
   { value: "no_show", label: "No-show" },
+  { value: "refunded", label: "Refunded" },
 ];
 
 /** The GET /v1/storefront/orders call for a filter: "all" asks with no status. */
@@ -317,7 +326,8 @@ export function paymentSummary(o: Pick<Order, "payment" | "paid_at" | "kind"> & 
 }
 
 /** The line a refund_due order carries. */
-export const refundLine = (totalKobo: number) => `Refund ${formatPrice(totalKobo)} to the customer in Paystack.`;
+export const refundLine = (totalKobo: number) =>
+  `${formatPrice(totalKobo)} is due back to the customer. Refund it here through Paystack, or refund it yourself in Paystack.`;
 
 /** Whether a value is the server's masked form ("A•••", "•••4567"). */
 export const isMasked = (v: string | undefined) => !!v && v.includes("•••");
