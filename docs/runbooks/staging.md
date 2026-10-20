@@ -107,7 +107,7 @@ Answer the questions:
 | Owner's email | the first owner (you); gets the set-your-password link |
 | Organisation name | e.g. `Taskiem Staging` |
 | Postgres URL | `postgres://<owner>:<password>@<host>:<port>/<db>?sslmode=require`, typed at the prompt |
-| SMTP URL, sender address | `smtps://user:pass@host:465`; the sender, e.g. `no-reply@$APP` |
+| SMTP URL, sender address | `smtps://user:pass@host:465` (TLS from the start) or `smtp://user:pass@host:587` (STARTTLS), never `smtps` with 587; the password URL-encoded (`@` is `%40`). The sender: an address on a domain verified at your mail provider, e.g. `noreply@example.com` |
 | Telegram bot token, username | from @BotFather; the username without `@` |
 | Public pages | `yes` |
 | Preview domain | `$PREVIEW` |
@@ -217,7 +217,9 @@ A merge to main reaches staging within 15 minutes of CI's `image` job. `taskiem-
 | No certificate for `$APP` | DNS (step 1) and ports 80 and 443 at the provider's firewall; `sudo taskiem-vps logs caddy` |
 | No certificate for a storefront | The wildcard record; the page must be published (certificates are issued only for hosts Taskiem serves); `sudo taskiem-vps logs taskiem-public` |
 | The bot does not answer | `sudo taskiem-vps logs taskiem` for the webhook registration at start; the token and username in `/opt/taskiem/taskiem.env` |
-| Emails do not arrive | The SMTP URL and sender; the spam folder; `sudo taskiem-vps logs taskiem` |
+| Emails do not arrive | `sudo docker compose --project-directory /opt/taskiem logs taskiem --since 1h 2>&1 \| grep -iE "mail\|smtp"`; the spam folder; the sender's domain verified at the mail provider |
+| `tls: first record does not look like a TLS handshake` | `smtps://` with port 587. Use `smtps://…:465` (TLS from the start) or `smtp://…:587` (STARTTLS) |
+| `501 Bad sender address syntax` | The sender was written with a name (`Taskiem <noreply@…>`); releases before #35 need the bare address (`noreply@…`) |
 | A release did not come | CI's `image` job on main; `sudo taskiem-vps status`; a release that failed its health check is rolled back and not retried (the alert says why) |
 | Form files wait | The virus scanner's first start downloads its signatures; `sudo taskiem-vps logs clamav` |
 
