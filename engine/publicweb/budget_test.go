@@ -39,18 +39,20 @@ func TestPageBudget(t *testing.T) {
 	}
 }
 
+// policyBreaks are what the public CSP refuses in a page.
+var policyBreaks = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)<script(\s[^>]*)?>\s*(?:[^<\s]|<[^/])`), // a script with a body, not just its end tag
+	regexp.MustCompile(`(?i)<script(?:\s[^>]*)?\ssrc=["']?(https?:)?//`),
+	regexp.MustCompile(`(?i)<style`),
+	regexp.MustCompile(`(?i)\sstyle=`),
+	regexp.MustCompile(`(?i)\son[a-z]+=`),
+	regexp.MustCompile(`(?i)javascript:`),
+}
+
 // TestTemplatesKeepThePolicy: the public CSP allows no inline script,
 // style or event handler, so a template that used one would break in the
 // browser. Catch it here instead.
 func TestTemplatesKeepThePolicy(t *testing.T) {
-	bad := []*regexp.Regexp{
-		regexp.MustCompile(`(?i)<script(\s[^>]*)?>\s*\S`), // a script with a body
-		regexp.MustCompile(`(?i)<script(?:\s[^>]*)?\ssrc=["']?(https?:)?//`),
-		regexp.MustCompile(`(?i)<style`),
-		regexp.MustCompile(`(?i)\sstyle=`),
-		regexp.MustCompile(`(?i)\son[a-z]+=`),
-		regexp.MustCompile(`(?i)javascript:`),
-	}
 	err := fs.WalkDir(templateFS, "templates", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -59,7 +61,7 @@ func TestTemplatesKeepThePolicy(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		for _, re := range bad {
+		for _, re := range policyBreaks {
 			if re.Match(b) {
 				t.Errorf("%s: %s is not allowed by the public CSP", p, re)
 			}

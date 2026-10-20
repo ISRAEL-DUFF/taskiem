@@ -62,3 +62,26 @@ a { color: var(--accent); }
 .sf-hours .is-today { font-weight: 700; }
 .sf-hours .is-today th { font-weight: 700; }
 .foot p { margin: 0 0 .25rem; }
+
+/* Forms and status pages (form.html, status.html). */
+.sf-forms { margin-top: .5rem; }
+.btn-small { min-height: 0; padding: .25rem .75rem; font-size: .875rem; }
+.btn-big { font-size: 1.25rem; padding: .875rem 1.5rem; }
+.sf-back { margin: 0 0 1rem; }
+.sf-form label { display: block; margin: .75rem 0 .25rem; font-weight: 600; }
+.sf-form input[type=text], .sf-form input[type=tel], .sf-form input[type=email], .sf-form textarea {
+  display: block; width: 100%; padding: .5rem; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--muted); border-radius: .375rem; min-height: 44px;
+}
+.sf-form fieldset { border: 1px solid var(--line); border-radius: .5rem; margin: 1rem 0; padding: .5rem .75rem; }
+.sf-form legend { font-weight: 700; padding: 0 .25rem; }
+.sf-choice label { display: inline-block; margin-right: 1rem; font-weight: 400; }
+.sf-line { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .375rem 0; border-bottom: 1px solid var(--line); }
+.sf-line label { margin: 0; font-weight: 400; }
+.sf-line input { width: 4.5rem; padding: .375rem; font: inherit; min-height: 44px; }
+.sf-total { margin: .5rem 0 0; font-weight: 700; }
+.sf-total:empty { display: none; }
+.sf-form .btn { margin-top: 1rem; font: inherit; font-weight: 600; cursor: pointer; }
+.hint { color: var(--muted); font-size: .875rem; font-weight: 400; }
+.sf-privacy { margin-top: 1rem; }
+.form-error { padding: .75rem 1rem; border-left: 4px solid #b91c1c; background: #fee2e2; color: #7f1d1d; }
+.sf-ref { color: var(--muted); }

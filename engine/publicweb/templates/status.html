@@ -1,0 +1,8 @@
+{{template "fhead" .}}{{if .Refresh}}<meta http-equiv="refresh" content="3">
+{{end}}{{template "fbody" .}}
+<h1>{{.Headline}}</h1>
+<p class="sf-ref">Reference <strong>{{.Reference}}</strong></p>
+{{range .Lines}}<p>{{.}}</p>
+{{end}}
+{{with .PayURL}}<p><a class="btn btn-primary btn-big" href="{{.}}"{{if $.NewTab}} target="_blank"{{end}} rel="noopener noreferrer">{{$.PayLabel}}</a></p>{{end}}
+{{template "ffoot" .}}

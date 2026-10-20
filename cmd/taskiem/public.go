@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/israel-duff/taskiem/engine/publicweb"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // publicConfig is the public host's (docs/public-host.md): the server for
@@ -40,6 +42,11 @@ type publicConfig struct {
 	// PoolSize caps its connections (TASKIEM_PUBLIC_DATABASE_POOL, 5), so
 	// a flood of page views cannot exhaust Postgres for everything else.
 	PoolSize int32
+	// Key is the public host's secret (TASKIEM_PUBLIC_KEY, 32 bytes in
+	// base64): form tokens are signed, and submissions sealed for the
+	// inbox, with keys derived from it. Unset, storefront forms answer
+	// "orders are not open yet".
+	Key []byte
 }
 
 func publicConfigFromEnv() (publicConfig, error) {
@@ -54,6 +61,16 @@ func publicConfigFromEnv() (publicConfig, error) {
 		if d = strings.ToLower(strings.TrimSpace(d)); d != "" {
 			c.Domains = append(c.Domains, d)
 		}
+	}
+	if v := strings.TrimSpace(os.Getenv("TASKIEM_PUBLIC_KEY")); v != "" {
+		k, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			k, err = base64.RawURLEncoding.DecodeString(strings.TrimRight(v, "="))
+		}
+		if err != nil || len(k) != 32 {
+			return c, errors.New("TASKIEM_PUBLIC_KEY: want 32 bytes in base64 (openssl rand -base64 32)")
+		}
+		c.Key = k
 	}
 	if c.DSN == "" { // unset or empty: the platform's
 		c.DSN = os.Getenv("TASKIEM_DATABASE_URL")
@@ -113,7 +130,20 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 	if cfg.DSN != "" && sameLogin(cfg.Public.DSN, cfg.DSN) {
 		log.Warn("the public host connects with the same database login as the other roles; give it its own login, a member of taskiem_public only (docs/public-host.md)")
 	}
-	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool), Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
+	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool),
+		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool), Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
+	if k := cfg.Public.Key; k != nil {
+		if srv.FormKey, err = storefront.FormKey(k); err != nil {
+			pool.Close()
+			return nil, nil, nil, fmt.Errorf("TASKIEM_PUBLIC_KEY: %w", err)
+		}
+		if srv.InboxKey, err = storefront.InboxKey(k); err != nil {
+			pool.Close()
+			return nil, nil, nil, fmt.Errorf("TASKIEM_PUBLIC_KEY: %w", err)
+		}
+	} else {
+		log.Warn("TASKIEM_PUBLIC_KEY is not set: storefront forms answer \"orders are not open yet\" (docs/public-host.md)")
+	}
 	return srv, httpTask("public", cfg.Public.Listen, srv.Handler(), log), pool.Close, nil
 }
 

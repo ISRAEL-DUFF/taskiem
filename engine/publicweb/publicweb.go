@@ -108,10 +108,25 @@ type Server struct {
 	// Storefronts read storefront pages; nil serves "Coming soon".
 	Storefronts Storefronts
 
+	// FormKey signs form tokens and keys status links and address hashes
+	// (storefront.FormKey of TASKIEM_PUBLIC_KEY). InboxKey seals
+	// submissions for the api role (storefront.InboxKey). Without both,
+	// and Submit, forms answer "orders are not open yet".
+	FormKey  []byte
+	InboxKey []byte
+	// Submit records submissions; OrderStatus reads their state for the
+	// customer's status page.
+	Submit      Submit
+	OrderStatus OrderStatus
+	// Submissions limits form submissions per client address; nil uses
+	// formguard.SubmissionsPerIP.
+	Submissions *formguard.Limiter
+
 	hosts   *lru.Cache[string, hostEntry]
 	origins *lru.Cache[uuid.UUID, []string]
 	pages   *lru.Cache[uuid.UUID, pageEntry]
 	now     func() time.Time
+	guard   *formguard.Guard
 }
 
 // Handler is the public listener's handler.
@@ -132,6 +147,18 @@ func (s *Server) Handler() http.Handler {
 	if s.Views == nil {
 		b := formguard.PageViewsPerIP
 		s.Views = formguard.NewLimiter(b.Rate, b.Burst, ViewLimiterSize, 10*time.Minute)
+	}
+	if s.Submissions == nil {
+		b := formguard.SubmissionsPerIP
+		s.Submissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 30*time.Minute)
+	}
+	if s.guard == nil && len(s.FormKey) > 0 {
+		g, err := formguard.New(s.FormKey)
+		if err != nil {
+			s.Logger.Error("public host: the form key is unusable; forms are off", "err", err)
+		} else {
+			s.guard = g
+		}
 	}
 	return s.headers(s.noCookies(http.HandlerFunc(s.serve)))
 }
@@ -201,21 +228,38 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 	case site.Suspended:
 		s.page(w, r, http.StatusGone, "unavailable", pageData{Title: "This page is unavailable"})
-	case r.Method != http.MethodGet && r.Method != http.MethodHead:
-		w.Header().Set("Allow", "GET, HEAD")
-		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
-	case r.URL.Path == "/embed" || strings.HasPrefix(r.URL.Path, "/embed/"):
-		// The one kind of page another site may frame, and only the
-		// organisation's verified websites. The views themselves arrive
-		// with S6.
+	default:
+		s.route(w, r, site)
+	}
+}
+
+// route serves a site's pages. /embed/ is the one kind of page another
+// site may frame, and only the organisation's verified websites; under it
+// a storefront's forms and status pages are served as at the top level.
+func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
+	path := r.URL.Path
+	embed := path == "/embed" || strings.HasPrefix(path, "/embed/")
+	if embed {
 		origins, err := s.embedOrigins(r.Context(), site.Tenant)
 		if err != nil {
 			s.Logger.Error("public host: embed origins", "tenant", site.Tenant, "err", err)
 			origins = nil // fail closed: nobody may frame it
 		}
 		httpsec.SetPublicEmbed(w.Header(), origins)
+		path = strings.TrimPrefix(path, "/embed")
+	}
+	switch {
+	case site.Kind == "storefront" && strings.HasPrefix(path, "/a/") && formKinds[path[len("/a/"):]]:
+		s.serveForm(w, r, site, path[len("/a/"):], embed)
+	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && !strings.Contains(path[len("/o/"):], "/"):
+		s.serveStatus(w, r, site, path[len("/o/"):], embed)
+	case r.Method != http.MethodGet && r.Method != http.MethodHead:
+		w.Header().Set("Allow", "GET, HEAD")
+		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
+	case embed:
+		// The other embedded views arrive with S6.
 		s.page(w, r, http.StatusOK, "embedsetup", pageData{Title: "Coming soon"})
-	case r.URL.Path != "/":
+	case path != "/":
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 	case site.Kind == "storefront":
 		s.serveStorefront(w, r, site)
@@ -225,6 +269,9 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.page(w, r, http.StatusOK, "setup", pageData{Title: "Coming soon"})
 	}
 }
+
+// formKinds are the storefront forms served under /a/.
+var formKinds = map[string]bool{"order": true, "enquiry": true, "callback": true}
 
 // site resolves host through the cache.
 func (s *Server) site(ctx context.Context, host string) (Site, bool, error) {
