@@ -22,7 +22,9 @@ func storefrontOrders(cfg config, e *engine, log *slog.Logger) (*storefront.Orde
 	}
 	o := &storefront.Orders{Pool: e.pool, Vault: e.vault, InboxKey: key, Start: e.store.Start, Signal: e.store.DeliverSignalOnce, Logger: log.With("component", "storefront")}
 	o.Payments = &storefront.PaystackPayments{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}
-	o.Stock = &storefront.XenibaseStock{Pool: o.Pool, Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}
+	stock := &storefront.XenibaseStock{Pool: o.Pool, Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}
+	o.Stock, o.Live = stock, stock
+	o.Cancel = e.store.CancelRun
 	if len(cfg.Public.Domains) > 0 {
 		o.PreviewDomain = cfg.Public.Domains[0]
 	}

@@ -156,16 +156,18 @@ func maskCustomer(c *storefront.Customer) {
 	}
 }
 
-// RunStorefrontOrders takes submissions from the inbox every second and
-// asks the payment provider about waiting payments every 30 seconds.
+// RunStorefrontOrders takes submissions from the inbox every second, asks
+// the payment provider about waiting payments every 30 seconds, and every
+// 15 applies customers' and owners' changes and sweeps bookings.
 func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 	if s.Orders == nil {
 		<-ctx.Done()
 		return nil
 	}
-	tick, payments := time.NewTicker(time.Second), time.NewTicker(30*time.Second)
+	tick, payments, bookings := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(15*time.Second)
 	defer tick.Stop()
 	defer payments.Stop()
+	defer bookings.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -177,6 +179,10 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 		case <-payments.C:
 			if err := s.Orders.CheckPayments(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("storefront: payments", "err", err)
+			}
+		case <-bookings.C:
+			if err := s.Orders.CheckBookings(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("storefront: bookings", "err", err)
 			}
 		}
 	}
