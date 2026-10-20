@@ -73,6 +73,10 @@ spec:
             - name: TASKIEM_ANCHOR_DIR
               value: /var/lib/taskiem/anchors
             {{- end }}
+            {{- if and $root.Values.clamav.enabled (or (eq $role "api") (eq $role "all")) }}
+            - name: TASKIEM_CLAMD_ADDR
+              value: {{ printf "%s-clamav:3310" (include "taskiem.fullname" $root) | quote }}
+            {{- end }}
             {{- with $root.Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

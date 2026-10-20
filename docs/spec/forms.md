@@ -1,6 +1,6 @@
 # Forms: a hosted form that starts a workflow, or asks someone for input mid-run
 
-Status: **draft for review** (proposed in [decision 0037](../decisions/0037-forms.md)). Nothing here is built. It answers open question Q10 of the [Xenibase plan](../xenibase-integration.md#5-open-questions) for general forms; [storefronts](storefronts.md) (decision 0036, also proposed) are the public-commerce case and share this spec's form host.
+Status: **accepted** ([decision 0037](../decisions/0037-forms.md), 2026-10-20); v1 is built (Phase 5, S7: [forms](../forms.md)). It answers open question Q10 of the [Xenibase plan](../xenibase-integration.md#5-open-questions) for general forms; [storefronts](storefronts.md) (decision 0036, accepted) are the public-commerce case and share this spec's form host.
 
 ## 1. Summary
 
@@ -154,7 +154,7 @@ No Xenibase auth and no new account system: members use Taskiem's own sign-in, o
 
 - **Where they go:** Xenibase storage, in the organisation's Xenibase project, in its private bucket, reached only through signed URLs ([media](../media.md#files-from-forms)).
 - **Limits:** the field's `accept` types and `max_mb` (default 10 MB, at most 25), and at most 10 files a submission. The type is checked by the file's content, not its name.
-- **Scanning:** every file is scanned for malware before the submission is accepted. A file that fails is refused and the respondent is told. The scanner runs in its own sandbox, with no network.
+- **Scanning:** every file is scanned for malware before the submission is accepted, by a ClamAV daemon Taskiem runs beside the api role (reachable by it alone; its only network is to the ClamAV mirrors for signature updates). A file that fails is refused and the respondent is told.
 - **Images:** metadata (including location) is removed. Large photos are scaled down to 2,000 pixels.
 - **In the run:** a file field's value is a reference: `{id, name, type, size, sha256}`. Steps read the content through a platform action that issues a short-lived signed URL. Contents never go into run history, logs or AI prompts.
 - **People** see and download files from the run or the submission in the app, with `pii.read`, and each download is audited.
@@ -336,8 +336,8 @@ v1 is milestone S7 of Phase 5 in the [build plan](build-plan.md#phase-5--storefr
 ## 13. Open questions
 
 1. **The form host's domain**, and whether it is the same service as the storefront host.
-2. **The malware scanner:** an open-source one run by Taskiem (no new data processor) or a scanning service.
-3. **Moderation** of public forms: the same decision as storefronts (decision 0036), or lighter, since forms have no catalogue or photos.
+2. ~~**The malware scanner**~~ (answered 2026-10-20): ClamAV, run by Taskiem beside the api role (decision 0037, 6).
+3. ~~**Moderation** of public forms~~ (answered 2026-10-20): the storefronts' checks on their titles and descriptions (decision 0036, 13).
 4. **The `result` mode:** whether 30 seconds is the right wait.
 5. **Default retention** for files, if shorter than the run's.
 6. **The name** people see: "Forms" is generic and works, but could share a brand with storefronts.

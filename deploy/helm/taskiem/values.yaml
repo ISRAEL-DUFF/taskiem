@@ -153,6 +153,18 @@ public:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
 
+# The malware scanner for files sent in forms (docs/forms.md#files). Off,
+# forms that ask for files cannot be deployed. It needs about 1.5 GB of
+# memory for its signatures, which it downloads from the ClamAV mirrors.
+clamav:
+  enabled: false
+  image: clamav/clamav
+  tag: "1.4"
+  replicas: 1
+  resources:
+    requests: { cpu: 200m, memory: 1536Mi }
+    limits: { memory: 2560Mi }
+
 service:
   type: ClusterIP
 

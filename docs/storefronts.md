@@ -110,7 +110,7 @@ Saving a form re-publishes a published page, so its buttons match.
    - Once paid, the workflow starts. An order not paid within 30 minutes expires and starts nothing.
 4. **The workflow runs.** The default order workflow:
    - **Asks the owner to accept or decline**, in WhatsApp, Telegram or Approvals, showing the items, the total and how it is collected. No answer within a day declines it.
-   - **Declined:** the customer is texted. An order already paid is left **refund due**: the owner refunds it in Paystack, because refunds are not automatic until the refund policy is decided.
+   - **Declined:** the customer is texted. An order already paid is left **refund due**, and the owner is asked whether to refund it now ([refunds](#refunds)).
    - **Accepted and paid on ordering:** the customer is texted that it is confirmed.
    - **Accepted and paid after acceptance:**
      - a payment link is made and texted;
@@ -132,6 +132,7 @@ The **storefront** platform connector (`storefront@1`, no connection needed) is 
 | `payment_link` | The checkout page for an accepted order paid after acceptance, made once. The run can then wait for the `storefront.payment` signal, correlated by the reference, whose payload's `status` is `paid` or `expired` |
 | `notify_customer` | An SMS, and an email when there is one, to the order's customer (`reference`, `text`, optional `subject`). `{link}` in the text becomes the customer's status link, where they confirm new prices or move and cancel a booking; no run sees the link itself |
 | `get_booking` | A booking's status, service and time (`when`, as customers read it), when its reminders fall (`remind_day_at`, `remind_hours_at`, and whether each is still to come) and its payment page |
+| `refund` | Refunds a refund-due order or booking in full through Paystack and tells the customer; put an approval before it ([refunds](#refunds)). A refusal fails the step and leaves it refund due |
 
 `decide` also takes `no_show` for a booking the customer did not come to; declining or cancelling a booking frees its time.
 
@@ -151,7 +152,20 @@ The run's `trigger.body` holds:
 **Statuses:**
 - `received`, `awaiting_payment`, `paid`, `accepted`;
 - `price_changed`: waiting for the customer to confirm new prices ([the price check](#the-price-check));
-- `declined`, `refund_due`, `expired`, `cancelled`, `completed`, and `no_show` for a booking.
+- `declined`, `refund_due`, `refunded`, `expired`, `cancelled`, `completed`, and `no_show` for a booking.
+
+### Refunds
+
+A paid order or booking that is declined or cancelled is left **refund due**. Taskiem never refunds unasked: the owner confirms, and then Taskiem refunds the payment in full through the business's own Paystack connection, from its Paystack balance.
+
+- **In the default workflows:** after a paid order or booking is declined, the owner is asked "Refund the customer?": approve to refund now, reject to refund it yourself.
+- **In chat:** `refund AK-7QX4KD`, confirmed with **yes** (audited; `storefront.manage`). Cancelling a paid booking in chat says so.
+- **In the web app:** the order page's **Refund through Paystack**.
+- **In a workflow of your own:** `storefront@1` `refund`, after an approval.
+
+The order becomes **refunded** and the customer is told the money reaches them in about 5 to 10 working days. If Paystack refuses (most often, too little balance), the order stays refund due with Paystack's reason; try again later, or refund in Paystack. A second refund of the same payment is never made.
+
+**Bookings cancelled by the customer:** a booking form chooses what a customer cancelling a paid booking gets back: everything (the default), or nothing of the deposit (**Keep the deposit**).
 
 ### The price check
 
@@ -193,7 +207,7 @@ Under Storefront > Bookings:
 - **The customer**, from the link in their messages, up to the cut-off: **move** it to another free time, or **cancel** it. The owner is told in their alert channels.
 - **The owner**, in chat or in the web app: `bookings` or `today` to see them; `booking AD-7QX4KD cancel`; `move AD-7QX4KD to Sat 11:00` (to any free time, even outside the booking hours); `off 25 Dec` for a day off. Each is shown and confirmed with **yes**, needs `storefront.manage`, and is audited. The customer is told.
 
-A **moved** booking's run is ended and a new one started with the new time (`trigger.body.event` is `rescheduled`; one already confirmed is not asked about again), so its reminders follow the booking. A **cancelled** booking's run is ended. A paid booking cancelled by either side is left **refund due**, for the owner to refund in Paystack.
+A **moved** booking's run is ended and a new one started with the new time (`trigger.body.event` is `rescheduled`; one already confirmed is not asked about again), so its reminders follow the booking. A **cancelled** booking's run is ended. A paid booking cancelled by either side is left **refund due** for the owner to [refund](#refunds), unless the customer cancelled and the booking form keeps the deposit.
 
 A booking run's `trigger.body` also holds `booking` (`service_id`, `service`, `starts_at`, `ends_at` in Lagos time, `when`, `auto_confirm`, the reminder times) and `event` (`new` or `rescheduled`).
 
@@ -217,6 +231,7 @@ The web app shows the storefront's address as a QR code (`GET /v1/storefront/qr`
 | `GET /v1/storefront/services` | The services copy and the availability in effect |
 | `GET /v1/storefront/bookings?from=&to=` | The bookings holding their time (Lagos dates; today and the next 30 days by default) |
 | `POST /v1/storefront/bookings/{reference}/cancel`, `/move` | The owner's changes (`move` takes `starts_at`) |
+| `POST /v1/storefront/orders/{reference}/refund` | The owner's refund of a paid order or booking that is refund due |
 | `GET /v1/storefront/image?src=` | One of the storefront's photos, for the web app, whose Content-Security-Policy allows images from its own origin only. Only the organisation's own public storefront images are fetched (its project host, its images path), through the egress guard |
 
 `preview_url` is where the **published** version serves: a slug changed in the draft serves once published (`published_slug`). The OpenAPI document has the shapes.

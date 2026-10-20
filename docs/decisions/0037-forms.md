@@ -1,6 +1,6 @@
 # 0037 — Forms: a hosted form that starts a workflow, or asks someone for input mid-run
 
-Date: 2026-10-19 · Status: Proposed
+Date: 2026-10-19 · Status: **Accepted** 2026-10-20, as amended below (built: S7, [forms](../forms.md))
 
 ## Context
 
@@ -8,7 +8,7 @@ Taskiem has no general hosted forms. Its only forms are WhatsApp Flows and the c
 
 The full design is [the forms spec](../spec/forms.md).
 
-## Decision (proposed)
+## Decision
 
 1. **A `form` trigger and a `form` step in wd/v1**, not a separate form product. The form is part of the workflow definition: versioned, validated, deployed and synced to Git with it.
 2. **The fields are the inputs schema**, with display hints in `x-form`, plus pages and CEL conditions in the trigger's config. A submission is checked like any run's input.
@@ -19,8 +19,9 @@ The full design is [the forms spec](../spec/forms.md).
 
    There are no respondent accounts and no Xenibase auth.
 4. **The form step is a signal** with a one-time link sent through the outbox, reminders and a timeout, like an approval request.
-5. **A cookieless form host** on its own domain, rendered on the server by the `public` role shared with storefronts, working without JavaScript. The `/embed/` pages are framed only by the organisation's verified websites, sharing storefronts' design.
-6. **Files go to Xenibase storage** in a private bucket, scanned for malware and stripped of metadata. Runs see only references; downloads need `pii.read` and are audited.
+5. **A cookieless form host** on its own domain (`forms.` under the preview domain by default; a multi-page form carries its earlier answers sealed in the page, not in a session table), rendered on the server by the `public` role shared with storefronts, working without JavaScript. The `/embed/` pages are framed only by the organisation's verified websites, sharing storefronts' design.
+6. **Files go to Xenibase storage** in a private bucket, scanned for malware and stripped of metadata. Runs see only references; downloads need `pii.reveal` and are audited.
+   - **The scanner is ClamAV, run by Taskiem** (decided 2026-10-20): a clamd beside the api role, reachable by it alone, updating its signatures from the ClamAV mirrors. Files then never leave Taskiem's systems for a scanning company, which would be a new data processor for payslips and identity documents (NDPA). Forms take only JPEG, PNG and PDF, photos are re-encoded and PDFs with scripts or actions refused, so the scanner's remaining job is mostly malicious PDFs. Without a scanner, forms that ask for files cannot be deployed. A scanning service can be added behind the same interface for a customer who needs one.
 7. **Fields that are never collected:** passwords, card numbers, CVV, PINs, one-time codes and bank logins. Government and bank identifiers are allowed only when marked `x-pii` (sealed at once), and not on anonymous public forms.
 8. **The public host, renderer, embed frame, abuse controls and `embed_sites` are shared with storefronts**, built by whichever ships first.
 
@@ -38,4 +39,6 @@ The full design is [the forms spec](../spec/forms.md).
 - SMS codes and links cost money, and are metered in the SMS allowance storefronts introduce.
 - The ingest pipeline, signals and outbox gain a new caller, but no new mechanism.
 - A form's public link changes nothing in the workflow's permissions: designing it is `workflow.edit`, putting it live is `workflow.publish`, and minting links is the new `form.links`.
-- Public forms are a phishing surface. The refused fields, verified domains, reports, suspension and (if adopted) storefront moderation are the controls.
+- Public forms are a phishing surface. The refused fields, verified domains, reports, suspension and storefront moderation (decision 0036, 13: titles and descriptions) are the controls.
+- The operator runs a ClamAV daemon (about 1.5 GB of memory); the VM kit and the Helm chart start one with the public pages.
+- Not built in v1 yet: proof-of-work in the page, options read from a data table, text blocks, the organisation's logo on forms, and the moderation and report handling, which come with S8.

@@ -130,8 +130,26 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  # The malware scanner for files sent in forms (docs/forms.md#files), with
+  # the public pages. Not published: only Taskiem reaches it, on the Compose
+  # network (TASKIEM_CLAMD_ADDR=clamav:3310). Its own freshclam fetches
+  # signature updates from the ClamAV mirrors; it needs about 1.5 GB of
+  # memory for them.
+  clamav:
+    <<: *hardening
+    profiles: [public]
+    image: clamav/clamav:${CLAMAV_VERSION:-1.4}
+    volumes:
+      - clamav_db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      retries: 3
+      start_period: 300s
+
 volumes:
   caddy_data: {}
   caddy_config: {}
   openbao_data: {}
   taskiem_data: {}
+  clamav_db: {}
