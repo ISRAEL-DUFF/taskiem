@@ -100,6 +100,9 @@ tags:
 - name: Connectors
   description: Connectors, connections, drift and the tenant's own WebAssembly connectors.
   x-taskiem-guide: connector-sdk
+- name: Storefront
+  description: The organisation's one-page public storefront, its catalogue and its photos.
+  x-taskiem-guide: storefronts
 - name: Embed sites
   description: Websites allowed to embed the organisation's storefront and hosted forms, proven by DNS or a file.
   x-taskiem-guide: embed-sites
@@ -331,6 +334,288 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront:
+    get:
+      operationId: getStorefront
+      tags:
+      - Storefront
+      summary: The organisation's storefront
+      description: 404 until it has one.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The storefront
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Storefront'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putStorefront
+      tags:
+      - Storefront
+      summary: Save the storefront's draft
+      description: The slug and the catalogue mapping are checked now; the card when it is published.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorefrontRequest'
+      responses:
+        '200':
+          description: The storefront
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Storefront'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/publish:
+    post:
+      operationId: publishStorefront
+      tags:
+      - Storefront
+      summary: Publish the draft
+      description: Refreshes the catalogue copy, then writes the draft as the next published version and claims its preview address.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The storefront
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Storefront'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/close:
+    post:
+      operationId: closeStorefront
+      tags:
+      - Storefront
+      summary: Close the storefront for now
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                message:
+                  type: string
+                  description: Shown instead of the catalogue, up to 200 characters, no links
+      responses:
+        '200':
+          description: The storefront
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Storefront'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/reopen:
+    post:
+      operationId: reopenStorefront
+      tags:
+      - Storefront
+      summary: Reopen a closed storefront
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The storefront
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Storefront'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/catalogue:
+    get:
+      operationId: getStorefrontCatalogue
+      tags:
+      - Storefront
+      summary: The catalogue as pages show it
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The catalogue copy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontCatalogue'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/catalogue/refresh:
+    post:
+      operationId: refreshStorefrontCatalogue
+      tags:
+      - Storefront
+      summary: Refresh the catalogue copy from its table now
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The catalogue copy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontCatalogue'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/catalogue/rows/{row}/photo:
+    post:
+      operationId: setStorefrontItemPhoto
+      tags:
+      - Storefront
+      summary: Store a photo and set it on a catalogue row
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The row's id
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Stored, and the row updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontMedia'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/media:
+    post:
+      operationId: uploadStorefrontMedia
+      tags:
+      - Storefront
+      summary: Store a logo or photo
+      description: The image is checked, turned upright, stripped of its metadata and stored at 2000, 800 and 320 pixels wide (docs/media.md).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontMedia'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/qr:
+    get:
+      operationId: storefrontQR
+      tags:
+      - Storefront
+      summary: The storefront's address as a QR code
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum: [svg, png]
+          default: svg
+      responses:
+        '200':
+          description: The QR code
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+            image/png:
+              schema:
+                type: string
+                format: binary
         default:
           $ref: '#/components/responses/Error'
   /v1/embed-sites:
@@ -12185,6 +12470,201 @@ components:
         disabled_at:
           $ref: '#/components/schemas/NullableTimestamp'
       additionalProperties: false
+    StorefrontHours:
+      type: object
+      properties:
+        days:
+          type: array
+          minItems: 7
+          maxItems: 7
+          description: Monday first; a day with no openings is closed
+          items:
+            type:
+            - array
+            - 'null'
+            items:
+              type: object
+              required: [open, close]
+              properties:
+                open:
+                  type: string
+                  pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                close:
+                  type: string
+                  pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        note:
+          type: string
+    StorefrontCard:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        tagline:
+          type: string
+        about:
+          type: string
+        logo:
+          type: string
+          description: A storefront media id
+        area:
+          type: string
+        address:
+          type: string
+        map_query:
+          type: string
+        phone:
+          type: string
+        whatsapp:
+          type: string
+        hours:
+          $ref: '#/components/schemas/StorefrontHours'
+        template:
+          type: string
+          enum: [classic, bold, '']
+        accent:
+          type: string
+        language:
+          type: string
+    StorefrontColumns:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        price:
+          type: string
+        price_unit:
+          type: string
+          enum: [naira, kobo, '']
+        description:
+          type: string
+        photo:
+          type: string
+        available:
+          type: string
+        category:
+          type: string
+        sort:
+          type: string
+    StorefrontRequest:
+      type: object
+      required: [slug, draft]
+      additionalProperties: false
+      properties:
+        slug:
+          type: string
+          description: The address, 3 to 30 of a-z, 0-9 and hyphens
+        draft:
+          $ref: '#/components/schemas/StorefrontCard'
+        catalogue_table:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        catalogue_columns:
+          $ref: '#/components/schemas/StorefrontColumns'
+    Storefront:
+      type: object
+      required: [id, slug, status, draft, catalogue_table, catalogue_columns, published_version, preview_url, templates, accents]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        status:
+          type: string
+          enum: [draft, published, closed]
+        draft:
+          $ref: '#/components/schemas/StorefrontCard'
+        catalogue_table:
+          type:
+          - string
+          - 'null'
+        catalogue_columns:
+          $ref: '#/components/schemas/StorefrontColumns'
+        published_version:
+          type: integer
+        published_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        closed_message:
+          type:
+          - string
+          - 'null'
+        catalogue_synced_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        catalogue_error:
+          type:
+          - string
+          - 'null'
+        updated_at:
+          type: string
+          format: date-time
+        preview_url:
+          type: string
+          description: Where the storefront is served; empty when the public host has no preview domain
+        templates:
+          type: array
+          items:
+            type: string
+        accents:
+          type: object
+          additionalProperties:
+            type: string
+    StorefrontImage:
+      type: object
+      description: URLs by width (2000, 800, 320)
+      additionalProperties:
+        type: string
+    StorefrontItem:
+      type: object
+      required: [id, name, available]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price_kobo:
+          type: integer
+        description:
+          type: string
+        photo:
+          $ref: '#/components/schemas/StorefrontImage'
+        available:
+          type: boolean
+        category:
+          type: string
+    StorefrontCatalogue:
+      type: object
+      required: [items, synced_at, error]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorefrontItem'
+        synced_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        error:
+          type:
+          - string
+          - 'null'
+    StorefrontMedia:
+      type: object
+      required: [id, width, height, urls, moderation]
+      properties:
+        id:
+          type: string
+          format: uuid
+        width:
+          type: integer
+        height:
+          type: integer
+        urls:
+          $ref: '#/components/schemas/StorefrontImage'
+        moderation:
+          type: string
+          enum: [unreviewed, approved, rejected]
     EmbedSiteRequest:
       type: object
       required: [origin]

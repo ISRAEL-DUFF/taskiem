@@ -34,9 +34,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/embedsites"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/lru"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
@@ -77,8 +79,14 @@ type Server struct {
 	// uses DNS and fetches through a default egress guard.
 	SiteProver *embedsites.Prover
 	// PublicHosts are the public host's own domains (the preview domain):
-	// never an embed site.
+	// never an embed site. The first is where storefronts are previewed.
 	PublicHosts []string
+	// Media stores storefront photos in tenants' Xenibase storage
+	// (docs/media.md); nil refuses uploads.
+	Media *media.Service
+	// Moderator checks storefront images before they may be shown (S8);
+	// nil records them as unreviewed.
+	Moderator storefront.Moderator
 	// Static serves the web app; nil omits it.
 	Static http.Handler
 	// EmbedDir holds the embedded builder's bundle (taskiem.js, served at
@@ -314,6 +322,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish)).Delete("/workflows/{wf}/deployments/{env}", s.undeploy)
 			r.With(s.need(PermWorkflowRead)).Get("/environments", s.listEnvironments)
 			r.With(s.need(PermAlertManage)).Get("/alerts", s.listAlerts)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront", s.getStorefront)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront", s.putStorefront)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/publish", s.publishStorefront)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/close", s.closeStorefront)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/reopen", s.reopenStorefront)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/catalogue", s.getStorefrontCatalogue)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/refresh", s.refreshStorefrontCatalogue)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/rows/{row}/photo", s.setStorefrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/media", s.uploadStorefrontMedia)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/qr", s.storefrontQR)
 			r.With(s.need(PermStorefrontManage)).Get("/embed-sites", s.listEmbedSites)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites", s.addEmbedSite)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites/{id}/verify", s.verifyEmbedSite)
