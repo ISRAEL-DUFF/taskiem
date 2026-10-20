@@ -19,7 +19,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `taskiem status show\|list\|open\|maintenance\|update\|resolve\|token` | Declares incidents and maintenance on the public status page, recorded with the operator's name; `token NAME` makes an operator token for the admin API. See [reliability](reliability.md#status-page). |
 | `taskiem canary setup\|probe\|run` | Sets up the synthetic end-to-end probe in an internal tenant, runs probes now, or probes forever from outside the cluster. See [reliability](reliability.md#synthetic-canary). |
 | `taskiem media check TENANT_ID` | A round trip through a tenant's Xenibase storage: makes its buckets, stores and downloads a photo and a private PDF, then deletes them. See [media](media.md#checking-a-tenants-storage). |
-| `taskiem healthcheck` | Probes the local API's `/readyz` (for images without a shell). |
+| `taskiem healthcheck [ADDR]` | Probes the local API's `/readyz`, or that of `ADDR` (`:9090` for the public role, whose readiness is on its metrics port), for images without a shell. |
 
 ## Roles
 

@@ -11,14 +11,7 @@ Nothing of Phase 5 ships to customers before gate G4.
 | # | Milestone | Status |
 | --- | --- | --- |
 | S0 | Decisions | **Open**: see below |
-| S1 | Shared public foundation | **In progress** (one PR). Built:
-- [public host](public-host.md);
-- form guards and name checks;
-- [messages](messages.md) by SMS and email;
-- [Xenibase storage](media.md);
-- [embed sites](embed-sites.md).
-
-Left: the VM kit's proxy with on-demand certificates |
+| S1 | Shared public foundation | **Built**, one PR in review: the [public host](public-host.md), form guards and name checks, [messages](messages.md) by SMS and email, [Xenibase storage](media.md), [embed sites](embed-sites.md), and the VM kit's [on-demand certificates](vm.md#public-pages-storefronts-and-forms) |
 | S2 | The storefront page | Not started |
 | S3 | Orders | Not started |
 | S4 | Bookings | Not started |

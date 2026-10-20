@@ -29,7 +29,7 @@ GRANT taskiem_public TO taskiem_public_login;
 3. **Kubernetes.** Set `public.enabled: true` and create the `public.existingSecret` Secret (default `taskiem-public`) holding `TASKIEM_PUBLIC_DATABASE_URL`. With `networkPolicy.enabled`, set `networkPolicy.tlsProxyNamespace` to the namespace of the proxy that issues certificates.
 4. **In front of it**, a proxy that terminates TLS:
    - The preview domain uses one wildcard certificate (`*.<preview domain>`).
-   - Businesses' own domains get certificates on demand, after asking `/tls/ask`. With Caddy, use `on_demand_tls { ask http://<public host>:9090/tls/ask }`.
+   - Businesses' own domains get certificates on demand, after asking `/tls/ask`. With Caddy, use `on_demand_tls { ask http://<public host>:9090/tls/ask }`. The [VM kit](vm.md#public-pages-storefronts-and-forms) does this for you.
    - Set `TASKIEM_TRUST_PROXY=true` behind it, so limits apply to visitors' addresses.
 
 ## Hosts

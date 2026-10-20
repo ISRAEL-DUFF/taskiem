@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
 
 func TestLoadPublicConfig(t *testing.T) {
 	// Only its own login: no TASKIEM_DATABASE_URL, no KMS, nothing else.
@@ -38,5 +43,22 @@ func TestSameLogin(t *testing.T) {
 	}
 	if sameLogin("postgres://pub@db/taskiem", "postgres://app@db/taskiem") {
 		t.Error("different users")
+	}
+}
+
+func TestHealthcheckAddress(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/readyz" {
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+	if err := healthcheck([]string{strings.TrimPrefix(srv.URL, "http://")}); err != nil {
+		t.Fatalf("a loopback address: %v", err)
+	}
+	for _, addr := range []string{"10.0.0.5:9090", "example.com:80", "169.254.169.254:80", "nonsense"} {
+		if err := healthcheck([]string{addr}); err == nil {
+			t.Errorf("%s accepted", addr)
+		}
 	}
 }
