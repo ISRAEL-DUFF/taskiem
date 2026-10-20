@@ -28,9 +28,12 @@ const storefrontPurpose = "storefront.catalogue"
 
 type storefrontOut struct {
 	storefront.Storefront
-	PreviewURL string            `json:"preview_url"`
-	Templates  []string          `json:"templates"`
-	Accents    map[string]string `json:"accents"`
+	PreviewURL string `json:"preview_url"`
+	// URL is the page's public address: its own primary domain once
+	// verified, else the preview address (storefront.Storefront.URL).
+	URL       string            `json:"url"`
+	Templates []string          `json:"templates"`
+	Accents   map[string]string `json:"accents"`
 }
 
 func (s *Server) previewDomain() string {
@@ -45,6 +48,7 @@ func (s *Server) storefrontOut(sf storefront.Storefront) storefrontOut {
 	// Where the published version serves: a slug changed in the draft
 	// serves only once published.
 	out.PreviewURL = storefront.PreviewURL(sf.PublishedSlug, s.previewDomain())
+	out.URL = sf.URL(s.previewDomain())
 	return out
 }
 
@@ -152,7 +156,7 @@ func (s *Server) publishStorefront(w http.ResponseWriter, r *http.Request) {
 	if p := principalFrom(r.Context()); p.Agent != nil && p.Agent.Kind == "onboarding" && sf.Status != "in_review" {
 		// Live: the onboarding is done (agents.go). Held for review, the
 		// agent may still change it.
-		s.agentPublished(r.Context(), p, sf.Draft.Name, out.PreviewURL)
+		s.agentPublished(r.Context(), p, sf.Draft.Name, out.URL)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -483,7 +487,8 @@ func (s *Server) setStorefrontItemPhoto(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, m)
 }
 
-// storefrontQR is the preview address as a QR code, SVG by default or PNG.
+// storefrontQR is the page's address (its own domain, else the preview
+// address) as a QR code, SVG by default or PNG.
 func (s *Server) storefrontQR(w http.ResponseWriter, r *http.Request) {
 	var sf storefront.Storefront
 	if err := s.tx(r, func(tx pgx.Tx) error {
@@ -494,7 +499,7 @@ func (s *Server) storefrontQR(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	u := s.storefrontOut(sf).PreviewURL
+	u := s.storefrontOut(sf).URL
 	if u == "" {
 		s.fail(w, r, fmt.Errorf("%w: the public host has no preview domain (TASKIEM_PUBLIC_DOMAINS)", errConflict))
 		return

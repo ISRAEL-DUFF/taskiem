@@ -750,6 +750,142 @@ paths:
                     enum: [pending]
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/domains:
+    get:
+      operationId: listStorefrontDomains
+      tags:
+      - Storefront
+      summary: List the business's own domains for its storefront
+      description: Each with its state and the DNS records to create; target is where domains point.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontDomainList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addStorefrontDomain
+      tags:
+      - Storefront
+      summary: Add a domain the business already owns
+      description: 'The answer gives the records to create: a TXT record _taskiem-verify.<domain> proving it, and the records pointing
+        it (and its www. twin) at the public host. Any number of organisations may add a domain; the first to prove it serves it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorefrontDomainRequest'
+        required: true
+      responses:
+        '201':
+          description: Added; not served until verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontDomain'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/domains/{id}/verify:
+    post:
+      operationId: verifyStorefrontDomain
+      tags:
+      - Storefront
+      summary: Check a domain's TXT record now
+      description: 409 while the record does not hold the domain's token, or when another page serves the domain. Once verified the
+        public host serves the storefront on it within 30 seconds, and the storefront's other addresses redirect to the primary domain.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The domain's id
+      responses:
+        '200':
+          description: Verified and served
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontDomain'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/domains/{id}/primary:
+    post:
+      operationId: primaryStorefrontDomain
+      tags:
+      - Storefront
+      summary: Make a verified domain the primary one
+      description: The storefront's other addresses redirect to it. 409 for a domain not verified.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The domain's id
+      responses:
+        '200':
+          description: The primary domain
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontDomain'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/domains/{id}:
+    delete:
+      operationId: removeStorefrontDomain
+      tags:
+      - Storefront
+      summary: Stop serving the storefront on a domain
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The domain's id
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/qr:
     get:
       operationId: storefrontQR
@@ -14181,7 +14317,15 @@ components:
           description: Why orders and bookings are paused (the plan's month, or the unverified daily limit), when they are
         preview_url:
           type: string
-          description: Where the published version is served; empty before publishing or when the public host has no preview domain
+          description: Where the published version is served on the preview domain; empty before publishing or when the public host has no preview domain
+        url:
+          type: string
+          description: 'The page''s public address for links, QR codes and cards: its own primary domain once verified, else preview_url'
+        domain:
+          type:
+          - string
+          - 'null'
+          description: The primary of the business's own verified domains
         templates:
           type: array
           items:
@@ -14190,6 +14334,99 @@ components:
           type: object
           additionalProperties:
             type: string
+    StorefrontDomainRequest:
+      type: object
+      required: [domain]
+      additionalProperties: false
+      properties:
+        domain:
+          type: string
+          description: The domain, such as adakitchen.ng, www.adakitchen.ng or shop.example.com
+    StorefrontDomainRecord:
+      type: object
+      required: [type, name, value, purpose]
+      properties:
+        type:
+          type: string
+          enum: [TXT, A, AAAA, CNAME, ALIAS]
+        name:
+          type: string
+        value:
+          type: string
+        purpose:
+          type: string
+          enum: [proof, point]
+          description: proof proves the domain and must be kept; point sends visitors to the page
+        note:
+          type: string
+    StorefrontDomainTarget:
+      type: object
+      properties:
+        cname:
+          type: string
+          description: The name subdomains point at
+        addresses:
+          type: array
+          items:
+            type: string
+          description: The public host's addresses, for a registrable domain's A and AAAA records
+    StorefrontDomain:
+      type: object
+      required: [id, domain, twin, token, primary, verified_at, created_by, created_at, status, records]
+      properties:
+        id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+        twin:
+          type:
+          - string
+          - 'null'
+          description: The www. twin of a registrable domain (or the domain of a www. host), served too and redirecting to the primary
+        token:
+          type: string
+          description: The value the TXT record must hold
+        primary:
+          type: boolean
+          description: The domain the storefront's other addresses redirect to
+        verified_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        checked_at:
+          type: string
+          format: date-time
+        check_failures:
+          type: integer
+        last_check_error:
+          type: string
+        unverified_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, live, unverified]
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorefrontDomainRecord'
+    StorefrontDomainList:
+      type: object
+      required: [domains, max, target]
+      properties:
+        domains:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorefrontDomain'
+        max:
+          type: integer
+          description: How many domains the storefront may have
+        target:
+          $ref: '#/components/schemas/StorefrontDomainTarget'
     StorefrontImage:
       type: object
       description: URLs by width (2000, 800, 320)

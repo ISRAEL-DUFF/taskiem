@@ -10,6 +10,8 @@
 <meta property="og:title" content="{{.M.Card.Name}}">
 {{with .Description}}<meta property="og:description" content="{{.}}">{{end}}
 {{with .Image}}<meta property="og:image" content="{{.}}">{{end}}
+{{with .URL}}<meta property="og:url" content="{{.}}">
+<link rel="canonical" href="{{.}}">{{end}}
 <link rel="stylesheet" href="{{asset "site.css"}}">
 </head>
 <body class="sf sf-{{.M.Card.Template}} accent-{{.Accent}}">

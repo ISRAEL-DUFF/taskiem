@@ -76,9 +76,16 @@ export interface Storefront {
   /** Why orders and bookings are paused, when they are. */
   orders_paused?: string | null;
   preview_url: string;
+  /** The page's public address: its own primary domain once verified, else preview_url. */
+  url?: string;
+  /** The primary of the business's own verified domains. */
+  domain?: string | null;
   templates: string[];
   accents: Record<string, string>;
 }
+
+/** Where to send people to the published page: its own domain, else the preview address. */
+export const pageURL = (sf: Pick<Storefront, "url" | "preview_url">) => sf.url || sf.preview_url;
 
 /** URLs by width ("320", "800", "2000"). */
 export type Image = Record<string, string>;

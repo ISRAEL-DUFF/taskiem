@@ -7,7 +7,7 @@ The public host serves pages anyone on the internet can open: [storefronts](spec
 | Concern | Control |
 | --- | --- |
 | A flood or a viral page slowing payments, chat or the console | Its own role (`taskiem serve --role public`), deployment, scaling and connection pool (`TASKIEM_PUBLIC_DATABASE_POOL`, 5), apart from `edge`, which takes webhooks |
-| A bug reading tenant data | It connects as `taskiem_public`, which can read no table and execute only `taskiem_public_host` and the narrow functions later milestones add. A test fails the build if the role gains any other table privilege or privileged function |
+| A bug reading tenant data | It connects as `taskiem_public`, which can read no table and execute only `taskiem_public_host` and the narrow functions later milestones add (such as `taskiem_public_storefront_domain`, S6). A test fails the build if the role gains any other table privilege or privileged function |
 | The platform's secrets | `--role public` needs only `TASKIEM_PUBLIC_DATABASE_URL`: no KMS, no `TASKIEM_DATABASE_URL`, no provider keys. The Helm chart gives its pods `public.existingSecret` alone |
 | Cookies on a business's domain | None are set: any a handler tries to set is dropped and logged |
 | Script injection and framing | `Content-Security-Policy` allows no inline script or style and no framing (`httpsec.PublicCSP`); a test fails any template that uses inline code. Only `/embed/` pages may be framed, and only by the organisation's [proven websites](embed-sites.md) |
@@ -36,7 +36,9 @@ GRANT taskiem_public TO taskiem_public_login;
 
 `public_hosts` maps a host name to the site it serves. A host serves only once verified. A suspended host, or one whose organisation is suspended, answers 410 "This page is unavailable". Suspension takes effect on every replica within 30 seconds, with no signal between them.
 
-Rows are written when storefronts and forms are set up (S2, S6). Until then, operators can add one by hand to try the host:
+Rows are written when storefronts are published (their preview address, S2) and when a business's [own domain](storefronts.md#your-own-domain) is verified (S6: the domain and its `www.` twin, through `taskiem_storefront_claim_domain`; removed when the domain is removed or unverified). While a storefront is published or closed and has a verified own domain, its other hosts answer page views (`GET`, `HEAD`, outside `/embed/`) with a 301 to the primary domain, cached for an hour; the public role reads that domain with `taskiem_public_storefront_domain`. Operators set where businesses point their domains with `TASKIEM_PUBLIC_CNAME` and `TASKIEM_PUBLIC_ADDRESSES`.
+
+Operators can also add a row by hand to try the host:
 
 ```sql
 INSERT INTO public_hosts (host, tenant_id, kind, site_id, verified_at)

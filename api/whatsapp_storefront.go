@@ -239,7 +239,7 @@ func (s *Server) shopNeed(ctx context.Context, c *chat) (storefront.Storefront, 
 }
 
 func (s *Server) shopLink(sf storefront.Storefront) string {
-	return storefront.PreviewURL(sf.PublishedSlug, s.previewDomain())
+	return sf.URL(s.previewDomain())
 }
 
 // --- make my page ---

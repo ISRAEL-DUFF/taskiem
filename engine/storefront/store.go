@@ -60,6 +60,19 @@ type Storefront struct {
 	ReviewNote      *string `json:"review_note"`
 	SuspendedReason *string `json:"suspended_reason"`
 	OrdersPaused    *string `json:"orders_paused"`
+	// Domain is the primary of the business's own verified domains
+	// (domains.go), where the page is served once published.
+	Domain *string `json:"domain"`
+}
+
+// URL is the published page's public address: its own primary domain
+// when it has one, else the preview address (PreviewURL); "" before it
+// is published. Every link, QR code and card uses it.
+func (s Storefront) URL(previewDomain string) string {
+	if s.Domain != nil && s.PublishedSlug != nil && *s.PublishedSlug != "" {
+		return "https://" + *s.Domain
+	}
+	return PreviewURL(s.PublishedSlug, previewDomain)
 }
 
 // Image is a published image's URLs by width.
@@ -104,14 +117,16 @@ func (it Item) SoldOut() bool { return it.Stock != nil && *it.Stock <= 0 }
 
 const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, published_version, published_slug, published_at, closed_message,
 	catalogue_synced_at, catalogue_error, updated_at, services_table, services_columns, availability, review_note, suspended_reason, orders_paused,
-	(SELECT m.urls FROM storefront_media m WHERE m.tenant_id = storefronts.tenant_id AND m.id::text = storefronts.draft->>'logo' AND m.moderation <> 'rejected')`
+	(SELECT m.urls FROM storefront_media m WHERE m.tenant_id = storefronts.tenant_id AND m.id::text = storefronts.draft->>'logo' AND m.moderation <> 'rejected'),
+	(SELECT d.host FROM storefront_domains d WHERE d.storefront_id = storefronts.id AND d.verified_at IS NOT NULL
+	  ORDER BY d.is_primary DESC, d.verified_at, d.host LIMIT 1)`
 
 func scan(r pgx.Row) (Storefront, error) {
 	var s Storefront
 	var draft, columns, scols, avail, logo []byte
 	err := r.Scan(&s.ID, &s.Slug, &s.Status, &draft, &s.CatalogueTable, &columns, &s.PublishedVersion, &s.PublishedSlug, &s.PublishedAt,
 		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &s.ServicesTable, &scols, &avail,
-		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo)
+		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo, &s.Domain)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Storefront{}, ErrNotFound
 	}
