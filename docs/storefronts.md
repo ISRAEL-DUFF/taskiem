@@ -80,5 +80,6 @@ The web app shows the storefront's address as a QR code (`GET /v1/storefront/qr`
 | `POST /v1/storefront/media` | Store a logo or photo (the image as the body) |
 | `POST /v1/storefront/catalogue/rows/{row}/photo` | Store a photo and set it on a row |
 | `GET /v1/storefront/qr` | The address as a QR code |
+| `GET /v1/storefront/image?src=` | One of the storefront's photos, for the web app, whose Content-Security-Policy allows images from its own origin only. Only the organisation's own public storefront images are fetched (its project host, its images path), through the egress guard |
 
-The OpenAPI document has the shapes.
+`preview_url` is where the **published** version serves: a slug changed in the draft serves once published (`published_slug`). The OpenAPI document has the shapes.

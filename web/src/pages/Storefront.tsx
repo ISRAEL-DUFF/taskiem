@@ -304,7 +304,7 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
         </fieldset>
         <LogoField
           logo={form.text.logo}
-          url={logoURL}
+          url={logoURL ?? (form.text.logo === saved?.draft.logo ? thumb(saved?.logo_urls) : undefined)}
           onChange={(id, url) => {
             setText("logo", id);
             setLogoURL(url);

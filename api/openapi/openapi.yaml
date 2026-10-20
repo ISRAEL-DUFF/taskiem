@@ -618,6 +618,39 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/image:
+    get:
+      operationId: storefrontImage
+      tags:
+      - Storefront
+      summary: One of the storefront's photos, through the API
+      description: For the web app, whose Content-Security-Policy allows images from its own origin only. Only the organisation's own public storefront images are fetched.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: src
+        in: query
+        required: true
+        schema:
+          type: string
+        description: A URL from the storefront's `urls`, `logo_urls` or an item's `photo`
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/embed-sites:
     get:
       operationId: listEmbedSites
@@ -12586,6 +12619,13 @@ components:
           $ref: '#/components/schemas/StorefrontColumns'
         published_version:
           type: integer
+        published_slug:
+          type:
+          - string
+          - 'null'
+          description: The slug the published version serves at; a slug changed in the draft serves once published
+        logo_urls:
+          $ref: '#/components/schemas/StorefrontImage'
         published_at:
           $ref: '#/components/schemas/NullableTimestamp'
         closed_message:
@@ -12603,7 +12643,7 @@ components:
           format: date-time
         preview_url:
           type: string
-          description: Where the storefront is served; empty when the public host has no preview domain
+          description: Where the published version is served; empty before publishing or when the public host has no preview domain
         templates:
           type: array
           items:

@@ -51,6 +51,10 @@ export interface Storefront {
   catalogue_table: string | null;
   catalogue_columns: Columns;
   published_version: number;
+  /** The slug the published version serves at. */
+  published_slug: string | null;
+  /** The draft's logo by width, unless it was rejected. */
+  logo_urls?: Image;
   published_at: string | null;
   closed_message: string | null;
   catalogue_synced_at: string | null;
@@ -262,17 +266,27 @@ export function cleanColumns(c: Columns): Columns {
 // --- media ---
 
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-export const MAX_IMAGE_BYTES = 5 << 20;
+export const MAX_IMAGE_BYTES = 10 << 20;
 
 /** Why a file cannot be a storefront image, before it is sent, or null. */
 export function imageProblem(file: { type: string; size: number }): string | null {
   if (!IMAGE_TYPES.includes(file.type)) return "Choose a JPEG, PNG or WebP photo.";
-  if (file.size > MAX_IMAGE_BYTES) return "That photo is larger than 5 MB. Choose a smaller one.";
+  if (file.size > MAX_IMAGE_BYTES) return "That photo is larger than 10 MB. Choose a smaller one.";
   return null;
 }
 
-/** The smallest stored width, for a thumbnail. */
-export const thumb = (img: Image | undefined) => img?.["320"] ?? img?.["800"] ?? img?.["2000"];
+/**
+ * A stored image's smallest width, for a thumbnail, shown through the API:
+ * photos live on the organisation's Xenibase host, and the app's
+ * Content-Security-Policy allows images from its own origin only.
+ */
+export function thumb(img: Image | undefined): string | undefined {
+  const u = img?.["320"] ?? img?.["800"] ?? img?.["2000"];
+  return u ? viaAPI(u) : undefined;
+}
+
+/** A storefront image's URL through GET /v1/storefront/image. */
+export const viaAPI = (url: string) => `/v1/storefront/image?src=${encodeURIComponent(url)}`;
 
 // --- the editor's form ---
 

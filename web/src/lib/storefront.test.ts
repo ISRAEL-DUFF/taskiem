@@ -165,10 +165,10 @@ describe("images", () => {
   it("checks type and size before uploading", () => {
     expect(imageProblem({ type: "image/png", size: 1000 })).toBeNull();
     expect(imageProblem({ type: "image/gif", size: 1000 })).toMatch(/JPEG, PNG or WebP/);
-    expect(imageProblem({ type: "image/jpeg", size: 6 << 20 })).toMatch(/5 MB/);
+    expect(imageProblem({ type: "image/jpeg", size: 11 << 20 })).toMatch(/10 MB/);
   });
   it("picks the thumbnail", () => {
-    expect(thumb({ "2000": "big", "320": "small" })).toBe("small");
+    expect(thumb({ "2000": "big", "320": "https://ref.xb.test/s.jpg" })).toBe("/v1/storefront/image?src=https%3A%2F%2Fref.xb.test%2Fs.jpg");
     expect(thumb(undefined)).toBeUndefined();
   });
 });

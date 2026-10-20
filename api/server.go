@@ -332,6 +332,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/rows/{row}/photo", s.setStorefrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/media", s.uploadStorefrontMedia)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/qr", s.storefrontQR)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/image", s.storefrontImage)
 			r.With(s.need(PermStorefrontManage)).Get("/embed-sites", s.listEmbedSites)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites", s.addEmbedSite)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites/{id}/verify", s.verifyEmbedSite)

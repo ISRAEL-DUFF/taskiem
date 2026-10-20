@@ -43,8 +43,10 @@ func (s *Server) previewDomain() string {
 
 func (s *Server) storefrontOut(sf storefront.Storefront) storefrontOut {
 	out := storefrontOut{Storefront: sf, Templates: storefront.Templates, Accents: storefront.Accents}
-	if d := s.previewDomain(); d != "" {
-		out.PreviewURL = "https://" + sf.Slug + "." + d
+	// Where the published version serves: a slug changed in the draft
+	// serves only once published.
+	if d := s.previewDomain(); d != "" && sf.PublishedSlug != nil {
+		out.PreviewURL = "https://" + *sf.PublishedSlug + "." + d
 	}
 	return out
 }
@@ -52,9 +54,9 @@ func (s *Server) storefrontOut(sf storefront.Storefront) storefrontOut {
 func storefrontErr(err error) error {
 	switch {
 	case errors.Is(err, storefront.ErrInvalid):
-		return fmt.Errorf("%w: %w", errBadRequest, err)
+		return fmt.Errorf("%w: %s", errBadRequest, plainError(err))
 	case errors.Is(err, storefront.ErrSlugTaken), errors.Is(err, storefront.ErrNotPublished):
-		return fmt.Errorf("%w: %w", errConflict, err)
+		return fmt.Errorf("%w: %s", errConflict, plainError(err))
 	case errors.Is(err, storefront.ErrNotFound):
 		return pgx.ErrNoRows
 	}
@@ -310,6 +312,39 @@ func (s *Server) RunStorefronts(ctx context.Context) error {
 	}
 }
 
+// plainError is an error's message for people: without the packages'
+// prefixes ("storefront: invalid: publicnames: reserved name: \"www\""
+// becomes "reserved name: \"www\"").
+func plainError(err error) string {
+	msg := err.Error()
+	for _, p := range []string{"storefront: invalid: ", "storefront: ", "publicnames: ", "embedsites: invalid site: ", "embedsites: ", "media: ", "sender: invalid message: "} {
+		msg = strings.ReplaceAll(msg, p, "")
+	}
+	return msg
+}
+
+// storefrontImage serves one of the organisation's storefront photos to
+// the web app, whose CSP allows images from its own origin only
+// (media.FetchPublic checks the URL is the organisation's).
+func (s *Server) storefrontImage(w http.ResponseWriter, r *http.Request) {
+	if s.Media == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	data, ctype, err := s.Media.FetchPublic(r.Context(), principalFrom(r.Context()).TenantID, r.URL.Query().Get("src"))
+	if errors.Is(err, media.ErrNotOurs) {
+		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, plainError(err)))
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	_, _ = w.Write(data) //nolint:gosec // a JPEG or PNG by its bytes (FetchPublic), sent as that type with nosniff
+}
+
 // uploadStorefrontMedia stores an image (the request's body) for the
 // storefront: a logo or a product photo.
 func (s *Server) uploadStorefrontMedia(w http.ResponseWriter, r *http.Request) {
@@ -332,7 +367,7 @@ func (s *Server) storeStorefrontImage(r *http.Request) (storefront.Media, error)
 	p := principalFrom(r.Context())
 	img, err := s.Media.PutImage(r.Context(), p.TenantID, data)
 	if errors.Is(err, media.ErrImage) {
-		return storefront.Media{}, fmt.Errorf("%w: %w", errBadRequest, err)
+		return storefront.Media{}, fmt.Errorf("%w: %s", errBadRequest, plainError(err))
 	}
 	if err != nil {
 		return storefront.Media{}, err

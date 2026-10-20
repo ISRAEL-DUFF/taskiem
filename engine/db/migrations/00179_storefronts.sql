@@ -16,6 +16,7 @@ CREATE TABLE storefronts (
   catalogue_table     uuid REFERENCES data_tables(id) ON DELETE SET NULL,
   catalogue_columns   jsonb NOT NULL DEFAULT '{}',
   published_version   int NOT NULL DEFAULT 0,
+  published_slug      text,
   published_at        timestamptz,
   closed_message      text,
   catalogue_synced_at timestamptz,

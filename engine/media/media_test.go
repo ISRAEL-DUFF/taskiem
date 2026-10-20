@@ -32,7 +32,7 @@ type fakeFiles struct {
 func (f *fakeFiles) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if r.Header.Get("Authorization") != "Bearer xb_tok" {
+	if r.Header.Get("Authorization") != "Bearer xb_tok" && !strings.HasPrefix(r.URL.Path, "/storage/v1/public/") {
 		w.WriteHeader(401)
 		return
 	}
@@ -41,6 +41,12 @@ func (f *fakeFiles) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, root)
 	body, _ := io.ReadAll(r.Body)
 	switch {
+	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/storage/v1/public/"):
+		if strings.HasSuffix(r.URL.Path, ".txt") {
+			_, _ = io.WriteString(w, "<html>not an image</html>")
+			return
+		}
+		_, _ = w.Write(encodeJPEG(f.t, halves(40, 20)))
 	case r.Method == "GET" && p == "":
 		list := []bucketInfo{}
 		for _, b := range f.buckets {
@@ -221,5 +227,32 @@ func TestPublicURL(t *testing.T) {
 	}
 	if got := PublicURL("https://ref.xb.test", "images/a b/#1.jpg"); !strings.HasSuffix(got, "/images/a%20b/%231.jpg") {
 		t.Fatal(got)
+	}
+}
+
+func TestFetchPublic(t *testing.T) {
+	s, _ := newService(t)
+	f := &fakeFiles{t: t}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	s.Credentials = func(context.Context, uuid.UUID) (map[string]string, error) {
+		return map[string]string{"token": "xb_tok", "project_id": "prj_1", "base_url": srv.URL, "api_url": srv.URL}, nil
+	}
+	ok := srv.URL + "/storage/v1/public/taskiem-public/images/ab/320.jpg"
+	data, ctype, err := s.FetchPublic(context.Background(), uuid.New(), ok)
+	if err != nil || ctype != "image/jpeg" || len(data) == 0 {
+		t.Fatalf("%v %s", err, ctype)
+	}
+	for _, bad := range []string{
+		"https://evil.test/storage/v1/public/taskiem-public/images/ab/320.jpg",
+		srv.URL + "/storage/v1/public/taskiem-private/files/x.pdf",
+		srv.URL + "/storage/v1/public/taskiem-public/../taskiem-private/files/x.pdf",
+		srv.URL + "/api/v1/projects/prj_1/files",
+		ok + "?x=1",
+		srv.URL + "/storage/v1/public/taskiem-public/images/ab/notes.txt",
+	} {
+		if _, _, err := s.FetchPublic(context.Background(), uuid.New(), bad); !errors.Is(err, ErrNotOurs) {
+			t.Errorf("%s: %v", bad, err)
+		}
 	}
 }

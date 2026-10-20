@@ -40,11 +40,16 @@ type Storefront struct {
 	CatalogueTable   *uuid.UUID `json:"catalogue_table"`
 	CatalogueColumns Columns    `json:"catalogue_columns"`
 	PublishedVersion int        `json:"published_version"`
-	PublishedAt      *time.Time `json:"published_at"`
-	ClosedMessage    *string    `json:"closed_message"`
-	CatalogueSynced  *time.Time `json:"catalogue_synced_at"`
-	CatalogueError   *string    `json:"catalogue_error"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	// PublishedSlug is the slug the published version serves at (the
+	// draft's may differ until it is published).
+	PublishedSlug *string `json:"published_slug"`
+	// LogoURLs are the draft's logo's URLs by width, unless rejected.
+	LogoURLs        Image      `json:"logo_urls,omitempty"`
+	PublishedAt     *time.Time `json:"published_at"`
+	ClosedMessage   *string    `json:"closed_message"`
+	CatalogueSynced *time.Time `json:"catalogue_synced_at"`
+	CatalogueError  *string    `json:"catalogue_error"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // Image is a published image's URLs by width.
@@ -74,14 +79,15 @@ type Item struct {
 	Category    string `json:"category,omitempty"`
 }
 
-const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, published_version, published_at, closed_message,
-	catalogue_synced_at, catalogue_error, updated_at`
+const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, published_version, published_slug, published_at, closed_message,
+	catalogue_synced_at, catalogue_error, updated_at,
+	(SELECT m.urls FROM storefront_media m WHERE m.tenant_id = storefronts.tenant_id AND m.id::text = storefronts.draft->>'logo' AND m.moderation <> 'rejected')`
 
 func scan(r pgx.Row) (Storefront, error) {
 	var s Storefront
-	var draft, columns []byte
-	err := r.Scan(&s.ID, &s.Slug, &s.Status, &draft, &s.CatalogueTable, &columns, &s.PublishedVersion, &s.PublishedAt,
-		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt)
+	var draft, columns, logo []byte
+	err := r.Scan(&s.ID, &s.Slug, &s.Status, &draft, &s.CatalogueTable, &columns, &s.PublishedVersion, &s.PublishedSlug, &s.PublishedAt,
+		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &logo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Storefront{}, ErrNotFound
 	}
@@ -90,6 +96,9 @@ func scan(r pgx.Row) (Storefront, error) {
 	}
 	_ = json.Unmarshal(draft, &s.Draft)
 	_ = json.Unmarshal(columns, &s.CatalogueColumns)
+	if logo != nil {
+		_ = json.Unmarshal(logo, &s.LogoURLs)
+	}
 	return s, nil
 }
 
@@ -158,7 +167,7 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 		return Storefront{}, err
 	}
 	return scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = CASE WHEN status = 'closed' THEN 'closed' ELSE 'published' END,
-		published_version = $2, published_at = now(), updated_at = now() WHERE tenant_id = $1 RETURNING `+cols, tenant, m.Version))
+		published_version = $2, published_slug = slug, published_at = now(), updated_at = now() WHERE tenant_id = $1 RETURNING `+cols, tenant, m.Version))
 }
 
 // Close shows message instead of the catalogue until reopened.

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -29,6 +30,8 @@ func fakeStorage(t *testing.T) *httptest.Server {
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/files/buckets"):
 			w.WriteHeader(201)
 			_, _ = io.WriteString(w, `{}`)
+		case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/storage/v1/public/"):
+			_, _ = w.Write(photo(t))
 		case r.Method == "PUT" && strings.HasSuffix(r.URL.Path, "/object"):
 			body, _ := io.ReadAll(r.Body)
 			_ = json.NewEncoder(w).Encode(map[string]any{"path": r.URL.Query().Get("path"), "size": len(body), "mime_type": r.Header.Get("Content-Type")})
@@ -86,7 +89,7 @@ func TestStorefront(t *testing.T) {
 	store := fakeStorage(t)
 	w.srv.Media = &media.Service{
 		Credentials: func(context.Context, uuid.UUID) (map[string]string, error) {
-			return map[string]string{"token": "xb_tok", "project_id": "prj_1", "base_url": store.URL, "api_url": "https://ref.xb.test"}, nil
+			return map[string]string{"token": "xb_tok", "project_id": "prj_1", "base_url": store.URL, "api_url": store.URL}, nil
 		},
 		Guard: &egress.Guard{Blocked: func(netip.Addr) bool { return false }},
 	}
@@ -111,7 +114,7 @@ func TestStorefront(t *testing.T) {
 		owner.must(400, "PUT", "/v1/storefront", bad)
 	}
 	sf := owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "Ada-Kitchen", "draft": card, "catalogue_table": table, "catalogue_columns": columns})
-	if sf["slug"] != "ada-kitchen" || sf["status"] != "draft" || sf["preview_url"] != "https://ada-kitchen.shops.taskiem.test" {
+	if sf["slug"] != "ada-kitchen" || sf["status"] != "draft" || sf["preview_url"] != "" {
 		t.Fatalf("%v", sf)
 	}
 
@@ -126,7 +129,7 @@ func TestStorefront(t *testing.T) {
 	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": card, "catalogue_table": table, "catalogue_columns": columns})
 
 	pub := owner.must(200, "POST", "/v1/storefront/publish", nil)
-	if pub["status"] != "published" || pub["published_version"] != float64(1) {
+	if pub["status"] != "published" || pub["published_version"] != float64(1) || pub["preview_url"] != "https://ada-kitchen.shops.taskiem.test" || pub["published_slug"] != "ada-kitchen" {
 		t.Fatalf("%v", pub)
 	}
 	cat := owner.must(200, "GET", "/v1/storefront/catalogue", nil)
@@ -151,8 +154,16 @@ func TestStorefront(t *testing.T) {
 		t.Fatalf("photo: %d %v", s, m)
 	}
 	cat = owner.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)
-	if p, _ := cat["items"].([]any)[0].(map[string]any)["photo"].(map[string]any); p["800"] == nil || !strings.HasPrefix(p["800"].(string), "https://ref.xb.test/storage/v1/public/taskiem-public/images/") {
+	p, _ := cat["items"].([]any)[0].(map[string]any)["photo"].(map[string]any)
+	if p["800"] == nil || !strings.HasPrefix(p["800"].(string), store.URL+"/storage/v1/public/taskiem-public/images/") {
 		t.Fatalf("photo not in the catalogue: %v", cat)
+	}
+	// The web app shows it through the API; nothing else is fetched.
+	if s, h, body := owner.rawGet(t, "/v1/storefront/image?src="+url.QueryEscape(p["320"].(string))); s != 200 || h.Get("Content-Type") != "image/jpeg" || len(body) == 0 {
+		t.Fatalf("image: %d %v", s, h)
+	}
+	if s, _, _ := owner.rawGet(t, "/v1/storefront/image?src="+url.QueryEscape("http://169.254.169.254/latest/meta-data")); s != 400 {
+		t.Fatalf("a foreign URL: %d", s)
 	}
 	if s, logo := owner.rawPost(t, "/v1/storefront/media", "image/jpeg", photo(t)); s != 201 || logo["id"] != m["id"] {
 		t.Fatalf("the same image is one record: %d %v", s, logo)
