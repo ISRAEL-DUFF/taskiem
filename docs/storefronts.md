@@ -1,6 +1,6 @@
 # Storefronts
 
-A storefront is a business's one-page public page: who it is, what it sells, and how to reach it ([spec](spec/storefronts.md), decision 0036). This is Phase 5, S2 and S3: the page, its catalogue, and ordering, questions and call-backs. Booking came with S4 ([below](#bookings)); setting up and running it [from chat](#from-chat) with S5, and field agents later in S5; the business's own domain and embedding with S6.
+A storefront is a business's one-page public page: who it is, what it sells, and how to reach it ([spec](spec/storefronts.md), decision 0036). This is Phase 5, S2 and S3: the page, its catalogue, and ordering, questions and call-backs. Booking came with S4 ([below](#bookings)); setting up and running it [from chat](#from-chat) with S5, and field agents later in S5; the business's [own domain](#your-own-domain) with S6, and embedding later.
 
 It is built and off by default: pages are served only by the [public host](public-host.md), and the web app's **Storefront** page needs `storefront.manage` (owners and admins).
 
@@ -211,11 +211,54 @@ A **moved** booking's run is ended and a new one started with the new time (`tri
 
 A booking run's `trigger.body` also holds `booking` (`service_id`, `service`, `starts_at`, `ends_at` in Lagos time, `when`, `auto_confirm`, the reminder times) and `event` (`new` or `rescheduled`).
 
+## Your own domain
+
+A business that already owns a domain can serve its page there instead of the preview address ([spec 6.6](spec/storefronts.md#66-addresses-domains-and-sharing)): `adakitchen.ng`, or a part of a domain it uses for something else, such as `shop.example.com`. This is Phase 5, S6. Buying a domain through the domain platform waits for its contract; embedding the page on a website comes later.
+
+1. **Add it** (the editor's **Your own domain**, or `POST /v1/storefront/domains` with `{"domain": "adakitchen.ng"}`). What was typed is tidied to a host name (`https://AdaKitchen.ng/` is `adakitchen.ng`). Refused, as for [embed sites](embed-sites.md#adding-a-site):
+   - IP addresses, punycode names and public suffixes themselves (`com.ng`);
+   - government and protected names;
+   - the platform's own domains: the web app's (`TASKIEM_PUBLIC_URL`) and the public host's (`TASKIEM_PUBLIC_DOMAINS`, so never a preview address).
+
+   A registrable domain brings its `www.` twin with it, and `www.adakitchen.ng` brings `adakitchen.ng`; a subdomain such as `shop.example.com` is just itself. A storefront may have up to 5 domains.
+2. **Create the records** the answer lists (`records`), at the company the domain was bought from:
+
+   | Record | Why |
+   | --- | --- |
+   | TXT `_taskiem-verify.adakitchen.ng` = `taskiem-domain-verify=…` | Proves the business controls the domain. One record covers the domain and its `www.` twin. Keep it: it is checked again |
+   | A / AAAA `adakitchen.ng` → the public host's addresses | Sends visitors to the page. A registrable domain cannot be a CNAME; without addresses configured, the answer says to use the DNS provider's ALIAS, ANAME or CNAME flattening to the CNAME target instead |
+   | CNAME `www.adakitchen.ng` (or `shop.example.com`) → `pages.<preview domain>` | The same, for a subdomain |
+
+3. **Check it** (`POST /v1/storefront/domains/{id}/verify`). The answer is 409 until the TXT record holds the value; DNS can take a few hours. Once verified the domain serves the page on every replica within 30 seconds, the proxy obtains its certificate the first time it is visited, and the page's address becomes the domain.
+
+Each step needs `storefront.manage` and is audited: `storefront_domain.add`, `storefront_domain.verify`, `storefront_domain.primary`, `storefront_domain.remove`.
+
+**Who gets a domain.** Any number of organisations may add the same domain, each with its own value to publish; the first to prove it serves it. Another can prove it only once the first removes it or it is unverified. Nothing is taken from a page serving it.
+
+**One primary.** The first domain verified is the **primary**; `POST /v1/storefront/domains/{id}/primary` makes another verified domain the primary. While the page is published or closed, every other address of it (the preview address, the `www.` twin, other domains) answers a page view with a **301** to the same path on the primary, kept by browsers for an hour only (`Cache-Control: max-age=3600`), so a domain that later stops serving is not followed for long. Forms being sent (`POST`) and `/embed/` views are served where they are. A draft is not served on any address; a suspended page answers 410 on every address, with no redirect.
+
+**Proven again.** As embed sites are, every 6 hours: a domain whose TXT record no longer holds its value, 4 checks in a row over at least 24 hours, is **unverified**. It stops serving at once (the proxy's `/tls/ask` answers 404 for it), the preview address serves the page again with no redirect, and `storefront_domain.unverified` is audited with the reason by `storefront-domain-checker`. A check that says nothing (a DNS timeout) is not counted. The editor shows the reason; putting the record back and checking again restores it.
+
+**Removing** a domain (`DELETE /v1/storefront/domains/{id}`) stops it serving at once, within the public host's 30-second cache.
+
+**Links.** The storefront's `url` is its primary domain once verified, else `preview_url`. The web app's links, the QR code and printed card, the page's `og:url` and canonical link, the public host's `/qr.png` and the chat's links all use it. Status links already sent on the preview address keep working: they redirect.
+
+**On the public host** a business's domain is a `public_hosts` row like the preview address, served with the same headers: no cookies, the strict Content-Security-Policy, no framing ([spec 8.3](spec/storefronts.md#83-isolation-from-the-app)). It serves nothing of the web app or the API.
+
+**Operators** set where domains point:
+
+| Variable | |
+| --- | --- |
+| `TASKIEM_PUBLIC_CNAME` | The name subdomains point at. Default `pages.<first of TASKIEM_PUBLIC_DOMAINS>`, which the preview domain's wildcard record already sends to the public host |
+| `TASKIEM_PUBLIC_ADDRESSES` | The public host's IPv4 and IPv6 addresses (comma-separated), for registrable domains' A and AAAA records. Unset, owners are told to use ALIAS or CNAME flattening |
+
+Certificates are issued on demand by the proxy in front of the public host ([public host](public-host.md#setting-it-up)).
+
 ## QR code and printable card
 
 The web app shows the storefront's address as a QR code (`GET /v1/storefront/qr`, SVG or PNG) and prints an A6 card with the name, the QR code, the address and the phone, for the stall, the counter or the bag.
 
-The public host serves the same code as `https://<host>/qr.png` on every published storefront's host: a PNG of the page's preview address (`<slug>.<preview domain>`, whichever of the storefront's hosts is asked), cacheable for an hour, holding nothing but the address. A draft has none. That is the image the chat sends.
+The public host serves the same code as `https://<host>/qr.png` on every published storefront's host: a PNG of the page's address (its [own domain](#your-own-domain) once live, else `<slug>.<preview domain>`, whichever of the storefront's hosts is asked), cacheable for an hour, holding nothing but the address. A draft has none. That is the image the chat sends.
 
 ## From chat
 
@@ -250,6 +293,8 @@ Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), a
 | `POST /v1/storefront/media` | Store a logo or photo (the image as the body) |
 | `POST /v1/storefront/catalogue/rows/{row}/photo` | Store a photo and set it on a row |
 | `GET /v1/storefront/qr` | The address as a QR code |
+| `GET /v1/storefront/domains`, `POST /v1/storefront/domains` | The business's [own domains](#your-own-domain), and adding one |
+| `POST /v1/storefront/domains/{id}/verify`, `/primary`, `DELETE /v1/storefront/domains/{id}` | Checking a domain's TXT record, making it the primary, removing it |
 | `GET /v1/storefront/actions`, `PUT /v1/storefront/actions/{kind}` | The forms and their settings |
 | `GET /v1/storefront/orders`, `GET /v1/storefront/orders/{reference}` | Orders, questions, call-backs and bookings; `?reveal=true` with `pii.reveal` |
 | `PUT /v1/storefront/bookings` | The services table, its mapping and when bookings are taken |
@@ -259,4 +304,4 @@ Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), a
 | `POST /v1/storefront/orders/{reference}/refund` | The owner's refund of a paid order or booking that is refund due |
 | `GET /v1/storefront/image?src=` | One of the storefront's photos, for the web app, whose Content-Security-Policy allows images from its own origin only. Only the organisation's own public storefront images are fetched (its project host, its images path), through the egress guard |
 
-`preview_url` is where the **published** version serves: a slug changed in the draft serves once published (`published_slug`). The OpenAPI document has the shapes.
+`preview_url` is where the **published** version serves on the preview domain: a slug changed in the draft serves once published (`published_slug`). `url` is the page's address to share: its primary [own domain](#your-own-domain) once verified (`domain`), else `preview_url`. The OpenAPI document has the shapes.
