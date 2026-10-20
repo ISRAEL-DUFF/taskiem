@@ -25,7 +25,7 @@
     {{with .M.MapLink}}<a class="btn" href="{{.}}" rel="noopener">Directions</a>{{end}}
   </nav>
   {{if .Forms}}<nav class="sf-actions sf-forms" aria-label="Order and contact forms">
-    {{range .Forms}}<a class="btn{{if eq .Kind "order"}} btn-primary{{end}}" href="/a/{{.Kind}}">{{.Label}}</a>
+    {{range .Forms}}<a class="btn{{if or (eq .Kind "order") (and (eq .Kind "booking") (not $.Ordering))}} btn-primary{{end}}" href="/a/{{.Kind}}">{{.Label}}</a>
     {{end}}
   </nav>{{end}}
 </header>
@@ -34,6 +34,20 @@
   <p class="sf-closed" role="status">{{.Closed}}</p>
   {{end}}
   {{with .M.Card.About}}<section class="sf-about"><h2>About</h2><p>{{.}}</p></section>{{end}}
+  {{if .Services}}
+  <section class="sf-catalogue" aria-label="Services">
+    <h2>Services</h2>
+    <ul class="sf-items">
+      {{range .Services}}
+      <li class="sf-item"><div class="sf-item-text">
+        <h3>{{.Name}}</h3>
+        <p class="sf-price">{{.Length}} · {{.Price}}</p>
+        <a class="btn btn-small" href="{{.Href}}" aria-label="Book {{.Name}}">Book</a>
+      </div></li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
   {{if .HasItems}}
   <section class="sf-catalogue" aria-label="Catalogue">
     {{range .Sections}}

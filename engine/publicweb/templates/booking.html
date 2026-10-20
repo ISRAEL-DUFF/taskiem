@@ -1,0 +1,41 @@
+{{template "fhead" .}}{{template "fbody" .}}
+<h1>{{.Label}}</h1>
+{{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
+{{with .Service}}
+<p class="sf-svc"><strong>{{.Name}}</strong> · {{.Length}} · {{.Price}}{{with $.Others}} <a href="{{.}}">Choose another</a>{{end}}</p>
+{{with $.Current}}<p>Booked for {{.}}</p>{{end}}
+{{if $.Days}}<nav class="sf-days" aria-label="Days">{{range $.Days}}<a class="btn btn-small{{if .Current}} btn-primary{{end}}" href="{{.Href}}"{{if .Current}} aria-current="date"{{end}}>{{.Label}}</a> {{end}}</nav>{{end}}
+{{with $.NoTimes}}<p class="sf-closed" role="status">{{.}}</p>{{end}}
+{{if $.Slots}}
+<form method="post" action="{{$.Action}}">
+<input type="hidden" name="token" value="{{$.Token}}">
+<div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="{{$.Honeypot}}" value="" autocomplete="off" tabindex="-1"></label></div>
+<input type="hidden" name="service" value="{{.ID}}">
+<fieldset class="sf-choice sf-slots">
+<legend>Times on {{$.Day}}</legend>
+{{range $.Slots}}<label><input type="radio" name="start" value="{{.Value}}" required{{if .Checked}} checked{{end}}> {{.Label}}</label>
+{{end}}</fieldset>
+{{if not $.Move}}
+<label for="f-name">Your name</label>
+<input id="f-name" type="text" name="name" value="{{$.Name}}" maxlength="80" autocomplete="name" required>
+<label for="f-phone">Phone number</label>
+<input id="f-phone" type="tel" name="phone" value="{{$.Phone}}" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0803 123 4567" required>
+<label for="f-email">Email <span class="hint">(optional)</span></label>
+<input id="f-email" type="email" name="email" value="{{$.Email}}" maxlength="254" autocomplete="email">
+{{with $.Pay}}<p class="sf-pay">{{.}}</p>{{end}}
+<p class="hint sf-privacy">Your details go to {{$.Business}} only, to {{$.Purpose}} and to contact you about it. Taskiem runs this page for them.</p>
+<button class="btn btn-primary" type="submit">Book</button>
+{{else}}
+<button class="btn btn-primary" type="submit">Move to this time</button>
+{{end}}
+</form>
+{{end}}
+{{else}}
+{{with .Services}}<p>Choose a service.</p>
+<ul class="sf-services">
+{{range .}}<li><a href="{{.Href}}"><strong>{{.Name}}</strong></a> <span class="hint">{{.Length}} · {{.Price}}</span></li>
+{{end}}</ul>
+{{else}}<p class="sf-closed" role="status">{{$.NoTimes}}</p>{{end}}
+{{end}}
+{{with .Back}}<p><a href="{{.}}">Keep my booking as it is</a></p>{{end}}
+{{template "ffoot" .}}

@@ -131,7 +131,10 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 		log.Warn("the public host connects with the same database login as the other roles; give it its own login, a member of taskiem_public only (docs/public-host.md)")
 	}
 	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool),
-		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool), Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
+		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool),
+		Services: publicweb.DBServices(pool), Busy: publicweb.DBBusy(pool), Book: publicweb.DBBook(pool), Booking: publicweb.DBBookingStatus(pool),
+		Change: publicweb.DBChange(pool), PriceChange: publicweb.DBPriceChange(pool),
+		Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
 	if k := cfg.Public.Key; k != nil {
 		if srv.FormKey, err = storefront.FormKey(k); err != nil {
 			pool.Close()

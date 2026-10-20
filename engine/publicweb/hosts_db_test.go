@@ -111,7 +111,7 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// Bookings (S4): the services and free time, holding a slot, a booking's status and the customer's changes.
 		"taskiem_public_storefront_services(uuid)": true, "taskiem_public_busy(uuid,timestamp with time zone,timestamp with time zone)": true,
 		"taskiem_public_book(uuid,text,bytea,bytea,bytea,text,timestamp with time zone,timestamp with time zone,integer)": true,
-		"taskiem_public_booking(text,bytea)": true,
+		"taskiem_public_booking(text,bytea)": true, "taskiem_public_price_change(text,bytea)": true,
 		"taskiem_public_change(text,bytea,text,integer,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer)": true}
 	for _, f := range definers {
 		if !allowed[f] {
