@@ -2,7 +2,19 @@
 # Everything goes to the one process: the web app, /v1, and webhooks
 # (/hooks/, which the all-roles process serves too). Taskiem sets HSTS
 # itself on an https TASKIEM_PUBLIC_URL. Metrics (9090) are never proxied.
+{
+	# Certificates for storefronts' hosts are issued when first visited,
+	# and only for a host the public host says it serves (docs/vm.md,
+	# docs/public-host.md). Used only by the sites in caddy.d/.
+	on_demand_tls {
+		ask http://taskiem-public:9090/tls/ask
+	}
+}
+
 {$TASKIEM_DOMAIN} {
 	encode zstd gzip
 	reverse_proxy taskiem:8080
 }
+
+# The public host's sites, when public pages are on (taskiem-vps setup).
+import /etc/caddy/caddy.d/*.caddy

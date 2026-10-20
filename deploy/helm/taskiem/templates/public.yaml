@@ -1,0 +1,178 @@
+{{- if .Values.public.enabled }}
+{{- $p := .Values.public }}
+{{- $name := printf "%s-public" (include "taskiem.fullname" .) }}
+# The public host (docs/public-host.md): its own Deployment, Service and
+# scaling, and no platform secret. Only /tls/ask on the metrics port is
+# for the proxy that issues business domains' certificates.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  {{- if not $p.autoscaling.enabled }}
+  replicas: {{ $p.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public
+  template:
+    metadata:
+      labels:
+        {{- include "taskiem.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: public
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "taskiem.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "taskiem.podSecurityContext" . | nindent 8 }}
+      terminationGracePeriodSeconds: {{ include "taskiem.gracePeriod" . }}
+      containers:
+        - name: taskiem
+          image: {{ include "taskiem.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: [serve, --role, public]
+          securityContext:
+            {{- include "taskiem.containerSecurityContext" . | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ $p.existingSecret }}
+          env:
+            - name: TASKIEM_PUBLIC_DATABASE_POOL
+              value: {{ $p.databasePool | quote }}
+            - name: TASKIEM_TRUST_PROXY
+              value: {{ .Values.config.TASKIEM_TRUST_PROXY | default "true" | quote }}
+            {{- include "taskiem.shutdownEnv" . | nindent 12 }}
+          ports:
+            - name: public
+              containerPort: 8082
+            - name: metrics
+              containerPort: 9090
+          readinessProbe:
+            httpGet: { path: /readyz, port: metrics }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            {{- toYaml $p.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "taskiem.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+  ports:
+    - { name: public, port: 80, targetPort: public }
+    - { name: metrics, port: 9090, targetPort: metrics }
+{{- if $p.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $p.autoscaling.minReplicas }}
+  maxReplicas: {{ $p.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $p.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- if and .Values.podDisruptionBudget.enabled (or $p.autoscaling.enabled (gt (int $p.replicas) 1)) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+# Page traffic on 8082 from anywhere (the proxy in front). The metrics port,
+# with /tls/ask, only from the monitoring namespace and the namespace of
+# the proxy that issues certificates.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ port: 8082 }]
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+        {{- with .Values.networkPolicy.tlsProxyNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+        {{- end }}
+      ports: [{ port: 9090 }]
+{{- end }}
+{{- end }}

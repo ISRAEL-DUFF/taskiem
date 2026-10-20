@@ -26,6 +26,8 @@ services:
       TASKIEM_DOMAIN: ${TASKIEM_DOMAIN:?set TASKIEM_DOMAIN in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # public.caddy when public pages are on (taskiem-vps setup).
+      - ./caddy.d:/etc/caddy/caddy.d:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -104,6 +106,29 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       openbao: { condition: service_healthy }
+
+  # The public host for storefronts and hosted forms (docs/public-host.md),
+  # started only with the "public" profile (COMPOSE_PROFILES in .env, set
+  # by taskiem-vps setup). It gets its own database login, a member of
+  # taskiem_public only, and nothing else: no OpenBao token, no platform
+  # secret.
+  taskiem-public:
+    <<: *hardening
+    profiles: [public]
+    image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
+    command: ["serve", "--role", "public"]
+    env_file: [public.env]
+    read_only: true
+    cap_drop: [ALL]
+    tmpfs: [/tmp]
+    ports:
+      - "127.0.0.1:9091:9090"
+    healthcheck:
+      test: ["CMD", "/taskiem", "healthcheck", "127.0.0.1:9090"]
+      interval: 10s
+      retries: 6
+    depends_on:
+      migrate: { condition: service_completed_successfully }
 
 volumes:
   caddy_data: {}

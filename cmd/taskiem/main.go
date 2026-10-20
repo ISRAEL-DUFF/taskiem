@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -89,8 +90,11 @@ Usage:
                                      declare incidents and maintenance on the public status page (operators; recorded)
   taskiem operators [add|enrol|reset|disable EMAIL]
                                      operator accounts for the operator console: passkey enrolment links (audited)
+  taskiem messages test --sms NUMBER|--email ADDRESS
+                                     send one test message through the platform's SMS or mail (docs/messages.md)
   taskiem canary setup|probe|run     set up and run the synthetic end-to-end probe (docs/reliability.md)
-  taskiem healthcheck                probe the local API (container health checks)
+  taskiem media check TENANT_ID      round trip through a tenant's Xenibase storage (docs/media.md)
+  taskiem healthcheck [ADDR]         probe the local API, or ADDR's /readyz (container health checks)
   taskiem version                    print the version
 
 diff, deploy, promote, runs and connector push use $TASKIEM_URL (default http://localhost:8080) and an
@@ -157,16 +161,20 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return connectorCmd(context.Background(), args[1:], stdout)
 	case "catalogue":
 		return catalogueCmd(context.Background(), args[1:], stdout)
+	case "media":
+		return mediaCmd(context.Background(), args[1:], stdout)
 	case "status":
 		return statusCmd(context.Background(), args[1:], stdout)
 	case "operators":
 		return operatorsCmd(context.Background(), args[1:], stdout)
+	case "messages":
+		return messagesCmd(context.Background(), args[1:], stdout)
 	case "canary":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		return canaryCmd(ctx, args[1:], stdout)
 	case "healthcheck":
-		return healthcheck()
+		return healthcheck(args[1:])
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return nil
@@ -388,14 +396,23 @@ func readAnchorsFile(raw []byte) ([]audit.Anchor, error) {
 }
 
 // healthcheck probes the local API's /readyz, for container health checks
-// in images without a shell.
-func healthcheck() error {
+// in images without a shell; with an address (the public role's metrics
+// port, :9090), that one.
+func healthcheck(args []string) error {
 	addr := env("TASKIEM_LISTEN", ":8080")
+	if len(args) == 1 {
+		addr = args[0] //nolint:gosec // the length is checked
+	}
 	if strings.HasPrefix(addr, ":") {
 		addr = "127.0.0.1" + addr
 	}
+	// Only this machine: it is a container's own health check.
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil || (host != "localhost" && !net.ParseIP(host).IsLoopback()) {
+		return fmt.Errorf("healthcheck: %q is not a loopback address and port", addr)
+	}
 	c := &http.Client{Timeout: 3 * time.Second}
-	resp, err := c.Get("http://" + addr + "/readyz")
+	resp, err := c.Get("http://" + addr + "/readyz") //nolint:gosec // a loopback address, checked above
 	if err != nil {
 		return err
 	}

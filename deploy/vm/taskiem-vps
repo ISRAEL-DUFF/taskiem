@@ -119,6 +119,13 @@ install_kit() { # DIR
   for f in docker-compose.yml Caddyfile openbao.hcl openbao-taskiem-policy.hcl; do
     install -m 0644 "$src/$f" "$KIT/$f"
   done
+  # Kits from before the public host (a rollback) have no public.caddy.
+  if [ -f "$src/public.caddy" ]; then
+    install -m 0644 "$src/public.caddy" "$KIT/public.caddy"
+    [ ! -f "$KIT/caddy.d/public.caddy" ] || install -m 0644 "$src/public.caddy" "$KIT/caddy.d/public.caddy"
+  else
+    rm -f "$KIT/caddy.d/public.caddy"
+  fi
   install -m 0755 "$src/taskiem-vps" "/usr/local/bin/taskiem-vps.new" && mv -f /usr/local/bin/taskiem-vps.new /usr/local/bin/taskiem-vps
   if [ -z "${TASKIEM_VPS_NO_TIMERS:-}" ] && [ -d /run/systemd/system ]; then
     install -m 0644 "$src"/systemd/taskiem-vps-*.service "$src"/systemd/taskiem-vps-*.timer /etc/systemd/system/
@@ -138,10 +145,20 @@ wait_healthy() { # SECONDS
     id=$(compose ps -q taskiem 2>/dev/null || true)
     status=""
     if [ -n "$id" ]; then status=$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true); fi
-    if [ "$status" = healthy ] && local_https /readyz >/dev/null 2>&1; then return 0; fi
+    if [ "$status" = healthy ] && local_https /readyz >/dev/null 2>&1 && public_healthy; then return 0; fi
     sleep 3
   done
   return 1
+}
+
+# The public host, when public pages are on, healthy too.
+public_healthy() {
+  [ "$(conf PUBLIC)" = yes ] || return 0
+  # A release from before the public host (a rollback) has no such service.
+  compose config --services 2>/dev/null | grep -x taskiem-public >/dev/null || return 0
+  local id
+  id=$(compose ps -q taskiem-public 2>/dev/null || true)
+  [ -n "$id" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true)" = healthy ]
 }
 
 in_window() {
@@ -193,7 +210,7 @@ cmd_setup() {
 
   # ALERT_EMAIL and ALERT_WEBHOOK are read indirectly (${!f}) when saved below.
   # shellcheck disable=SC2034
-  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME
+  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME PUBLIC PREVIEW_DOMAIN
   echo "Taskiem setup. Press Enter to keep the value in brackets." >&2
   ask DOMAIN "Public host name (DNS must point here)" "$(conf DOMAIN)"
   ask OWNER_EMAIL "Owner's email (receives the set-your-password link)" "$(conf OWNER_EMAIL)"
@@ -206,6 +223,15 @@ cmd_setup() {
     ask TELEGRAM_BOT_USERNAME "Telegram bot username, without @" "$(env_get "$KIT/taskiem.env" TASKIEM_TELEGRAM_BOT_USERNAME)"
     TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME#@}
     [ -n "$TELEGRAM_BOT_USERNAME" ] || die "the bot's username is required with its token"
+  fi
+  # Storefronts and hosted forms (Phase 5): off until they ship.
+  ask PUBLIC "Public pages for storefronts and forms (yes or no)" "$(conf PUBLIC || true)"
+  PUBLIC=${PUBLIC:-no}
+  case $PUBLIC in yes | no) ;; *) die "public pages: answer yes or no" ;; esac
+  if [ "$PUBLIC" = yes ]; then
+    ask PREVIEW_DOMAIN "Preview domain for storefronts, such as shops.example.com (point *.<it> here)" "$(conf PREVIEW_DOMAIN)"
+    PREVIEW_DOMAIN=${PREVIEW_DOMAIN,,}
+    [[ $PREVIEW_DOMAIN =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || die "the preview domain must be a host name such as shops.example.com"
   fi
   local first_run=""
   [ -n "$(conf CHANNEL)" ] || first_run=1
@@ -235,7 +261,8 @@ cmd_setup() {
   [ -n "$BACKUP_REPO" ] || log "WARNING: no backup destination: OpenBao's storage is not backed up off this server"
 
   local f
-  for f in DOMAIN OWNER_EMAIL ORG CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK; do env_set "$ETC/vps.conf" "$f" "${!f}"; done
+  [ "$PUBLIC" != yes ] || [ "$PREVIEW_DOMAIN" != "${DOMAIN,,}" ] || die "the preview domain must differ from the app's host name"
+  for f in DOMAIN OWNER_EMAIL ORG CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK PUBLIC PREVIEW_DOMAIN; do env_set "$ETC/vps.conf" "$f" "${!f:-}"; done
   env_set "$ETC/vps.conf" TZ Africa/Lagos
 
   # Secrets made once, never regenerated.
@@ -246,6 +273,10 @@ cmd_setup() {
   [ -n "$anchor" ] || anchor=$(openssl rand -base64 32)
   apppw=$(env_get "$ETC/secrets.env" APP_DB_PASSWORD)
   [ -n "$apppw" ] || apppw=$(hex 24)
+  local pubpw
+  pubpw=$(env_get "$ETC/secrets.env" PUBLIC_DB_PASSWORD)
+  [ -n "$pubpw" ] || pubpw=$(hex 24)
+  env_set "$ETC/secrets.env" PUBLIC_DB_PASSWORD "$pubpw"
   resticpw=$(env_get "$ETC/backup.env" RESTIC_PASSWORD)
   [ -n "$resticpw" ] || resticpw=$(hex 32)
   env_set "$ETC/secrets.env" APP_DB_PASSWORD "$apppw"
@@ -275,6 +306,23 @@ cmd_setup() {
     [ -n "$(env_get "$t" TASKIEM_TELEGRAM_WEBHOOK_SECRET)" ] || env_set "$t" TASKIEM_TELEGRAM_WEBHOOK_SECRET "$(hex 32)"
     # Signs approval buttons while WhatsApp is off.
     [ -n "$(env_get "$t" TASKIEM_CHAT_TOKEN_KEY)" ] || env_set "$t" TASKIEM_CHAT_TOKEN_KEY "$(openssl rand -base64 32)"
+  fi
+  # The public host (docs/public-host.md): its own login, a member of
+  # taskiem_public only, and nothing else of the platform's.
+  local pubrole="${dbname}_public" p="$KIT/public.env"
+  touch "$p" && chmod 600 "$p"
+  mkdir -p "$KIT/caddy.d"
+  if [ "$PUBLIC" = yes ]; then
+    env_set "$p" TASKIEM_PUBLIC_DATABASE_URL "${dsn_scheme}${pubrole}:${pubpw}@${dsn_host}/${dbname}${dsn_query}"
+    env_set "$p" TASKIEM_TRUST_PROXY true
+    env_set "$p" TASKIEM_PUBLIC_DOMAINS "$PREVIEW_DOMAIN"
+    env_set "$t" TASKIEM_PUBLIC_DOMAINS "$PREVIEW_DOMAIN"
+    env_set "$KIT/.env" COMPOSE_PROFILES public
+    install -m 0644 "$KIT/public.caddy" "$KIT/caddy.d/public.caddy"
+  else
+    env_set "$t" TASKIEM_PUBLIC_DOMAINS ""
+    env_set "$KIT/.env" COMPOSE_PROFILES ""
+    rm -f "$KIT/caddy.d/public.caddy"
   fi
   touch "$KIT/openbao.env" && chmod 600 "$KIT/openbao.env"
   env_set "$KIT/.env" TASKIEM_DOMAIN "$DOMAIN"
@@ -351,9 +399,34 @@ END \$\$;
 GRANT taskiem_app TO "$approle";
 SQL
 
+  # The public host's login exists only while public pages are on.
+  if [ "$PUBLIC" = yes ]; then
+    log "creating the database role the public host signs in as ($pubrole)"
+    docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
+DO \$\$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$pubrole') THEN
+    CREATE ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubpw';
+  ELSE
+    ALTER ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubpw';
+  END IF;
+END \$\$;
+GRANT taskiem_public TO "$pubrole";
+SQL
+  else
+    docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
+DO \$\$ BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = '$pubrole') THEN ALTER ROLE "$pubrole" NOLOGIN; END IF;
+END \$\$;
+SQL
+    compose rm -sf taskiem-public >/dev/null 2>&1 || true
+  fi
+
   log "starting Taskiem"
   compose up -d --remove-orphans
   wait_healthy 300 || die "Taskiem did not become healthy: taskiem-vps logs"
+  # Caddy reads caddy.d/ only when told: public pages on or off.
+  compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 ||
+    compose restart caddy >/dev/null
 
   if [ ! -f "$STATE/bootstrapped" ]; then
     log "creating the organisation and its owner"
@@ -577,6 +650,7 @@ run_checks() {
   [ "$status" = healthy ] || echo "Taskiem container is $status"
   local_https /readyz >/dev/null 2>&1 || echo "https://$domain/readyz does not answer"
   compose exec -T openbao wget -qO- http://127.0.0.1:8200/v1/sys/health >/dev/null 2>&1 || echo "OpenBao is sealed or down: secrets cannot be read"
+  public_healthy || echo "the public host (storefronts and forms) is not healthy: new business domains get no certificate"
   if compose logs --since 30h openbao-renew 2>/dev/null | grep 'RENEWAL FAILED' >/dev/null; then echo "OpenBao token renewal failed: secrets stop working when the token expires"; fi
   df -P / /var/lib/docker 2>/dev/null | awk 'NR>1 && $5+0 >= 85 {print "disk " $6 " is " $5 " full"}' | sort -u
   if [ -z "${TASKIEM_VPS_INSECURE_TLS:-}" ]; then

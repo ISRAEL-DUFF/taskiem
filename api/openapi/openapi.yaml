@@ -100,6 +100,9 @@ tags:
 - name: Connectors
   description: Connectors, connections, drift and the tenant's own WebAssembly connectors.
   x-taskiem-guide: connector-sdk
+- name: Embed sites
+  description: Websites allowed to embed the organisation's storefront and hosted forms, proven by DNS or a file.
+  x-taskiem-guide: embed-sites
 - name: Alerts
   description: Alert channels and rules.
   x-taskiem-guide: alerts
@@ -328,6 +331,118 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/embed-sites:
+    get:
+      operationId: listEmbedSites
+      tags:
+      - Embed sites
+      summary: List the websites allowed to embed the storefront and forms
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbedSiteList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addEmbedSite
+      tags:
+      - Embed sites
+      summary: Add a website to prove
+      description: The site may frame the public host's /embed/ pages once proven by a DNS TXT record or a file; the answer says what to publish.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbedSiteRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbedSite'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/embed-sites/{id}/verify:
+    post:
+      operationId: verifyEmbedSite
+      tags:
+      - Embed sites
+      summary: Check a website's proof now
+      description: 409 while the record or file does not hold the site's token yet.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The site's id
+      responses:
+        '200':
+          description: Verified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, origin, verified]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  origin:
+                    type: string
+                  verified:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/embed-sites/{id}:
+    delete:
+      operationId: removeEmbedSite
+      tags:
+      - Embed sites
+      summary: Stop a website embedding the storefront and forms
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The site's id
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
   /v1/alerts/channels:
@@ -12070,6 +12185,66 @@ components:
         disabled_at:
           $ref: '#/components/schemas/NullableTimestamp'
       additionalProperties: false
+    EmbedSiteRequest:
+      type: object
+      required: [origin]
+      additionalProperties: false
+      properties:
+        origin:
+          type: string
+          description: The site, such as adakitchen.ng or https://www.adakitchen.ng; https only, no path or port
+        method:
+          type: string
+          enum: [dns, file]
+          default: dns
+    EmbedSite:
+      type: object
+      required: [id, origin, method, token, verified_at, created_by, created_at, prove]
+      properties:
+        id:
+          type: string
+          format: uuid
+        origin:
+          type: string
+        method:
+          type: string
+          enum: [dns, file]
+        token:
+          type: string
+          description: The value the record or file must hold
+        verified_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        checked_at:
+          type: string
+          format: date-time
+        check_failures:
+          type: integer
+        last_check_error:
+          type: string
+        unverified_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        prove:
+          type: object
+          description: 'What to publish: record_type, record_name and record_value for dns; file_url and file_contents for file'
+          additionalProperties:
+            type: string
+    EmbedSiteList:
+      type: object
+      required: [sites, max]
+      properties:
+        sites:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmbedSite'
+        max:
+          type: integer
+          description: How many sites the organisation may add
     AlertChannelList:
       type: object
       required:

@@ -49,18 +49,21 @@ const (
 	// and changing tables and rows.
 	PermTableRead = "table.read"
 	PermTableEdit = "table.edit"
+	// Storefronts and hosted forms (decisions 0036, 0037): the public
+	// pages and the websites allowed to embed them.
+	PermStorefrontManage = "storefront.manage"
 )
 
 var allPermissions = []string{PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel,
 	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage,
-	PermTableRead, PermTableEdit}
+	PermTableRead, PermTableEdit, PermStorefrontManage}
 
 // rolePermissions are the built-in roles (spec 13.3). Any other membership
 // role (e.g. "credit_officer") is a business role that only qualifies the
 // member for approval steps naming it, on top of approval.decide.
 var rolePermissions = map[string][]string{
 	"owner":    allPermissions,
-	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage, PermTableRead, PermTableEdit},
+	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage, PermTableRead, PermTableEdit, PermStorefrontManage},
 	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart, PermTableRead, PermTableEdit},
 	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermTableRead},
 	"approver": {PermWorkflowRead, PermRunRead, PermApprovalDecide},

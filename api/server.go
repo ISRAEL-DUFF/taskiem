@@ -31,6 +31,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/embedsites"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -72,6 +73,12 @@ type Server struct {
 	// hop, which the load balancer in front of the API appends. Leave it off
 	// when clients connect directly, or they could spoof their address.
 	TrustProxy bool
+	// SiteProver checks embed sites' proofs (docs/embed-sites.md); nil
+	// uses DNS and fetches through a default egress guard.
+	SiteProver *embedsites.Prover
+	// PublicHosts are the public host's own domains (the preview domain):
+	// never an embed site.
+	PublicHosts []string
 	// Static serves the web app; nil omits it.
 	Static http.Handler
 	// EmbedDir holds the embedded builder's bundle (taskiem.js, served at
@@ -307,6 +314,10 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish)).Delete("/workflows/{wf}/deployments/{env}", s.undeploy)
 			r.With(s.need(PermWorkflowRead)).Get("/environments", s.listEnvironments)
 			r.With(s.need(PermAlertManage)).Get("/alerts", s.listAlerts)
+			r.With(s.need(PermStorefrontManage)).Get("/embed-sites", s.listEmbedSites)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites", s.addEmbedSite)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites/{id}/verify", s.verifyEmbedSite)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/embed-sites/{id}", s.removeEmbedSite)
 			r.With(s.need(PermAlertManage)).Get("/alerts/channels", s.listAlertChannels)
 			r.With(s.need(PermAlertManage)).Post("/alerts/channels", s.createAlertChannel)
 			r.With(s.need(PermAlertManage)).Delete("/alerts/channels/{id}", s.deleteAlertChannel)

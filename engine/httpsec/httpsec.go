@@ -48,3 +48,40 @@ func SetFrame(h http.Header, ancestors []string) {
 	h.Del("X-Frame-Options")
 	h.Set("Content-Security-Policy", FrameCSP(ancestors))
 }
+
+// PublicCSP is the Content-Security-Policy of public pages: storefronts
+// and hosted forms (docs/spec/storefronts.md 8.3). No inline script or
+// style, scripts and styles only from the page's own origin, images also
+// from https (photos in object storage or a CDN), and nothing may frame it.
+const PublicCSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; " +
+	"form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+
+// SetPublic writes a public page's headers: Set's, with the public policy,
+// a browsing context of its own, and no access to the camera, microphone,
+// location or payment APIs.
+func SetPublic(h http.Header) {
+	Set(h)
+	h.Set("Content-Security-Policy", PublicCSP)
+	h.Set("Cross-Origin-Opener-Policy", "same-origin")
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+}
+
+// PublicEmbedCSP is PublicCSP for a public /embed/ page: framed only by
+// ancestors, the organisation's verified websites (docs/embed-sites.md).
+// With none, nobody may frame it.
+func PublicEmbedCSP(ancestors []string) string {
+	fa := "'none'"
+	if len(ancestors) > 0 {
+		fa = strings.Join(ancestors, " ")
+	}
+	return strings.Replace(PublicCSP, "frame-ancestors 'none'", "frame-ancestors "+fa, 1)
+}
+
+// SetPublicEmbed writes an /embed/ page's headers over SetPublic's. With
+// ancestors, X-Frame-Options (which cannot name them) is left out.
+func SetPublicEmbed(h http.Header, ancestors []string) {
+	h.Set("Content-Security-Policy", PublicEmbedCSP(ancestors))
+	if len(ancestors) > 0 {
+		h.Del("X-Frame-Options")
+	}
+}

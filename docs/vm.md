@@ -90,10 +90,37 @@ curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/
 
 It asks for the bucket and its key, and from the recovery sheet the backup password and the unseal key; restores the newest backup; starts the release that was running; and turns the timers back on. Point the DNS name at the new VPS. CI rehearses this on every change.
 
+## Public pages: storefronts and forms
+
+The [public host](public-host.md) serves storefronts and hosted forms (Phase 5). It is off until they ship. To turn it on, answer **yes** to "Public pages" in `taskiem-vps setup` and give a **preview domain** such as `shops.example.com`.
+
+**What setup does:**
+- It creates a second database login, `<database>_public`, a member of `taskiem_public` only, which can read no table.
+- It writes `/opt/taskiem/public.env` holding that login alone: no OpenBao token and no other secret.
+- It starts `taskiem-public` (`--role public`; metrics on `127.0.0.1:9091`) and puts `public.caddy` in `/opt/taskiem/caddy.d/` so Caddy routes it.
+
+Answering **no** later stops the service, removes the route and disables the login.
+
+**DNS:** point `*.shops.example.com` (a wildcard A or AAAA record) at the server. Businesses' own domains are pointed at it too, by the domain platform or by the business (S6).
+
+**Certificates, on demand:**
+- Every host that is not the app's goes to the public host, and Caddy gets its certificate from Let's Encrypt the first time it is visited.
+- Before asking, Caddy checks with the public host (`http://taskiem-public:9090/tls/ask`, on the Compose network only): a certificate is requested only for a host Taskiem serves.
+- Any other name fails the TLS handshake, so nobody can make the server request certificates for names it does not serve, or run it into Let's Encrypt's limits.
+
+**Let's Encrypt's limits apply to preview addresses:** at most 50 new certificates a week for one registered domain, and each `<slug>.shops.example.com` takes one. Beyond about 50 new storefronts a week:
+- use a wildcard certificate for `*.shops.example.com`, which needs a DNS challenge, so a Caddy build with the DNS provider's module; or
+- move to Kubernetes, where the [Helm chart's](kubernetes.md) public component sits behind the cluster's ingress (decision 0032's trigger).
+
+Businesses' own domains each count against their own registered domain, not the preview domain's.
+
+`taskiem-vps check` alerts when the public host is unhealthy: existing pages may still be served from Caddy's certificates, but new hosts get none.
+
 ## Security notes
 
 - Auto-unseal keeps OpenBao's unseal key on the VPS, in a root-only file outside the backups. Someone with root on the VPS can read every secret, as they could anyway through Taskiem's own token; a stolen backup alone cannot.
 - Ports 8200 (OpenBao) and 9090 (metrics, on `127.0.0.1`) are never public. Docker publishes only 80 and 443.
+- The public host signs in as a separate user, a member of `taskiem_public` only, which reads no table; its env file holds nothing else.
 - The database user Taskiem signs in as is a member of `taskiem_app` only; row-level security applies to it ([operations](operations.md#database-roles)). The owner's URL is used for migrations only.
 - Images are accepted only with a cosign signature from this repository's CI workflow on main or a version tag.
 
@@ -103,7 +130,7 @@ It asks for the bucket and its key, and from the recovery sheet the backup passw
 | --- | --- |
 | `install.sh` | The one-line installer |
 | `taskiem-vps` | Setup, update, rollback, backup, restore, checks (installed to `/usr/local/bin`) |
-| `docker-compose.yml`, `Caddyfile`, `openbao.hcl`, `openbao-taskiem-policy.hcl` | The stack, installed to `/opt/taskiem` and replaced on each upgrade with the release's own copy |
+| `docker-compose.yml`, `Caddyfile`, `public.caddy`, `openbao.hcl`, `openbao-taskiem-policy.hcl` | The stack, installed to `/opt/taskiem` and replaced on each upgrade with the release's own copy (`public.caddy` is used only with public pages on) |
 | `systemd/` | The update, check and backup timers |
 
 The server's settings are in `/opt/taskiem/*.env` and `/etc/taskiem` (root only); its state (current and previous release, last backup) is in `/var/lib/taskiem-vps`.

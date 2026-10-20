@@ -223,10 +223,10 @@ Logos and product photos are uploaded by the owner (web, or a photo in chat).
 
 **Processing:**
 - **On upload:** checked by type (JPEG, PNG, WebP), size (5 MB) and dimensions; EXIF metadata, including location, is stripped.
-- **Sizes:** 320 and 800 pixels wide, in WebP with a JPEG fallback, using Xenibase storage's image transforms where they cover this.
+- **Sizes:** 320, 800 and 2000 pixels wide, as JPEG (PNG for logos with transparency). Taskiem makes them itself when the photo is stored, not with Xenibase's image transforms, which are counted against the project's plan ([media](../media.md#photos)).
 - **Moderated** before publishing ([7.4](#74-content-and-moderation)).
 
-**Storage:** in **Xenibase storage** (released on production), in a bucket of the business's Xenibase project, the same project as its data tables. Data tables only hold the object's reference. **Taskiem needs a storage integration first**: upload, public-read objects for published images, image transforms, and deletion. This was planned as P4-T1 in the Xenibase plan and is now a v1 dependency.
+**Storage:** in **Xenibase storage** (released on production), in a bucket of the business's Xenibase project, the same project as its data tables. Data tables only hold the object's reference. The storage integration (P4-T1 in the Xenibase plan) is built in S1: a public and a private bucket per project, uploads, signed URLs and deletion ([media](../media.md)).
 
 **Serving:** images are served through the storefront's own domain (proxied and cached by the storefront servers), with long cache lifetimes and content-hashed names, so a page never sends visitors to another host.
 
@@ -330,7 +330,7 @@ Some businesses already have a website (often a one-page site a nephew built, or
 
 **How it works:**
 - **A frame, always.** The embedded parts are the storefront's own pages, served from its domain in a frame, never HTML written into the host site. The host site's scripts cannot read what a customer types, and the storefront's CSP, rate limits and moderation apply unchanged.
-- **Which sites may frame it:** only the `/embed/` pages can be framed, and only by the **websites the owner has added and verified** (a DNS TXT record or a file at `/.well-known/taskiem-storefront.txt`; a field agent can add it during setup). Those pages are served with `frame-ancestors` naming the verified sites, as the [embedded builder's frame page](../embedding.md#8-iframe-mode) is. Every other page keeps `frame-ancestors 'none'`. Verifying stops a scam site from framing a real business to look trustworthy, or putting an invisible frame under its own buttons.
+- **Which sites may frame it:** only the `/embed/` pages can be framed, and only by the **websites the owner has added and verified** (a DNS TXT record or a file at `/.well-known/taskiem-site.txt`, shared with hosted forms; a field agent can add it during setup; [embed sites](../embed-sites.md)). Those pages are served with `frame-ancestors` naming the verified sites, as the [embedded builder's frame page](../embedding.md#8-iframe-mode) is. Every other page keeps `frame-ancestors 'none'`. Verifying stops a scam site from framing a real business to look trustworthy, or putting an invisible frame under its own buttons.
 - **Look:** the frame uses the storefront's template and accent. The element may set `accent` and `theme` (`light` or `dark`) to match the site, from the same fixed choices. No CSS from the host site reaches it.
 - **Cookies:** none, so browsers that block third-party cookies change nothing. The form's one-time token is in the form.
 - **Payment:** a provider's payment page does not work reliably inside a frame. When paying at order time, the frame opens the payment page in a new tab, waits, and shows the confirmation when the provider confirms (the frame asks by its own one-time reference, which shows only that submission's status).

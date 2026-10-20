@@ -100,6 +100,14 @@ func pool(t testing.TB, dsn, role string, size int32) *pgxpool.Pool {
 	return p
 }
 
+// PublicPool opens a pool as taskiem_public, the public host's role,
+// closed when the test ends.
+func (d *DB) PublicPool(t testing.TB, size int32) *pgxpool.Pool {
+	p := pool(t, d.DSN, "taskiem_public", size)
+	t.Cleanup(p.Close)
+	return p
+}
+
 // Fixture ids for one tenant's minimal object graph.
 type Tenant struct {
 	ID, WorkflowID uuid.UUID

@@ -211,6 +211,8 @@ jobs:
       TASKIEM_VPS_CHANNEL: staging
       TASKIEM_VPS_WINDOW: any
       TASKIEM_VPS_BACKUP_REPO: /srv/taskiem-backups
+      TASKIEM_VPS_PUBLIC: "yes"
+      TASKIEM_VPS_PREVIEW_DOMAIN: shops.localhost
     steps:
       - uses: actions/checkout@v5
       - name: ShellCheck
@@ -238,6 +240,21 @@ jobs:
           echo "TASKIEM_REQUIRE_ADMIN_PASSKEYS='false'" | sudo tee -a /opt/taskiem/taskiem.env >/dev/null
           sudo docker compose --project-directory /opt/taskiem up -d --wait taskiem
           curl -fsk -H 'Content-Type: application/json' -d "{\"email\":\"owner@example.com\",\"password\":\"$PW\",\"bearer\":true}" https://localhost/v1/auth/login | jq -er .token > token
+      - name: The public host runs apart, and certificates are asked for only for hosts it serves
+        run: |
+          dc() { sudo docker compose --project-directory /opt/taskiem "$@"; }
+          # Its own login and nothing else of the platform's.
+          sudo grep -q "^TASKIEM_PUBLIC_DATABASE_URL='postgres://taskiem_ci_public:" /opt/taskiem/public.env
+          if sudo grep -Eq 'OPENBAO|KMS|TASKIEM_DATABASE_URL|ANCHOR|SMTP' /opt/taskiem/public.env; then echo "the public host was given a platform secret"; exit 1; fi
+          test -f /opt/taskiem/caddy.d/public.caddy
+          ask() { dc exec -T caddy wget -qO- "http://taskiem-public:9090/tls/ask?domain=$1" >/dev/null 2>&1; }
+          if ask ada.shops.localhost; then echo "a certificate would be issued for a host nobody verified"; exit 1; fi
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d taskiem_ci -qc "INSERT INTO public_hosts (host, tenant_id, kind, site_id, verified_at)
+            SELECT 'ada.shops.localhost', id, 'storefront', gen_random_uuid(), now() FROM tenants LIMIT 1"
+          ask ada.shops.localhost
+          dc exec -T caddy wget -qO- --header 'Host: ada.shops.localhost' http://taskiem-public:8082/ | grep 'Coming soon' >/dev/null
+          # The app's own host still goes to the app.
+          curl -fsk https://localhost/readyz
       - name: A secret goes through OpenBao, before and after OpenBao restarts (auto-unseal)
         run: |
           put() { curl -fsk -X PUT -H "Authorization: Bearer $(cat token)" -H 'Content-Type: application/json' -d '{"value":"v"}' "https://localhost/v1/secrets/prod/$1"; }

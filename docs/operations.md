@@ -8,16 +8,18 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | --- | --- |
 | `taskiem migrate` | Applies database migrations as the schema owner. Forward-only. |
 | `taskiem bootstrap --tenant NAME --email EMAIL [--name NAME]` | Creates the first tenant, its owner, a Default workspace, and the `dev` and `prod` environments. Password from `TASKIEM_BOOTSTRAP_PASSWORD` (12+ characters). |
-| `taskiem serve [--role ROLE]` | Runs `api`, `edge`, `orchestrator`, `scheduler`, `worker`, or `all` (default; also `TASKIEM_ROLE`). |
+| `taskiem serve [--role ROLE]` | Runs `api`, `edge`, `orchestrator`, `scheduler`, `worker`, `public`, or `all` (default; also `TASKIEM_ROLE`). |
 | `taskiem tenants limits TENANT_ID [--set KEY=VALUE]...` | Shows a tenant's plan limits, usage and recent limit hits; `--set` changes a limit (`default` returns it to the platform default). Audited as `limits.set`. See [plan limits](#plan-limits). |
 | `taskiem tenants partner TENANT_ID [--max-subtenants N] [--subtenant-runs-per-day N] [--subtenant-runs-per-month N] [--disable]` | Makes a tenant a partner, which may create sub-tenants and embed apps through the partner admin API, and sets its partner-wide caps (0: no cap; flags left out keep their value). `--disable` stops it being one: its sub-tenants are kept, unreachable, and their end-user tokens stop. Audited as `partner.enable` and `partner.disable`. See [embedding](embedding.md). |
 | `taskiem tenants keys TENANT_ID [status \| rotate [--wait] \| rewrap \| check]` | Shows a tenant's encryption keys: tenant key versions and what wraps them, its own key's health (BYOK), re-wrapping progress and parked steps. `rotate` adds a tenant key version (`--wait` re-wraps at once), `rewrap` re-wraps now, `check` checks the keys and resumes steps parked while they were unavailable. Audited in the tenant's log as `platform_admin`. See [BYOK](byok.md#operators). |
 | `taskiem pools [assign POOL \| unassign] [--tenant TENANT_ID \| --plan PLAN] [--force]` | Lists live workers by pool and queue, queue depth by pool, and every routing; `assign` routes a tenant (with its sub-tenants) or a plan's tenants to a dedicated worker pool, refused while no live worker serves it unless `--force`; `unassign` removes the routing. Audited in the tenant's log as `platform_admin`; every change kept in `worker_pool_changes`. See [cloud](cloud.md#dedicated-worker-pools). |
 | `taskiem audit verify FILE` | Recomputes every hash and link of an audit export (`GET /v1/audit/export`) without the database. Exits non-zero on a broken chain. |
 | `taskiem validate FILE...` | Validates `*.wd.json` definitions and connector manifests. |
+| `taskiem messages test --sms NUMBER\|--email ADDRESS [--provider NAME]` | Sends one test message now through the platform's own SMS providers or mail server, to check their configuration. See [messages](messages.md). |
 | `taskiem status show\|list\|open\|maintenance\|update\|resolve\|token` | Declares incidents and maintenance on the public status page, recorded with the operator's name; `token NAME` makes an operator token for the admin API. See [reliability](reliability.md#status-page). |
 | `taskiem canary setup\|probe\|run` | Sets up the synthetic end-to-end probe in an internal tenant, runs probes now, or probes forever from outside the cluster. See [reliability](reliability.md#synthetic-canary). |
-| `taskiem healthcheck` | Probes the local API's `/readyz` (for images without a shell). |
+| `taskiem media check TENANT_ID` | A round trip through a tenant's Xenibase storage: makes its buckets, stores and downloads a photo and a private PDF, then deletes them. See [media](media.md#checking-a-tenants-storage). |
+| `taskiem healthcheck [ADDR]` | Probes the local API's `/readyz`, or that of `ADDR` (`:9090` for the public role, whose readiness is on its metrics port), for images without a shell. |
 
 ## Roles
 
@@ -25,6 +27,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | --- | --- | --- |
 | `api` | REST API (`/v1`), web app (`TASKIEM_WEB_DIR`), the WhatsApp notifier (approval requests, how chat-started runs ended), the USSD notifier (hand-off backstop, outcome SMS, session purge; [USSD](ussd.md)); with `all`, webhooks too (`/hooks`, `/channels/whatsapp`, `/channels/ussd`) | `TASKIEM_LISTEN` (`:8080`) |
 | `edge` | Webhook and connector-event ingest, Git push hooks, the platform WhatsApp number's webhook (`/channels/whatsapp`, [WhatsApp](whatsapp.md)), and USSD aggregators' callbacks (`/channels/ussd`, [USSD](ussd.md)) | `TASKIEM_EDGE_LISTEN` (`:8081`) |
+| `public` | The [public host](public-host.md) for storefronts and hosted forms, on its own database login (`taskiem_public`); off in `all` unless `TASKIEM_PUBLIC_ENABLED` | `TASKIEM_PUBLIC_LISTEN` (`:8082`) |
 | `orchestrator` | Decides runs left with undecided events (most decisions are inline) | — |
 | `scheduler` | Timers, lease recovery, the synthetic canary when configured ([reliability](reliability.md#synthetic-canary)), the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, partner webhooks ([embedding](embedding.md#6-partner-webhooks)), and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
 | `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox`; `container` for container steps, on their own pool with `TASKIEM_CONTAINER_*`, see [container steps](container-steps.md#operator-setup)), for the tenants of its worker pool (`TASKIEM_WORKER_POOL`, [cloud](cloud.md#dedicated-worker-pools)); drains in-flight steps for up to `TASKIEM_WORKER_DRAIN` (30 s) on shutdown, then releases what it still holds | — |
@@ -37,6 +40,10 @@ Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`)
 | --- | --- | --- |
 | `TASKIEM_DATABASE_URL` | — | Required. For a highly available Postgres, every host with `target_session_attrs=read-write` ([cloud](cloud.md#connection-strings)). |
 | `TASKIEM_DATABASE_READ_URL`, `TASKIEM_DATABASE_READ_MAX_LAG` | —, `10s` | A read replica for the run list and dashboard (`api` role), set aside while it lags beyond the bound or fails ([cloud](cloud.md#read-replica)) |
+| `TASKIEM_PUBLIC_DATABASE_URL`, `TASKIEM_PUBLIC_DATABASE_ROLE`, `TASKIEM_PUBLIC_DATABASE_POOL` | `TASKIEM_DATABASE_URL`, `taskiem_public`, `5` | The [public host](public-host.md)'s own login (a member of `taskiem_public` only), the role it sets, and its pool's size |
+| `TASKIEM_SMS_*`, `TASKIEM_MESSAGE_FROM`, `TASKIEM_MESSAGE_HASH_KEY` | — | The platform's own SMS providers and no-reply address for [messages to people outside an organisation](messages.md) |
+| `TASKIEM_PUBLIC_DOMAINS` | — | The public host's own domains (the preview domain, the form host), comma-separated: never accepted as an [embed site](embed-sites.md) |
+| `TASKIEM_PUBLIC_LISTEN`, `TASKIEM_PUBLIC_ENABLED` | `:8082`, `false` | The public host's listener, and whether `--role all` runs it |
 | `TASKIEM_DATABASE_RETRY_WINDOW` | `30s` | How long a worker keeps a step's outcome through a database failover before giving up to lease expiry ([cloud](cloud.md#what-happens-during-a-failover)) |
 | `TASKIEM_WORKER_POOL` | `shared` | The worker pool this worker serves ([cloud](cloud.md#dedicated-worker-pools)) |
 | `TASKIEM_DATABASE_ROLE` | `taskiem_app` | Role set on every connection (`SET ROLE`); row-level security applies to it. Empty disables. |

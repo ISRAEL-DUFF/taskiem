@@ -7,6 +7,14 @@ export default tseslint.config(
   { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
+  // Plain scripts the public host serves to browsers (docs/public-host.md).
+  {
+    files: ["engine/**/*.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly" },
+    },
+  },
   {
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: { parserOptions: { tsconfigRootDir: import.meta.dirname } },

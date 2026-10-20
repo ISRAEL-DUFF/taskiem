@@ -11,7 +11,7 @@ Nothing of Phase 5 ships to customers before gate G4.
 | # | Milestone | Status |
 | --- | --- | --- |
 | S0 | Decisions | **Open**: see below |
-| S1 | Shared public foundation | Not started. The host skeleton, page budget test and abuse controls can start before S0 closes |
+| S1 | Shared public foundation | **Built**, one PR in review: the [public host](public-host.md), form guards and name checks, [messages](messages.md) by SMS and email, [Xenibase storage](media.md), [embed sites](embed-sites.md), and the VM kit's [on-demand certificates](vm.md#public-pages-storefronts-and-forms) |
 | S2 | The storefront page | Not started |
 | S3 | Orders | Not started |
 | S4 | Bookings | Not started |
@@ -40,6 +40,6 @@ Already answered (2026-10-19): own domains from the domain platform; photos in X
 
 | Dependency | Status | Needed by |
 | --- | --- | --- |
-| Xenibase storage integration (P4-T1) | Xenibase storage is on production; Taskiem's integration is not started | S1 |
-| Termii sender ID, and an email sender (P4-O1) | Open | S1 |
+| Xenibase storage integration (P4-T1) | Built ([media](media.md)); to be proven on staging with `taskiem media check` | S1 |
+| Termii sender ID, and an email sender (P4-O1) | The sender is built ([messages](messages.md)); the sender ID approved for the `dnd` channel, Africa's Talking credentials and the no-reply address are open | S1 |
 | The domain platform's API | Contract not agreed | S6 |

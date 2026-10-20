@@ -1,0 +1,13 @@
+# Storefronts and hosted forms (docs/public-host.md): every host but the
+# app's goes to the public host. Preview addresses (<slug>.<preview
+# domain>) and businesses' own domains each get a certificate the first
+# time they are visited, once the public host's /tls/ask confirms it
+# serves them; any other name is refused before a certificate is asked for.
+# Copied into caddy.d/ by taskiem-vps setup when public pages are on.
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy taskiem-public:8082
+}
