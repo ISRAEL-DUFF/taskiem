@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{{.M.Card.Name}}</title>
+{{with .Description}}<meta name="description" content="{{.}}">{{end}}
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{.M.Card.Name}}">
+{{with .Description}}<meta property="og:description" content="{{.}}">{{end}}
+{{with .Image}}<meta property="og:image" content="{{.}}">{{end}}
+<link rel="stylesheet" href="{{asset "site.css"}}">
+</head>
+<body class="sf sf-{{.M.Card.Template}} accent-{{.Accent}}">
+<header class="sf-card">
+  {{with .M.Logo}}<img class="sf-logo" src="{{index . "320"}}" alt="" width="96" height="96">{{end}}
+  <h1>{{.M.Card.Name}}</h1>
+  {{with .M.Card.Tagline}}<p class="sf-tagline">{{.}}</p>{{end}}
+  {{if .OpenKnown}}<p class="sf-open {{if .OpenNow}}is-open{{else}}is-closed{{end}}">{{if .OpenNow}}Open now{{else}}Closed now{{end}}</p>{{end}}
+  {{with .M.Card.Area}}<p class="sf-area">{{.}}</p>{{end}}
+  <nav class="sf-actions" aria-label="Contact">
+    {{with .M.WhatsLink}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}
+    {{with .Phone}}<a class="btn" href="tel:{{.}}">Call</a>{{end}}
+    {{with .M.MapLink}}<a class="btn" href="{{.}}" rel="noopener">Directions</a>{{end}}
+  </nav>
+</header>
+<main class="page">
+  {{if .Closed}}
+  <p class="sf-closed" role="status">{{.Closed}}</p>
+  {{end}}
+  {{with .M.Card.About}}<section class="sf-about"><h2>About</h2><p>{{.}}</p></section>{{end}}
+  {{if .HasItems}}
+  <section class="sf-catalogue" aria-label="Catalogue">
+    {{range .Sections}}
+    {{if .Title}}<h2>{{.Title}}</h2>{{end}}
+    <ul class="sf-items">
+      {{range .Items}}
+      <li class="sf-item{{if not .Available}} is-unavailable{{end}}">
+        {{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 40rem) 12rem, 40vw" alt="{{.Name}}" loading="lazy" decoding="async">{{end}}
+        <div class="sf-item-text">
+          <h3>{{.Name}}</h3>
+          {{with .Description}}<p>{{.}}</p>{{end}}
+          <p class="sf-price">{{.Price}}{{if not .Available}} <span class="sf-badge">Unavailable</span>{{end}}</p>
+        </div>
+      </li>
+      {{end}}
+    </ul>
+    {{end}}
+  </section>
+  {{end}}
+  {{if .Hours}}
+  <section class="sf-hours">
+    <h2>Opening hours</h2>
+    <table>
+      {{range .Hours}}<tr{{if .Today}} class="is-today"{{end}}><th scope="row">{{.Day}}</th><td>{{.Spans}}</td></tr>{{end}}
+    </table>
+    {{with .M.Card.Hours.Note}}<p>{{.}}</p>{{end}}
+  </section>
+  {{end}}
+  {{with .M.Card.Address}}<section class="sf-address"><h2>Where to find us</h2><p>{{.}}</p></section>{{end}}
+</main>
+<footer class="foot">
+<p class="safety">Never enter a password or card PIN on this page.</p>
+<p>Powered by Taskiem</p>
+</footer>
+</body>
+</html>

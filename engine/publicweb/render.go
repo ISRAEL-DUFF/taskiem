@@ -90,8 +90,13 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, status int, name s
 	if d.Lang == "" {
 		d.Lang = "en"
 	}
+	s.render(w, r, status, name+".html", d)
+}
+
+// render executes a template with any data, as page does.
+func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, d any) {
 	var buf bytes.Buffer
-	if err := pages.ExecuteTemplate(&buf, name+".html", d); err != nil {
+	if err := pages.ExecuteTemplate(&buf, name, d); err != nil {
 		s.Logger.Error("public host: render", "page", name, "err", err)
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 		return

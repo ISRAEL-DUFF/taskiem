@@ -26,6 +26,28 @@ export function upload<T = unknown>(path: string, form: FormData): Promise<T> {
   return request<T>("POST", path, form, {});
 }
 
+/** POSTs a file as the raw request body, with its own Content-Type (storefront photos). */
+export function uploadFile<T = unknown>(path: string, file: Blob): Promise<T> {
+  return request<T>("POST", path, file, { "Content-Type": file.type || "application/octet-stream" });
+}
+
+/** GETs a binary response (an image) with the session, as a Blob. */
+export async function getBlob(path: string): Promise<Blob> {
+  const res = await fetch(path, { credentials: "same-origin", headers: { "X-Taskiem-Request": "1" } });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text || res.statusText;
+    try {
+      msg = (JSON.parse(text) as { error?: string }).error || msg;
+    } catch {
+      // not JSON: the text itself
+    }
+    if (res.status === 401) window.dispatchEvent(new Event("taskiem:unauthorised"));
+    throw new ApiError(res.status, msg);
+  }
+  return res.blob();
+}
+
 async function request<T>(method: string, path: string, body: BodyInit | undefined, headers: Record<string, string>): Promise<T> {
   const res = await fetch(path, {
     method,

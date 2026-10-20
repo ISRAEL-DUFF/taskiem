@@ -41,6 +41,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/embedsites"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -753,8 +754,10 @@ func serve(ctx context.Context, args []string) error {
 		srv.Billing = bill
 		srv.Tables = e.tables()
 		srv.PublicHosts = cfg.Public.Domains
+		// Storefront photos in tenants' Xenibase storage (docs/media.md).
+		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD)
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts)
 		// SMS and email to people outside a tenant (messages.go).
 		if w := cfg.senderWorker(e, alerter.Mailer, log); w != nil {
 			tasks = append(tasks, w.Run)

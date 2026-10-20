@@ -28,9 +28,9 @@ func siteOut(s embedsites.Site) embedSite { return embedSite{Site: s, Prove: s.I
 func siteErr(err error) error {
 	switch {
 	case errors.Is(err, embedsites.ErrInvalid), errors.Is(err, embedsites.ErrLimit):
-		return fmt.Errorf("%w: %w", errBadRequest, err)
+		return fmt.Errorf("%w: %s", errBadRequest, plainError(err))
 	case errors.Is(err, embedsites.ErrExists), errors.Is(err, embedsites.ErrNotProven):
-		return fmt.Errorf("%w: %w", errConflict, err)
+		return fmt.Errorf("%w: %s", errConflict, plainError(err))
 	case errors.Is(err, embedsites.ErrNotFound):
 		return pgx.ErrNoRows
 	}
@@ -121,7 +121,7 @@ func (s *Server) verifyEmbedSite(w http.ResponseWriter, r *http.Request) {
 		if perr == nil {
 			perr = errors.New("the proof was not found")
 		}
-		s.fail(w, r, fmt.Errorf("%w: %w: %w (DNS and caches can take a while)", errConflict, embedsites.ErrNotProven, perr))
+		s.fail(w, r, fmt.Errorf("%w: %s (DNS and caches can take a while)", errConflict, plainError(fmt.Errorf("%w: %w", embedsites.ErrNotProven, perr))))
 		return
 	}
 	err = s.tx(r, func(tx pgx.Tx) error {

@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -317,3 +318,49 @@ func (s *Service) logger() *slog.Logger {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// ErrNotOurs refuses a URL that is not one of the tenant's public images.
+var ErrNotOurs = errors.New("media: not one of the organisation's images")
+
+// FetchPublic downloads one of the tenant's public images, for the web
+// app: its own Content-Security-Policy allows images from its origin
+// only, so the editor shows photos through the API instead of loading
+// them from the project's host. Only URLs under the tenant's own project
+// host and its public images path are fetched, through the egress guard.
+func (s *Service) FetchPublic(ctx context.Context, tenant uuid.UUID, raw string) ([]byte, string, error) {
+	creds, err := s.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: "media.preview"}), tenant)
+	if err != nil {
+		return nil, "", err
+	}
+	api, err := url.Parse(strings.TrimRight(creds["api_url"], "/"))
+	if err != nil || api.Host == "" {
+		return nil, "", errors.New("media: the tenant's Xenibase connection has no project URL")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != api.Scheme || u.Host != api.Host || u.User != nil || u.RawQuery != "" ||
+		!strings.HasPrefix(u.EscapedPath(), "/storage/v1/public/"+PublicBucket+"/images/") || strings.Contains(u.Path, "..") {
+		return nil, "", ErrNotOurs
+	}
+	c := s.guard().Client(egress.Policy{Tenant: tenant.String(), Hosts: []string{u.Hostname()}, Purpose: "xenibase:storage"}, 30*time.Second)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := c.Do(req) //nolint:gosec // the tenant's own project host, checked above, through the egress guard
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("media: the image answered %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxImageBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	ctype := http.DetectContentType(data)
+	if len(data) > MaxImageBytes || (ctype != "image/jpeg" && ctype != "image/png") {
+		return nil, "", ErrNotOurs
+	}
+	return data, ctype, nil
+}
