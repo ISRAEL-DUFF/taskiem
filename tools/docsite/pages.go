@@ -58,6 +58,7 @@ var internal = []struct{ pattern, why string }{
 	{"forms", "hosted forms are built but off until Phase 5 ships; publish them with storefronts"},
 	{"moderation", "storefront trust and safety is built but idle until Phase 5 ships; publish it with storefronts"},
 	{"agents", "field agents are built but idle until Phase 5 ships; publish them with storefronts"},
+	{"runbooks/*", "Taskiem's own runbooks for its environments, for the team"},
 }
 
 // isInternal reports whether a docs page (path without ".md") stays out of the site.
