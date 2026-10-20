@@ -54,6 +54,7 @@ var internal = []struct{ pattern, why string }{
 	{"integrations/xenibase-storage-api", "a copy of a partner's API reference, for the team"},
 	{"media", "storage for storefronts and forms is built but idle until Phase 5 ships; publish it with storefronts"},
 	{"embed-sites", "embedding storefronts and forms is built but off until Phase 5 ships; publish it with storefronts"},
+	{"storefronts", "storefronts are built but off until Phase 5 ships; publish with them"},
 }
 
 // isInternal reports whether a docs page (path without ".md") stays out of the site.

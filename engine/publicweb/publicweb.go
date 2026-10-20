@@ -105,9 +105,12 @@ type Server struct {
 	// Origins are the sites allowed to frame /embed/ pages; nil allows
 	// none.
 	Origins Origins
+	// Storefronts read storefront pages; nil serves "Coming soon".
+	Storefronts Storefronts
 
 	hosts   *lru.Cache[string, hostEntry]
 	origins *lru.Cache[uuid.UUID, []string]
+	pages   *lru.Cache[uuid.UUID, pageEntry]
 	now     func() time.Time
 }
 
@@ -214,9 +217,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.page(w, r, http.StatusOK, "embedsetup", pageData{Title: "Coming soon"})
 	case r.URL.Path != "/":
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
+	case site.Kind == "storefront":
+		s.serveStorefront(w, r, site)
 	default:
-		// Storefront and form pages arrive with S2 and S7; until then a
-		// verified host says it is being set up.
+		// Form pages arrive with S7; until then a verified host says it is
+		// being set up.
 		s.page(w, r, http.StatusOK, "setup", pageData{Title: "Coming soon"})
 	}
 }
