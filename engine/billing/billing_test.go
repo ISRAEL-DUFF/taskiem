@@ -126,6 +126,11 @@ type clock struct {
 }
 
 func (c *clock) Now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
+func (c *clock) set(t time.Time) {
+	c.mu.Lock()
+	c.t = t.UTC().Truncate(time.Microsecond)
+	c.mu.Unlock()
+}
 func (c *clock) add(d time.Duration) {
 	c.mu.Lock()
 	c.t = c.t.Add(d).Truncate(time.Microsecond) // Postgres keeps microseconds
@@ -912,8 +917,15 @@ func TestSnapshotsAndPartnerAggregate(t *testing.T) {
 	a, b := w.e.DB.SeedTenant(t, &partner), w.e.DB.SeedTenant(t, &partner)
 	w.e.DB.StartRun(t, a)
 	w.e.DB.StartRun(t, b)
+	// Snapshots are taken at midday on the test clock. In the first hour
+	// after midnight UTC, SnapshotAll also rewrites the day before (to close
+	// it), so a clock left at the real time made this test see two days
+	// when run then; that closing is checked on its own below.
+	now := time.Now().UTC()
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	w.clock.set(day.Add(12 * time.Hour))
 	for _, sub := range []uuid.UUID{a.ID, b.ID} {
-		if _, err := w.e.DB.Admin.Exec(ctx, `INSERT INTO tenant_usage (tenant_id, day, runs_started) VALUES ($1, (now() AT TIME ZONE 'UTC')::date, 3)`, sub); err != nil {
+		if _, err := w.e.DB.Admin.Exec(ctx, `INSERT INTO tenant_usage (tenant_id, day, runs_started) VALUES ($1, $2::date, 3)`, sub, day); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -921,7 +933,7 @@ func TestSnapshotsAndPartnerAggregate(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := db.InTenantTx(ctx, w.e.DB.App, []uuid.UUID{partner}, func(tx pgx.Tx) error {
-		agg, err := billing.PartnerAggregate(ctx, tx, partner, w.clock.Now().AddDate(0, 0, -1), w.clock.Now())
+		agg, err := billing.PartnerAggregate(ctx, tx, partner, day.AddDate(0, 0, -1), day)
 		if err != nil {
 			return err
 		}
@@ -953,6 +965,30 @@ func TestSnapshotsAndPartnerAggregate(t *testing.T) {
 			t.Fatalf("foreign aggregate: %+v", agg)
 		}
 		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Each sub-tenant starts one more run late in the day. Half an hour
+	// after midnight the day before is closed: rewritten with all its usage,
+	// beside the new day's first snapshot.
+	if _, err := w.e.DB.Admin.Exec(ctx, `UPDATE tenant_usage SET runs_started = runs_started + 1 WHERE day = $1::date`, day); err != nil {
+		t.Fatal(err)
+	}
+	w.clock.set(day.Add(24*time.Hour + 30*time.Minute))
+	if err := w.svc.SnapshotAll(ctx); err != nil {
+		t.Fatal(err)
+	}
+	err = db.InTenantTx(ctx, w.e.DB.App, []uuid.UUID{partner}, func(tx pgx.Tx) error {
+		agg, err := billing.PartnerAggregate(ctx, tx, partner, day, day.AddDate(0, 0, 1))
+		if err != nil {
+			return err
+		}
+		if len(agg) != 2 || agg[0].RunsStarted != 8 || agg[0].SubTenants != 2 || agg[1].RunsStarted != 0 || agg[1].SubTenants != 2 {
+			t.Fatalf("after midnight: %+v", agg)
+		}
+		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
