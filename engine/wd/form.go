@@ -312,9 +312,7 @@ func checkFormTrigger(d *Definition) []Problem {
 		}
 	}
 	anonymous := f.Access == "public" && f.Verify == ""
-	for _, p := range FormFieldProblems(schema, anonymous, "/inputs/schema") {
-		out = append(out, p)
-	}
+	out = append(out, FormFieldProblems(schema, anonymous, "/inputs/schema")...)
 	return out
 }
 

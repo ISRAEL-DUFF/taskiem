@@ -60,7 +60,7 @@ func (s *Server) formsDeployable(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	if trigger {
 		f, err := d.FormTriggerConfig()
 		if err != nil {
-			return fmt.Errorf("%w: %s", errBadRequest, err)
+			return fmt.Errorf("%w: %w", errBadRequest, err)
 		}
 		if err := publicnames.CheckDisplayName(f.Title); err != nil {
 			return fmt.Errorf("%w: the form's title: %s", errBadRequest, plainError(err))

@@ -121,7 +121,7 @@ func (s *Service) processInbox(ctx context.Context, x inboxRow) error {
 	var sub Submission
 	if err := s.Keys.Open(SubmissionAAD(x.reference), x.payload, &sub); err != nil {
 		s.log().Error("forms: an inbox payload that does not open; dropped", "reference", x.reference)
-		return nil
+		return nil //nolint:nilerr // dropped on purpose: retrying cannot open it
 	}
 	rows, err := s.Pool.Query(ctx, `SELECT field, data FROM taskiem_form_uploads($1)`, x.id)
 	if err != nil {
