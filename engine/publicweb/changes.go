@@ -318,7 +318,7 @@ func (s *Server) serveMove(w http.ResponseWriter, r *http.Request, site Site, p 
 
 func (s *Server) servePrices(w http.ResponseWriter, r *http.Request, site Site, ref, key string, o OrderState, embed bool, back string) {
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, back, http.StatusSeeOther)
+		http.Redirect(w, r, back, http.StatusSeeOther) //nolint:gosec // G710: back is statusLink's path on this host
 		return
 	}
 	d, _ := s.statusHead(r.Context(), site, ref, embed)
@@ -348,7 +348,7 @@ func (s *Server) servePrices(w http.ResponseWriter, r *http.Request, site Site, 
 			}
 			status, msg = http.StatusServiceUnavailable, "Something went wrong on our side. Please try again."
 		case got == ChangeOK:
-			http.Redirect(w, r, back, http.StatusSeeOther)
+			http.Redirect(w, r, back, http.StatusSeeOther) //nolint:gosec // G710: back is statusLink's path on this host
 			return
 		default:
 			s.changeOutcome(w, r, d, got, back)
