@@ -29,6 +29,7 @@ import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
 import { TablePage, Tables } from "./pages/Tables";
+import { Storefront } from "./pages/Storefront";
 
 export function App() {
   return (
@@ -142,6 +143,7 @@ function SignedIn() {
         ["/workflows", "Workflows", "workflows", can("workflow.read")],
         ["/templates", "Templates", "templates", true],
         ["/tables", "Tables", "tables", can("table.read")],
+        ["/storefront", "Storefront", "storefront", can("storefront.manage")],
         ["/runs", "Runs", "runs", can("run.read")],
         ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish")],
       ],
@@ -253,6 +255,7 @@ function SignedIn() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/tables" element={<Tables />} />
           <Route path="/tables/:id" element={<TablePage />} />
+          <Route path="/storefront" element={<Storefront />} />
           <Route path="/start" element={<Start />} />
           <Route path="/start/guide" element={<Guide />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
