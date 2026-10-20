@@ -23,6 +23,7 @@ const paths: Record<string, string> = {
   close: "M6 6l12 12M18 6L6 18",
   search: "M11 18a7 7 0 100-14 7 7 0 000 14zm9 2l-4.3-4.3",
   plus: "M12 5v14M5 12h14",
+  storefront: "M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9a2.7 2.7 0 005.3 0 2.7 2.7 0 005.4 0A2.7 2.7 0 0020 9M10 20v-5h4v5",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {
