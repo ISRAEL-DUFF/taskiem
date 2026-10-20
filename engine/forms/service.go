@@ -222,8 +222,13 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		if err != nil {
 			return err
 		}
+		// Fields the schema marks personal, and anything else that looks
+		// personal (an email, a phone number, a BVN), as runs seal them.
 		sealedAnswers, err := pii.Seal(ctx, s.Vault, tx, in.Tenant, plainAnswers, pii.SchemaPaths(tg.schema, tg.types), pii.Taint{})
 		if err != nil {
+			return err
+		}
+		if sealedAnswers, err = pii.SealDetected(ctx, s.Vault, tx, in.Tenant, sealedAnswers, pii.Taint{}); err != nil {
 			return err
 		}
 		resp, err := s.sealRespondent(ctx, tx, in.Tenant, r)

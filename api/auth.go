@@ -52,18 +52,20 @@ const (
 	// Storefronts and hosted forms (decisions 0036, 0037): the public
 	// pages and the websites allowed to embed them.
 	PermStorefrontManage = "storefront.manage"
+	// PermFormLinks mints one-time links to a link form (forms 8.4).
+	PermFormLinks = "form.links"
 )
 
 var allPermissions = []string{PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel,
 	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage,
-	PermTableRead, PermTableEdit, PermStorefrontManage}
+	PermTableRead, PermTableEdit, PermStorefrontManage, PermFormLinks}
 
 // rolePermissions are the built-in roles (spec 13.3). Any other membership
 // role (e.g. "credit_officer") is a business role that only qualifies the
 // member for approval steps naming it, on top of approval.decide.
 var rolePermissions = map[string][]string{
 	"owner":    allPermissions,
-	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage, PermTableRead, PermTableEdit, PermStorefrontManage},
+	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage, PermTableRead, PermTableEdit, PermStorefrontManage, PermFormLinks},
 	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart, PermTableRead, PermTableEdit},
 	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermTableRead},
 	"approver": {PermWorkflowRead, PermRunRead, PermApprovalDecide},
@@ -98,6 +100,12 @@ type Principal struct {
 }
 
 func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
+
+// HasRole reports whether the principal holds a membership role (an
+// owner counts for every role, as for approvals).
+func (p *Principal) HasRole(role string) bool {
+	return slices.Contains(p.Roles, role) || slices.Contains(p.Roles, "owner")
+}
 
 func (p *Principal) Actor() string {
 	if p.EndUser != nil {

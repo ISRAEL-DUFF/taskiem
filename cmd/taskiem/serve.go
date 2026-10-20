@@ -26,6 +26,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
+	formconn "github.com/israel-duff/taskiem/connectors/form"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
@@ -40,6 +41,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embed"
 	"github.com/israel-duff/taskiem/engine/embedsites"
+	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/media"
@@ -468,7 +470,9 @@ func afterConnect(dbRole string) func(context.Context, *pgx.Conn) error {
 type engine struct {
 	// orders are the storefront's orders (S3); nil without the public
 	// host's key.
-	orders   *storefront.Orders
+	orders *storefront.Orders
+	// forms are hosted forms' api side (S7); nil without the public key.
+	forms    *forms.Service
 	cfg      config
 	log      *slog.Logger
 	pool     *pgxpool.Pool
@@ -507,8 +511,10 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// The storefront platform connector's actions are bound to the orders
 	// once the vault exists (below).
 	orders := &sfconn.Late{}
+	formOps := &formconn.Late{}
 	copts := cfg.Connectors
 	copts.Storefront = orders
+	copts.Forms = formOps
 	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
 		return nil, err
@@ -538,6 +544,13 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	if e.orders != nil {
 		orders.Set(e.orders)
+	}
+	if e.forms, err = formsService(cfg, e, log); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	if e.forms != nil {
+		formOps.Set(e.forms)
 	}
 	if cfg.WhatsApp != nil {
 		e.wa = whatsapp.New(pool, *cfg.WhatsApp, &egress.Guard{Logger: log}, log)
@@ -773,9 +786,10 @@ func serve(ctx context.Context, args []string) error {
 		srv.PublicHosts = cfg.Public.Domains
 		// Storefront photos in tenants' Xenibase storage (docs/media.md).
 		srv.Orders = e.orders
+		srv.Forms = e.forms
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders)
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms)
 		// SMS and email to people outside a tenant (messages.go).
 		if w := cfg.senderWorker(e, alerter.Mailer, log); w != nil {
 			tasks = append(tasks, w.Run)

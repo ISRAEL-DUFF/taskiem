@@ -158,3 +158,17 @@ func UploadAAD(reference, field string, n int) string {
 func CodeAAD(scope string) string          { return "form code " + scope }
 func RequestViewAAD(request string) string { return "form request view " + request }
 func LinkViewAAD(link string) string       { return "form link view " + link }
+
+// NewReference is a submission's reference: "F-" and 8 letters and
+// digits (no 0, 1, l or o).
+func NewReference() string {
+	const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	for i := range b {
+		b[i] = alphabet[int(b[i])%len(alphabet)]
+	}
+	return "F-" + string(b)
+}

@@ -32,6 +32,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embedsites"
+	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/media"
@@ -89,6 +90,8 @@ type Server struct {
 	Moderator storefront.Moderator
 	// Orders are the storefront's orders (S3); nil: none are shown.
 	Orders *storefront.Orders
+	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
+	Forms *forms.Service
 	// Static serves the web app; nil omits it.
 	Static http.Handler
 	// EmbedDir holds the embedded builder's bundle (taskiem.js, served at
@@ -339,6 +342,17 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{kind}", s.putStorefrontAction)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
+			r.With(s.need(PermWorkflowRead)).Get("/forms", s.listForms)
+			r.With(s.need(PermWorkflowPublish), s.tenantWide).Patch("/forms/{id}", s.patchForm)
+			r.With(s.need(PermFormLinks), s.tenantWide).Post("/forms/{id}/links", s.mintFormLinks)
+			r.Get("/forms/{id}/view", s.memberForm)
+			r.With(s.tenantWide).Post("/forms/{id}/submissions", s.submitMemberForm)
+			r.With(s.need(PermRunRead)).Get("/form-submissions", s.listFormSubmissions)
+			r.With(s.need(PermRunRead)).Get("/form-submissions/{id}", s.getFormSubmission)
+			r.With(s.need(PermPIIReveal)).Get("/form-files/{id}", s.formFileURL)
+			r.Get("/form-requests", s.listFormRequests)
+			r.Get("/form-requests/{id}", s.getFormRequest)
+			r.With(s.tenantWide).Post("/form-requests/{id}/answers", s.answerFormRequest)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/bookings", s.putStorefrontBookings)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/services", s.getStorefrontServices)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/bookings", s.listStorefrontBookings)

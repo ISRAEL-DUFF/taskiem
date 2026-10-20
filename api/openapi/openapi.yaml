@@ -103,6 +103,9 @@ tags:
 - name: Storefront
   description: The organisation's one-page public storefront, its catalogue and its photos.
   x-taskiem-guide: storefronts
+- name: Forms
+  description: Hosted forms that start a workflow, form steps that ask someone mid-run, one-time links, submissions and their files.
+  x-taskiem-guide: forms
 - name: Embed sites
   description: Websites allowed to embed the organisation's storefront and hosted forms, proven by DNS or a file.
   x-taskiem-guide: embed-sites
@@ -993,6 +996,460 @@ paths:
                 properties:
                   booking:
                     $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms:
+    get:
+      operationId: listForms
+      tags:
+      - Forms
+      summary: The organisation's forms
+      description: Each workflow with a form trigger has one per environment it is deployed to, with its link, status and counts.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      responses:
+        '200':
+          description: The forms
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [forms]
+                properties:
+                  forms:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Form'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms/{id}:
+    patch:
+      operationId: patchForm
+      tags:
+      - Forms
+      summary: Pause, reopen or close a form, or set when it is open
+      description: A suspended form cannot be changed here. clear names the settings to unset.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.publish
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                status:
+                  type: string
+                  enum: [live, paused, closed]
+                opens_at:
+                  type: string
+                  format: date-time
+                closes_at:
+                  type: string
+                  format: date-time
+                max_submissions:
+                  type: integer
+                  minimum: 1
+                closed_message:
+                  type: string
+                  maxLength: 300
+                clear:
+                  type: array
+                  items:
+                    type: string
+                    enum: [opens_at, closes_at, max_submissions, closed_message]
+      responses:
+        '200':
+          description: The form
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Form'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms/{id}/links:
+    post:
+      operationId: mintFormLinks
+      tags:
+      - Forms
+      summary: Make one-time links to a link form
+      description: A number of open links, or one per person bound to their phone or email (the link then also asks for the code sent there). The links are shown once.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: form.links
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                count:
+                  type: integer
+                  minimum: 1
+                  maximum: 500
+                to:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    properties:
+                      phone:
+                        type: string
+                      email:
+                        type: string
+                expires_in_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+      responses:
+        '201':
+          description: The links
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [links]
+                properties:
+                  links:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        url:
+                          type: string
+                        to:
+                          type: string
+                        expires_at:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms/{id}/view:
+    get:
+      operationId: getMemberForm
+      tags:
+      - Forms
+      summary: A members form, to fill in in the app
+      description: Any member (or, when the form names roles, members with one of them). The member's name and email fill fields marked x-form.from.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The form to render
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  form:
+                    $ref: '#/components/schemas/Form'
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  schema:
+                    type: object
+                  pages:
+                    type:
+                    - array
+                    - 'null'
+                  after:
+                    type: object
+                  member:
+                    type: object
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/forms/{id}/submissions:
+    post:
+      operationId: submitMemberForm
+      tags:
+      - Forms
+      summary: Send a members form
+      description: Starts its run as the member. 422 when the answers are refused.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                answers:
+                  type: object
+      responses:
+        '201':
+          description: The submission
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [submission]
+                properties:
+                  submission:
+                    $ref: '#/components/schemas/FormSubmission'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/form-submissions:
+    get:
+      operationId: listFormSubmissions
+      tags:
+      - Forms
+      summary: Forms' submissions
+      description: Newest first, personal answers masked.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.read
+      parameters:
+      - name: form
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: The submissions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [submissions]
+                properties:
+                  submissions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FormSubmission'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/form-submissions/{id}:
+    get:
+      operationId: getFormSubmission
+      tags:
+      - Forms
+      summary: One submission and its files
+      description: Personal answers are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The submission
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [submission, revealed]
+                properties:
+                  submission:
+                    $ref: '#/components/schemas/FormSubmission'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/form-files/{id}:
+    get:
+      operationId: getFormFile
+      tags:
+      - Forms
+      summary: A short-lived download link for a form file
+      description: Audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: pii.reveal
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  expires_at:
+                    type: string
+                  name:
+                    type: string
+                  type:
+                    type: string
+                  size:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/form-requests:
+    get:
+      operationId: listFormRequests
+      tags:
+      - Forms
+      summary: Form steps waiting for members of your roles
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FormRequest'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/form-requests/{id}:
+    get:
+      operationId: getFormRequest
+      tags:
+      - Forms
+      summary: A form step addressed to one of your roles, with its prefill
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormRequest'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/form-requests/{id}/answers:
+    post:
+      operationId: answerFormRequest
+      tags:
+      - Forms
+      summary: Answer a form step addressed to one of your roles
+      description: The waiting run goes on with the answers. 409 when it is no longer waiting.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                answers:
+                  type: object
+      responses:
+        '201':
+          description: The submission
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [submission]
+                properties:
+                  submission:
+                    $ref: '#/components/schemas/FormSubmission'
         default:
           $ref: '#/components/responses/Error'
   /v1/embed-sites:
@@ -13259,6 +13716,141 @@ components:
               type: array
               items:
                 type: string
+    Form:
+      type: object
+      required: [id, public_id, workflow_id, environment, version, title, access, status, submissions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        public_id:
+          type: string
+        workflow_id:
+          type: string
+          format: uuid
+        workflow:
+          type: string
+        environment:
+          type: string
+        version:
+          type: integer
+        title:
+          type: string
+        access:
+          type: string
+          enum: [public, link, members]
+        status:
+          type: string
+          enum: [live, paused, closed, suspended]
+        opens_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        closes_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        max_submissions:
+          type:
+          - integer
+          - 'null'
+        submissions:
+          type: integer
+        submissions_this_week:
+          type: integer
+        closed_message:
+          type:
+          - string
+          - 'null'
+        url:
+          type: string
+          description: Where people fill it in (the app, for a members form)
+        embed_url:
+          type: string
+    FormSubmission:
+      type: object
+      required: [id, reference, answers, respondent, channel, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        form_id:
+          type:
+          - string
+          - 'null'
+        request_id:
+          type:
+          - string
+          - 'null'
+        answers:
+          type: object
+          description: Personal values masked as {masked, category} unless revealed
+        respondent:
+          type: object
+        channel:
+          type: string
+          enum: [direct, embed, app]
+        run_id:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          enum: [received, started, answered, refused]
+        message:
+          type:
+          - string
+          - 'null'
+        note:
+          type:
+          - string
+          - 'null'
+        created_at:
+          type: string
+          format: date-time
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              field:
+                type: string
+              name:
+                type: string
+              type:
+                type: string
+              size:
+                type: integer
+    FormRequest:
+      type: object
+      required: [id, run_id, title, schema, status, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type:
+          - string
+          - 'null'
+        schema:
+          type: object
+        role:
+          type: string
+        status:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        prefill:
+          type: object
     EmbedSiteRequest:
       type: object
       required: [origin]
