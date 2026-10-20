@@ -1,5 +1,8 @@
 // Thin client for the Taskiem REST API (api/server.go). The session is an
 // HttpOnly cookie; every request carries the CSRF header the API requires.
+// A field agent working in a business adds its session's header (below).
+
+import { parseSession, sessionEnded, withAgentHeader, type AgentSession } from "./lib/agent";
 
 export interface Problem {
   path: string;
@@ -15,6 +18,57 @@ export class ApiError extends Error {
   ) {
     super(message);
   }
+}
+
+// --- a field agent's session in a business (docs/agents.md) ---
+//
+// While an agent works in a business, every request but their own
+// (/v1/agent/*, sign-in, /v1/me) carries X-Taskiem-Agent-Session, so the
+// storefront and table pages work unchanged inside the session. The
+// session is kept for the tab (sessionStorage) so a reload stays in it.
+
+const AGENT_KEY = "taskiem.agent-session";
+let agentSession: AgentSession | null = null;
+const agentListeners = new Set<() => void>();
+try {
+  agentSession = parseSession(globalThis.sessionStorage?.getItem(AGENT_KEY) ?? null);
+} catch {
+  // storage blocked: no session survives a reload
+}
+
+/** The business session the agent is working in, if any. */
+export function currentAgentSession(): AgentSession | null {
+  return agentSession;
+}
+
+/** Starts (or, with null, leaves) working in a business. */
+export function setAgentSession(s: AgentSession | null) {
+  agentSession = s;
+  try {
+    if (s) globalThis.sessionStorage?.setItem(AGENT_KEY, JSON.stringify(s));
+    else globalThis.sessionStorage?.removeItem(AGENT_KEY);
+  } catch {
+    // storage blocked: kept in memory only
+  }
+  for (const fn of agentListeners) fn();
+}
+
+/** For useSyncExternalStore. */
+export function subscribeAgentSession(fn: () => void): () => void {
+  agentListeners.add(fn);
+  return () => agentListeners.delete(fn);
+}
+
+function headersFor(path: string, headers: Record<string, string>): Record<string, string> {
+  return withAgentHeader(path, { ...headers, "X-Taskiem-Request": "1" }, agentSession?.id);
+}
+
+/** A refusal saying the session ended: leave it, and tell the agent app. */
+function noteEnded(status: number, body: Record<string, unknown>) {
+  if (!agentSession || !sessionEnded(status, body)) return;
+  const was = agentSession;
+  setAgentSession(null);
+  window.dispatchEvent(new CustomEvent("taskiem:agent-session-ended", { detail: was }));
 }
 
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
@@ -33,12 +87,14 @@ export function uploadFile<T = unknown>(path: string, file: Blob): Promise<T> {
 
 /** GETs a binary response (an image) with the session, as a Blob. */
 export async function getBlob(path: string): Promise<Blob> {
-  const res = await fetch(path, { credentials: "same-origin", headers: { "X-Taskiem-Request": "1" } });
+  const res = await fetch(path, { credentials: "same-origin", headers: headersFor(path, {}) });
   if (!res.ok) {
     const text = await res.text();
     let msg = text || res.statusText;
     try {
-      msg = (JSON.parse(text) as { error?: string }).error || msg;
+      const body = JSON.parse(text) as { error?: string };
+      msg = body.error || msg;
+      noteEnded(res.status, body);
     } catch {
       // not JSON: the text itself
     }
@@ -52,7 +108,7 @@ async function request<T>(method: string, path: string, body: BodyInit | undefin
   const res = await fetch(path, {
     method,
     credentials: "same-origin",
-    headers: { ...headers, "X-Taskiem-Request": "1" },
+    headers: headersFor(path, headers),
     body,
   });
   if (res.status === 204) return undefined as T;
@@ -65,7 +121,12 @@ async function request<T>(method: string, path: string, body: BodyInit | undefin
   }
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith("/v1/auth/")) window.dispatchEvent(new Event("taskiem:unauthorised"));
+    noteEnded(res.status, data);
     throw new ApiError(res.status, (data.error as string) ?? res.statusText, (data.problems as Problem[]) ?? [], data);
+  }
+  // Publishing ends an onboarding on the server: the agent app checks.
+  if (agentSession && method === "POST" && path === "/v1/storefront/publish") {
+    window.dispatchEvent(new CustomEvent("taskiem:agent-published", { detail: agentSession }));
   }
   return data as T;
 }

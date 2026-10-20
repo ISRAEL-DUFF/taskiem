@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
+import { AgentVisits } from "./AgentVisits";
 import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 
@@ -154,6 +155,7 @@ export function Members() {
         </table>
       )}
       <PendingInvitations refresh={members.data} />
+      <AgentVisits />
       <div className="toolbar" style={{ marginTop: 24 }}>
         <h2 className="grow" style={{ margin: 0 }}>
           Roles
