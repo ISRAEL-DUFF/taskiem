@@ -1,0 +1,10 @@
+{{template "fhead" .}}{{with .Refresh}}<meta http-equiv="refresh" content="{{.}}">
+{{end}}{{if .Embed}}<script src="{{asset "form-embed.js"}}" defer></script>
+{{end}}{{template "fbody" .}}
+{{if .Embed}}<div hidden data-embed data-origins="{{.Origins}}" data-submitted="{{.Reference}}"></div>
+{{end}}<h1>{{.Headline}}</h1>
+<div class="ff-message" role="status">{{if .Message}}{{.Message}}{{end}}</div>
+{{range .Lines}}<p>{{.}}</p>
+{{end}}<p class="sf-ref">Reference <strong>{{.Reference}}</strong></p>
+{{with .StatusURL}}<p><a class="btn" href="{{.}}"{{if $.Embed}} target="_blank" rel="noopener noreferrer"{{end}}>See what happens next</a></p>{{end}}
+{{template "ffoot" .}}

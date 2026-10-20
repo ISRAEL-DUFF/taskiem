@@ -211,11 +211,12 @@ GRANT SELECT (workflow_id, version, definition) ON workflow_versions TO taskiem_
 
 -- +goose StatementBegin
 -- A live form for the form host: its definition's form parts, its
--- organisation's name, and whether it takes submissions now.
+-- organisation's name and id (for the websites that may frame it), and
+-- whether it takes submissions now.
 CREATE FUNCTION taskiem_public_form(p_public_id text)
 RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT jsonb_build_object('endpoint_id', e.id, 'environment', e.environment, 'version', e.version, 'status', e.status,
+  SELECT jsonb_build_object('endpoint_id', e.id, 'tenant_id', e.tenant_id, 'environment', e.environment, 'version', e.version, 'status', e.status,
            'open', e.status = 'live' AND (e.opens_at IS NULL OR e.opens_at <= now()) AND (e.closes_at IS NULL OR e.closes_at > now())
              AND (e.max_submissions IS NULL OR e.submissions < e.max_submissions),
            'closed_message', e.closed_message, 'business', t.name,
@@ -320,7 +321,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM form_inbox WHERE id = p_inbox AND claimed_until IS NULL AND created_at > now() - interval '5 minutes') THEN
     RAISE EXCEPTION 'no such submission' USING ERRCODE = '42704';
   END IF;
-  INSERT INTO form_uploads (id, inbox_id, field, data) VALUES (gen_random_uuid(), p_inbox, p_field, p_data);
+  -- clock_timestamp, not now(): a submission's files arrive in one
+  -- transaction, and the api role reads them back in this order.
+  INSERT INTO form_uploads (id, inbox_id, field, data, created_at) VALUES (gen_random_uuid(), p_inbox, p_field, p_data, clock_timestamp());
 END
 $$;
 -- +goose StatementEnd

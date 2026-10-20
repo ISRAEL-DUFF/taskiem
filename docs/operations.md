@@ -44,6 +44,7 @@ Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`)
 | `TASKIEM_SMS_*`, `TASKIEM_MESSAGE_FROM`, `TASKIEM_MESSAGE_HASH_KEY` | — | The platform's own SMS providers and no-reply address for [messages to people outside an organisation](messages.md) |
 | `TASKIEM_PUBLIC_KEY` | — | 32 bytes, base64 (`openssl rand -base64 32`), the same on the `public` and `api` roles. It signs the [storefront](storefronts.md)'s forms and encrypts submissions on their way from the public host to the `api` role. Without it, no order can arrive |
 | `TASKIEM_PUBLIC_DOMAINS` | — | The public host's own domains (the preview domain, the form host), comma-separated: never accepted as an [embed site](embed-sites.md) |
+| `TASKIEM_PUBLIC_FORM_HOST` | `forms.` + the first of `TASKIEM_PUBLIC_DOMAINS` | The form host's name, where [hosted forms](public-host.md#hosted-forms) are served (`/f/…`, `/r/…`, `/q/…`, `/s/…`) |
 | `TASKIEM_PUBLIC_LISTEN`, `TASKIEM_PUBLIC_ENABLED` | `:8082`, `false` | The public host's listener, and whether `--role all` runs it |
 | `TASKIEM_DATABASE_RETRY_WINDOW` | `30s` | How long a worker keeps a step's outcome through a database failover before giving up to lease expiry ([cloud](cloud.md#what-happens-during-a-failover)) |
 | `TASKIEM_WORKER_POOL` | `shared` | The worker pool this worker serves ([cloud](cloud.md#dedicated-worker-pools)) |

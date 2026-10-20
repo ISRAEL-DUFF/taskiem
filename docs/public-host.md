@@ -43,6 +43,33 @@ INSERT INTO public_hosts (host, tenant_id, kind, site_id, verified_at)
 VALUES ('ada.shops.example.com', '<tenant id>', 'storefront', gen_random_uuid(), now());
 ```
 
+## Hosted forms
+
+[Hosted forms](spec/forms.md) (S7) are served on a platform host of their own, the **form host**: `forms.<first of TASKIEM_PUBLIC_DOMAINS>` by default, or `TASKIEM_PUBLIC_FORM_HOST`. It is not a `public_hosts` row: requests with that `Host` go straight to the forms. The preview domain's wildcard certificate covers it, and `/tls/ask` answers 200 for it. Without `TASKIEM_PUBLIC_KEY`, the form host answers "Forms are not open yet". (A `public_hosts` row of kind `form`, an organisation's own form domain, still shows "Coming soon".)
+
+| Path | What it serves |
+| --- | --- |
+| `GET/POST /f/{public_id}` | A form trigger's form, for `access: public`. A `link` form says it opens from the link sent; a `members` form says it opens in the app, linking to `TASKIEM_PUBLIC_URL/forms/{public_id}` |
+| `POST /f/{public_id}/code` | Asks for a 6-digit code (`verify: phone` or `email`) |
+| `GET /f/{public_id}/done/{reference}?k=` | The result page (`after.mode: result`): refreshes every 2 seconds, up to 30, for the workflow's message |
+| `/embed/f/{public_id}…` | The same, framed only by the organisation's verified [embed sites](embed-sites.md). It loads `form-embed.js`, which posts `form:height` and `form:submitted` (the reference only) to those sites, and records which of them framed the form |
+| `GET/POST /r/{token}`, `POST /r/{token}/code` | A `link` form through its one-time link. A link bound to a person asks for the code sent to them first |
+| `GET/POST /q/{token}`, `POST /q/{token}/code` | A form step's request: its questions, prefilled from the run; the code first when the step asks for one |
+| `GET /s/{reference}?k=` | A status link (`after.status: true`): the state in plain words and the workflow's latest message, nothing else |
+| `POST /report` | Reports a form. For now it is logged (`form host: a form was reported`) and answered 204; the operator console's queue comes later |
+
+How the pages behave:
+
+- **No session.** A multi-page form carries the answers so far, and a verified address, in a hidden field sealed under the public key and bound to the form and its one-time token. Conditions (`show_if`) are evaluated on the server between pages; one that reads an answer not given hides its page. A page not shown sends nothing, and its fields are not required.
+- **Fields** follow [forms 6.2](spec/forms.md#62-field-types). Inputs are named `a.<field>`, so no field can clash with the form's own inputs. A `naira` number is typed in naira; the run receives it as typed, or in kobo when the field's name ends `_kobo`. Not yet: `x-form.options_from` (shown as a text box) and `x-form.blocks` (not shown).
+- **Prefill** from the link's query takes only fields marked `x-form.prefill`; hidden fields take a value only that way, or from a form step's run.
+- **Checks** are the schema's (required, types, choices, lengths, patterns, limits), in plain words, and again in full before sending. Free text that holds a card number, BVN or NIN is refused unless the field is marked `x-pii: bvn` or `nin`. A submission is at most 256 KB without its files. A file is at most its field's `max_mb` (10 by default, 25 at most), of a type in its `accept` judged by its content, and at most 10 go with a form. Files on a page before the last are carried, sealed, through the later pages: together they may be at most 10 MB, so large files belong on the last page.
+- **Codes** go through `taskiem_public_form_code`, which the `api` role sends. `once_per: phone` or `email` applies when the respondent verified that kind of address.
+- **Limits:** 50 submissions and code requests an hour per client address (bursts of 20), on top of the page-view limit, the form token's fill time, the honeypot, and the database's own limits on codes (3 per address and 20 per form in 10 minutes, 5 attempts each).
+- **After sending:** the message (minimal Markdown: paragraphs, `**bold**`, links only to the organisation's verified websites), a redirect (only to `https://` on a verified website; an embedded form says thank you instead, so the frame stays on the form), or the result page. Each shows the reference.
+- **References** are `F-` and 8 letters and digits, drawn from the form token's idempotency key under the public key: a double tap or a retry answers with the first reference and writes nothing more.
+
+
 ## Building blocks for the next milestones
 
 - **`engine/sender`:** SMS and email to customers and respondents through the platform's providers, from a durable outbox ([messages](messages.md)).

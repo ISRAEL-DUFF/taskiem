@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -47,6 +48,12 @@ type publicConfig struct {
 	// inbox, with keys derived from it. Unset, storefront forms answer
 	// "orders are not open yet".
 	Key []byte
+	// FormHost is the form host's name (TASKIEM_PUBLIC_FORM_HOST, default
+	// forms.<first of Domains>): hosted forms are served there.
+	FormHost string
+	// AppURL is the web app's (TASKIEM_PUBLIC_URL), where members' forms
+	// open.
+	AppURL string
 }
 
 func publicConfigFromEnv() (publicConfig, error) {
@@ -72,6 +79,11 @@ func publicConfigFromEnv() (publicConfig, error) {
 		}
 		c.Key = k
 	}
+	c.FormHost = strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_PUBLIC_FORM_HOST")))
+	if c.FormHost == "" && len(c.Domains) > 0 {
+		c.FormHost = "forms." + c.Domains[0]
+	}
+	c.AppURL = strings.TrimRight(strings.TrimSpace(os.Getenv("TASKIEM_PUBLIC_URL")), "/")
 	if c.DSN == "" { // unset or empty: the platform's
 		c.DSN = os.Getenv("TASKIEM_DATABASE_URL")
 	}
@@ -134,6 +146,7 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool),
 		Services: publicweb.DBServices(pool), Busy: publicweb.DBBusy(pool), Book: publicweb.DBBook(pool), Booking: publicweb.DBBookingStatus(pool),
 		Change: publicweb.DBChange(pool), PriceChange: publicweb.DBPriceChange(pool),
+		Forms: publicweb.DBForms(pool), FormHost: cfg.Public.FormHost, AppURL: cfg.Public.AppURL,
 		Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
 	if k := cfg.Public.Key; k != nil {
 		if srv.FormKey, err = storefront.FormKey(k); err != nil {
@@ -144,8 +157,17 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 			pool.Close()
 			return nil, nil, nil, fmt.Errorf("TASKIEM_PUBLIC_KEY: %w", err)
 		}
+		fk, err := forms.NewKeys(k)
+		if err != nil {
+			pool.Close()
+			return nil, nil, nil, fmt.Errorf("TASKIEM_PUBLIC_KEY: %w", err)
+		}
+		srv.FormKeys = &fk
 	} else {
-		log.Warn("TASKIEM_PUBLIC_KEY is not set: storefront forms answer \"orders are not open yet\" (docs/public-host.md)")
+		log.Warn("TASKIEM_PUBLIC_KEY is not set: storefront forms answer \"orders are not open yet\" and hosted forms are not open (docs/public-host.md)")
+	}
+	if srv.FormHost == "" {
+		log.Warn("no form host: set TASKIEM_PUBLIC_DOMAINS or TASKIEM_PUBLIC_FORM_HOST to serve hosted forms (docs/public-host.md)")
 	}
 	return srv, httpTask("public", cfg.Public.Listen, srv.Handler(), log), pool.Close, nil
 }
