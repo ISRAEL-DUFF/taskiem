@@ -129,6 +129,29 @@ export interface ApprovalStep extends StepBase {
   };
 }
 
+/** A form step (docs/spec/forms.md 6.7): a one-time link to someone, and a wait for their answers (the step's output, with respondent). */
+export interface FormStep extends StepBase {
+  type: "form";
+  config: {
+    title: string;
+    description?: string;
+    /** Exactly one: a phone or email (usually an expression over the run), or members with a role. */
+    to: { phone: string } | { email: string } | { role: string };
+    via?: ("sms" | "email")[];
+    verify?: boolean;
+    /** The questions, as an inputs schema (x-form hints per property). */
+    schema: object;
+    /** Field to value (expressions over the run). */
+    prefill?: Values;
+    /** Default 7d. */
+    timeout?: Duration;
+    /** Durations after sending, each shorter than the timeout. */
+    remind?: Duration[];
+    /** continue completes the step with {timed_out: true}. */
+    on_timeout?: "fail" | "continue";
+  };
+}
+
 export interface SubflowStep extends StepBase {
   type: "subflow";
   input?: Values;
@@ -148,13 +171,35 @@ export interface AiStep extends StepBase {
 
 export type Step =
   | ConnectorStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
-  | WaitStep | SignalStep | ApprovalStep | SubflowStep | TransformStep | AiStep;
+  | WaitStep | SignalStep | ApprovalStep | FormStep | SubflowStep | TransformStep | AiStep;
 
 export type StepType = Step["type"];
 
 export interface Trigger {
-  type: "webhook" | "schedule" | "connector_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow" | "storefront";
+  type: "webhook" | "schedule" | "connector_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow" | "storefront" | "form";
   config?: Record<string, unknown>;
+}
+
+/** A page of a form: its fields (inputs-schema properties), shown unless show_if (CEL over answers) is false. */
+export interface FormPage {
+  title?: string;
+  fields: string[];
+  show_if?: string;
+}
+
+/** A form trigger's config (docs/spec/forms.md 6.1): the fields are the workflow's inputs schema. */
+export interface FormTriggerConfig {
+  title: string;
+  description?: string;
+  /** public (the default), link (one-time links) or members (signed in, optionally in roles). */
+  access?: "public" | "link" | "members";
+  roles?: string[];
+  /** A code sent to the respondent's phone or email before submitting. */
+  verify?: "phone" | "email";
+  /** Without pages, one page with every field. */
+  pages?: FormPage[];
+  after?: { mode?: "message" | "redirect" | "result"; message?: string; url?: string; status?: boolean };
+  once_per?: "phone" | "email" | "member";
 }
 
 /** A screen id in a USSD menu. */

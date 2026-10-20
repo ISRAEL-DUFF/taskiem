@@ -145,6 +145,8 @@ export function newStep(type: Step["type"], id: string): Step {
       return { id, type, config: { event: "paystack@1:transfer_event", correlation: "=trigger.body.reference", timeout: "24h" } };
     case "approval":
       return { id, type, config: { role: "approver", timeout: "24h", on_timeout: "reject" } };
+    case "form":
+      return { id, type, config: { title: "Tell us more", to: { phone: "" }, schema: { type: "object", properties: { answer: { type: "string", title: "Your answer" } } } } };
     case "branch":
       return { id, type, config: { paths: [{ name: "yes", when: "=true", steps: [] }] } };
     case "foreach":

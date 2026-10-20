@@ -1,6 +1,6 @@
 # Contract: Workflow tests `wd-test/v1`
 
-A workflow test (spec 10.5) declares a trigger, what the outside world does (step outcomes, signals, approval decisions), and what the run must do. `taskiem test` runs them offline; `taskiem dev` runs them on every change and will not deploy a workflow whose tests fail. Git-led deploys will require them (Phase 2, milestone 2).
+A workflow test (spec 10.5) declares a trigger, what the outside world does (step outcomes, signals, approval decisions, form answers), and what the run must do. `taskiem test` runs them offline; `taskiem dev` runs them on every change and will not deploy a workflow whose tests fail. Git-led deploys will require them (Phase 2, milestone 2).
 
 Tests run the real orchestrator (`engine/decide`) over an in-memory history on a virtual clock that starts at 2026-01-05T09:00:00Z. Nothing is called: every task step needs a mock. Backoffs, waits, and timeouts take no real time, so a test of a 72-hour signal timeout runs in milliseconds.
 
@@ -41,10 +41,11 @@ Tests run the real orchestrator (`engine/decide`) over an in-memory history on a
 | --- | --- |
 | `workflow` | The `*.wd.json` under test, relative to the test file |
 | `env` | Tenant variables (`env.*`) for every case; a case's `env` adds to and overrides them |
-| `trigger` | The run's `trigger`. For webhook workflows, `trigger.body` is checked against the workflow's inputs schema first |
+| `trigger` | The run's `trigger`. For webhook workflows, `trigger.body` is checked against the workflow's inputs schema first; for a `form` trigger `trigger.body` is the answers, checked the same way, and `trigger.form` (`submission_id`, `respondent`, ...) may be given as the form host would send it |
 | `mocks` | Outcomes of task steps (`connector`, `http`, `code`), keyed by step id or instance id (`pay_all[2].to_bank`, `compensate:pay`); an instance key wins. A mock is `{"output": ...}` or `{"error": {"kind", "message"}}`; a list answers successive attempts and its last entry repeats. Output values may be expressions over `input`, the step's resolved input |
 | `signals` | `{"payload": ...}` delivers the signal (the step's output); `{"timeout": true}` lets its timeout fire |
 | `approvals` | `{"decision": "approved" \| "rejected", "by": "..."}`, or `{"timeout": true}` |
+| `forms` | Answers to `form` steps (an addition for [forms](../spec/forms.md)), keyed like `signals`: `{"answers": {...}}` submits them, checked against the step's `schema` (a mismatch fails the case); the step's output is the answers plus `respondent`, which is `respondent` when the mock gives one and otherwise who the step asked (`{"kind": "link", "phone"}` or `"email"`, or `{"kind": "member", "member_id": "test-member"}` for a role). `{"timeout": true}` lets the step's timeout (7 days by default) fire: with `on_timeout: continue` its output is `{"timed_out": true}` |
 | `expect.status` | `completed`, `failed`, `needs_reconciliation` (a step parked for an operator), or `blocked` (waiting on something the case does not answer) |
 | `expect.error` | Text the run's failure message must contain |
 | `expect.steps` | Instance or step id to `completed`, `failed`, `parked`, `skipped`, `cancelled`, or `not_run` |

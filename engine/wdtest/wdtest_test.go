@@ -117,3 +117,43 @@ func TestPolicies(t *testing.T) {
 		t.Errorf("%v", r.Failures)
 	}
 }
+
+// A form trigger's answers are trigger.body; a form step is answered by
+// forms (its output is the answers and who answered) or times out.
+func TestForms(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_f","version":1,"name":"f",
+	  "trigger":{"type":"form","config":{"title":"Apply","after":{"mode":"message","message":"Thanks"}}},
+	  "inputs":{"schema":{"type":"object","required":["phone"],"properties":{"phone":{"type":"string","x-pii":"phone"}}}},
+	  "steps":[
+	    {"id":"ask","type":"form","config":{"title":"Your bank","to":{"phone":"=trigger.body.phone"},"timeout":"72h","on_timeout":"continue",
+	      "schema":{"type":"object","required":["bank"],"properties":{"bank":{"type":"string"}}}}},
+	    {"id":"done","type":"transform","needs":["ask"],"config":{"output":{"bank":"=has(steps.ask.output.bank) ? steps.ask.output.bank : 'none'"}}}]}`
+	def, err := wd.Load([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	trig := map[string]any{"body": map[string]any{"phone": "+2348030000000"}}
+	for _, c := range []wdtest.Case{
+		{Name: "answered", Trigger: trig, Forms: map[string]wdtest.FormMock{"ask": {Answers: map[string]any{"bank": "GTBank"}}},
+			Expect: wdtest.Expect{Status: "completed", Outputs: map[string]any{
+				"ask":  map[string]any{"bank": "GTBank", "respondent": map[string]any{"kind": "link", "phone": "+2348030000000"}},
+				"done": map[string]any{"bank": "GTBank"}}}},
+		{Name: "timed out", Trigger: trig, Forms: map[string]wdtest.FormMock{"ask": {Timeout: true}},
+			Expect: wdtest.Expect{Status: "completed", Outputs: map[string]any{"ask": map[string]any{"timed_out": true}, "done": map[string]any{"bank": "none"}}}},
+	} {
+		if r := wdtest.RunCase(def, registry(t), nil, c); !r.Passed() {
+			t.Errorf("%s: %v\n%v", c.Name, r.Failures, r.Trace)
+		}
+	}
+	// Answers outside the step's schema fail the case.
+	r := wdtest.RunCase(def, registry(t), nil, wdtest.Case{Name: "bad", Trigger: trig, Forms: map[string]wdtest.FormMock{"ask": {Answers: map[string]any{"bank": 5}}},
+		Expect: wdtest.Expect{Status: "completed"}})
+	if r.Passed() || !strings.Contains(strings.Join(r.Failures, "|"), "do not match the step's schema") {
+		t.Errorf("bad answers: %v", r.Failures)
+	}
+	// A form trigger's body is checked against the inputs schema.
+	r = wdtest.RunCase(def, registry(t), nil, wdtest.Case{Name: "no phone", Trigger: map[string]any{"body": map[string]any{}}, Expect: wdtest.Expect{Status: "completed"}})
+	if r.Passed() || !strings.Contains(strings.Join(r.Failures, "|"), "inputs schema") {
+		t.Errorf("trigger body: %v", r.Failures)
+	}
+}

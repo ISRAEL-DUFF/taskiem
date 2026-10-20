@@ -1096,6 +1096,26 @@
       "text": "Maka ihe ọ bụla n'ime ndepụta (ọ karịghị {count} n'otu oge):",
       "reviewed": false
     },
+    "wd.form": {
+      "text": "Gwa mmadụ ka o dejupụta “{title}”",
+      "reviewed": false
+    },
+    "wd.form.email": {
+      "text": "Gwa mmadụ, site na adreesị ozi-e ya, ka o dejupụta “{title}”",
+      "reviewed": false
+    },
+    "wd.form.phone": {
+      "text": "Gwa mmadụ, site na nọmba ekwentị ya, ka o dejupụta “{title}”",
+      "reviewed": false
+    },
+    "wd.form.role": {
+      "text": "Gwa ndị otu nwere ọrụ {role} ka ha dejupụta “{title}”",
+      "reviewed": false
+    },
+    "wd.form.timeout": {
+      "text": "{form} (ọ na-echere ruo {duration})",
+      "reviewed": false
+    },
     "wd.http": {
       "text": "Kpọọ ọrụ mpụga",
       "reviewed": false
@@ -1202,6 +1222,18 @@
     },
     "wd.trigger.event_reports": {
       "text": "Mgbe {connector} kọrọ {events}",
+      "reviewed": false
+    },
+    "wd.trigger.form": {
+      "text": "Mgbe mmadụ dejupụtara fọm “{title}”",
+      "reviewed": false
+    },
+    "wd.trigger.form_link": {
+      "text": "Mgbe mmadụ dejupụtara fọm “{title}” (naanị site na njikọ e zigaara ya)",
+      "reviewed": false
+    },
+    "wd.trigger.form_members": {
+      "text": "Mgbe mmadụ dejupụtara fọm “{title}” (naanị ndị otu)",
       "reviewed": false
     },
     "wd.trigger.manual": {

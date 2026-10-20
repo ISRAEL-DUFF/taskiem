@@ -197,6 +197,16 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           </Field>
         </>
       )}
+      {step.type === "form" && (
+        <>
+          <Field label="Title" hint="What the person is asked to fill in">
+            <input value={String(cfg.title ?? "")} onChange={(e) => setCfg({ title: e.target.value })} />
+          </Field>
+          <Field label="Configuration (JSON)" hint="to ({phone} or {email} as an expression, or {role}), schema (the questions), prefill, timeout, remind, on_timeout.">
+            <JsonInput value={cfg} onChange={(v) => v && set({ config: v })} rows={14} />
+          </Field>
+        </>
+      )}
       {(step.type === "branch" || step.type === "foreach" || step.type === "parallel") && (
         <Field label="Configuration (JSON)" hint="Nested steps are edited here.">
           <JsonInput value={cfg} onChange={(v) => v && set({ config: v })} rows={14} />

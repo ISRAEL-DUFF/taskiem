@@ -32,7 +32,7 @@ import (
 
 // Step is one recorded step instance.
 type Step struct {
-	Kind      string         `json:"kind"` // task | approval | signal | timer | other
+	Kind      string         `json:"kind"` // task | approval | signal | form | timer | other
 	Connector string         `json:"connector,omitempty"`
 	Action    string         `json:"action,omitempty"`
 	Input     any            `json:"input,omitempty"`
@@ -118,6 +118,9 @@ func Record(hist []history.Event) (*Recording, error) {
 				s.Kind = "timer"
 			case history.KindSignal:
 				s.Kind = "signal"
+				if p.Form != nil {
+					s.Kind = "form"
+				}
 			}
 			s.Connector, s.Action, s.Input = p.Connector, p.Action, p.Input
 			s.Attempts = max(s.Attempts, e.Attempt)
@@ -184,8 +187,9 @@ func Record(hist []history.Event) (*Recording, error) {
 }
 
 // Case builds the shadow case: the recorded trigger, recorded outcomes for
-// what completed, sampled outputs for the rest, recorded approvals and
-// signals (approved and empty where none was recorded), and the
+// what completed, sampled outputs for the rest, recorded approvals,
+// signals and form answers (approved, empty and sampled where none was
+// recorded; a form that timed out times out again), and the
 // expectation that the run completes.
 func (rec *Recording) Case(name string, def *wd.Definition, reg connector.Lookup) wdtest.Case {
 	reg = builder.ManifestOnly(reg)
@@ -207,6 +211,21 @@ func (rec *Recording) Case(name string, def *wd.Definition, reg connector.Lookup
 		case "signal":
 			if s.Signal != nil {
 				c.Signals[id] = wdtest.SignalMock{Payload: literal(s.Signal)}
+			}
+		case "form":
+			// The recorded submission: its answers, and who answered.
+			if m, ok := s.Signal.(map[string]any); ok {
+				answers := map[string]any{}
+				for k, v := range m {
+					if k != "respondent" {
+						answers[k] = literal(v)
+					}
+				}
+				fm := wdtest.FormMock{Answers: answers}
+				fm.Respondent, _ = literal(m["respondent"]).(map[string]any)
+				c.Forms[id] = fm
+			} else if s.Completed {
+				c.Forms[id] = wdtest.FormMock{Timeout: true}
 			}
 		}
 	}

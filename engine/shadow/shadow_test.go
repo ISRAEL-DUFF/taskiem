@@ -109,3 +109,33 @@ func TestRedactedRecordingHoldsNoSealedValues(t *testing.T) {
 		t.Errorf("regression on redacted data: %v", rep.Failures)
 	}
 }
+
+// A recorded form step replays its submission: the answers and who
+// answered.
+func TestShadowFormStep(t *testing.T) {
+	def := load(t, `{"schema":"wd/v1","id":"wf_f","version":1,"name":"f","trigger":{"type":"manual"},"steps":[
+	 {"id":"ask","type":"form","config":{"title":"Bank","to":{"role":"ops"},"schema":{"type":"object","properties":{"bank":{"type":"string"}}}}},
+	 {"id":"out","type":"transform","needs":["ask"],"config":{"output":{"bank":"=steps.ask.output.bank"}}}]}`)
+	resp := map[string]any{"kind": "member", "member_id": "m-1"}
+	h := []history.Event{
+		ev(1, history.RunStarted, "", 0, history.RunStartedPayload{Trigger: map[string]any{"type": "manual"}}),
+		ev(2, history.StepScheduled, "ask", 1, history.ScheduledPayload{Kind: history.KindSignal, Event: history.FormEvent, Correlation: "r",
+			Form: &history.FormScheduled{Request: "r", Title: "Bank", To: map[string]any{"role": "ops"}}}),
+		ev(3, history.SignalReceived, "ask", 0, history.SignalPayload{Event: history.FormEvent, Payload: map[string]any{"bank": "GTBank", "respondent": resp}}),
+		ev(4, history.StepCompleted, "ask", 0, history.CompletedPayload{Output: map[string]any{"bank": "GTBank", "respondent": resp}}),
+	}
+	rec, err := shadow.Record(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Steps["ask"].Kind != "form" {
+		t.Fatalf("kind: %+v", rec.Steps["ask"])
+	}
+	c := rec.Case("shadow", def, reg(t))
+	if m := c.Forms["ask"]; m.Answers["bank"] != "GTBank" || m.Respondent["member_id"] != "m-1" || m.Answers["respondent"] != nil {
+		t.Fatalf("mock: %+v", m)
+	}
+	if rep := shadow.Run(def, reg(t), rec, c); !rep.Passed {
+		t.Errorf("replay: %+v", rep)
+	}
+}
