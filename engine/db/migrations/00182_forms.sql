@@ -204,6 +204,11 @@ CREATE POLICY tenant_isolation ON form_files TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT ON form_files TO taskiem_app;
 
+-- The form host reads only the versions deployed behind a form.
+CREATE POLICY form_host ON workflow_versions FOR SELECT TO taskiem_dispatch
+  USING (EXISTS (SELECT 1 FROM form_endpoints e WHERE e.workflow_id = workflow_versions.workflow_id AND e.version = workflow_versions.version));
+GRANT SELECT (workflow_id, version, definition) ON workflow_versions TO taskiem_dispatch;
+
 -- +goose StatementBegin
 -- A live form for the form host: its definition's form parts, its
 -- organisation's name, and whether it takes submissions now.
@@ -470,6 +475,8 @@ DROP FUNCTION taskiem_public_form_submit(uuid, uuid, uuid, bytea, text, bytea, b
 DROP FUNCTION taskiem_public_form_request(bytea);
 DROP FUNCTION taskiem_public_form_link(bytea);
 DROP FUNCTION taskiem_public_form(text);
+REVOKE SELECT (workflow_id, version, definition) ON workflow_versions FROM taskiem_dispatch;
+DROP POLICY form_host ON workflow_versions;
 DROP TABLE form_files;
 DROP TABLE form_submissions;
 DROP TABLE form_once;
