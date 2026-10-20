@@ -433,7 +433,7 @@ func (s *Server) submitBooking(w http.ResponseWriter, r *http.Request, site Site
 	if embed {
 		prefix = "/embed"
 	}
-	http.Redirect(w, r, statusLink(prefix, ref, sub.StatusKey, ""), http.StatusSeeOther)
+	http.Redirect(w, r, statusLink(prefix, ref, sub.StatusKey, ""), http.StatusSeeOther) //nolint:gosec // G710: statusLink is a path on this host (TestStatusLinkStaysOnThisHost)
 }
 
 // recordBooking seals a booking and holds its slot, as record does for
@@ -456,6 +456,9 @@ func (s *Server) recordBooking(ctx context.Context, sf uuid.UUID, slug string, i
 }
 
 // statusLink is a status page's address, or one of its change pages'.
+// statusLink is a status page's path on this host: prefix is "" or
+// "/embed", and the reference is path-escaped, so no reference makes it
+// "//host" or a URL with a scheme.
 func statusLink(prefix, ref, key, page string) string {
 	p := prefix + "/o/" + url.PathEscape(ref)
 	if page != "" {

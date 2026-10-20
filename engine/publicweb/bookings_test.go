@@ -674,3 +674,18 @@ func TestBookingBudget(t *testing.T) {
 		}
 	}
 }
+
+// Whatever reference or key a request carries, a status link is a path
+// on this host: the redirects after booking and changes can go nowhere
+// else.
+func TestStatusLinkStaysOnThisHost(t *testing.T) {
+	for _, ref := range []string{"AD-7QX4KD", "/evil.test", "//evil.test", "https://evil.test", `\\evil.test`, "..", "a?b#c", "%2F%2Fevil.test"} {
+		for _, prefix := range []string{"", "/embed"} {
+			link := statusLink(prefix, ref, "k//evil.test?x=1", "move")
+			u, err := url.Parse(link)
+			if err != nil || u.Scheme != "" || u.Host != "" || !strings.HasPrefix(link, prefix+"/o/") || strings.HasPrefix(link, "//") {
+				t.Errorf("%q: %q leaves this host", ref, link)
+			}
+		}
+	}
+}
