@@ -42,7 +42,7 @@ Rules 1–5, 9, 10 and 12 are enforced by `engine/wd.Validate`. Rules 6–8 are 
 
 A `connector_event` trigger's `config` is `connector` (`xenibase@1`), `trigger` (a trigger in its manifest), optional `events` (each one the trigger sends), `connection` and `options`. `options` must match the manifest trigger's `options` schema (a trigger without one takes none); it is checked when the version is published. For a trigger the manifest registers remotely (connector/v1 rule 8, [decision 0021](../decisions/0021-remote-trigger-registration.md)), `events` and `options` say what Taskiem subscribes to at the provider: Xenibase's `row_changed` takes `options.tables`, optional `columns` and `refetch_truncated`. The reserved `database_change` trigger type is not used for Xenibase ([Xenibase](../integrations/xenibase.md#trigger)).
 
-A `storefront` trigger's `config` is `action`: `order`, `enquiry` or `callback`, a form on the organisation's public storefront ([storefronts](../storefronts.md)). One workflow per form and environment; the run's `trigger.body` is the submission (reference, the customer, the basket and its total, the payment).
+A `storefront` trigger's `config` is `action`: `order`, `enquiry`, `callback` or `booking`, a form on the organisation's public storefront ([storefronts](../storefronts.md)). One workflow per form and environment; the run's `trigger.body` is the submission (reference, the customer, the basket and its total, the payment, and for a booking the service and time). A booking starts a new run each time it is moved, with `trigger.body.event` `rescheduled`.
 
 ## USSD menus
 

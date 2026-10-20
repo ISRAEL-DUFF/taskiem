@@ -12,7 +12,7 @@ import (
 )
 
 // Kinds are the forms a storefront can offer (storefronts 6.3).
-var Kinds = []string{"order", "enquiry", "callback"}
+var Kinds = []string{"order", "enquiry", "callback", "booking"}
 
 // ErrNoWorkflow refuses enabling a form no workflow is deployed for.
 var ErrNoWorkflow = errors.New("storefront: no workflow is deployed for this form")
@@ -38,6 +38,20 @@ type ActionOptions struct {
 	Delivery bool `json:"delivery,omitempty"`
 	// DeliveryNote is shown with delivery ("Yaba and Surulere only").
 	DeliveryNote string `json:"delivery_note,omitempty"`
+	// DepositPercent is how much of a service's price a booking pays
+	// online (1 to 100; unset is the full price).
+	DepositPercent int `json:"deposit_percent,omitempty"`
+}
+
+// takesPayment reports whether a form's kind may ask for payment.
+func takesPayment(kind string) bool { return kind == "order" || kind == "booking" }
+
+// Deposit is what a booking pays online of price.
+func (o ActionOptions) Deposit(price int64) int64 {
+	if o.DepositPercent <= 0 || o.DepositPercent >= 100 {
+		return price
+	}
+	return (price*int64(o.DepositPercent) + 99) / 100
 }
 
 // PublicAction is what a published page shows of a form.
@@ -48,9 +62,11 @@ type PublicAction struct {
 	Pickup       bool   `json:"pickup,omitempty"`
 	Delivery     bool   `json:"delivery,omitempty"`
 	DeliveryNote string `json:"delivery_note,omitempty"`
+	// DepositPercent is a booking's online part of the price (100: all).
+	DepositPercent int `json:"deposit_percent,omitempty"`
 }
 
-var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back"}
+var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book"}
 
 // Actions reads the storefront's forms, every kind present (unset ones
 // disabled with their default label), with the workflow deployed for each.
@@ -82,7 +98,7 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 		a, ok := have[k]
 		if !ok {
 			a = Action{Kind: k, Label: defaultLabels[k], Payment: "after_accept"}
-			if k != "order" {
+			if !takesPayment(k) {
 				a.Payment = "none"
 			}
 		}
@@ -111,7 +127,7 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	if len([]rune(a.Label)) > 40 || hasLink(a.Label) {
 		return Action{}, fmt.Errorf("%w: a label is up to 40 characters, with no links", ErrInvalid)
 	}
-	if a.Kind != "order" {
+	if !takesPayment(a.Kind) {
 		a.Payment = "none"
 	}
 	switch a.Payment {
@@ -124,7 +140,15 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	if a.Kind == "order" && !a.Options.Pickup && !a.Options.Delivery {
 		a.Options.Pickup = true
 	}
-	if a.Kind != "order" {
+	switch a.Kind {
+	case "order":
+		a.Options.DepositPercent = 0
+	case "booking":
+		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
+			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+		}
+		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent}
+	default:
 		a.Options = ActionOptions{}
 	}
 	if len([]rune(a.Options.DeliveryNote)) > 120 || hasLink(a.Options.DeliveryNote) {
@@ -133,6 +157,9 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	sf, err := Get(ctx, tx, tenant)
 	if err != nil {
 		return Action{}, err
+	}
+	if a.Enabled && a.Kind == "booking" && sf.ServicesTable == nil {
+		return Action{}, fmt.Errorf("%w: choose the services table before taking bookings", ErrInvalid)
 	}
 	if a.Enabled {
 		var n int
@@ -170,7 +197,8 @@ func publicActions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PublicAc
 	var out []PublicAction
 	for _, a := range list {
 		if a.Enabled {
-			out = append(out, PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote})
+			out = append(out, PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
+				DepositPercent: a.Options.DepositPercent})
 		}
 	}
 	return out, nil

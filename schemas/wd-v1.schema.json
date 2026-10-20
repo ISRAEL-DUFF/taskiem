@@ -1473,7 +1473,8 @@
                     "enum": [
                       "order",
                       "enquiry",
-                      "callback"
+                      "callback",
+                      "booking"
                     ]
                   }
                 }

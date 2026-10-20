@@ -1,0 +1,377 @@
+{
+  "id": "storefront-booking",
+  "title": "Storefront bookings: confirm in chat, remind, mark attended",
+  "summary": "Each booking from your storefront comes to you in WhatsApp or Telegram to accept or decline (or is confirmed at once); the customer is texted, reminded a day and two hours before, and you mark whether they came.",
+  "description": "Starts when a customer books a time on your storefront. You get the booking (service and time) to accept or decline; if nobody answers in a day it is declined. With confirmation set to automatic it is confirmed at once. The customer is texted when it is booked, with a link to move or cancel it, and a payment link when they pay after you accept. They are reminded a day before and two hours before. After the appointment you are asked whether they came. Messages go from your business's name, by SMS, and by email when the customer gave one. A moved booking starts this again with the new time; a cancelled one ends it.",
+  "category": "storefront",
+  "tags": [
+    "storefront"
+  ],
+  "keywords": [
+    "storefront",
+    "storefront booking",
+    "storefront bookings",
+    "booking page",
+    "appointments page"
+  ],
+  "connectors": [
+    "storefront@1"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who confirms bookings",
+      "description": "The role that accepts or declines bookings and marks attendance.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_storefrontBooking",
+    "version": 1,
+    "name": "Storefront bookings",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "booking"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference",
+          "customer",
+          "booking",
+          "payment",
+          "event"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              },
+              "email": {
+                "type": "string",
+                "x-pii": "email"
+              }
+            }
+          },
+          "booking": {
+            "type": "object",
+            "properties": {
+              "service_id": {
+                "type": "string"
+              },
+              "service": {
+                "type": "string"
+              },
+              "starts_at": {
+                "type": "string"
+              },
+              "ends_at": {
+                "type": "string"
+              },
+              "when": {
+                "type": "string"
+              },
+              "auto_confirm": {
+                "type": "boolean"
+              }
+            }
+          },
+          "total_kobo": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "gate",
+        "type": "branch",
+        "name": "Confirm the booking",
+        "config": {
+          "paths": [
+            {
+              "name": "ask",
+              "when": "=trigger.body.event == 'new' && !trigger.body.booking.auto_confirm",
+              "steps": [
+                {
+                  "id": "ask",
+                  "type": "approval",
+                  "name": "Accept or decline the booking",
+                  "config": {
+                    "role": "{{approver_role}}",
+                    "count": 1,
+                    "timeout": "24h",
+                    "subject": {
+                      "booking": "=trigger.body.reference",
+                      "service": "=trigger.body.booking.service",
+                      "when": "=trigger.body.booking.when",
+                      "paid": "=trigger.body.payment.status == 'paid'"
+                    }
+                  }
+                },
+                {
+                  "id": "answer",
+                  "type": "connector",
+                  "name": "Record the answer",
+                  "connector": "storefront@1",
+                  "action": "decide",
+                  "needs": [
+                    "ask"
+                  ],
+                  "input": {
+                    "reference": "=trigger.body.reference",
+                    "decision": "=steps.ask.output.decision == 'approved' ? 'accept' : 'decline'",
+                    "note": "=steps.ask.output.decision == 'approved' ? '' : (has(steps.ask.output.reason) && steps.ask.output.reason == 'timeout' ? 'No answer within a day' : 'Declined')"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "auto",
+              "when": "=trigger.body.event == 'new'",
+              "steps": [
+                {
+                  "id": "confirm",
+                  "type": "connector",
+                  "name": "Confirm it",
+                  "connector": "storefront@1",
+                  "action": "decide",
+                  "input": {
+                    "reference": "=trigger.body.reference",
+                    "decision": "accept"
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "kept",
+                "type": "transform",
+                "name": "Already confirmed",
+                "config": {
+                  "output": {
+                    "event": "=trigger.body.event"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "state",
+        "type": "connector",
+        "name": "Read the booking",
+        "connector": "storefront@1",
+        "action": "get_booking",
+        "needs": [
+          "gate"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_declined",
+        "type": "connector",
+        "name": "Tell the customer it is declined",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "state"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "text": "='Sorry, we cannot take your booking ' + trigger.body.reference + ' (' + steps.state.output.service + ', ' + steps.state.output.when + ')' + (steps.state.output.status == 'refund_due' ? '. Your payment will be refunded.' : '. Please choose another time: you are welcome to book again.')"
+        },
+        "when": "=steps.state.output.status in ['declined', 'refund_due']"
+      },
+      {
+        "id": "tell_confirmed",
+        "type": "connector",
+        "name": "Tell the customer it is booked",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "state"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "text": "=(trigger.body.event == 'rescheduled' ? 'Your booking ' + trigger.body.reference + ' is moved to ' : 'Booked: ' + steps.state.output.service + ', ') + steps.state.output.when + '. To change or cancel: {link}'"
+        },
+        "when": "=steps.state.output.status in ['accepted', 'paid', 'awaiting_payment']"
+      },
+      {
+        "id": "link",
+        "type": "connector",
+        "name": "Make the payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "state"
+        ],
+        "when": "=trigger.body.event == 'new' && steps.state.output.status == 'accepted' && trigger.body.payment.mode == 'after_accept'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_pay",
+        "type": "connector",
+        "name": "Send the payment link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "link"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "text": "='To keep your booking ' + trigger.body.reference + ', pay ' + steps.link.output.total + ' within a day: ' + steps.link.output.url"
+        }
+      },
+      {
+        "id": "wait_day",
+        "type": "wait",
+        "name": "Until a day before",
+        "needs": [
+          "tell_confirmed"
+        ],
+        "config": {
+          "until": "=steps.state.output.remind_day_at"
+        }
+      },
+      {
+        "id": "say_day",
+        "type": "connector",
+        "name": "Remind the customer a day before",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_day"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "text": "='Reminder: ' + steps.state.output.service + ' tomorrow, ' + steps.state.output.when + ' (' + trigger.body.reference + '). To change or cancel: {link}'"
+        },
+        "when": "=steps.state.output.remind_day"
+      },
+      {
+        "id": "wait_hours",
+        "type": "wait",
+        "name": "Until two hours before",
+        "needs": [
+          "wait_day"
+        ],
+        "config": {
+          "until": "=steps.state.output.remind_hours_at"
+        }
+      },
+      {
+        "id": "say_hours",
+        "type": "connector",
+        "name": "Remind the customer two hours before",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_hours"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "text": "='See you soon: ' + steps.state.output.service + ' at ' + steps.state.output.when + ' (' + trigger.body.reference + ').'"
+        },
+        "when": "=steps.state.output.remind_hours"
+      },
+      {
+        "id": "wait_end",
+        "type": "wait",
+        "name": "Until the appointment ends",
+        "needs": [
+          "wait_hours"
+        ],
+        "config": {
+          "until": "=steps.state.output.ends_at"
+        }
+      },
+      {
+        "id": "outcome",
+        "type": "approval",
+        "name": "Did they come?",
+        "needs": [
+          "wait_end"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "72h",
+          "subject": {
+            "booking": "=trigger.body.reference",
+            "service": "=steps.state.output.service",
+            "when": "=steps.state.output.when",
+            "action": "Approve if they came, reject if they did not"
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "type": "connector",
+        "name": "Record whether they came",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "outcome"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "=steps.outcome.output.decision == 'approved' || (has(steps.outcome.output.reason) && steps.outcome.output.reason == 'timeout') ? 'complete' : 'no_show'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "4800h"
+    }
+  }
+}

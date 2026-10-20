@@ -11,8 +11,8 @@ auth:
   type: none
 actions:
   decide:
-    title: Accept, decline or complete an order
-    description: Moves the order from the storefront form that started the run. Accepting lowers the stock where the catalogue tracks it; declining one already paid leaves it refund_due.
+    title: Accept, decline or complete an order or booking
+    description: Moves the order or booking from the storefront form that started the run. Accepting lowers the stock where the catalogue tracks it; declining one already paid leaves it refund_due; no_show marks a booking the customer did not come to. Declining or cancelling a booking frees its time.
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -25,7 +25,7 @@ actions:
       required: [reference, decision]
       properties:
         reference: { type: string, description: The order's reference (trigger.body.reference) }
-        decision:  { type: string, enum: [accept, decline, complete, cancel] }
+        decision:  { type: string, enum: [accept, decline, complete, cancel, no_show] }
         note:      { type: string, description: Why, kept on the order }
     output:
       type: object
@@ -71,10 +71,38 @@ actions:
       required: [reference, text]
       properties:
         reference: { type: string }
-        text:      { type: string, maxLength: 1000, description: The message; an SMS starts with the business's name and is at most three parts }
+        text:      { type: string, maxLength: 1000, description: "The message; an SMS starts with the business's name and is at most three parts. {link} becomes the customer's status link, where a booking is moved or cancelled" }
         subject:   { type: string, description: The email's subject }
     output:
       type: object
       properties:
         reference: { type: string }
         queued:    { type: array, items: { type: string } }
+  get_booking:
+    title: Read a booking
+    description: The booking's status, service and time, when its reminders fall, and its payment page. A booking moved by the customer or the owner starts a new run, so a run's times are the booking's.
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference:       { type: string }
+        status:          { type: string }
+        service:         { type: string }
+        service_id:      { type: string }
+        starts_at:       { type: string, description: RFC 3339 in Lagos time }
+        ends_at:         { type: string }
+        when:            { type: string, description: "As customers read it: Sat 24 Oct, 10:30" }
+        auto_confirm:    { type: boolean }
+        remind_day_at:   { type: string, description: A day before the start, or now when that has passed }
+        remind_day:      { type: boolean, description: Whether the day-before reminder is still to come }
+        remind_hours_at: { type: string, description: Two hours before the start, or now when that has passed }
+        remind_hours:    { type: boolean }
+        payment_url:     { type: string }
+        total:           { type: string }
+        deposit_kobo:    { type: integer }
+        paid:            { type: boolean }

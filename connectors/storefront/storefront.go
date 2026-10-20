@@ -1,6 +1,7 @@
 // Package storefront is the storefront platform connector: the actions
-// workflows take on the organisation's storefront orders (accept, decline,
-// complete, a payment link, a message to the customer). Unlike provider
+// workflows take on the organisation's storefront orders and bookings
+// (accept, decline, complete, a payment link, a message to the customer,
+// reading a booking). Unlike provider
 // connectors it acts on Taskiem's own records, for the tenant of the run
 // calling it (connector.CallerFrom), never one named in its input.
 package storefront
@@ -28,6 +29,7 @@ type Ops interface {
 	Decide(ctx context.Context, tenant uuid.UUID, reference, decision, note, actor string) (map[string]any, error)
 	PaymentLink(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error)
+	GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -38,6 +40,7 @@ func New(ops Ops) *connector.Connector {
 		"decide":          connector.ActionFunc(a.decide),
 		"payment_link":    connector.ActionFunc(a.paymentLink),
 		"notify_customer": connector.ActionFunc(a.notify),
+		"get_booking":     connector.ActionFunc(a.getBooking),
 	}}
 }
 
@@ -90,6 +93,15 @@ func (a *actions) notify(ctx context.Context, req connector.Request) (connector.
 		key = c.Run.String() + ":" + c.Step
 	}
 	out, err := a.ops.NotifyCustomer(ctx, c.Tenant, ref, text, subject, key)
+	return connector.Response{Output: out}, classify(err)
+}
+
+func (a *actions) getBooking(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ref, err := a.caller(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	out, err := a.ops.GetBooking(ctx, c.Tenant, ref)
 	return connector.Response{Output: out}, classify(err)
 }
 
@@ -147,4 +159,12 @@ func (l *Late) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, 
 		return nil, err
 	}
 	return ops.NotifyCustomer(ctx, tenant, reference, text, subject, key)
+}
+
+func (l *Late) GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error) {
+	ops, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return ops.GetBooking(ctx, tenant, reference)
 }

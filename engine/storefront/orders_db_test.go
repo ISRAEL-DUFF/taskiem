@@ -55,6 +55,7 @@ type world struct {
 	sf     storefront.Storefront
 	wfs    map[string]uuid.UUID
 	key    []byte
+	keys   map[string]string // status keys by reference
 }
 
 func (w *world) in(fn func(pgx.Tx) error) {
@@ -67,7 +68,7 @@ func (w *world) in(fn func(pgx.Tx) error) {
 func newWorld(t *testing.T) *world {
 	env := rt.New(t)
 	ctx := context.Background()
-	w := &world{t: t, env: env, pay: &fakePay{created: map[string]storefront.PaymentRequest{}, paid: map[string]bool{}}, wfs: map[string]uuid.UUID{}}
+	w := &world{t: t, env: env, pay: &fakePay{created: map[string]storefront.PaymentRequest{}, paid: map[string]bool{}}, wfs: map[string]uuid.UUID{}, keys: map[string]string{}}
 	master := bytes.Repeat([]byte{4}, 32)
 	w.key, _ = storefront.InboxKey(master)
 	w.orders = &storefront.Orders{Pool: env.DB.App, Vault: env.Vault, InboxKey: w.key, Payments: w.pay, PreviewDomain: "shops.test",
@@ -116,6 +117,7 @@ func (w *world) submit(kind, payment string, total int64) string {
 	w.t.Helper()
 	ref := storefront.NewReference("ada-kitchen")
 	key, hash := storefront.NewStatusKey()
+	w.keys[ref] = key
 	sub := storefront.Submission{Kind: kind, Customer: storefront.Customer{Name: "Bola", Phone: "+2348031234567", Email: "bola@example.com"},
 		Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 2, PriceKobo: total / 2, LineKobo: total}}, TotalKobo: total,
 		Fulfilment: "pickup", Payment: payment, Channel: "direct", Submitted: time.Now(), StatusKey: key}
@@ -355,3 +357,5 @@ func TestEnquiryAndTheConnectorsBoundaries(t *testing.T) {
 		t.Fatalf("a disabled form took a submission: %v %v", got, err)
 	}
 }
+
+func (w *world) statusKey(ref string) string { return w.keys[ref] }
