@@ -12,7 +12,7 @@ Each step ends with a **check**. Stop at the first check that fails and see [Whe
 | --- | --- |
 | A VPS | Ubuntu 22.04 or 24.04, or Debian 12, x86_64. 4 vCPU and 8 GB is comfortable; 2 vCPU and 4 GB is the minimum with public pages on (the virus scanner for form files takes about 1.5 GB). 40 GB of disk. A user with `sudo` and SSH key login |
 | The provider's firewall | Inbound 22, 80 and 443 open. The kit closes everything else on the server itself |
-| Postgres 16 | Managed, with point-in-time recovery. An **empty** database and its owner, who must have `CREATEROLE`. The VPS must be allowed to connect (the provider's allow-list) |
+| Postgres 16 or newer | A **dedicated** server (managed, with point-in-time recovery), not a shared platform's project database: Taskiem's migrations create roles, which belong to the whole server, so the owner needs `CREATEROLE`, and two environments cannot share one server. An **empty** database, **not named `taskiem`** (`taskiem_staging`), and its owner. The VPS must be allowed to connect. For staging only, Postgres can run on the VPS itself: see [A database on the VPS](#a-database-on-the-vps-staging-only). Tested on 16 and 18 |
 | Two domains | `$APP`, and `$PREVIEW`, a **separate registrable domain**, never a subdomain of the app's (storefront pages must never share the app's cookies). Staging and production need different preview domains |
 | SMTP | An account that can send from the sender address you will use (owners, agents and operators get their set-your-password links by email) |
 | A Telegram bot | Made with [@BotFather](https://t.me/BotFather) (`/newbot`): its token and its username |
@@ -62,6 +62,34 @@ Nothing must listen on 80 or 443 yet: Caddy takes them.
 ```sh
 timeout 5 bash -c '</dev/tcp/<db-host>/<db-port>' && echo reachable
 ```
+
+## A database on the VPS (staging only)
+
+Instead of a managed database, staging can run Postgres beside Taskiem, from [`deploy/vm/staging-postgres.yaml`](../../deploy/vm/staging-postgres.yaml). It is not backed up (the kit's backups assume the provider's), so keep only test data in it.
+
+```sh
+sudo mkdir -p /opt/taskiem-postgres
+echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" | sudo tee /opt/taskiem-postgres/.env >/dev/null && sudo chmod 600 /opt/taskiem-postgres/.env
+sudo curl -fsSL -o /opt/taskiem-postgres/compose.yaml https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/staging-postgres.yaml
+sudo docker compose --project-directory /opt/taskiem-postgres up -d
+```
+
+It runs on the host's network. Once the installer has turned on the firewall (step 3), let Docker's private networks reach it, and nothing else:
+
+```sh
+sudo ufw allow from 172.16.0.0/12 to any port 5432 proto tcp
+sudo ufw allow from 192.168.0.0/16 to any port 5432 proto tcp
+```
+
+**Check:** `sudo docker compose --project-directory /opt/taskiem-postgres ps` shows it `healthy`.
+
+In step 3, give the installer the URL from the `.env` instead of typing one:
+
+```sh
+sudo sh -c '. /opt/taskiem-postgres/.env && TASKIEM_VPS_DATABASE_URL="postgres://taskiem_owner:$POSTGRES_PASSWORD@172.17.0.1:5432/taskiem_staging?sslmode=disable" taskiem-vps setup'
+```
+
+(On a fresh server, run the installer first, which installs Docker, the firewall and `taskiem-vps`, and let it stop at the database question with Ctrl-C; then start Postgres as above, and run `taskiem-vps setup` like this.)
 
 ## 3. Install
 
@@ -183,7 +211,9 @@ A merge to main reaches staging within 15 minutes of CI's `image` job. `taskiem-
 
 | Symptom | Look at |
 | --- | --- |
-| The installer stops at the database | The URL (user, password, `sslmode`), the provider's allow-list for the VPS's address, and that the user has `CREATEROLE` |
+| The installer stops at the database | The URL (user, password, `sslmode`), the provider's allow-list for the VPS's address |
+| `permission denied to create role` | The user lacks `CREATEROLE`: a shared platform's project database cannot host Taskiem; use a dedicated server, or Postgres on the VPS for staging |
+| `role "taskiem_app" is a member of role "taskiem_app"` | The database was named `taskiem` (kits before the guard did not refuse it). Its roles are now wrong: start the database over with another name |
 | No certificate for `$APP` | DNS (step 1) and ports 80 and 443 at the provider's firewall; `sudo taskiem-vps logs caddy` |
 | No certificate for a storefront | The wildcard record; the page must be published (certificates are issued only for hosts Taskiem serves); `sudo taskiem-vps logs taskiem-public` |
 | The bot does not answer | `sudo taskiem-vps logs taskiem` for the webhook registration at start; the token and username in `/opt/taskiem/taskiem.env` |

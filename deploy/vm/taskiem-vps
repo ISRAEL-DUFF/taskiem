@@ -256,6 +256,12 @@ cmd_setup() {
   case $CHANNEL in staging | production) ;; *) die "channel must be staging or production" ;; esac
   [[ $DATABASE_URL =~ ^(postgres(ql)?://)([^@/]*@)?([^/?]+)/([A-Za-z0-9_]+)(\?.*)?$ ]] || die "database URL must look like postgres://user:password@host:5432/dbname?sslmode=verify-full"
   local dsn_scheme=${BASH_REMATCH[1]} dsn_host=${BASH_REMATCH[4]} dbname=${BASH_REMATCH[5]} dsn_query=${BASH_REMATCH[6]}
+  # Its logins are named <database>_app and <database>_public: for a
+  # database named taskiem those are Taskiem's own group roles, which the
+  # migrations make and nothing may sign in as.
+  case ${dbname,,} in
+  taskiem | taskiem_dispatch) die "the database may not be named $dbname: its login roles would take the names of Taskiem's own roles; name it, for example, taskiem_staging or taskiem_prod" ;;
+  esac
   [ -n "$SMTP_URL" ] || log "WARNING: no SMTP: no password emails, invitations or alert emails"
   [ -z "$SMTP_URL" ] || [ -n "$MAIL_FROM" ] || die "a sender address is required with SMTP"
   [ -n "$BACKUP_REPO" ] || log "WARNING: no backup destination: OpenBao's storage is not backed up off this server"
