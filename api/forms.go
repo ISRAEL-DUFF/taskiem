@@ -115,12 +115,14 @@ func (s *Server) scanForm(r pgx.Row) (formOut, error) {
 	var f formOut
 	err := r.Scan(&f.ID, &f.PublicID, &f.WorkflowID, &f.Workflow, &f.Environment, &f.Version, &f.Title, &f.Access, &f.Status, &f.OpensAt, &f.ClosesAt,
 		&f.MaxSubmissions, &f.Submissions, &f.Week, &f.ClosedMessage)
-	if err == nil && s.Forms != nil && s.Forms.FormHost != "" {
+	switch {
+	case err != nil || s.Forms == nil:
+	case f.Access == "members":
+		// Members fill it in in the app, whatever the form host.
+		f.URL = strings.TrimRight(s.Forms.AppURL, "/") + "/forms/" + f.ID.String()
+	case s.Forms.FormHost != "":
 		f.URL = "https://" + s.Forms.FormHost + "/f/" + f.PublicID
 		f.EmbedURL = "https://" + s.Forms.FormHost + "/embed/f/" + f.PublicID
-		if f.Access == "members" {
-			f.URL, f.EmbedURL = strings.TrimRight(s.Forms.AppURL, "/")+"/forms/"+f.ID.String(), ""
-		}
 	}
 	return f, err
 }
