@@ -105,7 +105,7 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		definers = append(definers, n)
 	}
 	rows.Close()
-	allowed := map[string]bool{"taskiem_public_host(text)": true}
+	allowed := map[string]bool{"taskiem_public_host(text)": true, "taskiem_public_embed_origins(uuid)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

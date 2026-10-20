@@ -38,6 +38,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embed"
+	"github.com/israel-duff/taskiem/engine/embedsites"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -751,6 +752,8 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.Billing = bill
 		srv.Tables = e.tables()
+		srv.PublicHosts = cfg.Public.Domains
+		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD)
 		// SMS and email to people outside a tenant (messages.go).
 		if w := cfg.senderWorker(e, alerter.Mailer, log); w != nil {
@@ -808,6 +811,9 @@ func serve(ctx context.Context, args []string) error {
 		// Billing: periods, dunning, payment reconciliation, usage snapshots.
 		// Verified custom domains are re-verified (docs/embedding.md).
 		domains := &embed.DomainChecker{Pool: e.pool, Logger: log}
+		// Websites allowed to embed storefronts and forms, proven again
+		// every few hours (docs/embed-sites.md).
+		sites := &embedsites.Checker{Pool: e.pool, Prover: &embedsites.Prover{Guard: &egress.Guard{Logger: log}}, Logger: log}
 		// Tenant keys: customer key health, re-wrapping after rotations,
 		// and resuming steps parked while a key was unavailable (docs/byok.md).
 		keys := &secrets.KeyJob{Vault: e.vault, Interval: cfg.Keys.CheckInterval, Resume: e.store.ResumeKeyParked, Logger: log,
@@ -820,7 +826,7 @@ func serve(ctx context.Context, args []string) error {
 			}}
 		// Data tables: the data_tables connections' tokens, renewed before
 		// they expire (docs/data-tables.md#token-renewal).
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals)
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, e.remote().Run, keys.Run, e.tables().RunRenewals)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

@@ -10,7 +10,7 @@ The public host serves pages anyone on the internet can open: [storefronts](spec
 | A bug reading tenant data | It connects as `taskiem_public`, which can read no table and execute only `taskiem_public_host` and the narrow functions later milestones add. A test fails the build if the role gains any other table privilege or privileged function |
 | The platform's secrets | `--role public` needs only `TASKIEM_PUBLIC_DATABASE_URL`: no KMS, no `TASKIEM_DATABASE_URL`, no provider keys. The Helm chart gives its pods `public.existingSecret` alone |
 | Cookies on a business's domain | None are set: any a handler tries to set is dropped and logged |
-| Script injection and framing | `Content-Security-Policy` allows no inline script or style and no framing (`httpsec.PublicCSP`); a test fails any template that uses inline code. Embedding on verified sites comes with S6 |
+| Script injection and framing | `Content-Security-Policy` allows no inline script or style and no framing (`httpsec.PublicCSP`); a test fails any template that uses inline code. Only `/embed/` pages may be framed, and only by the organisation's [proven websites](embed-sites.md) |
 | Floods of page views | A per-address limit (300 a minute, bursts of 100), generous because mobile networks put many phones behind one address; static files are not counted |
 | Floods of made-up host names | Host lookups are cached in a bounded cache (10,000 hosts, 30 seconds; unknown hosts 10 seconds) |
 | Certificates for names it does not serve | `/tls/ask?domain=` answers 200 only for a verified host. It is on the internal metrics port, never on the public listener |

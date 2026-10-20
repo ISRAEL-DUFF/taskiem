@@ -59,6 +59,19 @@ func DBLookup(pool *pgxpool.Pool) Lookup {
 	}
 }
 
+// Origins returns the verified websites that may frame a tenant's /embed/
+// pages.
+type Origins func(ctx context.Context, tenant uuid.UUID) ([]string, error)
+
+// DBOrigins reads them with taskiem_public_embed_origins.
+func DBOrigins(pool *pgxpool.Pool) Origins {
+	return func(ctx context.Context, tenant uuid.UUID) ([]string, error) {
+		var out []string
+		err := pool.QueryRow(ctx, `SELECT taskiem_public_embed_origins($1)`, tenant).Scan(&out)
+		return out, err
+	}
+}
+
 // Cache sizes and lifetimes. Hosts are cached for a short while, so a
 // suspension or a newly verified domain takes effect within HostTTL on
 // every replica without any signalling between them; unknown hosts are
@@ -89,15 +102,23 @@ type Server struct {
 	// formguard.PageViewsPerIP. Generous on purpose: a mobile network puts
 	// many phones behind one address (storefronts 7.5).
 	Views *formguard.Limiter
+	// Origins are the sites allowed to frame /embed/ pages; nil allows
+	// none.
+	Origins Origins
 
-	hosts *lru.Cache[string, hostEntry]
-	now   func() time.Time
+	hosts   *lru.Cache[string, hostEntry]
+	origins *lru.Cache[uuid.UUID, []string]
+	now     func() time.Time
 }
 
 // Handler is the public listener's handler.
 func (s *Server) Handler() http.Handler {
 	if s.hosts == nil {
 		s.hosts = lru.New[string, hostEntry](HostCacheSize, HostTTL)
+	}
+	if s.origins == nil {
+		// As hosts: a site unverified stops framing within HostTTL.
+		s.origins = lru.New[uuid.UUID, []string](HostCacheSize, HostTTL)
 	}
 	if s.now == nil {
 		s.now = time.Now
@@ -180,6 +201,17 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method != http.MethodGet && r.Method != http.MethodHead:
 		w.Header().Set("Allow", "GET, HEAD")
 		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
+	case r.URL.Path == "/embed" || strings.HasPrefix(r.URL.Path, "/embed/"):
+		// The one kind of page another site may frame, and only the
+		// organisation's verified websites. The views themselves arrive
+		// with S6.
+		origins, err := s.embedOrigins(r.Context(), site.Tenant)
+		if err != nil {
+			s.Logger.Error("public host: embed origins", "tenant", site.Tenant, "err", err)
+			origins = nil // fail closed: nobody may frame it
+		}
+		httpsec.SetPublicEmbed(w.Header(), origins)
+		s.page(w, r, http.StatusOK, "embedsetup", pageData{Title: "Coming soon"})
 	case r.URL.Path != "/":
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 	default:
@@ -200,6 +232,21 @@ func (s *Server) site(ctx context.Context, host string) (Site, bool, error) {
 	}
 	s.hosts.Put(host, hostEntry{site: site, ok: ok, at: s.now()})
 	return site, ok, nil
+}
+
+func (s *Server) embedOrigins(ctx context.Context, tenant uuid.UUID) ([]string, error) {
+	if s.Origins == nil {
+		return nil, nil
+	}
+	if o, ok := s.origins.Get(tenant); ok {
+		return o, nil
+	}
+	o, err := s.Origins(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	s.origins.Put(tenant, o)
+	return o, nil
 }
 
 // TLSAsk answers a proxy's on-demand TLS check (GET ?domain=<host>): 200

@@ -238,3 +238,50 @@ func TestClientIP(t *testing.T) {
 		t.Fatalf("trusted proxy: %s", ip)
 	}
 }
+
+func TestEmbedFraming(t *testing.T) {
+	withSites, noSites, broken := uuid.New(), uuid.New(), uuid.New()
+	f := &fakeHosts{sites: map[string]Site{
+		"ada.shops.test":  {Tenant: withSites, Kind: "storefront"},
+		"bola.shops.test": {Tenant: noSites, Kind: "storefront"},
+		"odd.shops.test":  {Tenant: broken, Kind: "storefront"},
+	}}
+	s, _ := newServer(f)
+	var calls atomic.Int64
+	s.Origins = func(_ context.Context, tenant uuid.UUID) ([]string, error) {
+		calls.Add(1)
+		switch tenant {
+		case withSites:
+			return []string{"https://adakitchen.ng", "https://www.adakitchen.ng"}, nil
+		case broken:
+			return nil, errors.New("database down")
+		}
+		return nil, nil
+	}
+	h := s.Handler()
+	w := get(h, "GET", "ada.shops.test", "/embed/catalogue")
+	csp := w.Header().Get("Content-Security-Policy")
+	if w.Code != 200 || !strings.Contains(csp, "frame-ancestors https://adakitchen.ng https://www.adakitchen.ng") || w.Header().Get("X-Frame-Options") != "" {
+		t.Fatalf("verified sites: %d %q %q", w.Code, csp, w.Header().Get("X-Frame-Options"))
+	}
+	if !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "unsafe-inline") {
+		t.Fatalf("the rest of the policy must stay: %q", csp)
+	}
+	for _, host := range []string{"bola.shops.test", "odd.shops.test"} {
+		w := get(h, "GET", host, "/embed/catalogue")
+		if !strings.Contains(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") || w.Header().Get("X-Frame-Options") != "DENY" {
+			t.Errorf("%s must not be frameable: %v", host, w.Header())
+		}
+	}
+	// Other pages are never frameable, even for a tenant with sites.
+	if w := get(h, "GET", "ada.shops.test", "/"); !strings.Contains(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") ||
+		w.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("the storefront page: %v", w.Header())
+	}
+	// Cached: a second embed view does not look the sites up again.
+	n := calls.Load()
+	get(h, "GET", "ada.shops.test", "/embed/order")
+	if calls.Load() != n {
+		t.Fatal("origins looked up again within the cache's life")
+	}
+}

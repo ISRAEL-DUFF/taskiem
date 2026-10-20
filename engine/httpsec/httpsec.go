@@ -65,3 +65,23 @@ func SetPublic(h http.Header) {
 	h.Set("Cross-Origin-Opener-Policy", "same-origin")
 	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 }
+
+// PublicEmbedCSP is PublicCSP for a public /embed/ page: framed only by
+// ancestors, the organisation's verified websites (docs/embed-sites.md).
+// With none, nobody may frame it.
+func PublicEmbedCSP(ancestors []string) string {
+	fa := "'none'"
+	if len(ancestors) > 0 {
+		fa = strings.Join(ancestors, " ")
+	}
+	return strings.Replace(PublicCSP, "frame-ancestors 'none'", "frame-ancestors "+fa, 1)
+}
+
+// SetPublicEmbed writes an /embed/ page's headers over SetPublic's. With
+// ancestors, X-Frame-Options (which cannot name them) is left out.
+func SetPublicEmbed(h http.Header, ancestors []string) {
+	h.Set("Content-Security-Policy", PublicEmbedCSP(ancestors))
+	if len(ancestors) > 0 {
+		h.Del("X-Frame-Options")
+	}
+}

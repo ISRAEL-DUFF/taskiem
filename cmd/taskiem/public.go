@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,6 +33,10 @@ type publicConfig struct {
 	// Role is set on every connection (TASKIEM_PUBLIC_DATABASE_ROLE,
 	// taskiem_public).
 	Role string
+	// Domains are the public host's own domains: the preview domain and
+	// the form host (TASKIEM_PUBLIC_DOMAINS, comma-separated). They can
+	// never be added as an embed site.
+	Domains []string
 	// PoolSize caps its connections (TASKIEM_PUBLIC_DATABASE_POOL, 5), so
 	// a flood of page views cannot exhaust Postgres for everything else.
 	PoolSize int32
@@ -44,6 +49,11 @@ func publicConfigFromEnv() (publicConfig, error) {
 		DSN:      os.Getenv("TASKIEM_PUBLIC_DATABASE_URL"),
 		Role:     env("TASKIEM_PUBLIC_DATABASE_ROLE", "taskiem_public"),
 		PoolSize: 5,
+	}
+	for _, d := range strings.Split(os.Getenv("TASKIEM_PUBLIC_DOMAINS"), ",") {
+		if d = strings.ToLower(strings.TrimSpace(d)); d != "" {
+			c.Domains = append(c.Domains, d)
+		}
 	}
 	if c.DSN == "" { // unset or empty: the platform's
 		c.DSN = os.Getenv("TASKIEM_DATABASE_URL")
@@ -103,7 +113,7 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 	if cfg.DSN != "" && sameLogin(cfg.Public.DSN, cfg.DSN) {
 		log.Warn("the public host connects with the same database login as the other roles; give it its own login, a member of taskiem_public only (docs/public-host.md)")
 	}
-	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
+	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
 	return srv, httpTask("public", cfg.Public.Listen, srv.Handler(), log), pool.Close, nil
 }
 
