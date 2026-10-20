@@ -100,3 +100,37 @@ func TestStorefrontBudget(t *testing.T) {
 	}
 	t.Logf("100 items: %d bytes, %d compressed", len(body), gz.Len())
 }
+
+func TestStorefrontQR(t *testing.T) {
+	s, f := storefrontServer(t, samplePage("classic", 1), true)
+	f.sites["adakitchen.ng"] = f.sites["ada-kitchen.shops.test"]
+	want, _ := storefront.QRPNG("https://ada-kitchen.shops.test")
+	h := s.Handler()
+	// Without a preview domain, the address it was asked on.
+	w := get(h, "GET", "ada-kitchen.shops.test", "/qr.png")
+	if w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || !bytes.Equal(w.Body.Bytes(), want) || !strings.Contains(w.Header().Get("Cache-Control"), "public") ||
+		w.Header().Get("Set-Cookie") != "" {
+		t.Fatalf("%d %v", w.Code, w.Header())
+	}
+	// With one, always the preview address, whichever host serves it.
+	s.PreviewDomain = "shops.test"
+	if w := get(h, "GET", "adakitchen.ng", "/qr.png"); w.Code != 200 || !bytes.Equal(w.Body.Bytes(), want) {
+		t.Fatalf("own domain: %d", w.Code)
+	}
+	if w := get(h, "HEAD", "ada-kitchen.shops.test", "/qr.png"); w.Code != 200 || w.Body.Len() != 0 {
+		t.Fatalf("HEAD: %d %d", w.Code, w.Body.Len())
+	}
+	for _, path := range []string{"/embed/qr.png", "/qr.svg", "/qr.png/x"} {
+		if w := get(h, "GET", "ada-kitchen.shops.test", path); w.Code == 200 && w.Header().Get("Content-Type") == "image/png" {
+			t.Errorf("%s served a QR code", path)
+		}
+	}
+	if w := get(h, "POST", "ada-kitchen.shops.test", "/qr.png"); w.Code != 405 {
+		t.Errorf("POST: %d", w.Code)
+	}
+	// A draft has none.
+	s, _ = storefrontServer(t, StorefrontPage{}, false)
+	if w := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/qr.png"); w.Code != 404 {
+		t.Errorf("draft: %d", w.Code)
+	}
+}

@@ -57,6 +57,17 @@ func TestClientSend(t *testing.T) {
 		t.Error("empty text accepted")
 	}
 
+	pid, err := c.SendPhoto(ctx, 777, "https://ada.shops.test/qr.png", "*Ada's Kitchen* https://ada.shops.test", nil)
+	if err != nil || pid == 0 {
+		t.Fatal(pid, err)
+	}
+	if p := bot.Photos(777); len(p) != 1 || p[0].Photo != "https://ada.shops.test/qr.png" || p[0].Text != "Ada's Kitchen https://ada.shops.test" || len(p[0].Entities) != 1 {
+		t.Fatalf("%+v", p)
+	}
+	if _, err := c.SendPhoto(ctx, 777, "http://ada.shops.test/qr.png", "", nil); err == nil {
+		t.Error("a photo URL that is not https")
+	}
+
 	if err := c.RemoveKeyboard(ctx, 777, id); err != nil {
 		t.Fatal(err)
 	}

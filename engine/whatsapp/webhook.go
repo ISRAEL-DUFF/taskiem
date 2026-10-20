@@ -50,9 +50,13 @@ type Inbound struct {
 	// Media is an audio message or voice note (type audio): only its id
 	// and type arrive; the recording is fetched from the Graph API.
 	Media *Media
+	// Image is a photo (type image), its caption in Text: only its id
+	// arrives; the file is fetched from the Graph API, as a recording is.
+	// Telegram's photos arrive here too.
+	Image *Media
 }
 
-// Media is an audio message's reference.
+// Media is an audio message's or a photo's reference.
 type Media struct {
 	ID       string
 	MimeType string
@@ -117,6 +121,12 @@ func Parse(body []byte) ([]Inbound, error) {
 							SHA256   string `json:"sha256"`
 							Voice    bool   `json:"voice"`
 						} `json:"audio"`
+						Image struct {
+							ID       string `json:"id"`
+							MimeType string `json:"mime_type"`
+							SHA256   string `json:"sha256"`
+							Caption  string `json:"caption"`
+						} `json:"image"`
 					} `json:"messages"`
 				} `json:"value"`
 			} `json:"changes"`
@@ -150,6 +160,11 @@ func Parse(body []byte) ([]Inbound, error) {
 				case "audio":
 					if m.Audio.ID != "" {
 						in.Media = &Media{ID: m.Audio.ID, MimeType: m.Audio.MimeType, SHA256: m.Audio.SHA256, Voice: m.Audio.Voice}
+					}
+				case "image":
+					if m.Image.ID != "" {
+						in.Image = &Media{ID: m.Image.ID, MimeType: m.Image.MimeType, SHA256: m.Image.SHA256}
+						in.Text = m.Image.Caption
 					}
 				}
 				out = append(out, in)

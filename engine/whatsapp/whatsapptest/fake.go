@@ -23,8 +23,9 @@ import (
 type Sent struct {
 	From     string // the sending phone number id
 	To       string
-	Type     string // text, interactive or template
-	Text     string // the body; a template rendered from the library
+	Type     string // text, interactive, image or template
+	Text     string // the body (an image's caption); a template rendered from the library
+	Image    string // an image's link
 	Template string
 	Buttons  []whatsapp.Button // interactive reply buttons
 	Payloads []string          // template quick-reply payloads
@@ -61,7 +62,8 @@ type fakeMedia struct {
 	size int64 // reported size; 0 reports the real one
 }
 
-// AddMedia makes a media id known, as if a person had sent that audio;
+// AddMedia makes a media id known, as if a person had sent that audio
+// or photo;
 // reportSize, when not 0, is the size the lookup claims.
 func (g *Graph) AddMedia(id, mime string, data []byte, reportSize int64) {
 	g.mu.Lock()
@@ -200,9 +202,13 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var m struct {
-		To          string                `json:"to"`
-		Type        string                `json:"type"`
-		Text        struct{ Body string } `json:"text"`
+		To    string                `json:"to"`
+		Type  string                `json:"type"`
+		Text  struct{ Body string } `json:"text"`
+		Image struct {
+			Link    string `json:"link"`
+			Caption string `json:"caption"`
+		} `json:"image"`
 		Interactive struct {
 			Type   string                `json:"type"`
 			Body   struct{ Text string } `json:"body"`
@@ -256,6 +262,12 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 	switch m.Type {
 	case "text":
 		s.Text = m.Text.Body
+	case "image":
+		if !strings.HasPrefix(m.Image.Link, "https://") || len([]rune(m.Image.Caption)) > 1024 {
+			refuse(w, http.StatusBadRequest, 131009, "Parameter value is not valid")
+			return
+		}
+		s.Image, s.Text = m.Image.Link, m.Image.Caption
 	case "interactive":
 		s.Text = m.Interactive.Body.Text
 		for _, b := range m.Interactive.Action.Buttons {
@@ -367,6 +379,16 @@ func Delivery(phoneNumberID, from, id string, msg map[string]any) []byte {
 // Audio is an inbound audio message; voice marks a voice note.
 func Audio(mediaID, mime string, voice bool) map[string]any {
 	return map[string]any{"type": "audio", "audio": map[string]any{"id": mediaID, "mime_type": mime, "voice": voice}}
+}
+
+// Image is an inbound photo (mediaID, as AddMedia made it known) with a
+// caption.
+func Image(mediaID, mime, caption string) map[string]any {
+	img := map[string]any{"id": mediaID, "mime_type": mime}
+	if caption != "" {
+		img["caption"] = caption
+	}
+	return map[string]any{"type": "image", "image": img}
 }
 
 // Text is an inbound text message.

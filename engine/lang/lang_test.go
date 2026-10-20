@@ -186,7 +186,11 @@ func TestEveryIDTheAPIUsesExists(t *testing.T) {
 		"wa.table.hint.date", "wa.table.hint.datetime", "wa.table.hint.phone", "wa.table.hint.email", "wa.table.hint.json",
 		"run.status.completed", "run.status.failed", "run.status.needs_reconciliation", "run.status.running", "run.status.waiting",
 		"run.status.queued", "run.status.cancelled", "approval.status.open", "approval.status.approved", "approval.status.rejected",
-		"approval.status.expired", "approval.status.cancelled"} {
+		"approval.status.expired", "approval.status.cancelled",
+		"wa.shop.ask_name", "wa.shop.ask_tagline", "wa.shop.ask_area", "wa.shop.ask_hours", "wa.shop.ask_photo", "wa.shop.kind.enquiry", "wa.shop.kind.callback",
+		"wa.shop.status.received", "wa.shop.status.awaiting_payment", "wa.shop.status.paid", "wa.shop.status.accepted", "wa.shop.status.price_changed",
+		"wa.shop.status.declined", "wa.shop.status.refund_due", "wa.shop.status.refunded", "wa.shop.status.expired", "wa.shop.status.cancelled",
+		"wa.shop.status.completed", "wa.shop.status.no_show"} {
 		if !c.Has(id) {
 			t.Errorf("%s is not in en.json", id)
 		}

@@ -39,6 +39,16 @@ type Update struct {
 	// Voice is a voice note or audio file (message.voice or message.audio):
 	// only its file id arrives; the recording is fetched with getFile.
 	Voice *Voice
+	// Photo is a photo (message.photo, its largest size, or an image sent
+	// as a file), its caption in Text: fetched with getFile too.
+	Photo *Photo
+}
+
+// Photo is a photo's reference.
+type Photo struct {
+	FileID   string
+	MimeType string
+	Size     int64 // 0 when not reported
 }
 
 // Voice is a recording's reference.
@@ -70,6 +80,13 @@ type tgFile struct {
 	Size     int64  `json:"file_size"`
 }
 
+type tgPhotoSize struct {
+	FileID string `json:"file_id"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Size   int64  `json:"file_size"`
+}
+
 type tgMessage struct {
 	MessageID int64   `json:"message_id"`
 	From      *tgUser `json:"from"`
@@ -77,11 +94,16 @@ type tgMessage struct {
 		ID   int64  `json:"id"`
 		Type string `json:"type"`
 	} `json:"chat"`
-	Text    string  `json:"text"`
-	Caption string  `json:"caption"`
-	Voice   *tgFile `json:"voice"`
-	Audio   *tgFile `json:"audio"`
+	Text     string        `json:"text"`
+	Caption  string        `json:"caption"`
+	Voice    *tgFile       `json:"voice"`
+	Audio    *tgFile       `json:"audio"`
+	Photo    []tgPhotoSize `json:"photo"`
+	Document *tgFile       `json:"document"`
 }
+
+// imageTypes are the files read as photos when sent uncompressed.
+var imageTypes = map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true}
 
 // Parse reads a webhook body. Updates other than a new message or a
 // callback query (edits, channel posts, member changes) come back as
@@ -130,6 +152,19 @@ func Parse(body []byte) (Update, error) {
 			}
 		case m.Audio != nil && m.Audio.FileID != "":
 			u.Voice = &Voice{FileID: m.Audio.FileID, MimeType: m.Audio.MimeType, Duration: m.Audio.Duration, Size: m.Audio.Size}
+		case len(m.Photo) > 0:
+			// Telegram sends each size it made; the largest is kept.
+			best := m.Photo[0]
+			for _, p := range m.Photo[1:] {
+				if p.Width*p.Height > best.Width*best.Height {
+					best = p
+				}
+			}
+			if best.FileID != "" {
+				u.Photo = &Photo{FileID: best.FileID, MimeType: "image/jpeg", Size: best.Size}
+			}
+		case m.Document != nil && m.Document.FileID != "" && imageTypes[m.Document.MimeType]:
+			u.Photo = &Photo{FileID: m.Document.FileID, MimeType: m.Document.MimeType, Size: m.Document.Size}
 		}
 	case d.Callback != nil:
 		c := d.Callback

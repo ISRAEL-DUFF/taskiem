@@ -19,10 +19,11 @@ import (
 
 // Call is one call the fake accepted.
 type Call struct {
-	Method    string // sendMessage, editMessageReplyMarkup, answerCallbackQuery, setWebhook
+	Method    string // sendMessage, sendPhoto, editMessageReplyMarkup, answerCallbackQuery, setWebhook
 	ChatID    int64
-	MessageID int64 // the sent or edited message
-	Text      string
+	MessageID int64                     // the sent or edited message
+	Text      string                    // a message's text, or a photo's caption
+	Photo     string                    // sendPhoto: the photo's URL
 	Entities  []telegram.Entity         // formatting (bold), as sent
 	Keyboard  [][]telegram.InlineButton // the inline keyboard (empty when removed)
 	// answerCallbackQuery
@@ -179,6 +180,9 @@ func (b *Bot) serve(w http.ResponseWriter, r *http.Request) {
 		MessageID   int64             `json:"message_id"`
 		Text        string            `json:"text"`
 		Entities    []telegram.Entity `json:"entities"`
+		Photo       string            `json:"photo"`
+		Caption     string            `json:"caption"`
+		CaptionEnts []telegram.Entity `json:"caption_entities"`
 		ParseMode   string            `json:"parse_mode"`
 		ReplyMarkup *struct {
 			InlineKeyboard [][]struct {
@@ -198,6 +202,9 @@ func (b *Bot) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	c := Call{Method: method, ChatID: in.ChatID, MessageID: in.MessageID, Text: in.Text, Entities: in.Entities, CallbackID: in.CallbackQueryID,
 		URL: in.URL, Secret: in.SecretToken, AllowedUpdates: in.AllowedUpdates}
+	if method == "sendPhoto" {
+		c.Text, c.Entities, c.Photo = in.Caption, in.CaptionEnts, in.Photo
+	}
 	if in.ReplyMarkup != nil {
 		c.Keyboard = [][]telegram.InlineButton{}
 		for _, row := range in.ReplyMarkup.InlineKeyboard {
@@ -256,6 +263,21 @@ func (b *Bot) serve(w http.ResponseWriter, r *http.Request) {
 		c.MessageID = b.nextID
 		b.calls = append(b.calls, c)
 		answer(w, map[string]any{"message_id": c.MessageID, "chat": map[string]any{"id": in.ChatID, "type": "private"}, "date": 1759800000, "text": in.Text})
+		return
+	case "sendPhoto":
+		if in.ChatID == 0 || !strings.HasPrefix(in.Photo, "https://") || len([]rune(in.Caption)) > 1024 {
+			refuse(w, http.StatusBadRequest, "Bad Request: wrong photo or caption", 0)
+			return
+		}
+		if b.blocked[in.ChatID] {
+			refuse(w, http.StatusForbidden, "Forbidden: bot was blocked by the user", 0)
+			return
+		}
+		b.nextID++
+		c.MessageID = b.nextID
+		b.calls = append(b.calls, c)
+		answer(w, map[string]any{"message_id": c.MessageID, "chat": map[string]any{"id": in.ChatID, "type": "private"}, "date": 1759800000,
+			"photo": []any{map[string]any{"file_id": "sent", "width": 320, "height": 320}}})
 		return
 	case "editMessageReplyMarkup":
 		if in.ChatID == 0 || in.MessageID == 0 || in.MessageID > b.nextID {
@@ -327,6 +349,35 @@ func VoiceMessage(updateID, userID int64, fileID string, duration int) []byte {
 		"voice": map[string]any{"file_id": fileID, "file_unique_id": "u" + fileID, "duration": duration, "mime_type": "audio/ogg"},
 	}})
 	return body
+}
+
+// PhotoMessage is an update with a photo (fileID, as SetFile made it
+// known, in two sizes as Telegram sends them) and a caption in the
+// private chat of user id.
+func PhotoMessage(updateID, userID int64, fileID, caption string) []byte {
+	msg := map[string]any{
+		"message_id": updateID, "from": from(userID, ""), "chat": private(userID), "date": 1759800000,
+		"photo": []any{
+			map[string]any{"file_id": fileID + "-small", "file_unique_id": "s" + fileID, "width": 90, "height": 60, "file_size": 900},
+			map[string]any{"file_id": fileID, "file_unique_id": "u" + fileID, "width": 900, "height": 600},
+		},
+	}
+	if caption != "" {
+		msg["caption"] = caption
+	}
+	body, _ := json.Marshal(map[string]any{"update_id": updateID, "message": msg})
+	return body
+}
+
+// Photos lists the photos sent to a chat (all with 0).
+func (b *Bot) Photos(chatID int64) []Call {
+	var out []Call
+	for _, c := range b.Calls("sendPhoto") {
+		if chatID == 0 || c.ChatID == chatID {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // Callback is an update with a tapped inline button on messageID.

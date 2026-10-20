@@ -80,8 +80,16 @@
       "text": "Ƙi",
       "reviewed": false
     },
+    "button.yes": {
+      "text": "Eh",
+      "reviewed": false
+    },
     "button.yes_add": {
       "text": "Eh, ƙara shi",
+      "reviewed": false
+    },
+    "button.yes_publish": {
+      "text": "Eh, wallafa",
       "reviewed": false
     },
     "button.yes_run": {
@@ -676,6 +684,18 @@
       "text": "• *run* da sunan aiki: fara shi (za ka tabbatar da farko)",
       "reviewed": false
     },
+    "wa.help.shop": {
+      "text": "• *make my page* ko *my page*: kafa ko duba shafinka; *publish*; *qr*: lambar QR ɗinsa; *hours mon-sat 8-6*; *add service Haircut 30 2000*; *close shop* ko *open shop*",
+      "reviewed": false
+    },
+    "wa.help.shop_catalogue": {
+      "text": "• *add product Jollof rice 2000*, ko hoto mai wannan rubutun; *price*, *hide*, *show* ko *stock* da sunan kaya",
+      "reviewed": false
+    },
+    "wa.help.shop_orders": {
+      "text": "• *orders*: odar da ke buɗe; *order* da lambar sa: odar ɗaya; da *ready* ko *delivered* bayansa don ci gaba",
+      "reviewed": false
+    },
     "wa.help.status": {
       "text": "• *status*: abin da ya gudana da abin da ya gaza yau",
       "reviewed": false
@@ -854,6 +874,406 @@
     },
     "wa.run.which": {
       "text": "Wanne?\n{list}\nAika *run* da cikakken suna.",
+      "reviewed": false
+    },
+    "wa.shop.add_failed": {
+      "text": "Ba a iya ajiye wannan ba ({reason}). Amsa *yes* don sake gwadawa, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.address": {
+      "text": "Zai kasance a {link}",
+      "reviewed": false
+    },
+    "wa.shop.already_open": {
+      "text": "Shagonka a buɗe yake tuni.",
+      "reviewed": false
+    },
+    "wa.shop.ask_area": {
+      "text": "3/5. Unguwarka ko adireshinka? Misali: Yaba, Lagos. Amsa *skip* don barin sa.",
+      "reviewed": false
+    },
+    "wa.shop.ask_hours": {
+      "text": "4/5. Lokutan buɗewarka? Misali: *mon-sat 8-6*, *daily 9am-9pm* ko *mon-fri 9-5, sat 10-2, closed sunday*. Amsa *skip* don barin su.",
+      "reviewed": false
+    },
+    "wa.shop.ask_name": {
+      "text": "1/5. Menene sunan kasuwancinka?",
+      "reviewed": false
+    },
+    "wa.shop.ask_photo": {
+      "text": "5/5. Aiko hoto ko tambarinka don saman shafin, ko amsa *skip*.",
+      "reviewed": false
+    },
+    "wa.shop.ask_tagline": {
+      "text": "2/5. A layi ɗaya, me kake sayarwa? Misali: Jollof na gida da small chops. Amsa *skip* don barin sa.",
+      "reviewed": false
+    },
+    "wa.shop.bad_answer": {
+      "text": "Wannan bai dace ba: {reason}\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.shop.cannot_complete": {
+      "text": "Odar {ref} yana {status} kuma ba za a iya kammala shi yanzu ba.",
+      "reviewed": false
+    },
+    "wa.shop.changed": {
+      "text": "An gama: an sabunta *{name}*.",
+      "reviewed": false
+    },
+    "wa.shop.close_how": {
+      "text": "Saƙon rufewa haruffa 200 ne a mafi yawa, ba tare da hanyoyin haɗi ba. Misali: *close shop back on monday*.",
+      "reviewed": false
+    },
+    "wa.shop.closed": {
+      "text": "An rufe shagonka: shafinka yana nuna saƙonka maimakon kayayyaki. Amsa *open shop* don sake karɓar odar.",
+      "reviewed": false
+    },
+    "wa.shop.completed": {
+      "text": "An kammala odar {ref}.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_close": {
+      "text": "A rufe shagonka? Shafinka zai ce: {message}\nAbokan ciniki ba za su iya yin odar ba har sai ka amsa *open shop*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_complete": {
+      "text": "A yi wa odar {ref} alama an kai ko an karɓa? Wannan zai kammala shi.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_hide": {
+      "text": "A ɓoye *{name}*? Shafinka zai nuna shi babu har sai ka sake *show*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_hours": {
+      "text": "A saita lokutan buɗewarka zuwa:\n{hours}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_open": {
+      "text": "A sake buɗe shagonka? Abokan ciniki za su iya yin odar.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_price": {
+      "text": "A canza farashin *{name}* daga {from} zuwa {to}?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_product": {
+      "text": "A ƙara wannan kayan?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_publish": {
+      "text": "A wallafa shi yanzu? Idan eh, zan aiko maka da hanyar haɗi, lambar QR da rubutun status. Sannan ka ƙara kaya da *add product Jollof rice 2000*, ko ka aiko hoto mai suna da farashi a matsayin rubutunsa.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_publish_again": {
+      "text": "A wallafa *{name}* kamar yadda yake yanzu?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_ready": {
+      "text": "A gaya wa abokin ciniki cewa odar {ref} ta shirya? Za su sami saƙon rubutu.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_reminder": {
+      "text": "Amsa *yes* don ci gaba, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.confirm_service": {
+      "text": "A ƙara wannan sabis?\n*{name}*, minti {minutes}, {price}",
+      "reviewed": false
+    },
+    "wa.shop.confirm_show": {
+      "text": "A sake nuna *{name}* a shafinka?",
+      "reviewed": false
+    },
+    "wa.shop.confirm_stock": {
+      "text": "A saita adadin *{name}* daga {from} zuwa {to}?",
+      "reviewed": false
+    },
+    "wa.shop.created": {
+      "text": "An ajiye shafinka a matsayin daftari:\n{details}",
+      "reviewed": false
+    },
+    "wa.shop.denied": {
+      "text": "Matsayinka a {org} bai haɗa da sarrafa shago ba (storefront.manage).",
+      "reviewed": false
+    },
+    "wa.shop.denied_table": {
+      "text": "Canza kayayyaki yana buƙatar table.edit kuma, wanda matsayinka a {org} bai haɗa ba.",
+      "reviewed": false
+    },
+    "wa.shop.hours_how": {
+      "text": "Ban iya karanta waɗannan lokutan ba ({reason}). Rubuta su kamar *mon-sat 8-6*, *daily 9am-9pm* ko *mon-fri 9-5, sat 10-2, closed sunday*.",
+      "reviewed": false
+    },
+    "wa.shop.hours_saved": {
+      "text": "An ajiye lokutan buɗewa.",
+      "reviewed": false
+    },
+    "wa.shop.how_item": {
+      "text": "Rubuta sunan kayan bayan umarnin, kamar *hide Jollof rice*.",
+      "reviewed": false
+    },
+    "wa.shop.how_price": {
+      "text": "Rubuta shi kamar *price Jollof rice 2500*: sunan, sannan sabon farashi.",
+      "reviewed": false
+    },
+    "wa.shop.how_stock": {
+      "text": "Rubuta shi kamar *stock Jollof rice 20*: sunan, sannan nawa suka rage.",
+      "reviewed": false
+    },
+    "wa.shop.kind.callback": {
+      "text": "buƙatar kira",
+      "reviewed": false
+    },
+    "wa.shop.kind.enquiry": {
+      "text": "tambaya",
+      "reviewed": false
+    },
+    "wa.shop.left": {
+      "text": "Ba a canza komai ba.",
+      "reviewed": false
+    },
+    "wa.shop.no_address": {
+      "text": "Ba a sami adireshin da babu kowa ba don {name}. Zaɓi ɗaya a ƙarƙashin Storefront a manhajar yanar gizo.",
+      "reviewed": false
+    },
+    "wa.shop.no_catalogue": {
+      "text": "Shafinka bai da jerin kaya tukuna. Ƙara kaya na farko da *add product Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.no_column": {
+      "text": "Kayayyakinka ba su da ginshiƙin *{what}*. Zaɓi ɗaya a ƙarƙashin Storefront a manhajar yanar gizo.",
+      "reviewed": false
+    },
+    "wa.shop.no_item": {
+      "text": "Babu wani abu a cikin kayayyakinka mai suna {name}.",
+      "reviewed": false
+    },
+    "wa.shop.no_order": {
+      "text": "Babu odar {ref}.",
+      "reviewed": false
+    },
+    "wa.shop.no_orders": {
+      "text": "Babu odar da ke buɗe.",
+      "reviewed": false
+    },
+    "wa.shop.no_table_edit": {
+      "text": "Shafinka bai da jerin kaya: yin ɗaya yana buƙatar table.edit, wanda matsayinka bai haɗa ba.",
+      "reviewed": false
+    },
+    "wa.shop.no_tables": {
+      "text": "Ba za a iya jera kaya tukuna ba: babu teburorin bayanai ga ƙungiyarka ({reason}). An ajiye shafinka ba tare da jerin kaya ba.",
+      "reviewed": false
+    },
+    "wa.shop.none_yet": {
+      "text": "{org} ba shi da shafi tukuna. Amsa *make my page* don kafa ɗaya.",
+      "reviewed": false
+    },
+    "wa.shop.not_published": {
+      "text": "Ba a wallafa shafinka ba tukuna. Amsa *publish* don sanya shi a yanar gizo.",
+      "reviewed": false
+    },
+    "wa.shop.not_ready_now": {
+      "text": "Odar {ref} yana {status}: odar da aka karɓa ko aka biya kawai za a iya yi wa alama ya shirya.",
+      "reviewed": false
+    },
+    "wa.shop.not_saved": {
+      "text": "Ba a iya ajiye wannan ba: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.on_page": {
+      "text": "Yana kan shafinka yanzu.",
+      "reviewed": false
+    },
+    "wa.shop.opened": {
+      "text": "An sake buɗe shagonka.",
+      "reviewed": false
+    },
+    "wa.shop.order_detail": {
+      "text": "*{ref}*: {status}\n{items}\nJimla: {total}\nAbokin ciniki: {customer}\nAn karɓa {when}",
+      "reviewed": false
+    },
+    "wa.shop.orders_head": {
+      "text": "Odar da ke buɗe, na baya-bayan nan farko:",
+      "reviewed": false
+    },
+    "wa.shop.orders_tail": {
+      "text": "Amsa *order* da lambar sa don ɗaya.",
+      "reviewed": false
+    },
+    "wa.shop.page_closed": {
+      "text": "*{name}* a rufe yake ({message}): {link}\nOdar yau: {count}\nAmsa *open shop* don sake karɓar odar.",
+      "reviewed": false
+    },
+    "wa.shop.page_draft": {
+      "text": "*{name}* daftari ne, ba a wallafa ba tukuna. Amsa *publish* don sanya shi a yanar gizo.",
+      "reviewed": false
+    },
+    "wa.shop.page_live": {
+      "text": "An wallafa *{name}*: {link}\nOdar yau: {count}",
+      "reviewed": false
+    },
+    "wa.shop.photo_bad": {
+      "text": "Ba a iya amfani da wannan hoton ba ({reason}). Aiko JPEG ko PNG har zuwa MB 10.",
+      "reviewed": false
+    },
+    "wa.shop.photo_caption": {
+      "text": "Don ƙara kaya da wannan hoton, sake aiko shi da suna da farashi a matsayin rubutunsa, kamar *Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_failed": {
+      "text": "Ba a iya ajiye wannan hoton yanzu ba. Sake gwadawa bayan minti ɗaya.",
+      "reviewed": false
+    },
+    "wa.shop.photo_not_now": {
+      "text": "Ba zan iya karɓar hoto yanzu ba. Gama abin da muke yi, ko amsa *cancel*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_or_skip": {
+      "text": "Aiko hoto, ko amsa *skip*.",
+      "reviewed": false
+    },
+    "wa.shop.photo_rejected": {
+      "text": "Ba a karɓi wannan hoton don shafin jama'a ba. Ba a ƙara komai ba.",
+      "reviewed": false
+    },
+    "wa.shop.photos_off": {
+      "text": "Ba za a iya ajiye hotuna a nan tukuna ba, don haka ba a ƙara komai ba. Aiko kayan ba tare da hoto ba: *add product Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.pick_again": {
+      "text": "Amsa da lamba daga jerin:\n{list}",
+      "reviewed": false
+    },
+    "wa.shop.price_none": {
+      "text": "babu farashi",
+      "reviewed": false
+    },
+    "wa.shop.product_added": {
+      "text": "An ƙara *{name}* a {price}.",
+      "reviewed": false
+    },
+    "wa.shop.product_exists": {
+      "text": "*{name}* yana cikin kayayyakinka tuni a {price}. Canza farashinsa da *price* da sunansa.",
+      "reviewed": false
+    },
+    "wa.shop.product_how": {
+      "text": "Rubuta shi kamar *add product Jollof rice 2000*: sunan, sannan farashi (2000, ₦2,000 ko 2k).",
+      "reviewed": false
+    },
+    "wa.shop.publish_failed": {
+      "text": "Ba a iya wallafa shafinka ba: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.publish_hint": {
+      "text": "Amsa *publish* don sanya shafinka a yanar gizo.",
+      "reviewed": false
+    },
+    "wa.shop.published": {
+      "text": "Shafinka yana kan yanar gizo: {link}\nLambar QR da rubutun status na liƙawa suna biye. Ƙara kaya da *add product Jollof rice 2000*, ko aiko hoto mai rubutu *Jollof rice 2000*.",
+      "reviewed": false
+    },
+    "wa.shop.qr_caption": {
+      "text": "Duba don buɗe {name}: {link}",
+      "reviewed": false
+    },
+    "wa.shop.qr_print": {
+      "text": "Buga kati mai wannan lambar don teburinka: {url}",
+      "reviewed": false
+    },
+    "wa.shop.ready_failed": {
+      "text": "Ba a iya gaya wa abokin ciniki cewa odar {ref} ta shirya ba: {reason}",
+      "reviewed": false
+    },
+    "wa.shop.ready_sent": {
+      "text": "Ana gaya wa abokin ciniki cewa odar {ref} ta shirya. Amsa *order {ref} delivered* idan an karɓa.",
+      "reviewed": false
+    },
+    "wa.shop.service_added": {
+      "text": "An ƙara sabis *{name}*.",
+      "reviewed": false
+    },
+    "wa.shop.service_hint": {
+      "text": "Abokan ciniki za su iya yin ajiyar lokaci da zarar an kunna fom ɗin ajiya, a ƙarƙashin Storefront a manhajar yanar gizo.",
+      "reviewed": false
+    },
+    "wa.shop.service_how": {
+      "text": "Rubuta shi kamar *add service Haircut 30 2000*: sunan, mintunan da yake ɗauka, sannan farashi.",
+      "reviewed": false
+    },
+    "wa.shop.setup_start": {
+      "text": "Bari mu yi shafinka. Tambayoyi biyar gajeru; amsa *cancel* don tsayawa a kowane lokaci.",
+      "reviewed": false
+    },
+    "wa.shop.status.accepted": {
+      "text": "an karɓa",
+      "reviewed": false
+    },
+    "wa.shop.status.awaiting_payment": {
+      "text": "ana jiran biya",
+      "reviewed": false
+    },
+    "wa.shop.status.cancelled": {
+      "text": "an soke",
+      "reviewed": false
+    },
+    "wa.shop.status.completed": {
+      "text": "an kammala",
+      "reviewed": false
+    },
+    "wa.shop.status.declined": {
+      "text": "an ƙi",
+      "reviewed": false
+    },
+    "wa.shop.status.expired": {
+      "text": "ya ƙare",
+      "reviewed": false
+    },
+    "wa.shop.status.no_show": {
+      "text": "bai zo ba",
+      "reviewed": false
+    },
+    "wa.shop.status.paid": {
+      "text": "an biya",
+      "reviewed": false
+    },
+    "wa.shop.status.price_changed": {
+      "text": "ana jiran abokin ciniki ya amince da sabbin farashi",
+      "reviewed": false
+    },
+    "wa.shop.status.received": {
+      "text": "yana jiran ka karɓa",
+      "reviewed": false
+    },
+    "wa.shop.status.refund_due": {
+      "text": "ana bin maido kuɗi",
+      "reviewed": false
+    },
+    "wa.shop.status.refunded": {
+      "text": "an maido kuɗi",
+      "reviewed": false
+    },
+    "wa.shop.status_post": {
+      "text": "Yi odar daga {name} a nan: {link}",
+      "reviewed": false
+    },
+    "wa.shop.stock_untracked": {
+      "text": "ba a ƙirga ba",
+      "reviewed": false
+    },
+    "wa.shop.too_many": {
+      "text": "Canje-canje da yawa a lokaci ɗaya. Jira ɗan lokaci, sannan amsa *yes* kuma.",
+      "reviewed": false
+    },
+    "wa.shop.which_item": {
+      "text": "Fiye da ɗaya ya dace. Wanne?\n{list}\nAmsa da lambarsa.",
+      "reviewed": false
+    },
+    "wa.shop.with_logo": {
+      "text": "(da hotonka a sama)",
+      "reviewed": false
+    },
+    "wa.shop.with_photo": {
+      "text": " (da hoton)",
       "reviewed": false
     },
     "wa.status.denied": {

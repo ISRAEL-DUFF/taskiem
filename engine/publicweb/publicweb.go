@@ -108,6 +108,10 @@ type Server struct {
 	Origins Origins
 	// Storefronts read storefront pages; nil serves "Coming soon".
 	Storefronts Storefronts
+	// PreviewDomain is where storefronts serve as <slug>.<domain> (the
+	// first public domain): a storefront's /qr.png is that address. Without
+	// one, the address the page was asked for.
+	PreviewDomain string
 
 	// FormKey signs form tokens and keys status links and address hashes
 	// (storefront.FormKey of TASKIEM_PUBLIC_KEY). InboxKey seals
@@ -316,6 +320,8 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && changePages[path[strings.LastIndex(path, "/")+1:]] &&
 		strings.Count(path, "/") == 3:
 		s.serveChange(w, r, site, path[len("/o/"):strings.LastIndex(path, "/")], path[strings.LastIndex(path, "/")+1:], embed)
+	case site.Kind == "storefront" && path == "/qr.png" && !embed && (r.Method == http.MethodGet || r.Method == http.MethodHead):
+		s.serveQR(w, r, site)
 	case r.Method != http.MethodGet && r.Method != http.MethodHead:
 		w.Header().Set("Allow", "GET, HEAD")
 		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})

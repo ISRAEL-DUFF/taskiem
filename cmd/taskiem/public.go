@@ -148,6 +148,9 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 		Change: publicweb.DBChange(pool), PriceChange: publicweb.DBPriceChange(pool),
 		Forms: publicweb.DBForms(pool), FormHost: cfg.Public.FormHost, AppURL: cfg.Public.AppURL,
 		Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
+	if len(cfg.Public.Domains) > 0 {
+		srv.PreviewDomain = cfg.Public.Domains[0]
+	}
 	if k := cfg.Public.Key; k != nil {
 		if srv.FormKey, err = storefront.FormKey(k); err != nil {
 			pool.Close()

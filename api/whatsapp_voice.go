@@ -14,6 +14,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/voice"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -125,12 +126,20 @@ func (s *Server) waVoice(ctx context.Context, c *chat) error {
 	return nil
 }
 
-// recordVoice keeps what happened to a voice note: the transcript sealed,
-// for the retention period; refusals and failures with their reason only.
 // fetchVoice downloads the recording of c's voice note, at most max bytes
 // (whatsapp.ErrMediaTooLarge beyond), with its MIME type and size.
 func (s *Server) fetchVoice(ctx context.Context, c *chat, max int64) ([]byte, string, int, error) {
-	media := c.in.Media
+	return s.fetchMedia(ctx, c, c.in.Media, max)
+}
+
+// fetchMedia downloads a file a person sent on c's channel (a voice note
+// or a photo), at most max bytes (whatsapp.ErrMediaTooLarge beyond), with
+// its MIME type and size: from the Graph API on WhatsApp, with getFile on
+// Telegram. The file is held in memory only.
+func (s *Server) fetchMedia(ctx context.Context, c *chat, media *whatsapp.Media, max int64) ([]byte, string, int, error) {
+	if media == nil {
+		return nil, "", 0, errors.New("no file to fetch")
+	}
 	if c.wa == nil {
 		if s.Telegram == nil {
 			return nil, "", 0, errors.New("no channel to fetch from")
@@ -143,8 +152,11 @@ func (s *Server) fetchVoice(ctx context.Context, c *chat, max int64) ([]byte, st
 			return nil, "", int(size), whatsapp.ErrMediaTooLarge
 		}
 		data, err := s.Telegram.Client.Download(ctx, path, max)
+		if errors.Is(err, telegram.ErrFileTooLarge) {
+			return nil, "", int(size), whatsapp.ErrMediaTooLarge
+		}
 		if err != nil {
-			return nil, "", int(size), fmt.Errorf("telegram: downloading a voice note: %w", err)
+			return nil, "", int(size), fmt.Errorf("telegram: downloading a file: %w", err)
 		}
 		return data, media.MimeType, len(data), nil
 	}
@@ -163,6 +175,8 @@ func (s *Server) fetchVoice(ctx context.Context, c *chat, max int64) ([]byte, st
 	return data, mime, int(info.Size), err
 }
 
+// recordVoice keeps what happened to a voice note: the transcript sealed,
+// for the retention period; refusals and failures with their reason only.
 func (s *Server) recordVoice(ctx context.Context, c *chat, status, reason string, dur time.Duration, size int, text string) error {
 	retention := s.Voice.Retention
 	if retention <= 0 {
