@@ -383,7 +383,7 @@ export function StorefrontReview() {
           </table>
         )}
         <p className="hint">
-          Act on single reports, or reveal a reporter's contact, under <Link to="/ops/reports">Reports</Link>.
+          Act on single reports, or reveal a reporter's contact, under <Link className="inline-link" to="/ops/reports">Reports</Link>.
         </p>
       </div>
 

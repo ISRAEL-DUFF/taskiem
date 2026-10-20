@@ -47,7 +47,7 @@ export function RefusalBox({ error }: { error: unknown }) {
         {kind === "plan" && (
           <>
             {" "}
-            <Link to="/settings/billing">Open Billing</Link>
+            <Link className="inline-link" to="/settings/billing">Open Billing</Link>
           </>
         )}
       </div>
@@ -81,7 +81,7 @@ export function TrustNotices({ state, trust, onChanged }: { state: TrustState; t
       {state.orders_paused && (
         <div className="warning" role="status">
           <strong>Orders and bookings are paused.</strong> Your page has taken {state.orders_paused}. The forms say you are not taking orders online right now. Change
-          plan under <Link to="/settings/billing">Billing</Link>, or ask Taskiem to verify your business, to take more.
+          plan under <Link className="inline-link" to="/settings/billing">Billing</Link>, or ask Taskiem to verify your business, to take more.
         </div>
       )}
       {(state.status === "suspended" || down) &&
@@ -161,7 +161,7 @@ export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefin
           </ul>
           {!trust.verification.phone && (
             <p className="hint">
-              To publish, link your WhatsApp or Telegram under <Link to="/account">Account</Link>.
+              To publish, link your WhatsApp or Telegram under <Link className="inline-link" to="/account">Account</Link>.
             </p>
           )}
           {!trust.verification.business &&
