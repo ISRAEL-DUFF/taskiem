@@ -264,6 +264,23 @@ export const flutterwave = {
   verify_payment: (input?: FlutterwaveVerifyPaymentInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "verify_payment", input, extra),
 };
 
+// Forms (form@1)
+export interface FormFileUrlInput {
+  /** The file's id (steps.<id>.output.<field>.id or trigger.body.<field>.id) */
+  file: Val<string>;
+  ttl_minutes?: Val<number>;
+}
+export interface FormRespondInput {
+  /** Plain text, such as: Your application is with our credit team */
+  message: Val<string>;
+}
+export const form = {
+  /** Get a link to a file from a form (read) */
+  file_url: (input: FormFileUrlInput, extra?: ConnectorExtra): StepSpec => connector("form@1", "file_url", input, extra),
+  /** Tell the respondent (idempotent_write) */
+  respond: (input: FormRespondInput, extra?: ConnectorExtra): StepSpec => connector("form@1", "respond", input, extra),
+};
+
 // Gmail (gmail@1)
 export interface GmailCreateDraftInput {
   attachments?: Value;
@@ -2182,6 +2199,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "breet@1": "breet",
   "dojah@1": "dojah",
   "flutterwave@1": "flutterwave",
+  "form@1": "form",
   "gmail@1": "gmail",
   "googlesheets@1": "googlesheets",
   "interswitch@1": "interswitch",
@@ -2215,6 +2233,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
   "flutterwave@1": ["get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "resolve_account", "transfer", "verify_payment"],
+  "form@1": ["file_url", "respond"],
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
