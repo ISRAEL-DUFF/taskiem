@@ -354,3 +354,35 @@ func TestMatchKeywordsOutweighProse(t *testing.T) {
 		t.Fatalf("got %v, want esusu", m)
 	}
 }
+
+// What other templates say in their prose does not move a template's
+// match on its own keywords: adding common words to their descriptions
+// leaves its score as it was (the S3 and refunds regressions).
+func TestProseElsewhereKeepsAMatch(t *testing.T) {
+	tpl := func(id, keywords, title, desc string) *fstest.MapFile {
+		return &fstest.MapFile{Data: []byte(`{"id":"` + id + `","title":"` + title + `","summary":"S","description":"` + desc + `","category":"c",
+		 "tags":[],"keywords":[` + keywords + `],"connectors":[],"params":[],
+		 "definition":{"schema":"wd/v1","id":"wf_` + id + `","version":1,"name":"N","trigger":{"type":"manual"},
+		  "steps":[{"id":"t","type":"transform","config":{"output":{"ok":true}}}]}}`)}
+	}
+	build := func(prose string) *templates.Library {
+		fs := fstest.MapFS{"library/salary.json": tpl("salary", `"salary","payroll","approve","pay"`, "Pay salaries after approval", "Pays staff from the payroll sheet.")}
+		for _, id := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"} {
+			fs["library/"+id+".json"] = tpl(id, `"other`+id+`"`, "Something "+id, "Does something else. "+prose)
+		}
+		lib, err := templates.Load(fs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return lib
+	}
+	const goal = "pay this month's salary after two of us approve"
+	before := build("").Match(goal, 1)
+	after := build("When a paid order is declined, approve to refund the pay and salary through Paystack.").Match(goal, 1)
+	if len(before) == 0 || before[0].Template.ID != "salary" {
+		t.Fatalf("before: %v", before)
+	}
+	if len(after) == 0 || after[0].Template.ID != "salary" || after[0].Score != before[0].Score {
+		t.Fatalf("the match moved with other templates' prose: %v, was %v", after, before)
+	}
+}
