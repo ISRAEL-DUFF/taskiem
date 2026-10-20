@@ -57,6 +57,25 @@ func TestPublicKey(t *testing.T) {
 	}
 }
 
+func TestFormHost(t *testing.T) {
+	t.Setenv("TASKIEM_PUBLIC_DATABASE_URL", "postgres://pub@db/taskiem")
+	t.Setenv("TASKIEM_PUBLIC_URL", "https://app.taskiem.test/")
+	t.Setenv("TASKIEM_PUBLIC_DOMAINS", "Shops.Example.com, other.example.com")
+	t.Setenv("TASKIEM_PUBLIC_FORM_HOST", "")
+	if c, err := loadPublicConfig(); err != nil || c.Public.FormHost != "forms.shops.example.com" || c.Public.AppURL != "https://app.taskiem.test" {
+		t.Fatalf("default: %v %+v", err, c.Public)
+	}
+	t.Setenv("TASKIEM_PUBLIC_FORM_HOST", "Forms.Example.org")
+	if c, err := loadPublicConfig(); err != nil || c.Public.FormHost != "forms.example.org" {
+		t.Fatalf("set: %v %+v", err, c.Public)
+	}
+	t.Setenv("TASKIEM_PUBLIC_FORM_HOST", "")
+	t.Setenv("TASKIEM_PUBLIC_DOMAINS", "")
+	if c, err := loadPublicConfig(); err != nil || c.Public.FormHost != "" {
+		t.Fatalf("none: %v %+v", err, c.Public)
+	}
+}
+
 func TestSameLogin(t *testing.T) {
 	if !sameLogin("postgres://app:x@db:5432/taskiem", "postgres://app:y@db:5432/taskiem") {
 		t.Error("same user, host and database")
