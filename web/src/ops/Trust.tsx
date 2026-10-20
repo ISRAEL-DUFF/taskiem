@@ -340,7 +340,7 @@ export function StorefrontReview() {
           <ul className="ops-photos">
             {data.photos.map((p, i) => (
               <li key={p.id}>
-                <Photo url={smallest(p.urls)} n={i + 1} />
+                <Photo url={smallest(p.urls)} review={r.id} n={i + 1} />
                 <Tone label={p.moderation} tone={p.moderation === "approved" ? "ok" : p.moderation === "rejected" ? "danger" : "warn"} />
                 {r.status === "pending" && p.moderation !== "rejected" && (
                   <label className="inline">
@@ -404,14 +404,16 @@ export function StorefrontReview() {
   );
 }
 
-/** A photo's thumbnail; the console's Content-Security-Policy may refuse
- * images from other hosts, so a link opens it too. */
-function Photo({ url, n }: { url?: string; n: number }) {
+/** A photo's thumbnail, through the review's image proxy (the console's
+ * Content-Security-Policy allows images from its own origin only); a link
+ * opens the original too. */
+function Photo({ url, review, n }: { url?: string; review: string; n: number }) {
   const [failed, setFailed] = useState(false);
   if (!url) return <span className="hint">No URL</span>;
+  const src = `/v1/ops/storefront-reviews/${encodeURIComponent(review)}/image?src=${encodeURIComponent(url)}`;
   return (
     <a href={url} target="_blank" rel="noreferrer">
-      {failed ? `Open photo ${n}` : <img src={url} alt={`Photo ${n}`} width={120} height={120} loading="lazy" onError={() => setFailed(true)} />}
+      {failed ? `Open photo ${n}` : <img src={src} alt={`Photo ${n}`} width={120} height={120} loading="lazy" onError={() => setFailed(true)} />}
     </a>
   );
 }

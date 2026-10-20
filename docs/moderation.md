@@ -74,7 +74,7 @@ A decision can also reject single photos (`reject_photos`). Operators suspend an
 | `GET /v1/storefront/trust` | Verification, reviews, and why the page is held, suspended or paused |
 | `POST /v1/storefront/verification` | Ask Taskiem to verify the business |
 | `POST /v1/storefront/appeal` | Appeal a suspension or a turned-down page |
-| `GET /v1/ops/storefront-reviews`, `GET /v1/ops/storefront-reviews/{id}`, `POST /v1/ops/storefront-reviews/{id}/{approve,reject}` | The review queue |
+| `GET /v1/ops/storefront-reviews`, `GET /v1/ops/storefront-reviews/{id}`, `GET /v1/ops/storefront-reviews/{id}/image?src=`, `POST /v1/ops/storefront-reviews/{id}/{approve,reject}` | The review queue (the image route shows the business's own stored photos to the console) |
 | `GET /v1/ops/reports`, `POST /v1/ops/reports/{id}/{dismiss,action,contact}` | Reports |
 | `POST /v1/ops/storefronts/{tenant}/{suspend,restore}` | Suspension by hand |
 

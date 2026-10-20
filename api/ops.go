@@ -112,6 +112,7 @@ func (s *Server) opsRoutes(r chi.Router) {
 		r.Post("/status/incidents/{id}/updates", s.opsUpdateIncident)
 		r.Get("/storefront-reviews", s.opsReviews) // the review queue, reports and suspension (trust.go)
 		r.Get("/storefront-reviews/{id}", s.opsStorefrontReview)
+		r.Get("/storefront-reviews/{id}/image", s.opsReviewImage)
 		r.Post("/storefront-reviews/{id}/{decision}", s.opsDecideReview)
 		r.Get("/reports", s.opsReports)
 		r.Post("/reports/{id}/{action}", s.opsReportAction)

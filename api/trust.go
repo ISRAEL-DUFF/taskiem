@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/ops"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -581,6 +582,34 @@ func (s *Server) opsDecideReview(w http.ResponseWriter, r *http.Request) {
 		s.tellOwners(r.Context(), rev.TenantID, tell[0], tell[1])
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "status": map[string]string{"approve": "approved", "reject": "rejected"}[decision]})
+}
+
+// opsReviewImage serves one of the reviewed business's stored photos to
+// the console, whose CSP allows images from its own origin only. Only that
+// business's own storage is fetched (media.FetchPublic).
+func (s *Server) opsReviewImage(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil || s.Media == nil {
+		writeErr(w, http.StatusNotFound, "no such review")
+		return
+	}
+	rev, err := s.opsReviewOf(r, id)
+	if err != nil {
+		s.opsDBFail(w, r, err)
+		return
+	}
+	data, ctype, err := s.Media.FetchPublic(r.Context(), rev.TenantID, r.URL.Query().Get("src"))
+	if errors.Is(err, media.ErrNotOurs) {
+		writeErr(w, http.StatusBadRequest, plainError(err))
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = w.Write(data) //nolint:gosec // a JPEG or PNG by its bytes (FetchPublic), sent as that type with nosniff
 }
 
 func (s *Server) opsReports(w http.ResponseWriter, r *http.Request) {
