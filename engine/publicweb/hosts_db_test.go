@@ -106,7 +106,8 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 	}
 	rows.Close()
 	allowed := map[string]bool{"taskiem_public_host(text)": true, "taskiem_public_embed_origins(uuid)": true,
-		"taskiem_public_storefront(uuid)": true, "taskiem_public_storefront_catalogue(uuid)": true}
+		"taskiem_public_storefront(uuid)": true, "taskiem_public_storefront_catalogue(uuid)": true,
+		"taskiem_public_submit(uuid,text,text,bytea,bytea,bytea)": true, "taskiem_public_order_status(text,bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

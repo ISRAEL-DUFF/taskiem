@@ -101,6 +101,10 @@ type storefrontData struct {
 	Description string
 	Image       string
 	HasItems    bool
+	// Forms are the enabled forms' buttons; Ordering is true when the
+	// order form is one, so items get an Add link.
+	Forms    []storefront.PublicAction
+	Ordering bool
 }
 
 type section struct {
@@ -110,9 +114,10 @@ type section struct {
 
 type item struct {
 	storefront.Item
-	Price string
-	Small string
-	Large string
+	Price     string
+	Small     string
+	Large     string
+	Orderable bool
 }
 
 type hoursRow struct {
@@ -136,7 +141,11 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 		s.page(w, r, http.StatusOK, "setup", pageData{Title: "Coming soon"})
 		return
 	}
-	s.render(w, r, http.StatusOK, "storefront.html", storefrontView(p, s.now()))
+	d := storefrontView(p, s.now())
+	if !s.formsOpen() {
+		d.Forms, d.Ordering = nil, false
+	}
+	s.render(w, r, http.StatusOK, "storefront.html", d)
 }
 
 func storefrontView(p StorefrontPage, now time.Time) storefrontData {
@@ -179,9 +188,16 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 	if d.Closed != "" {
 		return d
 	}
+	// Order first: it is the primary button.
+	for _, k := range storefront.Kinds {
+		if a, ok := findAction(p.Model.Actions, k); ok {
+			d.Forms = append(d.Forms, a)
+			d.Ordering = d.Ordering || k == "order"
+		}
+	}
 	byTitle := map[string]int{}
 	for _, it := range p.Items {
-		x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"]}
+		x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"], Orderable: orderable(it)}
 		if x.Large == "" {
 			x.Large = it.Photo["2000"]
 		}

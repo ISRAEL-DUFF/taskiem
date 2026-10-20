@@ -95,18 +95,28 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, status int, name s
 
 // render executes a template with any data, as page does.
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, d any) {
+	s.renderWith(w, r, status, name, d, true)
+}
+
+// renderPrivate renders a page no cache may keep or share: a form, whose
+// token makes each copy one submission, and a status page.
+func (s *Server) renderPrivate(w http.ResponseWriter, r *http.Request, status int, name string, d any) {
+	s.renderWith(w, r, status, name, d, false)
+}
+
+func (s *Server) renderWith(w http.ResponseWriter, r *http.Request, status int, name string, d any, shared bool) {
 	var buf bytes.Buffer
 	if err := pages.ExecuteTemplate(&buf, name, d); err != nil {
 		s.Logger.Error("public host: render", "page", name, "err", err)
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 		return
 	}
-	sum := sha256.Sum256(buf.Bytes())
-	etag := `"` + hex.EncodeToString(sum[:12]) + `"`
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("ETag", etag)
-	if status == http.StatusOK {
+	if shared && status == http.StatusOK {
+		sum := sha256.Sum256(buf.Bytes())
+		etag := `"` + hex.EncodeToString(sum[:12]) + `"`
+		h.Set("ETag", etag)
 		// Browsers revalidate; a CDN may keep it briefly (storefronts 8.7).
 		h.Set("Cache-Control", "public, max-age=0, s-maxage=30, stale-while-revalidate=300")
 		if r.Header.Get("If-None-Match") == etag {
