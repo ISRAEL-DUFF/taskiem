@@ -107,6 +107,11 @@ BEGIN
   IF ref IS NOT NULL THEN
     RETURN ref;
   END IF;
+  -- A reference an order already has (its inbox row gone) is taken: the
+  -- public host draws another.
+  IF EXISTS (SELECT 1 FROM storefront_orders o WHERE o.reference = p_reference) THEN
+    RAISE EXCEPTION 'reference taken' USING ERRCODE = '23505', CONSTRAINT = 'storefront_inbox_reference_key';
+  END IF;
   SELECT s.tenant_id INTO t FROM storefronts s
     JOIN tenants tn ON tn.id = s.tenant_id AND tn.status = 'active'
     JOIN storefront_actions a ON a.storefront_id = s.id AND a.kind = p_kind AND a.enabled

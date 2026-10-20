@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -328,6 +329,16 @@ func TestEnquiryAndTheConnectorsBoundaries(t *testing.T) {
 	}
 	if _, err := conn.Actions["notify_customer"].Execute(octx, connector.Request{Input: map[string]any{"reference": ref, "text": "hi"}}); !errors.Is(err, storefront.ErrNoOrder) {
 		t.Fatalf("another tenant messaged the customer: %v", err)
+	}
+
+	// A reference an order already has is refused as taken, so the public
+	// host draws another.
+	_, h2 := storefront.NewStatusKey()
+	ct2, _ := storefront.SealSubmission(w.key, w.sf.ID, ref, storefront.Submission{Kind: "enquiry"})
+	_, err := w.env.DB.PublicPool(t, 1).Exec(ctx, `SELECT taskiem_public_submit($1, 'enquiry', $2, $3, $4, $5)`, w.sf.ID, ref, bytes.Repeat([]byte{2}, 32), h2, ct2)
+	var pe *pgconn.PgError
+	if !errors.As(err, &pe) || pe.Code != "23505" || pe.ConstraintName != "storefront_inbox_reference_key" {
+		t.Fatalf("a taken reference: %v", err)
 	}
 
 	// A disabled form takes nothing.

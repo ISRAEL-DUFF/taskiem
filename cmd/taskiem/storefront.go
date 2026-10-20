@@ -1,10 +1,7 @@
 package main
 
 import (
-	"encoding/base64"
-	"errors"
 	"log/slog"
-	"os"
 
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -15,15 +12,11 @@ import (
 // or nil when the public host's key (TASKIEM_PUBLIC_KEY) is unset: then
 // no order can arrive, and the storefront connector's actions fail plainly.
 func storefrontOrders(cfg config, e *engine, log *slog.Logger) (*storefront.Orders, error) {
-	raw := os.Getenv("TASKIEM_PUBLIC_KEY")
-	if raw == "" {
+	// The same key the public host's forms are signed with (public.go).
+	if len(cfg.Public.Key) == 0 {
 		return nil, nil
 	}
-	master, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil || len(master) != 32 {
-		return nil, errors.New("TASKIEM_PUBLIC_KEY must be 32 bytes, base64 (openssl rand -base64 32)")
-	}
-	key, err := storefront.InboxKey(master)
+	key, err := storefront.InboxKey(cfg.Public.Key)
 	if err != nil {
 		return nil, err
 	}
