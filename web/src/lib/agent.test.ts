@@ -4,6 +4,7 @@ import {
   agentCodeOK,
   agentHeaderApplies,
   attestPath,
+  consentChannels,
   endReason,
   fitWithin,
   formatLeft,
@@ -88,5 +89,12 @@ describe("field agents", () => {
     expect(agentCodeOK("AG-7KQ2M")).toBe(true);
     expect(agentCodeOK(" ag-7kq2m ")).toBe(true);
     expect(agentCodeOK("AG-7KQ2")).toBe(false);
+  });
+
+  it("offers WhatsApp, Telegram or both for consent", () => {
+    expect(consentChannels({ link: "https://wa.me/1", qr: "data:", telegram_link: "https://t.me/bot?start=agree_123456" })).toEqual(["whatsapp", "telegram"]);
+    expect(consentChannels({ telegram_link: "https://t.me/bot?start=agree_123456" })).toEqual(["telegram"]);
+    expect(consentChannels({ link: "https://wa.me/1" })).toEqual(["whatsapp"]);
+    expect(consentChannels({})).toEqual(["whatsapp"]);
   });
 });

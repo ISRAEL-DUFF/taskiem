@@ -5,6 +5,7 @@
 import { ApiError } from "../api";
 import type { Column, ColumnType, Table } from "./tables";
 import type { Availability, ServiceColumns } from "./bookings";
+import type { PageStatus } from "./trust";
 
 export interface Span {
   open: string;
@@ -49,7 +50,9 @@ export interface Columns {
 export interface Storefront {
   id: string;
   slug: string;
-  status: "draft" | "published" | "closed";
+  /** in_review waits for Taskiem before a first publish goes live;
+   * suspended is taken down (docs/moderation.md). */
+  status: PageStatus;
   draft: Card;
   catalogue_table: string | null;
   catalogue_columns: Columns;
@@ -67,6 +70,11 @@ export interface Storefront {
   catalogue_synced_at: string | null;
   catalogue_error: string | null;
   updated_at: string;
+  /** Why a first publish was turned down (the page is a draft again). */
+  review_note?: string | null;
+  suspended_reason?: string | null;
+  /** Why orders and bookings are paused, when they are. */
+  orders_paused?: string | null;
   preview_url: string;
   templates: string[];
   accents: Record<string, string>;
