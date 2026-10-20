@@ -226,7 +226,7 @@ func (s *Server) serveCancel(w http.ResponseWriter, r *http.Request, site Site, 
 		s.changeOutcome(w, r, d, got, back)
 		return
 	}
-	http.Redirect(w, r, back, http.StatusSeeOther)
+	http.Redirect(w, r, back, http.StatusSeeOther) //nolint:gosec // G710: back is statusLink's path on this host
 }
 
 func (s *Server) serveMove(w http.ResponseWriter, r *http.Request, site Site, p StorefrontPage, sd statusData, b BookingState, ref, key string, cutoff int, back string) {
@@ -304,7 +304,7 @@ func (s *Server) serveMove(w http.ResponseWriter, r *http.Request, site Site, p 
 		d.check(v.Get("start"))
 		s.showBooking(w, r, http.StatusServiceUnavailable, d, v.Get(tokenField))
 	case got == ChangeOK:
-		http.Redirect(w, r, back, http.StatusSeeOther)
+		http.Redirect(w, r, back, http.StatusSeeOther) //nolint:gosec // G710: back is statusLink's path on this host
 	case got == ChangeTaken:
 		if !fill() {
 			return
