@@ -26,6 +26,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/s3"
 	"github.com/israel-duff/taskiem/connectors/sftp"
 	"github.com/israel-duff/taskiem/connectors/slack"
+	"github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/connectors/telegram"
 	"github.com/israel-duff/taskiem/connectors/termii"
 	"github.com/israel-duff/taskiem/connectors/whatsapp"
@@ -50,6 +51,9 @@ type Options struct {
 	XenibaseURL string
 	// GoogleTokenURL overrides Google's OAuth token endpoint (tests).
 	GoogleTokenURL string
+	// Storefront binds the storefront platform connector's actions to the
+	// deployment's orders (docs/storefronts.md); nil: they fail plainly.
+	Storefront storefront.Ops
 }
 
 // Register adds every built-in connector to r.
@@ -83,6 +87,7 @@ func Register(r *connector.Registry, o Options) error {
 		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),
 		sftp.New(),
+		storefront.New(o.Storefront),
 	} {
 		if err := r.Register(c); err != nil {
 			return err

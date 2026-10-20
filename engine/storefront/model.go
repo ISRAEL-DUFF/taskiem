@@ -76,7 +76,8 @@ type Span struct {
 // Columns map a data table's columns to the catalogue: Name is required;
 // Price is a number in PriceUnit (naira, or kobo); Photo holds a
 // storefront_media id; Available is a boolean (absent: available);
-// Sort orders items (absent: the table's order).
+// Stock is an integer count (absent: not tracked), lowered when an order
+// is accepted; Sort orders items (absent: the table's order).
 type Columns struct {
 	Name        string `json:"name"`
 	Price       string `json:"price,omitempty"`
@@ -85,6 +86,7 @@ type Columns struct {
 	Photo       string `json:"photo,omitempty"`
 	Available   string `json:"available,omitempty"`
 	Category    string `json:"category,omitempty"`
+	Stock       string `json:"stock,omitempty"`
 	Sort        string `json:"sort,omitempty"`
 }
 
@@ -173,7 +175,7 @@ func (m *Columns) Check(known func(string) (typ string, ok bool)) error {
 	}
 	want := map[string][]string{
 		m.Name: {"text"}, m.Description: {"text"}, m.Category: {"text"}, m.Photo: {"text"},
-		m.Price: {"integer", "number"}, m.Sort: {"integer", "number"}, m.Available: {"boolean"},
+		m.Price: {"integer", "number"}, m.Sort: {"integer", "number"}, m.Available: {"boolean"}, m.Stock: {"integer"},
 	}
 	for col, types := range want {
 		if col == "" {

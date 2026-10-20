@@ -2,6 +2,7 @@
 // shapes, prices shown in naira, the opening hours editor's form and the
 // catalogue's column mapping.
 
+import { ApiError } from "../api";
 import type { Column, ColumnType, Table } from "./tables";
 
 export interface Span {
@@ -40,6 +41,7 @@ export interface Columns {
   photo?: string;
   available?: string;
   category?: string;
+  stock?: string;
   sort?: string;
 }
 
@@ -76,6 +78,8 @@ export interface Item {
   photo?: Image;
   available: boolean;
   category?: string;
+  /** How many are left, when the catalogue tracks stock. */
+  stock?: number;
 }
 
 export interface Catalogue {
@@ -218,6 +222,7 @@ export const MAPPING: { key: MappingKey; label: string; types: ColumnType[]; req
   { key: "category", label: "Category", types: ["text"], help: "Groups items on the page" },
   { key: "photo", label: "Photo", types: ["text"], help: "Holds the photos you add below" },
   { key: "available", label: "Available", types: ["boolean"], help: "No hides the item" },
+  { key: "stock", label: "Stock", types: ["integer"], help: "How many are left: orders above it are refused, and accepting an order lowers it" },
   { key: "sort", label: "Sort", types: ["integer", "number"], help: "Order on the page; otherwise by name" },
 ];
 
@@ -236,6 +241,7 @@ const GUESSES: Record<MappingKey, string[]> = {
   category: ["category", "group", "section", "type"],
   photo: ["photo", "image", "picture"],
   available: ["available", "in_stock", "active"],
+  stock: ["stock", "quantity", "qty", "left", "in_stock", "count"],
   sort: ["sort", "position", "order", "rank"],
 };
 
@@ -353,4 +359,14 @@ export const sameRequest = (a: Form, b: Form) => JSON.stringify(requestFrom(a)) 
 export function tidyMessage(msg: string): string {
   const m = msg.replace(/^((storefront|publicnames|media|invalid): )+/, "");
   return m ? m.charAt(0).toUpperCase() + m.slice(1) : msg;
+}
+
+/** Runs an API call, giving its refusal back without the server's package prefixes. */
+export async function tidy<T>(p: Promise<T>): Promise<T> {
+  try {
+    return await p;
+  } catch (e) {
+    if (e instanceof ApiError) throw new ApiError(e.status, tidyMessage(e.message), e.problems, e.body);
+    throw e;
+  }
 }

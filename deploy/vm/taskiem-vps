@@ -309,13 +309,22 @@ cmd_setup() {
   fi
   # The public host (docs/public-host.md): its own login, a member of
   # taskiem_public only, and nothing else of the platform's.
-  local pubrole="${dbname}_public" p="$KIT/public.env"
+  local pubrole="${dbname}_public" p="$KIT/public.env" pubkey hashkey
   touch "$p" && chmod 600 "$p"
+  # The storefront's key (forms and the inbox, the same on both containers)
+  # and the hash key for customers' message limits: made once.
+  pubkey=$(env_get "$t" TASKIEM_PUBLIC_KEY)
+  [ -n "$pubkey" ] || pubkey=$(openssl rand -base64 32)
+  env_set "$t" TASKIEM_PUBLIC_KEY "$pubkey"
+  hashkey=$(env_get "$t" TASKIEM_MESSAGE_HASH_KEY)
+  [ -n "$hashkey" ] || hashkey=$(openssl rand -base64 32)
+  env_set "$t" TASKIEM_MESSAGE_HASH_KEY "$hashkey"
   mkdir -p "$KIT/caddy.d"
   if [ "$PUBLIC" = yes ]; then
     env_set "$p" TASKIEM_PUBLIC_DATABASE_URL "${dsn_scheme}${pubrole}:${pubpw}@${dsn_host}/${dbname}${dsn_query}"
     env_set "$p" TASKIEM_TRUST_PROXY true
     env_set "$p" TASKIEM_PUBLIC_DOMAINS "$PREVIEW_DOMAIN"
+    env_set "$p" TASKIEM_PUBLIC_KEY "$pubkey"
     env_set "$t" TASKIEM_PUBLIC_DOMAINS "$PREVIEW_DOMAIN"
     env_set "$KIT/.env" COMPOSE_PROFILES public
     install -m 0644 "$KIT/public.caddy" "$KIT/caddy.d/public.caddy"

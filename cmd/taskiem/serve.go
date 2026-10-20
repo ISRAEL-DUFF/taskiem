@@ -26,6 +26,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
+	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/audit"
@@ -49,6 +50,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/status"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
@@ -464,6 +466,9 @@ func afterConnect(dbRole string) func(context.Context, *pgx.Conn) error {
 
 // engine is everything the roles share.
 type engine struct {
+	// orders are the storefront's orders (S3); nil without the public
+	// host's key.
+	orders   *storefront.Orders
 	cfg      config
 	log      *slog.Logger
 	pool     *pgxpool.Pool
@@ -499,7 +504,12 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		return nil, err
 	}
 	reg := connector.NewRegistry()
-	if err := builtin.Register(reg, cfg.Connectors); err != nil {
+	// The storefront platform connector's actions are bound to the orders
+	// once the vault exists (below).
+	orders := &sfconn.Late{}
+	copts := cfg.Connectors
+	copts.Storefront = orders
+	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
 		return nil, err
 	}
@@ -522,6 +532,13 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On}}
+	if e.orders, err = storefrontOrders(cfg, e, log); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	if e.orders != nil {
+		orders.Set(e.orders)
+	}
 	if cfg.WhatsApp != nil {
 		e.wa = whatsapp.New(pool, *cfg.WhatsApp, &egress.Guard{Logger: log}, log)
 		// Tenants' own numbers (credentials in their vaults) and template
@@ -755,9 +772,10 @@ func serve(ctx context.Context, args []string) error {
 		srv.Tables = e.tables()
 		srv.PublicHosts = cfg.Public.Domains
 		// Storefront photos in tenants' Xenibase storage (docs/media.md).
+		srv.Orders = e.orders
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts)
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders)
 		// SMS and email to people outside a tenant (messages.go).
 		if w := cfg.senderWorker(e, alerter.Mailer, log); w != nil {
 			tasks = append(tasks, w.Run)

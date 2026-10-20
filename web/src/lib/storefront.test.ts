@@ -153,6 +153,13 @@ describe("catalogue columns", () => {
   it("guesses a mapping from column names", () => {
     expect(guessColumns(table(cols))).toEqual({ name: "name", price: "price_kobo", price_unit: "kobo", photo: "image", available: "in_stock" });
     expect(guessColumns(table([col("dish", "text"), col("price", "number")]))).toEqual({ name: "dish", price: "price", price_unit: "naira" });
+    // A count of what is left is stock; a yes/no in_stock stays availability.
+    expect(guessColumns(table([col("dish", "text"), col("qty", "integer"), col("in_stock", "boolean")]))).toEqual({
+      name: "dish",
+      price_unit: "naira",
+      available: "in_stock",
+      stock: "qty",
+    });
   });
 
   it("leaves out empty fields", () => {

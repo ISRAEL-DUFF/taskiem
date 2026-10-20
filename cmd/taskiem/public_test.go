@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,6 +34,25 @@ func TestLoadPublicConfig(t *testing.T) {
 		t.Setenv("TASKIEM_PUBLIC_DATABASE_POOL", v)
 		if _, err := loadPublicConfig(); err == nil {
 			t.Errorf("pool %q accepted", v)
+		}
+	}
+}
+
+func TestPublicKey(t *testing.T) {
+	t.Setenv("TASKIEM_PUBLIC_DATABASE_URL", "postgres://pub@db/taskiem")
+	t.Setenv("TASKIEM_PUBLIC_KEY", "")
+	if c, err := loadPublicConfig(); err != nil || c.Public.Key != nil {
+		t.Fatalf("unset: %v %v", err, c.Public.Key)
+	}
+	key := strings.Repeat("k", 32)
+	t.Setenv("TASKIEM_PUBLIC_KEY", base64.StdEncoding.EncodeToString([]byte(key)))
+	if c, err := loadPublicConfig(); err != nil || string(c.Public.Key) != key {
+		t.Fatalf("set: %v %q", err, c.Public.Key)
+	}
+	for _, v := range []string{"not base64!", base64.StdEncoding.EncodeToString([]byte("short"))} {
+		t.Setenv("TASKIEM_PUBLIC_KEY", v)
+		if _, err := loadPublicConfig(); err == nil {
+			t.Errorf("key %q accepted", v)
 		}
 	}
 }

@@ -1,0 +1,80 @@
+# The storefront platform connector (docs/storefronts.md): what workflows do
+# with the organisation's storefront orders. It acts on Taskiem's own
+# records, for the run's tenant only, and needs no connection.
+manifest: connector/v1
+id: storefront
+version: 1.0.0
+name: Storefront
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  decide:
+    title: Accept, decline or complete an order
+    description: Moves the order from the storefront form that started the run. Accepting lowers the stock where the catalogue tracks it; declining one already paid leaves it refund_due.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference, decision]
+      properties:
+        reference: { type: string, description: The order's reference (trigger.body.reference) }
+        decision:  { type: string, enum: [accept, decline, complete, cancel] }
+        note:      { type: string, description: Why, kept on the order }
+    output:
+      type: object
+      properties:
+        reference:  { type: string }
+        status:     { type: string }
+        refund_due: { type: boolean }
+        total:      { type: string }
+        short:      { type: array, items: { type: string }, description: "On accept, the items there was too little stock of (stock is lowered to zero)" }
+  payment_link:
+    title: Make the order's payment link
+    description: A payment page for an accepted order the customer pays after acceptance; the run can then wait for the storefront.payment signal.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        url:       { type: string }
+        total:     { type: string }
+  notify_customer:
+    title: Message the customer
+    description: An SMS to the customer, and an email when they gave one, from the business's name. The recipient is the order's customer, never an address in the input.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference, text]
+      properties:
+        reference: { type: string }
+        text:      { type: string, maxLength: 1000, description: The message; an SMS starts with the business's name and is at most three parts }
+        subject:   { type: string, description: The email's subject }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        queued:    { type: array, items: { type: string } }

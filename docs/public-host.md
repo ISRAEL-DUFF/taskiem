@@ -26,7 +26,7 @@ GRANT taskiem_public TO taskiem_public_login;
 
    Then set `TASKIEM_PUBLIC_DATABASE_URL` to that login. The server sets `taskiem_public` on every connection, and warns at start if it shares the other roles' login.
 2. **Run it.** Use `taskiem serve --role public`, or set `TASKIEM_PUBLIC_ENABLED=true` with `--role all`. It listens on `TASKIEM_PUBLIC_LISTEN` (`:8082`). Metrics, `/healthz`, `/readyz` and `/tls/ask` are on `TASKIEM_METRICS_LISTEN`.
-3. **Kubernetes.** Set `public.enabled: true` and create the `public.existingSecret` Secret (default `taskiem-public`) holding `TASKIEM_PUBLIC_DATABASE_URL`. With `networkPolicy.enabled`, set `networkPolicy.tlsProxyNamespace` to the namespace of the proxy that issues certificates.
+3. **Kubernetes.** Set `public.enabled: true` and create the `public.existingSecret` Secret (default `taskiem-public`) holding `TASKIEM_PUBLIC_DATABASE_URL` and `TASKIEM_PUBLIC_KEY`. The main Secret holds the same `TASKIEM_PUBLIC_KEY`: the `api` role reads the orders the forms send ([storefronts](storefronts.md#orders-questions-and-call-backs)). With `networkPolicy.enabled`, set `networkPolicy.tlsProxyNamespace` to the namespace of the proxy that issues certificates.
 4. **In front of it**, a proxy that terminates TLS:
    - The preview domain uses one wildcard certificate (`*.<preview domain>`).
    - Businesses' own domains get certificates on demand, after asking `/tls/ask`. With Caddy, use `on_demand_tls { ask http://<public host>:9090/tls/ask }`. The [VM kit](vm.md#public-pages-storefronts-and-forms) does this for you.

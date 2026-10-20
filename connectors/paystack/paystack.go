@@ -29,10 +29,11 @@ func New(o Options) *connector.Connector {
 	base := strings.TrimRight(m.BaseURL, "/")
 	c := &client{base: base}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"check_balance":   connector.ActionFunc(c.checkBalance),
-		"transfer":        connector.ActionFunc(c.transfer),
-		"verify_transfer": connector.ActionFunc(c.verifyTransfer),
-		"verify_charge":   connector.ActionFunc(c.verifyCharge),
+		"check_balance":          connector.ActionFunc(c.checkBalance),
+		"transfer":               connector.ActionFunc(c.transfer),
+		"verify_transfer":        connector.ActionFunc(c.verifyTransfer),
+		"verify_charge":          connector.ActionFunc(c.verifyCharge),
+		"initialize_transaction": connector.ActionFunc(c.checkout),
 	}}
 }
 
@@ -117,6 +118,36 @@ func (c *client) verifyTransfer(ctx context.Context, req connector.Request) (con
 		return connector.Response{}, err
 	}
 	return connector.Response{Output: transferOutput(env.Data)}, nil
+}
+
+// checkout creates a checkout page under the request's reference
+// (Paystack's /transaction/initialize).
+func (c *client) checkout(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	ref, _ := in["reference"].(string)
+	if ref == "" {
+		return connector.Response{}, fmt.Errorf("initialize_transaction needs a reference: %w", effects.ErrFatal)
+	}
+	body := map[string]any{"amount": in["amount"], "email": in["email"], "reference": ref, "currency": orDefault(in["currency"], "NGN")}
+	for _, k := range []string{"callback_url", "metadata"} {
+		if v, ok := in[k]; ok {
+			body[k] = v
+		}
+	}
+	var env envelope
+	if err := c.do(ctx, req, http.MethodPost, "/transaction/initialize", body, &env); err != nil {
+		return connector.Response{}, err
+	}
+	if !env.Status {
+		return connector.Response{}, fmt.Errorf("paystack: %s: %w", env.Message, effects.ErrFatal)
+	}
+	out := map[string]any{"reference": ref}
+	for _, k := range []string{"authorization_url", "access_code"} {
+		if v, ok := env.Data[k].(string); ok {
+			out[k] = v
+		}
+	}
+	return connector.Response{Output: out}, nil
 }
 
 func (c *client) verifyCharge(ctx context.Context, req connector.Request) (connector.Response, error) {

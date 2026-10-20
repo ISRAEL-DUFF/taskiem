@@ -20,10 +20,14 @@
   {{if .OpenKnown}}<p class="sf-open {{if .OpenNow}}is-open{{else}}is-closed{{end}}">{{if .OpenNow}}Open now{{else}}Closed now{{end}}</p>{{end}}
   {{with .M.Card.Area}}<p class="sf-area">{{.}}</p>{{end}}
   <nav class="sf-actions" aria-label="Contact">
-    {{with .M.WhatsLink}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}
+    {{with .M.WhatsLink}}<a class="btn{{if not $.Ordering}} btn-primary{{end}}" href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}
     {{with .Phone}}<a class="btn" href="tel:{{.}}">Call</a>{{end}}
     {{with .M.MapLink}}<a class="btn" href="{{.}}" rel="noopener">Directions</a>{{end}}
   </nav>
+  {{if .Forms}}<nav class="sf-actions sf-forms" aria-label="Order and contact forms">
+    {{range .Forms}}<a class="btn{{if eq .Kind "order"}} btn-primary{{end}}" href="/a/{{.Kind}}">{{.Label}}</a>
+    {{end}}
+  </nav>{{end}}
 </header>
 <main class="page">
   {{if .Closed}}
@@ -36,12 +40,13 @@
     {{if .Title}}<h2>{{.Title}}</h2>{{end}}
     <ul class="sf-items">
       {{range .Items}}
-      <li class="sf-item{{if not .Available}} is-unavailable{{end}}">
+      <li class="sf-item{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
         {{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 40rem) 12rem, 40vw" alt="{{.Name}}" loading="lazy" decoding="async">{{end}}
         <div class="sf-item-text">
           <h3>{{.Name}}</h3>
           {{with .Description}}<p>{{.}}</p>{{end}}
-          <p class="sf-price">{{.Price}}{{if not .Available}} <span class="sf-badge">Unavailable</span>{{end}}</p>
+          <p class="sf-price">{{.Price}}{{if not .Available}} <span class="sf-badge">Unavailable</span>{{else if .SoldOut}} <span class="sf-badge">Sold out</span>{{end}}</p>
+          {{if and $.Ordering .Orderable}}<a class="btn btn-small" href="/a/order?item={{.ID}}" aria-label="Add {{.Name}}">Add</a>{{end}}
         </div>
       </li>
       {{end}}

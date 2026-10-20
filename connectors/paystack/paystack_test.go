@@ -118,3 +118,15 @@ func TestWebhookSignature(t *testing.T) {
 		t.Error("tampered body accepted")
 	}
 }
+
+func TestInitializeTransaction(t *testing.T) {
+	r, err := call(t, "initialize_transaction", map[string]any{"reference": ref, "amount": 300000, "email": "bola@example.com",
+		"callback_url": "https://ada-kitchen.shops.test/o/AK-7QX4KD"}, "initialize_transaction")
+	out, _ := r.Output.(map[string]any)
+	if err != nil || out["authorization_url"] != "https://checkout.paystack.com/0peioxfhpn" || out["reference"] != ref {
+		t.Fatalf("%v %v", out, err)
+	}
+	if _, err := call(t, "initialize_transaction", map[string]any{"amount": 300000, "email": "bola@example.com"}); err == nil {
+		t.Fatal("a payment page without a reference")
+	}
+}

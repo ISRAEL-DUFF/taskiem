@@ -1,0 +1,133 @@
+{
+  "id": "storefront-callback",
+  "title": "Storefront call-backs: acknowledge and follow up",
+  "summary": "A call-back request from your storefront is acknowledged to the customer by text, and comes to you in chat to mark called back.",
+  "description": "Starts when a customer asks for a call back on your storefront. The customer is texted that you will call. You are asked in WhatsApp or Telegram to approve once you have called them; open Storefront > Orders in Taskiem to see their number and best time. Messages go from your business's name.",
+  "category": "storefront",
+  "tags": [
+    "storefront"
+  ],
+  "keywords": [
+    "storefront",
+    "call back",
+    "callback",
+    "call-back form"
+  ],
+  "connectors": [
+    "storefront@1"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who accepts orders",
+      "description": "The role that accepts or declines orders.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_storefrontCallback",
+    "version": 1,
+    "name": "Storefront call-backs",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "callback"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference",
+          "customer"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              },
+              "email": {
+                "type": "string",
+                "x-pii": "email"
+              },
+              "message": {
+                "type": "string",
+                "x-pii": "free_text"
+              },
+              "best_time": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "acknowledge",
+        "type": "connector",
+        "name": "Tell the customer it arrived",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "text": "='Thank you. We will call you back soon (' + trigger.body.reference + ').'"
+        }
+      },
+      {
+        "id": "answered",
+        "type": "approval",
+        "name": "Mark the call made",
+        "needs": [
+          "acknowledge"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "72h",
+          "subject": {
+            "callback": "=trigger.body.reference",
+            "action": "Open Storefront > Orders to see who to call; approve once called"
+          }
+        }
+      },
+      {
+        "id": "complete",
+        "type": "connector",
+        "name": "Record it as done",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "answered"
+        ],
+        "when": "=steps.answered.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "96h"
+    }
+  }
+}

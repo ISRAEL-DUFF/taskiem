@@ -13,7 +13,7 @@ Nothing of Phase 5 ships to customers before gate G4.
 | S0 | Decisions | **Open**: see below |
 | S1 | Shared public foundation | **Built**, one PR in review: the [public host](public-host.md), form guards and name checks, [messages](messages.md) by SMS and email, [Xenibase storage](media.md), [embed sites](embed-sites.md), and the VM kit's [on-demand certificates](vm.md#public-pages-storefronts-and-forms) |
 | S2 | The storefront page | **Built**, one PR in review: [storefronts](storefronts.md): drafts and published snapshots, the business card with opening hours, the catalogue from a data table with its copy, photos with the moderation hook, two templates and eight accents, the preview address, the web editor, the QR code and printable card. Moderation decisions wait for S8 |
-| S3 | Orders | Not started |
+| S3 | Orders | **Built**, one PR in review: [orders, questions and call-backs](storefronts.md#orders-questions-and-call-backs), with the inbox from the public host, Paystack payment when ordering or after acceptance (checked by polling, unpaid orders expiring), the storefront trigger and platform connector, three default workflows (accept or decline in chat, customer texts and emails), [stock](storefronts.md#stock) (refused above what is left, lowered at Xenibase on Accept by compare-and-set), and the orders page. Refunds are manual (refund due) until the S0 refund decision. Prices come from the catalogue copy at ordering; holding an order whose price changed in the table before the workflow runs (spec 8.2) is not built yet |
 | S4 | Bookings | Not started |
 | S5 | Chat set-up and field agents | Not started |
 | S6 | Domains and embedding | Not started; waits for the domain platform contract |

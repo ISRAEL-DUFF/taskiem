@@ -162,6 +162,12 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 			return fmt.Errorf("a ussd trigger needs a service_code")
 		}
 		return nil
+	case "storefront":
+		switch str(c, "action") {
+		case "order", "enquiry", "callback":
+			return nil
+		}
+		return fmt.Errorf("a storefront trigger's action is order, enquiry or callback")
 	}
 	return fmt.Errorf("%s triggers are not available yet", def.Trigger.Type)
 }
@@ -247,6 +253,21 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			}
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, service_code)
 				VALUES ($1, $2, $3, $4, $5, 'ussd', $6)`, id, tenant, wf, version, env, code)
+		case "storefront":
+			// One workflow per storefront form in an environment: a
+			// submission starts the one deployed for its form.
+			action := str(c, "action")
+			var other string
+			e := tx.QueryRow(ctx, `SELECT w.name FROM triggers t JOIN workflows w ON w.id = t.workflow_id
+				WHERE t.type = 'storefront' AND t.environment = $1 AND t.storefront_action = $2 AND t.workflow_id <> $3`, env, action, wf).Scan(&other)
+			if e == nil {
+				return fmt.Errorf("%w: the storefront's %s form already starts workflow %q in %s", ErrTriggerTaken, action, other, env)
+			}
+			if !errors.Is(e, pgx.ErrNoRows) {
+				return e
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action)
+				VALUES ($1, $2, $3, $4, $5, 'storefront', $6)`, id, tenant, wf, version, env, action)
 		}
 		if err != nil {
 			return err

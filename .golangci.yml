@@ -18,7 +18,9 @@ linters:
         - fmt.Fprintln
     misspell:
       locale: UK
-      ignore-rules: [license, licenses, licensecheck, color]
+      # US spellings in names others chose: licence checks' tools, CSS, and
+      # Paystack's /transaction/initialize.
+      ignore-rules: [license, licenses, licensecheck, color, initialize]
     gosec:
       excludes:
         - G104 # covered by errcheck

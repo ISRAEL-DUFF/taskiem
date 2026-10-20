@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { ApiError, get, getBlob, post, put, uploadFile } from "../api";
 import { useAuth } from "../auth";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
+import { StorefrontForms } from "./StorefrontForms";
 import type { Table } from "../lib/tables";
 import {
   DAYS,
@@ -29,7 +30,7 @@ import {
   slugError,
   slugify,
   thumb,
-  tidyMessage,
+  tidy,
   type Catalogue,
   type Columns,
   type Form,
@@ -38,16 +39,6 @@ import {
   type Storefront as SF,
   type TextField,
 } from "../lib/storefront";
-
-/** Runs an API call, giving its refusal back without the server's package prefixes. */
-async function tidy<T>(p: Promise<T>): Promise<T> {
-  try {
-    return await p;
-  } catch (e) {
-    if (e instanceof ApiError) throw new ApiError(e.status, tidyMessage(e.message), e.problems, e.body);
-    throw e;
-  }
-}
 
 /** The organisation's storefront (docs/spec/storefronts.md): a one-page
  * public page with the business card and a catalogue from a data table. */
@@ -161,6 +152,7 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
           </>
         }
       />
+      <StorefrontTabs />
       {notice && (
         <div className="notice" role="status">
           {notice}
@@ -330,6 +322,8 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
           <CatalogueCopy key={saved.catalogue_table} tick={catalogueTick} photoColumn={saved.catalogue_columns.photo} stale={dirty && form.table !== null} />
         )}
       </section>
+
+      {saved && <StorefrontForms previewURL={saved.preview_url} published={published} />}
 
       {saved && published && saved.preview_url && <Share sf={saved} form={form} />}
 
@@ -580,6 +574,9 @@ function CatalogueCopy({ tick, photoColumn, stale }: { tick: number; photoColumn
                   <div className="sf-item-side">
                     {item.price_kobo !== undefined && item.price_kobo !== null && <span className="sf-price">{formatPrice(item.price_kobo)}</span>}
                     {!item.available && <span className="badge">unavailable</span>}
+                    {item.available && item.stock !== undefined && item.stock !== null && (
+                      <span className={item.stock > 0 ? "hint" : "badge"}>{item.stock > 0 ? `${item.stock} left` : "sold out"}</span>
+                    )}
                     {photoColumn && (
                       <button
                         type="button"
@@ -743,5 +740,17 @@ function CloseDialog({ onClose, onClosed }: { onClose: () => void; onClosed: (sf
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** The storefront's two pages: the page itself, and the orders it brings. */
+export function StorefrontTabs() {
+  return (
+    <nav className="tabs" aria-label="Storefront">
+      <NavLink to="/storefront" end>
+        Page
+      </NavLink>
+      <NavLink to="/storefront/orders">Orders</NavLink>
+    </nav>
   );
 }

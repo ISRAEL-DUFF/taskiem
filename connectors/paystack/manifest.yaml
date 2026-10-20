@@ -68,6 +68,35 @@ actions:
         transfer_code: { type: string }
         reference:     { type: string }
         status:        { type: string, enum: [pending, success, failed, reversed, otp, not_found] }
+  initialize_transaction:
+    title: Create a payment page
+    description: A Paystack checkout page for a customer to pay an amount; verify_charge reports when it is paid.
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 50, charset: "a-z0-9_-" }
+    reconcile: verify_charge
+    compensate: null
+    input:
+      type: object
+      required: [amount, email]
+      properties:
+        amount:       { type: integer, description: Amount in kobo, minimum: 100 }
+        email:        { type: string, description: The customer's email; Paystack requires one }
+        callback_url: { type: string, description: Where Paystack sends the customer after paying }
+        currency:     { type: string, default: NGN }
+        metadata:     { type: object }
+    output:
+      type: object
+      properties:
+        authorization_url: { type: string }
+        access_code:       { type: string }
+        reference:         { type: string }
+    pii:
+      - { field: email, category: email }
   verify_charge:
     title: Verify charge
     class: read

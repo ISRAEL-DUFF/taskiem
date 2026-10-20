@@ -1136,6 +1136,10 @@
       "text": "Ní gbogbo {interval}, ṣàyẹ̀wò {connector} ({action}) fún àwọn nǹkan tuntun",
       "reviewed": false
     },
+    "wd.trigger.storefront": {
+      "text": "Nígbà tí ẹnìkan bá fi fọ́ọ̀mù {form} ilé ìtajà ránṣẹ́",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "Nígbà tí iṣẹ́ míràn bá pè é",
       "reviewed": false

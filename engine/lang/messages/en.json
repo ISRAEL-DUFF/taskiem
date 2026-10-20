@@ -1419,6 +1419,11 @@
       "reviewed": true,
       "context": "Read-back: checks a connector for new items every {interval}"
     },
+    "wd.trigger.storefront": {
+      "text": "When someone sends the storefront's {form} form",
+      "reviewed": true,
+      "context": "Read-back: started by a form on the business's public storefront; {form} is order, enquiry or callback"
+    },
     "wd.trigger.subflow": {
       "text": "When another workflow calls it",
       "reviewed": true,

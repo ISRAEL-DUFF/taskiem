@@ -87,6 +87,8 @@ type Server struct {
 	// Moderator checks storefront images before they may be shown (S8);
 	// nil records them as unreviewed.
 	Moderator storefront.Moderator
+	// Orders are the storefront's orders (S3); nil: none are shown.
+	Orders *storefront.Orders
 	// Static serves the web app; nil omits it.
 	Static http.Handler
 	// EmbedDir holds the embedded builder's bundle (taskiem.js, served at
@@ -333,6 +335,10 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/media", s.uploadStorefrontMedia)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/qr", s.storefrontQR)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/image", s.storefrontImage)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/actions", s.listStorefrontActions)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{kind}", s.putStorefrontAction)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage)).Get("/embed-sites", s.listEmbedSites)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites", s.addEmbedSite)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites/{id}/verify", s.verifyEmbedSite)

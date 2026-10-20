@@ -651,6 +651,156 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/actions:
+    get:
+      operationId: listStorefrontActions
+      tags:
+      - Storefront
+      summary: The storefront's forms
+      description: Order, enquiry and call-back, each with its settings and the workflow deployed for it in prod.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The forms
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [actions]
+                properties:
+                  actions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StorefrontAction'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{kind}:
+    put:
+      operationId: putStorefrontAction
+      tags:
+      - Storefront
+      summary: Set a form's settings
+      description: A form can be enabled only once a workflow with a storefront trigger for it is deployed to prod (409 otherwise). A published storefront is published again so its buttons match.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [order, enquiry, callback]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                enabled:
+                  type: boolean
+                label:
+                  type: string
+                payment:
+                  type: string
+                  enum: [after_accept, at_order, none, '']
+                options:
+                  $ref: '#/components/schemas/StorefrontActionOptions'
+      responses:
+        '200':
+          description: The form
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontAction'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders:
+    get:
+      operationId: listStorefrontOrders
+      tags:
+      - Storefront
+      summary: The storefront's orders, enquiries and call-backs
+      description: Newest first, the customer's details masked.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+        description: A status, or open for every order still needing the business
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: The orders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orders]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}:
+    get:
+      operationId: getStorefrontOrder
+      tags:
+      - Storefront
+      summary: One order
+      description: The customer's details are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order, revealed]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/StorefrontOrder'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/embed-sites:
     get:
       operationId: listEmbedSites
@@ -12578,6 +12728,9 @@ components:
           type: string
         category:
           type: string
+        stock:
+          type: string
+          description: An integer column of how many are left; lowered when an order is accepted
         sort:
           type: string
     StorefrontRequest:
@@ -12675,6 +12828,9 @@ components:
           type: boolean
         category:
           type: string
+        stock:
+          type: integer
+          description: How many are left, when the catalogue tracks stock
     StorefrontCatalogue:
       type: object
       required: [items, synced_at, error]
@@ -12705,6 +12861,113 @@ components:
         moderation:
           type: string
           enum: [unreviewed, approved, rejected]
+    StorefrontActionOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        connection:
+          type: string
+          description: The Paystack connection payments use (default main)
+        pickup:
+          type: boolean
+        delivery:
+          type: boolean
+        delivery_note:
+          type: string
+    StorefrontAction:
+      type: object
+      required: [kind, enabled, label, payment, options, workflow_id]
+      properties:
+        kind:
+          type: string
+          enum: [order, enquiry, callback]
+        enabled:
+          type: boolean
+        label:
+          type: string
+        payment:
+          type: string
+          enum: [after_accept, at_order, none]
+        options:
+          $ref: '#/components/schemas/StorefrontActionOptions'
+        workflow_id:
+          type:
+          - string
+          - 'null'
+          description: The workflow deployed in prod for this form
+    StorefrontOrderLine:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        price_kobo:
+          type: integer
+        line_kobo:
+          type: integer
+    StorefrontOrder:
+      type: object
+      required: [id, reference, kind, status, customer, basket, total_kobo, payment, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        kind:
+          type: string
+          enum: [order, enquiry, callback]
+        status:
+          type: string
+          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due]
+        customer:
+          type: object
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+            email:
+              type: string
+            address:
+              type: string
+            message:
+              type: string
+            best_time:
+              type: string
+        basket:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorefrontOrderLine'
+        total_kobo:
+          type: integer
+        fulfilment:
+          type: string
+        payment:
+          type: string
+          enum: [after_accept, at_order, none]
+        payment_url:
+          type: string
+        paid_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        run_id:
+          type:
+          - string
+          - 'null'
+        note:
+          type: string
+        decided_by:
+          type: string
+        decided_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        expires_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        created_at:
+          type: string
+          format: date-time
     EmbedSiteRequest:
       type: object
       required: [origin]

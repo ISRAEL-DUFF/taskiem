@@ -136,7 +136,9 @@ migrations:
 # The public host: storefronts and hosted forms (docs/public-host.md),
 # off until Phase 5 ships. Its pods get no platform secret: only
 # public.existingSecret, which must hold TASKIEM_PUBLIC_DATABASE_URL, a
-# login that is a member of taskiem_public and of nothing else.
+# login that is a member of taskiem_public and of nothing else, and
+# TASKIEM_PUBLIC_KEY, which the main Secret must hold too (the api role
+# reads the orders the public host's forms send).
 public:
   enabled: false
   existingSecret: taskiem-public

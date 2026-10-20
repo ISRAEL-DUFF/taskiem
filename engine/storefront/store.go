@@ -58,14 +58,16 @@ type Image map[string]string
 // Model is what a published snapshot holds: everything the page shows
 // but the catalogue's rows, which are read from the copy.
 type Model struct {
-	Version     int       `json:"version"`
-	Slug        string    `json:"slug"`
-	Card        Card      `json:"card"`
-	Logo        Image     `json:"logo,omitempty"`
-	MapLink     string    `json:"map_link,omitempty"`
-	WhatsLink   string    `json:"whatsapp_link,omitempty"`
-	HasCatalog  bool      `json:"has_catalogue"`
-	PublishedAt time.Time `json:"published_at"`
+	Version    int    `json:"version"`
+	Slug       string `json:"slug"`
+	Card       Card   `json:"card"`
+	Logo       Image  `json:"logo,omitempty"`
+	MapLink    string `json:"map_link,omitempty"`
+	WhatsLink  string `json:"whatsapp_link,omitempty"`
+	HasCatalog bool   `json:"has_catalogue"`
+	// Actions are the forms the page offers.
+	Actions     []PublicAction `json:"actions,omitempty"`
+	PublishedAt time.Time      `json:"published_at"`
 }
 
 // Item is one catalogue item as pages show it.
@@ -77,7 +79,12 @@ type Item struct {
 	Photo       Image  `json:"photo,omitempty"`
 	Available   bool   `json:"available"`
 	Category    string `json:"category,omitempty"`
+	// Stock is how many are left, when the catalogue tracks it.
+	Stock *int64 `json:"stock,omitempty"`
 }
+
+// SoldOut reports whether the item tracks stock and has none left.
+func (it Item) SoldOut() bool { return it.Stock != nil && *it.Stock <= 0 }
 
 const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, published_version, published_slug, published_at, closed_message,
 	catalogue_synced_at, catalogue_error, updated_at,
@@ -152,6 +159,9 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 			return Storefront{}, err
 		}
 		m.Logo = img
+	}
+	if m.Actions, err = publicActions(ctx, tx, tenant); err != nil {
+		return Storefront{}, err
 	}
 	raw, _ := json.Marshal(m)
 	sum := sha256.Sum256(raw)
@@ -288,6 +298,12 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		if m.Available != "" {
 			if b, ok := r[m.Available].(bool); ok {
 				it.Available = b
+			}
+		}
+		if m.Stock != "" {
+			if f, ok := num(r[m.Stock]); ok {
+				n := max(0, int64(f))
+				it.Stock = &n
 			}
 		}
 		if m.Price != "" {
