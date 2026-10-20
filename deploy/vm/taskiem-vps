@@ -708,7 +708,7 @@ cmd_status() {
   local cur
   cur=$(cat "$STATE/current" 2>/dev/null || echo none)
   printf 'Server     https://%s\nChannel    %s (upgrade window: %s)\nRelease    %s\nCommit     %s\nUpdated    %s\nBackup     %s\n\n' \
-    "$(conf DOMAIN)" "$(conf CHANNEL)" "$(conf WINDOW || true)" "$cur" "$(image_revision "$cur" | cut -c1-12)" \
+    "$(conf DOMAIN)" "$(conf CHANNEL)" "$(conf WINDOW || true | sed 's/^$/any/')" "$cur" "$(image_revision "$cur" | cut -c1-12)" \
     "$(cat "$STATE/last-update" 2>/dev/null || echo never)" "$(cat "$STATE/last-backup" 2>/dev/null || echo never)"
   compose ps --format 'table {{.Service}}\t{{.Status}}'
   echo
