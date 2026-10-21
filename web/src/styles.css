@@ -749,12 +749,14 @@ table.audit td { vertical-align: middle; }
 table.audit code { font-size: 12px; white-space: nowrap; }
 .audit-detail { color: var(--muted); font-size: 13px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Motion: quick and quiet, and none for people who ask for less. */
+/* Motion: quick and quiet, and none for people who ask for less. Fill
+   "backwards" only: a finished animation that kept its transform would
+   trap fixed dialogs inside the page. */
 :root { --ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
 @media (prefers-reduced-motion: no-preference) {
   body { transition: background-color 0.25s, color 0.25s; }
-  .page { animation: page-in 0.32s var(--ease) both; }
-  .stats .stat, .home-col > .panel, tbody tr, .list-row, .template-card, .checklist li, .panel > .list-row { animation: rise-in 0.36s var(--ease) both; }
+  .page { animation: page-in 0.32s var(--ease) backwards; }
+  .stats .stat, .home-col > .panel, tbody tr, .list-row, .template-card, .checklist li, .panel > .list-row { animation: rise-in 0.36s var(--ease) backwards; }
   .stats .stat:nth-child(2), tbody tr:nth-child(2), .list-row:nth-child(3), .template-card:nth-child(2) { animation-delay: 30ms; }
   .stats .stat:nth-child(3), tbody tr:nth-child(3), .list-row:nth-child(4), .template-card:nth-child(3) { animation-delay: 60ms; }
   .stats .stat:nth-child(4), tbody tr:nth-child(4), .list-row:nth-child(5), .template-card:nth-child(4) { animation-delay: 90ms; }
@@ -762,18 +764,18 @@ table.audit code { font-size: 12px; white-space: nowrap; }
   tbody tr:nth-child(6), .list-row:nth-child(7) { animation-delay: 150ms; }
   tbody tr:nth-child(n + 7) { animation-delay: 170ms; }
   .home-col:last-child > .panel { animation-delay: 80ms; }
-  .progress > span, .meter-fill { animation: grow-x 0.8s var(--ease) both; transform-origin: left; transition: width 0.4s var(--ease); }
-  .bars span { animation: grow-y 0.5s var(--ease) both; transform-origin: bottom; }
+  .progress > span, .meter-fill { animation: grow-x 0.8s var(--ease) backwards; transform-origin: left; transition: width 0.4s var(--ease); }
+  .bars span { animation: grow-y 0.5s var(--ease) backwards; transform-origin: bottom; }
   .bars span:nth-child(n + 5) { animation-delay: 40ms; }
   .bars span:nth-child(n + 10) { animation-delay: 80ms; }
   .badge.published::before, .badge.running::before, .sf-open.on .dot { animation: live 2.4s ease-in-out infinite; }
-  #nav-more:not([hidden]) > a { animation: fade-down 0.2s var(--ease) both; }
-  .notice, .error, .warning { animation: rise-in 0.24s var(--ease) both; }
+  #nav-more:not([hidden]) > a { animation: fade-down 0.2s var(--ease) backwards; }
+  .notice, .error, .warning { animation: rise-in 0.24s var(--ease) backwards; }
   .stat, a.list-row, .panel, .card, .step-node { transition: background-color 0.15s, border-color 0.15s, box-shadow 0.2s, transform 0.2s var(--ease); }
   a.stat:hover { transform: translateY(-1px); }
   .nav a svg { transition: transform 0.2s var(--ease); }
   .nav a:hover svg { transform: translateX(1px); }
-  .empty-icon { animation: pop 0.4s var(--ease) both; }
+  .empty-icon { animation: pop 0.4s var(--ease) backwards; }
   .sf-cover, .sf-cta, .sf-pv-logo { transition: background-color 0.3s, color 0.3s; }
   .tabs button, .tabs a { transition: background-color 0.15s, color 0.15s, box-shadow 0.15s; }
 }
