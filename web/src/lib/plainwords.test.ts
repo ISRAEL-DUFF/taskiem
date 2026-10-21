@@ -58,6 +58,8 @@ const OWNER_FILES = [
   "pages/Editor.tsx",
   "pages/Workflows.tsx",
   "pages/Forms.tsx",
+  "pages/StorefrontDomains.tsx",
+  "pages/StorefrontEmbedSites.tsx",
 ];
 
 const SHOWN_ATTRS = new Set(["label", "hint", "placeholder", "title", "aria-label", "description"]);

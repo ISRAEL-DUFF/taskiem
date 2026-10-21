@@ -1,7 +1,7 @@
 import { plainValue, showValue } from "../lib/values";
 import { useState } from "react";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
 import { ErrorBox, Field, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
@@ -46,6 +46,7 @@ function AdvancedSwitch() {
 
 export function Settings() {
   const { can } = useAuth();
+  const advanced = useAdvanced();
   const [env, setEnv] = useState("prod");
   return (
     <>
@@ -55,11 +56,11 @@ export function Settings() {
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
       {can("member.manage") && <AdvancedSwitch />}
-      <Environments editable={can("secret.manage")} />
+      {advanced && <Environments editable={can("secret.manage")} />}
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />
-      {can("secret.manage") && <Egress env={env} />}
-      {can("git.manage") && <Git env={env} />}
+      {advanced && can("secret.manage") && <Egress env={env} />}
+      {advanced && can("git.manage") && <Git env={env} />}
       {can("secret.manage") && <WhatsAppNumber />}
       {can("secret.manage") && <USSDChannels />}
       <Governance />

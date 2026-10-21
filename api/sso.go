@@ -408,6 +408,13 @@ func (s *Server) addSSODomain(w http.ResponseWriter, r *http.Request) {
 // LookupTXT is how domains are verified; tests replace it.
 var LookupTXT = net.DefaultResolver.LookupTXT
 
+// LookupCNAME and LookupHost are how Check now reads a domain's records
+// (storefront.CheckRecords); tests replace them.
+var (
+	LookupCNAME = net.DefaultResolver.LookupCNAME
+	LookupHost  = net.DefaultResolver.LookupHost
+)
+
 func (s *Server) verifySSODomain(w http.ResponseWriter, r *http.Request) {
 	domain := strings.ToLower(chi.URLParam(r, "domain"))
 	var token string

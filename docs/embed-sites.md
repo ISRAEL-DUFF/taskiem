@@ -33,7 +33,13 @@ The scheduler checks every verified site again every 6 hours.
 - A site whose record or file no longer holds its value, 4 checks in a row over at least 24 hours, is **unverified**: it stops framing the pages, and `embed_site.unverified` is audited with the reason.
 - A check that says nothing (a DNS timeout, a site down for a moment) is not counted.
 
-This stops a domain that lapses or changes hands from framing the business's pages.
+This stops a domain that lapses or changes hands from framing the business's pages. The owners hear of it on the chat they linked (WhatsApp, else Telegram) and on the alert channels: a `domain_unverified` alert saying which record or file to put back.
+
+## Send to my web designer
+
+`POST /v1/embed-sites/{id}/send-to-designer` with `{"email": "…"}` (`storefront.manage`; no-technical-steps N9) emails whoever looks after the website the code that shows the page (`<iframe src="<the page's address>/embed" …>`) and the proof to publish (the TXT record, or the file and its line), so the owner never handles either. 409 when the deployment sends no email or the page is not published. It is audited as `embed_site.sent_to_designer` with the recipient's domain only. The DNS proof's `prove` also has `record_short`, the record's name as registrars ask for it.
+
+In the web app, **On your website** on the storefront page adds a site, shows the registrar guides and the code, sends it to the designer and checks it ([owners' guide](guide/your-website.md)).
 
 ## On the public host
 

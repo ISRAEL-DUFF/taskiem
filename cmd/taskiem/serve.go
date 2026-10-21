@@ -880,10 +880,10 @@ func serve(ctx context.Context, args []string) error {
 		domains := &embed.DomainChecker{Pool: e.pool, Logger: log}
 		// Websites allowed to embed storefronts and forms, proven again
 		// every few hours (docs/embed-sites.md).
-		sites := &embedsites.Checker{Pool: e.pool, Prover: &embedsites.Prover{Guard: &egress.Guard{Logger: log}}, Logger: log}
+		sites := &embedsites.Checker{Pool: e.pool, Prover: &embedsites.Prover{Guard: &egress.Guard{Logger: log}}, PublicURL: cfg.PublicURL, Logger: log}
 		// Storefronts' own domains, proven again the same way
 		// (docs/storefronts.md#your-own-domain).
-		sfDomains := &storefront.DomainChecker{Pool: e.pool, Prover: &embedsites.Prover{}, Logger: log}
+		sfDomains := &storefront.DomainChecker{Pool: e.pool, Prover: &embedsites.Prover{}, PublicURL: cfg.PublicURL, Logger: log}
 		// Tenant keys: customer key health, re-wrapping after rotations,
 		// and resuming steps parked while a key was unavailable (docs/byok.md).
 		keys := &secrets.KeyJob{Vault: e.vault, Interval: cfg.Keys.CheckInterval, Resume: e.store.ResumeKeyParked, Logger: log,

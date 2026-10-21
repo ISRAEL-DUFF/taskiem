@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { del, get, post } from "../api";
 import { Badge, ErrorBox, Field, Skeleton, fmtTime, useAction, useLoad } from "../ui";
-import { domainHosts, domainState, recordsInOrder, tidyDomain, type DomainList, type StorefrontDomain } from "../lib/domains";
+import { domainHosts, domainState, recordsInOrder, tidyDomain, type DomainCheck, type DomainList, type StorefrontDomain } from "../lib/domains";
+import { recordSteps, registrarOf, REGISTRARS } from "../lib/registrars";
 
 /** "Your own domain": a domain the business already owns, proven by a DNS
  * TXT record and then serving the storefront (docs/storefronts.md#your-own-domain). */
@@ -36,12 +37,14 @@ export function StorefrontDomains({ published, onChange }: { published: boolean;
           key={d.id}
           d={d}
           busy={act.busy}
-          onVerify={() =>
-            void act.run(async () => {
-              const v = await post<StorefrontDomain>(`/v1/storefront/domains/${d.id}/verify`);
-              changed(v.primary ? `${v.domain} is live. Your page's address is now https://${v.domain}.` : `${v.domain} is live.`);
-            })
-          }
+          onVerify={async () => {
+            // Check now: say which record is missing; once the proof is there, serve the domain.
+            const c = await post<DomainCheck>(`/v1/storefront/domains/${d.id}/check`);
+            if (!c.proven) return c;
+            const v = await post<StorefrontDomain>(`/v1/storefront/domains/${d.id}/verify`);
+            changed(v.primary ? `${v.domain} is live. Your page's address is now https://${v.domain}.` : `${v.domain} is live.`);
+            return c;
+          }}
           onPrimary={() =>
             void act.run(async () => {
               await post(`/v1/storefront/domains/${d.id}/primary`);
@@ -82,7 +85,23 @@ export function StorefrontDomains({ published, onChange }: { published: boolean;
   );
 }
 
-function DomainCard({ d, busy, onVerify, onPrimary, onRemove }: { d: StorefrontDomain; busy: boolean; onVerify: () => void; onPrimary: () => void; onRemove: () => void }) {
+function DomainCard({
+  d,
+  busy,
+  onVerify,
+  onPrimary,
+  onRemove,
+}: {
+  d: StorefrontDomain;
+  busy: boolean;
+  onVerify: () => Promise<DomainCheck>;
+  onPrimary: () => void;
+  onRemove: () => void;
+}) {
+  const [registrar, setRegistrar] = useState("");
+  const [check, setCheck] = useState<DomainCheck>();
+  const checking = useAction();
+  const reg = registrarOf(registrar);
   return (
     <div className="sf-domain" style={{ borderTop: "1px solid var(--border, #ddd)", paddingTop: 12, marginBottom: 12 }}>
       <div className="toolbar" style={{ marginBottom: 6 }}>
@@ -95,6 +114,51 @@ function DomainCard({ d, busy, onVerify, onPrimary, onRemove }: { d: StorefrontD
         {d.checked_at && ` Last checked ${fmtTime(d.checked_at)}.`}
       </p>
       {d.status !== "live" && (
+        <div className="sf-guide">
+          <Field label={`Where did you buy ${d.domain}?`}>
+            <select value={registrar} onChange={(e) => setRegistrar(e.target.value)}>
+              <option value="">Choose the company…</option>
+              {REGISTRARS.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {registrar && (
+            <ol>
+              {reg.open.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+              {recordsInOrder(d).map((r, i) => (
+                <li key={`${r.type}/${r.name}/${r.value}`}>
+                  {i === 0 ? "First, the record that proves the domain is yours:" : `Then the record that sends visitors to your page (${r.short ?? r.name}):`}
+                  <ul>
+                    {recordSteps(reg, r).map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                  <Copy text={r.value} label={`Copy the value for ${r.short ?? r.name}`} />
+                </li>
+              ))}
+              <li>Come back here and press Check now. It can take from a few minutes to a few hours for the records to show.</li>
+            </ol>
+          )}
+        </div>
+      )}
+      {check && d.status !== "live" && (
+        <ul className="sf-checks" role="status">
+          {check.checks.map((c) => (
+            <li key={`${c.type}/${c.name}`}>
+              {c.ok ? "✓" : "✗"} {c.says}
+            </li>
+          ))}
+        </ul>
+      )}
+      <ErrorBox error={checking.error} />
+      {d.status !== "live" && (
+        <details>
+          <summary>The records as a table</summary>
         <table>
           <thead>
             <tr>
@@ -122,6 +186,7 @@ function DomainCard({ d, busy, onVerify, onPrimary, onRemove }: { d: StorefrontD
             ))}
           </tbody>
         </table>
+        </details>
       )}
       {d.status === "live" && (
         <p className="hint">
@@ -130,8 +195,8 @@ function DomainCard({ d, busy, onVerify, onPrimary, onRemove }: { d: StorefrontD
       )}
       <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
         {d.status !== "live" && (
-          <button disabled={busy} onClick={onVerify}>
-            Check now
+          <button disabled={busy || checking.busy} onClick={() => void checking.run(async () => setCheck(await onVerify()))}>
+            {checking.busy ? "Checking…" : "Check now"}
           </button>
         )}
         {d.status === "live" && !d.primary && (
