@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -492,24 +493,35 @@ func (s *Server) shopEnsureCatalogue(ctx context.Context, c *chat, sf storefront
 	return sf, ""
 }
 
-// chatMakeTable makes a data table as the API's createTable does, under
+// chatMakeTable makes a data table for a chat: makeOwnTable, audited as
+// the chat's person on its channel.
+func (s *Server) chatMakeTable(ctx context.Context, c *chat, t *datatables.Table, names ...string) error {
+	return s.makeOwnTable(ctx, c.tenant.ID, c.p.Actor(), func(tx pgx.Tx, action, target string, detail map[string]any) error {
+		return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
+	}, t, names...)
+}
+
+// makeOwnTable makes a data table as the API's createTable does, under
 // the first of names that is free: the plan's limits, the organisation's
 // project, the record, then the table in Xenibase (the record removed if
-// that fails); audited.
-func (s *Server) chatMakeTable(ctx context.Context, c *chat, t *datatables.Table, names ...string) error {
+// that fails). Chat and the storefront editor's Make my catalogue use it
+// (no-technical-steps N7).
+func (s *Server) makeOwnTable(ctx context.Context, tenant uuid.UUID, actor string, audit func(tx pgx.Tx, action, target string, detail map[string]any) error,
+	t *datatables.Table, names ...string) error {
 	svc, err := s.tables()
 	if err != nil {
 		return err
 	}
-	lim, err := s.Store.LimitsFor(ctx, c.tenant.ID)
+	lim, err := s.Store.LimitsFor(ctx, tenant)
 	if err != nil {
 		return err
 	}
 	if err := datatables.CheckColumns(t.Columns, lim.MaxDataTableColumns); err != nil {
 		return err
 	}
+	inTx := func(fn func(pgx.Tx) error) error { return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, fn) }
 	pickName := func(tx pgx.Tx) error {
-		if err := s.checkCount(ctx, tx, c.tenant.ID, "max_data_tables"); err != nil {
+		if err := s.checkCount(ctx, tx, tenant, "max_data_tables"); err != nil {
 			return err
 		}
 		tables, err := datatables.ListTables(ctx, tx)
@@ -528,30 +540,30 @@ func (s *Server) chatMakeTable(ctx context.Context, c *chat, t *datatables.Table
 		}
 		return fmt.Errorf("%w: a table named %q already exists", datatables.ErrConflict, names[0])
 	}
-	if err := chatTx(ctx, s, c, pickName); err != nil {
+	if err := inTx(pickName); err != nil {
 		return err
 	}
-	proj, err := svc.EnsureProject(ctx, c.tenant.ID)
+	proj, err := svc.EnsureProject(ctx, tenant)
 	if err != nil {
 		return err
 	}
 	if !proj.Ready() {
 		return datatables.ErrProvisioning
 	}
-	t.CreatedBy = c.p.Actor()
-	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+	t.CreatedBy = actor
+	if err := inTx(func(tx pgx.Tx) error {
 		if err := pickName(tx); err != nil {
 			return err
 		}
-		if err := datatables.InsertTable(ctx, tx, c.tenant.ID, t); err != nil {
+		if err := datatables.InsertTable(ctx, tx, tenant, t); err != nil {
 			return err
 		}
-		return waAudit(ctx, tx, c.ch.Name(), c.p, "table.create", t.Name, map[string]any{"table_id": t.ID, "columns": columnNames(t.Columns)})
+		return audit(tx, "table.create", t.Name, map[string]any{"table_id": t.ID, "columns": columnNames(t.Columns)})
 	}); err != nil {
 		return err
 	}
-	if err := svc.Apply(ctx, c.tenant.ID, c.p.Actor(), datatables.CreateTableChange(t.Name, t.Columns)); err != nil {
-		_ = chatTx(ctx, s, c, func(tx pgx.Tx) error { return datatables.DeleteTable(ctx, tx, t.ID) })
+	if err := svc.Apply(ctx, tenant, actor, datatables.CreateTableChange(t.Name, t.Columns)); err != nil {
+		_ = inTx(func(tx pgx.Tx) error { return datatables.DeleteTable(ctx, tx, t.ID) })
 		return err
 	}
 	return nil

@@ -18,8 +18,8 @@ test("sign up, set up a template, and run it once", async ({ page }) => {
 
   // Signed in, on Get started, with nothing done yet.
   await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
-  await expect(page.getByTestId("onboarding-progress")).toHaveText("0 of 6 done");
-  await expect(page.getByRole("link", { name: /Get started \(0\/6\)/ })).toBeVisible();
+  await expect(page.getByTestId("onboarding-progress")).toHaveText("0 of 8 done");
+  await expect(page.getByRole("link", { name: /Get started \(0\/8\)/ })).toBeVisible();
 
   // The guided first workflow: the first starter needs nothing connected.
   await page.getByRole("link", { name: /Remind me every day/ }).click();

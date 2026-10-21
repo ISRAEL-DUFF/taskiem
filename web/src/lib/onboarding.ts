@@ -18,7 +18,7 @@ export interface Onboarding {
   seconds_to_first_run: number | null;
 }
 
-export type ChecklistId = "verify_email" | "connection" | "workflow" | "publish" | "first_run" | "invite";
+export type ChecklistId = "verify_email" | "chat" | "page" | "connection" | "workflow" | "publish" | "first_run" | "invite";
 
 /** Each checklist step: what it says, and where it is done. */
 export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href: string; action: string }> = {
@@ -27,6 +27,18 @@ export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href:
     text: "Open the link we emailed you. Until then you can build and run, but not invite people or make API keys.",
     href: "/start",
     action: "Send the link again",
+  },
+  chat: {
+    title: "Link WhatsApp or Telegram",
+    text: "Get orders, approvals and messages from Taskiem in the chat you already use, and run things by sending a message.",
+    href: "/account",
+    action: "Link it",
+  },
+  page: {
+    title: "Make your page",
+    text: "A page for your business with what you sell, your hours and a way to order or book, shared as a link or a QR code.",
+    href: "/storefront",
+    action: "Make your page",
   },
   connection: {
     title: "Connect an app",

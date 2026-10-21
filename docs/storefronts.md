@@ -20,7 +20,7 @@ Pages are rendered on the server and work without JavaScript. They send no cooki
 1. **Draft.** The owner edits the card, picks a template and accent, and chooses a **slug**: 3 to 30 letters, digits and hyphens, the page's address `<slug>.<preview domain>`.
    - Reserved words and protected names (banks, payment providers, agencies, Taskiem, and look-alikes of them) are refused ([public host](public-host.md#building-blocks-for-the-next-milestones)).
    - Saving a draft changes nothing anyone sees.
-2. **Catalogue.** The owner picks a data table and maps its columns:
+2. **Catalogue.** **Make my catalogue** (and **Make my services** for bookings; `POST /v1/storefront/catalogue/make`) makes the table and its mapping as chat does, and the owner then adds items in the editor with a name and a price in naira, and a photo, removing them there too: nobody opens the Tables page. A business that brings its own table picks it under **Use a table you already have** and maps its columns:
 
    | Mapping | Column type |
    | --- | --- |

@@ -4,7 +4,7 @@
 
 import type { Order } from "./orders";
 import type { ColumnType, Table } from "./tables";
-import { DAYS, MAX_OPENINGS, columnsFor, formatPrice, type Columns, type Hours, type Item, type Span } from "./storefront";
+import { itemRow, DAYS, MAX_OPENINGS, columnsFor, formatPrice, type Columns, type Hours, type Item, type Span } from "./storefront";
 
 // --- the services table ---
 
@@ -363,4 +363,18 @@ export function moveProblem(day: string, time: string): string | null {
   if (!DATE.test(day)) return "Choose the new date.";
   if (!HHMM.test(time)) return "Choose the new time.";
   return null;
+}
+
+/** A services table row from what the owner types (no-technical-steps
+ * N7): the name, minutes it takes and a price in naira, in the table's
+ * own columns. */
+export function serviceRow(columns: ServiceColumns, name: string, minutes: string, price: string): { row: Record<string, unknown> } | { error: string } {
+  const base = itemRow(columns, name, price);
+  if ("error" in base) return base;
+  const m = Number(minutes.trim());
+  if (!Number.isInteger(m) || m < 5 || m > 480) return { error: "Say how long it takes in minutes, from 5 to 480." };
+  if (!columns.duration) return { error: "The services have no duration column." };
+  // A services table keeps no "available" flag the editor sets.
+  const row = Object.fromEntries(Object.entries({ ...base.row, [columns.duration]: m }).filter(([k]) => k !== columns.available));
+  return { row };
 }

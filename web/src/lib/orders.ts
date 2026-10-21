@@ -351,3 +351,12 @@ export function telLink(phone: string | undefined): string | null {
   const t = phone.replace(/[^\d+]/g, "");
   return t ? `tel:${t}` : null;
 }
+
+/** What the storefront's Paystack connection means for customers' payments. */
+export function paystackLine(c: { status: string; mode?: string | null } | undefined): string {
+  if (!c) return "Connect Paystack so customers can pay.";
+  if (c.status !== "active") return `Your Paystack connection is ${c.status}: connect it again, or customers cannot pay.`;
+  if (c.mode === "test") return "This is a test key: payments are practice, not real money. Connect your live key before customers pay.";
+  if (c.mode === "live") return "Live: customers pay real money into this Paystack account.";
+  return "Customers pay into this Paystack account.";
+}

@@ -489,6 +489,46 @@ paths:
                 $ref: '#/components/schemas/StorefrontCatalogue'
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/catalogue/make:
+    post:
+      operationId: makeStorefrontTable
+      tags:
+      - Storefront
+      summary: Make the catalogue's or the services' table
+      description: Makes the products (or services) data table and maps it, as chat does, so nobody builds a table and maps its columns by hand. Needs `table.edit` too. A storefront that already has one is answered with it (`made` false); one with no page yet is 409.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind:
+                  type: string
+                  enum: [products, services]
+      responses:
+        '200':
+          description: It already had one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontTableMade'
+        '201':
+          description: Made and mapped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontTableMade'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/catalogue/refresh:
     post:
       operationId: refreshStorefrontCatalogue
@@ -12593,6 +12633,18 @@ components:
         created_at:
           type: string
           format: date-time
+    StorefrontTableMade:
+      type: object
+      required: [kind, table_id, made]
+      properties:
+        kind:
+          type: string
+        table_id:
+          type: string
+          format: uuid
+        made:
+          type: boolean
+      additionalProperties: false
     Readiness:
       type: object
       required: [ready, needs]

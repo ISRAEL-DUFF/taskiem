@@ -257,7 +257,7 @@ func TestOnboardingToFirstRun(t *testing.T) {
 		}
 		return got
 	}
-	if got := items(); len(got) != 6 || got["verify_email"] || got["first_run"] {
+	if got := items(); len(got) != 8 || got["verify_email"] || got["first_run"] || got["page"] || got["chat"] {
 		t.Fatalf("items: %v", got)
 	}
 

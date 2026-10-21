@@ -19,7 +19,8 @@ import {
   type FormKind,
   type StorefrontAction,
 } from "../lib/orders";
-import { ConnectionPicker } from "../forms/ConnectionPicker";
+import { ConnectionPicker, pickable, type ConnectionName } from "../forms/ConnectionPicker";
+import { paystackLine } from "../lib/orders";
 
 /** The storefront's forms (order, question, call-back, booking): each needs
  * a workflow in prod before it can be switched on; a booking also needs the
@@ -203,7 +204,7 @@ function PaymentOptions({ kind, form, set }: { kind: FormKind; form: ActionForm;
         <p className="hint">Taking payment {kind === "booking" ? "when booking" : "when ordering"} needs a business verified by Taskiem (see Trust above) and a plan that includes it.</p>
       )}
       {form.payment !== "none" && (
-        <Field label="Paystack" hint="Customers pay into this Paystack account.">
+        <Field label="Paystack" hint={<PaystackState name={form.connection || "main"} />}>
           <ConnectionPicker label="Paystack" connector="paystack" value={form.connection || "main"} onChange={(connection) => set({ connection })} />
         </Field>
       )}
@@ -260,4 +261,12 @@ function OrderOptions({ form, set }: { form: ActionForm; set: (p: Partial<Action
       )}
     </>
   );
+}
+
+/** Whether customers' payments are real: the chosen Paystack connection's state (N7). */
+function PaystackState({ name }: { name: string }) {
+  const names = useLoad(() => get<{ connections: ConnectionName[] }>("/v1/connection-names?connector=paystack"), [name]);
+  const c = pickable(names.data?.connections ?? [], "paystack").find((x) => x.name === name);
+  if (!names.data) return null;
+  return <span className={c && c.status === "active" ? undefined : "error-text"}>{paystackLine(c)}</span>;
 }

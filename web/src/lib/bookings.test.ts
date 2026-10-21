@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  serviceRow,
   addDays,
   availabilityErrors,
   availabilityFromForm,
@@ -266,5 +267,15 @@ describe("the bookings list", () => {
     expect(moveProblem("", "10:00")).toMatch(/date/);
     expect(moveProblem("2026-10-24", "")).toMatch(/time/);
     expect(moveProblem("2026-10-24", "10:00")).toBeNull();
+  });
+});
+
+describe("services typed in the editor", () => {
+  const cols = { name: "name", price: "price", price_unit: "naira" as const, duration: "duration_minutes" };
+  it("makes the row", () => {
+    expect(serviceRow(cols, "Haircut", "30", "2,000")).toEqual({ row: { name: "Haircut", price: 2000, duration_minutes: 30 } });
+  });
+  it("says what is wrong", () => {
+    expect(serviceRow(cols, "Haircut", "a while", "")).toEqual({ error: "Say how long it takes in minutes, from 5 to 480." });
   });
 });
