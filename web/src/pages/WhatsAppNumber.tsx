@@ -40,6 +40,7 @@ export function WhatsAppNumber() {
       </p>
       <ErrorBox error={act.error} />
       {notice && <p className="hint">{notice}</p>}
+      {!v.connected && <OwnNumberGuide />}
       {v.connected ? (
         <>
           <p>
@@ -149,5 +150,25 @@ function PublicMenu({ view, onSaved }: { view: NumberView; onSaved: () => void }
         </button>
       </div>
     </div>
+  );
+}
+
+/** How to get the details below from Meta, step by step (no-technical-steps N9). */
+function OwnNumberGuide() {
+  return (
+    <details className="help">
+      <summary>How to use your own WhatsApp number</summary>
+      <p className="hint">Most businesses never need this: the shared number works from the start. Use your own number when customers should see your name as the sender. It takes about half an hour and a phone number not already on the WhatsApp app.</p>
+      <ol>
+        <li>Open business.facebook.com and sign in with the Facebook account that runs your business page. Create a business portfolio if it asks.</li>
+        <li>Go to developers.facebook.com, choose My Apps, then Create App. Choose Business as the type and pick your business portfolio.</li>
+        <li>In the app, add the WhatsApp product. Under WhatsApp, open API Setup, choose Add phone number, and follow the steps: your business name, the number, and the code Meta texts or calls it with.</li>
+        <li>On the same API Setup page, copy the Phone number ID and the WhatsApp Business Account ID into the boxes below.</li>
+        <li>In business.facebook.com, open Settings, then Users, then System users. Add a system user with the Admin role, choose Generate new token, pick your app, tick whatsapp_business_messaging and whatsapp_business_management, and choose Never for when it expires. Copy the token into the box below.</li>
+        <li>In the app's Settings, then Basic, copy the App secret into the box below (Show reveals it). Type any long word you like as the Verify token.</li>
+        <li>Press Connect. Taskiem then shows the two addresses to paste back into the app, under WhatsApp, then Configuration.</li>
+        <li>Meta reviews your business name before messages show it; until then they come from the number alone.</li>
+      </ol>
+    </details>
   );
 }

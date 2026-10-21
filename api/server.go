@@ -375,11 +375,13 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/domains", s.listStorefrontDomains)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains", s.addStorefrontDomain)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains/{id}/verify", s.verifyStorefrontDomain)
+			r.With(s.need(PermStorefrontManage)).Post("/storefront/domains/{id}/check", s.checkStorefrontDomain)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains/{id}/primary", s.primaryStorefrontDomain)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/domains/{id}", s.removeStorefrontDomain)
 			r.With(s.need(PermStorefrontManage)).Get("/embed-sites", s.listEmbedSites)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites", s.addEmbedSite)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/embed-sites/{id}/verify", s.verifyEmbedSite)
+			r.With(s.need(PermStorefrontManage)).Post("/embed-sites/{id}/send-to-designer", s.sendToDesigner) // web_designer.go
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/embed-sites/{id}", s.removeEmbedSite)
 			r.With(s.need(PermAlertManage)).Get("/alerts/channels", s.listAlertChannels)
 			r.With(s.need(PermAlertManage)).Post("/alerts/channels", s.createAlertChannel)

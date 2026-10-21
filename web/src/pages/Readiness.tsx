@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { get, post, put, type ConnectorInfo } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
 import { fixFor, needsToShow, stepsText, variableValue, words, type ReadyNeed } from "../lib/readiness";
 import { ErrorBox, useAction, useLoad } from "../ui";
 import { NewConnection, startLink } from "./Connections";
@@ -13,7 +13,8 @@ import { NewConnection, startLink } from "./Connections";
  * tablesHere: the caller makes tables itself (the AI review).
  */
 export function NeedsList({ needs, onChanged, tablesHere = false }: { needs: ReadyNeed[]; onChanged: () => void; tablesHere?: boolean }) {
-  const shown = needsToShow(needs).filter((n) => !(tablesHere && n.kind === "table"));
+  const advanced = useAdvanced();
+  const shown = needsToShow(needs, advanced).filter((n) => !(tablesHere && n.kind === "table"));
   if (shown.length === 0) return null;
   const blocking = shown.some((n) => n.blocking);
   return (

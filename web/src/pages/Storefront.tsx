@@ -9,6 +9,7 @@ import { StorefrontForms } from "./StorefrontForms";
 import { PageStatusBadge, RefusalBox, TrustNotices, TrustPanel } from "./StorefrontTrust";
 import { publishNotice, type Trust } from "../lib/trust";
 import { StorefrontDomains } from "./StorefrontDomains";
+import { StorefrontEmbedSites } from "./StorefrontEmbedSites";
 import type { Table } from "../lib/tables";
 import {
   DAYS,
@@ -383,6 +384,8 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
           onChange={() => void get<SF>("/v1/storefront").then(setSaved, () => undefined)}
         />
       )}
+
+      {saved && live && pageURL(saved) && !currentAgentSession() && <StorefrontEmbedSites pageURL={pageURL(saved)} business={saved.draft.name} />}
 
       {closing && (
         <CloseDialog

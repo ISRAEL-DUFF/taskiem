@@ -9,3 +9,6 @@ Plain how-tos for running your business on Taskiem: no code and no technical ste
 - [Your tables](tables.md): keeping records in Taskiem instead of a spreadsheet.
 - [Changing a workflow](changing-a-workflow.md): when it runs, values from earlier steps, and "run only when".
 - [Settings](settings.md): the settings your workflows read, and the Advanced switch.
+- [Your own domain](own-domain.md): your page on a domain you own, step by step for your registrar.
+- [On your website](your-website.md): your page on a website you already have, and sending the details to your web designer.
+- [Your own WhatsApp number](own-whatsapp-number.md): messages from your own number instead of the shared one.

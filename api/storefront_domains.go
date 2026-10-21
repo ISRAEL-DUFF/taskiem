@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -216,4 +217,38 @@ func (s *Server) removeStorefrontDomain(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// checkStorefrontDomain answers POST /v1/storefront/domains/{id}/check
+// (no-technical-steps N9): each record the owner was asked to create, what
+// DNS has for it now and, in plain words, what to fix. It changes
+// nothing; verify serves the domain once the proof is there.
+func (s *Server) checkStorefrontDomain(w http.ResponseWriter, r *http.Request) {
+	id, err := domainID(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var d storefront.Domain
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		d, err = storefront.GetDomain(r.Context(), tx, principalFrom(r.Context()).TenantID, id)
+		return domainErr(err)
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	checks := storefront.CheckRecords(r.Context(), d, s.domainTarget(), storefront.Resolver{
+		TXT:   func(ctx context.Context, n string) ([]string, error) { return LookupTXT(ctx, n) },
+		CNAME: func(ctx context.Context, n string) (string, error) { return LookupCNAME(ctx, n) },
+		Host:  func(ctx context.Context, n string) ([]string, error) { return LookupHost(ctx, n) },
+	})
+	all, proof := true, false
+	for _, c := range checks {
+		all = all && c.OK
+		if c.Purpose == "proof" {
+			proof = c.OK
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"checks": checks, "all_ok": all, "proven": proof})
 }

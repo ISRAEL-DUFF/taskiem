@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/net/publicsuffix"
 
+	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/embedsites"
 )
@@ -110,11 +111,34 @@ type Record struct {
 	// as long as it is used) or "point" (sends visitors to the page).
 	Purpose string `json:"purpose"`
 	Note    string `json:"note,omitempty"`
+	// Short is the name as registrars ask for it: relative to the
+	// registered domain, "@" for the domain itself (no-technical-steps N9).
+	Short string `json:"short"`
 }
 
 // Records are what the owner creates for the domain: the proof, and the
 // records that point each of its hosts at the public host.
 func (d Domain) Records(t DomainTarget) []Record {
+	out := d.records(t)
+	for i := range out {
+		out[i].Short = shortName(out[i].Name)
+	}
+	return out
+}
+
+// shortName is a record's name relative to its registered domain.
+func shortName(name string) string {
+	reg, err := publicsuffix.EffectiveTLDPlusOne(strings.TrimPrefix(name, "_taskiem-verify."))
+	if err != nil || reg == "" {
+		return name
+	}
+	if name == reg {
+		return "@"
+	}
+	return strings.TrimSuffix(name, "."+reg)
+}
+
+func (d Domain) records(t DomainTarget) []Record {
 	out := []Record{{Type: "TXT", Name: "_taskiem-verify." + d.ProofHost(), Value: d.Token, Purpose: "proof"}}
 	for _, h := range d.Hosts() {
 		if apex(h) {
@@ -324,8 +348,11 @@ type DomainChecker struct {
 	Grace    time.Duration
 	// Interval is how often the checker looks for due domains (10m).
 	Interval time.Duration
-	Logger   *slog.Logger
-	Now      func() time.Time
+	// PublicURL is the web app's address, for the link in the owner's
+	// alert.
+	PublicURL string
+	Logger    *slog.Logger
+	Now       func() time.Time
 }
 
 func (c *DomainChecker) settings() (time.Duration, int, time.Duration) {
@@ -450,8 +477,17 @@ func (c *DomainChecker) Check(ctx context.Context, tenant uuid.UUID) error {
 			}
 			c.log().Warn("storefront domain unverified", "tenant", tenant, "domain", d.Host, "failures", n, "reason", reason)
 			detail, _ := json.Marshal(map[string]any{"failures": n, "failing_since": since.UTC(), "reason": reason})
-			_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'storefront-domain-checker', 'storefront_domain.unverified', $2, $3)`,
-				tenant, d.Host, detail)
+			if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'storefront-domain-checker', 'storefront_domain.unverified', $2, $3)`,
+				tenant, d.Host, detail); err != nil {
+				return err
+			}
+			// The owner hears of it in chat, with what to check
+			// (no-technical-steps N9).
+			_, err = alerts.TellOwners(ctx, tx, tenant, alerts.Alert{Kind: alerts.DomainUnverified, Dedup: d.Host + ":" + now.UTC().Format(time.RFC3339),
+				Title: "Your page stopped showing on " + d.Host,
+				Body: "Taskiem could not find the TXT record _taskiem-verify." + d.ProofHost() + " for over a day, so " + d.Host +
+					" no longer shows your page. Check the record is still there at the company you bought the domain from, then press Check now on your page's settings. Your page still works at its Taskiem address.",
+				Link: link(c.PublicURL, "/storefront"), Detail: map[string]any{"domain": d.Host}})
 			return err
 		})
 		if err != nil {
@@ -470,4 +506,12 @@ func clipErr(err error) string {
 		s = s[:300]
 	}
 	return s
+}
+
+// link is a web app path as a full address, or "" without one.
+func link(publicURL, path string) string {
+	if publicURL == "" {
+		return ""
+	}
+	return strings.TrimRight(publicURL, "/") + path
 }

@@ -30,6 +30,8 @@ Under **Alerts** (`alert.manage`), a tenant chooses where alerts go (channels) a
 | A fix is proposed for a failed run (`repair_proposed`, [AI repair](ai.md#repairing-failed-runs)), or a person must act on one | — | proposal; masked: workflow, environment, class and a link, never the explanation or diff |
 | Your own encryption key is unavailable, or works again (`key_health`, [BYOK](byok.md#when-the-key-is-unavailable)) | — | outage and recovery. Use an email or WhatsApp channel: Slack and webhook channels need their own secret, which is unreadable while the key is |
 
+Some alerts need no rule. **`domain_unverified`**: the business's own domain, or a website that embeds its page, stopped proving it is theirs and is no longer served ([storefronts](storefronts.md#your-own-domain), [embed sites](embed-sites.md)). It goes to every enabled channel and to each owner on the chat they linked (WhatsApp, else Telegram), saying which record or file to check.
+
 Run, approval and repair rules can be limited to one environment or workflow. A rule watches from when it was created (or switched back on), so it does not replay history. Thresholds are durations such as `30m`, `4h` or `72h`.
 
 ## Emailed audit anchors

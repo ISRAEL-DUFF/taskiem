@@ -840,6 +840,46 @@ paths:
                 $ref: '#/components/schemas/StorefrontDomain'
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/domains/{id}/check:
+    post:
+      operationId: checkStorefrontDomain
+      tags:
+      - Storefront
+      summary: Check now
+      description: Looks up each record the owner was asked to create and says, in plain words, which is missing or wrong. Changes nothing; verify serves the domain once the proof is there.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The domain's id
+      responses:
+        '200':
+          description: Each record and what DNS has for it
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checks, all_ok, proven]
+                properties:
+                  checks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StorefrontDomainRecordCheck'
+                  all_ok:
+                    type: boolean
+                  proven:
+                    type: boolean
+                    description: Whether the proof (the TXT record) is there, so verify will succeed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/domains/{id}/verify:
     post:
       operationId: verifyStorefrontDomain
@@ -1867,6 +1907,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EmbedSite'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/embed-sites/{id}/send-to-designer:
+    post:
+      operationId: sendEmbedSiteToDesigner
+      tags:
+      - Embed sites
+      summary: Send to my web designer
+      description: Emails whoever looks after the website the code that shows the business's page there and how to prove the website is the business's. 409 when this Taskiem sends no email or the page is not published. Audited with the recipient's domain only.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The site's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent, to]
+                properties:
+                  sent:
+                    type: boolean
+                  to:
+                    type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/embed-sites/{id}/verify:
@@ -15000,6 +15085,25 @@ components:
           description: proof proves the domain and must be kept; point sends visitors to the page
         note:
           type: string
+        short:
+          type: string
+          description: The name as registrars ask for it, relative to the registered domain; @ for the domain itself
+    StorefrontDomainRecordCheck:
+      allOf:
+      - $ref: '#/components/schemas/StorefrontDomainRecord'
+      - type: object
+        required: [ok, found, says]
+        properties:
+          ok:
+            type: boolean
+          found:
+            type: array
+            items:
+              type: string
+            description: What DNS answers for the name now
+          says:
+            type: string
+            description: The record's state in plain words, with what to fix
     StorefrontDomainTarget:
       type: object
       properties:
@@ -15486,7 +15590,7 @@ components:
           format: date-time
         prove:
           type: object
-          description: 'What to publish: record_type, record_name and record_value for dns; file_url and file_contents for file'
+          description: 'What to publish: record_type, record_name (and record_short, as registrars ask for it) and record_value for dns; file_url and file_contents for file'
           additionalProperties:
             type: string
     EmbedSiteList:
