@@ -38,6 +38,36 @@ actions:
             properties:
               currency: { type: string }
               balance: { type: integer, description: Minor units }
+  list_transactions:
+    title: List successful payments
+    description: Payments received since a time, newest first (Paystack's GET /transaction). Taskiem uses it to notice payments without a webhook set up in Paystack.
+    class: read
+    input:
+      type: object
+      required: [from]
+      properties:
+        from: { type: string, format: date-time, description: Since when }
+    output:
+      type: object
+      properties:
+        data: { type: array, items: { type: object }, description: "Paystack transaction objects, as its charge.success webhook carries them" }
+    pii:
+      - { field: output.data, category: other }
+  list_transfers:
+    title: List transfers
+    description: Transfers made since a time (Paystack's GET /transfer). Taskiem uses it to notice transfer results without a webhook set up in Paystack.
+    class: read
+    input:
+      type: object
+      required: [from]
+      properties:
+        from: { type: string, format: date-time, description: Since when }
+    output:
+      type: object
+      properties:
+        data: { type: array, items: { type: object }, description: "Paystack transfer objects, as its transfer webhooks carry them" }
+    pii:
+      - { field: output.data, category: other }
   transfer:
     title: Send transfer
     class: idempotent_write
@@ -161,6 +191,10 @@ triggers:
     event_type: =body.event
     dedup: =body.data.reference + ':' + body.event
     correlation: =body.data.reference
+    # Without the webhook in Paystack's dashboard, Taskiem asks Paystack
+    # itself every few minutes (no-technical-steps N4); with it, events
+    # arrive at once, and each is taken once either way.
+    poll: { action: list_transfers, since: from, items: =output.data, event: "='transfer.' + item.status", every: 5m }
   charge_event:
     type: webhook
     verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
@@ -168,3 +202,4 @@ triggers:
     event_type: =body.event
     dedup: =body.data.reference + ':' + body.event
     correlation: =body.data.reference
+    poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", every: 5m }

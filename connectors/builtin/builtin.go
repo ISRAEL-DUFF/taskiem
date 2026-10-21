@@ -19,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/mpesa"
 	"github.com/israel-duff/taskiem/connectors/mtnmomo"
 	"github.com/israel-duff/taskiem/connectors/mysql"
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/connectors/opay"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
@@ -58,6 +59,9 @@ type Options struct {
 	// Forms binds the forms platform connector (docs/forms.md); nil: its
 	// actions fail plainly.
 	Forms form.Ops
+	// Notify delivers Tell me messages (notify@1) to the business's own
+	// people; nil: they fail plainly.
+	Notify notify.Teller
 }
 
 // Register adds every built-in connector to r.
@@ -93,6 +97,7 @@ func Register(r *connector.Registry, o Options) error {
 		sftp.New(),
 		storefront.New(o.Storefront),
 		form.New(o.Forms),
+		notify.New(o.Notify),
 	} {
 		if err := r.Register(c); err != nil {
 			return err

@@ -93,7 +93,10 @@ function TemplatePicker() {
           <Link key={t.id} className="card template-card" to={`/start/guide?template=${t.id}`}>
             <strong>{t.title}</strong>
             <span>{t.summary}</span>
-            <span className="hint">{t.connectors.map((c) => c.split("@")[0]).join(" · ")}</span>
+            <span className="hint">
+              {t.connectors.map((c) => c.split("@")[0]).join(" · ")}
+              {t.needs_developer && " · needs a developer"}
+            </span>
           </Link>
         ))}
       </div>

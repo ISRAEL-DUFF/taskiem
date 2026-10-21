@@ -25,8 +25,16 @@ describe("getting started", () => {
   });
 
   it("puts the starter templates first and hides unavailable ones", () => {
-    const list = [tpl("kyc-bvn-check", ["dojah@1", "termii@1", "gmail@1"]), tpl("zeta", ["termii@1"], false), tpl("payroll-reminder", ["termii@1", "gmail@1"]), tpl("new-order-alert-sms", ["termii@1"]), tpl("alpha", ["termii@1"])];
-    expect(starterTemplates(list).map((t) => t.id)).toEqual(["new-order-alert-sms", "payroll-reminder", "alpha", "kyc-bvn-check"]);
+    const list = [
+      tpl("kyc-bvn-check", ["dojah@1", "notify@1", "gmail@1"]),
+      tpl("zeta", ["notify@1"], false),
+      tpl("payroll-reminder", ["notify@1", "gmail@1"]),
+      { ...tpl("new-order-alert-sms", ["notify@1"]), needs_developer: true },
+      tpl("alpha", ["notify@1"]),
+      tpl("daily-reminder", ["notify@1"]),
+    ];
+    // Nothing to connect first; a developer's template last.
+    expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder", "payroll-reminder", "alpha", "kyc-bvn-check", "new-order-alert-sms"]);
   });
 
   it("formats durations", () => {

@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/israel-duff/taskiem/api"
-	"github.com/israel-duff/taskiem/connectors/termii"
+	"github.com/israel-duff/taskiem/connectors/notify"
 )
 
 // drop forgets the emails containing text.
@@ -237,19 +236,10 @@ func TestResendVerification(t *testing.T) {
 // publish, a run; the checklist follows, and the time to the first
 // successful run is stamped once.
 func TestOnboardingToFirstRun(t *testing.T) {
-	var mu sync.Mutex
-	var texts []string
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		mu.Lock()
-		texts = append(texts, string(raw))
-		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"message_id":"m1","message":"Successfully Sent","balance":99}`)
-	}))
-	t.Cleanup(fake.Close)
+	// The first template tells the owner (notify@1): nothing to connect.
+	told := &recordTeller{}
 	w := newWorld(t)
-	if err := w.env.Registry.Register(termii.New(termii.Options{BaseURL: fake.URL})); err != nil {
+	if err := w.env.Registry.Register(notify.New(told)); err != nil {
 		t.Fatal(err)
 	}
 	out := (&client{t: t, base: w.base}).must(201, "POST", "/v1/signup", signupBody("Ada Stores", "ada@stores.test"))
@@ -271,14 +261,12 @@ func TestOnboardingToFirstRun(t *testing.T) {
 		t.Fatalf("items: %v", got)
 	}
 
-	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "termii@1", "environment": "prod", "name": "main", "credentials": map[string]string{"api_key": "TL-test"}})
-	owner.must(204, "PUT", "/v1/variables/prod/owner_phone", map[string]any{"value": "2348012345678"})
 	inst := owner.must(201, "POST", "/v1/templates/new-order-alert-sms/instantiate", map[string]any{"params": map[string]any{}})
 	if probs := inst["problems"].([]any); len(probs) > 0 {
 		t.Fatalf("template problems: %v", probs)
 	}
 	wf := inst["id"].(string)
-	if got := items(); !got["connection"] || !got["workflow"] || got["publish"] {
+	if got := items(); got["connection"] || !got["workflow"] || got["publish"] {
 		t.Fatalf("after the draft: %v", got)
 	}
 	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
@@ -287,16 +275,15 @@ func TestOnboardingToFirstRun(t *testing.T) {
 	if st := owner.must(200, "GET", "/v1/runs/"+run["run_id"].(string), nil)["run"].(map[string]any)["status"]; st != "completed" {
 		t.Fatalf("run status %v", st)
 	}
-	mu.Lock()
-	if len(texts) != 1 || !strings.Contains(texts[0], "New order A-1001 from Chidi") || !strings.Contains(texts[0], "2348012345678") {
-		t.Errorf("texts: %v", texts)
+	if got := told.all(); len(got) != 1 || !strings.Contains(got[0].Text, "New order A-1001 from Chidi") || got[0].To != "owner" {
+		t.Errorf("told: %+v", got)
 	}
-	mu.Unlock()
 	ob = owner.must(200, "GET", "/v1/onboarding", nil)
 	if ob["first_run_at"] == nil || ob["seconds_to_first_run"] == nil || ob["seconds_to_first_run"].(float64) < 0 {
 		t.Fatalf("first run not stamped: %v", ob)
 	}
-	if got := items(); !got["publish"] || !got["first_run"] || got["invite"] {
+	// Published with everything it needs, it counts as connected.
+	if got := items(); !got["connection"] || !got["publish"] || !got["first_run"] || got["invite"] {
 		t.Errorf("after the run: %v", got)
 	}
 	// Stamped once: a second run leaves it.
@@ -353,4 +340,25 @@ func TestOnboardingOtherTenants(t *testing.T) {
 	if ob := a.must(200, "GET", "/v1/onboarding", nil); ob["seconds_to_first_run"] == nil {
 		t.Errorf("Alpha: %v", ob)
 	}
+}
+
+// recordTeller records Tell me messages instead of sending them.
+type recordTeller struct {
+	mu   sync.Mutex
+	msgs []notify.Message
+}
+
+func (r *recordTeller) Tell(_ context.Context, m notify.Message) (notify.Result, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.msgs = append(r.msgs, m)
+	return notify.Result{People: 1, Chat: 1}, nil
+}
+
+func (r *recordTeller) Text(context.Context, notify.Text) (bool, error) { return false, nil }
+
+func (r *recordTeller) all() []notify.Message {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]notify.Message(nil), r.msgs...)
 }

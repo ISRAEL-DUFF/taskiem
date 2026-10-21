@@ -17197,6 +17197,9 @@ components:
         available:
           type: boolean
           description: Whether every connector it uses is available here.
+        needs_developer:
+          type: boolean
+          description: It starts from a web address another system calls (a webhook), which takes someone technical to set up.
         definition:
           description: The template's definition, with placeholders (one template only).
       additionalProperties: false
@@ -17304,6 +17307,12 @@ components:
           description: Where to send events, relative to the edge host (`/hooks/{tenant}/…?env=`).
         remote:
           $ref: '#/components/schemas/RemoteSubscription'
+        polled:
+          type: boolean
+          description: Taskiem also asks the provider for these events every few minutes (in prod), so setting the address up in its dashboard is optional.
+        service:
+          type: string
+          description: The connector's name, for a connector event.
       additionalProperties: false
     TriggerList:
       type: object

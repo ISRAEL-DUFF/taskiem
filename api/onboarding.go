@@ -466,6 +466,9 @@ func (s *Server) getOnboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	run = run || firstRunAt != nil
+	// A published workflow has what it needs (publishing checks it), so a
+	// first workflow that needs nothing connected counts as connected.
+	conn = conn || published
 	var items []checklistItem
 	if hasPerson {
 		items = append(items, checklistItem{"verify_email", verified})

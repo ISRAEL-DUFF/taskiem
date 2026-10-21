@@ -35,6 +35,8 @@ export interface Template {
   params: TemplateParam[];
   steps: TemplateLine[];
   available: boolean;
+  /** It starts from a web address another system calls: someone technical sets it up. */
+  needs_developer?: boolean;
 }
 
 export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];

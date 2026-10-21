@@ -324,6 +324,18 @@ func (m *Manifest) check() []string {
 	}
 	sort.Strings(tnames)
 	for _, name := range tnames {
+		// A polled trigger lists with a read action, and its deliveries are
+		// signed the way the provider signs them.
+		if pl := m.Triggers[name].Poll; pl != nil {
+			if a, ok := m.Actions[pl.Action]; !ok {
+				add("/triggers/%s/poll/action: unknown action %q", name, pl.Action)
+			} else if a.Class.IsWrite() {
+				add("/triggers/%s/poll/action: %q must be a read action", name, pl.Action)
+			}
+			if v := m.Triggers[name].Verify; v == nil || (v.Scheme != "hmac_sha256" && v.Scheme != "hmac_sha512") {
+				add("/triggers/%s/poll: only a trigger verified by plain HMAC can be polled", name)
+			}
+		}
 		// An ack is served from the hooks origin: never as a page.
 		if a := m.Triggers[name].Ack; a != nil && a.ContentType != "" {
 			if mt, _, err := mime.ParseMediaType(a.ContentType); err != nil || (mt != "text/plain" && mt != "application/json") {

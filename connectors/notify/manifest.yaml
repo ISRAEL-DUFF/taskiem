@@ -1,0 +1,68 @@
+# Tell me (no-technical-steps N2/N4, decision N0-4): a message to the
+# business's own people on the WhatsApp or Telegram they linked to
+# Taskiem, and by email when they linked neither. It needs no connection
+# and no account elsewhere; it acts for the run's tenant only, and only
+# ever reaches the business's own members.
+manifest: connector/v1
+id: notify
+version: 1.0.0
+name: Tell me
+description: Tells the business's owner, the people with a role, or named members, on WhatsApp or Telegram, or by email.
+category: messaging
+regions: [NG]
+auth:
+  type: none
+actions:
+  tell:
+    title: Tell the owner or the team
+    description: A message to the business's own people on the WhatsApp or Telegram they linked to Taskiem; anyone who linked neither gets it by email. Use it for messages to the business, not its customers.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [message]
+      properties:
+        to:      { type: string, enum: [owner, role, members], description: "Who hears it: the owners (the default), the members with a role, or named members" }
+        role:    { type: string, description: "With to: role, the role" }
+        members: { type: array, items: { type: string }, description: "With to: members, their sign-in emails" }
+        message: { type: string, minLength: 1, maxLength: 1500, description: The message, in plain words }
+        title:   { type: string, maxLength: 120, description: "A first line, and an email's subject" }
+    output:
+      type: object
+      properties:
+        people:  { type: integer, description: How many people it went to }
+        chat:    { type: integer, description: How many on WhatsApp or Telegram }
+        email:   { type: integer, description: How many by email }
+        nobody:  { type: boolean, description: Nobody could be reached (no such members) }
+    pii:
+      - { field: input.message, category: other }
+      - { field: input.title, category: other }
+  text:
+    title: Text a customer
+    description: An SMS to a customer's phone from the business's name, through Taskiem's own SMS, counted in the plan's monthly texts (sms_monthly). For messages to the business's own people, use tell.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [to, message]
+      properties:
+        to:      { type: string, description: "The phone number, in any form (0803 123 4567, +234…)" }
+        message: { type: string, minLength: 1, maxLength: 459, description: "The text; it starts with the business's name and is at most three SMS parts" }
+    output:
+      type: object
+      properties:
+        queued:         { type: boolean }
+        over_allowance: { type: boolean, description: "This month's texts are used up: it was not sent" }
+    pii:
+      - { field: input.to, category: phone }
+      - { field: input.message, category: other }

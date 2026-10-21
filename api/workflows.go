@@ -632,6 +632,11 @@ type triggerInfo struct {
 	// remotely registered trigger (decision 0021); its URL is Taskiem's to
 	// manage.
 	Remote *remote.Status `json:"remote,omitempty"`
+	// Polled: Taskiem also asks the provider every few minutes (in prod),
+	// so setting the address up in its dashboard is optional (N4).
+	Polled bool `json:"polled,omitempty"`
+	// Service is the connector's name (Paystack), for a connector event.
+	Service string `json:"service,omitempty"`
 }
 
 // listTriggers shows where a published workflow listens: webhook and
@@ -666,6 +671,7 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	reg, _ := s.Registry.For(r.Context(), p.TenantID.String())
 	for i, t := range out {
 		for j, sub := range subs {
 			if sub.Desired == "present" && sub.Environment == t.Environment && t.Connector != nil && sub.Connector == *t.Connector {
@@ -678,6 +684,14 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 			out[i].URL = base + *t.Path + "?env=" + t.Environment
 		case t.Connector != nil:
 			out[i].URL = base + "/connectors/" + *t.Connector + "/" + *t.Trigger + "?env=" + t.Environment
+			if reg != nil {
+				if c, ok := reg.Get(*t.Connector); ok {
+					out[i].Service = c.Manifest.Name
+					if spec, ok := c.Manifest.Triggers[*t.Trigger]; ok && spec.Poll != nil && t.Environment == "prod" {
+						out[i].Polled = true
+					}
+				}
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"triggers": nonNil(out), "remote_subscriptions": subs})

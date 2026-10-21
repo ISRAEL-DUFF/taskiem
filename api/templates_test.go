@@ -8,6 +8,7 @@ import (
 
 	"github.com/israel-duff/taskiem/connectors/gmail"
 	"github.com/israel-duff/taskiem/connectors/googlesheets"
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/connectors/termii"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
@@ -15,7 +16,7 @@ import (
 // registerSME makes the connectors of the SME templates' tests available.
 func registerSME(t *testing.T, reg *connector.Registry) {
 	t.Helper()
-	for _, c := range []*connector.Connector{googlesheets.New(googlesheets.Options{}), termii.New(termii.Options{}), gmail.New(gmail.Options{})} {
+	for _, c := range []*connector.Connector{googlesheets.New(googlesheets.Options{}), notify.New(nil), termii.New(termii.Options{}), gmail.New(gmail.Options{})} {
 		if err := reg.Register(c); err != nil {
 			t.Fatal(err)
 		}
@@ -137,7 +138,7 @@ func TestEmbedTemplates(t *testing.T) {
 	p := w.partner(t, "Payrolla", "owner@payrolla.test")
 	sub := p.sub(t, "Customer", nil)
 	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "x", "allowed_connectors": []string{}, "allowed_templates": []string{"salary-reminder"}})
-	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{"termii", "gmail"},
+	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{"notify", "gmail"},
 		"allowed_templates": []string{"payroll-reminder", "debtor-reminder-sms"}, "end_user_permissions": []string{"workflow.read", "workflow.edit"}})
 	u := p.endUser(t, w, app, sub, "cust-1", "", "workflow.read", "workflow.edit")
 

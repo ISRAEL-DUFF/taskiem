@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
@@ -31,6 +32,8 @@ func New(o Options) *connector.Connector {
 	c := &client{base: base}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"check_balance":          connector.ActionFunc(c.checkBalance),
+		"list_transactions":      connector.ActionFunc(c.listSince("/transaction", "success")),
+		"list_transfers":         connector.ActionFunc(c.listSince("/transfer", "")),
 		"transfer":               connector.ActionFunc(c.transfer),
 		"verify_transfer":        connector.ActionFunc(c.verifyTransfer),
 		"verify_charge":          connector.ActionFunc(c.verifyCharge),
@@ -69,6 +72,32 @@ func (c *client) checkBalance(ctx context.Context, req connector.Request) (conne
 		balances[i] = map[string]any{"currency": b["currency"], "balance": b["balance"]}
 	}
 	return connector.Response{Output: map[string]any{"balances": balances}}, nil
+}
+
+// listSince lists a resource's records created since input.from, up to a
+// hundred, with Paystack's status filter when given.
+func (c *client) listSince(path, status string) func(context.Context, connector.Request) (connector.Response, error) {
+	return func(ctx context.Context, req connector.Request) (connector.Response, error) {
+		from, _ := req.Input["from"].(string)
+		if _, err := time.Parse(time.RFC3339, from); err != nil {
+			return connector.Response{}, fmt.Errorf("paystack: from must be a time (RFC 3339): %w", effects.ErrFatal)
+		}
+		q := url.Values{"from": {from}, "perPage": {"100"}}
+		if status != "" {
+			q.Set("status", status)
+		}
+		var env struct {
+			Data []map[string]any `json:"data"`
+		}
+		if err := c.do(ctx, req, http.MethodGet, path+"?"+q.Encode(), nil, &env); err != nil {
+			return connector.Response{}, err
+		}
+		data := make([]any, len(env.Data))
+		for i, d := range env.Data {
+			data[i] = d
+		}
+		return connector.Response{Output: map[string]any{"data": data}}, nil
+	}
 }
 
 func transferOutput(d map[string]any) map[string]any {

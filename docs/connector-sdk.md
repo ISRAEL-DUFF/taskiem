@@ -110,6 +110,28 @@ The flow is Taskiem's, not the connector's: `POST /v1/connections/oauth/start` r
 
 Revocation goes both ways. Deleting an OAuth connection (`DELETE /v1/connections/{id}`) also posts its token to `revoke_url`, best effort. When the provider refuses a connection's token as revoked or expired, the connector wraps `connector.ErrCredentialsRejected` in its error (the Xenibase connector does for `401 invalid_token`); the engine then marks an OAuth connection `expired` at that step, so runs stop using it and the Connections page says to connect again. Pasted credentials are left alone: the person replaces them.
 
+### Events without a webhook set up
+
+A webhook trigger usually needs someone to paste Taskiem's address into the provider's dashboard. A business that never does still gets its events when the trigger also declares `poll`: Taskiem asks the provider itself, every few minutes, in prod.
+
+```yaml
+triggers:
+  charge_event:
+    type: webhook
+    verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
+    events: [charge.success]
+    event_type: =body.event
+    dedup: =body.data.reference + ':' + body.event
+    poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", every: 5m }
+```
+
+- `action` is a read action. Its input field `since` names the time (RFC 3339) it lists records from; Taskiem keeps where it got to, starts at the first deployment (nothing earlier is replayed), and looks back ten minutes each time.
+- `items` (over `output`) lists the records; `event` (over `item`) names each one's event.
+- Each record becomes the delivery the provider would send, `{"event": …, "data": item}`, signed with the connection's own secret, and goes through the trigger's usual checks, dedup and subscribers. An event the webhook also delivers is taken once.
+- Only a trigger verified by plain HMAC (`hmac_sha256`, `hmac_sha512`) can be polled.
+
+The editor then says the address in the provider's dashboard is optional; with it, events arrive at once.
+
 ## 3. Write the handlers (Go)
 
 ```go
