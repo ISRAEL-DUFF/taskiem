@@ -709,7 +709,7 @@ a.inline-link { text-decoration: underline; text-underline-offset: 2px; }
 /* The workflow editor's header and its trigger card (pages/Editor.tsx). */
 .crumbs { margin: 0 0 6px; font-size: 13px; }
 .crumbs a { color: var(--muted); }
-.crumbs a::before { content: "← "; }
+.crumbs a::before { content: "← " / ""; }
 .editor-head { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 20px; }
 .editor-title { display: flex; align-items: center; gap: 12px; flex: 1 1 320px; min-width: 0; }
 .editor-title h1 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -249,7 +249,9 @@ export function Editor() {
   return (
     <>
       <p className="crumbs">
-        <Link to="/workflows">Workflows</Link>
+        <Link to="/workflows" aria-label="Back to Workflows">
+          Workflows
+        </Link>
       </p>
       <div className="editor-head">
         <div className="editor-title">

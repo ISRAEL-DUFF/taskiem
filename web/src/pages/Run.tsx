@@ -97,7 +97,9 @@ export function RunPage() {
   return (
     <>
       <p className="crumbs">
-        <Link to="/runs">Activity</Link>
+        <Link to="/runs" aria-label="Back to Activity">
+          Activity
+        </Link>
       </p>
       <div className="editor-head">
         <div className="editor-title">
