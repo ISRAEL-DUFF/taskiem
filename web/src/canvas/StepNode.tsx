@@ -7,7 +7,7 @@ import { triggerWords } from "../lib/home";
 export type StepNodeData = { step: Step; invalid: boolean; status?: string };
 export type StepFlowNode = Node<StepNodeData, "step">;
 /** What starts the workflow, drawn before its first steps; not a step. */
-export type TriggerFlowNode = Node<{ words: string; type: string; status?: string }, "trigger">;
+export type TriggerFlowNode = Node<{ words: string; type: string; status?: string; detail?: string }, "trigger">;
 export const TRIGGER_NODE = "__trigger";
 
 /** What starts the workflow as a card left of the steps that need nothing,
@@ -121,6 +121,7 @@ export function TriggerNode({ data }: NodeProps<TriggerFlowNode>) {
       <div className="step-text">
         <div className="type">When</div>
         <div className="title">{data.words}</div>
+        {data.detail && <div className="type detail">{data.detail}</div>}
       </div>
       <Handle type="source" position={Position.Right} isConnectable={false} />
     </div>

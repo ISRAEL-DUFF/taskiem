@@ -414,6 +414,42 @@ export interface TriggerInfo {
   polled?: boolean;
   /** The connector's name, for a connector event. */
   service?: string;
+  /** An email trigger's address (decision 0038). */
+  email?: string;
+}
+
+/** A mail provider's request to confirm forwarding to a workflow's address. */
+export interface EmailConfirmation {
+  provider: string;
+  code?: string;
+  link?: string;
+  for?: string;
+  received_at: string;
+}
+
+/** A message that arrived at a workflow's address: what came of it, not its content. */
+export interface EmailMessage {
+  id: string;
+  sender_domain: string | null;
+  size: number;
+  attachments: number;
+  status: "started" | "refused" | "confirmation";
+  note: string | null;
+  run_id: string | null;
+  received_at: string;
+}
+
+/** A workflow's email address in one environment. */
+export interface EmailEndpoint {
+  id: string;
+  environment: string;
+  address: string;
+  status: "live" | "closed" | "suspended";
+  version: number;
+  senders: string[];
+  attachments: "keep" | "ignore";
+  confirmation: EmailConfirmation | null;
+  messages: EmailMessage[];
 }
 
 /** A provider subscription Taskiem created for a trigger (a Xenibase webhook). */
