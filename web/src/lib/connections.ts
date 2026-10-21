@@ -25,6 +25,13 @@ export function fieldsToComplete(c: ConnectorInfo | undefined): ConnectorInfo["a
   return c.auth.fields.filter((f) => f.required === false && !filled.has(f.key));
 }
 
+/** Whether a step using the connector needs a connection: not for one
+ * without auth, like Taskiem's own notify ("Tell me"). As readiness
+ * decides it on the server. */
+export function needsConnection(c: ConnectorInfo): boolean {
+  return c.auth.type !== "" && c.auth.type !== "none";
+}
+
 /** The connector a connection was made with, by its id (connections name
  * the id, connectors their `id@major` ref). */
 export function connectorOf(connectors: ConnectorInfo[] | undefined, id: string): ConnectorInfo | undefined {
