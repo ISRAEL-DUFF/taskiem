@@ -56,14 +56,19 @@ type OutboxItem struct {
 	Tenant uuid.UUID
 	// Channel is the chat channel it goes out on: "whatsapp" (the default)
 	// or "telegram" (decision 0035).
-	Channel  string
-	Kind     string
-	User     uuid.UUID
-	Run      *uuid.UUID
-	Step     *string
-	Level    *int
-	Alert    *uuid.UUID
-	Attempts int
+	Channel string
+	Kind    string
+	// User is the member it is for; for a message to someone outside the
+	// business (notify@1 message) it is uuid.Nil, and Contact (a
+	// contact's channel) or Reference (a submission's link) says whom.
+	User      uuid.UUID
+	Contact   *uuid.UUID
+	Reference *string
+	Run       *uuid.UUID
+	Step      *string
+	Level     *int
+	Alert     *uuid.UUID
+	Attempts  int
 }
 
 // Enqueue queues an item in tx unless one with the same dedup key exists
@@ -75,9 +80,13 @@ func Enqueue(ctx context.Context, tx pgx.Tx, it OutboxItem, dedup string) (bool,
 	if it.Channel == "" {
 		it.Channel = "whatsapp"
 	}
-	tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_outbox (id, tenant_id, channel, kind, user_id, run_id, step_id, level, alert_id, dedup_key)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (tenant_id, dedup_key) DO NOTHING`,
-		it.ID, it.Tenant, it.Channel, it.Kind, it.User, it.Run, it.Step, it.Level, it.Alert, dedup)
+	var user *uuid.UUID
+	if it.User != uuid.Nil {
+		user = &it.User
+	}
+	tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_outbox (id, tenant_id, channel, kind, user_id, contact_id, reach_reference, run_id, step_id, level, alert_id, dedup_key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (tenant_id, dedup_key) DO NOTHING`,
+		it.ID, it.Tenant, it.Channel, it.Kind, user, it.Contact, it.Reference, it.Run, it.Step, it.Level, it.Alert, dedup)
 	return err == nil && tag.RowsAffected() == 1, err
 }
 
@@ -89,13 +98,14 @@ func ClaimOutbox(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, limi
 		rows, err := tx.Query(ctx, `UPDATE whatsapp_outbox o SET attempts = o.attempts + 1, next_attempt_at = now() + interval '5 minutes'
 			WHERE o.id IN (SELECT id FROM whatsapp_outbox WHERE status = 'pending' AND next_attempt_at <= now()
 			  AND ($2::uuid[] IS NULL OR id = ANY ($2)) ORDER BY next_attempt_at LIMIT $1 FOR UPDATE SKIP LOCKED)
-			RETURNING o.id, o.tenant_id, o.channel, o.kind, o.user_id, o.run_id, o.step_id, o.level, o.alert_id, o.attempts`, limit, ids)
+			RETURNING o.id, o.tenant_id, o.channel, o.kind, coalesce(o.user_id, '00000000-0000-0000-0000-000000000000'), o.contact_id, o.reach_reference,
+			  o.run_id, o.step_id, o.level, o.alert_id, o.attempts`, limit, ids)
 		if err != nil {
 			return err
 		}
 		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (OutboxItem, error) {
 			var it OutboxItem
-			return it, r.Scan(&it.ID, &it.Tenant, &it.Channel, &it.Kind, &it.User, &it.Run, &it.Step, &it.Level, &it.Alert, &it.Attempts)
+			return it, r.Scan(&it.ID, &it.Tenant, &it.Channel, &it.Kind, &it.User, &it.Contact, &it.Reference, &it.Run, &it.Step, &it.Level, &it.Alert, &it.Attempts)
 		})
 		return err
 	})

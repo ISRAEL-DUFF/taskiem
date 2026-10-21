@@ -4,12 +4,12 @@
 // this decides how the web app offers each one.
 
 export interface ReadyNeed {
-  kind: "connection" | "variable" | "secret" | "table" | "role";
+  kind: "connection" | "variable" | "secret" | "table" | "role" | "field";
   /** "" for a connection a step does not name. */
   name: string;
   connector?: string;
   service?: string;
-  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody";
+  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -29,7 +29,8 @@ export type Fix =
   | { kind: "set_variable"; environment: string; name: string }
   | { kind: "set_secret"; environment: string; name: string }
   | { kind: "make_table"; name: string }
-  | { kind: "give_role"; role: string };
+  | { kind: "give_role"; role: string }
+  | { kind: "ask_phone"; field: string };
 
 /** The connection name a new connection takes for a need. */
 export const DEFAULT_CONNECTION = "main";
@@ -47,6 +48,8 @@ export function fixFor(n: ReadyNeed): Fix {
       return { kind: "make_table", name: n.name };
     case "role":
       return { kind: "give_role", role: n.name };
+    case "field":
+      return { kind: "ask_phone", field: n.name };
   }
 }
 

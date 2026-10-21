@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -241,6 +242,11 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		}
 		return nil
 	}
+	// Updates from a business for someone outside it (reach.go): the
+	// message its link filled in, with the code.
+	if m := reachCodeRe.FindStringSubmatch(in.Text); m != nil && in.Type == "text" {
+		return s.reachStart(ctx, wa, reach.WhatsApp, number, m[1])
+	}
 	// An owner agreeing to a field agent, or ending their sessions (agents.go).
 	if done, err := s.waAgentMessage(ctx, wa, number, in); done || err != nil {
 		return err
@@ -349,6 +355,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 			return s.waSay(ctx, wa, number, "", tr(l, "wa.linked"))
 		}
 	}
+	if done, err := s.reachStopStart(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
 	if wa.Own() {
 		if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
 			return err
@@ -357,6 +366,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		if done, err := s.WhatsAppPublic(ctx, number, in); done || err != nil {
 			return err
 		}
+	}
+	if done, err := s.reachAbout(ctx, wa, reach.WhatsApp, number); done || err != nil {
+		return err
 	}
 	if !s.limiter("wa-unbound:"+number, 10*time.Minute, 2).Allow() {
 		return nil

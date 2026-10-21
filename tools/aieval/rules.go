@@ -30,6 +30,7 @@ var rules = map[string]rule{
 	"inputs_declared":         ruleInputsDeclared,
 	"no_hardcoded_contacts":   ruleNoHardcodedContacts,
 	"no_inline_secrets":       ruleNoInlineSecrets,
+	"reach_by_phone":          ruleReachByPhone,
 }
 
 // hygiene rules apply to every case.
@@ -295,6 +296,54 @@ func ruleNoHardcodedContacts(def *wd.Definition, _ connector.Lookup) (bool, stri
 		if rePhone.MatchString(s) || reEmail.MatchString(s) {
 			return false, "a phone number or email address is written into the workflow"
 		}
+	}
+	return true, ""
+}
+
+// reChatID is a field asking for a chat app's id or username, its name or
+// title in lower case with _ and - as spaces.
+var reChatID = regexp.MustCompile(`\b(chat ?id|telegram (chat |user ?)?(id|name|handle)|telegram username|tg (chat |user ?)?id|whatsapp id)\b`)
+
+// People outside the business are messaged by their phone (notify@1
+// message), never by a chat id they were asked to type, and a chat app's
+// send never takes its recipient from someone's answers (N11).
+func ruleReachByPhone(def *wd.Definition, _ connector.Lookup) (bool, string) {
+	fields := func(schema any) string {
+		m, _ := schema.(map[string]any)
+		props, _ := m["properties"].(map[string]any)
+		for n, p := range props {
+			title, _ := p.(map[string]any)["title"].(string)
+			if reChatID.MatchString(strings.ToLower(strings.NewReplacer("_", " ", "-", " ").Replace(n + " " + title))) {
+				return n
+			}
+		}
+		return ""
+	}
+	if def.Trigger.Type == "form" {
+		schema, _ := def.InputsSchema()
+		if f := fields(schema); f != "" {
+			return false, "the form asks for " + f + ", a chat id people do not know"
+		}
+	}
+	bad := ""
+	walk(def.Steps, func(st *wd.Step) {
+		if st.Form != nil && bad == "" {
+			if f := fields(st.Form.Schema); f != "" {
+				bad = "a form step asks for " + f + ", a chat id people do not know"
+			}
+		}
+		if (st.Connector == "telegram@1" || st.Connector == "whatsapp@1") && bad == "" {
+			to, _ := st.Input["chat_id"].(string)
+			if st.Connector == "whatsapp@1" {
+				to, _ = st.Input["to"].(string)
+			}
+			if strings.Contains(to, "trigger.body") || strings.Contains(to, "trigger.form") {
+				bad = st.Connector + " sends to someone from their answers: use notify@1 message with their phone"
+			}
+		}
+	})
+	if bad != "" {
+		return false, bad
 	}
 	return true, ""
 }

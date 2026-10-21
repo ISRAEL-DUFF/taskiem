@@ -162,6 +162,8 @@ type Server struct {
 	FormHost string
 	Forms    FormStore
 	FormKeys *forms.Keys
+	// Reach offers updates on WhatsApp and Telegram (N11); nil: none.
+	Reach ReachStore
 	// AppURL is the web app's, where members' forms open.
 	AppURL string
 	// FormSubmissions limits form submissions and code requests per

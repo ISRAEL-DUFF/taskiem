@@ -55,6 +55,9 @@ tags:
 - name: Telegram
   description: Linking people to the platform's Telegram bot.
   x-taskiem-guide: telegram
+- name: Updates
+  description: People outside the business who get its workflows' messages on WhatsApp or Telegram, and the business's standing link for them.
+  x-taskiem-guide: updates
 - name: Account
   description: 'The signed-in person: who they are, their factors, invitations and email confirmation.'
   x-taskiem-guide: governance
@@ -9118,6 +9121,92 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/reach:
+    get:
+      operationId: getReach
+      tags:
+      - Updates
+      summary: Who the business reaches on WhatsApp and Telegram
+      description: The people outside the business who asked for its updates on a chat app (phones masked), which apps they can use, and the business's standing link.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reach'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/reach/contacts/{id}:
+    delete:
+      operationId: removeReachContact
+      tags:
+      - Updates
+      summary: Stop reaching a person
+      description: Removes a person and their links; the business's workflows then text them.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.publish
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        '404':
+          description: No such person.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/reach/page:
+    post:
+      operationId: newReachPage
+      tags:
+      - Updates
+      summary: Replace the standing link
+      description: A new link for the business's standing page; the old one stops working.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.publish
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [page_url]
+                properties:
+                  page_url:
+                    type: string
+        '409':
+          description: Updates on WhatsApp and Telegram are not set up on this Taskiem.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/readiness:
     post:
       operationId: draftReadiness
@@ -13127,6 +13216,55 @@ components:
         made:
           type: boolean
       additionalProperties: false
+    Reach:
+      type: object
+      required: [telegram, whatsapp, contacts]
+      properties:
+        telegram:
+          type: boolean
+          description: People can get updates on Telegram.
+        whatsapp:
+          type: boolean
+          description: People can get updates on WhatsApp.
+        page_url:
+          type: string
+          description: The business's standing page, where anyone can ask for its updates.
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReachContact'
+    ReachContact:
+      type: object
+      required: [id, phone, channels, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        phone:
+          type: string
+          description: Masked (+234•••••567).
+        channels:
+          type: array
+          items:
+            type: object
+            required: [channel, linked_at]
+            properties:
+              channel:
+                type: string
+                enum: [telegram, whatsapp]
+              linked_at:
+                type: string
+                format: date-time
+              last_sent_at:
+                type: string
+                format: date-time
+              stopped_at:
+                type: string
+                format: date-time
+                description: They sent STOP, or blocked the bot.
+        created_at:
+          type: string
+          format: date-time
     Readiness:
       type: object
       required: [ready, needs]
@@ -13146,7 +13284,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [connection, variable, secret, table, role]
+          enum: [connection, variable, secret, table, role, field]
         name:
           type: string
           description: The connection's, variable's, secret's, table's or role's name; empty for a connection a step does not name.
@@ -13157,7 +13295,7 @@ components:
           description: The connector's display name.
         problem:
           type: string
-          enum: [missing, expired, disabled, ambiguous, nobody]
+          enum: [missing, expired, disabled, ambiguous, nobody, chat_id]
         environment:
           type: string
         steps:

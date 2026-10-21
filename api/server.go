@@ -37,9 +37,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -148,6 +150,15 @@ type Server struct {
 	WhatsAppPublic WhatsAppPublic
 	// Telegram is the platform bot (decision 0035); nil turns the channel off.
 	Telegram *telegram.Platform
+	// Reach are the people outside each business who asked for updates on
+	// WhatsApp or Telegram (N11, decision 0039); ReachKeys open what a
+	// thank-you page's code carries, ReachHost is the form host their
+	// standing page is on, and Messages sends by SMS what cannot go on a
+	// chat app. nil Reach: updates are off.
+	Reach     *reach.Book
+	ReachKeys *forms.Keys
+	ReachHost string
+	Messages  *sender.Queue
 	// ChatSigner signs approval decision and hand-off tokens when WhatsApp
 	// is off (with WhatsApp on, its signer is used for both channels).
 	ChatSigner whatsapp.Signer
@@ -287,6 +298,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/whatsapp/number", s.putWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/whatsapp/number", s.deleteWhatsAppNumber)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
+			r.With(s.need(PermWorkflowRead)).Get("/reach", s.getReach)
+			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/reach/page", s.newReachPage)
+			r.With(s.need(PermWorkflowPublish), s.tenantWide).Delete("/reach/contacts/{id}", s.removeReachContact)
 			r.With(s.need(PermAlertManage)).Get("/whatsapp/outbox", s.listWhatsAppOutbox)
 			r.With(s.need(PermAlertManage), s.tenantWide).Post("/whatsapp/outbox/{id}/retry", s.retryWhatsAppOutbox)
 			r.With(s.need(PermApprovalDecide)).Get("/whatsapp/handoff/{token}", s.getHandoff)

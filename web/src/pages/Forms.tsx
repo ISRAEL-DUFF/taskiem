@@ -58,7 +58,7 @@ const ACCESS: Record<FormInfo["access"], string> = { public: "Anyone with the li
 /** The address to open a form at: its own, or the app's for members forms. */
 export const formLink = (f: FormInfo) => f.url || (f.access === "members" ? `${window.location.origin}/forms/${f.id}` : "");
 
-function Copy({ text, label }: { text: string; label: string }) {
+export function Copy({ text, label }: { text: string; label: string }) {
   const [done, setDone] = useState(false);
   return (
     <button

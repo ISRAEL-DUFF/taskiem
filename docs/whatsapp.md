@@ -22,7 +22,7 @@ Built from Meta's public documentation only, under the [clean-room policy](clean
    | `TASKIEM_WHATSAPP_APP_SECRET` | Verifies webhook signatures |
    | `TASKIEM_WHATSAPP_VERIFY_TOKEN` | Answers Meta's subscription handshake |
    | `TASKIEM_WHATSAPP_TOKEN_KEY` | 32 bytes, base64 (`openssl rand -base64 32`): signs decision tokens. Same value on every `api` and `edge` pod. Rotating it voids buttons already sent |
-   | `TASKIEM_WHATSAPP_DISPLAY_NUMBER` | The number as people should save it, shown on the Account page (not secret) |
+   | `TASKIEM_WHATSAPP_DISPLAY_NUMBER` | The number as people should save it, shown on the Account page and used by [update links](updates.md) (not secret) |
    | `TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE` | Language code the templates were approved in (`en`) |
    | `TASKIEM_WHATSAPP_DEFAULT_COUNTRY` | Calling code for numbers typed with a leading 0 (`234`) |
    | `TASKIEM_WHATSAPP_FLOWS_PRIVATE_KEY` | Optional: the Flows endpoint's RSA private key (PEM), turning on [forms and the PIN](#flows) |
@@ -102,6 +102,8 @@ Spec 11.1 (Build, SME tier): describe an automation in a message and get a draft
 
 If the draft cannot pass Taskiem's checks, Taskiem says so and suggests describing it differently or building in the web app. Building needs `workflow.edit` (checked when you ask, when you answer and when you save), AI configured on the deployment, and this month's AI budget: over budget, Taskiem says so before any model call. Builds are limited per number (three, then one every 20 seconds) and share the organisation's limit with the web app (five, then one every 20 seconds). Your message is redacted before it reaches the model and stored redacted, like every AI build ([data handling](ai.md#data-handling)); details you type for a template are not personal data by design (phone numbers and emails are tenant variables) and wait in the conversation's state, under the organisation's row-level security, for 30 minutes at most.
 
+**People outside a business** (customers, staff who don't sign in) can get a business's workflow messages from the platform number, or the business's own number, without a Taskiem account: they open its link and send the message it fills in ([updates](updates.md)). To them the number only sends updates, and understands STOP and START. `TASKIEM_WHATSAPP_DISPLAY_NUMBER` must be set for those links.
+
 ## Signing in on the web
 
 `sign in` (or `web link`) sends a one-time link, good for an hour, to choose a password and sign in to the web app: the owner of a business a [field agent](agents.md) made has none yet, and the chat is already bound to them. It is audited (`auth.signin_link`); an organisation held to single sign-on gets its sign-in page instead.
@@ -120,6 +122,7 @@ WhatsApp only delivers free-form messages within 24 hours of the person's last m
 | `taskiem_needs_reconciliation` | Utility | `[{{1}}] {{2}} needs reconciliation in {{3}}: a call's outcome is unknown and someone must check with the provider. Details: {{4}}` | — | Alert rule `needs_reconciliation` |
 | `taskiem_approval_waiting` | Utility | `[{{1}}] {{2}} Details: {{3}}` | — | Alert rule `stuck_approval` |
 | `taskiem_alert` | Utility | `[{{1}}] {{2}} Details: {{3}}` | — | Every other alert rule |
+| `taskiem_update` | Utility | `[{{1}}] Update on {{2}}: {{3}}` | — | A workflow's message to someone outside the business who asked for its updates ([updates](updates.md)); {{2}} is what they asked about |
 
 Variables are filled with one-line text (Meta refuses new lines in them): the request summary in `taskiem_approval_request` joins its masked fields with semicolons. Meta charges per template message: see [template costs](#template-costs). An organisation with its own number must have the same templates approved in its own WhatsApp Business Account.
 

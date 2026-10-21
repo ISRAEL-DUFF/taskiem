@@ -1133,6 +1133,18 @@ export const mysql = {
 };
 
 // Tell me (notify@1)
+export interface NotifyMessageInput {
+  /** What it is about, in a few words (your leave request, order AD-12): a WhatsApp update names it */
+  about?: Val<string>;
+  /** Their email address: used when they cannot be reached by phone */
+  email?: Val<string>;
+  /** The message */
+  message: Val<string>;
+  /** Their phone number, in any form (0803 123 4567, +234…) */
+  phone?: Val<string>;
+  /** A first line, and an email's subject */
+  title?: Val<string>;
+}
 export interface NotifyTellInput {
   /** With to: members, their sign-in emails */
   members?: Value;
@@ -1152,6 +1164,8 @@ export interface NotifyTextInput {
   to: Val<string>;
 }
 export const notify = {
+  /** Message a person (idempotent_write) */
+  message: (input: NotifyMessageInput, extra?: ConnectorExtra): StepSpec => connector("notify@1", "message", input, extra),
   /** Tell the owner or the team (idempotent_write) */
   tell: (input: NotifyTellInput, extra?: ConnectorExtra): StepSpec => connector("notify@1", "tell", input, extra),
   /** Text a customer (idempotent_write) */
@@ -2347,7 +2361,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "mpesa@1": ["account_balance", "b2c_payment", "check_credentials", "register_c2b_urls", "reversal", "stk_push", "stk_query", "transaction_status"],
   "mtnmomo@1": ["get_account_holder_name", "get_balance", "get_payment", "get_transfer", "request_to_pay", "transfer", "validate_account_holder"],
   "mysql@1": ["execute", "query"],
-  "notify@1": ["tell", "text"],
+  "notify@1": ["message", "tell", "text"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "paystack@1": ["check_balance", "create_recipient", "initialize_transaction", "list_banks", "list_transactions", "list_transfers", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
