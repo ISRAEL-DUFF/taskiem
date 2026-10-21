@@ -1,0 +1,97 @@
+package ingest_test
+
+import (
+	"crypto/sha512"
+	"net/http"
+	"net/http/httptest"
+	"net/netip"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/connectors/paystack"
+	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/ingest"
+)
+
+const onChargeFlow = `{"schema":"wd/v1","id":"wf_thanks","version":1,"name":"thanks",
+  "trigger":{"type":"connector_event","config":{"connector":"paystack@1","trigger":"charge_event","events":["charge.success"]}},
+  "steps":[{"id":"a","type":"transform","config":{"output":"=trigger.body.data.reference"}}]}`
+
+// A business that never set Paystack's webhook up still has its payments
+// noticed (no-technical-steps N4): the poller asks Paystack from where it
+// last looked, and each payment is delivered as Paystack would have sent
+// it; a payment the webhook also delivered starts nothing twice.
+func TestPollerDeliversPaystackPayments(t *testing.T) {
+	w := newWorld(t)
+	var asked atomic.Int64
+	var from atomic.Value
+	fake := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer sk_test_x" || r.URL.Path != "/transaction" || r.URL.Query().Get("status") != "success" {
+			rw.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		asked.Add(1)
+		from.Store(r.URL.Query().Get("from"))
+		rw.Header().Set("Content-Type", "application/json")
+		_, _ = rw.Write([]byte(`{"status":true,"data":[{"reference":"P-1","amount":500000,"customer":{"email":"bola@example.com"}},{"reference":"P-2","amount":250000}]}`))
+	}))
+	t.Cleanup(fake.Close)
+	if err := w.Registry.Register(paystack.New(paystack.Options{BaseURL: fake.URL})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Vault.CreateConnection(ctx, w.Tenant, "prod", "paystack", "main", "api_key", map[string]string{"secret_key": "sk_test_x"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	wf := w.publish(t, onChargeFlow)
+	now := time.Now()
+	p := &ingest.Poller{Store: w.Store, Registry: w.Registry, Connections: w.Vault, Hooks: w.h,
+		Egress: &egress.Guard{Blocked: func(netip.Addr) bool { return false }}, Now: func() time.Time { return now }}
+
+	// The first look only marks where to start: nothing before is replayed.
+	if n, err := p.Tick(ctx); err != nil || n != 0 || asked.Load() != 0 {
+		t.Fatalf("first tick: %d %v (asked %d)", n, err, asked.Load())
+	}
+	// Five minutes on: it asks from then (less the overlap), and both
+	// payments start the workflow.
+	now = now.Add(6 * time.Minute)
+	if n, err := p.Tick(ctx); err != nil || n != 2 {
+		t.Fatalf("second tick: %d %v", n, err)
+	}
+	if f, _ := from.Load().(string); f == "" || !strings.HasSuffix(f, "Z") {
+		t.Errorf("asked from %q", f)
+	}
+	if n := w.runCount(t, wf); n != 2 {
+		t.Fatalf("runs: %d", n)
+	}
+	// Not due yet: nothing is asked.
+	if n, _ := p.Tick(ctx); n != 0 || asked.Load() != 1 {
+		t.Errorf("tick before due: %d (asked %d)", n, asked.Load())
+	}
+	// The webhook delivers P-1 too, and the next poll lists both again:
+	// nothing starts twice.
+	body := []byte(`{"data":{"amount":500000,"customer":{"email":"bola@example.com"},"reference":"P-1"},"event":"charge.success"}`)
+	if st, out := w.post(t, "/connectors/paystack@1/charge_event", body, "x-paystack-signature", sign(sha512.New, "sk_test_x", body)); st != 202 || out["duplicate"] != true {
+		t.Errorf("the webhook after the poll: %d %v", st, out)
+	}
+	now = now.Add(6 * time.Minute)
+	if _, err := p.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := w.runCount(t, wf); n != 2 {
+		t.Errorf("runs after polling again: %d", n)
+	}
+	// Where it got to is recorded.
+	var errText *string
+	err := db.InTenantTx(ctx, w.DB.App, []uuid.UUID{w.Tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT last_error FROM trigger_polls WHERE connector = 'paystack@1' AND trigger_name = 'charge_event'`).Scan(&errText)
+	})
+	if err != nil || errText != nil {
+		t.Errorf("poll state: %v %v", errText, err)
+	}
+}

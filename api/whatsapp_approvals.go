@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -226,6 +227,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.waSendRunOutcome(ctx, it)
 		case whatsapp.OutboxAlert:
 			sendErr = s.sendAlertItem(ctx, it)
+		case notify.OutboxNotice:
+			sendErr = s.sendNoticeItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}

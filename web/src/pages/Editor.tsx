@@ -605,6 +605,8 @@ function Endpoints({ workflow }: { workflow: string }) {
   const { data, error } = useLoad(() => get<{ triggers: TriggerInfo[] }>(`/v1/workflows/${workflow}/triggers`), [workflow]);
   const act = useAction();
   const [made, setMade] = useState<SigningSecret | null>(null);
+  // Production only, unless asked: the other environments are rehearsals.
+  const [allEnvs, setAllEnvs] = useState(false);
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
   if (data.triggers.length === 0) return <div className="empty card">The published version is started manually or through the API: POST /v1/workflows/{workflow}/runs.</div>;
@@ -635,7 +637,7 @@ function Endpoints({ workflow }: { workflow: string }) {
           </tr>
         </thead>
         <tbody>
-          {data.triggers.map((t) => (
+          {data.triggers.filter((t) => allEnvs || t.environment === "prod" || !data.triggers.some((x) => x.environment === "prod")).map((t) => (
             <tr key={t.id}>
               <td>{t.environment}</td>
               <td>{t.type.replaceAll("_", " ")}</td>
@@ -648,6 +650,7 @@ function Endpoints({ workflow }: { workflow: string }) {
                   </div>
                 )}
                 {t.url && !t.remote && <code>{window.location.origin + t.url}</code>}
+                {t.url && !t.remote && <div className="hint">{endpointPurpose(t)}</div>}
                 {t.secret_name && t.auth !== "none" && (
                   <div className="hint">
                     Signed with the secret {t.secret_name} ({t.auth}){" "}
@@ -669,8 +672,21 @@ function Endpoints({ workflow }: { workflow: string }) {
           ))}
         </tbody>
       </table>
+      {data.triggers.some((t) => t.environment !== "prod") && (
+        <button className="link" onClick={() => setAllEnvs(!allEnvs)}>
+          {allEnvs ? "Show production only" : "Show the other environments"}
+        </button>
+      )}
     </>
   );
+}
+
+/** What a trigger's web address is for, in plain words. */
+export function endpointPurpose(t: TriggerInfo): string {
+  if (t.type === "webhook") return "Give this address to the system that sends you the data, such as your website or shop.";
+  const service = t.service ?? t.connector?.split("@")[0] ?? "the service";
+  if (t.polled) return `Taskiem checks ${service} for new events every few minutes. To get them at once, you can also add this address in ${service}'s dashboard; it is optional.`;
+  return `Add this address in ${service}'s dashboard, so ${service} tells Taskiem when something happens.`;
 }
 
 /** Which version each environment runs, and promotion into gated ones. */

@@ -70,7 +70,7 @@ func TestWhatsAppBuild(t *testing.T) {
 	}
 	draft := got[0].Text
 	for _, want := range []string{"Here is the workflow I drafted", "Weekly SMS reminders to customers who owe you", "1. Every Friday at 09:00 (Africa/Lagos time)",
-		"Read the debtors sheet (Google Sheets)", "4a. Text the customer a reminder of what they owe (Termii), only when its condition holds",
+		"Read the debtors sheet (Google Sheets)", "4a. Text the customer a reminder of what they owe (Tell me), only when its condition holds",
 		"I need 2 more detail(s)", "1/2. *Debtors spreadsheet*"} {
 		if !strings.Contains(draft, want) {
 			t.Errorf("draft lacks %q:\n%s", want, draft)

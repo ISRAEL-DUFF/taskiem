@@ -74,6 +74,7 @@ export function Templates() {
                   <span className="hint">
                     {t.connectors.map((c) => c.split("@")[0]).join(" · ")}
                     {!t.available && " · needs a connector not available here"}
+                    {t.needs_developer && " · needs a developer"}
                   </span>
                 </button>
               ))}
@@ -139,6 +140,12 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
         </div>
       )}
       {!t.available && <div className="notice">This template uses a connector that is not available in this organisation yet.</div>}
+      {t.needs_developer && (
+        <div className="notice">
+          <strong>Needs a developer.</strong> It starts when another system (your website or shop) calls a web address Taskiem gives you, so someone technical
+          has to set that up. Templates that start on a schedule or from a form need nobody.
+        </div>
+      )}
       {canCreate ? (
         <form
           onSubmit={(e) => {

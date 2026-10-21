@@ -395,6 +395,10 @@ export interface TriggerInfo {
   url?: string;
   /** A remotely registered trigger: the subscription Taskiem keeps at the provider (decision 0021). */
   remote?: RemoteSubscription;
+  /** Taskiem also asks the provider every few minutes, so setting the address up there is optional. */
+  polled?: boolean;
+  /** The connector's name, for a connector event. */
+  service?: string;
 }
 
 /** A provider subscription Taskiem created for a trigger (a Xenibase webhook). */

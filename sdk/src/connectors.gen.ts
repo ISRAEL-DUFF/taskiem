@@ -1121,6 +1121,32 @@ export const mysql = {
   query: (input: MysqlQueryInput, extra?: ConnectorExtra): StepSpec => connector("mysql@1", "query", input, extra),
 };
 
+// Tell me (notify@1)
+export interface NotifyTellInput {
+  /** With to: members, their sign-in emails */
+  members?: Value;
+  /** The message */
+  message: Val<string>;
+  /** With to: role, the role */
+  role?: Val<string>;
+  /** A first line, and an email's subject */
+  title?: Val<string>;
+  /** Who hears it: the owners (the default), the members with a role, or named members */
+  to?: Val<"owner" | "role" | "members">;
+}
+export interface NotifyTextInput {
+  /** The text; it starts with the business's name and is at most three SMS parts */
+  message: Val<string>;
+  /** The phone number, in any form (0803 123 4567, +234…) */
+  to: Val<string>;
+}
+export const notify = {
+  /** Tell the owner or the team (idempotent_write) */
+  tell: (input: NotifyTellInput, extra?: ConnectorExtra): StepSpec => connector("notify@1", "tell", input, extra),
+  /** Text a customer (idempotent_write) */
+  text: (input: NotifyTextInput, extra?: ConnectorExtra): StepSpec => connector("notify@1", "text", input, extra),
+};
+
 // OPay (opay@1)
 export interface OpayClosePaymentInput {
   order_no?: Val<string>;
@@ -1222,6 +1248,14 @@ export interface PaystackInitializeTransactionInput {
   email: Val<string>;
   metadata?: Value;
 }
+export interface PaystackListTransactionsInput {
+  /** Since when */
+  from: Val<string>;
+}
+export interface PaystackListTransfersInput {
+  /** Since when */
+  from: Val<string>;
+}
 export interface PaystackRefundStatusInput {
   reference: Val<string>;
 }
@@ -1250,6 +1284,10 @@ export const paystack = {
   check_balance: (input?: PaystackCheckBalanceInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "check_balance", input, extra),
   /** Create a payment page (idempotent_write) */
   initialize_transaction: (input: PaystackInitializeTransactionInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "initialize_transaction", input, extra),
+  /** List successful payments (read) */
+  list_transactions: (input: PaystackListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_transactions", input, extra),
+  /** List transfers (read) */
+  list_transfers: (input: PaystackListTransfersInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_transfers", input, extra),
   /** Check whether a payment was refunded (read) */
   refund_status: (input: PaystackRefundStatusInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "refund_status", input, extra),
   /** Refund a payment (reconcilable_write) */
@@ -2228,6 +2266,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "mpesa@1": "mpesa",
   "mtnmomo@1": "mtnmomo",
   "mysql@1": "mysql",
+  "notify@1": "notify",
   "opay@1": "opay",
   "paystack@1": "paystack",
   "postgres@1": "postgres",
@@ -2262,8 +2301,9 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "mpesa@1": ["account_balance", "b2c_payment", "check_credentials", "register_c2b_urls", "reversal", "stk_push", "stk_query", "transaction_status"],
   "mtnmomo@1": ["get_account_holder_name", "get_balance", "get_payment", "get_transfer", "request_to_pay", "transfer", "validate_account_holder"],
   "mysql@1": ["execute", "query"],
+  "notify@1": ["tell", "text"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
-  "paystack@1": ["check_balance", "initialize_transaction", "refund_status", "refund_transaction", "transfer", "verify_charge", "verify_transfer"],
+  "paystack@1": ["check_balance", "initialize_transaction", "list_transactions", "list_transfers", "refund_status", "refund_transaction", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],

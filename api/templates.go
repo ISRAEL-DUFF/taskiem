@@ -40,8 +40,11 @@ type templateView struct {
 	// numbered steps.
 	Steps []wdtext.Line `json:"steps"`
 	// Available: every connector it uses is available to the tenant.
-	Available  bool            `json:"available"`
-	Definition json.RawMessage `json:"definition,omitempty"`
+	Available bool `json:"available"`
+	// NeedsDeveloper: it starts from a signed web address another system
+	// calls (a webhook), which takes someone technical to set up.
+	NeedsDeveloper bool            `json:"needs_developer"`
+	Definition     json.RawMessage `json:"definition,omitempty"`
 }
 
 func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templateView {
@@ -57,6 +60,14 @@ func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templa
 		if def, err := wd.Load(doc); err == nil {
 			v.Steps = wdtext.Describe(def, reg)
 		}
+	}
+	var head struct {
+		Trigger struct {
+			Type string `json:"type"`
+		} `json:"trigger"`
+	}
+	if json.Unmarshal(t.Definition, &head) == nil {
+		v.NeedsDeveloper = head.Trigger.Type == "webhook"
 	}
 	if full {
 		v.Definition = t.Definition

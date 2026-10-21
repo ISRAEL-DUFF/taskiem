@@ -9,6 +9,7 @@ import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from 
 import { ParamField } from "./Templates";
 import { NeedsList } from "./Readiness";
 import { NewConnection, startLink } from "./Connections";
+import { needsConnection } from "../lib/connections";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 // Get started (docs/onboarding.md): the checklist, derived from what the
@@ -93,7 +94,10 @@ function TemplatePicker() {
           <Link key={t.id} className="card template-card" to={`/start/guide?template=${t.id}`}>
             <strong>{t.title}</strong>
             <span>{t.summary}</span>
-            <span className="hint">{t.connectors.map((c) => c.split("@")[0]).join(" · ")}</span>
+            <span className="hint">
+              {t.connectors.map((c) => c.split("@")[0]).join(" · ")}
+              {t.needs_developer && " · needs a developer"}
+            </span>
           </Link>
         ))}
       </div>
@@ -143,16 +147,20 @@ function GuideSteps({ t }: { t: Template }) {
   const [wf, setWf] = useState<{ id: string; published: boolean; problems: Problem[] } | null>(null);
 
   // Which connection each connector uses: the template's connection
-  // parameter for it, else "main".
-  const needs = t.connectors.map((ref) => {
-    const cid = ref.split("@")[0];
-    const p = t.params.find((x) => x.type === "connection" && x.connector === cid);
-    const name = (p ? values[p.name] : "") || "main";
-    const have = !!conns.data?.connections.some((c) => c.connector === cid && c.name === name && c.environment === ENV);
-    return { ref, cid, name, have, info: connectors.data?.connectors.find((c) => c.ref === ref || c.id === cid) };
-  });
+  // parameter for it, else "main". A connector without auth (notify)
+  // needs none.
+  const needs = t.connectors
+    .map((ref) => {
+      const cid = ref.split("@")[0];
+      const p = t.params.find((x) => x.type === "connection" && x.connector === cid);
+      const name = (p ? values[p.name] : "") || "main";
+      const have = !!conns.data?.connections.some((c) => c.connector === cid && c.name === name && c.environment === ENV);
+      return { ref, cid, name, have, info: connectors.data?.connectors.find((c) => c.ref === ref || c.id === cid) };
+    })
+    .filter((n) => !n.info || needsConnection(n.info));
   const missingVars = t.variables.filter((v) => !vars.data?.variables.some((x) => x.name === v.name && x.environment === ENV));
-  const connected = conns.data !== undefined && needs.every((n) => n.have) && vars.data !== undefined && missingVars.length === 0;
+  const connected =
+    conns.data !== undefined && connectors.data !== undefined && needs.every((n) => n.have) && vars.data !== undefined && missingVars.length === 0;
 
   return (
     <>
@@ -167,7 +175,8 @@ function GuideSteps({ t }: { t: Template }) {
           ))}
         </li>
         <li>
-          <h2>Connect {needs.map((n) => n.info?.name ?? n.cid).join(" and ")}</h2>
+          <h2>{needs.length > 0 ? `Connect ${needs.map((n) => n.info?.name ?? n.cid).join(" and ")}` : "Connect"}</h2>
+          {connectors.data && needs.length === 0 && t.variables.length === 0 && <p className="hint">Nothing to connect.</p>}
           {needs.map((n) =>
             n.have ? (
               <p key={n.ref} data-testid={`connected-${n.cid}`}>

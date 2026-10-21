@@ -273,6 +273,19 @@
         "registration": { "enum": ["manual", "remote"], "description": "manual (default): the provider is pointed at Taskiem's ingest URL by hand. remote: Taskiem creates, updates and deletes the provider's subscription as workflows using the trigger are deployed and removed, and verifies deliveries with the secret the provider returned (decision 0021); the connector supplies a registrar." },
         "options": { "$ref": "#/$defs/jsonSchema", "description": "JSON Schema of the workflow trigger's options (trigger.config.options in wd/v1): what to subscribe to at the provider, and how to complete events." },
         "test_event": { "$ref": "#/$defs/expr", "description": "Marks a delivery the provider sends to test the endpoint: it is verified and acknowledged, and starts only workflows that list its event by name." },
+        "poll": {
+          "description": "Taskiem also asks the provider itself, for businesses that have not set the webhook up: a read action listing records since a time, each delivered as {event, data} signed with the connection's secret, so it takes the webhook's own checks and is taken once either way.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "since", "items", "event"],
+          "properties": {
+            "action": { "$ref": "#/$defs/name" },
+            "since": { "$ref": "#/$defs/name" },
+            "items": { "$ref": "#/$defs/expr" },
+            "event": { "$ref": "#/$defs/expr" },
+            "every": { "type": "string", "pattern": "^[0-9]+(m|h)$" }
+          }
+        },
         "route": {
           "type": "object",
           "additionalProperties": false,

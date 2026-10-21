@@ -27,6 +27,7 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
+	"github.com/israel-duff/taskiem/connectors/notify"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
@@ -51,6 +52,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/status"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
@@ -519,9 +521,11 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// once the vault exists (below).
 	orders := &sfconn.Late{}
 	formOps := &formconn.Late{}
+	tell := &notify.Late{}
 	copts := cfg.Connectors
 	copts.Storefront = orders
 	copts.Forms = formOps
+	copts.Notify = tell
 	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
 		return nil, err
@@ -572,6 +576,18 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	if cfg.Telegram != nil {
 		e.tg = telegram.New(pool, *cfg.Telegram, &egress.Guard{Logger: log}, log)
 	}
+	// Tell me: on the chat channels this deployment runs, else by email.
+	n := &notify.Notifier{Pool: pool}
+	if e.wa != nil {
+		n.Chat = append(n.Chat, "whatsapp")
+	}
+	if e.tg != nil {
+		n.Chat = append(n.Chat, "telegram")
+	}
+	if len(cfg.Messages.HashKey) == 32 {
+		n.Messages = &sender.Queue{Vault: vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries, Allowance: e.smsAllowance}
+	}
+	tell.Set(n)
 	return e, nil
 }
 
@@ -883,7 +899,10 @@ func serve(ctx context.Context, args []string) error {
 			}}
 		// Data tables: the data_tables connections' tokens, renewed before
 		// they expire (docs/data-tables.md#token-renewal).
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals)
+		// Connector events without a webhook: Taskiem asks the provider
+		// (Paystack) itself for businesses that never set one up.
+		poller := &ingest.Poller{Store: e.store, Registry: e.registry, Connections: e.vault, Hooks: e.hooks(), Egress: &egress.Guard{Logger: log}, Logger: log}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

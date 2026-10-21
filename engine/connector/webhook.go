@@ -54,6 +54,61 @@ type TriggerSpec struct {
 	// and deliver each event into the sub-tenants whose connection lists
 	// the event's key (decision 0031).
 	Route *RouteSpec `json:"route"`
+	// Poll, when set, lets Taskiem ask the provider itself for what the
+	// webhook would carry, for businesses that never set the webhook up in
+	// the provider's dashboard (no-technical-steps N4).
+	Poll *PollSpec `json:"poll"`
+}
+
+// PollSpec is how a webhook trigger's events are also polled: Action, a
+// read action, takes Since (an input field) set to a time and answers
+// records; Items (over output) lists them; Event (over item) names each
+// one's event. Each becomes the body {event, data: item}, signed as the
+// provider signs, and is delivered through the webhook path.
+type PollSpec struct {
+	Action string `json:"action"`
+	Since  string `json:"since"`
+	Items  string `json:"items"`
+	Event  string `json:"event"`
+	Every  string `json:"every"`
+}
+
+// Interval is how often to poll (default five minutes).
+func (p *PollSpec) Interval() time.Duration {
+	if d, err := time.ParseDuration(p.Every); err == nil && d >= time.Minute {
+		return d
+	}
+	return 5 * time.Minute
+}
+
+// SignBody signs body as a provider using v would, for a trigger Taskiem
+// polls: the header and its value. Only plain HMAC schemes can be.
+func SignBody(v *VerifySpec, secret string, body []byte) (header, value string, err error) {
+	if v == nil || secret == "" {
+		return "", "", fmt.Errorf("%w: nothing to sign with", ErrBadSignature)
+	}
+	var mac func() hash.Hash
+	switch v.Scheme {
+	case "hmac_sha256":
+		mac = sha256.New
+	case "hmac_sha512":
+		mac = sha512.New
+	default:
+		return "", "", fmt.Errorf("%w: %s deliveries cannot be signed by Taskiem", ErrBadSignature, v.Scheme)
+	}
+	if v.KeyDerivation != "" && v.KeyDerivation != "none" {
+		return "", "", fmt.Errorf("%w: key derivation %s is not supported for polling", ErrBadSignature, v.KeyDerivation)
+	}
+	h := hmac.New(mac, []byte(secret))
+	h.Write(body)
+	sum := h.Sum(nil)
+	switch v.Encoding {
+	case "", "hex":
+		return v.Header, hex.EncodeToString(sum), nil
+	case "base64":
+		return v.Header, base64.StdEncoding.EncodeToString(sum), nil
+	}
+	return "", "", fmt.Errorf("%w: encoding %s is not supported for polling", ErrBadSignature, v.Encoding)
 }
 
 // RouteSpec routes a partner's delivery to its sub-tenants: Key, an

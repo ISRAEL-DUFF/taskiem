@@ -6,7 +6,7 @@
   "category": "payroll",
   "tags": ["payroll", "salaries", "payments", "approval", "paystack", "sms", "google sheets", "monthly"],
   "keywords": ["salary", "salaries", "payroll", "staff", "pay", "payout", "wages", "employees", "approve", "approval", "transfer", "payday"],
-  "connectors": ["googlesheets@1", "paystack@1", "termii@1"],
+  "connectors": ["googlesheets@1", "paystack@1", "notify@1"],
   "params": [
     {"name": "business_name", "type": "string", "title": "Business name", "description": "Named in the message to staff.", "required": true, "example": "Adaeze Logistics", "max_length": 60},
     {"name": "spreadsheet_id", "type": "string", "title": "Staff spreadsheet", "description": "The spreadsheet's id, from its link.", "required": true, "example": "1StAfFsHeEtIdEnTiFiEr0123456789abcd", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
@@ -14,7 +14,6 @@
     {"name": "day_of_month", "type": "integer", "title": "Payday", "description": "The day of the month salaries are paid (1 to 28).", "required": true, "default": 25, "example": 25, "minimum": 1, "maximum": 28},
     {"name": "approver_role", "type": "string", "title": "Who approves", "description": "The role that approves the payroll before anything is paid.", "required": false, "default": "owner", "example": "owner", "pattern": "^[a-z][a-z0-9_]{0,39}$"},
     {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack account salaries are paid from.", "required": false, "default": "main", "example": "main"},
-    {"name": "sms_connection", "type": "connection", "connector": "termii", "title": "Termii connection", "description": "The name of your Termii connection.", "required": false, "default": "main", "example": "main"},
     {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
   ],
   "definition": {
@@ -36,9 +35,9 @@
           "when": "=has(item.recipient_code) && item.recipient_code != null && has(item.amount) && item.amount != null && double(item.amount) >= 1.0",
           "input": {"amount": "=int(double(item.amount) * 100.0)", "recipient": "=string(item.recipient_code)", "reason": "=steps.settings.output.business_name + ' salary'"},
           "effect": {"idempotency_seed": "=run.id + ':' + string(item.recipient_code)"}},
-         {"id": "text_staff", "type": "connector", "name": "Text the person that their salary was sent", "connector": "termii@1", "action": "send_sms", "connection": "{{sms_connection}}", "needs": ["pay_salary"],
+         {"id": "text_staff", "type": "connector", "name": "Text the person that their salary was sent", "connector": "notify@1", "action": "text", "needs": ["pay_salary"],
           "when": "=has(item.phone) && item.phone != null && has(steps.pay_salary.output.status) && steps.pay_salary.output.status != 'failed'",
-          "input": {"to": "=string(item.phone)", "sms": "=steps.settings.output.business_name + ': your salary of NGN ' + string(item.amount) + ' has been sent. Thank you for your work.'"}}
+          "input": {"to": "=string(item.phone)", "message": "=steps.settings.output.business_name + ': your salary of NGN ' + string(item.amount) + ' has been sent. Thank you for your work.'"}}
        ]}}
     ],
     "settings": {"timeout": "48h"}

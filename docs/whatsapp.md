@@ -191,7 +191,7 @@ An alert channel of kind **WhatsApp** names members by email (Alerts > Channels)
 
 ## Delivery and retries
 
-Messages that must arrive go through a durable outbox (`whatsapp_outbox`, migration 00086): **approval requests**, **how runs started from WhatsApp ended**, and **alerts** to WhatsApp channels. Each is one row per person, naming what to send (the approval, the run, the alert) and to whom (the person, not their number). The message is rendered at each attempt, from the record as it then stands: an approval request gets fresh decision tokens, so the database never holds message text, tokens or numbers.
+Messages that must arrive go through a durable outbox (`whatsapp_outbox`, migration 00086): **approval requests**, **how runs started from WhatsApp ended**, **alerts** to WhatsApp channels, and workflows' **Tell me** messages ([notify@1](integrations/notify.md), kind `notice`, rendered from the step's input in the run's history). Each is one row per person, naming what to send (the approval, the run, the alert) and to whom (the person, not their number). The message is rendered at each attempt, from the record as it then stands: an approval request gets fresh decision tokens, so the database never holds message text, tokens or numbers.
 
 - **Claimed once.** Each attempt claims its row (`FOR UPDATE SKIP LOCKED`, a five-minute lease), so two notifiers never send the same message at once. The `api` role's notifier drains the outbox every five seconds; an alert is also tried at once by the role that raised it.
 - **Backoff.** A failed attempt waits 1, 4, 16, 64 and 256 minutes, then six hours, up to eight attempts. Ordering across messages is not kept.

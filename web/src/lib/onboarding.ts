@@ -60,14 +60,16 @@ export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href:
   },
 };
 
-/** Templates suited to a first workflow: one connector, nothing to wait
- * for, in this order when present; then the rest of the library. */
-export const STARTERS = ["new-order-alert-sms", "payment-thank-you-sms", "payroll-reminder", "low-balance-alert"];
+/** Templates suited to a first workflow, in this order when present: the
+ * first needs nothing connected, none needs a developer; then the rest of
+ * the library, with those that need a developer last. */
+export const STARTERS = ["daily-reminder", "payroll-reminder", "low-balance-alert", "stock-reorder-alert"];
 
 export function starterTemplates(list: Template[]): Template[] {
   const rank = (t: Template) => {
     const i = STARTERS.indexOf(t.id);
-    return i < 0 ? STARTERS.length + t.connectors.length : i;
+    if (i >= 0) return i;
+    return STARTERS.length + t.connectors.length + (t.needs_developer ? 100 : 0);
   };
   return [...list].filter((t) => t.available).sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
 }

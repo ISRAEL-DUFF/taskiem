@@ -1,0 +1,27 @@
+{
+  "id": "daily-reminder",
+  "title": "Remind me every day",
+  "summary": "At the time you choose, Taskiem reminds you on WhatsApp or Telegram of what you asked it to.",
+  "description": "Every day at the time you choose (Lagos time), you get your reminder on the WhatsApp or Telegram you linked to Taskiem, or by email. Nothing to connect: a good first workflow.",
+  "category": "operations",
+  "tags": ["reminder", "daily", "owner", "starter"],
+  "keywords": ["remind", "reminder", "every day", "daily", "morning", "evening", "alarm", "do not forget"],
+  "connectors": ["notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "message", "type": "string", "title": "What to remind you of", "description": "The reminder, in your own words.", "required": true, "example": "Count the cash and lock the shop.", "max_length": 300},
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When you are reminded, Lagos time.", "required": true, "default": "08:00", "example": "08:00"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_dailyReminder",
+    "version": 1,
+    "name": "Daily reminder",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * *", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "remind", "type": "connector", "name": "Remind the owner", "connector": "notify@1", "action": "tell",
+       "input": {"title": "Reminder", "message": "{{message}}"}}
+    ],
+    "settings": {"timeout": "10m"}
+  }
+}
