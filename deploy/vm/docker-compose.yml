@@ -130,6 +130,34 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  # Mail for workflows' email triggers (decision 0038, docs/email.md): an
+  # SMTP server on port 25 for the mail domain's MX record. Like the public
+  # pages it connects as taskiem_public and holds only the public key, which
+  # it seals messages with: mail.env, written by taskiem-vps setup, holds
+  # those and TASKIEM_MAIL_DOMAIN (also in taskiem.env, so the app shows
+  # addresses and takes the mail).
+  taskiem-mail:
+    <<: *hardening
+    profiles: [mail]
+    image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
+    command: ["serve", "--role", "mail"]
+    env_file:
+      # Optional: kits from before email triggers have no mail.env until
+      # setup runs again.
+      - { path: mail.env, required: false }
+    read_only: true
+    cap_drop: [ALL]
+    tmpfs: [/tmp]
+    ports:
+      - "25:2525"
+      - "127.0.0.1:9092:9090"
+    healthcheck:
+      test: ["CMD", "/taskiem", "healthcheck", "127.0.0.1:9090"]
+      interval: 10s
+      retries: 6
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
   # The malware scanner for files sent in forms (docs/forms.md#files), with
   # the public pages. Not published: only Taskiem reaches it, on the Compose
   # network (TASKIEM_CLAMD_ADDR=clamav:3310). Its own freshclam fetches
@@ -137,7 +165,7 @@ services:
   # memory for them.
   clamav:
     <<: *hardening
-    profiles: [public]
+    profiles: [public, mail]
     image: clamav/clamav:${CLAMAV_VERSION:-1.4}
     volumes:
       - clamav_db:/var/lib/clamav

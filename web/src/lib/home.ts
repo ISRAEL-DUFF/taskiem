@@ -87,9 +87,12 @@ export function runWords(status: string): string {
 }
 
 /** Who or what started a run, for "Started by …": a member's name, else
- * what its trigger is ("its schedule", "an order"); an id that is no
- * member's is an app or API key. */
+ * what its trigger is ("its schedule", "an order"); an email or a form
+ * says so (email:…, form:…); another id that is no member's is an app or
+ * API key. */
 export function startedByWords(startedBy: string | null, triggerType: string | undefined, names: Map<string, string>): string {
+  if (startedBy?.startsWith("email:")) return "an email";
+  if (startedBy?.startsWith("form:")) return "a form";
   if (startedBy) return names.get(startedBy) ?? "an app or API key";
   switch (triggerType) {
     case "schedule":

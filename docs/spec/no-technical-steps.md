@@ -2,7 +2,7 @@
 
 Taskiem is for Nigerian small businesses and the people who run their offices: traders, shop owners, salon owners, finance and HR staff. Most are not technical. Deploying staging (October 2026) showed, and an audit of the code confirmed, that an owner still meets steps that assume a developer: API keys, JSON, expressions, ids typed by hand, names that must match, messages in developer terms, and one bug that stops a one-person business from accepting its own orders.
 
-This plan removes them. It is a workstream of its own, **N0 to N9**, one pull request per milestone, and it runs **before the Phase 5 pilot** (S8's six weeks with traders and field agents): the pilot should test the product owners will actually meet.
+This plan removes them. It is a workstream of its own, **N0 to N10**, one pull request per milestone, and it runs **before the Phase 5 pilot** (S8's six weeks with traders and field agents): the pilot should test the product owners will actually meet.
 
 ## The rule
 
@@ -39,6 +39,7 @@ Everything a non-technical person needs can be done from a guided screen, or fro
 | **N0-5 What is "advanced".** Which features the default view hides | Hide by default: the dev environment and promotion, raw definitions, expressions, cron, policies' CEL, own connectors, allowed hosts, drift. A switch in Settings (owners and admins) shows them. Plans above Shop show them by default | N5, N8 |
 | **N0-6 Meta Embedded Signup.** A business's own WhatsApp number needs Taskiem to be a Meta Tech Provider | Apply when the shared number is not enough for a pilot business; until then, the guided screen | N9 |
 | **N0-7 Chat publishing.** Letting chat publish workflows | Yes, with the same checks and approvals as the web app, and a WhatsApp PIN or step-up where policy asks | N6 |
+| **N0-8 Receiving email.** "When an email comes in" needs mail received somewhere. Gmail's own notifications need restricted scopes (N0-2), and cover Gmail only | An address per workflow on Taskiem's own mail domain, received by a Taskiem `mail` role (no mail company sees the messages); owners forward from any mailbox with a filter. An inbound-mail service only as a fallback for operators who cannot open port 25 ([decision 0038](../decisions/0038-inbound-email.md)) | N10 |
 
 ## Milestones
 
@@ -172,6 +173,44 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 
 **Accept:** a gate owner connects a domain they own using only the guide; an unverified domain reaches the owner in chat.
 
+### N10: An email starts a workflow (L)
+
+**Problem.** Owners want workflows that start when an email arrives: a supplier's invoice, an order by email, a bank's transaction alert, a website's contact form. wd/v1 reserves an `email` trigger (`schemas/wd-v1.schema.json:1272`; [architecture §8.1](architecture.md)) and the app already has words for it ("An email comes in", `web/src/lib/home.ts:51`), but nothing receives mail and publishing one is refused (`engine/ingest/triggers.go:177`). The Gmail connector has actions only; a Gmail trigger needs restricted scopes and a yearly security assessment (N0-2).
+
+**Build** (the design is [decision 0038](../decisions/0038-inbound-email.md)):
+- **Definition:** the `email` trigger's config in the schema (`senders`, a list of addresses or domains; `attachments`, `keep` or `ignore`), in the [wd/v1 contract](../contracts/wd-v1.md), `ingest.Check`, the validator's messages and the `triggers.type` check. The OpenAPI `Trigger.type` enum gains `email` and the `storefront` and `form` it lacks.
+- **Addresses:** `email_endpoints` (12-character public id, per workflow and environment, stable across versions), made in `SyncEnvironments` like form endpoints; a **New address** action that retires the old one; the address in `GET /v1/workflows/{wf}/triggers`.
+- **Receiving:** a `mail` role, an SMTP server (STARTTLS, `SIZE` 30 MB, recipients checked at `RCPT` against known addresses, SPF/DKIM/DMARC recorded) writing to an `email_inbox` table through narrow functions, as the form host does; the api role drains it. Settings `TASKIEM_MAIL_DOMAIN`, `TASKIEM_MAIL_LISTEN` and the certificate. The VM kit gains the role, port 25 and the MX record in its runbook.
+- **Parsing:** raw MIME to `trigger.body`:
+  - fields: `from`, `to`, `cc`, `reply_to`, `subject`, `date`, `message_id`, `text`, `latest` (without the quoted thread), `html`, `attachments`, `forwarded_by`;
+  - character sets, HTML-only mail made into text, and a long body cut to `max_payload_bytes` with `truncated: true`;
+  - shares the MIME walking with the Gmail connector (`connectors/gmail/gmail.go:305-337`).
+- **Runs:**
+  - The run's `trigger` gets `email: {address, received_at, auth}`.
+  - Dedup is by Message-ID.
+  - The loop guard refuses automatic replies and Taskiem's own mail.
+  - `senders` is checked, trusting the From only when DKIM is aligned.
+  - Personal data is sealed at the declared email paths (`engine/runtime/sealing.go` extended beyond `trigger.body`'s inputs schema).
+  - The usual ingest gate, quotas and receipts apply.
+- **Attachments:** scanned by ClamAV and stored in the private bucket as form files are (`engine/forms/service.go:360-425`, `engine/media`); JPEG, PNG and PDF, 25 MB each, 10 per message, the rest under `skipped`; a `file_url` action for steps. Without a scanner, `attachments: keep` cannot be deployed.
+- **Forwarding confirmations:** mail from Gmail's and Outlook's forwarding-confirmation senders starts no run. Its code or link appears on the trigger's screen and goes to the owner's WhatsApp or Telegram (the N4 channel).
+- **Web app:**
+  - **An email comes in** in the trigger picker (`web/src/pages/Editor.tsx` `SettingsTab`), with the address and **Copy**.
+  - **Only from these senders**, as a list.
+  - **Keep attachments**.
+  - A step-by-step guide with screens for forwarding from Gmail and Outlook (filter by sender or subject).
+  - A live **Waiting for your first email…** that turns into the received message.
+  - **Try it with a sample email**, which runs the workflow as if a sample message had arrived.
+  - The canvas's trigger card shows the address.
+- **Chat:** an owner can ask for "a workflow for when my bank emails me an alert"; the AI builder knows the trigger (`engine/ai/builder/prompt.go`) and the aieval suite covers it. Chat replies with the address and the forwarding guide's link.
+- **Templates:** two in the library that start from email: a bank-alert email recorded in a table with the owner told, and a supplier's invoice saved with its PDF.
+
+**Accept:**
+- Tests of the parser on recorded messages: Gmail-forwarded, Outlook, multipart with attachments, HTML-only, non-UTF-8, a reply with a quoted thread, a malformed message.
+- An end-to-end test: mail sent over SMTP to a workflow's address starts one run with the expected body and file references; the same Message-ID again starts none; an unknown address is refused at `RCPT`; an automatic reply is refused; a Gmail confirmation shows its code and starts nothing.
+- A gate owner sets up Gmail forwarding with only the guide, and the next matching email runs the workflow.
+- No owner-facing text from Appendix C on the new screens.
+
 ## Order and timing
 
 | Order | Milestone | Size | Why here |
@@ -185,6 +224,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 | 7 | N5 Plain inputs and messages | M | Polish across everything above, and the gate's text test |
 | 8 | N8 Templates and canvas | L | The long tail; parts can ship separately |
 | 9 | N9 Optional steps | M | Optional features; domains wait on the domain platform |
+| 10 | N10 An email starts a workflow | L | Asked for after N1 to N9 were planned; needs N0-8, the mail domain and port 25 on the VMs, and reuses forms' file storage and N4's channel. M if an inbound-mail service is used instead of the `mail` role |
 
 About 14 to 18 weeks for one engineer, or 8 to 10 for two working in parallel (N2 and N8 split well). The Phase 5 pilot starts after N1 to N7 and the gate's observed sessions; N8 and N9 can finish during the pilot.
 

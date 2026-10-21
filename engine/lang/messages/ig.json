@@ -980,6 +980,10 @@
       "text": "E bipụtala *{name}*: ọ ga-arụ ọrụ site ugbu a.",
       "reviewed": false
     },
+    "wa.publish.email_address": {
+      "text": "Email e zigara ma ọ bụ e bufere na {address} na-amalite ya. Otu esi ebufe ha site na Gmail ma ọ bụ Outlook: {link}",
+      "reviewed": false
+    },
     "wa.publish.failed": {
       "text": "Enweghị ike ibipụta ya: {reason}.",
       "reviewed": false

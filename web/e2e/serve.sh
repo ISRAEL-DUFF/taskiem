@@ -42,4 +42,7 @@ export TASKIEM_LOGIN_BURST=100
 export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
 # Storefront orders (storefront.spec.ts): the public host's key turns on the inbox.
 export TASKIEM_PUBLIC_KEY=ZTJlLXB1YmxpYy1rZXktMzItYnl0ZXMtbG9uZy0hISE=
+# Email triggers (email.spec.ts): the mail role takes mail for in.e2e.test
+# on a local port instead of 25.
+export TASKIEM_MAIL_ENABLED=true TASKIEM_MAIL_DOMAIN=in.e2e.test TASKIEM_MAIL_LISTEN=127.0.0.1:12825
 exec bin/taskiem serve --role all

@@ -1,0 +1,30 @@
+{
+  "id": "supplier-invoice-email",
+  "title": "Approve supplier invoices that arrive by email",
+  "summary": "When a supplier emails an invoice, keep the PDF and ask you to approve it.",
+  "description": "When your supplier emails an invoice, keeps the attached PDF in Taskiem and asks you (or the role you choose) to approve it, showing who sent it and the subject. You hear the decision on the WhatsApp or Telegram you linked to Taskiem (or by email). The workflow gets its own email address: forward your supplier's invoices there, or give the address to your supplier. Only mail from the supplier's address or domain is taken. Paying stays with you: add a payment step after the approval when you are ready.",
+  "category": "approvals",
+  "tags": ["approvals", "suppliers", "invoices", "email", "attachments"],
+  "keywords": ["supplier", "vendor", "invoice", "bill", "email", "pdf", "attachment", "approve", "approval", "forward"],
+  "connectors": ["notify@1"],
+  "params": [
+    {"name": "supplier_sender", "type": "string", "title": "Your supplier's email", "description": "The address (or domain, such as supplier.com) your supplier's invoices come from.", "required": true, "example": "accounts@supplier.com", "max_length": 120},
+    {"name": "approver_role", "type": "string", "title": "Who approves", "description": "The role that approves invoices.", "required": false, "default": "owner", "example": "owner", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_supplierInvoiceEmail",
+    "version": 1,
+    "name": "Approve supplier invoices from email",
+    "description": "Keeps each emailed invoice and asks for approval.",
+    "trigger": {"type": "email", "config": {"senders": ["{{supplier_sender}}"], "attachments": "keep"}},
+    "steps": [
+      {"id": "approve_invoice", "type": "approval", "name": "Get the invoice approved",
+       "config": {"role": "{{approver_role}}", "count": 1, "timeout": "72h",
+         "subject": {"from": "=trigger.body.from.address", "subject": "=trigger.body.subject", "files": "=size(trigger.body.attachments)"}}},
+      {"id": "tell_decision", "type": "connector", "name": "Tell you what was decided", "connector": "notify@1", "action": "tell", "needs": ["approve_invoice"],
+       "input": {"message": "='The invoice \"' + trigger.body.subject + '\" was ' + (steps.approve_invoice.output.decision == 'approved' ? 'approved.' : 'not approved.')"}}
+    ],
+    "settings": {"timeout": "96h"}
+  }
+}

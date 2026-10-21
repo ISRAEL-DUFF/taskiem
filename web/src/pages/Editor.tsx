@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Background, Controls, ReactFlow, useReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
 import type { Step, WorkflowDefinition } from "@sdk/wd";
-import { ApiError, get, post, put, type ConnectorInfo, type JSONSchema, type MergeConflict, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
+import { ApiError, get, post, put, type ConnectorInfo, type JSONSchema, type MergeConflict, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary, type EmailEndpoint } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { SchedulePicker } from "../canvas/PlainPickers";
 import { sourcesFor } from "../lib/plaincanvas";
 import { StepNode, TRIGGER_NODE, TriggerNode, triggerCard, type StepFlowNode, type TriggerFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
 import { FormTriggerEditor, startFormTrigger } from "../canvas/FormEditor";
+import { EmailAddressCard, EmailTriggerSettings } from "../canvas/EmailTrigger";
 import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph, type Layout } from "../lib/graph";
 import { merge } from "../lib/schema";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
@@ -158,6 +159,13 @@ export function Editor() {
   };
 
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
+  // An email trigger's card shows the address mail starts it at.
+  const emailTrigger = doc.data?.definition.trigger.type === "email";
+  const emailEndpoints = useLoad(
+    () => (emailTrigger ? get<{ endpoints: EmailEndpoint[] }>(`/v1/workflows/${id}/email`) : Promise.resolve({ endpoints: [] })),
+    [id, emailTrigger],
+  );
+  const emailAddress = emailEndpoints.data?.endpoints.find((e) => e.environment === "prod" && e.status === "live")?.address || undefined;
   const invalid = useMemo(() => (def ? problemSteps(def, problems) : new Set<string>()), [def, problems]);
   const graph = useMemo(() => (def ? toGraph(def, layout) : { nodes: [], edges: [] }), [def, layout]);
   const stepNodes: StepFlowNode[] = graph.nodes.map((n) => ({
@@ -169,7 +177,7 @@ export function Editor() {
     data: { step: n.step, invalid: invalid.has(n.id) },
   }));
   // What starts it, left of the steps that need nothing, joined to them.
-  const trigger = def ? triggerCard(graph.nodes, def.trigger, { measured: sizes[TRIGGER_NODE] }) : null;
+  const trigger = def ? triggerCard(graph.nodes, def.trigger, { measured: sizes[TRIGGER_NODE], data: { detail: emailAddress } }) : null;
   const nodes: (StepFlowNode | TriggerFlowNode)[] = trigger ? [trigger.node, ...stepNodes] : stepNodes;
   const edges = trigger ? [...graph.edges, ...trigger.edges] : graph.edges;
 
@@ -516,7 +524,7 @@ export function Editor() {
         </div>
         </div>
       )}
-      {tab === "settings" && <SettingsTab def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} problems={problems} />}
+      {tab === "settings" && <SettingsTab workflow={id} def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} problems={problems} />}
       {advanced && tab === "code" && (
         <CodeTab
           def={def}
@@ -628,7 +636,7 @@ function stepProblemsOf(def: WorkflowDefinition, problems: Problem[], id: string
   return out;
 }
 
-function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDefinition; onChange: (d: WorkflowDefinition) => void; connectors: ConnectorInfo[]; problems: Problem[] }) {
+function SettingsTab({ workflow, def, onChange, connectors, problems }: { workflow: string; def: WorkflowDefinition; onChange: (d: WorkflowDefinition) => void; connectors: ConnectorInfo[]; problems: Problem[] }) {
   const t = def.trigger;
   const cfg = (t.config ?? {}) as Record<string, unknown>;
   const setCfg = (patch: Record<string, unknown>) => onChange({ ...def, trigger: { ...t, config: merge(cfg, patch) } });
@@ -656,7 +664,7 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
             const type = e.target.value as typeof t.type;
             if (type === "form") return onChange(startFormTrigger(def));
             const config: Record<string, unknown> | undefined =
-              type === "webhook" ? { path: "/" + def.id.replace(/^wf_/, ""), auth: "hmac" } : type === "schedule" ? { cron: "0 9 * * 1-5" } : type === "connector_event" ? { connector: "paystack@1", trigger: "transfer_event" } : undefined;
+              type === "webhook" ? { path: "/" + def.id.replace(/^wf_/, ""), auth: "hmac" } : type === "schedule" ? { cron: "0 9 * * 1-5" } : type === "connector_event" ? { connector: "paystack@1", trigger: "transfer_event" } : type === "email" ? {} : undefined;
             onChange({ ...def, trigger: config ? { type, config } : { type } });
           }}
         >
@@ -665,7 +673,8 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
           <option value="schedule">{advanced ? "Schedule" : "On a schedule"}</option>
           <option value="connector_event">{advanced ? "Connector event" : "When something happens in a service"}</option>
           <option value="form">{advanced ? "Form" : "When someone fills in a form"}</option>
-          {!["manual", "webhook", "schedule", "connector_event", "form"].includes(t.type) && <option value={t.type}>{t.type.replaceAll("_", " ")}</option>}
+          <option value="email">{advanced ? "Email" : "When an email comes in"}</option>
+          {!["manual", "webhook", "schedule", "connector_event", "form", "email"].includes(t.type) && <option value={t.type}>{t.type.replaceAll("_", " ")}</option>}
         </select>
       </Field>
       {t.type === "webhook" && !advanced && <p className="hint">Another system starts it at its web address (under Web addresses). Turn on Advanced in Settings to change how.</p>}
@@ -734,7 +743,8 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
           </Field>
         </>
       )}
-      {t.type !== "form" && advanced && (
+      {t.type === "email" && <EmailTriggerSettings config={cfg} onChange={setCfg} />}
+      {t.type !== "form" && t.type !== "email" && advanced && (
         <>
           <h2>Inputs schema</h2>
           <p className="hint">JSON Schema for trigger.body; fields marked "x-pii" are encrypted per data subject.</p>
@@ -764,6 +774,7 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
       )}
     </div>
     {t.type === "form" && <FormTriggerEditor def={def} onChange={onChange} problems={problems} />}
+    {t.type === "email" && <EmailAddressCard workflow={workflow} />}
     </>
   );
 }
@@ -826,6 +837,12 @@ function Endpoints({ workflow }: { workflow: string }) {
                 )}
                 {t.url && !t.remote && <code>{window.location.origin + t.url}</code>}
                 {t.url && !t.remote && <div className="hint">{endpointPurpose(t)}</div>}
+                {t.email && (
+                  <>
+                    <code>{t.email}</code>
+                    <div className="hint">Email sent or forwarded to this address starts the workflow (see When it runs).</div>
+                  </>
+                )}
                 {t.secret_name && t.auth !== "none" && (
                   <div className="hint">
                     Signed with the secret {t.secret_name} ({t.auth}){" "}

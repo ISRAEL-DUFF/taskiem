@@ -1,0 +1,31 @@
+# The inbound email platform connector (docs/email.md): what a workflow
+# started by an email does with the files that came with it. It acts on
+# Taskiem's own records, for the run's tenant only, and needs no
+# connection.
+manifest: connector/v1
+id: email
+version: 1.0.0
+name: Email received
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  file_url:
+    title: Get a link to an attachment
+    description: A short-lived download link for a file that came with the email that started this run (each of trigger.body.attachments is its id, name, type, size and sha256). The file's content never goes into the run.
+    class: read
+    input:
+      type: object
+      required: [file]
+      properties:
+        file:        { type: string, description: "The attachment's id (trigger.body.attachments[0].id)" }
+        ttl_minutes: { type: integer, minimum: 1, maximum: 60, default: 15 }
+    output:
+      type: object
+      properties:
+        url:        { type: string }
+        expires_at: { type: string }
+        name:       { type: string }
+        type:       { type: string }
+        size:       { type: integer }

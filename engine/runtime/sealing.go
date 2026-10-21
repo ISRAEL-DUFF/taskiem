@@ -18,16 +18,41 @@ import (
 // triggerPaths are the trigger fields the WD's inputs schema marks as PII.
 // The inputs schema describes trigger.body.
 func triggerPaths(def *wd.Definition) []pii.Path {
+	var out []pii.Path
+	if def.Trigger.Type == "email" {
+		out = append(out, emailPaths...)
+	}
 	schema, types := def.InputsSchema()
 	if schema == nil {
-		return nil
+		return out
 	}
-	var out []pii.Path
 	for _, p := range pii.SchemaPaths(schema, types) {
 		out = append(out, pii.Path{Segments: append([]string{"trigger", "body"}, p.Segments...), Category: p.Category})
 	}
 	return out
 }
+
+// emailPaths are an email trigger's personal parts (decision 0038): who
+// sent the message and to whom, and what it says.
+var emailPaths = func() []pii.Path {
+	var out []pii.Path
+	add := func(cat string, segs ...string) {
+		out = append(out, pii.Path{Segments: append([]string{"trigger", "body"}, segs...), Category: cat})
+	}
+	add("email", "from", "address")
+	add("name", "from", "name")
+	for _, list := range []string{"to", "cc", "reply_to"} {
+		add("email", list, "*", "address")
+		add("name", list, "*", "name")
+	}
+	add("email", "forwarded_by")
+	for _, f := range []string{"subject", "text", "latest", "html"} {
+		add("other", f)
+	}
+	add("other", "attachments", "*", "name")
+	add("other", "skipped", "*", "name")
+	return out
+}()
 
 // sealPayload marshals payload with declared paths and tainted values sealed.
 func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, payload any, paths []pii.Path, taint pii.Taint) (any, error) {

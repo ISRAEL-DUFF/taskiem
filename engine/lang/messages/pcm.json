@@ -980,6 +980,10 @@
       "text": "*{name}* don publish: e go dey work from now.",
       "reviewed": false
     },
+    "wa.publish.email_address": {
+      "text": "Any email wey dem send or forward go {address} go start am. How to forward dem from Gmail or Outlook: {link}",
+      "reviewed": false
+    },
     "wa.publish.failed": {
       "text": "E no fit publish: {reason}.",
       "reviewed": false

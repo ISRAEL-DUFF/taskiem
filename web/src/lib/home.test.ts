@@ -56,5 +56,7 @@ describe("startedByWords", () => {
     expect(startedByWords(null, "schedule", names)).toBe("its schedule");
     expect(startedByWords(null, "storefront", names)).toBe("an order");
     expect(startedByWords(null, undefined, names)).toBe("Taskiem");
+    expect(startedByWords("email:firstbank.ng", "email", names)).toBe("an email");
+    expect(startedByWords("form:F-1A2B", "form", names)).toBe("a form");
   });
 });

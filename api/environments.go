@@ -46,6 +46,9 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 	if err := s.formsDeployable(ctx, tx, tenant, d); err != nil {
 		return err
 	}
+	if err := s.emailDeployable(d); err != nil {
+		return err
+	}
 	reg, err := s.Registry.For(ctx, tenant.String())
 	if err != nil {
 		return err

@@ -59,6 +59,18 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 			trig["body"] = body
 		}
 	}
+	if def.Trigger.Type == "email" {
+		// A message as an email trigger delivers it (decision 0038).
+		trig["body"] = map[string]any{
+			"from": map[string]any{"address": "sender@example.com", "name": "A sender"}, "to": []any{}, "cc": []any{}, "reply_to": []any{},
+			"subject": "A sample email", "message_id": "sample@example.com", "date": "2026-01-01T09:00:00Z",
+			"text": "The text of a sample email.", "latest": "The text of a sample email.", "html": "",
+			"attachments": []any{map[string]any{"id": "00000000-0000-7000-8000-000000000000", "name": "sample.pdf", "type": "application/pdf", "size": 1000, "sha256": strings.Repeat("0", 64)}},
+			"skipped":     []any{},
+		}
+		trig["email"] = map[string]any{"address": "sample@in.taskiem.app", "received_at": "2026-01-01T09:00:00Z",
+			"auth": map[string]any{"spf": "pass", "dkim": []any{"example.com"}, "dmarc": "", "aligned": true}}
+	}
 	if def.Trigger.Type == "connector_event" {
 		if evs, ok := def.Trigger.Config["events"].([]any); ok && len(evs) > 0 {
 			trig["event"] = evs[0]

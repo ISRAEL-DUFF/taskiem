@@ -1,0 +1,29 @@
+{
+  "id": "bank-alert-email",
+  "title": "Record your bank's email alerts in a table",
+  "summary": "When your bank emails you an alert, keep it in a data table and tell you on WhatsApp.",
+  "description": "Every time your bank emails you a credit or debit alert, saves the alert's subject and text as a row in a data table in Taskiem (columns: received_at, subject, details) and tells you on the WhatsApp or Telegram you linked to Taskiem (or by email). The workflow gets its own email address: set your mailbox to forward your bank's alerts there (the workflow shows you how, step by step). Mail from anyone other than your bank's address is not taken. No bank login or mailbox password is needed.",
+  "category": "collections",
+  "tags": ["collections", "bank", "alerts", "email", "data table"],
+  "keywords": ["bank", "alert", "credit", "debit", "email", "inbox", "forward", "received", "money", "lands", "record", "table"],
+  "connectors": ["xenibase@1", "notify@1"],
+  "params": [
+    {"name": "bank_sender", "type": "string", "title": "Your bank's alert address", "description": "The address your bank's alerts come from (or just its domain, such as yourbank.com). Only mail from it is taken.", "required": true, "example": "alerts@yourbank.com", "max_length": 120},
+    {"name": "table", "type": "string", "title": "Alerts table", "description": "Your table with received_at, subject and details columns.", "required": false, "default": "bank_alerts", "example": "bank_alerts", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_bankAlertEmail",
+    "version": 1,
+    "name": "Record bank alerts from email",
+    "description": "Saves each alert your bank emails you, and tells you.",
+    "trigger": {"type": "email", "config": {"senders": ["{{bank_sender}}"]}},
+    "steps": [
+      {"id": "record_alert", "type": "connector", "name": "Save the alert in the table", "connector": "xenibase@1", "action": "insert_rows", "connection": "data_tables",
+       "input": {"table": "{{table}}", "row": {"received_at": "=trigger.email.received_at", "subject": "=trigger.body.subject", "details": "=trigger.body.latest"}}},
+      {"id": "tell_owner", "type": "connector", "name": "Tell you about the alert", "connector": "notify@1", "action": "tell", "needs": ["record_alert"],
+       "input": {"title": "Bank alert", "message": "='Your bank sent an alert: ' + trigger.body.subject"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

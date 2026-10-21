@@ -135,6 +135,9 @@ func loadPublicConfig() (config, error) {
 	if c.Public, err = publicConfigFromEnv(); err != nil {
 		return c, err
 	}
+	if c.Mail, err = mailConfigFromEnv(); err != nil {
+		return c, err
+	}
 	if c.Public.DSN == "" {
 		return c, errors.New("TASKIEM_PUBLIC_DATABASE_URL (or TASKIEM_DATABASE_URL) is required")
 	}
@@ -144,27 +147,37 @@ func loadPublicConfig() (config, error) {
 	return c, nil
 }
 
-// publicTask opens the public host's own pool and returns its server, the
-// task that serves it, and the pool's close.
-func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.Server, func(context.Context) error, func(), error) {
+// publicPool opens a pool on the public host's own login (as
+// taskiem_public), which the mail role shares.
+func publicPool(ctx context.Context, cfg config, log *slog.Logger) (*pgxpool.Pool, error) {
 	pc, err := pgxpool.ParseConfig(cfg.Public.DSN)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("TASKIEM_PUBLIC_DATABASE_URL: %w", err)
+		return nil, fmt.Errorf("TASKIEM_PUBLIC_DATABASE_URL: %w", err)
 	}
 	pc.MaxConns = cfg.Public.PoolSize
 	pc.AfterConnect = afterConnect(cfg.Public.Role)
 	pool, err := pgxpool.NewWithConfig(ctx, pc)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := pool.Ping(pctx); err != nil {
 		pool.Close()
-		return nil, nil, nil, fmt.Errorf("public host database: %w", err)
+		return nil, fmt.Errorf("public host database: %w", err)
 	}
 	if cfg.DSN != "" && sameLogin(cfg.Public.DSN, cfg.DSN) {
 		log.Warn("the public host connects with the same database login as the other roles; give it its own login, a member of taskiem_public only (docs/public-host.md)")
+	}
+	return pool, nil
+}
+
+// publicTask opens the public host's own pool and returns its server, the
+// task that serves it, and the pool's close.
+func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.Server, func(context.Context) error, func(), error) {
+	pool, err := publicPool(ctx, cfg, log)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool), Reports: publicweb.DBReports(pool),
 		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool),

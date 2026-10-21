@@ -11223,6 +11223,176 @@ paths:
                 $ref: '#/components/schemas/TriggerList'
         default:
           $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/email:
+    get:
+      operationId: getWorkflowEmail
+      tags:
+      - Workflows
+      summary: A workflow's email addresses
+      description: Per environment, the address mail starts the workflow at, the latest messages it got (what came of each, not their content), and the latest forwarding confirmation a mail provider sent to it.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - endpoints
+                - receiving
+                properties:
+                  receiving:
+                    type: boolean
+                    description: Whether this Taskiem takes mail (a mail domain and the public key are set).
+                  endpoints:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EmailEndpoint'
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/email/{env}/address:
+    post:
+      operationId: newEmailAddress
+      tags:
+      - Workflows
+      summary: Give a workflow a new email address
+      description: Mail to the old address is refused from then on. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.publish
+      x-taskiem-all-environments: true
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      - name: env
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The new address
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - address
+                properties:
+                  address:
+                    type: string
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/email/{env}/test:
+    post:
+      operationId: sendTestEmail
+      tags:
+      - Workflows
+      summary: Run a workflow with a sample email
+      description: Starts the workflow as if a sample message had arrived at its address, so its run shows what an email gives it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      - name: env
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The run started, or why none was
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - run_id
+                - note
+                properties:
+                  run_id:
+                    type:
+                    - string
+                    - 'null'
+                    format: uuid
+                  note:
+                    type: string
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/email-files/{id}:
+    get:
+      operationId: getEmailFile
+      tags:
+      - Workflows
+      summary: A short-lived download link for an email attachment
+      description: Audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: pii.reveal
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  expires_at:
+                    type: string
+                  name:
+                    type: string
+                  type:
+                    type: string
+                  size:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/versions:
     post:
       operationId: createVersion
@@ -17726,6 +17896,9 @@ components:
           - schedule
           - connector_event
           - ussd
+          - storefront
+          - form
+          - email
         version:
           type: integer
         path:
@@ -17761,6 +17934,107 @@ components:
         service:
           type: string
           description: The connector's name, for a connector event.
+        email:
+          type: string
+          description: An email trigger's address, where mail starts the workflow (decision 0038).
+      additionalProperties: false
+    EmailEndpoint:
+      type: object
+      required:
+      - id
+      - environment
+      - address
+      - status
+      - version
+      - confirmation
+      - messages
+      - senders
+      - attachments
+      properties:
+        id:
+          type: string
+          format: uuid
+        environment:
+          type: string
+        address:
+          type: string
+          description: Empty when this Taskiem has no mail domain.
+        status:
+          type: string
+          enum:
+          - live
+          - closed
+          - suspended
+        version:
+          type: integer
+        senders:
+          type: array
+          items:
+            type: string
+        attachments:
+          type: string
+          enum:
+          - keep
+          - ignore
+        confirmation:
+          description: The latest forwarding confirmation a mail provider sent to the address.
+          oneOf:
+          - type: 'null'
+          - type: object
+            properties:
+              provider:
+                type: string
+              code:
+                type: string
+              link:
+                type: string
+              for:
+                type: string
+              received_at:
+                type: string
+        messages:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - sender_domain
+            - size
+            - attachments
+            - status
+            - note
+            - run_id
+            - received_at
+            properties:
+              id:
+                type: string
+                format: uuid
+              sender_domain:
+                type:
+                - string
+                - 'null'
+              size:
+                type: integer
+              attachments:
+                type: integer
+              status:
+                type: string
+                enum:
+                - started
+                - refused
+                - confirmation
+              note:
+                type:
+                - string
+                - 'null'
+              run_id:
+                type:
+                - string
+                - 'null'
+                format: uuid
+              received_at:
+                $ref: '#/components/schemas/Timestamp'
+            additionalProperties: false
       additionalProperties: false
     TriggerList:
       type: object

@@ -1,0 +1,156 @@
+{{- if .Values.mail.enabled }}
+{{- $m := .Values.mail }}
+{{- $name := printf "%s-mail" (include "taskiem.fullname" .) }}
+# The mail role (docs/email.md): an SMTP server for workflows' email
+# triggers, reached from the internet on port 25 through its Service. Like
+# the public host it gets no platform secret, only mail.existingSecret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mail
+spec:
+  replicas: {{ $m.replicas }}
+  selector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mail
+  template:
+    metadata:
+      labels:
+        {{- include "taskiem.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mail
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "taskiem.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "taskiem.podSecurityContext" . | nindent 8 }}
+      terminationGracePeriodSeconds: {{ include "taskiem.gracePeriod" . }}
+      containers:
+        - name: taskiem
+          image: {{ include "taskiem.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: [serve, --role, mail]
+          securityContext:
+            {{- include "taskiem.containerSecurityContext" . | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ $m.existingSecret }}
+          env:
+            - name: TASKIEM_MAIL_DOMAIN
+              value: {{ required "mail.domain is required with mail.enabled" $m.domain | quote }}
+            {{- with $m.hostname }}
+            - name: TASKIEM_MAIL_HOSTNAME
+              value: {{ . | quote }}
+            {{- end }}
+            - name: TASKIEM_PUBLIC_DATABASE_POOL
+              value: {{ $m.databasePool | quote }}
+            {{- include "taskiem.shutdownEnv" . | nindent 12 }}
+          ports:
+            - name: smtp
+              containerPort: 2525
+            - name: metrics
+              containerPort: 9090
+          readinessProbe:
+            httpGet: { path: /readyz, port: metrics }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            {{- toYaml $m.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+# Port 25 from the internet: a LoadBalancer by default. Keep the client's
+# address (externalTrafficPolicy Local) so SPF checks the real sender.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mail
+  {{- with $m.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $m.service.type }}
+  {{- if ne $m.service.type "ClusterIP" }}
+  externalTrafficPolicy: Local
+  {{- end }}
+  selector:
+    {{- include "taskiem.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mail
+  ports:
+    - { name: smtp, port: 25, targetPort: smtp }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-metrics
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mail
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "taskiem.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mail
+  ports:
+    - { name: metrics, port: 9090, targetPort: metrics }
+{{- if .Values.networkPolicy.enabled }}
+---
+# SMTP from anywhere; metrics only from the monitoring namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "taskiem.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mail
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mail
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ port: 2525 }]
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+      ports: [{ port: 9090 }]
+{{- end }}
+{{- end }}
