@@ -6,27 +6,26 @@
   "category": "reporting",
   "tags": [
     "reporting",
-    "sales",
     "pos",
     "moniepoint",
     "cash-up",
-    "reconciliation",
-    "closing"
+    "reconciliation"
   ],
   "keywords": [
     "pos",
     "terminal",
+    "terminals",
+    "moniepoint",
     "cash up",
     "cashup",
+    "cash-up",
     "closing",
     "reconcile",
     "reconciliation",
     "sales book",
-    "difference",
-    "short",
-    "shortage",
+    "end of day",
     "balance the till",
-    "end of day"
+    "shortage"
   ],
   "connectors": [
     "xenibase@1",

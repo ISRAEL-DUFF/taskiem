@@ -5,28 +5,23 @@
   "description": "Whenever Moniepoint reports a transaction on one of your POS terminals (a card purchase, a transfer to the terminal, a withdrawal, a bill payment), adds a row to your POS sales table with the terminal, the kind, the amount in naira, the day, whether it was approved and the terminal's answer. This is the record the POS summary and cash-up workflows read. Connect your terminals once under Connections (Taskiem shows where in Moniepoint Business to create the webhook subscription); every terminal of the business is covered. Nothing is sent to anyone.",
   "category": "sales",
   "tags": [
-    "sales",
     "pos",
     "moniepoint",
     "terminal",
-    "records",
+    "terminals",
     "data table"
   ],
   "keywords": [
     "pos",
     "terminal",
+    "terminals",
     "moniepoint",
-    "sale",
-    "sales",
-    "card",
-    "transfer",
-    "record",
-    "table",
-    "takings",
-    "payment",
-    "received",
-    "shop",
-    "store"
+    "card machine",
+    "counter",
+    "pos sale",
+    "pos sales",
+    "pos payment",
+    "pos transaction"
   ],
   "connectors": [
     "moniepoint_pos@1",

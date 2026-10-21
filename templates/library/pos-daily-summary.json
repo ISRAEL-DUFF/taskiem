@@ -6,27 +6,21 @@
   "category": "reporting",
   "tags": [
     "reporting",
-    "sales",
     "pos",
     "moniepoint",
-    "summary",
-    "daily",
-    "owner"
+    "terminals"
   ],
   "keywords": [
     "pos",
     "terminal",
+    "terminals",
     "moniepoint",
-    "summary",
-    "total",
-    "today",
-    "daily",
-    "evening",
-    "report",
-    "takings",
-    "sales",
-    "owner",
-    "how much"
+    "card machine",
+    "counter",
+    "pos sales",
+    "pos summary",
+    "pos total",
+    "per terminal"
   ],
   "connectors": [
     "xenibase@1",

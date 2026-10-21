@@ -6,25 +6,21 @@
   "category": "alerts",
   "tags": [
     "alerts",
-    "sales",
     "pos",
     "moniepoint",
-    "terminal",
-    "owner"
+    "terminal"
   ],
   "keywords": [
     "pos",
     "terminal",
+    "terminals",
     "moniepoint",
+    "card machine",
     "big sale",
-    "large",
+    "large sale",
     "declined",
-    "failed",
-    "reversed",
-    "alert",
-    "tell me",
-    "owner",
-    "fraud"
+    "pos payment",
+    "did not go through"
   ],
   "connectors": [
     "moniepoint_pos@1",
