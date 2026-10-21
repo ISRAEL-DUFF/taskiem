@@ -145,7 +145,7 @@ wait_healthy() { # SECONDS
     id=$(compose ps -q taskiem 2>/dev/null || true)
     status=""
     if [ -n "$id" ]; then status=$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true); fi
-    if [ "$status" = healthy ] && local_https /readyz >/dev/null 2>&1 && public_healthy; then return 0; fi
+    if [ "$status" = healthy ] && local_https /readyz >/dev/null 2>&1 && public_healthy && mail_healthy; then return 0; fi
     sleep 3
   done
   return 1
@@ -158,6 +158,16 @@ public_healthy() {
   compose config --services 2>/dev/null | grep -x taskiem-public >/dev/null || return 0
   local id
   id=$(compose ps -q taskiem-public 2>/dev/null || true)
+  [ -n "$id" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true)" = healthy ]
+}
+
+# The mail role, when a mail domain is set, healthy too.
+mail_healthy() {
+  [ -n "$(conf MAIL_DOMAIN)" ] || return 0
+  # A release from before email triggers (a rollback) has no such service.
+  compose config --services 2>/dev/null | grep -x taskiem-mail >/dev/null || return 0
+  local id
+  id=$(compose ps -q taskiem-mail 2>/dev/null || true)
   [ -n "$id" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true)" = healthy ]
 }
 
@@ -210,7 +220,7 @@ cmd_setup() {
 
   # ALERT_EMAIL and ALERT_WEBHOOK are read indirectly (${!f}) when saved below.
   # shellcheck disable=SC2034
-  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME PUBLIC PREVIEW_DOMAIN
+  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME PUBLIC PREVIEW_DOMAIN MAIL_DOMAIN
   echo "Taskiem setup. Press Enter to keep the value in brackets." >&2
   ask DOMAIN "Public host name (DNS must point here)" "$(conf DOMAIN)"
   ask OWNER_EMAIL "Owner's email (receives the set-your-password link)" "$(conf OWNER_EMAIL)"
@@ -232,6 +242,13 @@ cmd_setup() {
     ask PREVIEW_DOMAIN "Preview domain for storefronts, such as shops.example.com (point *.<it> here)" "$(conf PREVIEW_DOMAIN)"
     PREVIEW_DOMAIN=${PREVIEW_DOMAIN,,}
     [[ $PREVIEW_DOMAIN =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || die "the preview domain must be a host name such as shops.example.com"
+  fi
+  # Email triggers (docs/email.md): mail for <id>@<mail domain> comes to
+  # this server on port 25; its MX record names this server's host name.
+  ask MAIL_DOMAIN "Mail domain for email triggers, such as in.example.com, its MX record pointing at this server's host name (empty: off)" "$(conf MAIL_DOMAIN || true)"
+  MAIL_DOMAIN=${MAIL_DOMAIN,,}
+  if [ -n "$MAIL_DOMAIN" ]; then
+    [[ $MAIL_DOMAIN =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || die "the mail domain must be a domain such as in.example.com"
   fi
   local first_run=""
   [ -n "$(conf CHANNEL)" ] || first_run=1
@@ -268,7 +285,8 @@ cmd_setup() {
 
   local f
   [ "$PUBLIC" != yes ] || [ "$PREVIEW_DOMAIN" != "${DOMAIN,,}" ] || die "the preview domain must differ from the app's host name"
-  for f in DOMAIN OWNER_EMAIL ORG CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK PUBLIC PREVIEW_DOMAIN; do env_set "$ETC/vps.conf" "$f" "${!f:-}"; done
+  [ -z "$MAIL_DOMAIN" ] || [ "$MAIL_DOMAIN" != "${DOMAIN,,}" ] || die "the mail domain must differ from the app's host name (use a subdomain, such as in.${DOMAIN,,})"
+  for f in DOMAIN OWNER_EMAIL ORG CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK PUBLIC PREVIEW_DOMAIN MAIL_DOMAIN; do env_set "$ETC/vps.conf" "$f" "${!f:-}"; done
   env_set "$ETC/vps.conf" TZ Africa/Lagos
 
   # Secrets made once, never regenerated.
@@ -332,16 +350,29 @@ cmd_setup() {
     env_set "$p" TASKIEM_PUBLIC_DOMAINS "$PREVIEW_DOMAIN"
     env_set "$p" TASKIEM_PUBLIC_KEY "$pubkey"
     env_set "$t" TASKIEM_PUBLIC_DOMAINS "$PREVIEW_DOMAIN"
-    # Files sent in forms are scanned by the clamav container (docs/forms.md#files).
-    env_set "$t" TASKIEM_CLAMD_ADDR clamav:3310
-    env_set "$KIT/.env" COMPOSE_PROFILES public
     install -m 0644 "$KIT/public.caddy" "$KIT/caddy.d/public.caddy"
   else
     env_set "$t" TASKIEM_PUBLIC_DOMAINS ""
-    env_set "$t" TASKIEM_CLAMD_ADDR ""
-    env_set "$KIT/.env" COMPOSE_PROFILES ""
     rm -f "$KIT/caddy.d/public.caddy"
   fi
+  # The mail role (docs/email.md): the public host's login and key, in a
+  # file of its own so it runs whether public pages are on or not.
+  local m="$KIT/mail.env" profiles=()
+  touch "$m" && chmod 600 "$m"
+  if [ -n "$MAIL_DOMAIN" ]; then
+    env_set "$m" TASKIEM_PUBLIC_DATABASE_URL "${dsn_scheme}${pubrole}:${pubpw}@${dsn_host}/${dbname}${dsn_query}"
+    env_set "$m" TASKIEM_PUBLIC_KEY "$pubkey"
+    env_set "$m" TASKIEM_MAIL_DOMAIN "$MAIL_DOMAIN"
+    env_set "$m" TASKIEM_MAIL_HOSTNAME "${DOMAIN,,}"
+    profiles+=(mail)
+  fi
+  # The app shows addresses and takes the mail the mail role leaves.
+  env_set "$t" TASKIEM_MAIL_DOMAIN "$MAIL_DOMAIN"
+  [ "$PUBLIC" != yes ] || profiles+=(public)
+  # Files sent in forms or kept from emails are scanned by the clamav
+  # container (docs/forms.md#files, docs/email.md).
+  if [ ${#profiles[@]} -gt 0 ]; then env_set "$t" TASKIEM_CLAMD_ADDR clamav:3310; else env_set "$t" TASKIEM_CLAMD_ADDR ""; fi
+  env_set "$KIT/.env" COMPOSE_PROFILES "$(IFS=,; echo "${profiles[*]}")"
   touch "$KIT/openbao.env" && chmod 600 "$KIT/openbao.env"
   env_set "$KIT/.env" TASKIEM_DOMAIN "$DOMAIN"
   env_set "$KIT/.env" OPENBAO_VERSION "${OPENBAO_IMAGE#*:}"
@@ -417,8 +448,9 @@ END \$\$;
 GRANT taskiem_app TO "$approle";
 SQL
 
-  # The public host's login exists only while public pages are on.
-  if [ "$PUBLIC" = yes ]; then
+  # The public host's login exists only while public pages or mail are on.
+  [ -n "$MAIL_DOMAIN" ] || compose rm -sf taskiem-mail >/dev/null 2>&1 || true
+  if [ "$PUBLIC" = yes ] || [ -n "$MAIL_DOMAIN" ]; then
     log "creating the database role the public host signs in as ($pubrole)"
     docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
 DO \$\$ BEGIN
@@ -438,6 +470,7 @@ END \$\$;
 SQL
     compose rm -sf taskiem-public >/dev/null 2>&1 || true
   fi
+  [ "$PUBLIC" = yes ] || compose rm -sf taskiem-public >/dev/null 2>&1 || true
 
   log "starting Taskiem"
   compose up -d --remove-orphans
@@ -669,6 +702,7 @@ run_checks() {
   local_https /readyz >/dev/null 2>&1 || echo "https://$domain/readyz does not answer"
   compose exec -T openbao wget -qO- http://127.0.0.1:8200/v1/sys/health >/dev/null 2>&1 || echo "OpenBao is sealed or down: secrets cannot be read"
   public_healthy || echo "the public host (storefronts and forms) is not healthy: new business domains get no certificate"
+  mail_healthy || echo "the mail server (email triggers) is not healthy: mail to workflows is refused until it is back, and senders retry"
   if compose logs --since 30h openbao-renew 2>/dev/null | grep 'RENEWAL FAILED' >/dev/null; then echo "OpenBao token renewal failed: secrets stop working when the token expires"; fi
   df -P / /var/lib/docker 2>/dev/null | awk 'NR>1 && $5+0 >= 85 {print "disk " $6 " is " $5 " full"}' | sort -u
   if [ -z "${TASKIEM_VPS_INSECURE_TLS:-}" ]; then

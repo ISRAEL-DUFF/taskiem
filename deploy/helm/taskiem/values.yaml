@@ -153,6 +153,26 @@ public:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
 
+# The mail role: email triggers' SMTP server (docs/email.md). Its pods get
+# no platform secret: only mail.existingSecret, which holds
+# TASKIEM_PUBLIC_DATABASE_URL (the public host's login, a member of
+# taskiem_public only) and TASKIEM_PUBLIC_KEY. Set
+# config.TASKIEM_MAIL_DOMAIN to the same domain, so the api role shows
+# addresses and takes the mail, and turn clamav on to keep attachments.
+mail:
+  enabled: false
+  domain: ""            # in.example.com: its MX record points at the Service's address
+  hostname: ""          # the name it greets with; default mx.<domain>
+  existingSecret: taskiem-mail
+  replicas: 2
+  databasePool: 5
+  service:
+    type: LoadBalancer
+    annotations: {}
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 256Mi }
+
 # The malware scanner for files sent in forms (docs/forms.md#files). Off,
 # forms that ask for files cannot be deployed. It needs about 1.5 GB of
 # memory for its signatures, which it downloads from the ClamAV mirrors.
