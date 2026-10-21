@@ -192,3 +192,14 @@ Workers need the most memory. Each running Python step can use up to 256 MiB of 
 ## The malware scanner for form files
 
 Files sent in [forms](forms.md#files) are scanned before they are accepted. `clamav.enabled: true` runs a ClamAV daemon in the release (a Deployment and a Service on port 3310) and sets `TASKIEM_CLAMD_ADDR` on the `api` role; with `networkPolicy.enabled`, only the `api` (or `all`) pods may reach it, never the public host. It needs about 1.5 GB of memory (`clamav.resources`) and outbound HTTPS to the ClamAV mirrors for its signatures, which a new pod downloads before it is ready. Off, forms that ask for files cannot be deployed. An operator running their own clamd sets `TASKIEM_CLAMD_ADDR` in `extraEnv` instead.
+
+## Email triggers
+
+[Email triggers](email.md) need the `mail` role reachable from the internet on port 25. `mail.enabled: true` with `mail.domain` runs it as its own Deployment (`--role mail`, two replicas) behind a `LoadBalancer` Service on port 25. The Service keeps the client's address (`externalTrafficPolicy: Local`), which the SPF check needs.
+
+1. Create the Secret `mail.existingSecret` (`taskiem-mail`) with `TASKIEM_PUBLIC_DATABASE_URL` (a login that is a member of `taskiem_public` only, such as the public host's) and `TASKIEM_PUBLIC_KEY` (the same as in the main Secret).
+2. Set `config.TASKIEM_MAIL_DOMAIN` to the same domain, so the `api` role shows addresses and takes the mail, and turn `clamav` on so workflows can keep attachments.
+3. Point the domain's MX record at a name for the Service's external address, and allow inbound TCP 25 to it. `mail.service.annotations` takes the cloud's load-balancer annotations.
+
+With `networkPolicy.enabled`, SMTP is open to everyone and the metrics port only to the monitoring namespace.
+

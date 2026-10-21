@@ -4,15 +4,16 @@ Staging runs on one VM with the [VM kit](../vm.md) (`taskiem-vps`), on the **sta
 
 Each step ends with a **check**. Stop at the first check that fails and see [When something fails](#when-something-fails).
 
-`$APP` below is the app's host name (`staging.example.com`) and `$PREVIEW` the storefronts' preview domain (`shops-staging.example.net`).
+`$APP` below is the app's host name (`staging.example.com`), `$PREVIEW` the storefronts' preview domain (`shops-staging.example.net`) and `$MAIL` the mail domain for email triggers (`in.staging.example.com`).
 
 ## 0. What you need
 
 | | Notes |
 | --- | --- |
 | A VPS | Ubuntu 22.04 or 24.04, or Debian 12, x86_64. 4 vCPU and 8 GB is comfortable; 2 vCPU and 4 GB is the minimum with public pages on (the virus scanner for form files takes about 1.5 GB). 40 GB of disk. A user with `sudo` and SSH key login |
-| The provider's firewall | Inbound 22, 80 and 443 open. The kit closes everything else on the server itself |
+| The provider's firewall | Inbound 22, 80 and 443 open, and 25 for [email triggers](#9-email-triggers). The kit closes everything else on the server itself |
 | Postgres 16 or newer | A **dedicated** server (managed, with point-in-time recovery), not a shared platform's project database: Taskiem's migrations create roles, which belong to the whole server, so the owner needs `CREATEROLE`, and two environments cannot share one server. An **empty** database, **not named `taskiem`** (`taskiem_staging`), and its owner. The VPS must be allowed to connect. For staging only, Postgres can run on the VPS itself: see [A database on the VPS](#a-database-on-the-vps-staging-only). Tested on 16 and 18 |
+| A mail domain (optional) | `$MAIL`, for [email triggers](#9-email-triggers): a subdomain of one you own, whose MX record you can set. Can be added later |
 | Two domains | `$APP`, and `$PREVIEW`, a **separate registrable domain**, never a subdomain of the app's (storefront pages must never share the app's cookies). Staging and production need different preview domains |
 | SMTP | An account that can send from the sender address you will use (owners, agents and operators get their set-your-password links by email) |
 | A Telegram bot | Made with [@BotFather](https://t.me/BotFather) (`/newbot`): its token and its username |
@@ -30,6 +31,7 @@ Create, at the DNS providers of each domain:
 | `A $APP` | the VPS's IPv4 address |
 | `A *.$PREVIEW` (a wildcard) | the same address |
 | `AAAA` for both | only if the VPS has IPv6 and its firewall allows it |
+| `MX $MAIL`, priority 10 (optional) | `$APP`: mail for email triggers comes to the same server |
 
 **Check** (from your computer; allow a few minutes after creating them):
 
@@ -38,7 +40,7 @@ dig +short $APP
 dig +short anything.$PREVIEW
 ```
 
-Both print the VPS's address.
+Both print the VPS's address. With a mail domain, `dig +short MX $MAIL` prints `10 $APP.`
 
 ## 2. The server
 
@@ -111,6 +113,7 @@ Answer the questions:
 | Telegram bot token, username | from @BotFather; the username without `@` |
 | Public pages | `yes` |
 | Preview domain | `$PREVIEW` |
+| Mail domain for email triggers | `$MAIL`, or empty to leave email triggers off (see [step 9](#9-email-triggers)) |
 | Release channel | `staging` |
 | Upgrade window | `any` |
 | Alert email, webhook | your email; a Slack-compatible webhook or empty |
@@ -203,11 +206,54 @@ Work through these in order. Each is a few minutes.
 | `sudo taskiem-vps status` | Release, last upgrade and backup, services, problems |
 | `sudo taskiem-vps update --now` | Upgrade to the newest staging release now |
 | `sudo taskiem-vps rollback` | Back to the release before |
-| `sudo taskiem-vps logs [taskiem\|taskiem-public\|caddy\|openbao\|clamav]` | Follow logs |
+| `sudo taskiem-vps logs [taskiem\|taskiem-public\|taskiem-mail\|caddy\|openbao\|clamav]` | Follow logs |
 | `sudo taskiem-vps owner-reset` | Email the owner a new set-your-password link |
 | `sudo taskiem-vps backup` | Back up now |
 
 A merge to main reaches staging within 15 minutes of CI's `image` job. `taskiem-vps status` shows the commit it runs.
+
+## 9. Email triggers
+
+[Email triggers](../email.md) give a workflow its own address, `<id>@$MAIL`; mail sent or forwarded there starts it. The server receives that mail itself on port 25. Releases bring the feature without turning it on: until a mail domain is set, email triggers cannot be published.
+
+### On a new server
+
+Answer the installer's "Mail domain" question with `$MAIL` (step 3), after creating the MX record (step 1) and opening port 25 (step 0). Then go to the checks below.
+
+### On a server installed before email triggers
+
+1. **Upgrade.** Staging upgrades itself within 15 minutes of the merge; `sudo taskiem-vps update --now` does it at once. The upgrade migrates the database and brings the `taskiem-mail` service and the setup question, but turns nothing on. **Check:** `sudo taskiem-vps status` shows the new commit, with no PROBLEM lines.
+2. **DNS.** Add `MX $MAIL` → `$APP`, priority 10, at `$MAIL`'s DNS provider. **Check** from your computer: `dig +short MX $MAIL` prints `10 $APP.`
+3. **Port 25.** Allow inbound TCP 25 in the hosting provider's firewall or security group. Some providers block port 25 for new accounts: they usually mean outbound, which is not needed, but ask if the check in step 5 fails. Nothing is needed on the server itself.
+4. **Setup.** Run `sudo taskiem-vps setup`. Press Enter at every question to keep its answer, and give `$MAIL` at "Mail domain for email triggers". It writes `/opt/taskiem/mail.env`, sets the domain for the app, starts `taskiem-mail` (and `clamav`, if public pages are off) and restarts what changed. Every secret is kept.
+5. **Check** on the server:
+
+   ```sh
+   sudo taskiem-vps status     # taskiem-mail running and healthy
+   sudo taskiem-vps check      # "all checks pass"
+   sudo grep MAIL /opt/taskiem/mail.env /opt/taskiem/taskiem.env   # TASKIEM_MAIL_DOMAIN in both
+   ```
+
+   And from your computer (not the server), that the internet reaches it:
+
+   ```sh
+   nc -vz $APP 25                        # succeeded / open
+   printf 'QUIT\r\n' | nc $APP 25         # 220 $APP ESMTP …
+   ```
+
+### Try it
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 1 | In the app: **Workflows**, a workflow (or a new one), **When it runs** → **When an email comes in**, **Publish** | **Its email address** shows `<id>@$MAIL`, **Waiting for your first email…** |
+| 2 | **Try it with a sample email** | A run opens, completed |
+| 3 | From your own mailbox, send an email to the address | Within a minute it is listed under **What arrived**, **Started a run** |
+| 4 | In Gmail: **Settings → Forwarding and POP/IMAP → Add a forwarding address**, the address | The confirmation code appears on the workflow's page, and the owner gets it on Telegram; enter it in Gmail |
+| 5 | Send yourself mail from someone not on the workflow's **Only take mail from** list (if it has one) | Listed as **Not started**, with the reason |
+
+**Check:** `sudo taskiem-vps logs taskiem-mail` shows `mail: received`, and `sudo taskiem-vps logs taskiem` shows no `ERROR` for email.
+
+To turn it off again: re-run setup and clear the mail domain. Published email triggers then refuse mail; senders retry for a few days.
 
 ## When something fails
 
@@ -222,6 +268,9 @@ A merge to main reaches staging within 15 minutes of CI's `image` job. `taskiem-
 | Emails do not arrive | The SMTP URL and sender; the spam folder; `sudo taskiem-vps logs taskiem` |
 | A release did not come | CI's `image` job on main; `sudo taskiem-vps status`; a release that failed its health check is rolled back and not retried (the alert says why) |
 | Form files wait | The virus scanner's first start downloads its signatures; `sudo taskiem-vps logs clamav` |
+| Mail to a workflow never arrives | `dig MX $MAIL` (it must name `$APP`); `nc -vz $APP 25` from outside (the provider's firewall); `sudo taskiem-vps logs taskiem-mail`. A sender told `550 No such address here` used an address that is not a published workflow's, or one replaced by **Get a new address** |
+| Publishing an email workflow says this Taskiem cannot receive email | No mail domain: [step 9](#9-email-triggers). "Keeping attachments needs a malware scanner": `clamav` is not running (`sudo taskiem-vps logs clamav`) |
+| Mail arrives but says "not one this workflow takes mail from" | The sender is not on the workflow's list, or could not be proven (no DKIM signature for its domain): widen the list, or leave it empty |
 
 ## Starting over
 

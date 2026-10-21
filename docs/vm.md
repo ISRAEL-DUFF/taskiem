@@ -39,7 +39,7 @@ It ends by writing a **recovery sheet** to `/root/taskiem-recovery-<date>.txt`: 
 
 Re-run `sudo taskiem-vps setup` any time to change an answer; it keeps every secret and skips what is done.
 
-**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, with `TASKIEM_VPS_NONINTERACTIVE=1`.
+**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, with `TASKIEM_VPS_NONINTERACTIVE=1`.
 
 ## Releases
 
@@ -63,7 +63,7 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 | `sudo taskiem-vps rollback` | Back to the release before the current one |
 | `sudo taskiem-vps backup` | Back up now |
 | `sudo taskiem-vps check` | Run the health checks |
-| `sudo taskiem-vps logs [service]` | Follow logs (`taskiem`, `openbao`, `caddy`, `openbao-renew`) |
+| `sudo taskiem-vps logs [service]` | Follow logs (`taskiem`, `openbao`, `caddy`, `openbao-renew`; `taskiem-public`, `taskiem-mail` and `clamav` when on) |
 | `sudo taskiem-vps owner-reset` | Email the owner a new set-your-password link |
 
 ## Alerts
@@ -76,7 +76,8 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 - the certificate expiring within 14 days;
 - no successful backup for 36 hours;
 - a release that failed to upgrade and was rolled back;
-- the recovery sheet still on the server.
+- the recovery sheet still on the server;
+- the public host or the mail server unhealthy, when they are on.
 
 Each upgrade, successful or rolled back, is reported too.
 
@@ -119,11 +120,35 @@ Businesses' own domains each count against their own registered domain, not the 
 
 `taskiem-vps check` alerts when the public host is unhealthy: existing pages may still be served from Caddy's certificates, but new hosts get none.
 
+## Email triggers
+
+[Email triggers](email.md) start a workflow when mail arrives at its own address, `<id>@<mail domain>`. The server receives that mail itself on port 25. Without a mail domain, email triggers cannot be published, and everything else works as before.
+
+**To turn it on**, at install or at any time later:
+
+1. Pick a mail domain under one you own, such as `in.example.com`. It must differ from the app's host name.
+2. At its DNS provider, add an **MX record** for it pointing at the server's host name (the A record the app already has): `in.example.com. MX 10 app.example.com.`
+3. Open **inbound TCP 25** in the hosting provider's firewall. Some providers block port 25 until asked, usually only outbound, which this does not need. The server itself needs nothing: Docker publishes the port.
+4. Answer "Mail domain for email triggers" in `sudo taskiem-vps setup` with it. On a running server, re-run setup and press Enter to keep every other answer.
+
+**What setup does:**
+- It writes `/opt/taskiem/mail.env`: the public host's database login (`<database>_public`, a member of `taskiem_public` only), the public key and the mail domain, and nothing else of the platform's.
+- It starts `taskiem-mail` (`--role mail`) on port 25, with metrics on `127.0.0.1:9092`. It greets as the server's host name and offers STARTTLS with a certificate of its own.
+- It sets `TASKIEM_MAIL_DOMAIN` in `taskiem.env`, so the app shows addresses and takes the mail the mail server leaves.
+- It starts `clamav`, if public pages have not already, so workflows can keep attachments. It needs about 1.5 GB of memory, as for forms.
+
+Emptying the answer later stops `taskiem-mail`. Published email triggers then refuse mail, and senders retry for a few days.
+
+`taskiem-vps check` alerts when the mail server is unhealthy. Senders retry for days, so mail is delayed, not lost, while it is down.
+
+**Upgrading a server from before email triggers:** the upgrade itself (automatic, or `taskiem-vps update --now`) adds the database tables and the `taskiem-mail` service but turns nothing on. Do the four steps above when you want it.
+
 ## Security notes
 
 - Auto-unseal keeps OpenBao's unseal key on the VPS, in a root-only file outside the backups. Someone with root on the VPS can read every secret, as they could anyway through Taskiem's own token; a stolen backup alone cannot.
-- Ports 8200 (OpenBao) and 9090 (metrics, on `127.0.0.1`) are never public. Docker publishes only 80 and 443.
-- The public host signs in as a separate user, a member of `taskiem_public` only, which reads no table; its env file holds nothing else.
+- Ports 8200 (OpenBao) and 9090 (metrics, on `127.0.0.1`) are never public. Docker publishes only 80 and 443, and 25 when email triggers are on.
+- The mail server takes mail only for addresses of live email triggers, refusing everything else before the message is sent: it is not a relay, and it sends nothing.
+- The public host and the mail server sign in as a separate user, a member of `taskiem_public` only, which reads no table; their env files hold nothing else.
 - The database user Taskiem signs in as is a member of `taskiem_app` only; row-level security applies to it ([operations](operations.md#database-roles)). The owner's URL is used for migrations only.
 - Images are accepted only with a cosign signature from this repository's CI workflow on main or a version tag.
 

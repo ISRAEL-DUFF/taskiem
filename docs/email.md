@@ -63,7 +63,7 @@ The same message delivered twice starts one run (by its Message-ID, or the whole
 
 ## For operators
 
-The `mail` role (`serve --role mail`, or inside `all` when `TASKIEM_MAIL_DOMAIN` and `TASKIEM_PUBLIC_KEY` are set) is an SMTP server for the mail domain. It:
+The `mail` role (`serve --role mail`, or inside `all` with `TASKIEM_MAIL_ENABLED=true`) is an SMTP server for the mail domain. It:
 
 - takes mail only for addresses of live email triggers, refusing anything else at `RCPT` (`550`), so nothing is accepted and bounced later;
 - checks SPF, DKIM and DMARC and records the results with the message, but filters nothing by content: most mail comes already filtered by the mailbox that forwards it;
@@ -78,6 +78,8 @@ To set it up ([settings](operations.md#configuration)):
 4. Optionally give it a certificate (`TASKIEM_MAIL_TLS_CERT`, `TASKIEM_MAIL_TLS_KEY`); otherwise it makes a self-signed one, which sending servers accept.
 5. Set `TASKIEM_CLAMD_ADDR` on the `api` role, as for forms, so attachments can be kept. Without it, a workflow that keeps attachments cannot be published.
 
-On the VM kit, the `taskiem-mail` service (Compose profile `mail`) does this with `public.env` and a `mail.env` holding `TASKIEM_MAIL_DOMAIN`. Set `TASKIEM_MAIL_DOMAIN` in `taskiem.env` too.
+On the VM kit, `taskiem-vps setup` does all of this from one answer ([one VM](vm.md#email-triggers)); the [staging runbook](runbooks/staging.md#9-email-triggers) walks through it. On Kubernetes, the chart's `mail` values do ([Kubernetes](kubernetes.md#email-triggers)).
+
+Prometheus counts SMTP outcomes as `taskiem_ingest_deliveries_total{kind="email_smtp", result="accepted|unknown_recipient|deferred"}` and what came of each message as `{kind="email", result="started|refused|confirmation"}`.
 
 Check it from anywhere with `swaks --to <address> --server mx.in.example.com`, or by sending an ordinary email.
