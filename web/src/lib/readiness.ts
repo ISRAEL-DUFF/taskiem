@@ -15,6 +15,14 @@ export interface ReadyNeed {
   /** Publishing waits for it: a run would fail at once. */
   blocking: boolean;
   message: string;
+  /** A missing table as the workflow uses it, to make in one tap. */
+  table?: TableSpec;
+}
+
+export interface TableSpec {
+  name: string;
+  title: string;
+  columns: { name: string; title: string; type: string; required: boolean }[];
 }
 
 export interface Readiness {
@@ -28,7 +36,7 @@ export type Fix =
   | { kind: "choose_connection"; connector: string; service: string }
   | { kind: "set_variable"; environment: string; name: string }
   | { kind: "set_secret"; environment: string; name: string }
-  | { kind: "make_table"; name: string }
+  | { kind: "make_table"; name: string; table?: TableSpec }
   | { kind: "give_role"; role: string }
   | { kind: "ask_phone"; field: string };
 
@@ -45,7 +53,7 @@ export function fixFor(n: ReadyNeed): Fix {
     case "secret":
       return { kind: "set_secret", environment: n.environment, name: n.name };
     case "table":
-      return { kind: "make_table", name: n.name };
+      return n.table ? { kind: "make_table", name: n.name, table: n.table } : { kind: "make_table", name: n.name };
     case "role":
       return { kind: "give_role", role: n.name };
     case "field":

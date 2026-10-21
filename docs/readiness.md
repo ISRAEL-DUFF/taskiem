@@ -8,7 +8,7 @@ Before a workflow is published, Taskiem checks that everything it needs is in pl
 | --- | --- | --- | --- |
 | **Connection** | A step uses a service (Paystack, Google Sheets…) that has no connection, an expired or switched-off one, or several when the step names none | Yes | **Connect** it in place: the service and name are filled in, nothing to match by hand |
 | **Secret** | An expression or code step reads a private value that is not stored | Yes | Type it in place; it is encrypted when saved |
-| **Table** | A step writes or reads a data table that does not exist | Yes | Made from the AI review, or on the Tables page |
+| **Table** | A step writes or reads a data table that does not exist | Yes | **Make it**, with the columns the workflow writes, filters and orders by (each typed from the form field that fills it, else text); from the AI review; or on the Tables page |
 | **Setting** (variable) | An expression reads `env.<name>` and it is not set | No: it can be set later | Type it in place |
 | **Role** | An approval or form step names a role no member holds | No: owners decide meanwhile | Give it to a member in place |
 

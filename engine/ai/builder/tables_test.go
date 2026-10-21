@@ -2,8 +2,11 @@ package builder
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 const leaveWF = `{"schema":"wd/v1","id":"wf_leave","version":1,"name":"Leave","trigger":{"type":"manual"},"steps":[
@@ -64,5 +67,38 @@ func TestReviewTables(t *testing.T) {
 	bad := TableSpec{Name: "leave", Columns: []ColumnSpec{{Name: "days", Type: "float"}}}
 	if _, warns = reviewTables([]TableSpec{bad}, nil, []byte(leaveWF), nil); !strings.Contains(warns[0].Message, `unknown type "float"`) {
 		t.Fatalf("type: %+v", warns)
+	}
+}
+
+// A missing table is described as the workflow uses it, typed from the
+// form fields that fill it.
+func TestTableFor(t *testing.T) {
+	def, err := wd.Load([]byte(`{"schema":"wd/v1","id":"wf_leave","version":1,"name":"Leave",
+	 "trigger":{"type":"form","config":{"title":"Leave","access":"public"}},
+	 "inputs":{"schema":{"type":"object","properties":{"name":{"type":"string"},"phone":{"type":"string","x-pii":"phone"},
+	   "start_date":{"type":"string","format":"date"},"days":{"type":"integer"}}}},
+	 "steps":[
+	  {"id":"save","type":"connector","connector":"xenibase@1","action":"insert_rows","connection":"data_tables",
+	   "input":{"table":"leave_requests","row":{"reference":"=trigger.form.reference","name":"=trigger.body.name","phone":"=trigger.body.phone",
+	     "start_date":"=trigger.body.start_date","days":"=trigger.body.days","status":"pending","id":"x"}}},
+	  {"id":"mark","type":"connector","connector":"xenibase@1","action":"update_rows","connection":"data_tables","needs":["save"],
+	   "input":{"table":"leave_requests","filters":[{"column":"reference","op":"eq","value":"=trigger.form.reference"}],"set":{"approved":true}}},
+	  {"id":"other","type":"connector","connector":"xenibase@1","action":"insert_rows","connection":"data_tables","needs":["save"],
+	   "input":{"table":"audit_log","row":{"what":"leave"}}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := TableFor(def, "leave_requests")
+	want := "approved:boolean days:integer name:text phone:phone reference:text start_date:date status:text"
+	var cols []string
+	for _, c := range got.Columns {
+		cols = append(cols, c.Name+":"+c.Type)
+	}
+	slices.Sort(cols)
+	if strings.Join(cols, " ") != want || got.Title != "Leave requests" {
+		t.Fatalf("got %q %v, want %q", got.Title, cols, want)
+	}
+	if err := checkTableShape(got); err != nil {
+		t.Fatal(err)
 	}
 }

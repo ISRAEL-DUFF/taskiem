@@ -13314,6 +13314,29 @@ components:
         message:
           type: string
           description: The need in plain words.
+        table:
+          type: object
+          description: A missing table as the workflow uses it (the columns it writes, filters and orders by), to make it in one tap.
+          required: [name, title, columns]
+          properties:
+            name:
+              type: string
+            title:
+              type: string
+            columns:
+              type: array
+              items:
+                type: object
+                required: [name, title, type, required]
+                properties:
+                  name:
+                    type: string
+                  title:
+                    type: string
+                  type:
+                    type: string
+                  required:
+                    type: boolean
       additionalProperties: false
     Error:
       type: object
