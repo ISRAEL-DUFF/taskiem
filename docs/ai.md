@@ -74,7 +74,7 @@ The draft is constrained to an **envelope**, not to wd/v1 itself: `{summary, ass
 
 ### Self-hosted open models
 
-`TASKIEM_AI_PROVIDER=selfhosted` speaks the OpenAI-compatible chat completions API that vLLM, llama.cpp's server, Ollama and TGI expose, with `response_format: json_schema` for the envelope (servers that ignore it still work: the answer is validated either way). Prompt caching, effort and refusal fallbacks are Anthropic features and are not sent. Which open model to offer is a decision for people (AI1); nothing in the pipeline depends on the provider.
+`TASKIEM_AI_PROVIDER=selfhosted` speaks the OpenAI-compatible chat completions API that vLLM, llama.cpp's server, Ollama and TGI expose, with `response_format: json_schema` for the envelope (servers that ignore it still work: the answer is validated either way). Prompt caching, effort and refusal fallbacks are Anthropic features and are not sent. A rate limit (429) or a briefly unavailable server (500, 502, 503, 504) is tried again up to three times, waiting as the server's `Retry-After` asks (at most 30 seconds) or 1, 2 and 4 seconds; a failure's log line carries the provider's own message. This suits hosted OpenAI-compatible gateways such as OpenRouter, which answer 429 under load. Which open model to offer is a decision for people (AI1); nothing in the pipeline depends on the provider.
 
 ## Repairing failed runs
 

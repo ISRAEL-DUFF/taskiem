@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,6 +20,13 @@ type SelfHostedOptions struct {
 	Model      string
 	APIKey     string // optional bearer token
 	HTTPClient *http.Client
+	// Retries is how many times a request is tried again after a rate limit
+	// (429) or a server that is briefly unavailable (500, 502, 503, 504):
+	// 3 by default, as hosted gateways such as OpenRouter answer 429 under
+	// load; -1 tries once.
+	Retries int
+	// sleep waits between tries (tests replace it).
+	sleep func(ctx context.Context, d time.Duration) error
 }
 
 // SelfHosted is the open-model provider. It speaks the de facto standard
@@ -34,7 +42,88 @@ func NewSelfHosted(o SelfHostedOptions) *SelfHosted {
 		o.HTTPClient = &http.Client{Timeout: 10 * time.Minute}
 	}
 	o.BaseURL = strings.TrimRight(o.BaseURL, "/")
+	if o.Retries == 0 {
+		o.Retries = 3
+	}
+	if o.sleep == nil {
+		o.sleep = func(ctx context.Context, d time.Duration) error {
+			t := time.NewTimer(d)
+			defer t.Stop()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-t.C:
+				return nil
+			}
+		}
+	}
 	return &SelfHosted{o}
+}
+
+// post sends a request, trying again after a rate limit or a briefly
+// unavailable server, and returns the answer's body.
+func (s *SelfHosted) post(ctx context.Context, raw []byte) ([]byte, error) {
+	for attempt := 0; ; attempt++ {
+		hreq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.o.BaseURL+"/chat/completions", bytes.NewReader(raw))
+		if err != nil {
+			return nil, err
+		}
+		hreq.Header.Set("Content-Type", "application/json")
+		if s.o.APIKey != "" {
+			hreq.Header.Set("Authorization", "Bearer "+s.o.APIKey)
+		}
+		resp, err := s.o.HTTPClient.Do(hreq)
+		if err != nil {
+			return nil, fmt.Errorf("selfhosted: %w", err)
+		}
+		data, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+		_ = resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("selfhosted: %w", err)
+		}
+		if resp.StatusCode/100 == 2 {
+			return data, nil
+		}
+		fail := fmt.Errorf("selfhosted: status %d%s", resp.StatusCode, providerMessage(data))
+		if !retryable[resp.StatusCode] || attempt >= s.o.Retries {
+			return nil, fail
+		}
+		if err := s.o.sleep(ctx, retryDelay(resp.Header.Get("Retry-After"), attempt)); err != nil {
+			return nil, fail
+		}
+	}
+}
+
+// retryable are the statuses tried again: a rate limit, and a server
+// briefly unavailable.
+var retryable = map[int]bool{http.StatusTooManyRequests: true, http.StatusInternalServerError: true, http.StatusBadGateway: true,
+	http.StatusServiceUnavailable: true, http.StatusGatewayTimeout: true}
+
+// retryDelay is how long to wait before the next try: what the server
+// asked for (Retry-After, in seconds, at most 30), else 1, 2, 4 seconds.
+func retryDelay(header string, attempt int) time.Duration {
+	if n, err := strconv.Atoi(strings.TrimSpace(header)); err == nil && n >= 0 {
+		return min(time.Duration(n)*time.Second, 30*time.Second)
+	}
+	return time.Second << min(attempt, 4)
+}
+
+// providerMessage is the error message in an OpenAI-compatible error body
+// ({"error": {"message": ...}}), for the log: why the provider refused.
+func providerMessage(data []byte) string {
+	var e struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(data, &e) != nil || strings.TrimSpace(e.Error.Message) == "" {
+		return ""
+	}
+	msg := strings.Join(strings.Fields(e.Error.Message), " ")
+	if r := []rune(msg); len(r) > 300 {
+		msg = string(r[:300]) + "…"
+	}
+	return ": " + msg
 }
 
 func (s *SelfHosted) Name() string  { return "selfhosted" }
@@ -67,25 +156,9 @@ func (s *SelfHosted) Complete(ctx context.Context, req Request) (*Response, erro
 	if err != nil {
 		return nil, err
 	}
-	hreq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.o.BaseURL+"/chat/completions", bytes.NewReader(raw))
+	data, err := s.post(ctx, raw)
 	if err != nil {
 		return nil, err
-	}
-	hreq.Header.Set("Content-Type", "application/json")
-	if s.o.APIKey != "" {
-		hreq.Header.Set("Authorization", "Bearer "+s.o.APIKey)
-	}
-	resp, err := s.o.HTTPClient.Do(hreq)
-	if err != nil {
-		return nil, fmt.Errorf("selfhosted: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
-	if err != nil {
-		return nil, fmt.Errorf("selfhosted: %w", err)
-	}
-	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("selfhosted: status %d", resp.StatusCode)
 	}
 	var out struct {
 		Model   string `json:"model"`
