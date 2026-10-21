@@ -107,15 +107,18 @@ const nodeTypes = { step: StepNode };
 /** The AI builder: for a new workflow, or to modify `workflow`. */
 export function AIBuilder({
   workflow,
+  goal: typed = "",
   onClose,
   onSaved,
 }: {
   workflow?: string;
+  /** What the person already typed (the Workflows page's describe bar). */
+  goal?: string;
   onClose: () => void;
   onSaved: (id: string, version: number) => void;
 }) {
   const [status, setStatus] = useState<AIStatus>();
-  const [goal, setGoal] = useState("");
+  const [goal, setGoal] = useState(typed);
   const [name, setName] = useState("");
   const [build, setBuild] = useState<Build>();
   const [tables, setTables] = useState<ReviewedTable[]>([]);

@@ -40,7 +40,7 @@ export function Runs() {
   };
   return (
     <>
-      <PageHeader title="Runs" description="Every time a workflow runs: what started it, where it is now, and how long it took. The list refreshes itself." />
+      <PageHeader title="Activity" description="Every time a workflow runs: what started it, where it is now, and how long it took. The list refreshes itself." />
       <div className="filters" role="search" aria-label="Filter runs">
         <label className="search">
           <span className="sr-only">Search runs</span>

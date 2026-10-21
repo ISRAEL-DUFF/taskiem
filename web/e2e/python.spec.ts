@@ -6,6 +6,7 @@ test("a Python code step runs", async ({ page }) => {
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
   await page.getByRole("button", { name: "New workflow" }).click();
   await page.getByLabel("Name").fill("Python flow");
   await page.getByRole("button", { name: "Create" }).click();

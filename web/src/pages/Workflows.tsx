@@ -3,11 +3,12 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { WorkflowDefinition } from "@sdk/wd";
 import { get, post, type WorkflowSummary } from "../api";
 import { useAdvanced, useAuth } from "../auth";
-import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { AIBuilder } from "./AIBuild";
 import { filterWorkflows } from "../lib/lists";
 import { workflowID } from "../lib/aitables";
+import { triggerWords } from "../lib/home";
 
 /** A new workflow's first draft: a manual trigger and one step. */
 export function starter(name: string): WorkflowDefinition {
@@ -25,7 +26,7 @@ export function Workflows() {
   const { can } = useAuth();
   const advanced = useAdvanced();
   const nav = useNavigate();
-  const { data, error } = useLoad(() => get<{ workflows: WorkflowSummary[] }>("/v1/workflows"), []);
+  const { data, error } = useLoad(() => get<{ workflows: WorkflowSummary[] }>(`/v1/workflows?tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`), []);
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
   const state = params.get("state") ?? "";
@@ -38,6 +39,7 @@ export function Workflows() {
   const [creating, setCreating] = useState(false);
   const [ai, setAI] = useState(false);
   const [name, setName] = useState("");
+  const [goal, setGoal] = useState("");
   const act = useAction();
   const editable = can("workflow.edit");
   const shown = data ? filterWorkflows(data.workflows, q, state) : [];
@@ -45,7 +47,7 @@ export function Workflows() {
     <>
       <PageHeader
         title="Workflows"
-        description="The automations your organisation runs: draft them on the canvas, publish a version, then start runs by hand, on a schedule or from an event."
+        description="The jobs Taskiem does for you, on its own: on a schedule, when an order comes in, or when you start them."
         actions={
           editable &&
           (advanced ? (
@@ -99,6 +101,21 @@ export function Workflows() {
       )}
       {data && data.workflows.length > 0 && (
         <>
+          {editable && (
+            <form
+              className="describe-bar"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setAI(true);
+              }}
+            >
+              <Icon name="sparkle" />
+              <input aria-label="Describe a new workflow" placeholder="Describe a job, e.g. every Friday, text customers who still owe me" value={goal} onChange={(e) => setGoal(e.target.value)} />
+              <button type="submit" className="primary" disabled={!goal.trim()}>
+                Draft it
+              </button>
+            </form>
+          )}
           <div className="filters" role="search" aria-label="Filter workflows">
             <label className="search">
               <span className="sr-only">Search workflows</span>
@@ -128,9 +145,9 @@ export function Workflows() {
               <thead>
                 <tr>
                   <th scope="col">Name</th>
-                  <th scope="col">Published</th>
-                  <th scope="col">Latest</th>
-                  <th scope="col">Created</th>
+                  <th scope="col">Runs when</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Last 14 days</th>
                 </tr>
               </thead>
               <tbody>
@@ -140,12 +157,15 @@ export function Workflows() {
                       <Link to={`/workflows/${w.id}`} onClick={(e) => e.stopPropagation()}>
                         {w.name}
                       </Link>
+                      {advanced && (
+                        <div className="hint">
+                          {w.active_version ? `v${w.active_version} live` : "Not published"} · latest v{w.latest_version} · made {fmtTime(w.created_at)}
+                        </div>
+                      )}
                     </td>
-                    <td data-label="Published">
-                      {w.active_version ? <Badge value="published" /> : <Badge value="draft" />} {w.active_version ? `v${w.active_version}` : ""}
-                    </td>
-                    <td data-label="Latest">v{w.latest_version}</td>
-                    <td data-label="Created">{fmtTime(w.created_at)}</td>
+                    <td data-label="Runs when">{triggerWords(w.trigger)}</td>
+                    <td data-label="Status">{w.active_version ? <span className="badge published">Running</span> : <span className="badge draft">Draft</span>}</td>
+                    <td data-label="Last 14 days">{w.active_version ? <RecentBars days={w.recent ?? []} /> : <span className="hint">Not run yet</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -153,7 +173,7 @@ export function Workflows() {
           )}
         </>
       )}
-      {ai && <AIBuilder onClose={() => setAI(false)} onSaved={(id, v) => nav(`/workflows/${id}?v=${v}`)} />}
+      {ai && <AIBuilder goal={goal} onClose={() => setAI(false)} onSaved={(id, v) => nav(`/workflows/${id}?v=${v}`)} />}
       {creating && (
         <Modal title="New workflow" onClose={() => setCreating(false)}>
           <form
@@ -181,5 +201,18 @@ export function Workflows() {
         </Modal>
       )}
     </>
+  );
+}
+
+/** Runs per day over the last two weeks, today last and darker. */
+function RecentBars({ days }: { days: number[] }) {
+  const top = Math.max(1, ...days);
+  const total = days.reduce((a, b) => a + b, 0);
+  return (
+    <span className="bars" role="img" aria-label={total === 0 ? "No runs in the last 14 days" : `${total} runs in the last 14 days`}>
+      {days.map((n, i) => (
+        <span key={i} className={i === days.length - 1 ? "today" : ""} style={{ height: n === 0 ? 2 : 4 + Math.round((16 * n) / top) }} />
+      ))}
+    </span>
   );
 }

@@ -15,7 +15,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
 import { Policies } from "./pages/Policies";
 import { Account, Invitations, Passkeys } from "./pages/Account";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import { EmptyState, ErrorBox, Skeleton, useAction, useFocusTrap, useScrollableTables } from "./ui";
 import { Reports } from "./pages/Reports";
@@ -36,6 +36,7 @@ import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
 import { get } from "./api";
 import { AgentApp, AgentWorkspace, useAgentSession } from "./pages/Agent";
+import { Home } from "./pages/Home";
 
 export function App() {
   return (
@@ -109,9 +110,9 @@ function Shell() {
   }
   if (me.invitations_only) return alone(<InviteeHome />);
   if (me.enrol_passkey) return alone(<EnrolPasskey />);
-  if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || (me.field_agent ? "/agent" : "/workflows")} replace />;
+  if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || (me.field_agent ? "/agent" : "/home")} replace />;
   // A field agent's home is the agent app, not the workspace's workflows (N6).
-  if (me.field_agent && !agentSession && (loc.pathname === "/" || loc.pathname === "/workflows")) return <Navigate to="/agent" replace />;
+  if (me.field_agent && !agentSession && (loc.pathname === "/" || loc.pathname === "/home" || loc.pathname === "/workflows")) return <Navigate to="/agent" replace />;
   if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
   // Field agents (docs/agents.md): their own pages, and a business's page
   // and tables while they work in it.
@@ -143,6 +144,24 @@ function SignedIn() {
     return () => wide.removeEventListener("change", close);
   }, []);
   useFocusTrap(navRef, drawer, () => setDrawer(false));
+  // More's links stay as the reader left them, in this browser; until then
+  // open for a business with Advanced on.
+  const [moreOpen, setMoreOpenState] = useState(() => {
+    try {
+      const v = localStorage.getItem("taskiem-nav-more");
+      return v ? v === "open" : !!me?.advanced;
+    } catch {
+      return !!me?.advanced;
+    }
+  });
+  const setMoreOpen = (open: boolean) => {
+    setMoreOpenState(open);
+    try {
+      localStorage.setItem("taskiem-nav-more", open ? "open" : "closed");
+    } catch {
+      // Storage blocked: open for this visit only.
+    }
+  };
   // Form steps waiting for someone with my roles: an entry while there are any.
   const [toFill, setToFill] = useState(0);
   useEffect(() => {
@@ -156,127 +175,110 @@ function SignedIn() {
     };
   }, [pathname]);
   if (!me) return null;
-  // Grouped as the sidebar shows them; [path, label, icon, visible].
-  const groups: [string, [string, string, string, boolean][]][] = [
-    [
-      "Build",
-      [
-        // For organisations that signed themselves up, until the checklist is
-        // done or hidden (it stays at /start).
-        ["/start", `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`, "start", !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed],
-        ["/dashboard", "Dashboard", "dashboard", can("run.read")],
-        ["/workflows", "Workflows", "workflows", can("workflow.read")],
-        ["/templates", "Templates", "templates", true],
-        ["/tables", "Tables", "tables", can("table.read")],
-        ["/storefront", "Storefront", "storefront", can("storefront.manage")],
-        ["/forms", "Forms", "forms", can("workflow.read")],
-        ["/forms/requests", `To fill in (${toFill})`, "inbox", toFill > 0],
-        ["/runs", "Runs", "runs", can("run.read")],
-        ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish")],
-      ],
-    ],
-    [
-      "Connect",
-      [
-        ["/connections", "Connections", "connections", can("connection.manage")],
-        ["/catalogue", "Connector catalogue", "catalogue", can("connector.manage") || can("workflow.read")],
-        ["/settings", "Secrets & settings", "settings", can("secret.manage") || can("workflow.read")],
-      ],
-    ],
-    [
-      "Govern",
-      [
-        ["/policies", "Approval policies", "policies", can("workflow.read")],
-        ["/alerts", "Alerts", "alerts", can("alert.manage")],
-        ["/audit", "Audit log", "audit", can("audit.read")],
-        ["/reports", "Reports", "reports", can("audit.read")],
-      ],
-    ],
-    [
-      "Organisation",
-      [
-        ["/members", "Members & keys", "members", can("member.manage")],
-        ["/settings/billing", "Billing", "billing", can("billing.manage")],
-        ["/settings/keys", "Encryption keys", "keys", can("key.manage")],
-      ],
-    ],
+  // The sidebar: what a business uses every day, then everything else
+  // under More (open while one of its pages is). [path, label, icon, visible, count].
+  type Item = [string, string, string, boolean, string?];
+  const daily: Item[] = [
+    // For organisations that signed themselves up, until the checklist is
+    // done or hidden (it stays at /start).
+    ["/start", `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`, "start", !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed],
+    ["/home", "Home", "home", true],
+    ["/workflows", "Workflows", "workflows", can("workflow.read")],
+    ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
+    ["/storefront", "Storefront", "storefront", can("storefront.manage")],
+    ["/forms", "Forms", "forms", can("workflow.read")],
+    ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
+    ["/runs", "Activity", "activity", can("run.read")],
+    ["/tables", "Tables", "tables", can("table.read")],
+    ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish")],
+    ["/connections", "Connections", "connections", can("connection.manage")],
   ];
-  const who = me.user?.email ?? "API key";
+  const more: Item[] = [
+    ["/dashboard", "Dashboard", "dashboard", can("run.read")],
+    ["/templates", "Templates", "templates", true],
+    ["/members", "Members & keys", "members", can("member.manage")],
+    ["/settings/billing", "Billing", "billing", can("billing.manage")],
+    ["/catalogue", "Connector catalogue", "catalogue", can("connector.manage") || can("workflow.read")],
+    ["/settings", "Secrets & settings", "settings", can("secret.manage") || can("workflow.read")],
+    ["/policies", "Approval policies", "policies", can("workflow.read")],
+    ["/alerts", "Alerts", "alerts", can("alert.manage")],
+    ["/audit", "Audit log", "audit", can("audit.read")],
+    ["/reports", "Reports", "reports", can("audit.read")],
+    ["/settings/keys", "Encryption keys", "keys", can("key.manage")],
+  ].filter(([, , , ok]) => ok) as Item[];
+  const inMore = more.some(([to]) => pathname === to || (to !== "/settings" && pathname.startsWith(to + "/")));
+  const link = ([to, label, icon, , count]: Item) => (
+    <NavLink key={to} to={to} end={to === "/settings" || to === "/forms" || to === "/storefront"}>
+      <Icon name={icon} />
+      {label}
+      {count && <span className="count alert">{count}</span>}
+    </NavLink>
+  );
+  const name = me.user?.name || me.user?.email || "API key";
+  const business = me.tenant_name || "Taskiem";
   return (
     <div className="shell">
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      {/* Narrow screens: a top bar whose menu button opens the sidebar as a drawer. */}
+      {/* Narrow screens: a top bar, a tab bar, and the sidebar as a drawer. */}
       <header className="topbar" inert={drawer || undefined}>
-        <button
-          className="icon-button"
-          aria-label="Open menu"
-          aria-expanded={drawer}
-          aria-controls="main-nav"
-          onClick={() => setDrawer(true)}
-        >
-          <Icon name="menu" />
-        </button>
         <span className="brand">
           <span className="brand-mark" aria-hidden="true">
-            T
+            {business.slice(0, 1).toUpperCase()}
           </span>
-          Taskiem
+          <span>{business}</span>
         </span>
       </header>
       {drawer && <div className="nav-scrim" aria-hidden="true" onClick={() => setDrawer(false)} />}
-      <nav
-        id="main-nav"
-        ref={navRef}
-        className={`nav drawer${drawer ? " open" : ""}`}
-        aria-label="Main"
-        tabIndex={-1}
-      >
+      <nav id="main-nav" ref={navRef} className={`nav drawer${drawer ? " open" : ""}`} aria-label="Main" tabIndex={-1}>
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
-            T
+            {business.slice(0, 1).toUpperCase()}
           </span>
-          Taskiem
+          <span className="brand-name">
+            <strong>{business}</strong>
+            <span>Taskiem</span>
+          </span>
           <button className="icon-button nav-close" aria-label="Close menu" onClick={() => setDrawer(false)}>
             <Icon name="close" />
           </button>
         </div>
-        {groups.map(([section, links]) => {
-          const shown = links.filter(([, , , ok]) => ok);
-          if (shown.length === 0) return null;
-          return (
-            <Fragment key={section}>
-              <div className="section" aria-hidden="true">
-                {section}
-              </div>
-              {shown.map(([to, label, icon]) => (
-                <NavLink key={to} to={to} end={to === "/settings" || to === "/forms"}>
-                  <Icon name={icon} />
-                  {label}
-                </NavLink>
-              ))}
-            </Fragment>
-          );
-        })}
+        {daily.filter(([, , , ok]) => ok).map(link)}
+        {more.length > 0 && (
+          <>
+            <button type="button" className="nav-toggle" aria-expanded={moreOpen || inMore} aria-controls="nav-more" onClick={() => setMoreOpen(!(moreOpen || inMore))}>
+              <Icon name="more" />
+              More
+              <svg className="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
+            <div id="nav-more" hidden={!(moreOpen || inMore)} style={{ display: moreOpen || inMore ? "contents" : undefined }}>
+              {more.map(link)}
+            </div>
+          </>
+        )}
         <div className="spacer" />
         <div className="who">
           <span className="avatar" aria-hidden="true">
-            {who.slice(0, 2)}
+            {initials(name)}
           </span>
           <div>
-            <NavLink to="/account">{who}</NavLink>
+            <NavLink to="/account">{name}</NavLink>
             <div className="roles">{me.roles.join(", ")}</div>
           </div>
+          <button className="signout" onClick={() => void logout()}>
+            Sign out
+          </button>
         </div>
-        <button className="signout" onClick={() => void logout()}>
-          Sign out
-        </button>
       </nav>
-      <main className="main" id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
+      <main className={/^\/workflows\/[^/]+$/.test(pathname) ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
+        <div className="page" key={pathname}>
         <Routes>
-          <Route path="/" element={<Navigate to="/workflows" replace />} />
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<Home />} />
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/workflows/:id" element={<Editor />} />
           <Route path="/templates" element={<Templates />} />
@@ -312,7 +314,40 @@ function SignedIn() {
           <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<EmptyState icon="search">There is no page at this address.</EmptyState>} />
         </Routes>
+        </div>
       </main>
+      <nav className="tabbar" aria-label="Quick" inert={drawer || undefined}>
+        <NavLink to="/home">
+          <Icon name="home" />
+          Home
+        </NavLink>
+        {can("storefront.manage") && (
+          <NavLink to="/storefront/orders">
+            <Icon name="orders" />
+            Orders
+          </NavLink>
+        )}
+        <NavLink to="/workflows">
+          <Icon name="workflows" />
+          Workflows
+        </NavLink>
+        {can("run.read") && (
+          <NavLink to="/runs">
+            <Icon name="activity" />
+            Activity
+          </NavLink>
+        )}
+        <button type="button" aria-label="Open menu" aria-expanded={drawer} aria-controls="main-nav" onClick={() => setDrawer(true)}>
+          <Icon name="menu" />
+          Menu
+        </button>
+      </nav>
     </div>
   );
+}
+
+/** Up to two initials for an avatar: "Ada Obi" is AO, "ada@x.ng" is AD. */
+export function initials(name: string): string {
+  const [a = "", b = ""] = name.includes("@") ? [] : name.split(/\s+/).filter(Boolean);
+  return (a && b ? a.charAt(0) + b.charAt(0) : name.slice(0, 2)).toUpperCase();
 }

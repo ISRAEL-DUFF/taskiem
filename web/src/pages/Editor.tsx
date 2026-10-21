@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Background, Controls, ReactFlow, useReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
 import type { Step, WorkflowDefinition } from "@sdk/wd";
 import { ApiError, get, post, put, type ConnectorInfo, type JSONSchema, type MergeConflict, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { SchedulePicker } from "../canvas/PlainPickers";
 import { sourcesFor } from "../lib/plaincanvas";
-import { StepNode, type StepFlowNode } from "../canvas/StepNode";
+import { StepNode, TRIGGER_NODE, TriggerNode, triggerCard, type StepFlowNode, type TriggerFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
 import { FormTriggerEditor, startFormTrigger } from "../canvas/FormEditor";
 import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph, type Layout } from "../lib/graph";
@@ -20,7 +20,7 @@ import { NeedsList } from "./Readiness";
 import { ProblemLine } from "../forms/ProblemLine";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 
-const nodeTypes = { step: StepNode };
+const nodeTypes = { step: StepNode, trigger: TriggerNode };
 const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
 
 /** The steps an owner adds without Advanced, in their words. */
@@ -80,7 +80,59 @@ export function Editor() {
   const [starting, setStarting] = useState(false);
   const [merge, setMerge] = useState<{ conflicts: MergeConflict[]; latest: number }>();
   const [ai, setAI] = useState(false);
+  // Full screen: the canvas and step panel over the whole window, for building.
+  const [full, setFull] = useState(false);
+  const [sideOpen, setSideOpen] = useState(true);
+  const box = useRef<HTMLDivElement>(null);
   const act = useAction();
+
+  // F toggles full screen, Esc leaves it; not while typing or in a dialog.
+  useEffect(() => {
+    if (tab !== "canvas") return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey || t?.closest("input, textarea, select, [contenteditable=true], .modal")) return;
+      if (e.key === "Escape") setFull(false);
+      else if (e.key === "f" || e.key === "F") setFull((f) => !f);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab]);
+  useEffect(() => {
+    if (!full) return;
+    document.documentElement.classList.add("no-scroll");
+    return () => document.documentElement.classList.remove("no-scroll");
+  }, [full]);
+  // Something to read outside the canvas (what publishing needs, an error, a
+  // merge to resolve) brings the page back.
+  useEffect(() => {
+    if (needs || act.error || merge) setFull(false);
+  }, [needs, act.error, merge]);
+  // The canvas fills the window below whatever sits above it on the page.
+  const hasDef = !!def;
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "";
+    if (full) return;
+    const wide = window.matchMedia("(min-width: 861px)");
+    const fit = () => {
+      if (!wide.matches) {
+        el.style.height = "";
+        return;
+      }
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      el.style.height = `${Math.max(520, Math.floor(window.innerHeight - top - 24))}px`;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el.closest(".page") ?? document.body);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, [tab, full, hasDef]);
 
   useEffect(() => {
     if (!doc.data) return;
@@ -105,20 +157,36 @@ export function Editor() {
     }, 600);
   };
 
+  const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   const invalid = useMemo(() => (def ? problemSteps(def, problems) : new Set<string>()), [def, problems]);
   const graph = useMemo(() => (def ? toGraph(def, layout) : { nodes: [], edges: [] }), [def, layout]);
-  const nodes: StepFlowNode[] = graph.nodes.map((n) => ({
+  const stepNodes: StepFlowNode[] = graph.nodes.map((n) => ({
     id: n.id,
     type: "step",
     position: n.position,
     selected: n.id === selected,
+    measured: sizes[n.id],
     data: { step: n.step, invalid: invalid.has(n.id) },
   }));
+  // What starts it, left of the steps that need nothing, joined to them.
+  const trigger = def ? triggerCard(graph.nodes, def.trigger, { measured: sizes[TRIGGER_NODE] }) : null;
+  const nodes: (StepFlowNode | TriggerFlowNode)[] = trigger ? [trigger.node, ...stepNodes] : stepNodes;
+  const edges = trigger ? [...graph.edges, ...trigger.edges] : graph.edges;
 
-  const onNodesChange = (changes: NodeChange<StepFlowNode>[]) => {
+  const onNodesChange = (changes: NodeChange<StepFlowNode | TriggerFlowNode>[]) => {
     let l = layout;
     let steps = def?.steps;
+    // The canvas measures each card and reports it here; a card it has no
+    // size for stays hidden, so the sizes outlive reloads of the definition.
+    const measured = changes.filter((c) => c.type === "dimensions" && c.dimensions);
+    if (measured.length > 0)
+      setSizes((was) => {
+        const next = { ...was };
+        for (const c of measured) if (c.type === "dimensions" && c.dimensions) next[c.id] = c.dimensions;
+        return next;
+      });
     for (const c of changes) {
+      if ("id" in c && c.id === TRIGGER_NODE) continue;
       if (c.type === "position" && c.position) {
         l = { ...l, [c.id]: c.position };
         if (!c.dragging) saveLayout(l);
@@ -137,13 +205,13 @@ export function Editor() {
     for (const c of changes) {
       if (c.type === "remove" && steps) {
         const [source, target] = c.id.split("->");
-        if (source && target) steps = disconnect(steps, source, target);
+        if (source && target && source !== TRIGGER_NODE) steps = disconnect(steps, source, target);
       }
     }
     if (steps && steps !== def?.steps) editSteps(steps);
   };
   const onConnect = (c: Connection) => {
-    if (!def || !c.source || !c.target) return;
+    if (!def || !c.source || !c.target || c.source === TRIGGER_NODE) return;
     const next = connect(def.steps, c.source, c.target);
     if (!next) {
       setNotice("That connection would make a cycle.");
@@ -232,50 +300,66 @@ export function Editor() {
 
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          {wf.data.workflow.name}
-        </h1>
-        <select
-          aria-label="Version"
-          value={version}
-          style={{ width: "auto" }}
-          onChange={(e) => {
-            if (dirty && !confirm("Discard unsaved changes?")) return;
-            setParams({ v: e.target.value });
-          }}
-        >
-          {wf.data.versions.map((v) => (
-            <option key={v.version} value={v.version}>
-              v{v.version} · {v.state}
-            </option>
-          ))}
-        </select>
-        {current && <Badge value={dirty ? "draft" : current.state} />}
-        {dirty && <span className="hint">unsaved</span>}
-        {can("workflow.edit") && !managed && (
-          <>
-            <button onClick={() => void validate()} disabled={act.busy}>
-              Validate
+      <p className="crumbs">
+        <Link to="/workflows" aria-label="Back to Workflows">
+          Workflows
+        </Link>
+      </p>
+      <div className="editor-head">
+        <div className="editor-title">
+          <h1>{wf.data.workflow.name}</h1>
+          {dirty ? (
+            <span className="badge warn">Unsaved changes</span>
+          ) : current?.state === "published" ? (
+            <span className="badge published">Live</span>
+          ) : (
+            current && <Badge value={current.state} />
+          )}
+        </div>
+        <div className="page-actions">
+          {(advanced || wf.data.versions.length > 1) && (
+            <select
+              aria-label="Version"
+              value={version}
+              style={{ width: "auto" }}
+              onChange={(e) => {
+                if (dirty && !confirm("Discard unsaved changes?")) return;
+                setParams({ v: e.target.value });
+              }}
+            >
+              {wf.data.versions.map((v) => (
+                <option key={v.version} value={v.version}>
+                  Version {v.version} · {v.state}
+                </option>
+              ))}
+            </select>
+          )}
+          {can("workflow.edit") && !managed && (
+            <>
+              {advanced && (
+                <button onClick={() => void validate()} disabled={act.busy}>
+                  Validate
+                </button>
+              )}
+              <button onClick={() => setAI(true)} disabled={act.busy || dirty} title={dirty ? "Save your changes first" : undefined}>
+                Change with AI
+              </button>
+              <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
+                Save draft
+              </button>
+            </>
+          )}
+          {can("run.start") && wf.data.workflow.active_version && (
+            <button onClick={() => setStarting(true)} disabled={act.busy}>
+              Start run
             </button>
-            <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
-              Save draft
+          )}
+          {can("workflow.publish") && !managed && (
+            <button className="primary" onClick={() => void publish()} disabled={act.busy || (!dirty && current?.state === "published")}>
+              Publish
             </button>
-            <button onClick={() => setAI(true)} disabled={act.busy || dirty} title={dirty ? "Save your changes first" : undefined}>
-              Change with AI
-            </button>
-          </>
-        )}
-        {can("workflow.publish") && !managed && (
-          <button className="primary" onClick={() => void publish()} disabled={act.busy || (!dirty && current?.state === "published")}>
-            Publish
-          </button>
-        )}
-        {can("run.start") && wf.data.workflow.active_version && (
-          <button onClick={() => setStarting(true)} disabled={act.busy}>
-            Start run
-          </button>
-        )}
+          )}
+        </div>
       </div>
       <ErrorBox error={act.error} />
       {needs && (
@@ -323,12 +407,53 @@ export function Editor() {
         ))}
       </div>
       {tab === "canvas" && (
-        <div className="editor">
+        <div className={full ? "editor-full" : "editor-wrap"} role={full ? "dialog" : undefined} aria-modal={full || undefined} aria-label={full ? `${wf.data.workflow.name}, full screen` : undefined}>
+          {full && (
+            <div className="full-bar">
+              <div className="editor-title">
+                <strong className="full-name">{wf.data.workflow.name}</strong>
+                {dirty ? <span className="badge warn">Unsaved changes</span> : current?.state === "published" ? <span className="badge published">Live</span> : current && <Badge value={current.state} />}
+                {problems.length > 0 && (
+                  <span className="badge failed">
+                    {problems.length} problem{problems.length > 1 ? "s" : ""}
+                  </span>
+                )}
+                {notice && <span className="hint full-notice">{notice}</span>}
+              </div>
+              <div className="page-actions">
+                {can("workflow.edit") && !managed && (
+                  <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
+                    Save draft
+                  </button>
+                )}
+                {can("workflow.publish") && !managed && (
+                  <button className="primary" onClick={() => void publish()} disabled={act.busy || (!dirty && current?.state === "published")}>
+                    Publish
+                  </button>
+                )}
+                <button onClick={() => setFull(false)} title="Leave full screen (Esc)">
+                  <ExitFullIcon /> Exit full screen
+                </button>
+              </div>
+            </div>
+          )}
+        <div className={`editor${sideOpen ? "" : " no-side"}`} ref={box}>
           <div className="canvas">
+            <div className="canvas-tools">
+              {!full && (
+                <button onClick={() => setFull(true)} title="Full screen (F)" aria-label="Full screen">
+                  <FullIcon />
+                </button>
+              )}
+              <button onClick={() => setSideOpen((o) => !o)} aria-expanded={sideOpen} aria-controls="step-panel" title={sideOpen ? "Hide the step panel" : "Show the step panel"}>
+                <PanelIcon /> {sideOpen ? "Hide panel" : "Show panel"}
+              </button>
+            </div>
             <ReactFlow
               nodes={nodes}
-              edges={graph.edges}
+              edges={edges}
               nodeTypes={nodeTypes}
+              onNodeClick={(_, n) => (n.id === TRIGGER_NODE ? (setFull(false), setTab("settings")) : setSideOpen(true))}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
@@ -340,10 +465,10 @@ export function Editor() {
             >
               <Background />
               <Controls />
-              <FitOnChange count={def.steps.length} />
+              <FitOnChange count={def.steps.length} frame={`${full}${sideOpen}`} />
             </ReactFlow>
           </div>
-          <div className="side">
+          <div className="side" id="step-panel" hidden={!sideOpen}>
             {can("workflow.edit") && (
               <>
                 <div className="hint">Add a step{selected ? ` after ${selected}` : ""}:</div>
@@ -388,6 +513,7 @@ export function Editor() {
               <p className="hint">Select a step to edit it. Drag from a step's right handle to another step to make it run after; select an arrow and press Delete to remove it.</p>
             )}
           </div>
+        </div>
         </div>
       )}
       {tab === "settings" && <SettingsTab def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} problems={problems} />}
@@ -456,7 +582,7 @@ export function Editor() {
 }
 
 /** Refits the view when steps are added or removed, so new steps are visible. */
-function FitOnChange({ count }: { count: number }) {
+function FitOnChange({ count, frame }: { count: number; frame: string }) {
   const rf = useReactFlow();
   const first = useRef(true);
   useEffect(() => {
@@ -466,9 +592,26 @@ function FitOnChange({ count }: { count: number }) {
     }
     const t = setTimeout(() => void rf.fitView({ maxZoom: 1, duration: 200 }), 30);
     return () => clearTimeout(t);
-  }, [count, rf]);
+  }, [count, frame, rf]);
   return null;
 }
+
+const FullIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+    <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" />
+  </svg>
+);
+const ExitFullIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+    <path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5" />
+  </svg>
+);
+const PanelIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    <rect x="2" y="2.5" width="12" height="11" rx="2" />
+    <path d="M10 2.5v11" />
+  </svg>
+);
 
 /** The validator's problems with one top-level step, at paths relative to it. */
 function stepProblemsOf(def: WorkflowDefinition, problems: Problem[], id: string): Problem[] {
@@ -725,8 +868,11 @@ export function endpointPurpose(t: TriggerInfo): string {
 function Deployments({ workflow, deployments, canPromote, onChange }: { workflow: string; deployments: Deployment[]; canPromote: boolean; onChange: () => void }) {
   const envs = useEnvironments();
   const act = useAction();
+  const advanced = useAdvanced();
   const list = envs.data?.environments ?? [];
-  if (list.length === 0) return null;
+  // One business, one place it runs: environments show with Advanced, or
+  // once someone has set up promotion between them.
+  if (list.length === 0 || (!advanced && !list.some((e) => e.promotion_from))) return null;
   const at = (env: string) => deployments.find((d) => d.environment === env);
   return (
     <div className="deployments hint" aria-label="Deployments">
@@ -764,22 +910,29 @@ function StartRun({ workflow, def, onClose, onStarted }: { workflow: string; def
   const [input, setInput] = useState<unknown>({});
   const [env, setEnv] = useState("prod");
   const [advanced, setAdvanced] = useState(false);
+  // Environments and raw input are for businesses with Advanced on.
+  const technical = useAdvanced();
   const act = useAction();
   // A form from the workflow's inputs, as chat's run asks them (N5).
   const schema = resolveSchema(def?.inputs?.schema as JSONSchema | undefined, (def?.types ?? {}) as Record<string, JSONSchema>);
+  const asks = !!schema?.properties && Object.keys(schema.properties).length > 0;
   return (
     <Modal title="Start a run" onClose={onClose}>
-      <Field label="Environment">
-        <EnvSelect value={env} onChange={setEnv} />
-      </Field>
-      {schema?.properties && !advanced ? (
-        <SchemaForm schema={schema} value={input as Record<string, unknown> | undefined} onChange={setInput} expressions={false} />
-      ) : (
+      {technical && (
+        <Field label="Environment">
+          <EnvSelect value={env} onChange={setEnv} />
+        </Field>
+      )}
+      {asks && !advanced ? (
+        <SchemaForm schema={schema as JSONSchema} value={input as Record<string, unknown> | undefined} onChange={setInput} expressions={false} />
+      ) : technical || advanced ? (
         <Field label="Input (JSON)" data-technical>
           <JsonInput value={input} onChange={setInput} rows={8} />
         </Field>
+      ) : (
+        <p>{def?.name ?? "This workflow"} needs nothing from you to start. Start it now to see it work.</p>
       )}
-      {schema?.properties && (
+      {asks && technical && (
         <label className="inline hint" data-technical>
           <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: enter JSON
         </label>

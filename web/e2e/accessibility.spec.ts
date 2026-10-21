@@ -34,7 +34,7 @@ async function signIn(page: Page) {
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 }
 
 /** Opens a page and waits until it has drawn its data. */
@@ -76,6 +76,7 @@ for (const scheme of ["light", "dark"] as const) {
 
 test("dialogs keep focus inside and give it back when they close", async ({ page }) => {
   await signIn(page);
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
   const opener = page.getByRole("button", { name: "New workflow" });
   await opener.click();
   const dialog = page.getByRole("dialog");
@@ -122,8 +123,8 @@ test.describe("on a phone-sized screen", () => {
 
     // Following a link closes the drawer.
     await menu.click();
-    await nav.getByRole("link", { name: "Runs" }).click();
-    await expect(page.getByRole("heading", { name: "Runs", exact: true })).toBeVisible();
+    await nav.getByRole("link", { name: "Activity" }).click();
+    await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
     await expect(nav).toBeHidden();
 
     // No page scrolls sideways; wide tables scroll inside themselves.

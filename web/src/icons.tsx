@@ -26,6 +26,16 @@ const paths: Record<string, string> = {
   forms: "M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h5",
   inbox: "M4 13l2-8h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5",
   storefront: "M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9a2.7 2.7 0 005.3 0 2.7 2.7 0 005.4 0A2.7 2.7 0 0020 9M10 20v-5h4v5",
+  home: "M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z",
+  activity: "M3 12h4l3-8 4 16 3-8h4",
+  orders: "M6 7h12l-1 13H7zM9 7a3 3 0 016 0",
+  chevron: "M9 6l6 6-6 6",
+  more: "M5 12h.01M12 12h.01M19 12h.01",
+  sparkle: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",
+  refund: "M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11",
+  lock: "M6 11h12v9H6zM8 11V8a4 4 0 018 0v3",
+  clock: "M12 7v5l3 2M12 21a9 9 0 100-18 9 9 0 000 18z",
+  bolt: "M13 3L5 14h6l-1 7 8-11h-6z",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {

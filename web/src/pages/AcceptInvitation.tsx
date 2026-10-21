@@ -38,7 +38,7 @@ export function AcceptInvitation() {
       const credential = await createFrom(o.publicKey);
       await post("/v1/auth/invitation/accept", { token, credential, name, passkey_name: "Passkey" });
       await refresh();
-      nav("/workflows", { replace: true });
+      nav("/home", { replace: true });
     });
   return (
     <div className="login card">

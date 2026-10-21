@@ -28,7 +28,7 @@ test("pending invitations are listed and withdrawn; an invitee with no organisat
   const bob = `bob-${stamp}@e2e.test`;
   const carol = `carol-${stamp}@e2e.test`;
   await signIn(page, "owner@e2e.test");
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   await inviteLeaver(page, bob);
   await inviteLeaver(page, carol);
 
@@ -54,7 +54,7 @@ test("pending invitations are listed and withdrawn; an invitee with no organisat
   await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
   expect((await page.request.get("/v1/workflows")).status()).toBe(403);
   await mine.getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" }).getByText("builder")).toBeVisible();
   expect((await page.request.get("/v1/workflows")).status()).toBe(200);
 });

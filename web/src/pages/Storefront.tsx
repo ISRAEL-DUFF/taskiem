@@ -10,6 +10,7 @@ import { PageStatusBadge, RefusalBox, TrustNotices, TrustPanel } from "./Storefr
 import { publishNotice, type Trust } from "../lib/trust";
 import { StorefrontDomains } from "./StorefrontDomains";
 import { StorefrontEmbedSites } from "./StorefrontEmbedSites";
+import { StorefrontPreview } from "./StorefrontPreview";
 import type { Table } from "../lib/tables";
 import {
   DAYS,
@@ -91,6 +92,11 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
   const [catalogueTick, setCatalogueTick] = useState(0);
   const [trustTick, setTrustTick] = useState(0);
   const trust = useLoad(() => (saved ? get<Trust>("/v1/storefront/trust") : Promise.resolve(undefined)), [saved === null, trustTick]);
+  // What the preview lists: the catalogue as last copied.
+  const previewItems = useLoad(
+    () => (saved?.catalogue_table ? get<Catalogue>("/v1/storefront/catalogue").catch(() => null) : Promise.resolve(null)),
+    [saved?.catalogue_table, catalogueTick],
+  );
   const reloadTrust = () => setTrustTick((n) => n + 1);
   const act = useAction();
   const base = formFrom(saved);
@@ -187,6 +193,8 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
       )}
       <RefusalBox error={act.error} />
 
+      <div className="sf-layout">
+        <div className="sf-main">
       <section className="card" aria-labelledby="sf-status">
         <h2 id="sf-status">Status</h2>
         {saved === null ? (
@@ -371,6 +379,9 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
           <CatalogueMapping form={form} setForm={setForm} tables={tables} tablesError={tablesError} />
         </details>
       </section>
+        </div>
+        <StorefrontPreview form={form} accents={accents} logoURL={logoURL} items={previewItems.data?.items ?? []} />
+      </div>
 
       {saved && <TrustPanel trust={trust.data} error={trust.error} onChanged={reloadTrust} />}
 
