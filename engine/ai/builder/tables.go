@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // The data tables a draft needs (rule 12): the model describes the new
@@ -120,4 +122,108 @@ func tablesUsed(doc []byte) map[string]bool {
 	}
 	walk(v)
 	return out
+}
+
+// TableFor is the table a workflow needs and does not have, as it uses
+// it: the columns its xenibase@1 steps on data_tables write (row, rows,
+// set), filter and order by, each typed from what goes in it (a form
+// field's format or personal-data kind, a literal's type), text when it
+// cannot tell. The readiness check offers to make it in one tap.
+func TableFor(def *wd.Definition, name string) TableSpec {
+	spec := TableSpec{Name: name, Title: strings.ToUpper(name[:1]) + strings.ReplaceAll(name[1:], "_", " ")}
+	schema, _ := def.InputsSchema()
+	m, _ := schema.(map[string]any)
+	props, _ := m["properties"].(map[string]any)
+	types := map[string]string{}
+	var order []string
+	add := func(col string, v any) {
+		if !tableNameRe.MatchString(col) || slices.Contains(reservedColumns, col) {
+			return
+		}
+		t := columnType(v, props)
+		if prev, ok := types[col]; ok {
+			if prev == "text" && t != "text" {
+				types[col] = t
+			}
+			return
+		}
+		types[col] = t
+		order = append(order, col)
+	}
+	addRow := func(row any) {
+		if m, ok := row.(map[string]any); ok {
+			keys := make([]string, 0, len(m))
+			for k := range m {
+				keys = append(keys, k)
+			}
+			slices.Sort(keys)
+			for _, k := range keys {
+				add(k, m[k])
+			}
+		}
+	}
+	def.Walk(func(st *wd.Step) {
+		if st.Connector != "xenibase@1" || st.Connection != "data_tables" || st.Input["table"] != name {
+			return
+		}
+		addRow(st.Input["row"])
+		if rows, ok := st.Input["rows"].([]any); ok {
+			for _, r := range rows {
+				addRow(r)
+			}
+		}
+		addRow(st.Input["set"])
+		for _, key := range []string{"filters", "order"} {
+			list, _ := st.Input[key].([]any)
+			for _, f := range list {
+				if m, ok := f.(map[string]any); ok {
+					if col, ok := m["column"].(string); ok {
+						add(col, m["value"])
+					}
+				}
+			}
+		}
+	})
+	for _, c := range order {
+		spec.Columns = append(spec.Columns, ColumnSpec{Name: c, Title: strings.ToUpper(c[:1]) + strings.ReplaceAll(c[1:], "_", " "), Type: types[c]})
+	}
+	return spec
+}
+
+var bodyFieldRe = regexp.MustCompile(`^=\s*trigger\.body\.([A-Za-z_][A-Za-z0-9_]*)\s*$`)
+
+// columnType is the column type for a value written to it.
+func columnType(v any, props map[string]any) string {
+	switch x := v.(type) {
+	case bool:
+		return "boolean"
+	case float64, int, int64:
+		return "number"
+	case string:
+		m := bodyFieldRe.FindStringSubmatch(x)
+		if m == nil {
+			return "text"
+		}
+		p, _ := props[m[1]].(map[string]any)
+		format, _ := p["format"].(string)
+		kind, _ := p["x-pii"].(string)
+		typ, _ := p["type"].(string)
+		switch {
+		case format == "date":
+			return "date"
+		case format == "date-time":
+			return "datetime"
+		case kind == "phone" || strings.HasPrefix(format, "phone"):
+			return "phone"
+		case kind == "email" || format == "email":
+			return "email"
+		case typ == "integer":
+			return "integer"
+		case typ == "number":
+			return "number"
+		case typ == "boolean":
+			return "boolean"
+		}
+	}
+	return "text"
 }

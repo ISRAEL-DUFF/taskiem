@@ -99,8 +99,12 @@ func (s *Server) failTables(w http.ResponseWriter, r *http.Request, err error) {
 		case xe.Status == http.StatusConflict:
 			code(http.StatusConflict, "xenibase_conflict", "Xenibase: "+xe.Message)
 		default:
-			s.Logger.Warn("data tables: Xenibase refused a call", "path", r.URL.Path, "status", xe.Status, "code", xe.Code)
-			code(http.StatusBadGateway, "xenibase_error", "Xenibase answered "+strconv.Itoa(xe.Status)+" "+xe.Code+": "+xe.Message)
+			s.Logger.Warn("data tables: Xenibase refused a call", "path", r.URL.Path, "call", xe.Call, "status", xe.Status, "code", xe.Code)
+			to := ""
+			if xe.Call != "" {
+				to = " to " + xe.Call
+			}
+			code(http.StatusBadGateway, "xenibase_error", "Xenibase answered "+strconv.Itoa(xe.Status)+" "+xe.Code+to+": "+xe.Message)
 		}
 	case errors.As(err, &pe):
 		msg := "Xenibase: " + pe.Message

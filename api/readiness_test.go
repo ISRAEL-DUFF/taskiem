@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 )
@@ -109,4 +110,32 @@ func TestReadiness(t *testing.T) {
 	if st, _ := cora.do("POST", "/v1/approvals/"+run+"/other", map[string]any{"decision": "approved"}); st != 403 {
 		t.Errorf("cora decides another role's approval: %d", st)
 	}
+}
+
+// A missing table comes with the columns the workflow uses, so it can be
+// made in one tap.
+func TestReadinessDescribesMissingTables(t *testing.T) {
+	w := newWorld(t)
+	if err := w.env.Registry.Register(xenibase.New(xenibase.Options{})); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	doc := `{"schema":"wd/v1","id":"wf_leave","version":1,"name":"Leave",
+	 "trigger":{"type":"form","config":{"title":"Leave","access":"public"}},
+	 "inputs":{"schema":{"type":"object","properties":{"name":{"type":"string"},"start_date":{"type":"string","format":"date"}}}},
+	 "steps":[{"id":"save","type":"connector","name":"Save it","connector":"xenibase@1","action":"insert_rows","connection":"data_tables",
+	   "input":{"table":"leave_requests","row":{"name":"=trigger.body.name","start_date":"=trigger.body.start_date","status":"pending"}}}]}`
+	r := owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(doc)})
+	for _, x := range r["needs"].([]any) {
+		n := x.(map[string]any)
+		if n["kind"] != "table" {
+			continue
+		}
+		if got := toJSON(n["table"]); !strings.Contains(got, `"name":"leave_requests"`) || !strings.Contains(got, `{"name":"start_date","required":false,"title":"Start date","type":"date"}`) ||
+			!strings.Contains(got, `"name":"status"`) {
+			t.Fatalf("the table: %s", got)
+		}
+		return
+	}
+	t.Fatalf("no table need: %v", r["needs"])
 }

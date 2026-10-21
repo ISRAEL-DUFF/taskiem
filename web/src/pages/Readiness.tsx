@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { get, post, put, type ConnectorInfo } from "../api";
 import { useAdvanced, useAuth } from "../auth";
-import { fixFor, needsToShow, stepsText, variableValue, words, type ReadyNeed } from "../lib/readiness";
+import { fixFor, needsToShow, stepsText, variableValue, words, type ReadyNeed, type TableSpec } from "../lib/readiness";
 import { ErrorBox, useAction, useLoad } from "../ui";
 import { NewConnection, startLink } from "./Connections";
 
@@ -60,12 +60,29 @@ function NeedItem({ need, onChanged }: { need: ReadyNeed; onChanged: () => void 
         ) : (
           <AskOwner />
         ))}
-      {fix.kind === "make_table" && (
-        <p className="hint">
-          Make it on the <Link to="/tables">Tables</Link> page.
-        </p>
-      )}
+      {fix.kind === "make_table" &&
+        (fix.table && can("table.edit") ? (
+          <TableFix table={fix.table} onDone={onChanged} />
+        ) : (
+          <p className="hint">
+            Make it on the <Link to="/tables">Tables</Link> page.
+          </p>
+        ))}
       {fix.kind === "give_role" && (can("member.manage") ? <RoleFix role={fix.role} onDone={onChanged} /> : <AskOwner />)}
+    </div>
+  );
+}
+
+/** Makes a missing table with the columns the workflow uses. */
+function TableFix({ table, onDone }: { table: TableSpec; onDone: () => void }) {
+  const act = useAction();
+  return (
+    <div>
+      <p className="hint">Its columns: {table.columns.map((c) => c.title).join(", ")}.</p>
+      <button type="button" className="small" disabled={act.busy} onClick={() => void act.run(async () => (await post("/v1/tables", table), onDone()))}>
+        {act.busy ? "Making it…" : "Make it"}
+      </button>
+      <ErrorBox error={act.error} />
     </div>
   );
 }

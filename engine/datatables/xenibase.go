@@ -42,10 +42,17 @@ type Error struct {
 	RetryAfter time.Duration
 	// Statement is the DDL Postgres refused (ddl_failed).
 	Statement string
+	// Call is the request refused (GET /api/v1/projects), so an
+	// operator can tell which one: a wrong server or organisation answers
+	// 404 like a missing project.
+	Call string
 }
 
 func (e *Error) Error() string {
 	s := fmt.Sprintf("xenibase: http %d", e.Status)
+	if e.Call != "" {
+		s = "xenibase: " + e.Call + ": http " + fmt.Sprint(e.Status)
+	}
 	if e.Code != "" {
 		s += " " + e.Code
 	}
@@ -147,8 +154,17 @@ func (s *Service) platform(tenant string) (*client, error) {
 func (c *client) do(ctx context.Context, method, path string, body, out any) error {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
-	err := connector.DoJSON(ctx, c.hc, method, c.base+path, map[string]string{"Authorization": "Bearer " + c.token}, body, out)
-	return mapError(err)
+	err := mapError(connector.DoJSON(ctx, c.hc, method, c.base+path, map[string]string{"Authorization": "Bearer " + c.token}, body, out))
+	if e, ok := AsError(err); ok {
+		// With the server URL's own path: one ending in /api/v1 shows
+		// as /api/v1/api/v1/… here.
+		call, _, _ := strings.Cut(path, "?")
+		if u, perr := url.Parse(c.base); perr == nil {
+			call = strings.TrimRight(u.Path, "/") + call
+		}
+		e.Call = method + " " + call
+	}
+	return err
 }
 
 // --- shapes ---

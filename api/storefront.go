@@ -377,7 +377,7 @@ func (s *Server) storefrontImage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) uploadStorefrontMedia(w http.ResponseWriter, r *http.Request) {
 	m, err := s.storeStorefrontImage(r)
 	if err != nil {
-		s.fail(w, r, err)
+		s.failImage(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, m)
@@ -403,6 +403,18 @@ func (s *Server) storeStorefrontImage(r *http.Request) (storefront.Media, error)
 	return m, err
 }
 
+// failImage answers an image that was not stored: a problem with the
+// business's data project, where photos live, is said as tables say it
+// (being set up, or what Xenibase refused), not as an internal error.
+func (s *Server) failImage(w http.ResponseWriter, r *http.Request, err error) {
+	var xe *datatables.Error
+	if errors.Is(err, datatables.ErrUnavailable) || errors.Is(err, datatables.ErrProvisioning) || errors.Is(err, datatables.ErrProjectFailed) || errors.As(err, &xe) {
+		s.failTables(w, r, err)
+		return
+	}
+	s.fail(w, r, err)
+}
+
 // errImageRejected: the moderator refused an image for a public page.
 var errImageRejected = errors.New("the image was not accepted for a public page")
 
@@ -414,6 +426,13 @@ var errImageRejected = errors.New("the image was not accepted for a public page"
 func (s *Server) putStorefrontImage(ctx context.Context, p *Principal, data []byte, audit func(pgx.Tx, storefront.Media) error) (storefront.Media, error) {
 	if s.Media == nil {
 		return storefront.Media{}, errors.New("storage for photos is not configured")
+	}
+	// Photos live in the business's data project: the first one makes it,
+	// as the first table does.
+	if s.Tables != nil {
+		if _, err := s.Tables.EnsureProject(ctx, p.TenantID); err != nil && !errors.Is(err, datatables.ErrUnavailable) {
+			return storefront.Media{}, err
+		}
 	}
 	img, err := s.Media.PutImage(ctx, p.TenantID, data)
 	if err != nil {
@@ -466,7 +485,7 @@ func (s *Server) setStorefrontItemPhoto(w http.ResponseWriter, r *http.Request) 
 	}
 	m, err := s.storeStorefrontImage(r)
 	if err != nil {
-		s.fail(w, r, err)
+		s.failImage(w, r, err)
 		return
 	}
 	tr, err := s.tableRowsFor(r.Context(), tenant, table, storefrontPurpose)

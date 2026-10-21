@@ -312,7 +312,8 @@ func ruleReachByPhone(def *wd.Definition, _ connector.Lookup) (bool, string) {
 		m, _ := schema.(map[string]any)
 		props, _ := m["properties"].(map[string]any)
 		for n, p := range props {
-			title, _ := p.(map[string]any)["title"].(string)
+			pm, _ := p.(map[string]any)
+			title, _ := pm["title"].(string)
 			if reChatID.MatchString(strings.ToLower(strings.NewReplacer("_", " ", "-", " ").Replace(n + " " + title))) {
 				return n
 			}

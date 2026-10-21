@@ -247,7 +247,11 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 				return nil, err
 			}
 			if !ok {
-				add(key{"table", u.name, "", env}, readyNeed{Problem: "missing", Blocking: true, Message: needMessage(l, "table", "missing", "", u.name)}, u.step)
+				n := readyNeed{Problem: "missing", Blocking: true, Message: needMessage(l, "table", "missing", "", u.name)}
+				if spec := builder.TableFor(d, u.name); len(spec.Columns) > 0 {
+					n.Table = &spec
+				}
+				add(key{"table", u.name, "", env}, n, u.step)
 			}
 		}
 	}

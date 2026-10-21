@@ -182,6 +182,9 @@ type Need struct {
 	Blocking bool `json:"blocking"`
 	// Message says it in plain words.
 	Message string `json:"message"`
+	// Table is a missing table as the workflow uses it, for making it in
+	// one tap (TableFor); absent when its columns cannot be told.
+	Table *TableSpec `json:"table,omitempty"`
 }
 
 // NeedStep is a step that has a need, by id and name.
