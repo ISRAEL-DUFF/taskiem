@@ -200,6 +200,18 @@ func TestWorkflowLifecycleAndRuns(t *testing.T) {
 	if len(runs) != 1 {
 		t.Fatalf("runs: %v", runs)
 	}
+	// The list says what starts each workflow and counts today's run last.
+	owner.must(400, "GET", "/v1/workflows?tz=Mars/Olympus", nil)
+	for _, it := range owner.must(200, "GET", "/v1/workflows?tz=UTC", nil)["workflows"].([]any) {
+		s := it.(map[string]any)
+		if s["id"] != wf {
+			continue
+		}
+		recent := s["recent"].([]any)
+		if s["trigger"].(map[string]any)["type"] != "manual" || len(recent) != 14 || recent[13] != float64(1) || recent[12] != float64(0) {
+			t.Errorf("summary: trigger %v, recent %v", s["trigger"], recent)
+		}
+	}
 
 	// History is sealed unless revealed, and revealing is audited.
 	run := a["run_id"].(string)
