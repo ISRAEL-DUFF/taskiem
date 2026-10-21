@@ -1,0 +1,5 @@
+{"request":{"method":"GET","path":"/bank","query":{"country":"nigeria","perPage":"200"},"headers":{"Authorization":"Bearer sk_test_xyz"}},
+ "response":{"status":200,"body":{"status":true,"message":"Banks retrieved","data":[
+  {"name":"Access Bank","code":"044"},{"name":"Access Bank (Diamond)","code":"063"},{"name":"First Bank of Nigeria","code":"011"},
+  {"name":"First City Monument Bank","code":"214"},{"name":"Guaranty Trust Bank","code":"058"},{"name":"OPay Digital Services Limited (OPay)","code":"999992"},
+  {"name":"United Bank For Africa","code":"033"},{"name":"Zenith Bank","code":"057"}]}}}

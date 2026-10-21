@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
@@ -990,4 +991,19 @@ func audit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, action, target stri
 	raw, _ := json.Marshal(detail)
 	_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'storefront', $2, $3, $4)`, tenant, action, target, raw)
 	return err
+}
+
+// CustomerLanguage is the language the business speaks to its customers
+// in: its default chat language (Settings > Languages), English when it
+// has none (no-technical-steps N6).
+func (o *Orders) CustomerLanguage(ctx context.Context, tenant uuid.UUID) lang.Tag {
+	l := lang.EN
+	_ = db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var def string
+		if err := tx.QueryRow(ctx, `SELECT default_language FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&def); err == nil && lang.Valid(lang.Tag(def)) {
+			l = lang.Tag(def)
+		}
+		return nil
+	})
+	return l
 }

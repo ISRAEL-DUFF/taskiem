@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -453,7 +454,16 @@ func (s *Server) importTableRows(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "the file could not be read")
 		return
 	}
-	rows, hasID, err := readCSV(bytes.NewReader(data), tr.table.Columns)
+	// Headers matching no column by name or title, matched by the person
+	// (the mapping field: {"Header": "column"}, "" to leave one out).
+	var mapping map[string]string
+	if m := r.FormValue("mapping"); m != "" {
+		if err := json.Unmarshal([]byte(m), &mapping); err != nil {
+			writeErr(w, http.StatusBadRequest, "the mapping is not a list of header to column")
+			return
+		}
+	}
+	rows, hasID, err := readCSV(bytes.NewReader(data), tr.table.Columns, mapping)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -508,7 +518,21 @@ func importIDFor(table uuid.UUID, key string, file []byte) string {
 
 // readCSV parses a CSV whose header row names the table's columns (id
 // allowed; created_at and updated_at ignored) into checked rows.
-func readCSV(rd io.Reader, cols []datatables.Column) (rows []any, hasID bool, err error) {
+// headerKey is a header or column name as matched: lower case, letters
+// and digits only ("Phone Number", "phone_number" and "PhoneNumber" match).
+func headerKey(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, s)
+}
+
+// readCSV reads an import: each header is the column it names, by name or
+// title loosely (N5), or by mapping (header -> column, "" to leave it
+// out), for the headers that match none.
+func readCSV(rd io.Reader, cols []datatables.Column, mapping ...map[string]string) (rows []any, hasID bool, err error) {
 	cr := csv.NewReader(rd)
 	cr.TrimLeadingSpace = true
 	cr.FieldsPerRecord = -1
@@ -516,21 +540,41 @@ func readCSV(rd io.Reader, cols []datatables.Column) (rows []any, hasID bool, er
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: the file has no header row", errBadRequest)
 	}
-	names := make([]string, len(header))
-	for i, h := range header {
-		names[i] = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(h, "\uFEFF")))
-	}
 	known := map[string]bool{"id": true, "created_at": true, "updated_at": true}
+	byKey := map[string]string{"id": "id", "createdat": "created_at", "updatedat": "updated_at"}
 	types := map[string]string{}
 	for _, c := range cols {
 		known[c.Name] = true
 		types[c.Name] = c.Type
-	}
-	for _, n := range names {
-		if !known[n] {
-			return nil, false, fmt.Errorf("%w: the table has no column %q (the header row names columns)", errBadRequest, n)
+		byKey[headerKey(c.Name)] = c.Name
+		if c.Title != "" {
+			if _, taken := byKey[headerKey(c.Title)]; !taken {
+				byKey[headerKey(c.Title)] = c.Name
+			}
 		}
-		hasID = hasID || n == "id"
+	}
+	var mapped map[string]string
+	if len(mapping) > 0 {
+		mapped = mapping[0]
+	}
+	names := make([]string, len(header))
+	var unmatched []string
+	for i, h := range header {
+		h = strings.TrimSpace(strings.TrimPrefix(h, "\uFEFF"))
+		if to, ok := mapped[h]; ok {
+			if to != "" && !known[to] {
+				return nil, false, fmt.Errorf("%w: the table has no column %q to put %q in", errBadRequest, to, h)
+			}
+			names[i] = to
+		} else if n, ok := byKey[headerKey(h)]; ok {
+			names[i] = n
+		} else {
+			unmatched = append(unmatched, h)
+		}
+		hasID = hasID || names[i] == "id"
+	}
+	if len(unmatched) > 0 {
+		return nil, false, fmt.Errorf("%w: the table has no column for %s: match each to a column, or leave it out", errBadRequest, strings.Join(quoteAll(unmatched), ", "))
 	}
 	for line := 2; ; line++ {
 		rec, err := cr.Read()
@@ -549,7 +593,7 @@ func readCSV(rd io.Reader, cols []datatables.Column) (rows []any, hasID bool, er
 			if i >= len(names) {
 				return nil, false, fmt.Errorf("%w: line %d has more cells than the header", errBadRequest, line)
 			}
-			if names[i] == "created_at" || names[i] == "updated_at" {
+			if names[i] == "" || names[i] == "created_at" || names[i] == "updated_at" {
 				continue
 			}
 			if strings.TrimSpace(v) != "" {
@@ -698,4 +742,12 @@ func cell(v any) string {
 	}
 	raw, _ := json.Marshal(v)
 	return string(raw)
+}
+
+func quoteAll(list []string) []string {
+	out := make([]string, len(list))
+	for i, s := range list {
+		out[i] = strconv.Quote(s)
+	}
+	return out
 }

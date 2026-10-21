@@ -37,9 +37,9 @@ func TestStorefrontDomains(t *testing.T) {
 	}
 	recs := toJSON(d["records"])
 	for _, want := range []string{
-		`"name":"_taskiem-verify.adakitchen.ng","purpose":"proof","type":"TXT","value":"` + token + `"`,
-		`"name":"adakitchen.ng","purpose":"point","type":"A","value":"203.0.113.7"`,
-		`"name":"www.adakitchen.ng","purpose":"point","type":"CNAME","value":"pages.shops.taskiem.test"`,
+		`"name":"_taskiem-verify.adakitchen.ng","purpose":"proof","short":"_taskiem-verify","type":"TXT","value":"` + token + `"`,
+		`"name":"adakitchen.ng","purpose":"point","short":"@","type":"A","value":"203.0.113.7"`,
+		`"name":"www.adakitchen.ng","purpose":"point","short":"www","type":"CNAME","value":"pages.shops.taskiem.test"`,
 	} {
 		if !strings.Contains(recs, want) {
 			t.Errorf("no %s in %s", want, recs)
@@ -76,7 +76,7 @@ func TestStorefrontDomains(t *testing.T) {
 
 	// A second domain; the primary can move to it.
 	sub := owner.must(201, "POST", "/v1/storefront/domains", map[string]any{"domain": "order.adakitchen.ng"})
-	if sub["twin"] != nil || !strings.Contains(toJSON(sub["records"]), `"name":"order.adakitchen.ng","purpose":"point","type":"CNAME"`) {
+	if sub["twin"] != nil || !strings.Contains(toJSON(sub["records"]), `"name":"order.adakitchen.ng","purpose":"point","short":"order","type":"CNAME"`) {
 		t.Fatalf("%v", sub)
 	}
 	txt["_taskiem-verify.order.adakitchen.ng"] = []string{sub["token"].(string)}

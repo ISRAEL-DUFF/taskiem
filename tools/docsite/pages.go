@@ -23,6 +23,7 @@ type section struct {
 }
 
 var nav = []section{
+	{"For business owners", []string{"guide/index", "guide/start", "guide/templates", "guide/connections", "guide/paying-people", "guide/tables", "guide/changing-a-workflow", "guide/settings", "guide/own-domain", "guide/your-website", "guide/own-whatsapp-number"}},
 	{"Get started", []string{"onboarding", "templates", "data-tables", "dashboard", "environments", "cli"}},
 	{"Build workflows", []string{"sdk", "readiness", "code-steps", "container-steps", "ai", "alerts"}},
 	{"Connectors", []string{"connector-sdk", "connector-submissions", "integrations/*"}},

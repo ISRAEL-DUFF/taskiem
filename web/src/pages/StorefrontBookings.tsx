@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ApiError, get, post, put } from "../api";
+import { ApiError, del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
@@ -26,6 +26,7 @@ import {
   lagosTime,
   moveProblem,
   serviceLine,
+  serviceRow,
   servicesProblem,
   servicesTables,
   timeSpan,
@@ -348,6 +349,18 @@ function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables
       setNotice(published ? "Saved; your page is updated." : "Saved. Bookings show on your page once you publish it and switch on the booking form.");
     });
 
+  /** Makes the services' table and maps it, as chat does. */
+  const makeServices = () =>
+    act.run(async () => {
+      setNotice("");
+      await tidy(post("/v1/storefront/catalogue/make", { kind: "services" }));
+      const out = await get<SF>("/v1/storefront");
+      setSaved(out);
+      setForm(settingsFrom(out));
+      setTick((n) => n + 1);
+      setNotice("Your services list is ready: add what customers can book below.");
+    });
+
   return (
     <form
       onSubmit={(e) => {
@@ -357,9 +370,22 @@ function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables
     >
       <section className="card sf-catalogue" aria-labelledby="sf-services">
         <h2 id="sf-services">Services</h2>
-        <ServicesMapping form={form} setForm={setForm} tables={tables} tablesError={tablesError} />
+        {!saved.services_table && (
+          <div className="notice">
+            <p style={{ marginTop: 0 }}>List what customers can book, how long each takes and its price. Taskiem keeps the list for you.</p>
+            <button type="button" className="primary" disabled={act.busy} onClick={() => void makeServices()}>
+              Make my services
+            </button>
+          </div>
+        )}
+        {saved.services_table && (
+          <ServicesPreview tick={tick} table={saved.services_table} columns={saved.services_columns ?? {}} stale={dirty && form.table !== saved.services_table} />
+        )}
+        <details open={!saved.services_table && !!form.table}>
+          <summary>{saved.services_table ? "Services settings" : "Use a table you already have"}</summary>
+          <ServicesMapping form={form} setForm={setForm} tables={tables} tablesError={tablesError} />
+        </details>
         {mapProblem && <p className="error-text">{mapProblem}</p>}
-        {saved.services_table && <ServicesPreview tick={tick} stale={dirty && form.table !== saved.services_table} />}
       </section>
 
       <section className="card" aria-labelledby="sf-booking-hours">
@@ -465,8 +491,8 @@ function ServicesMapping({
               </Field>
             );
           })}
-          {form.columns.price && (
-            <Field label="Prices in the table are in" hint="Naira: 1500 is ₦1,500. Kobo: 150000 is ₦1,500.">
+          {form.columns.price && form.columns.price_unit === "kobo" && (
+            <Field data-technical label="Prices in the table are in" hint="Naira: 1500 is ₦1,500. Kobo: 150000 is ₦1,500.">
               <select value={form.columns.price_unit || "naira"} onChange={(e) => setColumns({ price_unit: e.target.value as ServiceColumns["price_unit"] })}>
                 <option value="naira">Naira</option>
                 <option value="kobo">Kobo</option>
@@ -481,9 +507,37 @@ function ServicesMapping({
 }
 
 /** The services copy the booking form offers (GET /v1/storefront/services). */
-function ServicesPreview({ tick, stale }: { tick: number; stale: boolean }) {
+function ServicesPreview({ tick, table, columns, stale }: { tick: number; table: string; columns: ServiceColumns; stale: boolean }) {
   const svc = useLoad(() => get<Services>("/v1/storefront/services"), [tick]);
   const act = useAction();
+  const { can } = useAuth();
+  const [name, setName] = useState("");
+  const [minutes, setMinutes] = useState("30");
+  const [price, setPrice] = useState("");
+  const [problem, setProblem] = useState("");
+  // Adding and removing services here writes the table: nobody opens Tables.
+  const addService = () => {
+    const made = serviceRow(columns, name, minutes, price);
+    if ("error" in made) {
+      setProblem(made.error);
+      return;
+    }
+    setProblem("");
+    void act.run(async () => {
+      await tidy(post(`/v1/tables/${table}/rows`, { row: made.row }));
+      setName("");
+      setPrice("");
+      await tidy(post("/v1/storefront/catalogue/refresh"));
+      svc.reload();
+    });
+  };
+  const removeService = (id: string, label: string) =>
+    confirm(`Remove ${label} from what customers can book?`) &&
+    void act.run(async () => {
+      await tidy(del(`/v1/tables/${table}/rows/${encodeURIComponent(id)}`));
+      await tidy(post("/v1/storefront/catalogue/refresh"));
+      svc.reload();
+    });
   const refresh = () =>
     act.run(async () => {
       await tidy(post("/v1/storefront/catalogue/refresh"));
@@ -509,7 +563,22 @@ function ServicesPreview({ tick, stale }: { tick: number; stale: boolean }) {
         </div>
       )}
       {!shown && !svc.error && <Skeleton rows={3} label="Loading the services…" />}
-      {shown && shown.items.length === 0 && <EmptyState icon="tables">No services yet. Add rows to the table, then refresh.</EmptyState>}
+      {can("table.edit") && (
+        <div className="toolbar sf-add-item">
+          <input aria-label="Service" placeholder="A service, such as Haircut" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+          <input aria-label="Minutes it takes" inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value)} style={{ width: "6em" }} />
+          <input aria-label="Price in naira" placeholder="Price (₦)" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} style={{ width: "9em" }} />
+          <button type="button" className="primary" disabled={act.busy || !name.trim()} onClick={addService}>
+            Add
+          </button>
+          {problem && (
+            <span className="error-text" role="alert">
+              {problem}
+            </span>
+          )}
+        </div>
+      )}
+      {shown && shown.items.length === 0 && <EmptyState icon="tables">No services yet. Add what customers can book above.</EmptyState>}
       {shown && shown.items.length > 0 && (
         <ul className="sf-items" aria-label="Services">
           {shown.items.map((it) => {
@@ -525,6 +594,11 @@ function ServicesPreview({ tick, stale }: { tick: number; stale: boolean }) {
                 <div className="sf-item-side">
                   {!it.available && <span className="badge">unavailable</span>}
                   {it.available && !it.duration_minutes && <span className="badge">no duration</span>}
+                  {can("table.edit") && (
+                    <button type="button" className="link" disabled={act.busy} aria-label={`Remove ${it.name}`} onClick={() => removeService(it.id, it.name)}>
+                      Remove
+                    </button>
+                  )}
                 </div>
               </li>
             );

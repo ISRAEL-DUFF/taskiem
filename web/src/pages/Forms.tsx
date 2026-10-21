@@ -3,7 +3,8 @@
 // opening times; one-time links for link forms; and the submissions,
 // masked unless revealed.
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { formWorkflow, type AfterAnswer } from "../lib/newform";
 import { get, patch, post } from "../api";
 import { useAuth } from "../auth";
 import { embedSnippet, linksCSV, maskContact, parseRecipients, showAnswer } from "../lib/forms";
@@ -76,16 +77,73 @@ function Copy({ text, label }: { text: string; label: string }) {
   );
 }
 
+/** A new form and the workflow behind it (no-technical-steps N8). */
+function NewForm({ onClose }: { onClose: () => void }) {
+  const nav = useNavigate();
+  const [title, setTitle] = useState("");
+  const [after, setAfter] = useState<AfterAnswer>("tell");
+  const act = useAction();
+  return (
+    <Modal title="New form" onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act.run(async () => {
+            const r = await post<{ id: string }>("/v1/workflows", { name: title.trim(), definition: formWorkflow(title, after) });
+            nav(`/workflows/${r.id}?tab=settings`);
+          });
+        }}
+      >
+        <Field label="What the form is called" hint="People see it at the top of the form.">
+          <input value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} required autoFocus placeholder="e.g. Join the waiting list" />
+        </Field>
+        <fieldset>
+          <legend>When someone fills it in</legend>
+          <label className="choice">
+            <input type="radio" name="after" checked={after === "tell"} onChange={() => setAfter("tell")} /> Tell me on WhatsApp (or by email)
+          </label>
+          <label className="choice">
+            <input type="radio" name="after" checked={after === "collect"} onChange={() => setAfter("collect")} /> Just keep the answers here
+          </label>
+        </fieldset>
+        <p className="hint">Next you choose its questions; publish it to get its link.</p>
+        <ErrorBox error={act.error} />
+        <div className="toolbar">
+          <button type="submit" className="primary" disabled={act.busy || !title.trim()}>
+            Make the form
+          </button>
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function Forms() {
+  const { can } = useAuth();
+  const [making, setMaking] = useState(false);
   const { data, error, reload } = useLoad(() => get<{ forms: FormInfo[] }>("/v1/forms"), []);
   return (
     <>
-      <PageHeader title="Forms" description="Forms in front of your workflows: share the link, embed it on your website, and see what comes in." />
+      <PageHeader
+        title="Forms"
+        description="Forms in front of your workflows: share the link, embed it on your website, and see what comes in."
+        actions={
+          can("workflow.edit") && (
+            <button className="primary" onClick={() => setMaking(true)}>
+              New form
+            </button>
+          )
+        }
+      />
+      {making && <NewForm onClose={() => setMaking(false)} />}
       <ErrorBox error={error} />
       {!data && !error && <Skeleton rows={3} label="Loading your forms…" />}
       {data?.forms.length === 0 && (
-        <EmptyState icon="forms" action={<Link to="/workflows">Open a workflow</Link>}>
-          No forms yet. Set a workflow's trigger to Form (under Trigger &amp; settings) and publish it.
+        <EmptyState icon="forms" action={can("workflow.edit") ? <button onClick={() => setMaking(true)}>Make your first form</button> : undefined}>
+          No forms yet. A form collects answers from your customers or team and starts a workflow with them.
         </EmptyState>
       )}
       <div className="form-cards">

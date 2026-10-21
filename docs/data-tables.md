@@ -24,7 +24,7 @@ curl -X POST $TASKIEM/v1/tables -H "Authorization: Bearer $KEY" -H 'Content-Type
   "columns": [
     {"name": "name", "title": "Name", "type": "text", "required": true},
     {"name": "phone", "type": "phone"},
-    {"name": "balance_kobo", "title": "Balance (kobo)", "type": "integer"},
+    {"name": "balance", "title": "Balance (naira)", "type": "number"},
     {"name": "paid", "type": "boolean"}
   ]}'
 ```
@@ -67,7 +67,7 @@ Every write carries an `Idempotency-Key` to Xenibase's data API: the request's o
 
 ## CSV
 
-`POST /v1/tables/{id}/import` takes a multipart form with a `file` field: a CSV whose header row names the table's columns (`created_at` and `updated_at` are ignored), up to 5,000 rows per call, written in batches of 500. With an `id` column the rows are upserted on `id` (so an export can be changed and imported back); without one they are inserted. Each batch carries its own idempotency key from the import id and the batch's index. The import id comes from the request's `Idempotency-Key` header, or without one from the file itself (and always the table), so the same import sent again after a lost answer or a failed batch writes nothing twice: the batches already in are answered from Xenibase's replay (`replayed_batches`; within its 24 hours). To import the same file again on purpose, send a new `Idempotency-Key`. The audit entry (`table.import`) records counts only.
+`POST /v1/tables/{id}/import` takes a multipart form with a `file` field: a CSV whose header row names the table's columns, by name or title in any case and spacing (`Phone Number` is `phone_number`; `created_at` and `updated_at` are ignored), and a `mapping` field for the headers that match none (`{"Notes": ""}` leaves one out, `{"Tel": "phone"}` puts it in a column); the web app asks about each such header. **Make a table from a file** on the Tables page makes a table with a column per header, typed from its values (numbers, phone numbers, dates, else text), then imports the file into it. It is up to 5,000 rows per call, written in batches of 500. With an `id` column the rows are upserted on `id` (so an export can be changed and imported back); without one they are inserted. Each batch carries its own idempotency key from the import id and the batch's index. The import id comes from the request's `Idempotency-Key` header, or without one from the file itself (and always the table), so the same import sent again after a lost answer or a failed batch writes nothing twice: the batches already in are answered from Xenibase's replay (`replayed_batches`; within its 24 hours). To import the same file again on purpose, send a new `Idempotency-Key`. The audit entry (`table.import`) records counts only.
 
 `GET /v1/tables/{id}/export` answers `text/csv`: `id`, the columns, `created_at` and `updated_at`, by id, up to 100,000 rows. A text, phone, email or JSON cell that a spreadsheet would run as a formula (one starting with `=`, `+`, `-`, `@`, a tab or a carriage return) is written with a leading `'`, which spreadsheets hide and keep as text; an import takes it off again, so an export imports back unchanged. If Xenibase fails partway, the response is aborted, so the download fails instead of looking complete. Each export is audited as `table.export` with the number of rows and whether it completed; adding, changing and deleting rows through the API are audited as `table.row.insert`, `table.row.update` and `table.row.delete` (counts and row ids, never values).
 
@@ -77,7 +77,7 @@ A data table is an ordinary Xenibase table to a workflow: the connector is `xeni
 
 ```json
 {"id": "read_debtors", "type": "connector", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
- "input": {"table": "debtors", "filters": [{"column": "balance_kobo", "op": "gt", "value": 0}], "order": [{"column": "name"}], "limit": 1000}}
+ "input": {"table": "debtors", "filters": [{"column": "balance", "op": "gt", "value": 0}], "order": [{"column": "name"}], "limit": 1000}}
 ```
 
 ```json
@@ -85,7 +85,7 @@ A data table is an ordinary Xenibase table to a workflow: the connector is `xeni
  "needs": ["read_debtors"], "input": {"table": "debtors", "key": "=item.id", "set": {"paid": true}}}
 ```
 
-The template [`debtor-reminder-table`](templates.md) is the weekly debtor reminder over a `debtors` table (`name`, `phone`, `balance_kobo`) instead of a sheet. The AI builder's context lists the organisation's tables with their columns and types (never rows), so a goal such as "remind my customers who owe me" names the table rather than a spreadsheet, and a goal that needs a table that does not exist proposes it, to be made when the draft is saved ([AI](ai.md)); `wdtext` reads such a step as any Xenibase step ("Read rows (data API) (Xenibase)"), since it never prints a step's inputs.
+The template [`debtor-reminder-table`](templates.md) is the weekly debtor reminder over a `debtors` table (`name`, `phone`, `balance` in naira) instead of a sheet. The AI builder's context lists the organisation's tables with their columns and types (never rows), so a goal such as "remind my customers who owe me" names the table rather than a spreadsheet, and a goal that needs a table that does not exist proposes it, to be made when the draft is saved ([AI](ai.md)); `wdtext` reads such a step as any Xenibase step ("Read rows (data API) (Xenibase)"), since it never prints a step's inputs.
 
 ### The row-changed trigger
 

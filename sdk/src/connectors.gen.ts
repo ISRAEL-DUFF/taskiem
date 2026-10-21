@@ -1238,6 +1238,15 @@ export const opay = {
 export interface PaystackCheckBalanceInput {
   [key: string]: Value;
 }
+export interface PaystackCreateRecipientInput {
+  account_number: Val<string>;
+  /** The bank's name as people write it (GTBank, First Bank, Opay), when there is no code */
+  bank?: Val<string>;
+  /** The bank's code (list_banks); or give bank */
+  bank_code?: Val<string>;
+  /** The account's name as the bank has it */
+  name: Val<string>;
+}
 export interface PaystackInitializeTransactionInput {
   /** Amount in kobo */
   amount: Val<number>;
@@ -1247,6 +1256,9 @@ export interface PaystackInitializeTransactionInput {
   /** The customer's email; Paystack requires one */
   email: Val<string>;
   metadata?: Value;
+}
+export interface PaystackListBanksInput {
+  [key: string]: Value;
 }
 export interface PaystackListTransactionsInput {
   /** Since when */
@@ -1265,6 +1277,12 @@ export interface PaystackRefundTransactionInput {
   /** The payment's reference */
   reference: Val<string>;
 }
+export interface PaystackResolveAccountInput {
+  /** The 10-digit account number */
+  account_number: Val<string>;
+  /** The bank's code (list_banks) */
+  bank_code: Val<string>;
+}
 export interface PaystackTransferInput {
   /** Amount in kobo */
   amount: Val<number>;
@@ -1282,8 +1300,12 @@ export interface PaystackVerifyTransferInput {
 export const paystack = {
   /** Check balance (read) */
   check_balance: (input?: PaystackCheckBalanceInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "check_balance", input, extra),
+  /** Save a person or business to pay (idempotent_write) */
+  create_recipient: (input: PaystackCreateRecipientInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "create_recipient", input, extra),
   /** Create a payment page (idempotent_write) */
   initialize_transaction: (input: PaystackInitializeTransactionInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "initialize_transaction", input, extra),
+  /** List Nigerian banks (read) */
+  list_banks: (input?: PaystackListBanksInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_banks", input, extra),
   /** List successful payments (read) */
   list_transactions: (input: PaystackListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_transactions", input, extra),
   /** List transfers (read) */
@@ -1292,6 +1314,8 @@ export const paystack = {
   refund_status: (input: PaystackRefundStatusInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "refund_status", input, extra),
   /** Refund a payment (reconcilable_write) */
   refund_transaction: (input: PaystackRefundTransactionInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "refund_transaction", input, extra),
+  /** Find an account's name (read) */
+  resolve_account: (input: PaystackResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "resolve_account", input, extra),
   /** Send transfer (idempotent_write) */
   transfer: (input: PaystackTransferInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "transfer", input, extra),
   /** Verify charge (read) */
@@ -1798,10 +1822,14 @@ export interface StorefrontGetBookingInput {
 }
 export interface StorefrontNotifyCustomerInput {
   reference: Val<string>;
+  /** Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed…), in the business's own language */
+  say?: Val<string>;
   /** The email's subject */
   subject?: Val<string>;
   /** The message; an SMS starts with the business's name and is at most three parts. {link} becomes the customer's status link, where a booking is moved or cancelled */
-  text: Val<string>;
+  text?: Val<string>;
+  /** With say: the message's values (reference, total, url, service, when) */
+  vars?: Value;
 }
 export interface StorefrontPaymentLinkInput {
   reference: Val<string>;
@@ -1950,6 +1978,9 @@ export const termii = {
 export interface WhatsappGetPhoneNumberInput {
   [key: string]: Value;
 }
+export interface WhatsappListTemplatesInput {
+  [key: string]: Value;
+}
 export interface WhatsappMarkAsReadInput {
   /** The wamid from an inbound message event */
   message_id: Val<string>;
@@ -1997,6 +2028,8 @@ export interface WhatsappSendTextInput {
 export const whatsapp = {
   /** Get the business phone number (read) */
   get_phone_number: (input?: WhatsappGetPhoneNumberInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "get_phone_number", input, extra),
+  /** List approved message templates (read) */
+  list_templates: (input?: WhatsappListTemplatesInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "list_templates", input, extra),
   /** Mark a message as read (idempotent_write) */
   mark_as_read: (input: WhatsappMarkAsReadInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "mark_as_read", input, extra),
   /** Send an interactive message (buttons or list) (unsafe_write) */
@@ -2303,7 +2336,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "mysql@1": ["execute", "query"],
   "notify@1": ["tell", "text"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
-  "paystack@1": ["check_balance", "initialize_transaction", "list_transactions", "list_transfers", "refund_status", "refund_transaction", "transfer", "verify_charge", "verify_transfer"],
+  "paystack@1": ["check_balance", "create_recipient", "initialize_transaction", "list_banks", "list_transactions", "list_transfers", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
@@ -2313,7 +2346,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
-  "whatsapp@1": ["get_phone_number", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
+  "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
   "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],
   "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
 };

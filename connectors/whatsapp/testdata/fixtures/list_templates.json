@@ -1,0 +1,5 @@
+{"request":{"method":"GET","path":"/102290129340398/message_templates","query":{"status":"APPROVED","limit":"200"}},
+ "response":{"status":200,"body":{"data":[
+  {"name":"payment_reminder","language":"en","category":"UTILITY","status":"APPROVED","components":[{"type":"HEADER","format":"TEXT","text":"Reminder"},{"type":"BODY","text":"Hello {{1}}, you owe {{2}} to {{3}}."}]},
+  {"name":"order_ready","language":"en_GB","category":"UTILITY","status":"APPROVED","components":[{"type":"BODY","text":"Your order is ready."}]}],
+  "paging":{"cursors":{"before":"a","after":"b"}}}}}

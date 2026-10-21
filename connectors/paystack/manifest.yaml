@@ -68,6 +68,60 @@ actions:
         data: { type: array, items: { type: object }, description: "Paystack transfer objects, as its transfer webhooks carry them" }
     pii:
       - { field: output.data, category: other }
+  list_banks:
+    title: List Nigerian banks
+    description: The banks Paystack pays into, by name and code, to choose one by name.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        banks: { type: array, items: { type: object, properties: { name: { type: string }, code: { type: string } } } }
+  resolve_account:
+    title: Find an account's name
+    description: The name on a bank account, from its number and bank, to confirm before paying it.
+    class: read
+    input:
+      type: object
+      required: [account_number, bank_code]
+      properties:
+        account_number: { type: string, description: The 10-digit account number }
+        bank_code:      { type: string, description: The bank's code (list_banks) }
+    output:
+      type: object
+      properties:
+        account_name:   { type: string }
+        account_number: { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  create_recipient:
+    title: Save a person or business to pay
+    description: A transfer recipient from a bank account, so transfers can be sent to it; an account already saved answers its recipient code again.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [account_number, name]
+      properties:
+        account_number: { type: string }
+        bank_code:      { type: string, description: The bank's code (list_banks); or give bank }
+        bank:           { type: string, description: "The bank's name as people write it (GTBank, First Bank, Opay), when there is no code" }
+        name:           { type: string, description: The account's name as the bank has it }
+    output:
+      type: object
+      properties:
+        recipient_code: { type: string }
+        name:           { type: string }
+    pii:
+      - { field: account_number, category: account_number }
+      - { field: name, category: name }
   transfer:
     title: Send transfer
     class: idempotent_write

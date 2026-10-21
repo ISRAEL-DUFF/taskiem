@@ -6,6 +6,21 @@ export interface DomainRecord {
   /** proof proves the domain (keep it); point sends visitors to the page. */
   purpose: "proof" | "point";
   note?: string;
+  /** The name as registrars ask for it: "@" for the domain itself. */
+  short?: string;
+}
+
+/** One record as Check now found it (POST /v1/storefront/domains/{id}/check). */
+export interface RecordCheck extends DomainRecord {
+  ok: boolean;
+  found: string[];
+  says: string;
+}
+
+export interface DomainCheck {
+  checks: RecordCheck[];
+  all_ok: boolean;
+  proven: boolean;
 }
 
 export interface StorefrontDomain {

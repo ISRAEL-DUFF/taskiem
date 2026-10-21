@@ -7,6 +7,10 @@ import { parseSession, sessionEnded, withAgentHeader, type AgentSession } from "
 export interface Problem {
   path: string;
   message: string;
+  /** In plain words, naming the step by its name (no-technical-steps N5). */
+  plain?: string;
+  /** Where it is put right: a web app path, or #step=<id> in the editor. */
+  fix?: { label: string; path: string };
 }
 
 export class ApiError extends Error {
@@ -195,6 +199,10 @@ export interface Me {
    * authenticator: a passkey or authenticator if they have one, else their
    * password. */
   factors?: { passkey: boolean; totp: boolean; password: boolean };
+  /** A Taskiem field agent signed in as themselves: they land on the agent app. */
+  field_agent?: boolean;
+  /** Whether the business sees the technical parts (the Advanced switch, N0-5). */
+  advanced?: boolean;
 }
 
 /** A tenant inviting the signed-in person (GET /v1/me/invitations). */

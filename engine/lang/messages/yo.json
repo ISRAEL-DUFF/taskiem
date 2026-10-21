@@ -112,6 +112,78 @@
       "text": "Bẹ́ẹ̀ni, fi pamọ́",
       "reviewed": false
     },
+    "customer.booking_confirmed": {
+      "text": "A ti fipamọ́: {service}, {when}. Láti yí padà tàbí fagilé: {link}",
+      "reviewed": false
+    },
+    "customer.booking_declined": {
+      "text": "Ẹ má bínú, a kò lè gba ìfipamọ́ àkókò yín {reference} ({service}, {when}). Ẹ yan àkókò mìíràn: ẹ lè tún fipamọ́.",
+      "reviewed": false
+    },
+    "customer.booking_declined_refund": {
+      "text": "Ẹ má bínú, a kò lè gba ìfipamọ́ àkókò yín {reference} ({service}, {when}). A ó dá owó yín padà.",
+      "reviewed": false
+    },
+    "customer.booking_moved": {
+      "text": "A ti gbé ìfipamọ́ àkókò yín {reference} lọ sí {when}. Láti yí padà tàbí fagilé: {link}",
+      "reviewed": false
+    },
+    "customer.booking_pay": {
+      "text": "Láti pa ìfipamọ́ àkókò yín {reference} mọ́, ẹ san {total} láàrin ọjọ́ kan: {url}",
+      "reviewed": false
+    },
+    "customer.booking_reminder_day": {
+      "text": "Ìrántí: {service} lọ́la, {when} ({reference}). Láti yí padà tàbí fagilé: {link}",
+      "reviewed": false
+    },
+    "customer.booking_reminder_hours": {
+      "text": "A ó rí yín láìpẹ́: {service} ní {when} ({reference}).",
+      "reviewed": false
+    },
+    "customer.callback_thanks": {
+      "text": "Ẹ ṣé. A ó pè yín padà láìpẹ́ ({reference}).",
+      "reviewed": false
+    },
+    "customer.enquiry_thanks": {
+      "text": "A ti gba ìbéèrè yín ({reference}), a ó sì dáhùn láìpẹ́.",
+      "reviewed": false
+    },
+    "customer.order_confirmed_delivery": {
+      "text": "A ti fìdí àṣẹ yín {reference} múlẹ̀. A ó mú un wá láìpẹ́.",
+      "reviewed": false
+    },
+    "customer.order_confirmed_pickup": {
+      "text": "A ti fìdí àṣẹ yín {reference} múlẹ̀. A ó fi ọ̀rọ̀ ránṣẹ́ sí yín nígbà tí ó bá ṣetán láti gbà.",
+      "reviewed": false
+    },
+    "customer.order_declined": {
+      "text": "Ẹ má bínú, a kò lè gba àṣẹ yín {reference}.",
+      "reviewed": false
+    },
+    "customer.order_declined_refund": {
+      "text": "Ẹ má bínú, a kò lè gba àṣẹ yín {reference}. A ó dá owó yín {total} padà.",
+      "reviewed": false
+    },
+    "customer.order_link_expired": {
+      "text": "Ìjápọ̀ ìsanwó fún {reference} ti parí, nítorí náà a ti fagilé àṣẹ náà. Ẹ lè tún ra.",
+      "reviewed": false
+    },
+    "customer.order_paid_delivery": {
+      "text": "A ti gba owó fún {reference}. A ó mú un wá láìpẹ́.",
+      "reviewed": false
+    },
+    "customer.order_paid_pickup": {
+      "text": "A ti gba owó fún {reference}. A ó fi ọ̀rọ̀ ránṣẹ́ sí yín nígbà tí ó bá ṣetán láti gbà.",
+      "reviewed": false
+    },
+    "customer.order_pay": {
+      "text": "A ti gba àṣẹ yín {reference}. Ẹ san {total} níbí láàrin ọjọ́ kan: {url}",
+      "reviewed": false
+    },
+    "customer.order_ready": {
+      "text": "{name}: àṣẹ yín {reference} ti ṣetán.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "Mò ń kọ̀wé sí yín ní {language}. Àwọn èdè tó wà níbí: {languages}. Ẹ fi *language* àti orúkọ kan ránṣẹ́ láti yí i padà.",
       "reviewed": false
@@ -476,6 +548,14 @@
       "text": "(a kò tíì fìdí rẹ̀ múlẹ̀)",
       "reviewed": false
     },
+    "wa.build.ask_setting": {
+      "text": "Kí ni *{name}* yóò jẹ́? Ẹ fèsì rẹ̀, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.build.before_publish": {
+      "text": "Kí a tó lè tẹ̀ ẹ́ jáde:",
+      "reviewed": false
+    },
     "wa.build.budget": {
       "text": "Ìnáwó AI oṣù yìí fún {org} ti tán, nítorí náà mi ò lè kọ́ èyí báyìí. Ẹ ṣì lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù.",
       "reviewed": false
@@ -548,12 +628,20 @@
       "text": "A kò tíì ṣètò kíkọ́ pẹ̀lú AI lórí Taskiem yìí. Ẹ lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù.",
       "reviewed": false
     },
+    "wa.build.offer_publish": {
+      "text": "Ṣé kí n tẹ *{name}* jáde báyìí kí ó bẹ̀rẹ̀ iṣẹ́? Ẹ fèsì *yes* tàbí *no*.",
+      "reviewed": false
+    },
+    "wa.build.publish_later": {
+      "text": "Nígbà tí ẹ bá ṣetán, ẹ fi *publish {name}* ránṣẹ́.",
+      "reviewed": false
+    },
     "wa.build.refused": {
       "text": "Mi ò lè kọ́ ìyẹn. Ẹ gbìyànjú láti ṣàlàyé rẹ̀ lọ́nà mìíràn.",
       "reviewed": false
     },
     "wa.build.save_question": {
-      "text": "Ṣé kí n fi èyí pamọ́ bí àkọsílẹ̀ ìlànà iṣẹ́? Ẹ dáhùn *yes* tàbí *no*. (Àkọsílẹ̀ kì í ṣiṣẹ́ títí a ó fi tẹ̀ ẹ́ jáde nínú Taskiem.)",
+      "text": "Ṣé kí n fi èyí pamọ́ bí àkọsílẹ̀? Ẹ dáhùn *yes* tàbí *no*. (Àkọsílẹ̀ kì í ṣiṣẹ́ títí a ó fi tẹ̀ ẹ́ jáde: màá béèrè lẹ́yìn náà.)",
       "reviewed": false
     },
     "wa.build.save_reminder": {
@@ -561,11 +649,19 @@
       "reviewed": false
     },
     "wa.build.saved": {
-      "text": "A ti fi *{name}* pamọ́ bí àkọsílẹ̀. Kò tíì máa ṣiṣẹ́: ẹ ṣàyẹ̀wò rẹ̀, ẹ ṣètò àwọn ìsopọ̀ àti àyípadà tó nílò, kí ẹ sì tẹ̀ ẹ́ jáde nínú Taskiem{link}.",
+      "text": "A ti fi *{name}* pamọ́ bí àkọsílẹ̀{link}.",
+      "reviewed": false
+    },
+    "wa.build.setting_saved": {
+      "text": "Mo ti fi {name} pamọ́.",
       "reviewed": false
     },
     "wa.build.still_drafting": {
       "text": "Mo ṣì ń kọ ìlànà iṣẹ́ yín; màá fi ránṣẹ́ nígbà tó bá ṣetán. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
+      "reviewed": false
+    },
+    "wa.build.tables_made": {
+      "text": "Mo ti ṣe tábìlì tó ń lò: {tables}.",
       "reviewed": false
     },
     "wa.build.tables_needed": {
@@ -585,7 +681,7 @@
       "reviewed": false
     },
     "wa.build.variables": {
-      "text": "Kí ó tó ṣiṣẹ́, ẹ ṣètò àwọn àyípadà wọ̀nyí nínú Taskiem: {names}.",
+      "text": "Nígbà tí a bá ti fi pamọ́, màá béèrè: {names}.",
       "reviewed": false
     },
     "wa.build.warn_policy": {
@@ -872,6 +968,34 @@
       "text": "{label} kò sí lárọ̀ọ́wọ́tó báyìí.",
       "reviewed": false
     },
+    "wa.publish.ask_someone": {
+      "text": "A ti fi pamọ́ gẹ́gẹ́ bí àkọ́pamọ́. Ẹni tó lè tẹ̀ jáde nínú ẹgbẹ́ yín lè tẹ̀ ẹ́ jáde báyìí.",
+      "reviewed": false
+    },
+    "wa.publish.denied": {
+      "text": "Ẹ kò lè tẹ àwọn iṣẹ́ jáde ní {org}; ẹ béèrè lọ́wọ́ olùní.",
+      "reviewed": false
+    },
+    "wa.publish.done": {
+      "text": "A ti tẹ *{name}* jáde: yóò máa ṣiṣẹ́ láti ìsinsìnyí.",
+      "reviewed": false
+    },
+    "wa.publish.failed": {
+      "text": "A kò lè tẹ̀ ẹ́ jáde: {reason}.",
+      "reviewed": false
+    },
+    "wa.publish.in_app": {
+      "text": "Ẹgbẹ́ yín ń ṣàyẹ̀wò àwọn àyípadà nínú Git, nítorí náà ẹ tẹ̀ ẹ́ jáde nínú app: {link}",
+      "reviewed": false
+    },
+    "wa.publish.not_ready": {
+      "text": "*{name}* kò tíì ṣetán láti tẹ̀ jáde:",
+      "reviewed": false
+    },
+    "wa.publish.waiting": {
+      "text": "*{name}* ń dúró de ẹlòmíràn láti tẹ̀ ẹ́ jáde: wọ́n á pinnu nínú Approvals ní Taskiem.",
+      "reviewed": false
+    },
     "wa.run.bad_inputs": {
       "text": "Àwọn ìwọlé kò bá {workflow} mu: {problems}. Ẹ tún fi *run* ránṣẹ́.",
       "reviewed": false
@@ -978,6 +1102,10 @@
     },
     "wa.shop.bad_answer": {
       "text": "Èyí kò bá a mu: {reason}\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.shop.bookings_on": {
+      "text": "A ti tan àwọn ìfipamọ́ àkókò náà.",
       "reviewed": false
     },
     "wa.shop.cannot_complete": {
@@ -1168,8 +1296,20 @@
       "text": "Àwọn ìbéèrè tó ṣí sílẹ̀, tuntun jùlọ ní àkọ́kọ́:",
       "reviewed": false
     },
+    "wa.shop.orders_no_paystack": {
+      "text": "Àwọn oníbàárà yóò sanwó nígbà tí wọ́n bá gba ọjà wọn. Láti gba owó lórí ayélujára, ẹ so Paystack pọ̀: {link}",
+      "reviewed": false
+    },
+    "wa.shop.orders_on": {
+      "text": "A ti tan àwọn àṣẹ: àwọn oníbàárà lè ra láti ojú-ìwé yín, gbogbo àṣẹ yóò sì wá bá yín níbí.",
+      "reviewed": false
+    },
     "wa.shop.orders_tail": {
       "text": "Fèsì *order* àti nọ́mbà ìtọ́kasí fún ọ̀kan.",
+      "reviewed": false
+    },
+    "wa.shop.other_edits_live": {
+      "text": "Àwọn àyípadà mìíràn tí ẹ fi pamọ́ sí ojú-ìwé yín tí ẹ kò tíì tẹ̀ jáde ti jáde pẹ̀lú rẹ̀.",
       "reviewed": false
     },
     "wa.shop.page_closed": {
@@ -1268,12 +1408,16 @@
       "text": "A ń sọ fún oníbàárà pé ìbéèrè {ref} ti ṣetán. Fèsì *order {ref} delivered* nígbà tí wọ́n bá gbà á.",
       "reviewed": false
     },
+    "wa.shop.reopens": {
+      "text": "Yóò ṣí padà fúnra rẹ̀ ní {time}.",
+      "reviewed": false
+    },
     "wa.shop.service_added": {
       "text": "A ti fi iṣẹ́ *{name}* kún.",
       "reviewed": false
     },
     "wa.shop.service_hint": {
-      "text": "Àwọn oníbàárà lè ṣe ìforúkọsílẹ̀ rẹ̀ ní kété tí fọ́ọ̀mù ìforúkọsílẹ̀ bá wà ní títàn, lábẹ́ Storefront nínú ètò wẹ́ẹ̀bù.",
+      "text": "Àwọn oníbàárà lè fipamọ́ rẹ̀ nígbà tí a bá tan ìfipamọ́: ẹ fèsì *turn on orders*.",
       "reviewed": false
     },
     "wa.shop.service_how": {
@@ -1344,6 +1488,10 @@
       "text": "Àyípadà pọ̀ jù lẹ́ẹ̀kan náà. Dúró díẹ̀, lẹ́yìn náà fèsì *yes* lẹ́ẹ̀kan sí i.",
       "reviewed": false
     },
+    "wa.shop.turn_on_orders": {
+      "text": "Ṣé kí n tan àwọn àṣẹ báyìí? Àwọn oníbàárà yóò lè ra láti ojú-ìwé yín, gbogbo àṣẹ yóò sì wá bá yín níbí láti gbà tàbí kọ̀.",
+      "reviewed": false
+    },
     "wa.shop.which_item": {
       "text": "Ju ọ̀kan lọ ló bá a mu. Èwo?\n{list}\nFèsì pẹ̀lú nọ́mbà rẹ̀.",
       "reviewed": false
@@ -1354,6 +1502,18 @@
     },
     "wa.shop.with_photo": {
       "text": " (pẹ̀lú fọ́tò náà)",
+      "reviewed": false
+    },
+    "wa.signin.link": {
+      "text": "Ẹ ṣí ìjápọ̀ yìí láti yan ọ̀rọ̀ aṣínà yín kí ẹ sì wọlé sí Taskiem lórí wẹ́ẹ̀bù. Ó ń ṣiṣẹ́ lẹ́ẹ̀kan, fún wákàtí kan; ẹ má fi han ẹnikẹ́ni:\n{link}",
+      "reviewed": false
+    },
+    "wa.signin.sso": {
+      "text": "Ẹgbẹ́ yín ń wọlé pẹ̀lú àkáǹtì ilé-iṣẹ́ wọn: {link}",
+      "reviewed": false
+    },
+    "wa.signin.unavailable": {
+      "text": "A kò tíì ṣètò wíwọlé lórí wẹ́ẹ̀bù fún Taskiem yìí.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -1485,7 +1645,7 @@
       "reviewed": false
     },
     "wa.table.hint.json": {
-      "text": "Dátà tí a ṣètò gẹ́gẹ́ bí JSON",
+      "text": "Ọ̀pọ̀ iye papọ̀, bí àkójọ",
       "reviewed": false
     },
     "wa.table.hint.phone": {

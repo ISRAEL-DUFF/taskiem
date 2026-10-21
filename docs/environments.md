@@ -2,6 +2,8 @@
 
 A tenant starts with `dev` and `prod`. Each environment has its own secrets, connections, variables, allowed hosts and triggers (webhooks name theirs with `?env=`; schedules fire in `prod` only), and **runs its own version of each workflow**.
 
+A business without **Advanced** on (no-technical-steps N0-5, N9) sees one environment, `prod`: the environment pickers, the Environments section of Settings and a new connection's environment are hidden, and readiness lists only what production needs. `dev` still exists and works through the API; turning Advanced on shows it again.
+
 ## Staging
 
 Add an environment under **Secrets & settings → Environments** (`POST /v1/environments`, `workflow.publish`) and choose how it takes versions:

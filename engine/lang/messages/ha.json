@@ -112,6 +112,78 @@
       "text": "Eh, adana",
       "reviewed": false
     },
+    "customer.booking_confirmed": {
+      "text": "An yi alƙawari: {service}, {when}. Don canzawa ko soke: {link}",
+      "reviewed": false
+    },
+    "customer.booking_declined": {
+      "text": "Yi haƙuri, ba za mu iya karɓar alƙawarin ku {reference} ({service}, {when}) ba. Ku zaɓi wani lokaci: kuna iya sake yin alƙawari.",
+      "reviewed": false
+    },
+    "customer.booking_declined_refund": {
+      "text": "Yi haƙuri, ba za mu iya karɓar alƙawarin ku {reference} ({service}, {when}) ba. Za a mayar muku da kuɗin ku.",
+      "reviewed": false
+    },
+    "customer.booking_moved": {
+      "text": "An matsar da alƙawarin ku {reference} zuwa {when}. Don canzawa ko soke: {link}",
+      "reviewed": false
+    },
+    "customer.booking_pay": {
+      "text": "Don riƙe alƙawarin ku {reference}, ku biya {total} cikin kwana ɗaya: {url}",
+      "reviewed": false
+    },
+    "customer.booking_reminder_day": {
+      "text": "Tunatarwa: {service} gobe, {when} ({reference}). Don canzawa ko soke: {link}",
+      "reviewed": false
+    },
+    "customer.booking_reminder_hours": {
+      "text": "Sai an jima: {service} a {when} ({reference}).",
+      "reviewed": false
+    },
+    "customer.callback_thanks": {
+      "text": "Na gode. Za mu kira ku nan ba da daɗewa ba ({reference}).",
+      "reviewed": false
+    },
+    "customer.enquiry_thanks": {
+      "text": "Mun karɓi tambayar ku ({reference}) kuma za mu amsa nan ba da daɗewa ba.",
+      "reviewed": false
+    },
+    "customer.order_confirmed_delivery": {
+      "text": "An tabbatar da odar ku {reference}. Za mu kawo muku ba da daɗewa ba.",
+      "reviewed": false
+    },
+    "customer.order_confirmed_pickup": {
+      "text": "An tabbatar da odar ku {reference}. Za mu tura muku saƙo idan ya shirya don karɓa.",
+      "reviewed": false
+    },
+    "customer.order_declined": {
+      "text": "Yi haƙuri, ba za mu iya karɓar odar ku {reference} ba.",
+      "reviewed": false
+    },
+    "customer.order_declined_refund": {
+      "text": "Yi haƙuri, ba za mu iya karɓar odar ku {reference} ba. Za a mayar muku da kuɗin ku {total}.",
+      "reviewed": false
+    },
+    "customer.order_link_expired": {
+      "text": "Hanyar biyan kuɗi don {reference} ta ƙare, don haka an soke odar. Kuna iya sake yin odar.",
+      "reviewed": false
+    },
+    "customer.order_paid_delivery": {
+      "text": "An karɓi biyan kuɗi don {reference}. Za mu kawo muku ba da daɗewa ba.",
+      "reviewed": false
+    },
+    "customer.order_paid_pickup": {
+      "text": "An karɓi biyan kuɗi don {reference}. Za mu tura muku saƙo idan ya shirya don karɓa.",
+      "reviewed": false
+    },
+    "customer.order_pay": {
+      "text": "An karɓi odar ku {reference}. Ku biya {total} nan cikin kwana ɗaya: {url}",
+      "reviewed": false
+    },
+    "customer.order_ready": {
+      "text": "{name}: odar ku {reference} ta shirya.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "Ina rubuta maka da {language}. Harsunan da ke nan: {languages}. Aika *language* da suna don canzawa.",
       "reviewed": false
@@ -476,6 +548,14 @@
       "text": "(ba a tabbatar ba tukuna)",
       "reviewed": false
     },
+    "wa.build.ask_setting": {
+      "text": "Me *{name}* zai zama? Ku amsa, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.build.before_publish": {
+      "text": "Kafin a iya buga shi:",
+      "reviewed": false
+    },
     "wa.build.budget": {
       "text": "Kasafin AI na wannan wata na {org} ya ƙare, don haka ba zan iya gina wannan yanzu ba. Har yanzu za ka iya gina ayyuka a manhajar yanar gizo.",
       "reviewed": false
@@ -548,12 +628,20 @@
       "text": "Ba a saita gini da AI a wannan Taskiem ba. Za ka iya gina ayyuka a manhajar yanar gizo.",
       "reviewed": false
     },
+    "wa.build.offer_publish": {
+      "text": "In buga *{name}* yanzu don ya fara aiki? Ku amsa *yes* ko *no*.",
+      "reviewed": false
+    },
+    "wa.build.publish_later": {
+      "text": "Idan kun shirya, ku aika *publish {name}*.",
+      "reviewed": false
+    },
     "wa.build.refused": {
       "text": "Ba zan iya gina wannan ba. Gwada bayyana shi ta wata hanya.",
       "reviewed": false
     },
     "wa.build.save_question": {
-      "text": "In adana wannan a matsayin daftarin aiki? Amsa da *yes* ko *no*. (Daftari ba ya gudana har sai an wallafa shi a Taskiem.)",
+      "text": "In ajiye wannan a matsayin daftari? Ku amsa *yes* ko *no*. (Daftari ba ya aiki sai an buga shi: zan tambaye ku na gaba.)",
       "reviewed": false
     },
     "wa.build.save_reminder": {
@@ -561,11 +649,19 @@
       "reviewed": false
     },
     "wa.build.saved": {
-      "text": "An adana *{name}* a matsayin daftari. Bai fara aiki ba tukuna: duba shi, saita haɗi da masu canji da yake buƙata, kuma ka wallafa shi a Taskiem{link}.",
+      "text": "An ajiye *{name}* a matsayin daftari{link}.",
+      "reviewed": false
+    },
+    "wa.build.setting_saved": {
+      "text": "An ajiye {name}.",
       "reviewed": false
     },
     "wa.build.still_drafting": {
       "text": "Har yanzu ina tsara aikinka; zan aiko shi idan ya shirya. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.build.tables_made": {
+      "text": "Na yi teburin da yake amfani da shi: {tables}.",
       "reviewed": false
     },
     "wa.build.tables_needed": {
@@ -585,7 +681,7 @@
       "reviewed": false
     },
     "wa.build.variables": {
-      "text": "Kafin ya gudana, saita waɗannan masu canji a Taskiem: {names}.",
+      "text": "Idan an ajiye, zan tambaye ku: {names}.",
       "reviewed": false
     },
     "wa.build.warn_policy": {
@@ -872,6 +968,34 @@
       "text": "{label} ba ya samuwa a yanzu.",
       "reviewed": false
     },
+    "wa.publish.ask_someone": {
+      "text": "An ajiye shi a matsayin daftari. Wanda zai iya bugawa a ƙungiyarku zai iya buga shi yanzu.",
+      "reviewed": false
+    },
+    "wa.publish.denied": {
+      "text": "Ba za ku iya buga ayyuka a {org} ba; ku tambayi mai shi.",
+      "reviewed": false
+    },
+    "wa.publish.done": {
+      "text": "An buga *{name}*: zai fara aiki daga yanzu.",
+      "reviewed": false
+    },
+    "wa.publish.failed": {
+      "text": "Ba a iya buga shi ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.publish.in_app": {
+      "text": "Ƙungiyarku na duba canje-canje a Git, don haka ku buga shi a app: {link}",
+      "reviewed": false
+    },
+    "wa.publish.not_ready": {
+      "text": "*{name}* bai shirya bugawa ba tukuna:",
+      "reviewed": false
+    },
+    "wa.publish.waiting": {
+      "text": "*{name}* yana jiran wani mutum ya buga shi: za su yanke shawara a Approvals cikin Taskiem.",
+      "reviewed": false
+    },
     "wa.run.bad_inputs": {
       "text": "Bayanan ba su dace da {workflow} ba: {problems}. Sake aika *run*.",
       "reviewed": false
@@ -978,6 +1102,10 @@
     },
     "wa.shop.bad_answer": {
       "text": "Wannan bai dace ba: {reason}\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.shop.bookings_on": {
+      "text": "An kunna yin alƙawari ma.",
       "reviewed": false
     },
     "wa.shop.cannot_complete": {
@@ -1168,8 +1296,20 @@
       "text": "Odar da ke buɗe, na baya-bayan nan farko:",
       "reviewed": false
     },
+    "wa.shop.orders_no_paystack": {
+      "text": "Abokan ciniki za su biya idan sun karɓi odarsu. Don karɓar kuɗi ta intanet, ku haɗa Paystack: {link}",
+      "reviewed": false
+    },
+    "wa.shop.orders_on": {
+      "text": "An kunna odar: abokan ciniki za su iya yin odar daga shafinku, kowace odar kuma za ta zo nan.",
+      "reviewed": false
+    },
     "wa.shop.orders_tail": {
       "text": "Amsa *order* da lambar sa don ɗaya.",
+      "reviewed": false
+    },
+    "wa.shop.other_edits_live": {
+      "text": "Sauran canje-canjen da kuka ajiye a shafinku amma ba ku buga ba sun fito tare da shi.",
       "reviewed": false
     },
     "wa.shop.page_closed": {
@@ -1268,12 +1408,16 @@
       "text": "Ana gaya wa abokin ciniki cewa odar {ref} ta shirya. Amsa *order {ref} delivered* idan an karɓa.",
       "reviewed": false
     },
+    "wa.shop.reopens": {
+      "text": "Zai sake buɗewa da kansa a {time}.",
+      "reviewed": false
+    },
     "wa.shop.service_added": {
       "text": "An ƙara sabis *{name}*.",
       "reviewed": false
     },
     "wa.shop.service_hint": {
-      "text": "Abokan ciniki za su iya yin ajiyar lokaci da zarar an kunna fom ɗin ajiya, a ƙarƙashin Storefront a manhajar yanar gizo.",
+      "text": "Abokan ciniki za su iya yin alƙawari idan an kunna: ku amsa *turn on orders*.",
       "reviewed": false
     },
     "wa.shop.service_how": {
@@ -1344,6 +1488,10 @@
       "text": "Canje-canje da yawa a lokaci ɗaya. Jira ɗan lokaci, sannan amsa *yes* kuma.",
       "reviewed": false
     },
+    "wa.shop.turn_on_orders": {
+      "text": "In kunna odar yanzu? Abokan ciniki za su iya yin odar daga shafinku, kuma kowace odar za ta zo nan don ku karɓa ko ƙi.",
+      "reviewed": false
+    },
     "wa.shop.which_item": {
       "text": "Fiye da ɗaya ya dace. Wanne?\n{list}\nAmsa da lambarsa.",
       "reviewed": false
@@ -1354,6 +1502,18 @@
     },
     "wa.shop.with_photo": {
       "text": " (da hoton)",
+      "reviewed": false
+    },
+    "wa.signin.link": {
+      "text": "Buɗe wannan hanyar don zaɓar kalmar sirrinku kuma ku shiga Taskiem a yanar gizo. Yana aiki sau ɗaya, na awa ɗaya; kada ku ba kowa:\n{link}",
+      "reviewed": false
+    },
+    "wa.signin.sso": {
+      "text": "Ƙungiyarku na shiga da asusun kamfaninsu: {link}",
+      "reviewed": false
+    },
+    "wa.signin.unavailable": {
+      "text": "Ba a saita shiga ta yanar gizo a wannan Taskiem ba.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -1485,7 +1645,7 @@
       "reviewed": false
     },
     "wa.table.hint.json": {
-      "text": "Bayanai masu tsari a matsayin JSON",
+      "text": "Ƙima da yawa tare, kamar jeri",
       "reviewed": false
     },
     "wa.table.hint.phone": {

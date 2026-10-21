@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ApiError, del, get, post, put, upload, type AuthField, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
 import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, splitFields } from "../lib/connections";
 import { Help } from "../onboarding";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
@@ -55,6 +55,9 @@ export function Connections() {
   const linkedConnector = linked ? connectorOf(connectors.data?.connectors, linked.connector) : undefined;
   const toComplete = fieldsToComplete(linkedConnector) ?? [];
   const dismiss = () => void navigate("/connections", { replace: true });
+  // A link from chat or a readiness fix: ?connect=paystack opens that
+  // service's guided screen (N6).
+  const connectID = new URLSearchParams(location.search).get("connect") ?? "";
   const returnTo = back.linked || back.error ? readReturn() : "";
   return (
     <>
@@ -177,6 +180,15 @@ export function Connections() {
       )}
       {adding && connectors.data && (
         <NewConnection connectors={connectors.data.connectors} onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} onLink={startLink} />
+      )}
+      {!adding && connectID && connectors.data?.connectors.some((c) => c.id === connectID) && (
+        <NewConnection
+          connectors={connectors.data.connectors}
+          preset={{ connector: connectID, environment: "prod", name: "" }}
+          onClose={dismiss}
+          onDone={() => (dismiss(), list.reload())}
+          onLink={startLink}
+        />
       )}
       {completing && (
         <CompleteConnection
@@ -490,6 +502,7 @@ export function NewConnection({
 }) {
   const [ref, setRef] = useState((preset && connectors.find((x) => x.id === preset.connector)?.ref) ?? connectors[0]?.ref ?? "");
   const [env, setEnv] = useState(preset?.environment ?? "prod");
+  const advanced = useAdvanced();
   const [name, setName] = useState(preset?.name ?? "");
   const [creds, setCreds] = useState<Record<string, string>>({});
   const c = connectors.find((x) => x.ref === ref);
@@ -610,12 +623,14 @@ export function NewConnection({
               <Field label="Name" hint="Leave it empty: it is called main, which templates and the AI use.">
                 <input value={name} placeholder="main" onChange={(e) => setName(e.target.value)} />
               </Field>
-              <Field label="Environment">
-                <select value={env} onChange={(e) => setEnv(e.target.value)}>
-                  <option value="prod">prod (the real one)</option>
-                  <option value="dev">dev (for trying things)</option>
-                </select>
-              </Field>
+              {advanced && (
+                <Field label="Environment">
+                  <select value={env} onChange={(e) => setEnv(e.target.value)}>
+                    <option value="prod">prod (the real one)</option>
+                    <option value="dev">dev (for trying things)</option>
+                  </select>
+                </Field>
+              )}
             </div>
           )}
         </details>

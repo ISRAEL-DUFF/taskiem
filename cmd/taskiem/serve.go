@@ -883,10 +883,10 @@ func serve(ctx context.Context, args []string) error {
 		domains := &embed.DomainChecker{Pool: e.pool, Logger: log}
 		// Websites allowed to embed storefronts and forms, proven again
 		// every few hours (docs/embed-sites.md).
-		sites := &embedsites.Checker{Pool: e.pool, Prover: &embedsites.Prover{Guard: &egress.Guard{Logger: log}}, Logger: log}
+		sites := &embedsites.Checker{Pool: e.pool, Prover: &embedsites.Prover{Guard: &egress.Guard{Logger: log}}, PublicURL: cfg.PublicURL, Logger: log}
 		// Storefronts' own domains, proven again the same way
 		// (docs/storefronts.md#your-own-domain).
-		sfDomains := &storefront.DomainChecker{Pool: e.pool, Prover: &embedsites.Prover{}, Logger: log}
+		sfDomains := &storefront.DomainChecker{Pool: e.pool, Prover: &embedsites.Prover{}, PublicURL: cfg.PublicURL, Logger: log}
 		// Tenant keys: customer key health, re-wrapping after rotations,
 		// and resuming steps parked while a key was unavailable (docs/byok.md).
 		keys := &secrets.KeyJob{Vault: e.vault, Interval: cfg.Keys.CheckInterval, Resume: e.store.ResumeKeyParked, Logger: log,
@@ -902,7 +902,9 @@ func serve(ctx context.Context, args []string) error {
 		// Connector events without a webhook: Taskiem asks the provider
 		// (Paystack) itself for businesses that never set one up.
 		poller := &ingest.Poller{Store: e.store, Registry: e.registry, Connections: e.vault, Hooks: e.hooks(), Egress: &egress.Guard{Logger: log}, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run)
+		// Pages closed for the day open again the next morning.
+		reopener := &storefront.Reopener{Pool: e.pool, Logger: log}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

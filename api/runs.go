@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -287,7 +289,8 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	forks.Children = nonNil(forks.Children)
-	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal, "forks": forks})
+	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal, "forks": forks,
+		"plain_errors": s.plainRunErrors(r, ref.ID, events)})
 }
 
 func (s *Server) cancelRun(w http.ResponseWriter, r *http.Request) {
@@ -344,4 +347,35 @@ func (s *Server) resolveStep(w http.ResponseWriter, r *http.Request) {
 	}
 	st, _ := s.Store.RunStatus(r.Context(), ref)
 	writeJSON(w, http.StatusOK, map[string]any{"run_id": ref.ID, "step": step, "status": st})
+}
+
+// plainRunErrors says each failed step's last error in plain words, by
+// step instance, naming the step by its name (no-technical-steps N5).
+func (s *Server) plainRunErrors(r *http.Request, run uuid.UUID, events []history.Event) map[string]string {
+	out := map[string]string{}
+	var def []byte
+	_ = s.tx(r, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `SELECT wv.definition FROM runs r JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version WHERE r.id = $1`, run).Scan(&def)
+	})
+	steps := plain.StepsOf(def)
+	for _, e := range events {
+		if e.Type != history.StepFailed {
+			continue
+		}
+		var p struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(e.Payload, &p) != nil || p.Error.Message == "" {
+			continue
+		}
+		base, _, _ := strings.Cut(e.StepID, "[")
+		name := steps.Name(base)
+		if name == "" {
+			name = strings.ReplaceAll(base, "_", " ")
+		}
+		out[e.StepID] = plain.RunError(name, p.Error.Message)
+	}
+	return out
 }

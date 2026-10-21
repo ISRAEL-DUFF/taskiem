@@ -9,7 +9,12 @@
     "cancel": ["comot am", "leave am", "forget am", "no do am again"],
     "yes": ["yes o", "na so", "do am", "oya do am", "e dey ok", "ehen"],
     "no": ["no o", "no do am", "abeg no", "no be so"],
-    "tables": ["my tables", "which tables i get", "show me my tables", "tables wey i get", "my records"]
+    "tables": ["my tables", "which tables i get", "show me my tables", "tables wey i get", "my records"],
+    "make_page": ["make my page", "make my shop"],
+    "my_page": ["my page", "my shop"],
+    "orders": ["my orders", "wetin people order"],
+    "open_shop": ["open my shop", "open shop"],
+    "qr": ["my qr"]
   },
   "prefixes": {
     "switch": ["change go", "switch go"],
@@ -17,7 +22,11 @@
     "build": ["build am", "abeg build", "make una build", "help me build"],
     "language": ["change language"],
     "add": ["put am for", "put for", "add am for", "add am to", "add for"],
-    "find": ["find am for", "look for", "search for", "check for"]
+    "find": ["find am for", "look for", "search for", "check for"],
+    "publish": ["publish"],
+    "close_shop": ["close my shop", "close shop"],
+    "order_ready": ["e don ready", "don ready"],
+    "order_delivered": ["e don reach", "dem don collect"]
   },
   "fillers": ["abeg", "abeg o", "please"],
   "markers": ["abeg", "wetin", "dey", "una", "wahala", "comot", "sabi", "oya", "abi", "sef", "wan", "pikin", "chop", "dem", "wey", "make i", "how far", "no be", "na im", "e don", "go dey", "fit", "dis", "dat"]

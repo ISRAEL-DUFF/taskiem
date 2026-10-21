@@ -1,6 +1,7 @@
+import { plainValue, showValue } from "../lib/values";
 import { useState } from "react";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
 import { ErrorBox, Field, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
@@ -21,8 +22,31 @@ interface Variable {
   updated_at: string;
 }
 
+/** The Advanced switch: owners and admins show the technical parts. */
+function AdvancedSwitch() {
+  const { me, refresh } = useAuth();
+  const act = useAction();
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Advanced</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={!!me?.advanced}
+          disabled={act.busy}
+          onChange={(e) => void act.run(async () => (await put("/v1/settings/advanced", { advanced: e.target.checked }), await refresh()))}
+        />{" "}
+        Show the technical parts
+      </label>
+      <p className="hint">For someone who builds workflows by hand: a blank canvas, formulas, the test environment and your own connectors. Everyone in the business sees the same.</p>
+      <ErrorBox error={act.error} />
+    </div>
+  );
+}
+
 export function Settings() {
   const { can } = useAuth();
+  const advanced = useAdvanced();
   const [env, setEnv] = useState("prod");
   return (
     <>
@@ -31,11 +55,12 @@ export function Settings() {
         description="Your environments and the secrets and variables workflows read in each of them."
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
-      <Environments editable={can("secret.manage")} />
+      {can("member.manage") && <AdvancedSwitch />}
+      {advanced && <Environments editable={can("secret.manage")} />}
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />
-      {can("secret.manage") && <Egress env={env} />}
-      {can("git.manage") && <Git env={env} />}
+      {advanced && can("secret.manage") && <Egress env={env} />}
+      {advanced && can("git.manage") && <Git env={env} />}
       {can("secret.manage") && <WhatsAppNumber />}
       {can("secret.manage") && <USSDChannels />}
       <Governance />
@@ -274,14 +299,19 @@ function Secrets({ env }: { env: string }) {
 
 function Variables({ env, editable }: { env: string; editable: boolean }) {
   const { data, error, reload } = useLoad(() => get<{ variables: Variable[] }>("/v1/variables"), []);
+  // What each setting is for: the templates that read it say (N5).
+  const tpls = useLoad(() => get<{ templates: { variables: { name: string; why: string }[] }[] }>("/v1/templates"), []);
+  const why = new Map((tpls.data?.templates ?? []).flatMap((t) => t.variables.map((v) => [v.name, v.why] as const)));
   const [name, setName] = useState("");
+  const [text, setText] = useState("");
+  const [advanced, setAdvanced] = useState(false);
   const [value, setValue] = useState<unknown>("");
   const act = useAction();
   const rows = data?.variables.filter((v) => v.environment === env) ?? [];
   return (
     <section className="card">
-      <h2 style={{ marginTop: 0 }}>Variables</h2>
-      <p className="hint">Expressions read these as env.&lt;name&gt;. Each run keeps the values it started with.</p>
+      <h2 style={{ marginTop: 0 }}>Settings your workflows read</h2>
+      <p className="hint">Such as the owner's phone number or a business name. Each run keeps the values it started with.</p>
       <Help topic="variables" />
       <ErrorBox error={error ?? act.error} />
       {rows.length > 0 && (
@@ -290,11 +320,10 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
             {rows.map((v) => (
               <tr key={v.name}>
                 <td>
-                  <code>{v.name}</code>
+                  <strong>{v.name.replace(/_/g, " ")}</strong>
+                  {why.get(v.name) && <div className="hint">{why.get(v.name)}</div>}
                 </td>
-                <td>
-                  <code>{JSON.stringify(v.value)}</code>
-                </td>
+                <td>{showValue(v.value)}</td>
                 <td className="hint">{fmtTime(v.updated_at)}</td>
               </tr>
             ))}
@@ -306,8 +335,9 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              await put(`/v1/variables/${env}/${name}`, { value });
+              await put(`/v1/variables/${env}/${name}`, { value: advanced ? value : plainValue(text) });
               setName("");
+              setText("");
               setValue("");
               reload();
             });
@@ -317,10 +347,19 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
             <Field label="Name">
               <input className="mono" value={name} onChange={(e) => setName(e.target.value)} required />
             </Field>
-            <Field label="Value (JSON: &quot;text&quot;, 42, true, {...})">
-              <JsonInput value={value} onChange={setValue} rows={1} />
-            </Field>
+            {advanced ? (
+              <Field label="Value (JSON)">
+                <JsonInput value={value} onChange={setValue} rows={1} />
+              </Field>
+            ) : (
+              <Field label="Value" hint="Text or a number, as you would write it. A phone number in any form is kept as +234….">
+                <input value={text} onChange={(e) => setText(e.target.value)} required />
+              </Field>
+            )}
           </div>
+          <label className="inline hint" data-technical>
+            <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: enter JSON
+          </label>
           <button type="submit" disabled={act.busy || !name}>
             Set variable
           </button>

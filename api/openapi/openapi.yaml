@@ -489,6 +489,46 @@ paths:
                 $ref: '#/components/schemas/StorefrontCatalogue'
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/catalogue/make:
+    post:
+      operationId: makeStorefrontTable
+      tags:
+      - Storefront
+      summary: Make the catalogue's or the services' table
+      description: Makes the products (or services) data table and maps it, as chat does, so nobody builds a table and maps its columns by hand. Needs `table.edit` too. A storefront that already has one is answered with it (`made` false); one with no page yet is 409.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind:
+                  type: string
+                  enum: [products, services]
+      responses:
+        '200':
+          description: It already had one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontTableMade'
+        '201':
+          description: Made and mapped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontTableMade'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/catalogue/refresh:
     post:
       operationId: refreshStorefrontCatalogue
@@ -798,6 +838,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StorefrontDomain'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/domains/{id}/check:
+    post:
+      operationId: checkStorefrontDomain
+      tags:
+      - Storefront
+      summary: Check now
+      description: Looks up each record the owner was asked to create and says, in plain words, which is missing or wrong. Changes nothing; verify serves the domain once the proof is there.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The domain's id
+      responses:
+        '200':
+          description: Each record and what DNS has for it
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checks, all_ok, proven]
+                properties:
+                  checks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StorefrontDomainRecordCheck'
+                  all_ok:
+                    type: boolean
+                  proven:
+                    type: boolean
+                    description: Whether the proof (the TXT record) is there, so verify will succeed
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/domains/{id}/verify:
@@ -1827,6 +1907,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EmbedSite'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/embed-sites/{id}/send-to-designer:
+    post:
+      operationId: sendEmbedSiteToDesigner
+      tags:
+      - Embed sites
+      summary: Send to my web designer
+      description: Emails whoever looks after the website the code that shows the business's page there and how to prove the website is the business's. 409 when this Taskiem sends no email or the page is not published. Audited with the recipient's domain only.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The site's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent, to]
+                properties:
+                  sent:
+                    type: boolean
+                  to:
+                    type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/embed-sites/{id}/verify:
@@ -9578,6 +9703,129 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/paystack/banks:
+    get:
+      operationId: listPaystackBanks
+      tags:
+      - Connectors
+      summary: The banks Paystack pays into
+      description: By name and code, read with the business's Paystack connection in prod, for choosing who to pay by bank. 409 when Paystack is not connected.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      parameters:
+      - name: connection
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [banks]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        code:
+                          type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/paystack/resolve:
+    post:
+      operationId: resolvePaystackAccount
+      tags:
+      - Connectors
+      summary: The name on a bank account
+      description: From its 10-digit number and bank, for the person to confirm before paying it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_number, bank_code]
+              properties:
+                account_number:
+                  type: string
+                bank_code:
+                  type: string
+                connection:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account_name, account_number]
+                properties:
+                  account_name:
+                    type: string
+                  account_number:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/paystack/recipients:
+    post:
+      operationId: createPaystackRecipient
+      tags:
+      - Connectors
+      summary: Save someone to pay
+      description: A Paystack transfer recipient from a bank account and the name on it; Paystack answers the same code for an account saved before. Audited with the account's last four digits.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_number, bank_code, name]
+              properties:
+                account_number:
+                  type: string
+                bank_code:
+                  type: string
+                name:
+                  type: string
+                connection:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recipient_code, name]
+                properties:
+                  recipient_code:
+                    type: string
+                  name:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/sheets/resolve:
     post:
       operationId: resolveSpreadsheet
@@ -9620,6 +9868,100 @@ paths:
                     type: array
                     items:
                       type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/whatsapp/templates:
+    get:
+      operationId: listWhatsAppTemplates
+      tags:
+      - Connectors
+      summary: The business's approved WhatsApp templates
+      description: By what they say, with their language, read with the business's WhatsApp connection in prod. 409 when WhatsApp is not connected or the connection has no WhatsApp Business Account ID.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: connection
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templates]
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        language:
+                          type: string
+                        category:
+                          type: string
+                        body:
+                          type: string
+                        variables:
+                          type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/advanced:
+    get:
+      operationId: getAdvanced
+      tags:
+      - Account
+      summary: Whether the business sees the technical parts
+      description: The Advanced switch. Until an owner or admin sets it, plans above Shop have it on.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdvancedSetting'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putAdvanced
+      tags:
+      - Account
+      summary: Turn the technical parts on or off
+      description: For everyone in the business. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [advanced]
+              properties:
+                advanced:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
   /v1/signup:
@@ -11949,7 +12291,7 @@ paths:
       - Data tables
       summary: Import rows from CSV
       description: >-
-        A multipart form with a `file` field holding a CSV whose header row names the table's columns (`created_at` and `updated_at` are ignored). Up to 5,000 rows per call, written in batches of 500: upserted on `id` when the file has an `id` column (an export imported back), inserted otherwise. Each batch carries its own key from the import id and the batch's index; the import id comes from the `Idempotency-Key` header, or without one from the file and the table, so a retried import writes nothing twice (`replayed_batches`). Send a new key to import the same file again on purpose. Audited as `table.import` with counts only.
+        A multipart form with a `file` field holding a CSV whose header row names the table's columns, by name or title in any case or spacing (`created_at` and `updated_at` are ignored), and an optional `mapping` field: a JSON object from each header that matches no column to the column it goes in, or `""` to leave it out. Up to 5,000 rows per call, written in batches of 500: upserted on `id` when the file has an `id` column (an export imported back), inserted otherwise. Each batch carries its own key from the import id and the batch's index; the import id comes from the `Idempotency-Key` header, or without one from the file and the table, so a retried import writes nothing twice (`replayed_batches`). Send a new key to import the same file again on purpose. Audited as `table.import` with counts only.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -11983,6 +12325,9 @@ paths:
                   type: string
                   format: binary
                   description: The CSV file (at most 16 MB)
+                mapping:
+                  type: string
+                  description: 'JSON: each header that matches no column, to the column it goes in, or "" to leave it out.'
       responses:
         '200':
           description: Imported
@@ -12593,6 +12938,18 @@ components:
         created_at:
           type: string
           format: date-time
+    StorefrontTableMade:
+      type: object
+      required: [kind, table_id, made]
+      properties:
+        kind:
+          type: string
+        table_id:
+          type: string
+          format: uuid
+        made:
+          type: boolean
+      additionalProperties: false
     Readiness:
       type: object
       required: [ready, needs]
@@ -12702,6 +13059,17 @@ components:
           description: JSON pointer into the definition, e.g. `/steps/2/needs`.
         message:
           type: string
+        plain:
+          type: string
+          description: The problem in plain words for a business owner, naming the step by its name.
+        fix:
+          type: object
+          description: Where it is put right, as a web app path (`/connections?connect=paystack`), or `#step=<id>` for the step in the editor.
+          properties:
+            label:
+              type: string
+            path:
+              type: string
     Problems:
       type: array
       items:
@@ -13087,6 +13455,11 @@ components:
             $ref: '#/components/schemas/HistoryEvent'
         revealed:
           type: boolean
+        plain_errors:
+          type: object
+          description: Each failed step's error in plain words, by step instance, naming the step by its name.
+          additionalProperties:
+            type: string
         forks:
           type: object
           required:
@@ -13350,8 +13723,23 @@ components:
         totp:
           type: boolean
           description: Whether an authenticator is enrolled.
+        field_agent:
+          type: boolean
+          description: A Taskiem field agent signed in as themselves; the web app lands them on the agent app.
+        advanced:
+          type: boolean
+          description: Whether the business sees the web app's technical parts (the Advanced switch).
         factors:
           description: What the person proves themselves with to change their factors.
+    AdvancedSetting:
+      type: object
+      required: [advanced, chosen]
+      properties:
+        advanced:
+          type: boolean
+        chosen:
+          type: boolean
+          description: Whether someone set it; otherwise it is the plan's default.
     SignupOptions:
       type: object
       required:
@@ -14697,6 +15085,25 @@ components:
           description: proof proves the domain and must be kept; point sends visitors to the page
         note:
           type: string
+        short:
+          type: string
+          description: The name as registrars ask for it, relative to the registered domain; @ for the domain itself
+    StorefrontDomainRecordCheck:
+      allOf:
+      - $ref: '#/components/schemas/StorefrontDomainRecord'
+      - type: object
+        required: [ok, found, says]
+        properties:
+          ok:
+            type: boolean
+          found:
+            type: array
+            items:
+              type: string
+            description: What DNS answers for the name now
+          says:
+            type: string
+            description: The record's state in plain words, with what to fix
     StorefrontDomainTarget:
       type: object
       properties:
@@ -15183,7 +15590,7 @@ components:
           format: date-time
         prove:
           type: object
-          description: 'What to publish: record_type, record_name and record_value for dns; file_url and file_contents for file'
+          description: 'What to publish: record_type, record_name (and record_short, as registrars ask for it) and record_value for dns; file_url and file_contents for file'
           additionalProperties:
             type: string
     EmbedSiteList:
@@ -17121,6 +17528,13 @@ components:
         connector:
           type: string
           description: For a connection parameter, the connector it is for.
+        picker:
+          type: string
+          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language]
+          description: How the value is chosen instead of typed.
+        from:
+          type: string
+          description: The parameter the picker depends on (a tab's spreadsheet, a column's table, a language's template).
       additionalProperties: false
     TemplateNeed:
       type: object

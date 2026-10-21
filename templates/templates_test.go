@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -186,7 +187,7 @@ func TestInstantiateParams(t *testing.T) {
 		t.Errorf("settings: %v", out)
 	}
 	// Defaults fill what was not given; key order is the template's.
-	if def.Step("read_debtors").Input["range"] != "Debtors!A:C" || def.Step("read_debtors").Connection != "main" {
+	if def.Step("read_debtors").Input["range"] != "Debtors" || def.Step("read_debtors").Connection != "main" {
 		t.Errorf("defaults: %v", def.Step("read_debtors").Input)
 	}
 	if !strings.HasPrefix(string(doc), `{"schema":"wd/v1","id":"wf_debtorReminderSms"`) {
@@ -384,5 +385,65 @@ func TestProseElsewhereKeepsAMatch(t *testing.T) {
 	}
 	if len(after) == 0 || after[0].Template.ID != "salary" || after[0].Score != before[0].Score {
 		t.Fatalf("the match moved with other templates' prose: %v, was %v", after, before)
+	}
+}
+
+// Details as an owner has them (no-technical-steps N8): a sheet's link
+// for its id, a tab's name for the range, and a picker that must be one
+// Taskiem has.
+func TestOwnerShapedParams(t *testing.T) {
+	sheet := templates.Param{Name: "spreadsheet_id", Type: "string", Picker: "sheet"}
+	if v, err := sheet.Coerce("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123/edit#gid=0"); err != nil || v != "1AbCdEfGhIjKlMnOpQrStUvWxYz0123" {
+		t.Errorf("a link: %v %v", v, err)
+	}
+	tab := templates.Param{Name: "sheet_range", Type: "string", Picker: "sheet_tab", From: "spreadsheet_id"}
+	for in, want := range map[string]string{"Debtors": "Debtors", "Staff list": "'Staff list'", "Ada's": "'Ada''s'", "Sales!A:C": "Sales!A:C", "'Q1 sales'": "'Q1 sales'"} {
+		if v, err := tab.Coerce(in); err != nil || v != want {
+			t.Errorf("tab %q: %v %v", in, v, err)
+		}
+	}
+	bad := []byte(`{"id":"x","title":"X","summary":"s","description":"d","category":"c","tags":[],"connectors":[],"params":[
+	 {"name":"sheet_range","type":"string","title":"Tab","description":"d","example":"A","picker":"sheet_tab"}],
+	 "definition":{"schema":"wd/v1","id":"wf_x","version":1,"name":"X","trigger":{"type":"manual"},"steps":[{"id":"a","type":"transform","config":{"output":{"r":"{{sheet_range}}"}}}]}}`)
+	if _, err := templates.Load(fstest.MapFS{"library/x.json": {Data: bad}}); err == nil || !strings.Contains(err.Error(), "picker") {
+		t.Errorf("a tab picker without its sheet: %v", err)
+	}
+}
+
+// Every template's details can be filled in by an owner (no-technical-steps
+// N8): each is a number, a yes or no, a time, a day, a connection, words
+// whose title and description ask nothing technical, or chosen with a
+// picker. Templates another system starts (a webhook) need a developer
+// anyway and are left out.
+func TestEveryDetailIsOwnerShaped(t *testing.T) {
+	technical := regexp.MustCompile(`(?i)\b(id|ids|A1|range|kobo|RCP_|recipient code|without \+|schema|expression|cron|json|body variables?|language code|schema\.table)\b|\{\{`)
+	for _, tp := range templates.Default().List() {
+		var head struct {
+			Trigger struct {
+				Type string `json:"type"`
+			} `json:"trigger"`
+		}
+		if err := json.Unmarshal(tp.Definition, &head); err != nil {
+			t.Fatal(err)
+		}
+		if head.Trigger.Type == "webhook" {
+			continue
+		}
+		for _, p := range tp.Params {
+			if technical.MatchString(p.Title) || technical.MatchString(p.Description) {
+				t.Errorf("%s: %s asks in technical words: %q / %q", tp.ID, p.Name, p.Title, p.Description)
+			}
+			if p.Type != "string" || p.Picker != "" || len(p.Enum) > 0 {
+				continue
+			}
+			// Free words: no format to get right.
+			if p.Pattern != "" {
+				t.Errorf("%s: %s is typed but must match %s; give it a picker", tp.ID, p.Name, p.Pattern)
+			}
+		}
+		// A run form asks nothing technical either.
+		if strings.Contains(string(tp.Definition), "recipient_code") && !strings.Contains(string(tp.Definition), `"format": "paystack-recipient"`) && head.Trigger.Type == "manual" {
+			t.Errorf("%s: its run form asks for a recipient code", tp.ID)
+		}
 	}
 }

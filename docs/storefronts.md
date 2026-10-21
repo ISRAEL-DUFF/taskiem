@@ -20,7 +20,7 @@ Pages are rendered on the server and work without JavaScript. They send no cooki
 1. **Draft.** The owner edits the card, picks a template and accent, and chooses a **slug**: 3 to 30 letters, digits and hyphens, the page's address `<slug>.<preview domain>`.
    - Reserved words and protected names (banks, payment providers, agencies, Taskiem, and look-alikes of them) are refused ([public host](public-host.md#building-blocks-for-the-next-milestones)).
    - Saving a draft changes nothing anyone sees.
-2. **Catalogue.** The owner picks a data table and maps its columns:
+2. **Catalogue.** **Make my catalogue** (and **Make my services** for bookings; `POST /v1/storefront/catalogue/make`) makes the table and its mapping as chat does, and the owner then adds items in the editor with a name and a price in naira, and a photo, removing them there too: nobody opens the Tables page. A business that brings its own table picks it under **Use a table you already have** and maps its columns:
 
    | Mapping | Column type |
    | --- | --- |
@@ -231,13 +231,15 @@ A business that already owns a domain can serve its page there instead of the pr
 
 3. **Check it** (`POST /v1/storefront/domains/{id}/verify`). The answer is 409 until the TXT record holds the value; DNS can take a few hours. Once verified the domain serves the page on every replica within 30 seconds, the proxy obtains its certificate the first time it is visited, and the page's address becomes the domain.
 
+**Check now** (`POST /v1/storefront/domains/{id}/check`, no-technical-steps N9) looks each record up and says in plain words which is missing or wrong ("The TXT record named _taskiem-verify is not there yet", "adakitchen.ng points somewhere else (198.51.100.1)…"), with `all_ok` and `proven`; it changes nothing. Each record also has `short`, its name as registrars ask for it (`_taskiem-verify`, `@`, `www`). The web app's **Check now** calls it, then verify once the proof is there, and shows step-by-step guides for Whogohost, Qservers, DomainKing, GoDaddy, Namecheap and any other registrar, with each record's boxes filled in ([owners' guide](guide/own-domain.md)).
+
 Each step needs `storefront.manage` and is audited: `storefront_domain.add`, `storefront_domain.verify`, `storefront_domain.primary`, `storefront_domain.remove`.
 
 **Who gets a domain.** Any number of organisations may add the same domain, each with its own value to publish; the first to prove it serves it. Another can prove it only once the first removes it or it is unverified. Nothing is taken from a page serving it.
 
 **One primary.** The first domain verified is the **primary**; `POST /v1/storefront/domains/{id}/primary` makes another verified domain the primary. While the page is published or closed, every other address of it (the preview address, the `www.` twin, other domains) answers a page view with a **301** to the same path on the primary, kept by browsers for an hour only (`Cache-Control: max-age=3600`), so a domain that later stops serving is not followed for long. Forms being sent (`POST`) and `/embed/` views are served where they are. A draft is not served on any address; a suspended page answers 410 on every address, with no redirect.
 
-**Proven again.** As embed sites are, every 6 hours: a domain whose TXT record no longer holds its value, 4 checks in a row over at least 24 hours, is **unverified**. It stops serving at once (the proxy's `/tls/ask` answers 404 for it), the preview address serves the page again with no redirect, and `storefront_domain.unverified` is audited with the reason by `storefront-domain-checker`. A check that says nothing (a DNS timeout) is not counted. The editor shows the reason; putting the record back and checking again restores it.
+**Proven again.** As embed sites are, every 6 hours: a domain whose TXT record no longer holds its value, 4 checks in a row over at least 24 hours, is **unverified**. It stops serving at once (the proxy's `/tls/ask` answers 404 for it), the preview address serves the page again with no redirect, and `storefront_domain.unverified` is audited with the reason by `storefront-domain-checker`. A check that says nothing (a DNS timeout) is not counted. The editor shows the reason; putting the record back and checking again restores it. The owners hear of it on the chat they linked (WhatsApp, else Telegram) and on the alert channels: a `domain_unverified` alert ([alerts](alerts.md)) saying which record to check.
 
 **Removing** a domain (`DELETE /v1/storefront/domains/{id}`) stops it serving at once, within the public host's 30-second cache.
 
@@ -266,7 +268,8 @@ The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefr
 
 | Message | What happens |
 | --- | --- |
-| `make my page` | With no storefront yet, five questions, one at a time: the business's name, one line of what it sells, the area or address, opening hours, a photo for the top of the page (`skip` leaves any but the name out). Each answer is checked as publishing checks it. Then the draft is saved at the first free address the name gives (`adas-kitchen`, then `adas-kitchen-yaba`, then `adas-kitchen-2`…), a **products** table (`name`, `price` in naira, `photo`, `available`, `stock`) is made in the organisation's Xenibase project and mapped as the catalogue, and Taskiem shows the summary and asks to publish. Where data tables are not available, it says so and the page is saved without a catalogue. On **yes**: the catalogue copy is refreshed, the draft published, and Taskiem sends the link, the QR code image and a status text to paste (`Order from Ada's Kitchen here: https://…`) |
+| `make my page` | With no storefront yet, five questions, one at a time: the business's name, one line of what it sells, the area or address, opening hours, a photo for the top of the page (`skip` leaves any but the name out). Each answer is checked as publishing checks it. Then the draft is saved at the first free address the name gives (`adas-kitchen`, then `adas-kitchen-yaba`, then `adas-kitchen-2`…), a **products** table (`name`, `price` in naira, `photo`, `available`, `stock`) is made in the organisation's Xenibase project and mapped as the catalogue, and Taskiem shows the summary and asks to publish. Where data tables are not available, it says so and the page is saved without a catalogue. On **yes**: the catalogue copy is refreshed, the draft published, and Taskiem sends the link, the QR code image and a status text to paste (`Order from Ada's Kitchen here: https://…`), then offers **Turn on orders?** |
+| `turn on orders` (or **yes** to the offer) | The order form's workflow (and the booking form's, when the page has services) is made from its template and published from chat with the same checks as the Forms page and the [one-person approval rule](governance.md#one-person-businesses), the form switched on, and a published page published again. Payment after acceptance when Paystack is connected, otherwise none (paid on collection or delivery), with a link to connect Paystack |
 | `my page`, `make my page` (once there is one) | The link, whether it is a draft, published or closed, and today's orders |
 | `publish` | Publishes the draft as it is, on **yes** |
 | `qr` | The QR code image, its address, and where the printable card is in the web app |
@@ -274,7 +277,7 @@ The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefr
 | `price <item> <price>`, `hide <item>`, `show <item>`, `stock <item> <n>` | The item is found by name, case-insensitively: the exact name, else the one the words start, else one containing them; when several match, a numbered list to pick from. Shown old to new, then written by row id on **yes** to the mapped columns (an owner's own table keeps its own column names; a mapping without the column is refused), and the copy refreshed. `hide` marks the item unavailable |
 | `hours mon-sat 8-6` | Opening hours, read forgivingly: `mon-sat 8-6`, `daily 9am-9pm`, `weekdays 8:30-17:30, weekends 2-6`, `mon-fri 9-1 2-6`, `mon-sat 8-6, closed sunday`, `open 24 hours`. Times without am or pm are a day's opening (`8-6` is 08:00 to 18:00). Saved in the draft, and a published page is published again |
 | `add service Haircut 30 2000` | The name, the minutes (`30`, `45min`, `1h`) and the price. A storefront without a services table gets a **services** table (`name`, `price`, `duration_minutes`, `capacity`), mapped for [bookings](#bookings) with the availability kept; the service is added, the copies refreshed and a published page published again. Customers book it once the booking form is on |
-| `close shop`, `close shop back on monday`, `close shop today` | [Close](#editing-and-publishing) with that message (or the default one). `close shop today` closes with "Closed today. We open again tomorrow."; nothing reopens it by itself: the owner sends `open shop` |
+| `close shop`, `close shop back on monday`, `close shop today` | [Close](#editing-and-publishing) with that message (or the default one). `close shop today` closes with "Closed today. We open again tomorrow." and reopens by itself at 06:00 Lagos time the next day (the scheduler's reopener; audited as `storefront.reopen`), which the confirmation says |
 | `open shop` | Reopen |
 | `orders` | The ten newest open orders, questions and call-backs: reference, items (or the service and time), total, status in words, the customer masked |
 | `order AK-7QX4KD` | One order, the customer masked |
@@ -282,6 +285,10 @@ The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefr
 | `order AK-7QX4KD delivered` (or `collected`, `done`) | Completes it, as the order workflow's "mark it delivered or collected" step does. A run still waiting on that step finds it completed |
 
 Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), at most 10 MB, held in memory only. A photo sent while something else is being answered is refused.
+
+The commands work in the organisation's languages too (word lists in `engine/lang/intents`, drafts until reviewed): `àwọn àṣẹ mi` (orders) in Yoruba, `rufe shagona` (close shop) in Hausa, `mepee ụlọ ahịa m` (open shop) in Igbo, `wetin people order` in Pidgin, and `ti ṣetán AK-7QX4KD` (ready). Changing the hours or adding a service from chat republishes the page; when the draft held other changes not yet published, the reply says they went live too.
+
+Customers' texts are in the business's language (its default chat language, Settings > Languages): the order and booking templates name Taskiem's customer messages (`notify_customer` with `say`, such as `order_confirmed_pickup`), and "your order is ready" from chat is the same.
 
 ## API
 

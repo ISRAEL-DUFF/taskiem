@@ -277,6 +277,14 @@ func TestMatchIntent(t *testing.T) {
 		{"a'a", []lang.Tag{lang.HA, lang.EN}, lang.IntentNo, ""},
 		{"kagbuo", []lang.Tag{lang.IG, lang.EN}, lang.IntentCancel, ""},
 		{"asụsụ hausa", []lang.Tag{lang.IG, lang.EN}, lang.IntentLanguage, "hausa"},
+		// The storefront and publishing, in every language (N6).
+		{"àwọn àṣẹ mi", []lang.Tag{lang.YO, lang.EN}, lang.IntentOrders, ""},
+		{"ti ṣetán AK-7QX2M4", []lang.Tag{lang.YO, lang.EN}, lang.IntentReady, "AK-7QX2M4"},
+		{"rufe shagona today", []lang.Tag{lang.HA, lang.EN}, lang.IntentCloseShop, "today"},
+		{"mepee ụlọ ahịa m", []lang.Tag{lang.IG, lang.EN}, lang.IntentOpenShop, ""},
+		{"wetin people order", []lang.Tag{lang.PCM, lang.EN}, lang.IntentOrders, ""},
+		{"publish Visitors log", all, lang.IntentPublish, "Visitors log"},
+		{"my page", all, lang.IntentMyPage, ""},
 		// Another language's words mean nothing unless it is that person's.
 		{"fagilé", all, lang.IntentNone, ""},
 		{"please pay salaries every friday", all, lang.IntentNone, ""},
@@ -330,5 +338,26 @@ func TestDetect(t *testing.T) {
 	// Only languages that are on are detected.
 	if got, ok := lang.Detect("Abeg wetin dey happen for my account?", []lang.Tag{lang.EN, lang.YO}); ok || got != lang.EN {
 		t.Errorf("detected a language that is off: %s", got)
+	}
+}
+
+// The gate's text test for chat (no-technical-steps, Appendix C): no
+// message a person reads in WhatsApp, Telegram, USSD or SMS uses the words
+// an owner never sees. Placeholders ({cron}) are values, not words.
+func TestMessagesUseNoTechnicalWords(t *testing.T) {
+	glossary := []*regexp.Regexp{regexp.MustCompile(`\bJSON\b`), regexp.MustCompile(`(?i)\bschemas?\b`), regexp.MustCompile(`wd/v1|wd-test`),
+		regexp.MustCompile(`(?i)\bexpressions?\b`), regexp.MustCompile(`\bCEL\b`), regexp.MustCompile(`(?i)\bcron\b`), regexp.MustCompile(`(?i)\bkobo\b`),
+		regexp.MustCompile(`(?i)\btokens?\b`), regexp.MustCompile(`(?i)\bwebhooks?\b`), regexp.MustCompile(`\bHMAC\b`), regexp.MustCompile(`(?i)\bendpoints?\b`),
+		regexp.MustCompile(`(?i)\bpayloads?\b`), regexp.MustCompile(`(?i)\bAPI keys?\b`), regexp.MustCompile(`secret_key|trigger\.body|=steps|/steps/`),
+		regexp.MustCompile(`(?i)\bstep id\b`), regexp.MustCompile(`\bnull\b|\bundefined\b`), regexp.MustCompile(`\b(status|HTTP) [1-5]\d\d\b`)}
+	placeholder := regexp.MustCompile(`\{[a-z_]+\}`)
+	f := lang.Default().File(lang.EN)
+	for id, e := range f.Messages {
+		text := placeholder.ReplaceAllString(e.Text, "")
+		for _, g := range glossary {
+			if g.MatchString(text) {
+				t.Errorf("%s says %q: %q", id, g.FindString(text), e.Text)
+			}
+		}
 	}
 }

@@ -165,6 +165,19 @@ The Xenibase integration runs as a parallel plan ([Xenibase integration](xenibas
 | PG3 | [~] **Xenibase-side work for later phases**: P3-G1 and P3-G2 exist; P2-G1 (OAuth consent) and the dedicated-instance role bootstrap are built on the Xenibase branch. Needed from people: a Xenibase organisation, an unrestricted `read`, `write`, `admin` token and a region for the platform's data tables (`TASKIEM_XENIBASE_URL`, `TASKIEM_XENIBASE_TOKEN`, `TASKIEM_XENIBASE_ORG`); an OAuth client registered for Taskiem (its client id and secret into Taskiem's Secret) | Xenibase account holder, ops | Data tables and account linking built against the fake | Data tables and "Connect Xenibase" for real organisations |
 | PG4 | [ ] **Corrections C1–C11 to the joint doc** ([section 3](xenibase-integration.md#3-corrections-to-the-joint-doc)) | Joint doc author, Xenibase team | — | A joint doc both teams can build from |
 
+## No technical steps (N0–N9)
+
+Built and tested in N1–N9 (PRs #39–#47). These items are the acceptance checks that need people, or approvals outside Taskiem.
+
+| # | Item | Who | Code status | Unblocks |
+| --- | --- | --- | --- | --- |
+| NT1 | [ ] **Owner sessions for the templates (N8)**: three to five owners from the target segment, each with Advanced off, fill in the details of every template in the library (Start from a template), with someone watching who does not help. Note every field where the owner stops, asks, or types something the check refuses | Product, with owners | Every template's details are owner-shaped pickers or plain fields (`TestEveryDetailIsOwnerShaped`); bank, account, sheet, tab, role and WhatsApp template pickers built ([templates](guide/templates.md)) | N8 sign-off |
+| NT2 | [ ] **Owner sessions for a domain (N9)**: two or three owners who own a domain connect it to a storefront or website using only the in-app guide ([own domain](guide/own-domain.md)); note the step and screen where each one stops | Product, with owners | Registrar guides, Check now, record-by-record results and alerts when a domain stops pointing here | N9 sign-off |
+| NT3 | [ ] **Registrar steps checked on live screens** for Whogohost, Qservers and DomainKing: menu names, box names (name, value) and the save button, compared with `web/src/lib/registrars.ts`. GoDaddy and Namecheap match their official help | Anyone with an account at each | Steps written from the common WHMCS layout; none of the three publish DNS help | NT2 for those registrars |
+| NT4 | [ ] **Meta Tech Provider approval** for one-click WhatsApp sign-up (Embedded Signup, N0-6) | Ops / founder | Own-number guide built (N9); Embedded Signup waits on approval | Owners connecting their number without Meta's Business Manager |
+| NT5 | [ ] **Domain platform contract** for buying and registering domains in the app | Founder | Connect-a-domain-you-own built (N9) | Owners without a domain |
+| NT6 | [ ] **Merge PRs #39–#47** in order N1, N3, N2, N4, N7, N6, N5, N8, N9 (migrations 00187–00191) | Engineering lead | Each PR passes its tests and lint | Everything above in production |
+
 ## Decisions waiting on someone
 
 | # | Decision | Who | Today |

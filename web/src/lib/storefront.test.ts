@@ -19,6 +19,7 @@ import {
   slugify,
   thumb,
   type Hours,
+  itemRow,
 } from "./storefront";
 import type { Column, Table } from "./tables";
 
@@ -212,5 +213,18 @@ describe("the editor's form", () => {
     expect(tidyMessage("storefront: the address is taken: mama")).toBe("The address is taken: mama");
     expect(tidyMessage('storefront: invalid: publicnames: reserved name: "www"')).toBe('Reserved name: "www"');
     expect(tidyMessage("an image is at most 5 MB")).toBe("An image is at most 5 MB");
+  });
+});
+
+describe("catalogue items typed in the editor", () => {
+  const cols = { name: "name", price: "price", price_unit: "naira" as const, available: "available" };
+  it("makes the row in naira, or kobo when the table counts in kobo", () => {
+    expect(itemRow(cols, " Jollof rice ", "₦1,500")).toEqual({ row: { name: "Jollof rice", price: 1500, available: true } });
+    expect(itemRow({ ...cols, price_unit: "kobo" }, "Rice", "1500.50")).toEqual({ row: { name: "Rice", price: 150050, available: true } });
+    expect(itemRow(cols, "Rice", "")).toEqual({ row: { name: "Rice", available: true } });
+  });
+  it("says what is wrong", () => {
+    expect(itemRow(cols, "", "100")).toEqual({ error: "Give the item a name." });
+    expect(itemRow(cols, "Rice", "a lot")).toEqual({ error: "Write the price as a number of naira, such as 1500." });
   });
 });

@@ -58,17 +58,19 @@ The checklist is worked out from what the organisation has done, not from stored
 | Step | Done when |
 | --- | --- |
 | Confirm your email | The signed-in person's email is confirmed |
-| Connect an app | The organisation has a connection |
-| Create a workflow | It has a workflow |
+| Link WhatsApp or Telegram | The signed-in person has linked one |
+| Make your page | The organisation's storefront is published |
+| Pick a template or describe what you want | It has a workflow |
+| Connect what it needs | The organisation has a connection, or a published workflow (publishing checks it has what it needs, so one that needs nothing counts) |
 | Publish it | It has a published version |
 | Run it once | It has a completed run |
 | Invite a teammate | It has a second member, or an invitation waiting |
 
-The guided first workflow (`/start/guide?template=<id>`) takes one [template](templates.md) through four steps on one page: its details; its connection (saved as the name the template uses, `main` by default, in prod) and the variables it reads (such as `owner_phone`); create and publish; and a test run with an input sampled from the workflow's inputs schema, whose status updates until it ends. Starter templates (one connector, nothing to wait for) are offered first. A template's page in **Templates** links to the same guide.
+The guided first workflow (`/start/guide?template=<id>`) takes one [template](templates.md) through four steps on one page: its details; what it connects, on the guided screen (saved as the name the template uses, `main` by default, in prod), and the variables it reads; create and publish; and a test run with an input sampled from the workflow's inputs schema, whose status updates until it ends. Starter templates are offered first: the first, **Remind me every day**, needs nothing connected, and templates that need a developer come last. A template's page in **Templates** links to the same guide.
 
 ## In-product help
 
-Get started, Templates, Connections and the Variables section of Settings have a help panel: a few plain sentences on what the page is for. With `TASKIEM_DOCS_URL` set, each panel also links to its page on the docs site: `/onboarding`, `/templates`, `/connector-sdk` and `/environments`. `make docs` builds that site, with the same URLs ([decision 0025](decisions/0025-public-docs-and-api-reference.md)).
+Get started, Templates, Connections and the Variables section of Settings have a help panel: a few plain sentences on what the page is for. With `TASKIEM_DOCS_URL` set, each panel also links to its page of the owners' guide on the docs site ([`docs/guide/`](guide/index.md), plain how-tos, not the developer docs): `/guide/start`, `/guide/templates`, `/guide/connections`, `/guide/tables` and `/guide/settings`. `make docs` builds that site, with the same URLs ([decision 0025](decisions/0025-public-docs-and-api-reference.md)).
 
 ## Measuring gate G4
 

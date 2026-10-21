@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, NavLink } from "react-router-dom";
-import { ApiError, currentAgentSession, get, getBlob, post, put, uploadFile } from "../api";
+import { ApiError, currentAgentSession, del, get, getBlob, post, put, uploadFile } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
@@ -9,6 +9,7 @@ import { StorefrontForms } from "./StorefrontForms";
 import { PageStatusBadge, RefusalBox, TrustNotices, TrustPanel } from "./StorefrontTrust";
 import { publishNotice, type Trust } from "../lib/trust";
 import { StorefrontDomains } from "./StorefrontDomains";
+import { StorefrontEmbedSites } from "./StorefrontEmbedSites";
 import type { Table } from "../lib/tables";
 import {
   DAYS,
@@ -42,6 +43,7 @@ import {
   type Media,
   type Storefront as SF,
   type TextField,
+  itemRow,
 } from "../lib/storefront";
 
 /** The organisation's storefront (docs/spec/storefronts.md): a one-page
@@ -143,6 +145,15 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
     setCatalogueTick((n) => n + 1);
     reloadTrust();
   };
+
+  /** Makes the catalogue's table and maps it, as chat does: no table to build by hand. */
+  const makeCatalogue = () =>
+    act.run(async () => {
+      if (dirty) await save();
+      await tidy(post("/v1/storefront/catalogue/make", { kind: "products" }));
+      changed(await get<SF>("/v1/storefront"), "Your catalogue is ready: add what you sell below.");
+      setCatalogueTick((n) => n + 1);
+    });
 
   const canSave = !slugBad && hourProblems.length === 0;
   const suspended = saved?.status === "suspended";
@@ -334,10 +345,31 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
 
       <section className="card sf-catalogue" aria-labelledby="sf-catalogue">
         <h2 id="sf-catalogue">Catalogue</h2>
-        <CatalogueMapping form={form} setForm={setForm} tables={tables} tablesError={tablesError} />
+        {!saved?.catalogue_table &&
+          (saved ? (
+            <div className="notice">
+              <p style={{ marginTop: 0 }}>Show what you sell, with prices and photos. Taskiem keeps the list for you.</p>
+              <button className="primary" disabled={act.busy || !canSave} onClick={() => void makeCatalogue()}>
+                Make my catalogue
+              </button>
+            </div>
+          ) : (
+            <p className="hint">Save your page first, then add what you sell.</p>
+          ))}
         {saved?.catalogue_table && (
-          <CatalogueCopy key={saved.catalogue_table} tick={catalogueTick} photoColumn={saved.catalogue_columns.photo} stale={dirty && form.table !== null} />
+          <CatalogueCopy
+            key={saved.catalogue_table}
+            tick={catalogueTick}
+            table={saved.catalogue_table}
+            columns={saved.catalogue_columns}
+            photoColumn={saved.catalogue_columns.photo}
+            stale={dirty && form.table !== null}
+          />
         )}
+        <details open={!saved?.catalogue_table && !!form.table}>
+          <summary>{saved?.catalogue_table ? "Catalogue settings" : "Use a table you already have"}</summary>
+          <CatalogueMapping form={form} setForm={setForm} tables={tables} tablesError={tablesError} />
+        </details>
       </section>
 
       {saved && <TrustPanel trust={trust.data} error={trust.error} onChanged={reloadTrust} />}
@@ -352,6 +384,8 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
           onChange={() => void get<SF>("/v1/storefront").then(setSaved, () => undefined)}
         />
       )}
+
+      {saved && live && pageURL(saved) && !currentAgentSession() && <StorefrontEmbedSites pageURL={pageURL(saved)} business={saved.draft.name} />}
 
       {closing && (
         <CloseDialog
@@ -537,8 +571,8 @@ function CatalogueMapping({ form, setForm, tables, tablesError }: { form: Form; 
               </Field>
             );
           })}
-          {form.columns.price && (
-            <Field label="Prices in the table are in" hint="Naira: 1500 is ₦1,500. Kobo: 150000 is ₦1,500.">
+          {form.columns.price && form.columns.price_unit === "kobo" && (
+            <Field data-technical label="Prices in the table are in" hint="Naira: 1500 is ₦1,500. Kobo: 150000 is ₦1,500.">
               <select value={form.columns.price_unit || "naira"} onChange={(e) => setColumns({ price_unit: e.target.value as Columns["price_unit"] })}>
                 <option value="naira">Naira</option>
                 <option value="kobo">Kobo</option>
@@ -553,7 +587,11 @@ function CatalogueMapping({ form, setForm, tables, tablesError }: { form: Form; 
 }
 
 /** The copy of the catalogue pages read, with photos added per item. */
-function CatalogueCopy({ tick, photoColumn, stale }: { tick: number; photoColumn?: string; stale: boolean }) {
+function CatalogueCopy({ tick, table, columns, photoColumn, stale }: { tick: number; table: string; columns: Columns; photoColumn?: string; stale: boolean }) {
+  const { can } = useAuth();
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [problem, setProblem] = useState("");
   const cat = useLoad(() => get<Catalogue>("/v1/storefront/catalogue"), [tick]);
   const act = useAction();
   const [data, setData] = useState<Catalogue>();
@@ -561,6 +599,28 @@ function CatalogueCopy({ tick, photoColumn, stale }: { tick: number; photoColumn
   const target = useRef<string>("");
   useEffect(() => setData(cat.data), [cat.data]);
   const refresh = () => act.run(async () => setData(await tidy(post<Catalogue>("/v1/storefront/catalogue/refresh"))));
+  const editable = can("table.edit");
+  // Adding and removing items here writes the table: nobody opens Tables.
+  const addItem = () => {
+    const made = itemRow(columns, name, price);
+    if ("error" in made) {
+      setProblem(made.error);
+      return;
+    }
+    setProblem("");
+    void act.run(async () => {
+      await tidy(post(`/v1/tables/${table}/rows`, { row: made.row }));
+      setName("");
+      setPrice("");
+      setData(await tidy(post<Catalogue>("/v1/storefront/catalogue/refresh")));
+    });
+  };
+  const removeItem = (id: string, label: string) =>
+    confirm(`Remove ${label} from your catalogue?`) &&
+    void act.run(async () => {
+      await tidy(del(`/v1/tables/${table}/rows/${encodeURIComponent(id)}`));
+      setData(await tidy(post<Catalogue>("/v1/storefront/catalogue/refresh")));
+    });
   const shown = data ?? cat.data;
   return (
     <div className="sf-copy">
@@ -580,9 +640,27 @@ function CatalogueCopy({ tick, photoColumn, stale }: { tick: number; photoColumn
         </div>
       )}
       {!shown && !cat.error && <Skeleton rows={3} label="Loading the catalogue…" />}
-      {shown && shown.items.length === 0 && (
-        <EmptyState icon="tables">No items yet. Add rows to the table, then refresh.</EmptyState>
+      {editable && (
+        <form
+          className="toolbar sf-add-item"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addItem();
+          }}
+        >
+          <input aria-label="Item" placeholder="What you sell, such as Jollof rice" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+          <input aria-label="Price in naira" placeholder="Price (₦)" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} style={{ width: "9em" }} />
+          <button type="submit" className="primary" disabled={act.busy || !name.trim()}>
+            Add
+          </button>
+          {problem && (
+            <span className="error-text" role="alert">
+              {problem}
+            </span>
+          )}
+        </form>
       )}
+      {shown && shown.items.length === 0 && <EmptyState icon="tables">No items yet. Add what you sell above.</EmptyState>}
       {shown && shown.items.length > 0 && (
         <>
           {!photoColumn && <p className="hint">Choose a photo column above and save to add photos to items here.</p>}
@@ -614,6 +692,11 @@ function CatalogueCopy({ tick, photoColumn, stale }: { tick: number; photoColumn
                         }}
                       >
                         {src ? "Change photo" : "Add photo"}
+                      </button>
+                    )}
+                    {editable && (
+                      <button type="button" className="link" disabled={act.busy} aria-label={`Remove ${item.name}`} onClick={() => removeItem(item.id, item.name)}>
+                        Remove
                       </button>
                     )}
                   </div>

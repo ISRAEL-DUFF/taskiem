@@ -44,10 +44,10 @@ func TestDomainRecords(t *testing.T) {
 	d := storefront.Domain{Host: "adakitchen.ng", Twin: &twin, Token: "taskiem-domain-verify=x"}
 	recs := d.Records(storefront.DomainTarget{CNAME: "pages.shops.test", Addresses: []string{"203.0.113.7", "2001:db8::7"}})
 	want := []storefront.Record{
-		{Type: "TXT", Name: "_taskiem-verify.adakitchen.ng", Value: "taskiem-domain-verify=x", Purpose: "proof"},
-		{Type: "A", Name: "adakitchen.ng", Value: "203.0.113.7", Purpose: "point"},
-		{Type: "AAAA", Name: "adakitchen.ng", Value: "2001:db8::7", Purpose: "point"},
-		{Type: "CNAME", Name: "www.adakitchen.ng", Value: "pages.shops.test", Purpose: "point"},
+		{Type: "TXT", Name: "_taskiem-verify.adakitchen.ng", Value: "taskiem-domain-verify=x", Purpose: "proof", Short: "_taskiem-verify"},
+		{Type: "A", Name: "adakitchen.ng", Value: "203.0.113.7", Purpose: "point", Short: "@"},
+		{Type: "AAAA", Name: "adakitchen.ng", Value: "2001:db8::7", Purpose: "point", Short: "@"},
+		{Type: "CNAME", Name: "www.adakitchen.ng", Value: "pages.shops.test", Purpose: "point", Short: "www"},
 	}
 	if len(recs) != len(want) {
 		t.Fatalf("%+v", recs)

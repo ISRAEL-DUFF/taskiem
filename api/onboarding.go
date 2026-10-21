@@ -437,7 +437,8 @@ func (s *Server) getOnboarding(w http.ResponseWriter, r *http.Request) {
 	var (
 		source                            *string
 		signedUpAt, firstRunAt, dismissed *time.Time
-		verified, hasPerson               bool
+		verified, hasPerson, chatLinked   bool
+		page                              bool
 		conn, wf, published, run, invited bool
 	)
 	err := s.tx(r, func(tx pgx.Tx) error {
@@ -452,6 +453,14 @@ func (s *Server) getOnboarding(w http.ResponseWriter, r *http.Request) {
 			if err := tx.QueryRow(ctx, `SELECT email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&verified); err != nil {
 				return err
 			}
+			// Whether this person has linked a chat channel (N7).
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_wa_numbers($1)) OR EXISTS (SELECT 1 FROM taskiem_tg_accounts($1))`,
+				[]uuid.UUID{p.UserID}).Scan(&chatLinked); err != nil {
+				return err
+			}
+		}
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefronts WHERE published_version > 0)`).Scan(&page); err != nil {
+			return err
 		}
 		return tx.QueryRow(ctx, `SELECT
 			EXISTS (SELECT 1 FROM connections),
@@ -473,7 +482,11 @@ func (s *Server) getOnboarding(w http.ResponseWriter, r *http.Request) {
 	if hasPerson {
 		items = append(items, checklistItem{"verify_email", verified})
 	}
-	items = append(items, checklistItem{"connection", conn}, checklistItem{"workflow", wf}, checklistItem{"publish", published},
+	if hasPerson {
+		items = append(items, checklistItem{"chat", chatLinked})
+	}
+	// A goal first, then what it needs (no-technical-steps N8).
+	items = append(items, checklistItem{"page", page}, checklistItem{"workflow", wf}, checklistItem{"connection", conn}, checklistItem{"publish", published},
 		checklistItem{"first_run", run}, checklistItem{"invite", invited})
 	done := 0
 	for _, it := range items {

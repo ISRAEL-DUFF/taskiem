@@ -9,7 +9,12 @@
     "cancel": ["soke", "fasa", "a fasa", "tsaya"],
     "yes": ["eh", "na'am", "to", "yi shi"],
     "no": ["a'a", "kada", "kar a yi"],
-    "tables": ["teburori", "teburorina", "jerin teburori", "bayanan da nake da su"]
+    "tables": ["teburori", "teburorina", "jerin teburori", "bayanan da nake da su"],
+    "make_page": ["yi shafina", "yi shagona"],
+    "my_page": ["shafina", "shagona"],
+    "orders": ["odar dina", "odar"],
+    "open_shop": ["bude shagona", "bude shago"],
+    "qr": ["qr dina"]
   },
   "prefixes": {
     "switch": ["koma", "sauya zuwa"],
@@ -17,7 +22,11 @@
     "build": ["gina", "kirkiro"],
     "language": ["harshe", "canza harshe zuwa"],
     "add": ["ƙara a", "ƙara zuwa", "saka a", "ƙara"],
-    "find": ["nemo", "nemo a", "nemi", "bincika"]
+    "find": ["nemo", "nemo a", "nemi", "bincika"],
+    "publish": ["buga"],
+    "close_shop": ["rufe shagona", "rufe shago"],
+    "order_ready": ["ya shirya"],
+    "order_delivered": ["an kai", "an karba"]
   },
   "fillers": ["don allah", "dan allah"],
   "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana"]

@@ -112,6 +112,78 @@
       "text": "Ee, chekwaa ya",
       "reviewed": false
     },
+    "customer.booking_confirmed": {
+      "text": "Edokwala: {service}, {when}. Iji gbanwee ma ọ bụ kagbuo: {link}",
+      "reviewed": false
+    },
+    "customer.booking_declined": {
+      "text": "Ndo, anyị enweghị ike ịnabata ndokwa gị {reference} ({service}, {when}). Biko họrọ oge ọzọ: ị nwere ike idokwa ọzọ.",
+      "reviewed": false
+    },
+    "customer.booking_declined_refund": {
+      "text": "Ndo, anyị enweghị ike ịnabata ndokwa gị {reference} ({service}, {when}). A ga-alaghachi gị ego gị.",
+      "reviewed": false
+    },
+    "customer.booking_moved": {
+      "text": "Ebugara ndokwa gị {reference} na {when}. Iji gbanwee ma ọ bụ kagbuo: {link}",
+      "reviewed": false
+    },
+    "customer.booking_pay": {
+      "text": "Iji jide ndokwa gị {reference}, kwụọ {total} n'ime otu ụbọchị: {url}",
+      "reviewed": false
+    },
+    "customer.booking_reminder_day": {
+      "text": "Ncheta: {service} echi, {when} ({reference}). Iji gbanwee ma ọ bụ kagbuo: {link}",
+      "reviewed": false
+    },
+    "customer.booking_reminder_hours": {
+      "text": "Anyị ga-ahụ gị n'oge na-adịghị anya: {service} na {when} ({reference}).",
+      "reviewed": false
+    },
+    "customer.callback_thanks": {
+      "text": "Daalụ. Anyị ga-akpọghachi gị n'oge na-adịghị anya ({reference}).",
+      "reviewed": false
+    },
+    "customer.enquiry_thanks": {
+      "text": "Anyị anatala ajụjụ gị ({reference}) ma anyị ga-aza n'oge na-adịghị anya.",
+      "reviewed": false
+    },
+    "customer.order_confirmed_delivery": {
+      "text": "E kwadoola iwu gị {reference}. Anyị ga-ebuga ya n'oge na-adịghị anya.",
+      "reviewed": false
+    },
+    "customer.order_confirmed_pickup": {
+      "text": "E kwadoola iwu gị {reference}. Anyị ga-ezitere gị ozi mgbe ọ dị njikere ka ị bịa nara ya.",
+      "reviewed": false
+    },
+    "customer.order_declined": {
+      "text": "Ndo, anyị enweghị ike ịnabata iwu gị {reference}.",
+      "reviewed": false
+    },
+    "customer.order_declined_refund": {
+      "text": "Ndo, anyị enweghị ike ịnabata iwu gị {reference}. A ga-alaghachi gị ego gị {total}.",
+      "reviewed": false
+    },
+    "customer.order_link_expired": {
+      "text": "Njikọ ịkwụ ụgwọ maka {reference} agwụla, ya mere a kagburu iwu ahụ. Ị nwere ike ịzụ ọzọ.",
+      "reviewed": false
+    },
+    "customer.order_paid_delivery": {
+      "text": "Anatala ụgwọ maka {reference}. Anyị ga-ebuga ya n'oge na-adịghị anya.",
+      "reviewed": false
+    },
+    "customer.order_paid_pickup": {
+      "text": "Anatala ụgwọ maka {reference}. Anyị ga-ezitere gị ozi mgbe ọ dị njikere ka ị bịa nara ya.",
+      "reviewed": false
+    },
+    "customer.order_pay": {
+      "text": "Anabatala iwu gị {reference}. Kwụọ {total} ebe a n'ime otu ụbọchị: {url}",
+      "reviewed": false
+    },
+    "customer.order_ready": {
+      "text": "{name}: iwu gị {reference} adịla njikere.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "Ana m edere gị n'asụsụ {language}. Asụsụ dị ebe a: {languages}. Ziga *language* na aha iji gbanwee.",
       "reviewed": false
@@ -476,6 +548,14 @@
       "text": "(ekwenyebeghị ya)",
       "reviewed": false
     },
+    "wa.build.ask_setting": {
+      "text": "Gịnị ka *{name}* ga-abụ? Zaa ya, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.build.before_publish": {
+      "text": "Tupu e nwee ike ibipụta ya:",
+      "reviewed": false
+    },
     "wa.build.budget": {
       "text": "Mmefu AI nke ọnwa a maka {org} agwụla, ya mere enweghị m ike iwu nke a ugbu a. Ị ka nwere ike iwu usoro ọrụ na ngwa weebụ.",
       "reviewed": false
@@ -548,12 +628,20 @@
       "text": "Edobeghị iwu site na AI na Taskiem a. Ị nwere ike iwu usoro ọrụ na ngwa weebụ.",
       "reviewed": false
     },
+    "wa.build.offer_publish": {
+      "text": "Ka m bipụta *{name}* ugbu a ka ọ malite ọrụ? Zaa *yes* ma ọ bụ *no*.",
+      "reviewed": false
+    },
+    "wa.build.publish_later": {
+      "text": "Mgbe ị dị njikere, ziga *publish {name}*.",
+      "reviewed": false
+    },
     "wa.build.refused": {
       "text": "Enweghị m ike iwu nke ahụ. Nwaa ịkọwa ya n'ụzọ ọzọ.",
       "reviewed": false
     },
     "wa.build.save_question": {
-      "text": "Ka m chekwaa nke a dịka mbido usoro ọrụ? Zaa *yes* ma ọ bụ *no*. (Mbido anaghị arụ ọrụ ruo mgbe ebipụtara ya na Taskiem.)",
+      "text": "Ka m chekwaa nke a dị ka draft? Zaa *yes* ma ọ bụ *no*. (Draft anaghị arụ ọrụ ruo mgbe e bipụtara ya: m ga-ajụ gị ọzọ.)",
       "reviewed": false
     },
     "wa.build.save_reminder": {
@@ -561,11 +649,19 @@
       "reviewed": false
     },
     "wa.build.saved": {
-      "text": "Echekwala *{name}* dịka mbido. Ọ malitebeghị ọrụ: lelee ya, debe njikọ na mgbanwe ọ chọrọ, ma bipụta ya na Taskiem{link}.",
+      "text": "Echekwala m *{name}* dị ka draft{link}.",
+      "reviewed": false
+    },
+    "wa.build.setting_saved": {
+      "text": "Echekwala m {name}.",
       "reviewed": false
     },
     "wa.build.still_drafting": {
       "text": "Ana m ede usoro ọrụ gị; aga m eziga ya mgbe ọ dị njikere. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.build.tables_made": {
+      "text": "Emeela m tebụl ọ na-eji: {tables}.",
       "reviewed": false
     },
     "wa.build.tables_needed": {
@@ -585,7 +681,7 @@
       "reviewed": false
     },
     "wa.build.variables": {
-      "text": "Tupu ọ rụọ ọrụ, debe mgbanwe ndị a na Taskiem: {names}.",
+      "text": "Mgbe echekwara ya, m ga-ajụ gị: {names}.",
       "reviewed": false
     },
     "wa.build.warn_policy": {
@@ -872,6 +968,34 @@
       "text": "{label} adịghị ugbu a.",
       "reviewed": false
     },
+    "wa.publish.ask_someone": {
+      "text": "Echekwala ya dị ka draft. Onye nwere ike ibipụta na nzukọ gị nwere ike ibipụta ya ugbu a.",
+      "reviewed": false
+    },
+    "wa.publish.denied": {
+      "text": "Ị nweghị ike ibipụta ọrụ na {org}; jụọ onye nwe ya.",
+      "reviewed": false
+    },
+    "wa.publish.done": {
+      "text": "E bipụtala *{name}*: ọ ga-arụ ọrụ site ugbu a.",
+      "reviewed": false
+    },
+    "wa.publish.failed": {
+      "text": "Enweghị ike ibipụta ya: {reason}.",
+      "reviewed": false
+    },
+    "wa.publish.in_app": {
+      "text": "Nzukọ gị na-enyocha mgbanwe na Git, ya mere bipụta ya na app: {link}",
+      "reviewed": false
+    },
+    "wa.publish.not_ready": {
+      "text": "*{name}* adịbeghị njikere ibipụta:",
+      "reviewed": false
+    },
+    "wa.publish.waiting": {
+      "text": "*{name}* na-eche onye ọzọ ka o bipụta ya: ha ga-ekpebi n'Approvals na Taskiem.",
+      "reviewed": false
+    },
     "wa.run.bad_inputs": {
       "text": "Ntinye adabaghị {workflow}: {problems}. Ziga *run* ọzọ.",
       "reviewed": false
@@ -978,6 +1102,10 @@
     },
     "wa.shop.bad_answer": {
       "text": "Nke a adabaghị: {reason}\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.shop.bookings_on": {
+      "text": "Agbanyekwala ndokwa oge.",
       "reviewed": false
     },
     "wa.shop.cannot_complete": {
@@ -1168,8 +1296,20 @@
       "text": "Ọda ndị meghere emeghe, nke kachasị ọhụrụ na mbụ:",
       "reviewed": false
     },
+    "wa.shop.orders_no_paystack": {
+      "text": "Ndị ahịa ga-akwụ ụgwọ mgbe ha natara iwu ha. Iji nara ego n'ịntanetị, jikọọ Paystack: {link}",
+      "reviewed": false
+    },
+    "wa.shop.orders_on": {
+      "text": "Agbanyela iwu: ndị ahịa nwere ike ịzụ site na peeji gị, iwu ọ bụla ga-abịakwute gị ebe a.",
+      "reviewed": false
+    },
     "wa.shop.orders_tail": {
       "text": "Zaa *order* na nọmba ya maka otu.",
+      "reviewed": false
+    },
+    "wa.shop.other_edits_live": {
+      "text": "Mgbanwe ndị ọzọ ị chekwara na peeji gị ma ị bipụtaghị apụtala ya na ya.",
       "reviewed": false
     },
     "wa.shop.page_closed": {
@@ -1268,12 +1408,16 @@
       "text": "A na-agwa onye ahịa na ọda {ref} adịla njikere. Zaa *order {ref} delivered* ozugbo anatara ya.",
       "reviewed": false
     },
+    "wa.shop.reopens": {
+      "text": "Ọ ga-emepe onwe ya ọzọ na {time}.",
+      "reviewed": false
+    },
     "wa.shop.service_added": {
       "text": "Etinyela ọrụ *{name}*.",
       "reviewed": false
     },
     "wa.shop.service_hint": {
-      "text": "Ndị ahịa nwere ike idebe ya ozugbo fọm ndebe gbanyere, n'okpuru Storefront na ngwa weebụ.",
+      "text": "Ndị ahịa nwere ike idokwa ya ozugbo agbanyere ndokwa: zaa *turn on orders*.",
       "reviewed": false
     },
     "wa.shop.service_how": {
@@ -1344,6 +1488,10 @@
       "text": "Mgbanwe ndị a dị ọtụtụ n'otu oge. Chere ntakịrị, mgbe ahụ zaa *yes* ọzọ.",
       "reviewed": false
     },
+    "wa.shop.turn_on_orders": {
+      "text": "Ka m gbanye iwu ugbu a? Ndị ahịa ga-enwe ike ịzụ site na peeji gị, iwu ọ bụla ga-abịakwute gị ebe a ka ị nabata ma ọ bụ jụ.",
+      "reviewed": false
+    },
     "wa.shop.which_item": {
       "text": "Ihe karịrị otu dabara. Kedu nke?\n{list}\nZaa na nọmba ya.",
       "reviewed": false
@@ -1354,6 +1502,18 @@
     },
     "wa.shop.with_photo": {
       "text": " (ya na foto ahụ)",
+      "reviewed": false
+    },
+    "wa.signin.link": {
+      "text": "Mepee njikọ a ka ị họrọ okwuntughe gị ma banye Taskiem na weebụ. Ọ na-arụ ọrụ otu ugboro, maka otu awa; edobe ya naanị gị:\n{link}",
+      "reviewed": false
+    },
+    "wa.signin.sso": {
+      "text": "Nzukọ gị na-eji akaụntụ ụlọ ọrụ ha abanye: {link}",
+      "reviewed": false
+    },
+    "wa.signin.unavailable": {
+      "text": "Edobeghị ịbanye na weebụ na Taskiem a.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -1485,7 +1645,7 @@
       "reviewed": false
     },
     "wa.table.hint.json": {
-      "text": "Data a haziri dị ka JSON",
+      "text": "Ọtụtụ uru ọnụ, dị ka ndepụta",
       "reviewed": false
     },
     "wa.table.hint.phone": {

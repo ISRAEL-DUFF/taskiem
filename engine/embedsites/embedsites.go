@@ -32,6 +32,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"golang.org/x/net/publicsuffix"
+
+	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/publicnames"
@@ -84,7 +87,13 @@ func (s Site) Host() string { return strings.TrimPrefix(s.Origin, "https://") }
 // Instructions say what to publish to prove the site.
 func (s Site) Instructions() map[string]string {
 	if s.Method == DNS {
-		return map[string]string{"record_type": "TXT", "record_name": "_taskiem-verify." + s.Host(), "record_value": s.Token}
+		// record_short is the name as registrars ask for it, relative to
+		// the registered domain (no-technical-steps N9).
+		short := "_taskiem-verify"
+		if reg, err := publicsuffix.EffectiveTLDPlusOne(s.Host()); err == nil && reg != s.Host() {
+			short += "." + strings.TrimSuffix(s.Host(), "."+reg)
+		}
+		return map[string]string{"record_type": "TXT", "record_name": "_taskiem-verify." + s.Host(), "record_value": s.Token, "record_short": short}
 	}
 	return map[string]string{"file_url": s.Origin + WellKnownPath, "file_contents": s.Token}
 }
@@ -282,8 +291,11 @@ type Checker struct {
 	Grace    time.Duration
 	// Interval is how often the checker looks for due sites (default 10m).
 	Interval time.Duration
-	Logger   *slog.Logger
-	Now      func() time.Time
+	// PublicURL is the web app's address, for the link in the owner's
+	// alert.
+	PublicURL string
+	Logger    *slog.Logger
+	Now       func() time.Time
 }
 
 func (c *Checker) settings() (time.Duration, int, time.Duration) {
@@ -404,8 +416,24 @@ func (c *Checker) Check(ctx context.Context, tenant uuid.UUID) error {
 			}
 			c.log().Warn("embed site unverified", "tenant", tenant, "origin", s.Origin, "failures", n, "reason", reason)
 			detail, _ := json.Marshal(map[string]any{"failures": n, "failing_since": since.UTC(), "reason": reason})
-			_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'embed-site-checker', 'embed_site.unverified', $2, $3)`,
-				tenant, s.Origin, detail)
+			if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'embed-site-checker', 'embed_site.unverified', $2, $3)`,
+				tenant, s.Origin, detail); err != nil {
+				return err
+			}
+			// The owner hears of it in chat, with what to check
+			// (no-technical-steps N9).
+			what := "the TXT record _taskiem-verify." + s.Host() + " at the company the domain was bought from"
+			if s.Method == File {
+				what = "the file " + WellKnownPath + " on the website"
+			}
+			al := alerts.Alert{Kind: alerts.DomainUnverified, Dedup: s.Origin + ":" + now.UTC().Format(time.RFC3339),
+				Title:  "Your forms stopped showing on " + s.Host(),
+				Body:   "Taskiem could not find " + what + " for over a day, so your forms and booking pages no longer show there. Ask whoever looks after the website to put it back, then check it again in Taskiem.",
+				Detail: map[string]any{"site": s.Origin}}
+			if c.PublicURL != "" {
+				al.Link = strings.TrimRight(c.PublicURL, "/") + "/storefront"
+			}
+			_, err = alerts.TellOwners(ctx, tx, tenant, al)
 			return err
 		})
 		if err != nil {

@@ -5,13 +5,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
-
-	"github.com/jackc/pgx/v5"
-
-	"github.com/israel-duff/taskiem/engine/connector"
-	"github.com/israel-duff/taskiem/engine/egress"
-	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
 // A spreadsheet from its link (no-technical-steps N2): the person pastes
@@ -49,57 +42,14 @@ func (s *Server) resolveSpreadsheet(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: that is not a Google Sheets link; open the sheet in your browser and copy the address", errBadRequest))
 		return
 	}
-	p := principalFrom(r.Context())
-	const env, conn = "prod", "googlesheets"
-	var name string
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT name FROM connections WHERE environment = $1 AND connector = $2 AND status = 'active' AND ($3 = '' OR name = $3)`,
-			env, conn, req.Connection)
-		if err != nil {
-			return err
-		}
-		names, err := pgx.CollectRows(rows, pgx.RowTo[string])
-		if err != nil {
-			return err
-		}
-		switch len(names) {
-		case 0:
-			return fmt.Errorf("%w: connect Google Sheets first", errConflict)
-		case 1:
-			name = names[0]
-			return nil
-		}
-		return fmt.Errorf("%w: you have more than one Google Sheets connection; choose which one", errBadRequest)
-	}); err != nil {
-		s.fail(w, r, err)
-		return
+	out, err := s.connectorLookup(r, "googlesheets", "Google Sheets", req.Connection, "get_spreadsheet", "sheets.resolve", map[string]any{"spreadsheet_id": sheet})
+	if isLookup(err) {
+		err = fmt.Errorf("%w: Taskiem cannot open that sheet with your Google account. Check the link, and that the account you connected can open it", errBadRequest)
 	}
-	reg, err := s.Registry.For(r.Context(), p.TenantID.String())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	c, ok := connectorByID(reg, conn)
-	if !ok {
-		s.fail(w, r, fmt.Errorf("%w: Google Sheets is not available here", errBadRequest))
-		return
-	}
-	creds, err := s.Vault.Credentials(secrets.WithUse(r.Context(), secrets.Use{Kind: secrets.KindConnection, Purpose: "sheets.resolve", Actor: p.Actor()}), p.TenantID, env, conn, name)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	g := s.Egress
-	if g == nil {
-		g = &egress.Guard{Logger: s.Logger}
-	}
-	hc := g.Client(egress.Policy{Tenant: p.TenantID.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + conn}, 20*time.Second)
-	resp, err := c.Actions["get_spreadsheet"].Execute(r.Context(), connector.Request{Input: map[string]any{"spreadsheet_id": sheet}, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1})
-	if err != nil {
-		s.fail(w, r, fmt.Errorf("%w: Taskiem cannot open that sheet with your Google account. Check the link, and that the account you connected can open it", errBadRequest))
-		return
-	}
-	out, _ := resp.Output.(map[string]any)
 	var tabs []string
 	if list, ok := out["sheets"].([]any); ok {
 		for _, t := range list {

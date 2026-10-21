@@ -11,8 +11,8 @@
     {"name": "business_name", "type": "string", "title": "Business name", "description": "Signs the welcome message.", "required": true, "example": "Femi Fitness", "max_length": 60},
     {"name": "welcome_line", "type": "string", "title": "Welcome line", "description": "A line after the greeting, e.g. what to do next.", "required": false, "default": "Reply to this number any time you need help.", "example": "Your first class is free this week!", "max_length": 140},
     {"name": "path", "type": "string", "title": "Web address path", "description": "The path your sign-up form calls.", "required": false, "default": "/customers/new", "example": "/customers/new", "pattern": "^/[A-Za-z0-9/_.-]{1,80}$"},
-    {"name": "spreadsheet_id", "type": "string", "title": "Customer list spreadsheet", "description": "The spreadsheet's id, from its link.", "required": true, "example": "1CuStOmErLiStShEeTiD0123456789abcd", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
-    {"name": "sheet_range", "type": "string", "title": "Sheet", "description": "The sheet and columns rows are added to.", "required": false, "default": "Customers!A:C", "example": "Customers!A:C"},
+    {"name": "spreadsheet_id", "type": "string", "title": "Customer list spreadsheet", "description": "Paste the sheet's link from your browser.", "required": true, "example": "1CuStOmErLiStShEeTiD0123456789abcd", "pattern": "^[A-Za-z0-9_-]{20,100}$", "picker": "sheet"},
+    {"name": "sheet_range", "type": "string", "title": "Tab", "description": "The tab new customers are added to.", "required": false, "default": "Customers", "example": "Customers", "picker": "sheet_tab", "from": "spreadsheet_id"},
     {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
   ],
   "definition": {

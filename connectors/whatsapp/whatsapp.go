@@ -26,6 +26,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -48,6 +50,7 @@ func New(o Options) *connector.Connector {
 	c := &client{base: strings.TrimRight(m.BaseURL, "/")}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"get_phone_number": connector.ActionFunc(c.getPhoneNumber),
+		"list_templates":   connector.ActionFunc(c.listTemplates),
 		"send_text":        connector.ActionFunc(c.sendText),
 		"send_template":    connector.ActionFunc(c.sendTemplate),
 		"send_media":       connector.ActionFunc(c.sendMedia),
@@ -183,7 +186,7 @@ func (c *client) send(ctx context.Context, req connector.Request, kind string, c
 	if err != nil {
 		return connector.Response{}, err
 	}
-	to := strings.TrimSpace(str(req.Input, "to"))
+	to := phone(str(req.Input, "to"))
 	if to == "" {
 		return connector.Response{}, fmt.Errorf("whatsapp: to (the recipient's number) is required: %w", effects.ErrFatal)
 	}
@@ -304,4 +307,70 @@ func (c *client) markAsRead(ctx context.Context, req connector.Request) (connect
 		return connector.Response{}, fmt.Errorf("whatsapp: mark as read returned success false: %w", effects.ErrUnknownOutcome)
 	}
 	return connector.Response{Output: map[string]any{"success": true}}, nil
+}
+
+var bodyVar = regexp.MustCompile(`\{\{\s*(\d+)\s*\}\}`)
+
+// listTemplates lists the business account's approved templates
+// (GET /{waba-id}/message_templates).
+func (c *client) listTemplates(ctx context.Context, req connector.Request) (connector.Response, error) {
+	waba := strings.TrimSpace(req.Credentials["business_account_id"])
+	if waba == "" {
+		return connector.Response{}, fmt.Errorf("whatsapp: the connection has no business_account_id: %w", effects.ErrFatal)
+	}
+	var env struct {
+		Data []struct {
+			Name       string `json:"name"`
+			Language   string `json:"language"`
+			Category   string `json:"category"`
+			Status     string `json:"status"`
+			Components []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"components"`
+		} `json:"data"`
+	}
+	q := url.Values{"fields": {"name,language,category,status,components"}, "status": {"APPROVED"}, "limit": {"200"}}
+	if err := c.do(ctx, req, http.MethodGet, "/"+url.PathEscape(waba)+"/message_templates?"+q.Encode(), nil, &env); err != nil {
+		return connector.Response{}, err
+	}
+	out := make([]any, 0, len(env.Data))
+	for _, t := range env.Data {
+		if t.Status != "" && t.Status != "APPROVED" {
+			continue
+		}
+		var body string
+		for _, comp := range t.Components {
+			if comp.Type == "BODY" {
+				body = comp.Text
+			}
+		}
+		n := 0
+		for _, m := range bodyVar.FindAllStringSubmatch(body, -1) {
+			if v, err := strconv.Atoi(m[1]); err == nil && v > n {
+				n = v
+			}
+		}
+		out = append(out, map[string]any{"name": t.Name, "language": t.Language, "category": strings.ToLower(t.Category), "body": body, "variables": n})
+	}
+	return connector.Response{Output: map[string]any{"templates": out}}, nil
+}
+
+// phone takes a number as people write it (no-technical-steps N8): spaces,
+// dashes and brackets go, 00 becomes +, and a Nigerian number starting 0
+// (0803 123 4567) gets its country code.
+func phone(s string) string {
+	d := strings.Map(func(r rune) rune {
+		if r == ' ' || r == '-' || r == '(' || r == ')' || r == '.' {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(s))
+	switch {
+	case strings.HasPrefix(d, "00"):
+		return "+" + d[2:]
+	case strings.HasPrefix(d, "0") && len(d) == 11 && strings.Trim(d, "0123456789") == "":
+		return "+234" + d[1:]
+	}
+	return d
 }

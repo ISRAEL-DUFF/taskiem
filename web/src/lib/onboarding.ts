@@ -18,7 +18,7 @@ export interface Onboarding {
   seconds_to_first_run: number | null;
 }
 
-export type ChecklistId = "verify_email" | "connection" | "workflow" | "publish" | "first_run" | "invite";
+export type ChecklistId = "verify_email" | "chat" | "page" | "connection" | "workflow" | "publish" | "first_run" | "invite";
 
 /** Each checklist step: what it says, and where it is done. */
 export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href: string; action: string }> = {
@@ -28,17 +28,29 @@ export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href:
     href: "/start",
     action: "Send the link again",
   },
-  connection: {
-    title: "Connect an app",
-    text: "Connect the service your workflow uses, such as Paystack or Google Sheets. Pick a template first: it shows exactly what to connect, and where to find it.",
-    href: "/start/guide",
-    action: "Connect what your template needs",
+  chat: {
+    title: "Link WhatsApp or Telegram",
+    text: "Get orders, approvals and messages from Taskiem in the chat you already use, and run things by sending a message.",
+    href: "/account",
+    action: "Link it",
+  },
+  page: {
+    title: "Make your page",
+    text: "A page for your business with what you sell, your hours and a way to order or book, shared as a link or a QR code.",
+    href: "/storefront",
+    action: "Make your page",
   },
   workflow: {
-    title: "Create a workflow",
-    text: "Start from a ready template for small businesses, or build your own.",
+    title: "Pick a template or describe what you want",
+    text: "Start from a ready template for small businesses, or say in your own words what Taskiem should do.",
     href: "/start/guide",
     action: "Pick a template",
+  },
+  connection: {
+    title: "Connect what it needs",
+    text: "Your draft lists the services it uses, such as Paystack or Google Sheets, with the one screen that connects each.",
+    href: "/start/guide",
+    action: "Connect what your workflow needs",
   },
   publish: {
     title: "Publish it",
@@ -131,7 +143,7 @@ export const HELP: Record<HelpTopic, { title: string; body: string[]; doc: strin
       "Connections hold the credentials of the services steps use. Variables hold settings such as the owner's phone number.",
       "A workflow runs only once it is published. Every run is recorded step by step under Runs.",
     ],
-    doc: "onboarding",
+    doc: "guide/start",
   },
   templates: {
     title: "About templates",
@@ -139,33 +151,33 @@ export const HELP: Record<HelpTopic, { title: string; body: string[]; doc: strin
       "A template is a ready workflow. Fill in its details and it becomes a draft you can review, change and publish.",
       "Templates that move money always ask for an approval first.",
     ],
-    doc: "templates",
+    doc: "guide/templates",
   },
   connections: {
     title: "About connections",
     body: [
       "A connection is your account with a service, such as Termii for SMS or Paystack for payments.",
-      "Each environment (prod, dev) has its own connections. Templates use the connection named main unless you choose another.",
+      "Your first connection to a service is called main, and templates use it unless you choose another.",
       "Credentials are encrypted when saved and never shown again; to change them, add the connection again.",
     ],
-    doc: "connector-sdk",
+    doc: "guide/connections",
   },
   tables: {
     title: "About data tables",
     body: [
       "A data table holds records your business keeps, such as your debtors with their phone numbers and balances, so a workflow can read and write them without a spreadsheet.",
-      "Tables live in a Xenibase project Taskiem keeps for your organisation. Workflows reach them through the connection named data_tables with the Xenibase connector's actions; the AI builder knows your tables and their columns.",
+      "Templates and Describe it can make the tables they need, and the AI builder knows your tables and their columns. A spreadsheet file can become a table.",
       "Phone and email columns are personal data: they are masked in logs and never shown to the AI. Deleting a table or a column drops its data, so you type its name first.",
     ],
-    doc: "data-tables",
+    doc: "guide/tables",
   },
   variables: {
     title: "About variables",
     body: [
-      "Variables are settings workflows read, such as owner_phone. Phone numbers are in international format without +, e.g. 2348012345678.",
+      "Settings are things your workflows read, such as your phone number or business name. Type them as you would anywhere: a phone number in any form.",
       "Secrets are for passwords and keys: they are encrypted and never shown again.",
     ],
-    doc: "environments",
+    doc: "guide/settings",
   },
 };
 

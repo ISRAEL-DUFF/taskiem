@@ -292,3 +292,28 @@ func TestTriggerExpressions(t *testing.T) {
 		}
 	}
 }
+
+// Choosing a template by what it says (no-technical-steps N8).
+func TestListTemplates(t *testing.T) {
+	if _, err := call(t, "list_templates", nil); err == nil || !strings.Contains(err.Error(), "business_account_id") {
+		t.Errorf("without the account: %v", err)
+	}
+	cr := map[string]string{"access_token": creds["access_token"], "phone_number_id": creds["phone_number_id"], "business_account_id": "102290129340398"}
+	r, err := callWith(t, cr, "list_templates", nil, "list_templates")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := r.Output.(map[string]any)["templates"].([]any)
+	first := ts[0].(map[string]any)
+	if len(ts) != 2 || first["name"] != "payment_reminder" || first["variables"] != 3 || first["category"] != "utility" || first["body"] != "Hello {{1}}, you owe {{2}} to {{3}}." {
+		t.Errorf("templates: %v", ts)
+	}
+}
+
+func TestPhoneAsPeopleWriteIt(t *testing.T) {
+	for in, want := range map[string]string{"0803 123 4567": "+2348031234567", "+234 803-123-4567": "+2348031234567", "002348031234567": "+2348031234567", "2348031234567": "2348031234567"} {
+		if got := phone(in); got != want {
+			t.Errorf("phone(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

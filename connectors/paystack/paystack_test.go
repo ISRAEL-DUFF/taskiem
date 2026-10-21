@@ -158,3 +158,37 @@ func TestRefund(t *testing.T) {
 		t.Fatalf("not refunded: %v", err)
 	}
 }
+
+// Paying people by bank and account number (no-technical-steps N8): the
+// banks by name, the account's name to confirm, and a recipient made from
+// the bank's name as a sheet has it.
+func TestRecipientsFromBankAndAccount(t *testing.T) {
+	r, err := call(t, "list_banks", nil, "list_banks")
+	if err != nil || len(r.Output.(map[string]any)["banks"].([]any)) != 8 {
+		t.Fatalf("banks: %v %v", r.Output, err)
+	}
+	r, err = call(t, "resolve_account", map[string]any{"account_number": "0123456789", "bank_code": "058"}, "resolve_account")
+	if err != nil || r.Output.(map[string]any)["account_name"] != "BOLA ADE" {
+		t.Fatalf("resolve: %v %v", r.Output, err)
+	}
+	if _, err := call(t, "resolve_account", map[string]any{"account_number": "12345", "bank_code": "058"}); effects.Classify(err) != effects.KindFatal {
+		t.Errorf("a short account number: %v", err)
+	}
+	r, err = call(t, "create_recipient", map[string]any{"account_number": "0123456789", "bank": "GTBank", "name": "Bola Ade"}, "list_banks", "create_recipient")
+	if err != nil || r.Output.(map[string]any)["recipient_code"] != "RCP_2x5j67tnnw1t98k" {
+		t.Fatalf("recipient: %v %v", r.Output, err)
+	}
+	if _, err := call(t, "create_recipient", map[string]any{"account_number": "0123456789", "bank": "Bank of Nowhere", "name": "Bola Ade"}, "list_banks"); err == nil || !strings.Contains(err.Error(), "no single bank") {
+		t.Errorf("an unknown bank: %v", err)
+	}
+}
+
+func TestBankKey(t *testing.T) {
+	for in, want := range map[string]string{"GTBank": "guaranty trust", "Guaranty Trust Bank": "guaranty trust", "gtb": "guaranty trust", "First Bank": "first",
+		"First Bank of Nigeria": "first", "UBA": "united for africa", "United Bank For Africa": "united for africa", "Zenith Bank PLC": "zenith",
+		"Access": "access", "Access Bank (Diamond)": "access diamond", "OPay": "opay"} {
+		if got := BankKey(in); got != want {
+			t.Errorf("BankKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
