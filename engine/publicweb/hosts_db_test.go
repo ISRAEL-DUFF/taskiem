@@ -158,7 +158,9 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_form_code(uuid,bytea,bytea,bytea)": true, "taskiem_public_form_code_check(uuid,bytea,bytea)": true,
 		"taskiem_public_form_status(text,bytea)": true, "taskiem_public_report(text,text,text,text,bytea,bytea)": true,
 		// Own domains (S6): a storefront's primary domain, where its other hosts redirect.
-		"taskiem_public_storefront_domain(uuid)": true}
+		"taskiem_public_storefront_domain(uuid)": true,
+		// Email triggers (N10): the mail role checks a recipient and leaves a sealed message.
+		"taskiem_mail_recipient(text)": true, "taskiem_mail_receive(uuid,uuid,bytea,bytea,bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

@@ -71,10 +71,12 @@ test("an email starts a workflow at its own address", async ({ page }) => {
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText(/is published; new runs use it/)).toBeVisible({ timeout: 30_000 });
 
-  // Its address shows once it is live, waiting for mail.
-  const address = page.locator(".email-address code");
+  // Its address shows once it is live, waiting for mail. The E2E tenant
+  // has Advanced on, so each environment has a card: production's is used.
+  const card = page.locator(".email-card", { hasText: "Its email address (prod)" });
+  const address = card.locator(".email-address code");
   await expect(address).toHaveText(/^[a-z0-9]{12}@in\.e2e\.test$/, { timeout: 15_000 });
-  await expect(page.getByText("Waiting for your first email…")).toBeVisible();
+  await expect(card.getByText("Waiting for your first email…")).toBeVisible();
   const to = (await address.textContent()) ?? "";
   const vs = await axe(page);
   expect(vs, describe("email trigger", vs)).toEqual([]);
@@ -93,10 +95,10 @@ test("an email starts a workflow at its own address", async ({ page }) => {
   );
   // Greeting, EHLO, MAIL, RCPT, DATA (354), the message, QUIT.
   expect(replies[5]).toMatch(/^250/);
-  await expect(page.getByText(/could not be proven/)).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByText(/could not be proven/)).toBeVisible({ timeout: 15_000 });
 
   // A sample email runs it, and opens the run.
-  await page.getByRole("button", { name: "Try it with a sample email" }).click();
+  await card.getByRole("button", { name: "Try it with a sample email" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.locator("h1 + .badge")).toHaveText(/completed|running|queued/, { timeout: 15_000 });
 });
