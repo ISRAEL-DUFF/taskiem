@@ -254,6 +254,61 @@
       "reviewed": true,
       "context": "A language that is not on"
     },
+    "reach.about": {
+      "text": "This chat sends you updates from {businesses}. Send STOP to stop the latest one.",
+      "reviewed": true,
+      "context": "Someone outside a business wrote to the bot or number that sends them its updates; {businesses} are those that do"
+    },
+    "reach.code_invalid": {
+      "text": "This link has expired or was used already. Open the business's link again to get a new one.",
+      "reviewed": true,
+      "context": "Someone sent a link's code that is unknown, used or older than seven days"
+    },
+    "reach.linked": {
+      "text": "You'll get updates from {business} here. Send STOP to stop them.",
+      "reviewed": true,
+      "context": "Someone outside a business linked this chat to get its updates"
+    },
+    "reach.number_unreachable": {
+      "text": "Sorry, {business} cannot send updates to this number here.",
+      "reviewed": true,
+      "context": "The phone a Telegram account shared is not one Taskiem reaches (another country)"
+    },
+    "reach.resumed": {
+      "text": "You'll get updates from {business} here again. Send STOP to stop them.",
+      "reviewed": true,
+      "context": "Someone sent START after stopping a business's updates"
+    },
+    "reach.share_number": {
+      "text": "To get updates from {business} here, tap Share my number below. Telegram sends the number on your account, so {business} knows it is yours.",
+      "reviewed": true,
+      "context": "Someone opened a business's standing link on Telegram; next they share their own number"
+    },
+    "reach.share_number_request": {
+      "text": "You'll get updates from {business} about your request here. To get all their updates here, tap Share my number below: Telegram sends the number on your account, so {business} knows it is yours.",
+      "reviewed": true,
+      "context": "Someone opened the link on a form's thank-you page on Telegram; their phone was not checked, so they are asked to share it"
+    },
+    "reach.share_own": {
+      "text": "Please share your own number, with the Share my number button below.",
+      "reviewed": true,
+      "context": "Someone shared a contact that is not their own number"
+    },
+    "reach.stopped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again.",
+      "reviewed": true,
+      "context": "Someone sent STOP: the business that messaged them last stops"
+    },
+    "reach.stopped_none": {
+      "text": "You are not getting updates from anyone here.",
+      "reviewed": true,
+      "context": "Someone sent STOP but no business sends them updates here"
+    },
+    "ready.chat_id": {
+      "text": "The form asks for {field}, which people don't know. Ask for their phone number instead and send them messages with Message a person: they get them on WhatsApp or Telegram with one tap, or by text.",
+      "reviewed": true,
+      "context": "Readiness: a form field asks for a chat app's id or username (N11)"
+    },
     "ready.connection_ambiguous": {
       "text": "You have more than one {service} connection; choose which one to use.",
       "reviewed": true,

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -74,6 +75,7 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 		got := found[k]
 		if got == nil {
 			n.Kind, n.Name, n.Connector, n.Environment = k.kind, k.name, k.connector, k.env
+			n.Steps = []readyStep{}
 			n.Blocking = n.Blocking && blocking[k.env]
 			found[k] = &n
 			order = append(order, k)
@@ -250,7 +252,7 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 		}
 	}
 	// Roles are the business's, not an environment's: reported once, for
-	// the environment that blocks (or the first).
+	// the environment that blocks (or the first). So are form fields.
 	if len(envs) > 0 {
 		roleEnv := envs[0]
 		for _, e := range envs {
@@ -258,6 +260,10 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 				roleEnv = e
 				break
 			}
+		}
+		// A form asking people for their chat id (N11): nobody knows it.
+		for _, f := range chatIDFields(d) {
+			add(key{"field", f.name, "", roleEnv}, readyNeed{Problem: "chat_id", Message: tr(l, "ready.chat_id", "field", f.label)}, f.step)
 		}
 		for _, u := range roles {
 			if u.name == "owner" {
@@ -278,6 +284,55 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Blocking && !out[j].Blocking })
 	return out, nil
+}
+
+// chatIDWords are what a field asking for a chat app's id or username is
+// called, its name or title in lower case with _ and - as spaces.
+var chatIDWords = regexp.MustCompile(`\b(chat ?id|telegram (chat |user ?)?(id|name|handle)|telegram username|tg (chat |user ?)?id|whatsapp id)\b`)
+
+type chatIDField struct {
+	name, label string
+	step        *wd.Step
+}
+
+// chatIDFields are the fields of a form trigger or form step that ask for
+// a chat id or a Telegram username: people do not know theirs, and a bot
+// cannot write to a username. Messages to them go by phone (notify@1
+// message), on the app they choose with the business's link.
+func chatIDFields(d *wd.Definition) []chatIDField {
+	var out []chatIDField
+	check := func(schema any, st *wd.Step) {
+		m, _ := schema.(map[string]any)
+		props, _ := m["properties"].(map[string]any)
+		names := make([]string, 0, len(props))
+		for n := range props {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			p, _ := props[n].(map[string]any)
+			title, _ := p["title"].(string)
+			text := strings.ToLower(strings.NewReplacer("_", " ", "-", " ").Replace(n + " " + title))
+			if !chatIDWords.MatchString(text) {
+				continue
+			}
+			label := title
+			if label == "" {
+				label = humanName(n)
+			}
+			out = append(out, chatIDField{name: n, label: label, step: st})
+		}
+	}
+	if d.Trigger.Type == "form" {
+		schema, _ := d.InputsSchema()
+		check(schema, nil)
+	}
+	d.Walk(func(st *wd.Step) {
+		if st.Form != nil {
+			check(st.Form.Schema, st)
+		}
+	})
+	return out
 }
 
 // stepTitle is a step's name, or its id.

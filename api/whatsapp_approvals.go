@@ -230,6 +230,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.sendAlertItem(ctx, it)
 		case notify.OutboxNotice:
 			sendErr = s.sendNoticeItem(ctx, it)
+		case notify.OutboxMessage:
+			sendErr = s.sendReachItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}

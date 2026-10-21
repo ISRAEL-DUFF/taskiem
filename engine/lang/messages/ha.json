@@ -204,6 +204,50 @@
       "text": "{name} ba ya samuwa a nan. Harsunan da ke nan: {languages}.",
       "reviewed": false
     },
+    "reach.about": {
+      "text": "Wannan hira tana aiko maka da labarai daga {businesses}. Aika STOP don dakatar da na ƙarshe.",
+      "reviewed": false
+    },
+    "reach.code_invalid": {
+      "text": "Wannan hanyar haɗi ta ƙare ko an riga an yi amfani da ita. Sake buɗe hanyar haɗin kasuwancin don samun sabuwa.",
+      "reviewed": false
+    },
+    "reach.linked": {
+      "text": "Za ka riƙa samun labarai daga {business} a nan. Aika STOP don dakatar da su.",
+      "reviewed": false
+    },
+    "reach.number_unreachable": {
+      "text": "Yi haƙuri, {business} ba zai iya aika labarai zuwa wannan lambar a nan ba.",
+      "reviewed": false
+    },
+    "reach.resumed": {
+      "text": "Za ka sake riƙa samun labarai daga {business} a nan. Aika STOP don dakatar da su.",
+      "reviewed": false
+    },
+    "reach.share_number": {
+      "text": "Don samun labarai daga {business} a nan, danna Share my number a ƙasa. Telegram zai aika lambar da ke kan asusunka, don {business} ya san taka ce.",
+      "reviewed": false
+    },
+    "reach.share_number_request": {
+      "text": "Za ka riƙa samun labarai daga {business} game da buƙatarka a nan. Don samun duk labaransu a nan, danna Share my number a ƙasa: Telegram zai aika lambar da ke kan asusunka, don {business} ya san taka ce.",
+      "reviewed": false
+    },
+    "reach.share_own": {
+      "text": "Don Allah raba lambarka, da maɓallin Share my number a ƙasa.",
+      "reviewed": false
+    },
+    "reach.stopped": {
+      "text": "Ba za ka ƙara samun labarai daga {business} a nan ba. Aika START don sake samun su.",
+      "reviewed": false
+    },
+    "reach.stopped_none": {
+      "text": "Ba ka samun labarai daga kowa a nan.",
+      "reviewed": false
+    },
+    "ready.chat_id": {
+      "text": "Fom ɗin yana neman {field}, wanda mutane ba su sani ba. Nemi lambar wayarsu maimakon haka kuma aika musu saƙonni da Message a person: za su samu a WhatsApp ko Telegram da danna ɗaya, ko ta saƙon tes.",
+      "reviewed": false
+    },
     "ready.connection_ambiguous": {
       "text": "Kuna da haɗin {service} fiye da ɗaya; zaɓi wanda za a yi amfani da shi.",
       "reviewed": false

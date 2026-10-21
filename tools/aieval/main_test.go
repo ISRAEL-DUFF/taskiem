@@ -113,7 +113,8 @@ const badPayout = `{"schema":"wd/v1","id":"wf_bad","version":1,"name":"Bad","tri
   {"id":"approve","type":"approval","config":{"role":"finance","count":1}},
   {"id":"pay_all","type":"foreach","config":{"items":"=trigger.body.rows","steps":[
     {"id":"pay","type":"connector","connector":"paystack@1","action":"transfer","input":{"amount":"=item.amount","recipient":"=item.r"}}]}},
-  {"id":"tell","type":"connector","needs":["pay_all"],"connector":"termii@1","action":"send_sms","input":{"to":"2348031234567","sms":"Bearer abcdefghijklmnopqrstuvwxyz0123"}}]}`
+  {"id":"tell","type":"connector","needs":["pay_all"],"connector":"termii@1","action":"send_sms","input":{"to":"2348031234567","sms":"Bearer abcdefghijklmnopqrstuvwxyz0123"}},
+  {"id":"tg","type":"connector","needs":["pay_all"],"connector":"telegram@1","action":"send_message","input":{"chat_id":"=trigger.body.chat_id","text":"Paid"}}]}`
 
 // Each rule holds on a hand-written good definition and fails on a bad one.
 func TestRules(t *testing.T) {

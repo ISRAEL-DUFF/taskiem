@@ -162,7 +162,8 @@ type Proposal struct {
 // Need is one thing a workflow needs before it can run where it is
 // published (no-technical-steps N3).
 type Need struct {
-	// Kind is connection, variable, secret, table or role.
+	// Kind is connection, variable, secret, table, role, or field (a form
+	// field asking for a chat id: problem chat_id).
 	Kind string `json:"kind"`
 	// Name is the connection's, variable's, secret's, table's or role's
 	// name; "" for a connection a step does not name (the only one of its

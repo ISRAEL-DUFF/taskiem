@@ -1,0 +1,45 @@
+{
+  "id": "leave-request",
+  "title": "Leave requests from your staff, approved and answered on their phone",
+  "summary": "Staff ask for leave with a form; a manager approves; they hear the answer on WhatsApp, Telegram or by text.",
+  "description": "Your staff ask for leave with a short form: their name, phone number, the type of leave, the dates and why. Their phone is checked with a code, the request is saved in your leave table in Taskiem (columns: reference, name, phone, leave_type, start_date, end_date, reason, status), and the manager (or the role you choose) approves or declines it in Taskiem, WhatsApp or Telegram. The row is updated, and the staff member is told the decision on the WhatsApp or Telegram they chose on the form's thank-you page with one tap, or by text message. Your staff do not need a Taskiem account, and nobody is asked for a chat ID. Make the leave table under Tables first, or let Taskiem make it when you accept the workflow.",
+  "category": "approvals",
+  "tags": ["leave", "hr"],
+  "keywords": ["leave", "holiday", "holidays", "vacation", "sick leave", "annual leave", "maternity", "paternity", "absence"],
+  "connectors": ["xenibase@1", "notify@1"],
+  "params": [
+    {"name": "table", "type": "string", "title": "Leave table", "description": "Your table with reference, name, phone, leave_type, start_date, end_date, reason and status columns.", "required": false, "default": "leave_requests", "example": "leave_requests", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"},
+    {"name": "approver_role", "type": "string", "title": "Who approves", "description": "The role that approves leave, such as manager.", "required": false, "default": "owner", "example": "manager", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_leaveRequest",
+    "version": 1,
+    "name": "Leave requests",
+    "description": "Saves each leave request, gets it approved and tells the staff member.",
+    "trigger": {"type": "form", "config": {"title": "Ask for leave", "access": "public", "verify": "phone",
+      "after": {"mode": "message", "message": "Thank you. Your manager will look at your request, and you will hear the answer on your phone.", "status": true}}},
+    "inputs": {"schema": {"type": "object", "required": ["name", "phone", "leave_type", "start_date", "end_date"], "properties": {
+      "name": {"type": "string", "title": "Your name", "maxLength": 100, "x-pii": "name"},
+      "phone": {"type": "string", "title": "Your phone number", "x-pii": "phone"},
+      "leave_type": {"type": "string", "title": "Type of leave", "enum": ["annual", "sick", "casual", "maternity", "paternity", "other"]},
+      "start_date": {"type": "string", "format": "date", "title": "First day of leave"},
+      "end_date": {"type": "string", "format": "date", "title": "Last day of leave"},
+      "reason": {"type": "string", "title": "Why (optional)", "maxLength": 500}}}},
+    "steps": [
+      {"id": "save_request", "type": "connector", "name": "Save the request in the leave table", "connector": "xenibase@1", "action": "insert_rows", "connection": "data_tables",
+       "input": {"table": "{{table}}", "row": {"reference": "=trigger.form.reference", "name": "=trigger.body.name", "phone": "=trigger.body.phone", "leave_type": "=trigger.body.leave_type",
+         "start_date": "=trigger.body.start_date", "end_date": "=trigger.body.end_date", "reason": "=has(trigger.body.reason) ? trigger.body.reason : ''", "status": "pending"}}},
+      {"id": "decide", "type": "approval", "name": "Approve or decline the leave", "needs": ["save_request"],
+       "config": {"role": "{{approver_role}}", "count": 1, "timeout": "72h",
+         "subject": {"name": "=trigger.body.name", "leave": "=trigger.body.leave_type", "from": "=trigger.body.start_date", "to": "=trigger.body.end_date",
+           "reason": "=has(trigger.body.reason) ? trigger.body.reason : ''"}}},
+      {"id": "update_request", "type": "connector", "name": "Record the decision in the leave table", "connector": "xenibase@1", "action": "update_rows", "connection": "data_tables", "needs": ["decide"],
+       "input": {"table": "{{table}}", "filters": [{"column": "reference", "op": "eq", "value": "=trigger.form.reference"}], "max_affected": 1, "set": {"status": "=steps.decide.output.decision"}}},
+      {"id": "tell_staff", "type": "connector", "name": "Tell the staff member the decision", "connector": "notify@1", "action": "message", "needs": ["decide"],
+       "input": {"phone": "=trigger.form.respondent.phone", "about": "your leave request", "title": "Leave request",
+         "message": "=steps.decide.output.decision == 'approved' ? 'Your ' + trigger.body.leave_type + ' leave from ' + trigger.body.start_date + ' to ' + trigger.body.end_date + ' is approved. Reference ' + trigger.form.reference + '.' : 'Your ' + trigger.body.leave_type + ' leave from ' + trigger.body.start_date + ' to ' + trigger.body.end_date + ' was not approved. Please speak to your manager.'"}}
+    ],
+    "settings": {"timeout": "96h"}
+  }
+}

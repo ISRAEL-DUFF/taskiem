@@ -33,7 +33,7 @@ So an owner who connected "Moniepoint" to Taskiem got a connector that could pay
 
 **OPay** has a POS integration API (create an order for a terminal, query it) and a webhook under Developer Tool → "POS & Others" in the OPay Business dashboard, whose notifications carry the terminal serial, the amount, the fee and the settlement amount. Two things are not public: the signing and encryption of its envelope (OPay's own Odoo integration uses RSA keys), and whether the webhook fires for every walk-up sale on a terminal or only for orders created through the API. Both are questions for an OPay contact ([needs people, P16](../needs-people.md)).
 
-The full references are in the [Moniepoint POS integration guide](../integrations/moniepoint_pos.md) and [decision 0039](../decisions/0039-pos-terminals.md).
+The full references are in the [Moniepoint POS integration guide](../integrations/moniepoint_pos.md) and [decision 0040](../decisions/0040-pos-terminals.md).
 
 ## 3. What we are building
 

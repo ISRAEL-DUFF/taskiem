@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -21,6 +22,11 @@ import (
 // when it is sent, from the step's own input in the run's history, so the
 // outbox holds no text (docs/whatsapp.md#delivery-and-retries).
 const OutboxNotice = "notice"
+
+// OutboxMessage is the outbox kind of a message to someone outside the
+// business on a chat app (message): rendered from the step's input when
+// sent, like a notice, to a contact's channel or a submission's link.
+const OutboxMessage = "message"
 
 // Notifier delivers Tell me messages: each person on the first chat
 // channel they linked (in Chat's order), through the chat outbox the api
@@ -33,6 +39,9 @@ type Notifier struct {
 	// Messages sends the email to people who linked no chat; nil: they
 	// are not reached.
 	Messages *sender.Queue
+	// Reach finds people outside the business who asked for updates on a
+	// chat app (message); nil: they get SMS or email.
+	Reach *reach.Book
 }
 
 // Tell queues the message to its people, once per person for the key.
@@ -132,6 +141,115 @@ func (n *Notifier) Text(ctx context.Context, t Text) (bool, error) {
 	return over, nil
 }
 
+// Message queues a message to someone outside the business: on the chat
+// app they linked with the business (or with this run's own submission),
+// else by SMS from the business's name, else by email.
+func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
+	d := Delivery{Via: "nobody"}
+	var phone string
+	if m.Phone != "" {
+		p, err := sender.NormalisePhone(m.Phone, n.countries())
+		if err != nil && m.Email == "" {
+			return d, fmt.Errorf("%q is not a phone number Taskiem can reach: %w", m.Phone, effects.ErrFatal)
+		}
+		phone = p
+	}
+	err := db.InTenantTx(ctx, n.Pool, []uuid.UUID{m.Tenant}, func(tx pgx.Tx) error {
+		var business string
+		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, m.Tenant).Scan(&business); err != nil {
+			return err
+		}
+		if phone != "" && n.Reach.Ready() {
+			t, ok, err := n.Reach.FindTx(ctx, tx, m.Tenant, m.Run, phone, n.Chat)
+			if err != nil {
+				return err
+			}
+			if ok && n.Messages != nil {
+				// The same limits per person as SMS, across businesses.
+				if ok, err = n.Messages.TakeRecipient(ctx, tx, "chat", phone); err != nil {
+					return err
+				} else if !ok {
+					return sender.ErrRecipientLimit
+				}
+			}
+			if ok {
+				run, step := m.Run, m.Step
+				it := whatsapp.OutboxItem{Tenant: m.Tenant, Channel: t.Channel, Kind: OutboxMessage, Run: &run, Step: &step}
+				if t.Contact != uuid.Nil {
+					it.Contact = &t.Contact
+				} else {
+					it.Reference = &t.Reference
+				}
+				if _, err := whatsapp.Enqueue(ctx, tx, it, "message:"+m.Key); err != nil {
+					return err
+				}
+				d.Via = t.Channel
+				return nil
+			}
+		}
+		if n.Messages == nil {
+			return nil
+		}
+		if phone != "" {
+			_, err := n.Messages.Enqueue(ctx, tx, sender.Message{Tenant: m.Tenant, Channel: sender.SMS, Purpose: sender.PurposeNotice, To: phone,
+				SenderName: business, Text: SMSText(business, m.Title, m.Text), Key: "message:" + m.Key})
+			switch {
+			case errors.Is(err, sender.ErrAllowance):
+				d.OverAllowance = true
+			case err != nil:
+				return err
+			default:
+				d.Via = "sms"
+				return nil
+			}
+		}
+		if m.Email != "" {
+			subject := m.Title
+			if subject == "" {
+				subject = "A message from " + business
+			}
+			if _, err := n.Messages.Enqueue(ctx, tx, sender.Message{Tenant: m.Tenant, Channel: sender.Email, Purpose: sender.PurposeNotice, To: m.Email,
+				SenderName: business, Subject: subject, Text: text(Message{Title: m.Title, Text: m.Text}), Key: "message-email:" + m.Key}); err != nil {
+				return err
+			}
+			d.Via = "email"
+		}
+		return nil
+	})
+	switch {
+	case errors.Is(err, sender.ErrInvalid):
+		return d, fmt.Errorf("%w: %w", effects.ErrFatal, err)
+	case err != nil:
+		return d, fmt.Errorf("%w: %w", effects.ErrRetryable, err)
+	}
+	return d, nil
+}
+
+func (n *Notifier) countries() []string {
+	if n.Messages != nil && len(n.Messages.Countries) > 0 {
+		return n.Messages.Countries
+	}
+	return []string{"234"}
+}
+
+// SMSText is a message as an SMS from business: its title and message,
+// cut to fit in sender.MaxSegments parts with the business's name before it.
+func SMSText(business, title, message string) string {
+	t := message
+	if title != "" {
+		t = title + ": " + message
+	}
+	name := sender.CleanName(business)
+	if sender.Segments(name+": "+t) <= sender.MaxSegments {
+		return t
+	}
+	r := []rune(t)
+	for len(r) > 0 && sender.Segments(name+": "+string(r)+"…") > sender.MaxSegments {
+		r = r[:len(r)-min(10, len(r))]
+	}
+	return string(r) + "…"
+}
+
 type person struct {
 	id    uuid.UUID
 	email string
@@ -198,6 +316,17 @@ func (l *Late) Tell(ctx context.Context, m Message) (Result, error) {
 		return Result{}, fmt.Errorf("Tell me is not available on this deployment: %w", effects.ErrFatal)
 	}
 	return t.Tell(ctx, m)
+}
+
+// Message messages through the bound teller.
+func (l *Late) Message(ctx context.Context, m Outside) (Delivery, error) {
+	l.mu.RLock()
+	t := l.t
+	l.mu.RUnlock()
+	if t == nil {
+		return Delivery{}, fmt.Errorf("messaging people is not available on this deployment: %w", effects.ErrFatal)
+	}
+	return t.Message(ctx, m)
 }
 
 // Text texts through the bound teller.

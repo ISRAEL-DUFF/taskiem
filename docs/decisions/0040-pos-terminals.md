@@ -1,4 +1,4 @@
-# 0039 — POS terminals: a connector for Moniepoint's terminal events, the record in data tables, templates that make their tables
+# 0040 — POS terminals: a connector for Moniepoint's terminal events, the record in data tables, templates that make their tables
 
 Date: 2026-10-21 · Status: **Accepted** 2026-10-21 (built: `moniepoint_pos@1`, the `pos-*` templates, template tables)
 

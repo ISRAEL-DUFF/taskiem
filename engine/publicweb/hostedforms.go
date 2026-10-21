@@ -175,6 +175,8 @@ type hdoneData struct {
 	Embed     bool
 	Origins   string
 	Home      string
+	// Updates are the buttons for getting updates on WhatsApp or Telegram.
+	Updates []updateLink
 }
 
 // appData is the page of a members form: it opens in the app.
@@ -217,6 +219,8 @@ func (s *Server) routeForms(w http.ResponseWriter, r *http.Request) {
 		s.serveFormRequest(w, r, key, sub)
 	case !embed && head == "s" && sub == "" && r.Method != http.MethodPost:
 		s.serveFormStatus(w, r, key)
+	case !embed && head == "u" && publicIDRe.MatchString(key) && (sub == "" || reachAppRe.MatchString(sub)):
+		s.serveReach(w, r, key, sub)
 	default:
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 	}
@@ -1221,7 +1225,14 @@ func (s *Server) formSubmit(w http.ResponseWriter, r *http.Request, hf *hform, s
 		s.formNotice(w, r, http.StatusConflict, "Closed", hf.business, hf.title+" is not taking answers right now.")
 		return
 	}
-	s.formAfter(w, r, hf, ref, sub.StatusKey)
+	var updates []updateLink
+	if len(hf.pub.Reach) > 0 && hf.req == nil {
+		phones, proven := hf.reachPhones(st, answers)
+		if len(phones) > 0 {
+			updates = s.updateLinks(r.Context(), hf.pub.Tenant, hf.business, ref, phones, proven)
+		}
+	}
+	s.formAfter(w, r, hf, ref, sub.StatusKey, updates)
 }
 
 // recordForm seals a submission and writes it with its files, drawing
@@ -1378,9 +1389,9 @@ func (hf *hform) validate(st *hstate, answers map[string]any) string {
 }
 
 // formAfter shows what follows a submission (forms 6.6).
-func (s *Server) formAfter(w http.ResponseWriter, r *http.Request, hf *hform, ref, key string) {
+func (s *Server) formAfter(w http.ResponseWriter, r *http.Request, hf *hform, ref, key string, updates []updateLink) {
 	d := hdoneData{pageData: pageData{Title: "Thank you", Lang: "en"}, Business: hf.business, Accent: "green", Reference: ref,
-		Headline: "Thank you", Embed: hf.embed, Origins: strings.Join(hf.origins, " ")}
+		Headline: "Thank you", Embed: hf.embed, Origins: strings.Join(hf.origins, " "), Updates: updates}
 	statusURL := "/s/" + url.PathEscape(ref) + "?k=" + url.QueryEscape(key)
 	if hf.req != nil {
 		d.Message = "Your answers have been sent to " + hf.business + "."
@@ -1393,7 +1404,7 @@ func (s *Server) formAfter(w http.ResponseWriter, r *http.Request, hf *hform, re
 	}
 	switch after.Mode {
 	case "redirect":
-		if target, ok := safeRedirect(after.URL, hf.origins); ok && !hf.embed {
+		if target, ok := safeRedirect(after.URL, hf.origins); ok && !hf.embed && len(updates) == 0 {
 			// The URL is the form's own config, on one of the organisation's
 			// verified websites: never one the request names.
 			w.Header().Set("Location", target) //nolint:gosec // G710: the form's own after.url, only on a verified website (TestHostedFormAfter)
@@ -1406,6 +1417,12 @@ func (s *Server) formAfter(w http.ResponseWriter, r *http.Request, hf *hform, re
 		d.Message = "Just a moment while we check your answers…"
 		d.Refresh = "2; url=" + hf.done + "/done/" + url.PathEscape(ref) + "?k=" + url.QueryEscape(key)
 		d.StatusURL = ""
+		if len(updates) > 0 {
+			// The page stays, so the updates can be asked for; the answer
+			// is a tap away.
+			d.Message, d.Refresh = "Your answers have been sent.", ""
+			d.StatusURL = hf.done + "/done/" + url.PathEscape(ref) + "?k=" + url.QueryEscape(key)
+		}
 		s.renderPrivate(w, r, http.StatusOK, "formdone.html", d)
 		return
 	}

@@ -204,6 +204,50 @@
       "text": "{name} adịghị ebe a. Asụsụ dị ebe a: {languages}.",
       "reviewed": false
     },
+    "reach.about": {
+      "text": "Mkparịta ụka a na-ezitere gị ozi site na {businesses}. Zipu STOP iji kwụsị nke ikpeazụ.",
+      "reviewed": false
+    },
+    "reach.code_invalid": {
+      "text": "Njikọ a agwụla ma ọ bụ e jirila ya mee ihe. Mepee njikọ azụmahịa ahụ ọzọ iji nweta nke ọhụrụ.",
+      "reviewed": false
+    },
+    "reach.linked": {
+      "text": "Ị ga-enweta ozi site na {business} ebe a. Zipu STOP iji kwụsị ha.",
+      "reviewed": false
+    },
+    "reach.number_unreachable": {
+      "text": "Ndo, {business} enweghị ike iziga ozi na nọmba a ebe a.",
+      "reviewed": false
+    },
+    "reach.resumed": {
+      "text": "Ị ga-enweta ozi site na {business} ebe a ọzọ. Zipu STOP iji kwụsị ha.",
+      "reviewed": false
+    },
+    "reach.share_number": {
+      "text": "Iji nweta ozi site na {business} ebe a, pịa Share my number n'okpuru. Telegram ga-eziga nọmba dị na akaụntụ gị, ka {business} mara na ọ bụ nke gị.",
+      "reviewed": false
+    },
+    "reach.share_number_request": {
+      "text": "Ị ga-enweta ozi site na {business} gbasara arịrịọ gị ebe a. Iji nweta ozi ha niile ebe a, pịa Share my number n'okpuru: Telegram ga-eziga nọmba dị na akaụntụ gị, ka {business} mara na ọ bụ nke gị.",
+      "reviewed": false
+    },
+    "reach.share_own": {
+      "text": "Biko kekọrịta nọmba nke gị, site na bọtịnụ Share my number n'okpuru.",
+      "reviewed": false
+    },
+    "reach.stopped": {
+      "text": "Ị gaghị enwetakwa ozi site na {business} ebe a. Zipu START iji nweta ha ọzọ.",
+      "reviewed": false
+    },
+    "reach.stopped_none": {
+      "text": "Ọ dịghị onye na-ezitere gị ozi ebe a.",
+      "reviewed": false
+    },
+    "ready.chat_id": {
+      "text": "Fọm ahụ na-ajụ {field}, nke ndị mmadụ amaghị. Jụọ nọmba ekwentị ha kama nke ahụ ma ziga ha ozi site na Message a person: ha ga-enweta ha na WhatsApp ma ọ bụ Telegram site na otu pịa, ma ọ bụ site na ozi ederede.",
+      "reviewed": false
+    },
     "ready.connection_ambiguous": {
       "text": "Ị nwere njikọ {service} karịa otu; họrọ nke a ga-eji.",
       "reviewed": false

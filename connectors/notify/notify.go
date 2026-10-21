@@ -49,12 +49,35 @@ type Text struct {
 	Key    string
 }
 
+// Outside is one message to someone outside the business (message).
+type Outside struct {
+	Tenant      uuid.UUID
+	Run         uuid.UUID
+	Step        string
+	Environment string
+	Phone       string
+	Email       string
+	Title       string
+	Text        string
+	About       string
+	Key         string
+}
+
+// Delivery is how a message to someone outside goes.
+type Delivery struct {
+	// Via is whatsapp, telegram, sms, email or nobody.
+	Via           string
+	OverAllowance bool
+}
+
 // Teller delivers messages: Notifier in the platform.
 type Teller interface {
 	Tell(ctx context.Context, m Message) (Result, error)
 	// Text queues an SMS to a customer; over is true when the month's
 	// texts are used up (nothing is sent, the step still succeeds).
 	Text(ctx context.Context, t Text) (over bool, err error)
+	// Message queues a message to someone outside the business.
+	Message(ctx context.Context, m Outside) (Delivery, error)
 }
 
 // New returns the connector; t nil makes it fail plainly.
@@ -97,6 +120,33 @@ func New(t Teller) *connector.Connector {
 				return connector.Response{}, err
 			}
 			return connector.Response{Output: map[string]any{"people": res.People, "chat": res.Chat, "email": res.Email, "nobody": res.People == 0}}, nil
+		}),
+		"message": connector.ActionFunc(func(ctx context.Context, req connector.Request) (connector.Response, error) {
+			c, ok := connector.CallerFrom(ctx)
+			if !ok {
+				return connector.Response{}, fmt.Errorf("messaging a person runs only in a workflow run: %w", effects.ErrFatal)
+			}
+			if t == nil {
+				return connector.Response{}, fmt.Errorf("messaging people is not available on this deployment: %w", effects.ErrFatal)
+			}
+			m := Outside{Tenant: c.Tenant, Run: c.Run, Step: c.Step, Environment: c.Environment, Key: req.IdempotencyKey}
+			m.Phone, _ = req.Input["phone"].(string)
+			m.Email, _ = req.Input["email"].(string)
+			m.Title, _ = req.Input["title"].(string)
+			m.Text, _ = req.Input["message"].(string)
+			m.About, _ = req.Input["about"].(string)
+			m.Phone, m.Email = strings.TrimSpace(m.Phone), strings.TrimSpace(m.Email)
+			switch {
+			case strings.TrimSpace(m.Text) == "":
+				return connector.Response{}, fmt.Errorf("a message is required: %w", effects.ErrFatal)
+			case m.Phone == "" && m.Email == "":
+				return connector.Response{}, fmt.Errorf("their phone number or email is required: %w", effects.ErrFatal)
+			}
+			d, err := t.Message(ctx, m)
+			if err != nil {
+				return connector.Response{}, err
+			}
+			return connector.Response{Output: map[string]any{"via": d.Via, "over_allowance": d.OverAllowance}}, nil
 		}),
 		"text": connector.ActionFunc(func(ctx context.Context, req connector.Request) (connector.Response, error) {
 			c, ok := connector.CallerFrom(ctx)

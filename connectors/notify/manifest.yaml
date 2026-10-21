@@ -2,12 +2,14 @@
 # business's own people on the WhatsApp or Telegram they linked to
 # Taskiem, and by email when they linked neither. It needs no connection
 # and no account elsewhere; it acts for the run's tenant only, and only
-# ever reaches the business's own members.
+# ever reaches the business's own members. message (N11, decision 0040)
+# reaches people outside the business, on the chat app they asked for
+# updates on, else by SMS or email.
 manifest: connector/v1
 id: notify
 version: 1.0.0
 name: Tell me
-description: Tells the business's owner, the people with a role, or named members, on WhatsApp or Telegram, or by email.
+description: Tells the business's owner, the people with a role, or named members, on WhatsApp or Telegram, or by email; and messages people outside the business by their phone.
 category: messaging
 regions: [NG]
 auth:
@@ -40,6 +42,40 @@ actions:
         email:   { type: integer, description: How many by email }
         nobody:  { type: boolean, description: Nobody could be reached (no such members) }
     pii:
+      - { field: input.message, category: other }
+      - { field: input.title, category: other }
+  message:
+    title: Message a person
+    description: >-
+      A message to someone outside the business (a customer, or staff who
+      do not sign in to Taskiem), by their phone number: on the WhatsApp or
+      Telegram they asked for updates on with the business's link, else by
+      SMS from the business's name (sms_monthly), else by email. Never ask
+      anyone for a chat id: give their phone.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [message]
+      properties:
+        phone:   { type: string, description: "Their phone number, in any form (0803 123 4567, +234…)" }
+        email:   { type: string, description: "Their email address: used when they cannot be reached by phone" }
+        message: { type: string, minLength: 1, maxLength: 1500, description: The message, in plain words }
+        title:   { type: string, maxLength: 120, description: "A first line, and an email's subject" }
+        about:   { type: string, maxLength: 60, description: "What it is about, in a few words (your leave request, order AD-12): a WhatsApp update names it" }
+    output:
+      type: object
+      properties:
+        via:            { type: string, enum: [whatsapp, telegram, sms, email, nobody], description: How it goes to them }
+        over_allowance: { type: boolean, description: "This month's texts are used up, so it did not go by SMS" }
+    pii:
+      - { field: input.phone, category: phone }
+      - { field: input.email, category: email }
       - { field: input.message, category: other }
       - { field: input.title, category: other }
   text:

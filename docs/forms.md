@@ -26,7 +26,7 @@ The form is part of the workflow: its questions are the workflow's inputs schema
 | `access` | `public`: anyone with the link. `link`: only one-time links the organisation makes. `members`: signed-in members, in the app (`roles` limits it) |
 | `verify` | `phone` or `email`: a 6-digit code sent there before submitting (five tries, 10 minutes) |
 | `pages` | Groups of fields; `show_if` (over earlier pages' answers) hides a page, whose fields are then not asked. With no pages, the form is one page |
-| `after` | `message` (default), `redirect` (only to one of the organisation's verified websites), or `result` (the run's own message, waiting up to 30 seconds). `status: true` gives a status link |
+| `after` | `message` (default), `redirect` (only to one of the organisation's verified websites), or `result` (the run's own message, waiting up to 30 seconds). `status: true` gives a status link. When the workflow messages a phone typed in the form (`notify@1` `message`), the page also offers **Get updates on WhatsApp / Telegram** ([updates](updates.md)), and a `redirect` waits for that |
 | `once_per` | `phone`, `email` or `member`: one submission each |
 
 **Fields** are the inputs schema, with display hints in `x-form`: `label`, `help`, `placeholder`, `widget` (`textarea`, `consent`), `prefill` (may be set from the link), `hidden`, `from` (`member.name`, `member.email` for members forms), `accept` and `max_mb` for files, `order`. Types: text, number, email, Nigerian phone (`format: phone-ng`), URL, date and time, choices (`enum`, or an array of `enum`), yes or no, consent, and files (`format: file`).

@@ -183,7 +183,7 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool),
 		Services: publicweb.DBServices(pool), Busy: publicweb.DBBusy(pool), Book: publicweb.DBBook(pool), Booking: publicweb.DBBookingStatus(pool),
 		Change: publicweb.DBChange(pool), PriceChange: publicweb.DBPriceChange(pool),
-		Forms: publicweb.DBForms(pool), FormHost: cfg.Public.FormHost, AppURL: cfg.Public.AppURL,
+		Forms: publicweb.DBForms(pool), Reach: publicweb.DBReach(pool), FormHost: cfg.Public.FormHost, AppURL: cfg.Public.AppURL,
 		Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}
 	if len(cfg.Public.Domains) > 0 {
 		srv.PreviewDomain = cfg.Public.Domains[0]
