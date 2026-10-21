@@ -152,21 +152,59 @@ var hrefRE = regexp.MustCompile(`(?:href|src)="([^"]*)"`)
 // TestBuild builds the site and checks its own links: every link within
 // the site reaches a page, and every anchor a heading or operation on it.
 func TestBuild(t *testing.T) {
-	for _, cfg := range []Config{{Base: "/"}, {Base: "/docs/", Source: "https://example.com/repo/blob/main/"}} {
+	for _, cfg := range []Config{
+		{Base: "/"},
+		{Base: "/docs/", Source: "https://example.com/repo/blob/main/"},
+		{Base: "/", Site: true, App: "https://app.example.ng", WhatsApp: "+234 800 000 0000", Email: "hello@example.ng"},
+		{Base: "/taskiem/", Site: true},
+	} {
 		files, err := build(repoRoot, cfg)
 		if err != nil {
 			t.Fatal(err)
 		}
+		docs := "" // where the docs' files are
+		if cfg.Site {
+			docs = "docs/"
+		}
 		for _, f := range []string{"index.html", "404.html", "onboarding.html", "templates.html", "connector-sdk.html", "environments.html",
 			"contracts.html", "contracts/wd-v1.html", "integrations/slack.html", "api.html", "api/workflows.html", "api/schemas.html",
 			"api/openapi.yaml", "search.json", "style.css", "search.js"} {
-			if _, ok := files[f]; !ok {
-				t.Errorf("%s: no %s", cfg.Base, f)
+			if _, ok := files[docs+f]; !ok {
+				t.Errorf("%s: no %s", cfg.Base, docs+f)
 			}
 		}
 		for _, f := range []string{"needs-people.html", "phase-4-status.html", "decisions/0022-self-serve-onboarding.html", "spec/architecture.html", "integrations/payrolla.html"} {
-			if _, ok := files[f]; ok {
+			if _, ok := files[docs+f]; ok {
 				t.Errorf("%s: internal page %s published", cfg.Base, f)
+			}
+		}
+		if cfg.Site {
+			for _, p := range wwwPages {
+				if _, ok := files[p.Name+".html"]; !ok {
+					t.Errorf("%s: no website page %s", cfg.Base, p.Name)
+				}
+			}
+			if _, ok := files["www.css"]; !ok {
+				t.Errorf("%s: no www.css", cfg.Base)
+			}
+			home := string(files["index.html"])
+			for _, want := range []string{"Tell Taskiem what to do in your own words", cfg.Base + "docs/", "Paystack", cfg.Base + "img/logo.png", "material-symbols-outlined"} {
+				if !strings.Contains(home, want) {
+					t.Errorf("%s: home page lacks %q", cfg.Base, want)
+				}
+			}
+			// The outside facts show only when given (docs/strategy/website.md, the claims register).
+			for name, want := range map[string]bool{"wa.me/2348000000000": cfg.WhatsApp != "", "https://app.example.ng/signup": cfg.App != "", "start/guide?template=": cfg.App != "", "mailto:hello@example.ng": cfg.Email != "", "opening soon": cfg.App == "" && cfg.WhatsApp == ""} {
+				all := home + string(files["templates.html"]) + string(files["contact.html"])
+				if got := strings.Contains(all, name); got != want {
+					t.Errorf("%s: website mentions %q: %v, want %v", cfg.Base, name, got, want)
+				}
+			}
+		} else {
+			for _, f := range []string{"how-it-works.html", "security.html", "www.css"} {
+				if _, ok := files[f]; ok {
+					t.Errorf("%s: website file %s built without Site", cfg.Base, f)
+				}
 			}
 		}
 		ids := map[string]map[string]bool{}
@@ -194,8 +232,8 @@ func TestBuild(t *testing.T) {
 				}
 				target, frag, _ := strings.Cut(strings.TrimPrefix(href, cfg.Base), "#")
 				switch {
-				case target == "":
-					target = "index"
+				case target == "" || strings.HasSuffix(target, "/"):
+					target += "index"
 				case strings.Contains(target, "."):
 					if _, ok := files[target]; !ok {
 						t.Errorf("%s%s: link %s: no file", cfg.Base, name, href)
@@ -211,7 +249,7 @@ func TestBuild(t *testing.T) {
 			}
 		}
 		var idx []entry
-		if err := json.Unmarshal(files["search.json"], &idx); err != nil {
+		if err := json.Unmarshal(files[docs+"search.json"], &idx); err != nil {
 			t.Fatal(err)
 		}
 		found := false
@@ -244,5 +282,58 @@ func TestPrepareRefusesForeignDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(out, "old.html")); !os.IsNotExist(err) {
 		t.Errorf("old output kept: %v", err)
+	}
+}
+
+// TestPricingWords: plan limits and prices in the owner's words, and no
+// price while deploy/plans.yaml holds placeholders.
+func TestPricingWords(t *testing.T) {
+	for n, want := range map[int64]string{500000: "₦5,000", 100000000: "₦1,000,000", 99900: "₦999", 0: "₦0"} {
+		if got := naira(n); got != want {
+			t.Errorf("naira(%d) = %q, want %q", n, got, want)
+		}
+	}
+	p, err := loadPricing(repoRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Plans) < 3 || p.TrialDays == 0 || p.TrialPlan == "" || len(p.Compare) < 5 {
+		t.Fatalf("pricing: %+v", p)
+	}
+	for _, r := range p.Compare {
+		if len(r.Cells) != len(p.Plans) {
+			t.Errorf("compare row %q has %d cells for %d plans", r.Label, len(r.Cells), len(p.Plans))
+		}
+	}
+	for _, pl := range p.Plans {
+		if p.Placeholder && pl.Monthly != "" {
+			t.Errorf("%s: a price %q while prices are placeholders", pl.ID, pl.Monthly)
+		}
+		if len(pl.Includes) == 0 {
+			t.Errorf("%s: nothing included", pl.ID)
+		}
+	}
+	// The website's three tiers (docs/strategy/website.md) are the plans file's.
+	for id, want := range map[string]string{"starter": "₦15,000", "growth": "₦45,000", "enterprise": "₦180,000"} {
+		found := false
+		for _, pl := range p.Plans {
+			if pl.ID == id {
+				found = true
+				if pl.Monthly != want {
+					t.Errorf("%s: %s a month, the website says %s", id, pl.Monthly, want)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("no public plan %q", id)
+		}
+	}
+}
+
+// TestWebsiteRefusesABadNumber: -whatsapp must be a phone number.
+func TestWebsiteRefusesABadNumber(t *testing.T) {
+	err := buildWebsite(repoRoot, Config{Base: "/", Site: true, WhatsApp: "chat to us"}, "/docs/", nil, map[string][]byte{})
+	if err == nil || !strings.Contains(err.Error(), "not a phone number") {
+		t.Errorf("err = %v", err)
 	}
 }

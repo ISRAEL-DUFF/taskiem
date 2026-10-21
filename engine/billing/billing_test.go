@@ -248,7 +248,7 @@ func TestConfigValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !c.PlaceholderPrices || c.VATBasisPoints() != 750 || c.TrialPlan != "growth" {
+	if c.PlaceholderPrices || c.VATBasisPoints() != 750 || c.TrialPlan != "growth" {
 		t.Fatalf("config: %+v", c)
 	}
 	// Every plan's limits are known keys; the internal plan is built in.
@@ -379,7 +379,7 @@ func TestPlanLimitsAndOverrides(t *testing.T) {
 	if plan, status := l.Plan(); plan != "starter" || status != billing.StatusComped {
 		t.Fatalf("plan: %s %s", plan, status)
 	}
-	if l.MaxRunningRuns != 5 || l.WorkerConcurrency != 5 || l.MaxRetentionDays != 7 || l.AIMonthlyTokens != 500_000 || l.WhatsAppTemplatesMonthly != 500 || l.MaxWorkflows != 20 {
+	if l.MaxRunningRuns != 5 || l.WorkerConcurrency != 5 || l.MaxRetentionDays != 7 || l.AIMonthlyTokens != 500_000 || l.WhatsAppTemplatesMonthly != 500 || l.MaxWorkflows != 10 {
 		t.Fatalf("starter limits: %+v", l)
 	}
 	// Keys the plan leaves out keep the platform default.
@@ -469,7 +469,7 @@ func TestLifecycle(t *testing.T) {
 	if len(inv) != 1 || inv[0].Status != "open" || inv[0].Kind != "subscription" || inv[0].PlanID != "growth" {
 		t.Fatalf("invoices: %+v", inv)
 	}
-	if inv[0].SubtotalKobo != 6_000_000 || inv[0].VATKobo != 450_000 || inv[0].TotalKobo != 6_450_000 {
+	if inv[0].SubtotalKobo != 4_500_000 || inv[0].VATKobo != 337_500 || inv[0].TotalKobo != 4_837_500 {
 		t.Fatalf("growth invoice with VAT: %+v", inv[0])
 	}
 	if w.mail.count("payment due for invoice "+inv[0].Number) != 1 {
@@ -704,33 +704,33 @@ func TestPlanChanges(t *testing.T) {
 	w.checkoutAndPay(t, tenant, "growth")
 	start := w.sub(t, tenant)
 
-	// Upgrade halfway through: a new period at the business price, less
+	// Upgrade halfway through: a new period at the enterprise price, less
 	// the unused half of growth; the saved card pays it at once.
 	w.clock.add(start.PeriodEnd.Sub(start.PeriodStart) / 2)
-	res, err := w.svc.ChangePlan(ctx, tenant, "business", "monthly", "user:u1")
+	res, err := w.svc.ChangePlan(ctx, tenant, "enterprise", "monthly", "user:u1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.Effective != "now" || res.Invoice == nil || res.Invoice.Status != "paid" {
 		t.Fatalf("upgrade: %+v", res)
 	}
-	credit := billing.Unused(6_000_000, start.PeriodStart, start.PeriodEnd, w.clock.Now())
-	if credit < 2_900_000 || credit > 3_100_000 {
+	credit := billing.Unused(4_500_000, start.PeriodStart, start.PeriodEnd, w.clock.Now())
+	if credit < 2_150_000 || credit > 2_350_000 {
 		t.Fatalf("credit: %d", credit)
 	}
 	lines := res.Invoice.Lines
-	if len(lines) != 2 || lines[0].AmountKobo != 25_000_000 || lines[1].Kind != "proration_credit" || lines[1].AmountKobo != -credit {
+	if len(lines) != 2 || lines[0].AmountKobo != 18_000_000 || lines[1].Kind != "proration_credit" || lines[1].AmountKobo != -credit {
 		t.Fatalf("upgrade lines: %+v", lines)
 	}
-	if res.Invoice.SubtotalKobo != 25_000_000-credit || res.Invoice.VATKobo != billing.VAT(25_000_000-credit, 750) {
+	if res.Invoice.SubtotalKobo != 18_000_000-credit || res.Invoice.VATKobo != billing.VAT(18_000_000-credit, 750) {
 		t.Fatalf("upgrade totals: %+v", res.Invoice)
 	}
 	s := w.sub(t, tenant)
-	if s.PlanID != "business" || !s.PeriodStart.Equal(w.clock.Now()) {
+	if s.PlanID != "enterprise" || !s.PeriodStart.Equal(w.clock.Now()) {
 		t.Fatalf("after upgrade: %+v", s)
 	}
-	if l := w.limits(t, tenant); l.MaxRunningRuns != 100 {
-		t.Fatalf("business limits: %d", l.MaxRunningRuns)
+	if l := w.limits(t, tenant); l.MaxRunningRuns != 0 || l.MaxRetentionDays != 2555 {
+		t.Fatalf("enterprise limits: %+v", l)
 	}
 
 	// Downgrade refused while usage exceeds starter: 21 more workflows and
@@ -756,7 +756,7 @@ func TestPlanChanges(t *testing.T) {
 	for _, b := range de.Blockers {
 		got[b.Limit] = b
 	}
-	if b := got["max_workflows"]; b.Allowed != 20 || b.Used < 21 || !strings.Contains(b.Remove, "workflows") {
+	if b := got["max_workflows"]; b.Allowed != 10 || b.Used < 21 || !strings.Contains(b.Remove, "workflows") {
 		t.Fatalf("workflow blocker: %+v", de.Blockers)
 	}
 	if _, ok := got["feature:sso"]; ok {
@@ -777,7 +777,7 @@ func TestPlanChanges(t *testing.T) {
 	if res.Effective != "period_end" || res.Subscription.PendingPlanID != "growth" {
 		t.Fatalf("downgrade scheduled: %+v", res)
 	}
-	if l := w.limits(t, tenant); l.MaxRunningRuns != 100 {
+	if l := w.limits(t, tenant); l.MaxRetentionDays != 2555 {
 		t.Fatal("downgrade applied early")
 	}
 	// At period end the renewal is on growth.
@@ -789,7 +789,7 @@ func TestPlanChanges(t *testing.T) {
 	if s.PlanID != "growth" || s.PendingPlanID != "" || s.Status != billing.StatusActive {
 		t.Fatalf("after period end: %+v", s)
 	}
-	if inv := w.invoices(t, tenant); inv[0].PlanID != "growth" || inv[0].Lines[0].AmountKobo != 6_000_000 {
+	if inv := w.invoices(t, tenant); inv[0].PlanID != "growth" || inv[0].Lines[0].AmountKobo != 4_500_000 {
 		t.Fatalf("renewal on growth: %+v", inv[0])
 	}
 

@@ -61,6 +61,8 @@ pre code { background: none; padding: 0; overflow-wrap: normal; }
   border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 700; text-decoration: none; color: var(--text); white-space: nowrap; }
+.home { font-weight: 800; text-decoration: none; color: var(--accent); white-space: nowrap; }
+.home + .brand::before { content: "/"; color: var(--muted); font-weight: 400; margin-right: 10px; }
 
 .search { position: relative; flex: 1; max-width: 520px; }
 .search input {

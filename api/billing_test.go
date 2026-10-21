@@ -68,7 +68,7 @@ func TestBillingAPI(t *testing.T) {
 	owner := w.tenant(t, "Acme", "owner@acme.test")
 	ov := owner.must(200, "GET", "/v1/billing", nil)
 	sub := ov["subscription"].(map[string]any)
-	if sub["status"] != "trial" || sub["plan"] != "growth" || ov["placeholder_prices"] != true || len(ov["plans"].([]any)) != 5 {
+	if sub["status"] != "trial" || sub["plan"] != "growth" || ov["placeholder_prices"] != false || len(ov["plans"].([]any)) != 3 {
 		t.Fatalf("overview: %v", ov)
 	}
 	if _, leaked := sub["authorization_code"]; leaked {
@@ -103,11 +103,11 @@ func TestBillingAPI(t *testing.T) {
 		t.Fatalf("downgrade: %d %v", st, out)
 	}
 	// An upgrade during the trial is the plan tried.
-	res := owner.must(200, "POST", "/v1/billing/plan", map[string]any{"plan": "business"})
+	res := owner.must(200, "POST", "/v1/billing/plan", map[string]any{"plan": "enterprise"})
 	if res["effective"] != "now" {
 		t.Fatalf("trial upgrade: %v", res)
 	}
-	// Business includes embedding: past the plan check (the partner API
+	// Enterprise includes embedding: past the plan check (the partner API
 	// itself then wants a partner API key).
 	if st, out := owner.do("GET", "/v1/partner/", nil); st == 402 {
 		t.Fatalf("business partner API: %v", out)
@@ -119,11 +119,11 @@ func TestBillingAPI(t *testing.T) {
 		t.Fatalf("checkout: %v", co)
 	}
 	inv := co["invoice"].(map[string]any)
-	if inv["total_kobo"].(float64) != 64_500_000 || inv["interval"] != "annual" {
+	if inv["total_kobo"].(float64) != 48_375_000 || inv["interval"] != "annual" {
 		t.Fatalf("annual growth with VAT: %v", inv)
 	}
 	html := owner.must(200, "GET", "/v1/billing/invoices/"+inv["id"].(string)+"?format=html", nil)
-	if !strings.Contains(html["raw"].(string), "VAT (7.5%)") || !strings.Contains(html["raw"].(string), "₦645,000.00") {
+	if !strings.Contains(html["raw"].(string), "VAT (7.5%)") || !strings.Contains(html["raw"].(string), "₦483,750.00") {
 		t.Fatalf("invoice html: %v", html)
 	}
 

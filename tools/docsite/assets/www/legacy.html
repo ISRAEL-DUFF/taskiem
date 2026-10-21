@@ -1,0 +1,29 @@
+{{/* Shared pieces of the pages the designer did not draw. */}}
+{{define "cta"}}
+<div class="cta">
+  {{- if .WhatsApp}}
+  <a class="btn wa" href="{{.WhatsApp}}">{{template "icon-wa"}} {{if .Pricing.TrialDays}}Try Taskiem on WhatsApp (free {{.Pricing.TrialDays}}-day trial){{else}}Chat with Taskiem on WhatsApp{{end}}</a>
+  {{- end}}
+  {{- if .App}}
+  <a class="btn{{if not .WhatsApp}} primary{{end}}" href="{{.App}}signup">Start on the web</a>
+  {{- end}}
+  {{- if and (not .WhatsApp) (not .App)}}
+  <p class="soon">Taskiem is opening soon. Until then, <a href="{{.Docs}}guide/index">read the owner's guide</a>.</p>
+  {{- end}}
+</div>
+{{end}}
+{{define "banner"}}
+<section class="closing">
+  <div class="banner">
+    <span class="eyebrow">Zero set-up · nothing to install</span>
+    <h2>Run your business like a bank. Get started on WhatsApp in two minutes.</h2>
+    <p class="lead">Flat monthly pricing in naira with no fee per run. If your business uses WhatsApp, you are already equipped.</p>
+    <div class="checks">
+      {{- if .Pricing.TrialDays}}<span>{{template "icon-tick"}} {{.Pricing.TrialDays}}-day free trial</span>{{end}}
+      <span>{{template "icon-tick"}} Billed flat in naira (₦)</span>
+      <span>{{template "icon-tick"}} No charge per run</span>
+    </div>
+    {{template "cta" .}}
+  </div>
+</section>
+{{end}}

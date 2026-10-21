@@ -1,18 +1,24 @@
-// Command docsite builds Taskiem's public docs site: the public pages of
-// docs/ (pages.go says which, decision 0025), an API reference rendered
-// from api/openapi/openapi.yaml, navigation and a static search index. It
-// first checks every relative link and anchor in the repository's docs and
-// fails on a broken one.
+// Command docsite builds Taskiem's public site: the product website
+// (website.go, docs/strategy/website.md) at the root and, under docs/,
+// the docs site: the public pages of docs/ (pages.go says which, decision
+// 0025), an API reference rendered from api/openapi/openapi.yaml,
+// navigation and a static search index. It first checks every relative
+// link and anchor in the repository's docs and fails on a broken one.
 //
 //	go run ./tools/docsite                   # check links, build into site/
 //	go run ./tools/docsite -check            # check links only
-//	go run ./tools/docsite -base /docs/ -source https://github.com/OWNER/REPO/blob/main/
+//	go run ./tools/docsite -site=false -base /docs/   # the docs alone, served under /docs/
+//	go run ./tools/docsite -app https://app.example.ng -whatsapp 2348000000000 -email hello@example.ng
 //
 // Pages are written as <name>.html and linked without the extension
-// (/templates), the stable URLs the web app's help panels open
+// (/docs/templates), the stable URLs the web app's help panels open
 // (TASKIEM_DOCS_URL/<page>, docs/onboarding.md#in-product-help). Hosts
 // that do not serve name.html for /name need a rewrite (docs/operations.md
 // names one).
+//
+// The website leaves out what is not true yet: without -whatsapp there is
+// no WhatsApp button, without -app no sign-up button, and prices show
+// only once deploy/plans.yaml has placeholder_prices: false.
 package main
 
 import (
@@ -30,14 +36,19 @@ func main() {
 	base := flag.String("base", "/", "the URL path the site is served under")
 	source := flag.String("source", "", "a URL prefix for repository files the site does not publish, e.g. https://github.com/OWNER/REPO/blob/main/; without it such links become plain text")
 	check := flag.Bool("check", false, "only check the docs' links")
+	site := flag.Bool("site", true, "build the product website at -base, with the docs under docs/; false builds the docs alone at -base")
+	app := flag.String("app", "", "the web app's address, for the site's sign-up buttons; empty leaves them out")
+	whatsapp := flag.String("whatsapp", "", "Taskiem's WhatsApp number with the country code, for the site's chat buttons; empty leaves them out")
+	email := flag.String("email", "", "the contact email the site shows; empty leaves it out")
 	flag.Parse()
-	if err := run(*root, *out, *base, *source, *check); err != nil {
+	cfg := Config{Base: *base, Source: *source, Site: *site, App: *app, WhatsApp: *whatsapp, Email: *email}
+	if err := run(*root, *out, cfg, *check); err != nil {
 		fmt.Fprintln(os.Stderr, "docsite:", err)
 		os.Exit(1)
 	}
 }
 
-func run(root, out, base, source string, check bool) error {
+func run(root, out string, cfg Config, check bool) error {
 	docs, err := repoDocs(root)
 	if err != nil {
 		return err
@@ -52,10 +63,10 @@ func run(root, out, base, source string, check bool) error {
 		fmt.Printf("docsite: %d files, links and anchors resolve\n", len(docs))
 		return nil
 	}
-	if !strings.HasPrefix(base, "/") || !strings.HasSuffix(base, "/") {
+	if !strings.HasPrefix(cfg.Base, "/") || !strings.HasSuffix(cfg.Base, "/") {
 		return errors.New("-base must start and end with /")
 	}
-	files, err := build(root, Config{Base: base, Source: source})
+	files, err := build(root, cfg)
 	if err != nil {
 		return err
 	}

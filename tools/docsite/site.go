@@ -22,6 +22,21 @@ import (
 type Config struct {
 	Base   string // URL path the site lives under, "/" or "/docs/"
 	Source string // URL prefix for repository files; "" unlinks them
+	// Site builds the product website at Base and puts the docs under
+	// Base+"docs/"; false builds the docs alone at Base.
+	Site bool
+	// The website's outside facts (website.go): each is left out when empty.
+	App      string // the web app's address
+	WhatsApp string // Taskiem's WhatsApp number
+	Email    string // the contact email
+}
+
+// docsBase is the URL path the docs live under.
+func (c Config) docsBase() string {
+	if c.Site {
+		return c.Base + "docs/"
+	}
+	return c.Base
 }
 
 //go:embed assets
@@ -57,7 +72,8 @@ type entry struct {
 }
 
 type site struct {
-	cfg     Config
+	cfg     Config // Base is the docs' own base (Config.docsBase)
+	home    string // the website's address, when the docs sit under it
 	files   map[string][]byte
 	pages   map[string]*page // by name
 	nav     [][]string       // page names per nav section; the API reference is added after
@@ -99,7 +115,12 @@ func build(root string, cfg Config) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &site{cfg: cfg, files: map[string][]byte{}, pages: map[string]*page{}}
+	docsCfg := cfg
+	docsCfg.Base = cfg.docsBase()
+	s := &site{cfg: docsCfg, files: map[string][]byte{}, pages: map[string]*page{}}
+	if cfg.Site {
+		s.home = cfg.Base
+	}
 	titles := map[string]string{}
 	for _, n := range names {
 		src := sourceOf(fsys, n)
@@ -121,7 +142,7 @@ func build(root string, cfg Config) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.api = apiNav(cfg, doc)
+	s.api = apiNav(docsCfg, doc)
 	for _, n := range names {
 		if err := s.renderPage(s.pages[n]); err != nil {
 			return nil, fmt.Errorf("docs/%s: %w", s.pages[n].Src, err)
@@ -151,7 +172,21 @@ func build(root string, cfg Config) (map[string][]byte, error) {
 		s.files[a] = b
 	}
 	s.files["api/openapi.yaml"] = openapi.Source()
-	return s.files, nil
+	if !cfg.Site {
+		return s.files, nil
+	}
+	files := make(map[string][]byte, len(s.files)+16)
+	for name, body := range s.files {
+		files["docs/"+name] = body
+	}
+	public := make(map[string]bool, len(names))
+	for _, n := range names {
+		public[n] = true
+	}
+	if err := buildWebsite(root, cfg, docsCfg.Base, public, files); err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 // url is a page's address on the site.
@@ -265,7 +300,7 @@ func (s *site) render(file, title, current string, content template.HTML, source
 	secs = append(secs, api)
 	var buf bytes.Buffer
 	err := layout.Execute(&buf, map[string]any{
-		"Base": s.cfg.Base, "Title": title, "Nav": secs, "Content": content, "Source": source,
+		"Base": s.cfg.Base, "Home": s.home, "Title": title, "Nav": secs, "Content": content, "Source": source,
 	})
 	if err != nil {
 		return err

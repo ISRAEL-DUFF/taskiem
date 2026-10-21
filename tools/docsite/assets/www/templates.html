@@ -1,0 +1,35 @@
+{{define "content"}}
+<div class="legacy">
+<section class="page-head">
+  <h1>What you can automate</h1>
+  <p class="lead">Every workflow below is ready to use. Pick one, fill in a few details (your sheet or table, your times, your wording), connect what it needs and publish. Or describe something new in your own words and Taskiem builds it.</p>
+</section>
+<nav class="jump" aria-label="Groups">
+  <ul>
+  {{- range .Templates}}
+    <li><a href="#{{.ID}}">{{.Title}}</a></li>
+  {{- end}}
+  </ul>
+</nav>
+{{- range .Templates}}
+<section class="tight" id="{{.ID}}">
+  <h2 style="font-size:24px;line-height:32px">{{.Title}}</h2>
+  <div class="cards">
+  {{- range .Items}}
+    <article class="card">
+      <h3>{{.Title}}</h3>
+      <p>{{.Summary}}</p>
+      {{- if .Uses}}
+      <p class="uses">Uses {{join .Uses}}</p>
+      {{- end}}
+      {{- if .SetupURL}}
+      <p><a class="more" href="{{.SetupURL}}">Set it up {{template "icon-arrow"}}</a></p>
+      {{- end}}
+    </article>
+  {{- end}}
+  </div>
+</section>
+{{- end}}
+{{template "banner" .}}
+</div>
+{{end}}
