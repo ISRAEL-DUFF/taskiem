@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Background, Controls, ReactFlow, useReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
 import type { Step, WorkflowDefinition } from "@sdk/wd";
-import { ApiError, get, post, put, type ConnectorInfo, type MergeConflict, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
+import { ApiError, get, post, put, type ConnectorInfo, type JSONSchema, type MergeConflict, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
 import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
@@ -12,7 +12,10 @@ import { merge } from "../lib/schema";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
 import { Badge, ErrorBox, Field, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { AIBuilder } from "./AIBuild";
+import { resolveSchema } from "../lib/values";
+import { SchemaForm } from "../forms/SchemaForm";
 import { NeedsList } from "./Readiness";
+import { ProblemLine } from "../forms/ProblemLine";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 const nodeTypes = { step: StepNode };
@@ -294,7 +297,7 @@ export function Editor() {
           <ul>
             {problems.map((p, i) => (
               <li key={i}>
-                <code>{p.path}</code> {p.message}
+                <ProblemLine p={p} onStep={setSelected} />
               </li>
             ))}
           </ul>
@@ -406,7 +409,7 @@ export function Editor() {
           )}
         </p>
       )}
-      {starting && <StartRun workflow={id} onClose={() => setStarting(false)} onStarted={(run) => nav(`/runs/${run}`)} />}
+      {starting && <StartRun workflow={id} def={def} onClose={() => setStarting(false)} onStarted={(run) => nav(`/runs/${run}`)} />}
       {ai && (
         <AIBuilder
           workflow={id}
@@ -728,18 +731,30 @@ function Deployments({ workflow, deployments, canPromote, onChange }: { workflow
   );
 }
 
-function StartRun({ workflow, onClose, onStarted }: { workflow: string; onClose: () => void; onStarted: (run: string) => void }) {
+function StartRun({ workflow, def, onClose, onStarted }: { workflow: string; def?: WorkflowDefinition; onClose: () => void; onStarted: (run: string) => void }) {
   const [input, setInput] = useState<unknown>({});
   const [env, setEnv] = useState("prod");
+  const [advanced, setAdvanced] = useState(false);
   const act = useAction();
+  // A form from the workflow's inputs, as chat's run asks them (N5).
+  const schema = resolveSchema(def?.inputs?.schema as JSONSchema | undefined, (def?.types ?? {}) as Record<string, JSONSchema>);
   return (
     <Modal title="Start a run" onClose={onClose}>
       <Field label="Environment">
         <EnvSelect value={env} onChange={setEnv} />
       </Field>
-      <Field label="Input (trigger.body)">
-        <JsonInput value={input} onChange={setInput} rows={8} />
-      </Field>
+      {schema?.properties && !advanced ? (
+        <SchemaForm schema={schema} value={input as Record<string, unknown> | undefined} onChange={setInput} expressions={false} />
+      ) : (
+        <Field label="Input (JSON)">
+          <JsonInput value={input} onChange={setInput} rows={8} />
+        </Field>
+      )}
+      {schema?.properties && (
+        <label className="inline hint" data-technical>
+          <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: enter JSON
+        </label>
+      )}
       <ErrorBox error={act.error} />
       <div className="toolbar">
         <button

@@ -8,6 +8,9 @@ import { initialValues, toParams, type Template } from "../lib/templates";
 import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from "../ui";
 import { ParamField } from "./Templates";
 import { NeedsList } from "./Readiness";
+import { ProblemLine } from "../forms/ProblemLine";
+import { plainValue, resolveSchema } from "../lib/values";
+import { SchemaForm } from "../forms/SchemaForm";
 import { NewConnection, startLink } from "./Connections";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 
@@ -228,7 +231,7 @@ function VariableForm({ name, why, saved, onDone }: { name: string; why: string;
       className="card"
       onSubmit={(e) => {
         e.preventDefault();
-        void act.run(async () => (await put(`/v1/variables/${ENV}/${name}`, { value: value.trim() }), onDone()));
+        void act.run(async () => (await put(`/v1/variables/${ENV}/${name}`, { value: plainValue(value) }), onDone()));
       }}
     >
       <Field label={name} hint={why}>
@@ -274,7 +277,9 @@ function CreateAndPublish({
           The draft needs changes before it can be published. <Link to={`/workflows/${wf.id}`}>Open it in the editor</Link>
           <ul>
             {wf.problems.map((p, i) => (
-              <li key={i}>{`${p.path}: ${p.message}`}</li>
+              <li key={i}>
+                <ProblemLine p={p} />
+              </li>
             ))}
           </ul>
         </div>
@@ -334,6 +339,8 @@ const terminal = ["completed", "failed", "cancelled", "needs_reconciliation"];
 function TestRun({ workflow, onDone }: { workflow: string; onDone: () => void }) {
   const version = useLoad(() => get<{ definition: { inputs?: { schema?: JSONSchema }; types?: Record<string, JSONSchema> } }>(`/v1/workflows/${workflow}/versions/1`), [workflow]);
   const [input, setInput] = useState<unknown>(undefined);
+  const [advanced, setAdvanced] = useState(false);
+  const schema = resolveSchema(version.data?.definition.inputs?.schema, version.data?.definition.types);
   const [run, setRun] = useState<string | null>(null);
   const act = useAction();
   useEffect(() => {
@@ -347,9 +354,21 @@ function TestRun({ workflow, onDone }: { workflow: string; onDone: () => void })
   }, [st, onDone]);
   return (
     <>
-      <Field label="Test input" hint="What the trigger would send. Change it if you like.">
-        <JsonInput value={input} onChange={setInput} rows={6} />
-      </Field>
+      {schema?.properties && !advanced ? (
+        <>
+          <p className="hint">What the run starts with, filled in with an example. Change it if you like.</p>
+          <SchemaForm schema={schema} value={input as Record<string, unknown> | undefined} onChange={setInput} expressions={false} />
+        </>
+      ) : (
+        <Field label="Test input" hint="What the trigger would send. Change it if you like.">
+          <JsonInput value={input} onChange={setInput} rows={6} />
+        </Field>
+      )}
+      {schema?.properties && (
+        <label className="inline hint" data-technical>
+          <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: enter JSON
+        </label>
+      )}
       <ErrorBox error={act.error ?? version.error} />
       <div className="toolbar">
         <button

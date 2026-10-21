@@ -340,3 +340,24 @@ func TestDetect(t *testing.T) {
 		t.Errorf("detected a language that is off: %s", got)
 	}
 }
+
+// The gate's text test for chat (no-technical-steps, Appendix C): no
+// message a person reads in WhatsApp, Telegram, USSD or SMS uses the words
+// an owner never sees. Placeholders ({cron}) are values, not words.
+func TestMessagesUseNoTechnicalWords(t *testing.T) {
+	glossary := []*regexp.Regexp{regexp.MustCompile(`\bJSON\b`), regexp.MustCompile(`(?i)\bschemas?\b`), regexp.MustCompile(`wd/v1|wd-test`),
+		regexp.MustCompile(`(?i)\bexpressions?\b`), regexp.MustCompile(`\bCEL\b`), regexp.MustCompile(`(?i)\bcron\b`), regexp.MustCompile(`(?i)\bkobo\b`),
+		regexp.MustCompile(`(?i)\btokens?\b`), regexp.MustCompile(`(?i)\bwebhooks?\b`), regexp.MustCompile(`\bHMAC\b`), regexp.MustCompile(`(?i)\bendpoints?\b`),
+		regexp.MustCompile(`(?i)\bpayloads?\b`), regexp.MustCompile(`(?i)\bAPI keys?\b`), regexp.MustCompile(`secret_key|trigger\.body|=steps|/steps/`),
+		regexp.MustCompile(`(?i)\bstep id\b`), regexp.MustCompile(`\bnull\b|\bundefined\b`), regexp.MustCompile(`\b(status|HTTP) [1-5]\d\d\b`)}
+	placeholder := regexp.MustCompile(`\{[a-z_]+\}`)
+	f := lang.Default().File(lang.EN)
+	for id, e := range f.Messages {
+		text := placeholder.ReplaceAllString(e.Text, "")
+		for _, g := range glossary {
+			if g.MatchString(text) {
+				t.Errorf("%s says %q: %q", id, g.FindString(text), e.Text)
+			}
+		}
+	}
+}

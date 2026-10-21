@@ -14,6 +14,8 @@ interface RunDoc {
   revealed: boolean;
   /** The run this one resumed from a failed step, and the runs that resumed it. */
   forks?: { parent_run_id: string | null; resumed_step: string | null; resumed_by: string[] };
+  /** Each failed step's error in plain words (no-technical-steps N5). */
+  plain_errors?: Record<string, string>;
 }
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
@@ -181,7 +183,7 @@ export function RunPage() {
       <div className="timeline" hidden={view !== "timeline"}>
         {rows.length === 0 && <div className="empty">No steps yet.</div>}
         {rows.map((s) => (
-          <StepCard key={s.id} row={s} reads={readsByStep.get(s.id) ?? []} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
+          <StepCard key={s.id} row={s} plainError={data.plain_errors?.[s.id]} reads={readsByStep.get(s.id) ?? []} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
         ))}
       </div>
       {ended && ended.type === "RunFailed" && (
@@ -231,7 +233,7 @@ export function RunPage() {
   );
 }
 
-function StepCard({ row, reads, canResolve, onResolve }: { row: StepRow; reads: SecretRead[]; canResolve: boolean; onResolve: () => void }) {
+function StepCard({ row, plainError, reads, canResolve, onResolve }: { row: StepRow; plainError?: string; reads: SecretRead[]; canResolve: boolean; onResolve: () => void }) {
   return (
     <div className={`step ${row.status}`} data-testid={`step-${row.id}`}>
       <div className="toolbar" style={{ marginBottom: 2 }}>
@@ -248,7 +250,13 @@ function StepCard({ row, reads, canResolve, onResolve }: { row: StepRow; reads: 
       </div>
       {row.error && (
         <div className="error" style={{ margin: "4px 0" }}>
-          {row.error.kind}: {row.error.message}
+          {plainError ?? `${row.error.kind ?? ""}: ${row.error.message ?? ""}`}
+          {plainError && (
+            <details className="hint">
+              <summary>Details</summary>
+              {row.error.kind}: {row.error.message}
+            </details>
+          )}
         </div>
       )}
       {row.input !== undefined && (
@@ -306,7 +314,7 @@ function Resolve({ run, step, onClose, onDone }: { run: string; step: string; on
         </select>
       </Field>
       {resolution === "completed" && (
-        <Field label="Output to record (JSON)">
+        <Field data-technical label="Output to record (JSON)">
           <JsonInput value={output} onChange={setOutput} rows={5} />
         </Field>
       )}

@@ -491,8 +491,8 @@ function ServicesMapping({
               </Field>
             );
           })}
-          {form.columns.price && (
-            <Field label="Prices in the table are in" hint="Naira: 1500 is ₦1,500. Kobo: 150000 is ₦1,500.">
+          {form.columns.price && form.columns.price_unit === "kobo" && (
+            <Field data-technical label="Prices in the table are in" hint="Naira: 1500 is ₦1,500. Kobo: 150000 is ₦1,500.">
               <select value={form.columns.price_unit || "naira"} onChange={(e) => setColumns({ price_unit: e.target.value as ServiceColumns["price_unit"] })}>
                 <option value="naira">Naira</option>
                 <option value="kobo">Kobo</option>

@@ -395,7 +395,7 @@ func (s *Server) waBuildParam(ctx context.Context, c *chat, text string) error {
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err
 		}
-		return c.say(ctx, s, c.t("wa.build.details_invalid", "problem", whatsapp.SafeText(probs[0].Message), "link", s.waLink(c, "/workflows")))
+		return c.say(ctx, s, c.t("wa.build.details_invalid", "problem", whatsapp.SafeText(problemText(probs[0])), "link", s.waLink(c, "/workflows")))
 	}
 	params, _ := json.Marshal(b.Params)
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
@@ -476,4 +476,13 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 		return err
 	}
 	return c.say(ctx, s, msg+"\n\n"+next)
+}
+
+// problemText is a check's problem as a person reads it: its plain words,
+// else its message (N5).
+func problemText(p problem) string {
+	if p.Plain != "" {
+		return p.Plain
+	}
+	return p.Message
 }

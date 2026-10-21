@@ -60,7 +60,9 @@ export function Json({ value }: { value: unknown }) {
   return <pre>{JSON.stringify(redact(value), null, 2)}</pre>;
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+/** A labelled field. data-technical marks one an owner meets only under
+ * Advanced (no-technical-steps N5: the gate's word test leaves it out). */
+export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode; "data-technical"?: boolean }) {
   return (
     <label className="field">
       <span>{label}</span>

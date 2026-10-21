@@ -23,3 +23,9 @@ A draft's review lists what it needs, with each fix beside it, and checks again 
 ## Roles
 
 Wherever a step names a role, the role is picked from the business's roles (`GET /v1/approver-roles`), or a new one is written in words. A business role (one that is not built in, like `credit_officer`) lets its holders decide the approvals that name it, without the separate `approval.decide` permission; the web inbox, chat requests and buttons follow the same rule. Owners count for every role ([governance](governance.md#one-person-businesses)).
+
+## In plain words
+
+Every problem the publishing checks find carries `plain`, the problem in plain words naming the step by its name, and `fix`, where it is put right (`/connections?connect=paystack`, `/policies`, or `#step=<id>` for the step in the editor), beside its `path` and `message` (`engine/plain`, one map for the web app, the AI review and chat). A run's page has `plain_errors`, each failed step's error the same way, and chat says why a run failed when it tells the person who started it. The web app shows the plain words, with the technical message under **Details**; the AI review keeps the model, rounds and tokens there too. Settings are typed as plain text (a phone number in any form is kept as `+234…`), and a run is started from a form built from the workflow's inputs, with JSON under **Advanced**.
+
+A test fails if an owner's page or a chat message uses the words an owner never sees (`web/src/lib/plainwords.test.ts`, `TestMessagesUseNoTechnicalWords`): JSON, schema, expression, cron, kobo, token, webhook, endpoint, payload, API key, step id, raw paths, and the like, outside **Details** and **Advanced**.

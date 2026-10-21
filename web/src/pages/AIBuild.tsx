@@ -17,6 +17,7 @@ import {
 } from "../lib/aitables";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 import { NeedsList } from "./Readiness";
+import { ProblemLine } from "../forms/ProblemLine";
 
 // "Build with AI" (docs/ai.md): describe a goal, the server drafts,
 // validates, self-corrects and dry-runs a workflow, and the person reviews
@@ -56,8 +57,19 @@ interface Proposal {
   connectors: string[];
   /** Starting templates the prompt offered, and the one the draft started from. */
   templates_offered?: string[];
-  template?: { id: string; title: string; instantiated: boolean; params: Record<string, unknown>; missing: string[] };
-  usage: { input_tokens: number; output_tokens: number; cache_creation_tokens: number; cache_read_tokens: number };
+  template?: {
+    id: string;
+    title: string;
+    instantiated: boolean;
+    params: Record<string, unknown>;
+    missing: string[];
+  };
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
+  };
   model: string;
   /** New data tables the draft uses, made when it is saved. */
   tables?: ProposedTable[];
@@ -84,19 +96,35 @@ const STAGES: Record<string, string> = {
   done: "Done",
 };
 
-const stageText = (s: string) => STAGES[s] ?? (s.startsWith("correct") ? `Fixing problems (round ${s.split(" ")[1] ?? ""} of 3)` : s);
+const stageText = (s: string) =>
+  STAGES[s] ??
+  (s.startsWith("correct")
+    ? `Fixing problems (round ${s.split(" ")[1] ?? ""} of 3)`
+    : s);
 
 const nodeTypes = { step: StepNode };
 
 /** The AI builder: for a new workflow, or to modify `workflow`. */
-export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; onClose: () => void; onSaved: (id: string, version: number) => void }) {
+export function AIBuilder({
+  workflow,
+  onClose,
+  onSaved,
+}: {
+  workflow?: string;
+  onClose: () => void;
+  onSaved: (id: string, version: number) => void;
+}) {
   const [status, setStatus] = useState<AIStatus>();
   const [goal, setGoal] = useState("");
   const [name, setName] = useState("");
   const [build, setBuild] = useState<Build>();
   const [tables, setTables] = useState<ReviewedTable[]>([]);
   // Saved, with tables that could not be made: shown before moving on.
-  const [saved, setSaved] = useState<{ id: string; version: number; troubles: TableResult[] }>();
+  const [saved, setSaved] = useState<{
+    id: string;
+    version: number;
+    troubles: TableResult[];
+  }>();
   const { can } = useAuth();
   const act = useAction();
 
@@ -107,22 +135,38 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
   }, [proposal]);
 
   useEffect(() => {
-    void get<AIStatus>("/v1/ai/status").then(setStatus, () => setStatus({ enabled: false }));
+    void get<AIStatus>("/v1/ai/status").then(setStatus, () =>
+      setStatus({ enabled: false }),
+    );
   }, []);
 
   // Poll a running build.
   useEffect(() => {
     if (build?.status !== "running") return;
     const t = setTimeout(() => {
-      void get<Build>(`/v1/ai/builds/${build.id}`).then(setBuild, () => undefined);
+      void get<Build>(`/v1/ai/builds/${build.id}`).then(
+        setBuild,
+        () => undefined,
+      );
     }, 1500);
     return () => clearTimeout(t);
   }, [build]);
 
   const start = () =>
     act.run(async () => {
-      const r = await post<{ id: string }>("/v1/ai/build", workflow ? { goal, workflow } : { goal });
-      setBuild({ id: r.id, status: "running", stage: "queued", error: null, proposal: null, saved_workflow_id: null, saved_version: null });
+      const r = await post<{ id: string }>(
+        "/v1/ai/build",
+        workflow ? { goal, workflow } : { goal },
+      );
+      setBuild({
+        id: r.id,
+        status: "running",
+        stage: "queued",
+        error: null,
+        proposal: null,
+        saved_workflow_id: null,
+        saved_version: null,
+      });
     });
 
   const save = () =>
@@ -133,21 +177,34 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
         const problem = tableProblem(t);
         if (problem) throw new Error(problem);
       }
-      const body: Record<string, unknown> = workflow ? {} : { name: name || undefined };
+      const body: Record<string, unknown> = workflow
+        ? {}
+        : { name: name || undefined };
       if (toMake.length > 0) body.tables = toMake;
-      const r = await post<{ id: string; version: number; tables?: TableResult[] }>(`/v1/ai/builds/${build.id}/save`, body);
+      const r = await post<{
+        id: string;
+        version: number;
+        tables?: TableResult[];
+      }>(`/v1/ai/builds/${build.id}/save`, body);
       const troubles = tableTroubles(r.tables);
-      if (troubles.length > 0) setSaved({ id: r.id, version: r.version, troubles });
+      if (troubles.length > 0)
+        setSaved({ id: r.id, version: r.version, troubles });
       else onSaved(r.id, r.version);
     });
 
   const p = build?.proposal;
   const budget = status?.budget;
   return (
-    <Modal title={workflow ? "Change with AI" : "Build with AI"} onClose={onClose}>
+    <Modal
+      title={workflow ? "Change with AI" : "Build with AI"}
+      onClose={onClose}
+    >
       <div className="ai-builder">
         {status && !status.enabled && (
-          <div className="notice">AI building is not set up on this installation. Build the workflow on the canvas instead.</div>
+          <div className="notice">
+            AI building is not set up on this installation. Build the workflow
+            on the canvas instead.
+          </div>
         )}
         {status?.enabled && !build && (
           <form
@@ -157,19 +214,41 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
             }}
           >
             <Field
-              label={workflow ? "What should change?" : "What should the workflow do?"}
+              label={
+                workflow
+                  ? "What should change?"
+                  : "What should the workflow do?"
+              }
               hint="Say what starts it, what it should do, and who approves anything that moves money. Personal data is masked before it reaches the model; secrets never do."
             >
-              <textarea rows={5} value={goal} maxLength={4000} onChange={(e) => setGoal(e.target.value)} required autoFocus />
+              <textarea
+                rows={5}
+                value={goal}
+                maxLength={4000}
+                onChange={(e) => setGoal(e.target.value)}
+                required
+                autoFocus
+              />
             </Field>
             {budget && budget.monthly_tokens > 0 && (
               <p className="hint">
-                {status.model} · this month: {budget.used_tokens.toLocaleString()} of {budget.monthly_tokens.toLocaleString()} tokens
+                This month's AI use:{" "}
+                {Math.min(
+                  100,
+                  Math.round(
+                    (budget.used_tokens / budget.monthly_tokens) * 100,
+                  ),
+                )}
+                % of your plan's.
               </p>
             )}
             <ErrorBox error={act.error} />
             <div className="toolbar">
-              <button type="submit" className="primary" disabled={act.busy || !goal.trim()}>
+              <button
+                type="submit"
+                className="primary"
+                disabled={act.busy || !goal.trim()}
+              >
                 Draft it
               </button>
               <button type="button" onClick={onClose}>
@@ -204,10 +283,14 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
                   </li>
                 ))}
               </ul>
-              Create them on the <a href="/tables">Tables</a> page before publishing the workflow.
+              Create them on the <a href="/tables">Tables</a> page before
+              publishing the workflow.
             </div>
             <div className="toolbar">
-              <button className="primary" onClick={() => onSaved(saved.id, saved.version)}>
+              <button
+                className="primary"
+                onClick={() => onSaved(saved.id, saved.version)}
+              >
                 Open the workflow
               </button>
             </div>
@@ -218,24 +301,42 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
             {build.status === "proposed" && p.definition && (
               <>
                 <DraftNeeds proposal={p} />
-                {tables.length > 0 && <TablesReview tables={tables} onChange={setTables} canMake={can("table.edit")} />}
+                {tables.length > 0 && (
+                  <TablesReview
+                    tables={tables}
+                    onChange={setTables}
+                    canMake={can("table.edit")}
+                  />
+                )}
                 {!workflow && (
                   <Field label="Name">
-                    <input value={name} placeholder={p.definition.name} onChange={(e) => setName(e.target.value)} />
+                    <input
+                      value={name}
+                      placeholder={p.definition.name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
                   </Field>
                 )}
                 <ErrorBox error={act.error} />
                 <div className="toolbar">
-                  <button className="primary" onClick={() => void save()} disabled={act.busy}>
+                  <button
+                    className="primary"
+                    onClick={() => void save()}
+                    disabled={act.busy}
+                  >
                     Save as draft
                   </button>
-                  <button onClick={() => setBuild(undefined)} disabled={act.busy}>
+                  <button
+                    onClick={() => setBuild(undefined)}
+                    disabled={act.busy}
+                  >
                     Start over
                   </button>
                 </div>
                 <p className="hint">
-                  Saving creates a draft version with you as its author and the AI as co-author. Publishing it goes through the usual checks and
-                  approvals.
+                  Saving creates a draft version with you as its author and the
+                  AI as co-author. Publishing it goes through the usual checks
+                  and approvals.
                 </p>
               </>
             )}
@@ -256,22 +357,52 @@ function DraftNeeds({ proposal: p }: { proposal: Proposal }) {
   useEffect(() => {
     if (tick === 0 || !p.definition) return;
     let on = true;
-    void post<Readiness>("/v1/readiness", { definition: p.definition }).then((r) => on && setLive(r.needs));
+    void post<Readiness>("/v1/readiness", { definition: p.definition }).then(
+      (r) => on && setLive(r.needs),
+    );
     return () => {
       on = false;
     };
   }, [tick, p.definition]);
-  return <NeedsList needs={live ?? p.needs ?? []} onChanged={() => setTick((n) => n + 1)} tablesHere />;
+  return (
+    <NeedsList
+      needs={live ?? p.needs ?? []}
+      onChanged={() => setTick((n) => n + 1)}
+      tablesHere
+    />
+  );
 }
 
-function Review({ proposal: p, children }: { proposal: Proposal; children: ReactNode }) {
-  const graph = useMemo(() => (p.definition ? toGraph(p.definition) : { nodes: [], edges: [] }), [p.definition]);
-  const nodes: StepFlowNode[] = graph.nodes.map((n) => ({ id: n.id, type: "step", position: n.position, data: { step: n.step, invalid: false } }));
-  const tokens = p.usage.input_tokens + p.usage.output_tokens + p.usage.cache_creation_tokens + p.usage.cache_read_tokens;
+function Review({
+  proposal: p,
+  children,
+}: {
+  proposal: Proposal;
+  children: ReactNode;
+}) {
+  const graph = useMemo(
+    () => (p.definition ? toGraph(p.definition) : { nodes: [], edges: [] }),
+    [p.definition],
+  );
+  const nodes: StepFlowNode[] = graph.nodes.map((n) => ({
+    id: n.id,
+    type: "step",
+    position: n.position,
+    data: { step: n.step, invalid: false },
+  }));
+  const tokens =
+    p.usage.input_tokens +
+    p.usage.output_tokens +
+    p.usage.cache_creation_tokens +
+    p.usage.cache_read_tokens;
   return (
     <>
       {p.definition && (
-        <div className="canvas ai-preview" role="group" aria-label="Proposed workflow">
+        <div
+          className="canvas ai-preview"
+          role="group"
+          aria-label="Proposed workflow"
+        >
           <ReactFlow
             nodes={nodes}
             edges={graph.edges}
@@ -290,15 +421,23 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
       {p.template && (
         <div className="notice" aria-label="Template">
           Started from the template{" "}
-          <a href={`/templates?id=${encodeURIComponent(p.template.id)}`} target="_blank" rel="noreferrer">
+          <a
+            href={`/templates?id=${encodeURIComponent(p.template.id)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
             {p.template.title}
           </a>
-          {p.template.instantiated ? ", filled in from your goal." : ", adapted to your goal."}
+          {p.template.instantiated
+            ? ", filled in from your goal."
+            : ", adapted to your goal."}
           {p.template.missing.length > 0 && (
             <>
               {" "}
-              Your goal did not say <strong>{p.template.missing.join(", ")}</strong>: the draft holds example values for them. Set them before
-              publishing, or create the workflow from the template with the details filled in.
+              Your goal did not say{" "}
+              <strong>{p.template.missing.join(", ")}</strong>: the draft holds
+              example values for them. Set them before publishing, or create the
+              workflow from the template with the details filled in.
             </>
           )}
         </div>
@@ -316,11 +455,12 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
       )}
       {p.problems.length > 0 && (
         <div className="error">
-          It would not publish yet ({p.problems.length} problem{p.problems.length > 1 ? "s" : ""}):
+          It would not publish yet ({p.problems.length} problem
+          {p.problems.length > 1 ? "s" : ""}):
           <ul>
             {p.problems.map((x, i) => (
               <li key={i}>
-                <code>{x.path}</code> {x.message}
+                <ProblemLine p={x} />
               </li>
             ))}
           </ul>
@@ -332,7 +472,13 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
           <ul>
             {p.warnings.map((w, i) => (
               <li key={i}>
-                <Badge value={w.kind} /> {w.message}
+                {plainWarning(w)}
+                {plainWarning(w) !== w.message && (
+                  <details className="hint">
+                    <summary>Details</summary>
+                    {w.message}
+                  </details>
+                )}
               </li>
             ))}
           </ul>
@@ -340,32 +486,46 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
       )}
       {p.results.length > 0 && (
         <>
-          <h3>Dry run</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Test</th>
-                <th>Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              {p.results.map((r, i) => (
-                <tr key={i}>
-                  <td>
-                    {r.name} {r.source === "generated" && <span className="hint">(generated)</span>}
-                  </td>
-                  <td>
-                    <Badge value={r.passed ? "passed" : "failed"} /> {r.failures?.join("; ")}
-                  </td>
+          <p>
+            {p.results.every((r) => r.passed)
+              ? "Taskiem tried the draft with pretend data, and it worked."
+              : "Taskiem tried the draft with pretend data, and something did not go as expected: check the steps before you publish."}
+          </p>
+          <details className="hint">
+            <summary>The practice runs</summary>
+            <table>
+              <thead>
+                <tr>
+                  <th>Test</th>
+                  <th>Result</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {p.results.map((r, i) => (
+                  <tr key={i}>
+                    <td>
+                      {r.name}{" "}
+                      {r.source === "generated" && (
+                        <span className="hint">(generated)</span>
+                      )}
+                    </td>
+                    <td>
+                      <Badge value={r.passed ? "passed" : "failed"} />{" "}
+                      {r.failures?.join("; ")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
         </>
       )}
-      <p className="hint">
-        {p.model} · {p.rounds} round{p.rounds === 1 ? "" : "s"} · {tokens.toLocaleString()} tokens · connectors considered: {p.connectors.join(", ") || "none"}
-      </p>
+      <details className="hint">
+        <summary>Details</summary>
+        {p.model} · {p.rounds} round{p.rounds === 1 ? "" : "s"} ·{" "}
+        {tokens.toLocaleString()} tokens · connectors considered:{" "}
+        {p.connectors.join(", ") || "none"}
+      </details>
       {children}
     </>
   );
@@ -373,15 +533,28 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
 
 /** The new tables a draft needs: the person may rename, retype, add or drop
  * columns, or leave a table out, before they are made with the draft. */
-function TablesReview({ tables, onChange, canMake }: { tables: ReviewedTable[]; onChange: (t: ReviewedTable[]) => void; canMake: boolean }) {
-  const set = (i: number, t: ReviewedTable) => onChange(tables.map((x, j) => (j === i ? t : x)));
+function TablesReview({
+  tables,
+  onChange,
+  canMake,
+}: {
+  tables: ReviewedTable[];
+  onChange: (t: ReviewedTable[]) => void;
+  canMake: boolean;
+}) {
+  const set = (i: number, t: ReviewedTable) =>
+    onChange(tables.map((x, j) => (j === i ? t : x)));
   return (
     <section aria-label="New tables">
       <h3>New tables</h3>
       <p className="hint">
-        The workflow keeps its records in {tables.length === 1 ? "a table that does not exist yet" : "tables that do not exist yet"}. Check the columns: they
-        are made when you save the draft.
-        {!canMake && " You cannot make tables yourself: an owner or admin can make them on the Tables page."}
+        The workflow keeps its records in{" "}
+        {tables.length === 1
+          ? "a table that does not exist yet"
+          : "tables that do not exist yet"}
+        . Check the columns: they are made when you save the draft.
+        {!canMake &&
+          " You cannot make tables yourself: an owner or admin can make them on the Tables page."}
       </p>
       {tables.map((t, i) => {
         const problem = t.create ? tableProblem(t) : "";
@@ -389,8 +562,13 @@ function TablesReview({ tables, onChange, canMake }: { tables: ReviewedTable[]; 
           <fieldset key={i} className="ai-table">
             <legend>
               <label className="inline">
-                <input type="checkbox" checked={t.create} disabled={!canMake} onChange={(e) => set(i, { ...t, create: e.target.checked })} /> Make the
-                table <code>{t.name}</code>
+                <input
+                  type="checkbox"
+                  checked={t.create}
+                  disabled={!canMake}
+                  onChange={(e) => set(i, { ...t, create: e.target.checked })}
+                />{" "}
+                Make the table <code>{t.name}</code>
               </label>
             </legend>
             <table>
@@ -406,7 +584,13 @@ function TablesReview({ tables, onChange, canMake }: { tables: ReviewedTable[]; 
               </thead>
               <tbody>
                 {t.columns.map((c, k) => {
-                  const setCol = (v: Partial<typeof c>) => set(i, { ...t, columns: t.columns.map((x, m) => (m === k ? { ...x, ...v } : x)) });
+                  const setCol = (v: Partial<typeof c>) =>
+                    set(i, {
+                      ...t,
+                      columns: t.columns.map((x, m) =>
+                        m === k ? { ...x, ...v } : x,
+                      ),
+                    });
                   return (
                     <tr key={k}>
                       <td>
@@ -414,11 +598,24 @@ function TablesReview({ tables, onChange, canMake }: { tables: ReviewedTable[]; 
                           aria-label={`Column ${k + 1} name`}
                           value={c.name}
                           disabled={!t.create}
-                          onChange={(e) => setCol({ name: e.target.value, title: !c.title || c.title === c.name ? e.target.value : c.title })}
+                          onChange={(e) =>
+                            setCol({
+                              name: e.target.value,
+                              title:
+                                !c.title || c.title === c.name
+                                  ? e.target.value
+                                  : c.title,
+                            })
+                          }
                         />
                       </td>
                       <td>
-                        <select aria-label={`Column ${k + 1} type`} value={c.type} disabled={!t.create} onChange={(e) => setCol({ type: e.target.value })}>
+                        <select
+                          aria-label={`Column ${k + 1} type`}
+                          value={c.type}
+                          disabled={!t.create}
+                          onChange={(e) => setCol({ type: e.target.value })}
+                        >
                           {COLUMN_TYPES.map((ty) => (
                             <option key={ty} value={ty}>
                               {ty}
@@ -432,12 +629,24 @@ function TablesReview({ tables, onChange, canMake }: { tables: ReviewedTable[]; 
                           aria-label={`Column ${k + 1} required`}
                           checked={c.required}
                           disabled={!t.create}
-                          onChange={(e) => setCol({ required: e.target.checked })}
+                          onChange={(e) =>
+                            setCol({ required: e.target.checked })
+                          }
                         />
                       </td>
                       <td>
-                        <button type="button" disabled={!t.create} onClick={() => set(i, { ...t, columns: t.columns.filter((_, m) => m !== k) })}>
-                          Remove<span className="sr-only"> column {c.name}</span>
+                        <button
+                          type="button"
+                          disabled={!t.create}
+                          onClick={() =>
+                            set(i, {
+                              ...t,
+                              columns: t.columns.filter((_, m) => m !== k),
+                            })
+                          }
+                        >
+                          Remove
+                          <span className="sr-only"> column {c.name}</span>
                         </button>
                       </td>
                     </tr>
@@ -449,7 +658,15 @@ function TablesReview({ tables, onChange, canMake }: { tables: ReviewedTable[]; 
               <button
                 type="button"
                 disabled={!t.create}
-                onClick={() => set(i, { ...t, columns: [...t.columns, { name: "", title: "", type: "text", required: false }] })}
+                onClick={() =>
+                  set(i, {
+                    ...t,
+                    columns: [
+                      ...t.columns,
+                      { name: "", title: "", type: "text", required: false },
+                    ],
+                  })
+                }
               >
                 Add a column
               </button>
@@ -460,4 +677,15 @@ function TablesReview({ tables, onChange, canMake }: { tables: ReviewedTable[]; 
       })}
     </section>
   );
+}
+
+/** A review warning in plain words (no-technical-steps N5). */
+export function plainWarning(w: Warning): string {
+  switch (w.kind) {
+    case "test":
+      return "A practice run of the draft did not go as expected. Check the steps before you publish it.";
+    case "policy":
+      return `The draft does not follow one of your organisation's rules: ${w.message}`;
+  }
+  return w.message;
 }
