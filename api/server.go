@@ -100,7 +100,8 @@ type Server struct {
 	// EmbedDir holds the embedded builder's bundle (taskiem.js, served at
 	// /embed/v1/taskiem.js; docs/embedding.md); empty serves none.
 	EmbedDir string
-	// Egress guards calls to Git hosts; nil uses a default guard.
+	// Egress guards the server's own outbound calls (Git hosts, key
+	// checks, OAuth); nil uses a default guard.
 	Egress *egress.Guard
 	// Connectors loads tenants' own WebAssembly connectors; nil refuses
 	// uploads.
