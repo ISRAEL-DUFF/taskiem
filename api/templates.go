@@ -36,6 +36,9 @@ type templateView struct {
 	Connectors  []string          `json:"connectors"`
 	Variables   []templates.Need  `json:"variables"`
 	Params      []templates.Param `json:"params"`
+	// Tables are the data tables the workflow works on, made for the
+	// business when the template is used if they do not exist yet.
+	Tables []templates.Table `json:"tables"`
 	// Steps are the template, filled with its examples, read as plain
 	// numbered steps.
 	Steps []wdtext.Line `json:"steps"`
@@ -50,7 +53,7 @@ type templateView struct {
 func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templateView {
 	v := templateView{ID: t.ID, Title: t.Title, Summary: t.Summary, Description: t.Description, Category: t.Category,
 		Tags: nonNil(t.Tags), Connectors: nonNil(t.Connectors), Variables: nonNil(t.Variables), Params: nonNil(t.Params),
-		Steps: []wdtext.Line{}, Available: true}
+		Tables: nonNil(t.Tables), Steps: []wdtext.Line{}, Available: true}
 	for _, c := range t.Connectors {
 		if _, ok := reg.Get(c); !ok {
 			v.Available = false
@@ -161,7 +164,34 @@ func (s *Server) instantiateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": 1, "state": "draft", "template": t.ID,
-		"problems": nonNil(s.checkFor(r, doc)), "variables": nonNil(t.Variables)})
+		"problems": nonNil(s.checkFor(r, doc)), "variables": nonNil(t.Variables), "tables": s.templateTables(r, p, t, req.Params)})
+}
+
+// templateTables makes the data tables a template declares, after its
+// draft is saved: one that exists already is left as it is, and one that
+// cannot be made is reported, never a reason to lose the draft (making a
+// table may provision the data project, which no transaction can hold).
+func (s *Server) templateTables(r *http.Request, p *Principal, t *templates.Template, params map[string]any) []aiTableResult {
+	tables := t.TablesFor(params)
+	out := make([]aiTableResult, 0, len(tables))
+	for _, tb := range tables {
+		res := aiTableResult{Name: tb.Name, Status: "created"}
+		req := tableReq{Name: tb.Name, Title: tb.Title, Description: tb.Description}
+		for _, c := range tb.Columns {
+			req.Columns = append(req.Columns, columnReq{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required, Personal: c.Personal})
+		}
+		switch _, err := s.newDataTable(r, p, req); {
+		case err == nil:
+		case errors.Is(err, errConflict) && strings.Contains(err.Error(), "already exists"):
+			res.Status = "exists"
+		case !p.Can(PermTableEdit):
+			res.Status, res.Error = "skipped", "making tables needs table.edit: ask an owner or admin to create it on the Tables page"
+		default:
+			res.Status, res.Error = "failed", errorText(s, r, err)
+		}
+		out = append(out, res)
+	}
+	return out
 }
 
 // instantiateTx fills a template and saves it as a new draft workflow by

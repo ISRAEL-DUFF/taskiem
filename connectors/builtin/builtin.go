@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
+	"github.com/israel-duff/taskiem/connectors/moniepointpos"
 	"github.com/israel-duff/taskiem/connectors/mono"
 	"github.com/israel-duff/taskiem/connectors/mpesa"
 	"github.com/israel-duff/taskiem/connectors/mtnmomo"
@@ -43,6 +44,7 @@ type Options struct {
 	PaystackURL, TermiiURL, DojahURL, IswalletURL string
 	FlutterwaveURL, AnchorURL, LencoURL, BreetURL string
 	MoniepointURL, InterswitchURL                 string
+	MoniepointPOSURL                              string
 	S3URL                                         string
 	AfricasTalkingURL, TelegramURL, WhatsAppURL   string
 	SlackURL, GmailURL, GooglesheetsURL           string
@@ -80,6 +82,7 @@ func Register(r *connector.Registry, o Options) error {
 		lenco.New(lenco.Options{BaseURL: o.LencoURL}),
 		breet.New(breet.Options{BaseURL: o.BreetURL}),
 		moniepoint.New(moniepoint.Options{BaseURL: o.MoniepointURL}),
+		moniepointpos.New(moniepointpos.Options{BaseURL: o.MoniepointPOSURL}),
 		interswitch.New(interswitch.Options{BaseURL: o.InterswitchURL}),
 		africastalking.New(africastalking.Options{BaseURL: o.AfricasTalkingURL}),
 		telegram.New(telegram.Options{BaseURL: o.TelegramURL}),

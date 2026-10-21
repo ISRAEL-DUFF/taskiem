@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v1/auth",
+  "body": {
+   "clientId": "api-client-taskiem",
+   "clientSecret": "pos-secret-0000000000000001"
+  }
+ },
+ "response": {
+  "status": 503,
+  "body": {
+   "message": "Service Unavailable"
+  }
+ }
+}

@@ -164,3 +164,68 @@ func TestEmbedTemplates(t *testing.T) {
 	}
 	u.call(200, "GET", "/workflows/"+out["id"].(string), nil)
 }
+
+// A template that declares tables makes them when it is used; one that
+// exists already is left alone, and without data tables the draft is still
+// saved and the table reported.
+func TestTemplateMakesItsTables(t *testing.T) {
+	tw := newTablesWorld(t)
+	w := tw.world
+	registerSME(t, w.env.Registry)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+
+	tpl := owner.must(200, "GET", "/v1/templates/pos-daily-summary", nil)
+	tables := tpl["tables"].([]any)
+	if len(tables) != 2 || tables[0].(map[string]any)["name"] != "{{table}}" || tables[1].(map[string]any)["name"] != "{{terminals_table}}" {
+		t.Fatalf("declared tables: %v", tables)
+	}
+
+	params := map[string]any{"business_name": "Acme Stores", "send_time": "20:30", "table": "pos_sales", "terminals_table": "shop_terminals"}
+	out := owner.must(201, "POST", "/v1/templates/pos-daily-summary/instantiate", map[string]any{"params": params})
+	made := out["tables"].([]any)
+	if len(made) != 2 || made[0].(map[string]any)["status"] != "created" || made[0].(map[string]any)["name"] != "pos_sales" ||
+		made[1].(map[string]any)["status"] != "created" || made[1].(map[string]any)["name"] != "shop_terminals" {
+		t.Fatalf("tables made: %v", made)
+	}
+	list := owner.must(200, "GET", "/v1/tables", nil)["tables"].([]any)
+	names := map[string]int{}
+	for _, x := range list {
+		m := x.(map[string]any)
+		names[m["name"].(string)] = len(m["columns"].([]any))
+	}
+	if names["pos_sales"] != 12 || names["shop_terminals"] != 3 {
+		t.Fatalf("tables after the template: %v", names)
+	}
+	def := string(mustJSON(t, owner.must(200, "GET", "/v1/workflows/"+out["id"].(string)+"/versions/1", nil)["definition"]))
+	if !strings.Contains(def, `"table":"shop_terminals"`) {
+		t.Errorf("the chosen table name is in the workflow: %s", def)
+	}
+
+	// Used again: the tables exist and are left as they are.
+	out = owner.must(201, "POST", "/v1/templates/pos-daily-summary/instantiate", map[string]any{"params": params})
+	for _, x := range out["tables"].([]any) {
+		if x.(map[string]any)["status"] != "exists" {
+			t.Errorf("second use: %v", x)
+		}
+	}
+
+	// A builder (workflow.edit and table.edit) points it at a table of
+	// their own, which is made for them.
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "builder@acme.test", "password": testPassword, "roles": []string{"builder"}})
+	builder := w.login(t, "builder@acme.test", testPassword)
+	out = builder.must(201, "POST", "/v1/templates/pos-daily-summary/instantiate", map[string]any{"params": withParam(params, "table", "other_sales")})
+	first := out["tables"].([]any)[0].(map[string]any)
+	if first["status"] != "created" || first["name"] != "other_sales" {
+		t.Errorf("a builder's own table: %v", first)
+	}
+
+	// No data tables on the platform: the draft is saved, the table reported.
+	w2 := newWorld(t)
+	registerSME(t, w2.env.Registry)
+	owner2 := w2.tenant(t, "Beta", "owner@beta.test")
+	out = owner2.must(201, "POST", "/v1/templates/pos-daily-summary/instantiate", map[string]any{"params": params})
+	first = out["tables"].([]any)[0].(map[string]any)
+	if first["status"] == "created" || first["error"] == "" {
+		t.Errorf("without data tables: %v", first)
+	}
+}

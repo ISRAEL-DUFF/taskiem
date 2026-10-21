@@ -1,0 +1,124 @@
+# Moniepoint POS terminals: the transactions a business's terminals make,
+# delivered as they happen, and payment requests pushed to a terminal.
+# This is Moniepoint's POS API (channel.moniepoint.com), a different product
+# from Monnify (the moniepoint connector): a shop with Moniepoint terminals
+# has a Moniepoint Business account, not a Monnify merchant account.
+# Built from Moniepoint's public POS developer documentation on TeamApt's
+# Confluence space (teamapt.atlassian.net/wiki/spaces/EI), read 21 October
+# 2026: Push Payment Request (API Reference), API Client Credentials,
+# Webhooks, POS as a Platform Documentation (docs/integrations/moniepoint-pos.md).
+manifest: connector/v1
+id: moniepoint_pos
+version: 1.0.0
+name: Moniepoint POS terminals
+description: Every transaction on your Moniepoint POS terminals as it happens (card purchases, transfers to the terminal, withdrawals, bill payments), and payment requests sent to a terminal.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - key: client_id
+      label: API client ID
+      secret: false
+      help: Lets Taskiem ask your terminals for a payment and check what became of it. Covers every terminal assigned to your business.
+      where: "Moniepoint Business → Settings → POS Terminal Configuration (turn on ERP Integration), then Settings → POS Apps Developer → API Clients → create a client"
+    - key: client_secret
+      label: API client secret
+      secret: true
+      help: Shown once when the client is created. If it leaks, delete the client in Moniepoint and create another.
+      where: "The same screen, when you create the client"
+    - key: webhook_secret
+      label: Webhook secret
+      secret: true
+      required: false
+      help: Proves that each transaction Taskiem receives really came from Moniepoint. Needed to receive your terminals' transactions; not needed only to send payment requests.
+      where: "Moniepoint Business → Settings → POS Apps Developer → Webhooks → New Subscription (paste Taskiem's address, tick the transaction types), then Get API Secret"
+    - key: environment
+      label: "Environment: live (default) or sandbox"
+      secret: false
+      required: false
+      help: Sandbox is for a client created in Moniepoint's Sandbox environment; leave empty for real terminals.
+  test: { action: check_access }
+base_url: https://channel.moniepoint.com
+egress_hosts: [channel.moniepoint.com, moniepoint-pos-backend-service.development.moniepoint.com]
+actions:
+  check_access:
+    title: Check the connection
+    description: Signs in to Moniepoint's POS API with the client ID and secret and reports how long the access it was given lasts. Changes nothing.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        ok:         { type: boolean }
+        expires_in: { type: integer, description: Seconds the access token Moniepoint issued is good for }
+  request_payment:
+    title: Ask a terminal to take a payment
+    description: >-
+      Pushes a payment request to one of the business's terminals, which
+      then takes the card or transfer for that amount. Moniepoint accepts
+      the request (202) and the outcome arrives as a transaction event
+      (correlation: merchant_reference) or from get_transaction. A repeat
+      under the same reference is refused by Moniepoint ("Transaction
+      exists") and reported as the request already made.
+    class: idempotent_write
+    idempotency:
+      field: merchant_reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 64, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [terminal_serial, amount]
+      properties:
+        terminal_serial:    { type: string, description: The terminal's serial number (on the device, and in the Moniepoint dashboard) }
+        amount:             { type: integer, minimum: 1, description: Kobo }
+        payment_method:     { type: string, enum: [CARD_PURCHASE, POS_TRANSFER, ANY], default: ANY, description: What the terminal offers the customer }
+        merchant_reference: { type: string }
+    output: { $ref: '#/actions/get_transaction/output' }
+  get_transaction:
+    title: Get a payment request
+    description: What became of a payment request, by its merchant_reference. processing_status is PENDING until the terminal answers, then PROCESSED or CANCELLED; response_code and response_message say whether the payment was approved.
+    class: read
+    input:
+      type: object
+      required: [merchant_reference]
+      properties:
+        merchant_reference: { type: string }
+    output:
+      type: object
+      properties:
+        merchant_reference:       { type: string }
+        terminal_serial:          { type: string }
+        request_amount:           { type: integer, description: Kobo, as requested }
+        actual_amount:            { type: integer, description: Kobo, as paid; absent until the terminal answers }
+        transaction_reference:    { type: string, description: Moniepoint's reference, once there is a transaction }
+        transaction_type:         { type: string }
+        requested_payment_method: { type: string }
+        actual_payment_method:    { type: string }
+        processing_status:        { type: string, description: "PENDING, PROCESSED or CANCELLED" }
+        response_code:            { type: string }
+        response_message:         { type: string }
+        business_owner_id:        { type: integer }
+triggers:
+  # Moniepoint posts one event per terminal transaction to the URL of the
+  # webhook subscription the business creates under POS Apps Developer →
+  # Webhooks, for the transaction types it ticked. Each delivery is signed:
+  # the moniepoint-webhook-signature header is the Base64 HMAC-SHA256,
+  # keyed with the subscription's secret, of
+  # "<moniepoint-webhook-id>__<moniepoint-webhook-timestamp>__<raw body>".
+  # The connector's own verifier checks it (no generic scheme signs the
+  # body together with two headers). Retries carry the same eventId.
+  transaction:
+    type: webhook
+    verify: { scheme: connector, secret_field: webhook_secret }
+    events: [V1_POS_PURCHASE_TRANSACTION, V1_POS_TRANSFER_TRANSACTION, V1_POS_CARD_TRANSFER_TRANSACTION, V1_POS_WITHDRAWAL_TRANSACTION, V1_POS_BILL_PAYMENT_TRANSACTION, V1_POS_COLLECTION_TRANSACTION, V1_POS_PAY_CODE_TRANSACTION, V1_POS_AIRTIME_TRANSACTION, V1_POS_BOOM_TRANSACTION, V1_TRANSFER_TRANSACTION]
+    event_type: =body.eventType
+    dedup: =body.eventId
+    # A payment request's merchant_reference, when the transaction answers
+    # one; walk-up sales carry none.
+    correlation: >-
+      =has(body.data.merchantReference) && body.data.merchantReference != null
+      ? string(body.data.merchantReference) : ""

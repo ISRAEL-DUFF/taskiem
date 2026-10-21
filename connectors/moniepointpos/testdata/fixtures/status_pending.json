@@ -1,0 +1,28 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v1/transactions/merchants/tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "clientId": "api-client-taskiem",
+   "businessOwnerId": 1,
+   "terminalSerial": "P260TEST01",
+   "requestAmount": 1100000,
+   "transactionReference": "",
+   "merchantReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "transactionType": "PURCHASE",
+   "requestPaymentMethod": "CARD_PURCHASE",
+   "actualPaymentMethod": null,
+   "actualAmount": null,
+   "processingStatus": "PENDING",
+   "responseCode": null,
+   "responseMessage": null,
+   "metaData": null
+  }
+ }
+}

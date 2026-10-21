@@ -17818,8 +17818,47 @@ components:
         needs_developer:
           type: boolean
           description: It starts from a web address another system calls (a webhook), which takes someone technical to set up.
+        tables:
+          type: array
+          description: The data tables the workflow works on; made for the organisation when the template is used if they do not exist yet.
+          items:
+            $ref: '#/components/schemas/TemplateTable'
         definition:
           description: The template's definition, with placeholders (one template only).
+      additionalProperties: false
+    TemplateTable:
+      type: object
+      required:
+      - name
+      - columns
+      properties:
+        name:
+          type: string
+          description: The table's name, or a `{{parameter}}` marker naming the parameter that chooses it.
+        title:
+          type: string
+        description:
+          type: string
+        columns:
+          type: array
+          items:
+            type: object
+            required:
+            - name
+            - type
+            properties:
+              name:
+                type: string
+              title:
+                type: string
+              type:
+                type: string
+                enum: [text, integer, number, boolean, date, datetime, phone, email, json]
+              required:
+                type: boolean
+              personal:
+                type: boolean
+            additionalProperties: false
       additionalProperties: false
     TemplateList:
       type: object
@@ -17871,6 +17910,23 @@ components:
           description: Variables to set before it runs.
           items:
             $ref: '#/components/schemas/TemplateNeed'
+        tables:
+          type: array
+          description: What became of each data table the template declares.
+          items:
+            type: object
+            required:
+            - name
+            - status
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+                enum: [created, exists, skipped, failed]
+              error:
+                type: string
+            additionalProperties: false
       additionalProperties: false
     Layout:
       type: object

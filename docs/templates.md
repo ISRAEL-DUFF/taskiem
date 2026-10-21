@@ -26,12 +26,20 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | `salary-payout-approval` | On payday, pay each person on the staff sheet by Paystack transfer after the owner approves, and text them | Google Sheets, Paystack, Tell me |
 | `supplier-payment-approval` | Pay a supplier invoice by Paystack transfer after approval and tell the owner the outcome | Paystack, Tell me |
 | `kyc-bvn-check` | Check an applicant's BVN with Dojah; welcome them if the name matches, flag it otherwise | Dojah, Tell me, Gmail |
+| `pos-sales-record` | Every transaction your Moniepoint POS terminals make becomes a row in the `pos_sales` [data table](data-tables.md); the record the next three read ([POS terminals](strategy/pos-terminals.md)) | Moniepoint POS terminals, Xenibase (the `data_tables` connection) |
+| `pos-daily-summary` | Every evening, add up today's POS sales per terminal and per kind from the table and tell the owner | Xenibase, Tell me |
+| `pos-sale-alert` | Tell the owner at once about a POS sale at or above an amount, or a payment that was declined or reversed | Moniepoint POS terminals, Tell me |
+| `pos-cashup` | At closing, compare a terminal's day with the sales book, tell the owner the difference and keep the check in the `pos_cashups` table | Xenibase, Tell me |
 | `xenibase-new-row-whatsapp` | When a row is inserted into a Xenibase table, send the number in it an approved WhatsApp template (Taskiem creates and removes the Xenibase webhook itself) | Xenibase, WhatsApp |
 
 
 **Tell me** is `notify@1`, built in: no connection or account elsewhere ([Tell me](integrations/notify.md)). Messages to the owner and staff go to the WhatsApp or Telegram they linked to Taskiem, or by email; texts to customers go by Taskiem's own SMS and count in the plan's `sms_monthly`. Termii stays available for a business texting its own customers in bulk from its own account. Templates that start from a web address another system calls (a webhook) are marked **needs a developer** (`needs_developer` in `GET /v1/templates`) and offered after the others; the first starters need no developer.
 
 Every template that moves money does so after an approval step and with an idempotency key, so a retry never pays twice. Every one is a valid wd/v1 definition: `templates_test.go` fills each with its example values and checks that it passes the publishing checks, uses exactly the connectors it declares, has no policy finding, runs its generated dry-run happy path, reads aloud as plain steps without an expression, and round-trips through flow code (spec 10.2) unchanged.
+
+## Tables a template makes
+
+A template that keeps records in a [data table](data-tables.md) declares the tables it works on, with their columns (`tables` in the template file). When the template is used, Taskiem makes any that the business does not have yet, after the draft is saved: a table that exists already is left exactly as it is, and one that cannot be made (no data tables on the platform, the person lacks `table.edit`, the limit is reached) is reported with the reason, never a reason to lose the draft. A declared table's name may be the marker of a parameter with the table picker (`{{table}}`), so the person can point the template at a table of their own; the Templates page says which tables a template keeps its records in, and the API answers what became of each (`tables: [{name, status: created | exists | skipped | failed, error?}]`). The `pos-*` templates declare `pos_sales`, `pos_terminals` and `pos_cashups` this way; `debtor-reminder-table` and `bank-alert-email` still expect their table to exist.
 
 ## Parameters
 
@@ -64,7 +72,7 @@ Required parameters without a default must be given; optional ones take their de
 
 ### How a template is written
 
-A template is a JSON file in `templates/library/<id>.json` with `id`, `title`, `summary`, `description`, `category`, `tags`, `keywords` (for retrieval), `connectors`, `variables`, `params` (each with a `title`, `description` and `example`) and `definition`, a wd/v1 document where `{{name}}` marks a parameter:
+A template is a JSON file in `templates/library/<id>.json` with `id`, `title`, `summary`, `description`, `category`, `tags`, `keywords` (for retrieval), `connectors`, `variables`, `params` (each with a `title`, `description` and `example`), `tables` (the data tables it works on, with their columns; made when the template is used) and `definition`, a wd/v1 document where `{{name}}` marks a parameter:
 
 - a whole string `"{{name}}"` becomes the typed value (`"max_concurrency": "{{limit}}"` becomes a number);
 - inside an expression (a string starting with `=`) the marker becomes a CEL literal, strings quoted and escaped, so a value cannot change the expression around it (`"=… < {{threshold:kobo}}"`);
@@ -78,7 +86,7 @@ Modifiers: `:hour` and `:minute` of a time, `:cron` of a weekday (0 for Sunday t
 | --- | --- | --- |
 | `GET /v1/templates` | any member | Every template: summary, parameters, variables, its steps in plain words (filled with the examples), and `available` (every connector it uses is available to the tenant). `?q=` ranks by keyword match, `?category=` filters |
 | `GET /v1/templates/{id}` | any member | One template, with its definition (markers included) |
-| `POST /v1/templates/{id}/instantiate` | `workflow.edit` | `{"params": {...}, "name"?}`: a new workflow with a `draft` version 1, `created_by` the person, the template recorded on the version (`workflow_versions.template_id`), `workflow.create` audited with the template; answers the draft's `problems` (publishing checks) and the variables to set. Plan limits apply (`max_workflows`). Never publishes |
+| `POST /v1/templates/{id}/instantiate` | `workflow.edit` | `{"params": {...}, "name"?}`: a new workflow with a `draft` version 1, `created_by` the person, the template recorded on the version (`workflow_versions.template_id`), `workflow.create` audited with the template; answers the draft's `problems`, its `variables`, and `tables`: what became of each data table the template declares (above) (publishing checks) and the variables to set. Plan limits apply (`max_workflows`). Never publishes |
 | `GET /v1/embed/{app}/templates` | end user | The app's `allowed_templates`, `available` only when the app also allows every connector they use |
 | `POST /v1/embed/{app}/templates/{id}/instantiate` | end user, `workflow.edit` | As above, for one of the app's templates (403 otherwise, and 403 `not_allowed` when the filled definition uses a connector the app does not allow) |
 

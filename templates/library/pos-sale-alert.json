@@ -1,0 +1,206 @@
+{
+  "id": "pos-sale-alert",
+  "title": "Tell the owner about big POS sales and payments that did not go through",
+  "summary": "The moment a Moniepoint terminal takes a sale above the amount you choose, or a payment is declined or reversed, tell the owner.",
+  "description": "Whenever Moniepoint reports a transaction on one of your POS terminals, tells the owner at once if it is an approved sale at or above the amount you choose (so you know about the big ones wherever you are), or if the payment was declined, failed or reversed (so a customer is not let go with goods for a payment that never came). Everything else stays quiet. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
+  "category": "alerts",
+  "tags": [
+    "alerts",
+    "sales",
+    "pos",
+    "moniepoint",
+    "terminal",
+    "owner"
+  ],
+  "keywords": [
+    "pos",
+    "terminal",
+    "moniepoint",
+    "big sale",
+    "large",
+    "declined",
+    "failed",
+    "reversed",
+    "alert",
+    "tell me",
+    "owner",
+    "fraud"
+  ],
+  "connectors": [
+    "moniepoint_pos@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Starts each message.",
+      "required": true,
+      "example": "Chidi Electronics",
+      "max_length": 60
+    },
+    {
+      "name": "large_amount",
+      "type": "number",
+      "title": "Tell me about sales from (naira)",
+      "description": "An approved sale at or above this amount is reported at once.",
+      "required": true,
+      "default": 50000,
+      "example": 50000,
+      "minimum": 1,
+      "maximum": 1000000000
+    },
+    {
+      "name": "pos_connection",
+      "type": "connection",
+      "connector": "moniepoint_pos",
+      "title": "Moniepoint POS connection",
+      "description": "The Moniepoint POS terminals connection whose transactions start this workflow.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_posSaleAlert",
+    "version": 1,
+    "name": "Big POS sales and declined payments",
+    "description": "Tells the owner about large approved sales and payments that did not go through.",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "moniepoint_pos@1",
+        "trigger": "transaction",
+        "events": [
+          "V1_POS_PURCHASE_TRANSACTION",
+          "V1_POS_TRANSFER_TRANSACTION",
+          "V1_POS_CARD_TRANSFER_TRANSACTION",
+          "V1_POS_WITHDRAWAL_TRANSACTION",
+          "V1_POS_BILL_PAYMENT_TRANSACTION",
+          "V1_POS_COLLECTION_TRANSACTION",
+          "V1_POS_PAY_CODE_TRANSACTION",
+          "V1_POS_AIRTIME_TRANSACTION",
+          "V1_POS_BOOM_TRANSACTION",
+          "V1_TRANSFER_TRANSACTION"
+        ],
+        "connection": "{{pos_connection}}"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "terminalSerial": {
+                "type": "string"
+              },
+              "amount": {
+                "type": "integer"
+              },
+              "transactionReference": {
+                "type": "string"
+              },
+              "merchantReference": {
+                "type": "string"
+              },
+              "transactionTime": {
+                "type": "string"
+              },
+              "transactionType": {
+                "type": "string"
+              },
+              "transactionStatus": {
+                "type": "string"
+              },
+              "responseCode": {
+                "type": "string"
+              },
+              "responseMessage": {
+                "type": "string"
+              },
+              "narration": {
+                "type": "string"
+              },
+              "metaData": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "prepare",
+        "type": "code",
+        "name": "Read the sale from Moniepoint's report",
+        "input": {
+          "event": "=trigger.body",
+          "received_at": "=run.started_at"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "export default function (input) {\n  const e = input.event || {};\n  const d = e.data || {};\n  const kinds = { PURCHASE: 'card purchase', CARD_PURCHASE: 'card purchase', TRANSFER: 'transfer to terminal', CARD_TRANSFER: 'card transfer',\n    WITHDRAWAL: 'withdrawal', BILL_PAYMENT: 'bill payment', COLLECTION: 'collection', PAY_CODE: 'pay code', AIRTIME: 'airtime', BOOM: 'boom' };\n  const short = String(e.eventType || '').replace(/^V1_/, '').replace(/_TRANSACTION$/, '').replace(/^POS_/, '');\n  const kind = kinds[short] || (d.transactionType ? String(d.transactionType).toLowerCase().replace(/_/g, ' ') : 'other');\n  const status = String(d.transactionStatus || '').toUpperCase();\n  const approved = ['COMPLETED', 'APPROVED', 'SUCCESS', 'SUCCESSFUL'].indexOf(status) >= 0;\n  const pending = status === 'PENDING' || status === '';\n  const kobo = Number(d.amount);\n  const amount = isFinite(kobo) ? Math.round(kobo) / 100 : 0;\n  let when = null;\n  const t = String(d.transactionTime || '');\n  if (/^\\d{4}\\/\\d{2}\\/\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(t)) when = new Date(t.replace(/\\//g, '-').replace(' ', 'T') + '+01:00');\n  else if (t) when = new Date(t);\n  if (!when || isNaN(when.getTime())) when = new Date(input.received_at);\n  if (isNaN(when.getTime())) when = new Date(0);\n  const lagos = new Date(when.getTime() + 3600 * 1000);\n  let customer = '';\n  try { const m = JSON.parse(d.metaData || '{}'); customer = String((m && m.customerName) || ''); } catch (err) { customer = ''; }\n  return { row: {\n    reference: String(d.transactionReference || e.eventId || ''), terminal: String(d.terminalSerial || ''), kind: kind,\n    status: status ? status.toLowerCase() : 'unknown', approved: approved, amount: amount, happened_at: when.toISOString(),\n    sale_date: lagos.toISOString().slice(0, 10), customer: customer, narration: String(d.narration || ''),\n    response: String(d.responseMessage || ''), event: String(e.eventType || '') }, pending: pending, naira: amount };\n}\n"
+        }
+      },
+      {
+        "id": "tell_big_sale",
+        "type": "connector",
+        "name": "Tell the owner about a big sale",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settings",
+          "prepare"
+        ],
+        "when": "=has(steps.prepare.output.row) && steps.prepare.output.row.approved == true && double(steps.prepare.output.naira) >= double({{large_amount}})",
+        "input": {
+          "title": "Big POS sale",
+          "message": "=steps.settings.output.business_name + ': ' + steps.prepare.output.row.kind + ' of NGN ' + string(steps.prepare.output.naira) + ' on terminal ' + steps.prepare.output.row.terminal + (steps.prepare.output.row.customer != '' ? ' from ' + steps.prepare.output.row.customer : '') + '.'"
+        }
+      },
+      {
+        "id": "tell_declined",
+        "type": "connector",
+        "name": "Tell the owner about a payment that did not go through",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settings",
+          "prepare"
+        ],
+        "when": "=has(steps.prepare.output.row) && steps.prepare.output.row.approved == false && steps.prepare.output.pending == false",
+        "input": {
+          "title": "POS payment did not go through",
+          "message": "=steps.settings.output.business_name + ': a ' + steps.prepare.output.row.kind + ' of NGN ' + string(steps.prepare.output.naira) + ' on terminal ' + steps.prepare.output.row.terminal + ' was ' + steps.prepare.output.row.status + (steps.prepare.output.row.response != '' ? ' (' + steps.prepare.output.row.response + ')' : '') + '. Do not release goods for it.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}
