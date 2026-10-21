@@ -1224,6 +1224,11 @@
       "reviewed": true,
       "context": "A workflow published from chat"
     },
+    "wa.publish.email_address": {
+      "text": "Emails sent or forwarded to {address} start it. How to forward them from Gmail or Outlook: {link}",
+      "reviewed": true,
+      "context": "After publishing from chat a workflow that starts from email: its address"
+    },
     "wa.publish.failed": {
       "text": "It could not be published: {reason}.",
       "reviewed": true,

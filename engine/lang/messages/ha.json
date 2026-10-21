@@ -980,6 +980,10 @@
       "text": "An buga *{name}*: zai fara aiki daga yanzu.",
       "reviewed": false
     },
+    "wa.publish.email_address": {
+      "text": "Imel ɗin da aka aika ko aka tura zuwa {address} ne ke fara shi. Yadda za ka tura su daga Gmail ko Outlook: {link}",
+      "reviewed": false
+    },
     "wa.publish.failed": {
       "text": "Ba a iya buga shi ba: {reason}.",
       "reviewed": false

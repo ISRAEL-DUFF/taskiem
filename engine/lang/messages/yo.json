@@ -980,6 +980,10 @@
       "text": "A ti tẹ *{name}* jáde: yóò máa ṣiṣẹ́ láti ìsinsìnyí.",
       "reviewed": false
     },
+    "wa.publish.email_address": {
+      "text": "Àwọn ímeèlì tí a fi ránṣẹ́ tàbí tí a dárí sí {address} ló ń bẹ̀rẹ̀ rẹ̀. Bí o ṣe lè dárí wọn láti Gmail tàbí Outlook: {link}",
+      "reviewed": false
+    },
     "wa.publish.failed": {
       "text": "A kò lè tẹ̀ ẹ́ jáde: {reason}.",
       "reviewed": false

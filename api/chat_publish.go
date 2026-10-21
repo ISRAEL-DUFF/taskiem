@@ -101,10 +101,16 @@ func (s *Server) publishFromChat(ctx context.Context, c *chat, wf uuid.UUID, v i
 }
 
 // publishReply says how a publish from chat went.
-func (s *Server) publishReply(c *chat, state, name string, needs []readyNeed, wf uuid.UUID) string {
+func (s *Server) publishReply(ctx context.Context, c *chat, state, name string, needs []readyNeed, wf uuid.UUID) string {
 	switch state {
 	case publishedNow:
-		return c.t("wa.publish.done", "name", whatsapp.SafeText(name))
+		msg := c.t("wa.publish.done", "name", whatsapp.SafeText(name))
+		if addr := s.emailAddressOf(ctx, c.tenant.ID, wf); addr != "" {
+			// One that starts from email: where to send it, and how to
+			// forward mail there (decision 0038).
+			msg += "\n\n" + c.t("wa.publish.email_address", "address", addr, "link", s.waLink(c, "/workflows/"+wf.String()+"?tab=settings"))
+		}
+		return msg
 	case publishWaiting:
 		return c.t("wa.publish.waiting", "name", whatsapp.SafeText(name))
 	case publishInTheApp:
@@ -113,6 +119,21 @@ func (s *Server) publishReply(c *chat, state, name string, needs []readyNeed, wf
 		return c.t("wa.publish.denied", "org", c.tenant.Name)
 	}
 	return c.t("wa.publish.not_ready", "name", whatsapp.SafeText(name)) + "\n" + s.needLines(c, needs)
+}
+
+// emailAddressOf is a workflow's email address in prod, or "" when it
+// does not start from email.
+func (s *Server) emailAddressOf(ctx context.Context, tenant, wf uuid.UUID) string {
+	if s.MailDomain == "" {
+		return ""
+	}
+	var public string
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT public_id FROM email_endpoints WHERE workflow_id = $1 AND environment = 'prod' AND status = 'live'`, wf).Scan(&public)
+	}); err != nil {
+		return ""
+	}
+	return public + "@" + s.MailDomain
 }
 
 // needLines are needs in the chat's language, each with where to fix it
@@ -302,7 +323,7 @@ func (s *Server) waBuildPublishAnswer(ctx context.Context, c *chat, cmd string) 
 		if err != nil {
 			return c.say(ctx, s, c.t("wa.publish.failed", "reason", whatsapp.SafeText(plainError(err))))
 		}
-		return c.say(ctx, s, s.publishReply(c, state, b.Name, needs, b.Workflow))
+		return c.say(ctx, s, s.publishReply(ctx, c, state, b.Name, needs, b.Workflow))
 	case "no", "n":
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err
@@ -332,7 +353,7 @@ func (s *Server) waPublishWorkflow(ctx context.Context, c *chat, name string) (b
 	if err != nil {
 		return true, c.say(ctx, s, c.t("wa.publish.failed", "reason", whatsapp.SafeText(plainError(err))))
 	}
-	return true, c.say(ctx, s, s.publishReply(c, state, real, needs, wf))
+	return true, c.say(ctx, s, s.publishReply(ctx, c, state, real, needs, wf))
 }
 
 // plainValue is a value typed as it is meant (no-technical-steps N5, as
@@ -426,7 +447,7 @@ func (s *Server) shopTurnOnOrders(ctx context.Context, c *chat) error {
 				return c.say(ctx, s, c.t("wa.publish.failed", "reason", whatsapp.SafeText(plainError(err))))
 			}
 			if state != publishedNow {
-				return c.say(ctx, s, s.publishReply(c, state, f.name, needs, wf))
+				return c.say(ctx, s, s.publishReply(ctx, c, state, f.name, needs, wf))
 			}
 		}
 		payment := "none"
