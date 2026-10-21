@@ -1,11 +1,4 @@
-import {
-  BrowserRouter,
-  Navigate,
-  NavLink,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router-dom";
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
@@ -24,14 +17,7 @@ import { Policies } from "./pages/Policies";
 import { Account, Invitations, Passkeys } from "./pages/Account";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
-import {
-  EmptyState,
-  ErrorBox,
-  Skeleton,
-  useAction,
-  useFocusTrap,
-  useScrollableTables,
-} from "./ui";
+import { EmptyState, ErrorBox, Skeleton, useAction, useFocusTrap, useScrollableTables } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
 import { AcceptInvitation } from "./pages/AcceptInvitation";
@@ -47,12 +33,7 @@ import { Storefront } from "./pages/Storefront";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { FormSubmissions, Forms } from "./pages/Forms";
-import {
-  FormRequestPage,
-  FormRequests,
-  MemberForm,
-  type FormRequest,
-} from "./pages/FormFill";
+import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
 import { get } from "./api";
 import { AgentApp, AgentWorkspace, useAgentSession } from "./pages/Agent";
 import { Home } from "./pages/Home";
@@ -76,19 +57,12 @@ function EnrolPasskey() {
   return (
     <div className="login card" style={{ maxWidth: 640 }}>
       <h1>Add a passkey</h1>
-      <p>
-        Administrators sign in to Taskiem with a passkey: your device's
-        fingerprint, face or PIN. Add one to continue.
-      </p>
+      <p>Administrators sign in to Taskiem with a passkey: your device's fingerprint, face or PIN. Add one to continue.</p>
       {added ? (
         <>
           <p>Passkey added. Sign in with it now.</p>
           <ErrorBox error={act.error} />
-          <button
-            className="primary"
-            disabled={act.busy}
-            onClick={() => void act.run(loginWithPasskey)}
-          >
+          <button className="primary" disabled={act.busy} onClick={() => void act.run(loginWithPasskey)}>
             Sign in with your passkey
           </button>
         </>
@@ -109,10 +83,7 @@ function InviteeHome() {
   return (
     <div className="login card" style={{ maxWidth: 720 }}>
       <h1>Welcome back{me?.user?.name ? `, ${me.user.name}` : ""}</h1>
-      <p>
-        You do not belong to an organisation on Taskiem yet. Accept an
-        invitation to join one.
-      </p>
+      <p>You do not belong to an organisation on Taskiem yet. Accept an invitation to join one.</p>
       <Invitations always onJoined={() => void refresh()} />
       <p>
         <button onClick={() => void logout()}>Sign out</button>
@@ -135,41 +106,17 @@ function Shell() {
   if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
-    return loc.pathname === "/login" ? (
-      alone(<Login />)
-    ) : (
-      <Navigate
-        to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`}
-        replace
-      />
-    );
+    return loc.pathname === "/login" ? alone(<Login />) : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`} replace />;
   }
   if (me.invitations_only) return alone(<InviteeHome />);
   if (me.enrol_passkey) return alone(<EnrolPasskey />);
-  if (loc.pathname === "/login")
-    return (
-      <Navigate
-        to={
-          new URLSearchParams(loc.search).get("next") ||
-          (me.field_agent ? "/agent" : "/home")
-        }
-        replace
-      />
-    );
+  if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || (me.field_agent ? "/agent" : "/home")} replace />;
   // A field agent's home is the agent app, not the workspace's workflows (N6).
-  if (
-    me.field_agent &&
-    !agentSession &&
-    (loc.pathname === "/" ||
-      loc.pathname === "/home" ||
-      loc.pathname === "/workflows")
-  )
-    return <Navigate to="/agent" replace />;
+  if (me.field_agent && !agentSession && (loc.pathname === "/" || loc.pathname === "/home" || loc.pathname === "/workflows")) return <Navigate to="/agent" replace />;
   if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
   // Field agents (docs/agents.md): their own pages, and a business's page
   // and tables while they work in it.
-  if (loc.pathname === "/agent" || loc.pathname.startsWith("/agent/"))
-    return <AgentApp />;
+  if (loc.pathname === "/agent" || loc.pathname.startsWith("/agent/")) return <AgentApp />;
   if (agentSession) return <AgentWorkspace session={agentSession} />;
   return (
     <OnboardingProvider>
@@ -234,12 +181,7 @@ function SignedIn() {
   const daily: Item[] = [
     // For organisations that signed themselves up, until the checklist is
     // done or hidden (it stays at /start).
-    [
-      "/start",
-      `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`,
-      "start",
-      !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed,
-    ],
+    ["/start", `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`, "start", !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed],
     ["/home", "Home", "home", true],
     ["/workflows", "Workflows", "workflows", can("workflow.read")],
     ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
@@ -248,12 +190,7 @@ function SignedIn() {
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
-    [
-      "/approvals",
-      "Approvals",
-      "approvals",
-      can("approval.decide") || can("workflow.publish"),
-    ],
+    ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish")],
     ["/connections", "Connections", "connections", can("connection.manage")],
   ];
   const more: Item[] = [
@@ -261,34 +198,17 @@ function SignedIn() {
     ["/templates", "Templates", "templates", true],
     ["/members", "Members & keys", "members", can("member.manage")],
     ["/settings/billing", "Billing", "billing", can("billing.manage")],
-    [
-      "/catalogue",
-      "Connector catalogue",
-      "catalogue",
-      can("connector.manage") || can("workflow.read"),
-    ],
-    [
-      "/settings",
-      "Secrets & settings",
-      "settings",
-      can("secret.manage") || can("workflow.read"),
-    ],
+    ["/catalogue", "Connector catalogue", "catalogue", can("connector.manage") || can("workflow.read")],
+    ["/settings", "Secrets & settings", "settings", can("secret.manage") || can("workflow.read")],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
     ["/alerts", "Alerts", "alerts", can("alert.manage")],
     ["/audit", "Audit log", "audit", can("audit.read")],
     ["/reports", "Reports", "reports", can("audit.read")],
     ["/settings/keys", "Encryption keys", "keys", can("key.manage")],
   ].filter(([, , , ok]) => ok) as Item[];
-  const inMore = more.some(
-    ([to]) =>
-      pathname === to || (to !== "/settings" && pathname.startsWith(to + "/")),
-  );
+  const inMore = more.some(([to]) => pathname === to || (to !== "/settings" && pathname.startsWith(to + "/")));
   const link = ([to, label, icon, , count]: Item) => (
-    <NavLink
-      key={to}
-      to={to}
-      end={to === "/settings" || to === "/forms" || to === "/storefront"}
-    >
+    <NavLink key={to} to={to} end={to === "/settings" || to === "/forms" || to === "/storefront"}>
       <Icon name={icon} />
       {label}
       {count && <span className="count alert">{count}</span>}
@@ -310,20 +230,8 @@ function SignedIn() {
           <span>{business}</span>
         </span>
       </header>
-      {drawer && (
-        <div
-          className="nav-scrim"
-          aria-hidden="true"
-          onClick={() => setDrawer(false)}
-        />
-      )}
-      <nav
-        id="main-nav"
-        ref={navRef}
-        className={`nav drawer${drawer ? " open" : ""}`}
-        aria-label="Main"
-        tabIndex={-1}
-      >
+      {drawer && <div className="nav-scrim" aria-hidden="true" onClick={() => setDrawer(false)} />}
+      <nav id="main-nav" ref={navRef} className={`nav drawer${drawer ? " open" : ""}`} aria-label="Main" tabIndex={-1}>
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             {business.slice(0, 1).toUpperCase()}
@@ -332,44 +240,21 @@ function SignedIn() {
             <strong>{business}</strong>
             <span>Taskiem</span>
           </span>
-          <button
-            className="icon-button nav-close"
-            aria-label="Close menu"
-            onClick={() => setDrawer(false)}
-          >
+          <button className="icon-button nav-close" aria-label="Close menu" onClick={() => setDrawer(false)}>
             <Icon name="close" />
           </button>
         </div>
         {daily.filter(([, , , ok]) => ok).map(link)}
         {more.length > 0 && (
           <>
-            <button
-              type="button"
-              className="nav-toggle"
-              aria-expanded={moreOpen || inMore}
-              aria-controls="nav-more"
-              onClick={() => setMoreOpen(!(moreOpen || inMore))}
-            >
+            <button type="button" className="nav-toggle" aria-expanded={moreOpen || inMore} aria-controls="nav-more" onClick={() => setMoreOpen(!(moreOpen || inMore))}>
               <Icon name="more" />
               More
-              <svg
-                className="chev"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
+              <svg className="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M9 6l6 6-6 6" />
               </svg>
             </button>
-            <div
-              id="nav-more"
-              hidden={!(moreOpen || inMore)}
-              style={{ display: moreOpen || inMore ? "contents" : undefined }}
-            >
+            <div id="nav-more" hidden={!(moreOpen || inMore)} style={{ display: moreOpen || inMore ? "contents" : undefined }}>
               {more.map(link)}
             </div>
           </>
@@ -388,69 +273,47 @@ function SignedIn() {
           </button>
         </div>
       </nav>
-      <main
-        className={/^\/workflows\/[^/]+$/.test(pathname) ? "main wide" : "main"}
-        id="main"
-        tabIndex={-1}
-        ref={mainRef}
-        inert={drawer || undefined}
-      >
+      <main className={/^\/workflows\/[^/]+$/.test(pathname) ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
         <div className="page" key={pathname}>
-          <Routes>
-            <Route path="/" element={<Navigate to="/home" replace />} />
-            <Route path="/home" element={<Home />} />
-            <Route path="/workflows" element={<Workflows />} />
-            <Route path="/workflows/:id" element={<Editor />} />
-            <Route path="/templates" element={<Templates />} />
-            <Route path="/tables" element={<Tables />} />
-            <Route path="/tables/:id" element={<TablePage />} />
-            <Route path="/storefront" element={<Storefront />} />
-            <Route path="/storefront/orders" element={<StorefrontOrders />} />
-            <Route
-              path="/storefront/orders/:reference"
-              element={<StorefrontOrder />}
-            />
-            <Route
-              path="/storefront/bookings"
-              element={<StorefrontBookings />}
-            />
-            <Route path="/forms" element={<Forms />} />
-            <Route path="/forms/requests" element={<FormRequests />} />
-            <Route path="/forms/requests/:id" element={<FormRequestPage />} />
-            <Route path="/forms/:id" element={<MemberForm />} />
-            <Route
-              path="/forms/:id/submissions"
-              element={<FormSubmissions />}
-            />
-            <Route path="/start" element={<Start />} />
-            <Route path="/start/guide" element={<Guide />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/runs" element={<Runs />} />
-            <Route path="/runs/:id" element={<RunPage />} />
-            <Route path="/approvals" element={<Approvals />} />
-            <Route path="/connections" element={<Connections />} />
-            <Route path="/catalogue" element={<Catalogue />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/settings/billing" element={<Billing />} />
-            <Route path="/settings/keys" element={<Keys />} />
-            <Route path="/alerts" element={<Alerts />} />
-            <Route path="/audit" element={<Audit />} />
-            <Route path="/members" element={<Members />} />
-            <Route path="/policies" element={<Policies />} />
-            <Route path="/account" element={<Account />} />
-            <Route path="/handoff" element={<Handoff />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route
-              path="*"
-              element={
-                <EmptyState icon="search">
-                  There is no page at this address.
-                </EmptyState>
-              }
-            />
-          </Routes>
+        <Routes>
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/workflows" element={<Workflows />} />
+          <Route path="/workflows/:id" element={<Editor />} />
+          <Route path="/templates" element={<Templates />} />
+          <Route path="/tables" element={<Tables />} />
+          <Route path="/tables/:id" element={<TablePage />} />
+          <Route path="/storefront" element={<Storefront />} />
+          <Route path="/storefront/orders" element={<StorefrontOrders />} />
+          <Route path="/storefront/orders/:reference" element={<StorefrontOrder />} />
+          <Route path="/storefront/bookings" element={<StorefrontBookings />} />
+          <Route path="/forms" element={<Forms />} />
+          <Route path="/forms/requests" element={<FormRequests />} />
+          <Route path="/forms/requests/:id" element={<FormRequestPage />} />
+          <Route path="/forms/:id" element={<MemberForm />} />
+          <Route path="/forms/:id/submissions" element={<FormSubmissions />} />
+          <Route path="/start" element={<Start />} />
+          <Route path="/start/guide" element={<Guide />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/runs" element={<Runs />} />
+          <Route path="/runs/:id" element={<RunPage />} />
+          <Route path="/approvals" element={<Approvals />} />
+          <Route path="/connections" element={<Connections />} />
+          <Route path="/catalogue" element={<Catalogue />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/billing" element={<Billing />} />
+          <Route path="/settings/keys" element={<Keys />} />
+          <Route path="/alerts" element={<Alerts />} />
+          <Route path="/audit" element={<Audit />} />
+          <Route path="/members" element={<Members />} />
+          <Route path="/policies" element={<Policies />} />
+          <Route path="/account" element={<Account />} />
+          <Route path="/handoff" element={<Handoff />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="*" element={<EmptyState icon="search">There is no page at this address.</EmptyState>} />
+        </Routes>
         </div>
       </main>
       <nav className="tabbar" aria-label="Quick" inert={drawer || undefined}>
@@ -474,13 +337,7 @@ function SignedIn() {
             Activity
           </NavLink>
         )}
-        <button
-          type="button"
-          aria-label="Open menu"
-          aria-expanded={drawer}
-          aria-controls="main-nav"
-          onClick={() => setDrawer(true)}
-        >
+        <button type="button" aria-label="Open menu" aria-expanded={drawer} aria-controls="main-nav" onClick={() => setDrawer(true)}>
           <Icon name="menu" />
           Menu
         </button>
@@ -491,8 +348,6 @@ function SignedIn() {
 
 /** Up to two initials for an avatar: "Ada Obi" is AO, "ada@x.ng" is AD. */
 export function initials(name: string): string {
-  const [a = "", b = ""] = name.includes("@")
-    ? []
-    : name.split(/\s+/).filter(Boolean);
+  const [a = "", b = ""] = name.includes("@") ? [] : name.split(/\s+/).filter(Boolean);
   return (a && b ? a.charAt(0) + b.charAt(0) : name.slice(0, 2)).toUpperCase();
 }
