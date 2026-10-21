@@ -201,6 +201,8 @@ export interface Me {
   factors?: { passkey: boolean; totp: boolean; password: boolean };
   /** A Taskiem field agent signed in as themselves: they land on the agent app. */
   field_agent?: boolean;
+  /** Whether the business sees the technical parts (the Advanced switch, N0-5). */
+  advanced?: boolean;
 }
 
 /** A tenant inviting the signed-in person (GET /v1/me/invitations). */

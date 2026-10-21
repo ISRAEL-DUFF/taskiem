@@ -8,8 +8,8 @@
   "keywords": ["paid", "pays", "payment", "received", "receipt", "whatsapp", "customer", "confirmation", "charge"],
   "connectors": ["paystack@1", "whatsapp@1"],
   "params": [
-    {"name": "template_name", "type": "string", "title": "WhatsApp template", "description": "Your approved receipt template, with body variables for name, amount and reference.", "required": true, "default": "payment_receipt", "example": "payment_receipt", "pattern": "^[a-z0-9_]{1,512}$"},
-    {"name": "language", "type": "string", "title": "Template language", "description": "The template's language code.", "required": false, "default": "en", "example": "en", "pattern": "^[a-z]{2}(_[A-Z]{2})?$"},
+    {"name": "template_name", "type": "string", "title": "WhatsApp template", "description": "Your approved receipt template, chosen by what it says. Its words take the customer's name, the amount and the payment's reference, in that order.", "required": true, "default": "payment_receipt", "example": "payment_receipt", "pattern": "^[a-z0-9_]{1,512}$", "picker": "whatsapp_template"},
+    {"name": "language", "type": "string", "title": "Template language", "description": "Filled in when you choose the template.", "required": false, "default": "en", "example": "en", "pattern": "^[a-z]{2}(_[A-Z]{2})?$", "picker": "whatsapp_language", "from": "template_name"},
     {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack connection whose webhooks start this workflow.", "required": false, "default": "main", "example": "main"},
     {"name": "whatsapp_connection", "type": "connection", "connector": "whatsapp", "title": "WhatsApp connection", "description": "The name of your WhatsApp Business connection.", "required": false, "default": "main", "example": "main"}
   ],

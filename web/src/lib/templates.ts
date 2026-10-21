@@ -15,6 +15,10 @@ export interface TemplateParam {
   maximum?: number;
   max_length?: number;
   connector?: string;
+  /** How the value is chosen instead of typed (no-technical-steps N8). */
+  picker?: "sheet" | "sheet_tab" | "table" | "column" | "role" | "whatsapp_template" | "whatsapp_language";
+  /** The parameter a picker depends on: a tab's sheet, a column's table, a language's template. */
+  from?: string;
 }
 
 export interface TemplateLine {

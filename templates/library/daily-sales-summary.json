@@ -10,8 +10,8 @@
   "variables": [],
   "params": [
     {"name": "business_name", "type": "string", "title": "Business name", "description": "Starts the summary message.", "required": true, "example": "Chidi Electronics", "max_length": 60},
-    {"name": "spreadsheet_id", "type": "string", "title": "Sales spreadsheet", "description": "The spreadsheet's id, from its link.", "required": true, "example": "1SaLeSsHeEtIdEnTiFiEr0123456789abcd", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
-    {"name": "sheet_range", "type": "string", "title": "Sheet and columns", "description": "Where the sales are, with a header row of date, item and amount.", "required": false, "default": "Sales!A:C", "example": "Sales!A:C"},
+    {"name": "spreadsheet_id", "type": "string", "title": "Sales spreadsheet", "description": "Paste the sheet's link from your browser.", "required": true, "example": "1SaLeSsHeEtIdEnTiFiEr0123456789abcd", "pattern": "^[A-Za-z0-9_-]{20,100}$", "picker": "sheet"},
+    {"name": "sheet_range", "type": "string", "title": "Tab", "description": "The tab with the sales. Its first row names the columns: date, item and amount.", "required": false, "default": "Sales", "example": "Sales", "picker": "sheet_tab", "from": "spreadsheet_id"},
     {"name": "send_time", "type": "time", "title": "Time", "description": "When the summary is sent, Lagos time.", "required": true, "default": "20:00", "example": "20:00"},
     {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
   ],

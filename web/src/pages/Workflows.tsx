@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { WorkflowDefinition } from "@sdk/wd";
 import { get, post, type WorkflowSummary } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { AIBuilder } from "./AIBuild";
@@ -23,6 +23,7 @@ export function starter(name: string): WorkflowDefinition {
 
 export function Workflows() {
   const { can } = useAuth();
+  const advanced = useAdvanced();
   const nav = useNavigate();
   const { data, error } = useLoad(() => get<{ workflows: WorkflowSummary[] }>("/v1/workflows"), []);
   const [params, setParams] = useSearchParams();
@@ -46,7 +47,8 @@ export function Workflows() {
         title="Workflows"
         description="The automations your organisation runs: draft them on the canvas, publish a version, then start runs by hand, on a schedule or from an event."
         actions={
-          editable && (
+          editable &&
+          (advanced ? (
             <>
               <button onClick={() => setAI(true)}>Build with AI</button>
               <button className="primary" onClick={() => setCreating(true)}>
@@ -54,7 +56,18 @@ export function Workflows() {
                 New workflow
               </button>
             </>
-          )
+          ) : (
+            // The two ways to start (no-technical-steps N8); a blank canvas is under Advanced.
+            <>
+              <Link className="button" to="/templates">
+                Start from a template
+              </Link>
+              <button className="primary" onClick={() => setAI(true)}>
+                <Icon name="plus" />
+                Describe it
+              </button>
+            </>
+          ))
         }
       />
       <ErrorBox error={error} />
@@ -65,9 +78,15 @@ export function Workflows() {
           action={
             editable ? (
               <>
-                <button className="primary" onClick={() => setCreating(true)}>
-                  Build your first workflow
-                </button>
+                {advanced ? (
+                  <button className="primary" onClick={() => setCreating(true)}>
+                    Build your first workflow
+                  </button>
+                ) : (
+                  <button className="primary" onClick={() => setAI(true)}>
+                    Describe what it should do
+                  </button>
+                )}
                 <Link className="button" to="/templates">
                   Start from a template
                 </Link>

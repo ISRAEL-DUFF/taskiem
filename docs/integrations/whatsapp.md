@@ -17,12 +17,16 @@ The connector is `connectors/whatsapp` (`whatsapp@1`), used by tenants inside wo
 | `phone_number_id` | The business phone number's ID |
 | `app_secret` | Verifies webhook signatures. Required to receive events |
 | `verify_token` | Any string you choose. Enter the same value as the **Verify token** in the dashboard |
+| `business_account_id` | Optional: the WhatsApp Business Account ID, so templates can be chosen by what they say (`list_templates`) |
 
 ## Actions
+
+A message's `to` is taken as people write it: spaces, dashes and brackets are dropped, `00` becomes `+`, and a Nigerian number starting `0` (0803 123 4567) gets `+234`.
 
 | Action | Request | Class | Notes |
 | --- | --- | --- | --- |
 | `get_phone_number` | `GET /{phone-number-id}` | read | Display number, verified name, quality rating |
+| `list_templates` | `GET /{waba-id}/message_templates?status=APPROVED` | read | The approved templates' `name`, `language`, `category`, body words and how many values the body takes. Needs `business_account_id`. The web app's template picker (`GET /v1/whatsapp/templates`) uses it |
 | `send_text` | `POST /{id}/messages`, `type: text` | unsafe write | Only within the 24-hour customer service window. `preview_url`, `reply_to` (a wamid to quote) |
 | `send_template` | `type: template` | unsafe write | `name`, `language` (`en_US`), `components` as Meta documents them, for example `[{type: body, parameters: [{type: text, parameter_name: first_name, text: Ada}]}]`. The only message allowed outside the window |
 | `send_media` | `type: image/document/audio/video/sticker` | unsafe write | `link` (Meta fetches it and caches it for 10 minutes) or `media_id`. `caption` for image, document and video. `filename` for documents |

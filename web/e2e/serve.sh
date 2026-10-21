@@ -17,6 +17,8 @@ TASKIEM_BOOTSTRAP_PASSWORD='correct horse battery' bin/taskiem bootstrap --tenan
 # The E2E tenant is also a partner (embed.spec.ts embeds the builder).
 tenant=$(psql "$dsn" -tAc "SELECT id FROM tenants WHERE name = 'E2E'")
 bin/taskiem tenants partner "$tenant" --capabilities white_label,custom_domains >/dev/null
+# It builds by hand: the technical parts are shown (no-technical-steps N0-5).
+psql "$dsn" -qc "UPDATE tenants SET advanced = true WHERE id = '$tenant'"
 # It also publishes a connector in the public catalogue (catalogue.spec.ts).
 bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant"
 # An operator for ops.spec.ts: on the reviewer list, with a one-time link

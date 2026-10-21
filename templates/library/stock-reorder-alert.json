@@ -9,8 +9,8 @@
   "connectors": ["googlesheets@1", "notify@1"],
   "variables": [],
   "params": [
-    {"name": "spreadsheet_id", "type": "string", "title": "Inventory spreadsheet", "description": "The spreadsheet's id, from its link.", "required": true, "example": "1InVeNtOrYsHeEtId0123456789abcdefgh", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
-    {"name": "sheet_range", "type": "string", "title": "Sheet and columns", "description": "Header row: item, quantity, reorder_level.", "required": false, "default": "Inventory!A:C", "example": "Inventory!A:C"},
+    {"name": "spreadsheet_id", "type": "string", "title": "Inventory spreadsheet", "description": "Paste the sheet's link from your browser.", "required": true, "example": "1InVeNtOrYsHeEtId0123456789abcdefgh", "pattern": "^[A-Za-z0-9_-]{20,100}$", "picker": "sheet"},
+    {"name": "sheet_range", "type": "string", "title": "Tab", "description": "The tab with your stock. Its first row names the columns: item, quantity and reorder_level.", "required": false, "default": "Inventory", "example": "Inventory", "picker": "sheet_tab", "from": "spreadsheet_id"},
     {"name": "send_time", "type": "time", "title": "Time", "description": "When the check runs, Lagos time.", "required": false, "default": "07:30", "example": "07:30"},
     {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
   ],

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
@@ -8,6 +8,7 @@ import { Badge, ErrorBox, Field, useAction, useLoad } from "../ui";
 import { RolePicker } from "../forms/RolePicker";
 import { ConnectionPicker } from "../forms/ConnectionPicker";
 import { SheetChooser } from "../forms/SheetChooser";
+import { ColumnPicker, LanguagePicker, TabPicker, TablePicker, WhatsAppTemplatePicker } from "../forms/Pickers";
 
 // The SME template library (docs/templates.md): browse ready workflows,
 // read their steps in plain words, and create a draft from one by filling
@@ -155,7 +156,16 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
         >
           <h3>Details</h3>
           {t.params.map((p) => (
-            <ParamField key={p.name} param={p} value={values[p.name] ?? ""} error={fieldErrors[p.name]} onChange={(v) => setValues({ ...values, [p.name]: v })} />
+            <ParamField
+              key={p.name}
+              param={p}
+              params={t.params}
+              values={values}
+              value={values[p.name] ?? ""}
+              error={fieldErrors[p.name]}
+              onChange={(v) => setValues((old) => ({ ...old, [p.name]: v }))}
+              onOther={(name, v) => setValues((old) => ({ ...old, [name]: v }))}
+            />
           ))}
           <Field label="Workflow name" hint="Leave empty to use the template's name.">
             <input value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
@@ -175,7 +185,24 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
   );
 }
 
-export function ParamField({ param: p, value, error, onChange }: { param: TemplateParam; value: string; error?: string; onChange: (v: string) => void }) {
+export function ParamField({
+  param: p,
+  value,
+  error,
+  onChange,
+  params = [],
+  values = {},
+  onOther,
+}: {
+  param: TemplateParam;
+  value: string;
+  error?: string;
+  onChange: (v: string) => void;
+  /** The template's other parameters and their values, for pickers that depend on one. */
+  params?: TemplateParam[];
+  values?: Record<string, string>;
+  onOther?: (name: string, v: string) => void;
+}) {
   const kind = inputKind(p);
   const label = p.required ? p.title : `${p.title} (optional)`;
   const hint = (
@@ -199,8 +226,39 @@ export function ParamField({ param: p, value, error, onChange }: { param: Templa
       </Field>
     );
   }
+  const from = p.from ? (values[p.from] ?? "") : "";
+  const picked = (input: ReactNode) => (
+    <Field label={label} hint={hint}>
+      {input}
+    </Field>
+  );
+  switch (p.picker) {
+    case "sheet_tab":
+      return picked(<TabPicker label={label} sheet={from} value={value} onChange={onChange} />);
+    case "table":
+      return picked(<TablePicker label={label} value={value} onChange={onChange} />);
+    case "column":
+      return picked(<ColumnPicker label={label} table={from} value={value} onChange={onChange} />);
+    case "whatsapp_template": {
+      // Choosing the template fills in its language too.
+      const lang = params.find((x) => x.picker === "whatsapp_language" && x.from === p.name);
+      return picked(
+        <WhatsAppTemplatePicker
+          label={label}
+          value={value}
+          language={lang ? values[lang.name] : undefined}
+          onChange={(name, language) => {
+            onChange(name);
+            if (lang && language) onOther?.(lang.name, language);
+          }}
+        />,
+      );
+    }
+    case "whatsapp_language":
+      return picked(<LanguagePicker label={label} value={value} onChange={onChange} />);
+  }
   // A spreadsheet is chosen by its link, never an id.
-  if (p.name === "spreadsheet_id" || p.name.endsWith("_spreadsheet_id")) {
+  if (p.picker === "sheet" || p.name === "spreadsheet_id" || p.name.endsWith("_spreadsheet_id")) {
     return (
       <Field label={label} hint={hint}>
         <SheetChooser value={value} onChange={onChange} />

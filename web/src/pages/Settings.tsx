@@ -22,6 +22,28 @@ interface Variable {
   updated_at: string;
 }
 
+/** The Advanced switch: owners and admins show the technical parts. */
+function AdvancedSwitch() {
+  const { me, refresh } = useAuth();
+  const act = useAction();
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Advanced</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={!!me?.advanced}
+          disabled={act.busy}
+          onChange={(e) => void act.run(async () => (await put("/v1/settings/advanced", { advanced: e.target.checked }), await refresh()))}
+        />{" "}
+        Show the technical parts
+      </label>
+      <p className="hint">For someone who builds workflows by hand: a blank canvas, formulas, the test environment and your own connectors. Everyone in the business sees the same.</p>
+      <ErrorBox error={act.error} />
+    </div>
+  );
+}
+
 export function Settings() {
   const { can } = useAuth();
   const [env, setEnv] = useState("prod");
@@ -32,6 +54,7 @@ export function Settings() {
         description="Your environments and the secrets and variables workflows read in each of them."
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
+      {can("member.manage") && <AdvancedSwitch />}
       <Environments editable={can("secret.manage")} />
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />

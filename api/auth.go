@@ -540,6 +540,12 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 			out["factors"] = f
 		}
 	}
+	// What the web app shows: the technical parts only with Advanced on.
+	_ = s.tx(r, func(tx pgx.Tx) error {
+		on, _, err := s.advancedOf(r.Context(), tx, p.TenantID)
+		out["advanced"] = on
+		return err
+	})
 	// A field agent signed in as themselves lands on the agent app (N6).
 	if p.UserID != uuid.Nil && p.Agent == nil && p.KeyID == uuid.Nil {
 		var active bool

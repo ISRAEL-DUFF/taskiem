@@ -485,7 +485,8 @@ func (s *Server) getOnboarding(w http.ResponseWriter, r *http.Request) {
 	if hasPerson {
 		items = append(items, checklistItem{"chat", chatLinked})
 	}
-	items = append(items, checklistItem{"page", page}, checklistItem{"connection", conn}, checklistItem{"workflow", wf}, checklistItem{"publish", published},
+	// A goal first, then what it needs (no-technical-steps N8).
+	items = append(items, checklistItem{"page", page}, checklistItem{"workflow", wf}, checklistItem{"connection", conn}, checklistItem{"publish", published},
 		checklistItem{"first_run", run}, checklistItem{"invite", invited})
 	done := 0
 	for _, it := range items {

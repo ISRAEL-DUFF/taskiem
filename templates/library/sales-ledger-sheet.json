@@ -8,8 +8,8 @@
   "keywords": ["record", "log", "ledger", "books", "bookkeeping", "sheet", "spreadsheet", "payment", "sales", "row"],
   "connectors": ["paystack@1", "googlesheets@1"],
   "params": [
-    {"name": "spreadsheet_id", "type": "string", "title": "Ledger spreadsheet", "description": "The spreadsheet's id, from its link.", "required": true, "example": "1LeDgErSpReAdShEeTiD0123456789abcd", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
-    {"name": "sheet_range", "type": "string", "title": "Sheet", "description": "The sheet and columns rows are added to.", "required": false, "default": "Ledger!A:E", "example": "Ledger!A:E"},
+    {"name": "spreadsheet_id", "type": "string", "title": "Ledger spreadsheet", "description": "Paste the sheet's link from your browser.", "required": true, "example": "1LeDgErSpReAdShEeTiD0123456789abcd", "pattern": "^[A-Za-z0-9_-]{20,100}$", "picker": "sheet"},
+    {"name": "sheet_range", "type": "string", "title": "Tab", "description": "The tab each sale is added to.", "required": false, "default": "Ledger", "example": "Ledger", "picker": "sheet_tab", "from": "spreadsheet_id"},
     {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack connection whose webhooks start this workflow.", "required": false, "default": "main", "example": "main"},
     {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
   ],

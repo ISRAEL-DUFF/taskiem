@@ -9618,6 +9618,129 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/paystack/banks:
+    get:
+      operationId: listPaystackBanks
+      tags:
+      - Connectors
+      summary: The banks Paystack pays into
+      description: By name and code, read with the business's Paystack connection in prod, for choosing who to pay by bank. 409 when Paystack is not connected.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      parameters:
+      - name: connection
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [banks]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        code:
+                          type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/paystack/resolve:
+    post:
+      operationId: resolvePaystackAccount
+      tags:
+      - Connectors
+      summary: The name on a bank account
+      description: From its 10-digit number and bank, for the person to confirm before paying it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_number, bank_code]
+              properties:
+                account_number:
+                  type: string
+                bank_code:
+                  type: string
+                connection:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account_name, account_number]
+                properties:
+                  account_name:
+                    type: string
+                  account_number:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/paystack/recipients:
+    post:
+      operationId: createPaystackRecipient
+      tags:
+      - Connectors
+      summary: Save someone to pay
+      description: A Paystack transfer recipient from a bank account and the name on it; Paystack answers the same code for an account saved before. Audited with the account's last four digits.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_number, bank_code, name]
+              properties:
+                account_number:
+                  type: string
+                bank_code:
+                  type: string
+                name:
+                  type: string
+                connection:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recipient_code, name]
+                properties:
+                  recipient_code:
+                    type: string
+                  name:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/sheets/resolve:
     post:
       operationId: resolveSpreadsheet
@@ -9660,6 +9783,100 @@ paths:
                     type: array
                     items:
                       type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/whatsapp/templates:
+    get:
+      operationId: listWhatsAppTemplates
+      tags:
+      - Connectors
+      summary: The business's approved WhatsApp templates
+      description: By what they say, with their language, read with the business's WhatsApp connection in prod. 409 when WhatsApp is not connected or the connection has no WhatsApp Business Account ID.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: connection
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templates]
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        language:
+                          type: string
+                        category:
+                          type: string
+                        body:
+                          type: string
+                        variables:
+                          type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/advanced:
+    get:
+      operationId: getAdvanced
+      tags:
+      - Account
+      summary: Whether the business sees the technical parts
+      description: The Advanced switch. Until an owner or admin sets it, plans above Shop have it on.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdvancedSetting'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putAdvanced
+      tags:
+      - Account
+      summary: Turn the technical parts on or off
+      description: For everyone in the business. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [advanced]
+              properties:
+                advanced:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
   /v1/signup:
@@ -13424,8 +13641,20 @@ components:
         field_agent:
           type: boolean
           description: A Taskiem field agent signed in as themselves; the web app lands them on the agent app.
+        advanced:
+          type: boolean
+          description: Whether the business sees the web app's technical parts (the Advanced switch).
         factors:
           description: What the person proves themselves with to change their factors.
+    AdvancedSetting:
+      type: object
+      required: [advanced, chosen]
+      properties:
+        advanced:
+          type: boolean
+        chosen:
+          type: boolean
+          description: Whether someone set it; otherwise it is the plan's default.
     SignupOptions:
       type: object
       required:
@@ -17195,6 +17424,13 @@ components:
         connector:
           type: string
           description: For a connection parameter, the connector it is for.
+        picker:
+          type: string
+          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language]
+          description: How the value is chosen instead of typed.
+        from:
+          type: string
+          description: The parameter the picker depends on (a tab's spreadsheet, a column's table, a language's template).
       additionalProperties: false
     TemplateNeed:
       type: object

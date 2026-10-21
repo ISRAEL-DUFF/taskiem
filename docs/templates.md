@@ -46,6 +46,18 @@ Each template has named, typed and described parameters:
 | `weekday` | A day: "Friday", "fri", "Fridays" |
 | `connection` | The name of the tenant's connection for the template's connector (default `main`) |
 
+**Pickers** (no-technical-steps N8). A parameter's `picker` says how the web app has a person choose it instead of typing an id, and `from` names the parameter it depends on:
+
+| `picker` | Chosen as | `from` |
+| --- | --- | --- |
+| `sheet` | A pasted Google Sheets link, opened to show the sheet's name (`POST /v1/sheets/resolve`). The value may also be the link: its id is taken | |
+| `sheet_tab` | A tab of that sheet, by name. A bare name is the whole tab; a name with spaces is quoted (`'Staff list'`) | the `sheet` parameter |
+| `table`, `column` | One of the business's tables, and a column of it | `column`: the `table` parameter |
+| `role` | One of the business's roles (`GET /v1/approver-roles`) | |
+| `whatsapp_template`, `whatsapp_language` | An approved WhatsApp template by what it says; its language is filled in (`GET /v1/whatsapp/templates`) | the language: the template parameter |
+
+A run form's field with `"format": "paystack-recipient"` asks for a bank and a 10-digit account number, shows the name on the account (`POST /v1/paystack/resolve`) and, once the person confirms it, saves the recipient (`POST /v1/paystack/recipients`); the field's value is Paystack's recipient code, never shown. Amounts are in naira; phone numbers are taken in any form. `TestEveryDetailIsOwnerShaped` keeps every template that does not need a developer free of ids, ranges, kobo and patterns to type.
+
 Required parameters without a default must be given; optional ones take their default. A value that does not fit is refused by name (`400 invalid_params`, with `params: [{param, message}]`), as is a parameter the template does not have. **No value may start with `=`** or contain `{{`: a parameter is data, never an expression.
 
 **Personal data is not a parameter.** Phone numbers and email addresses of the owner or the accountant are tenant variables the template reads (`env.owner_phone`, `env.owner_email`, `env.accountant_email`), listed with the template, so no definition carries them. Customers' numbers come from the run's data (the sheet, the payment event).

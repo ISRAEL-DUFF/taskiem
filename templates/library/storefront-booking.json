@@ -27,7 +27,8 @@
       "required": false,
       "default": "owner",
       "example": "owner",
-      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
     }
   ],
   "definition": {

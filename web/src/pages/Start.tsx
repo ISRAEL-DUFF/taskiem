@@ -169,7 +169,15 @@ function GuideSteps({ t }: { t: Template }) {
           <h2>Fill in the details</h2>
           {t.params.length === 0 && <p className="hint">Nothing to fill in.</p>}
           {t.params.map((p) => (
-            <ParamField key={p.name} param={p} value={values[p.name] ?? ""} onChange={(v) => setValues({ ...values, [p.name]: v })} />
+            <ParamField
+              key={p.name}
+              param={p}
+              params={t.params}
+              values={values}
+              value={values[p.name] ?? ""}
+              onChange={(v) => setValues((old) => ({ ...old, [p.name]: v }))}
+              onOther={(name, v) => setValues((old) => ({ ...old, [name]: v }))}
+            />
           ))}
         </li>
         <li>

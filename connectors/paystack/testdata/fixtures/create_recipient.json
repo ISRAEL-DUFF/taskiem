@@ -1,0 +1,3 @@
+{"request":{"method":"POST","path":"/transferrecipient","headers":{"Authorization":"Bearer sk_test_xyz"},
+  "body":{"type":"nuban","name":"Bola Ade","account_number":"0123456789","bank_code":"058","currency":"NGN"}},
+ "response":{"status":201,"body":{"status":true,"message":"Transfer recipient created successfully","data":{"active":true,"currency":"NGN","name":"Bola Ade","recipient_code":"RCP_2x5j67tnnw1t98k","type":"nuban"}}}}

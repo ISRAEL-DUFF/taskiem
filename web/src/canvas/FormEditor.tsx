@@ -28,6 +28,9 @@ import {
   type PageDraft,
 } from "../lib/forms";
 import { merge } from "../lib/schema";
+import type { Source } from "../lib/plaincanvas";
+import { DurationPicker, RulesBuilder, ValuePicker } from "./PlainPickers";
+import { useAdvanced } from "../auth";
 import { Badge, Field, JsonInput } from "../ui";
 import type { FormInfo } from "../pages/Forms";
 
@@ -352,6 +355,7 @@ export function FieldsEditor({ fields, onChange, pages, linkPrefill, members, pr
 
 /** Pages: titles and conditions; fields choose their page. */
 function PagesEditor({ pages, fields, onChange }: { pages: PageDraft[]; fields: FieldDraft[]; onChange: (pages: PageDraft[], fields: FieldDraft[]) => void }) {
+  const advanced = useAdvanced();
   const asFormPages = pages.map((_, i) => ({ fields: fields.filter((f) => f.page === i).map((f) => f.name) }));
   if (pages.length === 0) {
     return (
@@ -390,7 +394,17 @@ function PagesEditor({ pages, fields, onChange }: { pages: PageDraft[]; fields: 
                 Remove
               </button>
             </div>
-            {i > 0 && (
+            {i > 0 && !advanced && (
+              <Field label="Show only when">
+                {/* Rules over earlier pages' answers; show_if has no leading "=". */}
+                <RulesBuilder
+                  sources={earlier.map((n) => ({ label: `The answer to “${fields.find((f) => f.name === n)?.label || n}”`, expr: `=answers.${n}` }))}
+                  value={p.show_if ? "=" + p.show_if : ""}
+                  onChange={(e) => onChange(pages.map((x, j) => (j === i ? { ...x, show_if: e.replace(/^=/, "") } : x)), fields)}
+                />
+              </Field>
+            )}
+            {i > 0 && advanced && (
               <Field
                 label="Show only when"
                 hint={earlier.length ? <>An expression over earlier pages: {earlier.map((n) => <code key={n}>answers.{n}</code>).reduce<ReactNode[]>((a, c) => (a.length ? [...a, ", ", c] : [c]), [])}. For example answers.{earlier[0]} == true</> : "Earlier pages have no questions yet."}
@@ -413,6 +427,7 @@ type Def = WorkflowDefinition;
 
 /** The trigger panel for a form trigger. */
 export function FormTriggerEditor({ def, onChange, problems }: { def: Def; onChange: (d: Def) => void; problems: Problem[] }) {
+  const advanced = useAdvanced();
   const t = def.trigger;
   const cfg = (t.config ?? {}) as FormTriggerConfig;
   const schema = (typeof def.inputs?.schema === "object" ? def.inputs.schema : undefined) as FormSchema | undefined;
@@ -523,10 +538,12 @@ export function FormTriggerEditor({ def, onChange, problems }: { def: Def; onCha
         <FieldsEditor fields={fields} onChange={(fs) => setFields(fs)} pages={pages} linkPrefill={access !== "members"} members={access === "members"} problems={fieldProblems} />
         <h3>Pages</h3>
         <PagesEditor pages={pages} fields={fields} onChange={(ps, fs) => setFields(fs, ps)} />
-        <details>
-          <summary>Edit the questions as JSON (the inputs schema)</summary>
-          <JsonInput value={def.inputs?.schema} onChange={(v) => onChange({ ...def, inputs: v === undefined ? undefined : { schema: v as object } } as Def)} rows={12} />
-        </details>
+        {advanced && (
+          <details>
+            <summary>Edit the questions as JSON (the inputs schema)</summary>
+            <JsonInput value={def.inputs?.schema} onChange={(v) => onChange({ ...def, inputs: v === undefined ? undefined : { schema: v as object } } as Def)} rows={12} />
+          </details>
+        )}
       </div>
       <div className="card form-preview" role="region" aria-label="Preview">
         <h2>Preview</h2>
@@ -571,7 +588,20 @@ function LiveForms({ workflow }: { workflow: string }) {
 }
 
 /** The configuration editor of a form step. Problems are relative to the step's config. */
-export function FormStepEditor({ cfg, onChange, problems }: { cfg: FormStepConfig; onChange: (cfg: FormStepConfig) => void; problems: Problem[] }) {
+export function FormStepEditor({
+  cfg,
+  onChange,
+  problems,
+  advanced = true,
+  sources = [],
+}: {
+  cfg: FormStepConfig;
+  onChange: (cfg: FormStepConfig) => void;
+  problems: Problem[];
+  /** Whether expressions and JSON are shown; without, values come from earlier steps by their words. */
+  advanced?: boolean;
+  sources?: Source[];
+}) {
   const schema = cfg.schema;
   const { fields } = useMemo(() => loadFields(schema), [schema]);
   const set = (patch: Record<string, unknown>) => onChange(merge(cfg as Record<string, unknown>, patch) as FormStepConfig);
@@ -606,9 +636,14 @@ export function FormStepEditor({ cfg, onChange, problems }: { cfg: FormStepConfi
             <option value="role">Members with a role</option>
           </select>
         </Field>
-        <Field label={kind === "role" ? "Role" : kind === "phone" ? "Phone (expression)" : "Email (expression)"} hint={kind === "role" ? "They find it under To fill in" : `e.g. =trigger.body.${kind}`}>
+        <Field
+          label={kind === "role" ? "Role" : advanced ? (kind === "phone" ? "Phone (expression)" : "Email (expression)") : kind === "phone" ? "Whose phone" : "Whose email"}
+          hint={kind === "role" ? "They find it under To fill in" : advanced ? `e.g. =trigger.body.${kind}` : "A number or address from earlier in the workflow"}
+        >
           {kind === "role" ? (
             <RolePicker value={toValue} onChange={(role) => set({ to: { role } })} />
+          ) : !advanced ? (
+            <ValuePicker label={kind === "phone" ? "Whose phone" : "Whose email"} sources={sources} value={toValue} onChange={(v) => set({ to: { [kind]: v } })} />
           ) : (
             <input className="mono" value={toValue} onChange={(e) => set({ to: { [kind]: e.target.value } })} />
           )}
@@ -655,6 +690,17 @@ export function FormStepEditor({ cfg, onChange, problems }: { cfg: FormStepConfi
           <summary>Fill in answers from the run</summary>
           {fields.map((f) => (
             <Field key={f.name} label={`${f.label || f.name} (prefill)`}>
+              {!advanced ? (
+                <ValuePicker
+                  label={`${f.label || f.name} (prefill)`}
+                  sources={sources}
+                  value={typeof prefill[f.name] === "string" ? (prefill[f.name] as string) : ""}
+                  onChange={(v) => {
+                    const p = merge(prefill, { [f.name]: v || undefined });
+                    set({ prefill: Object.keys(p).length ? p : undefined });
+                  }}
+                />
+              ) : (
               <input
                 className="mono"
                 value={typeof prefill[f.name] === "string" ? (prefill[f.name] as string) : prefill[f.name] === undefined ? "" : JSON.stringify(prefill[f.name])}
@@ -664,15 +710,23 @@ export function FormStepEditor({ cfg, onChange, problems }: { cfg: FormStepConfi
                   set({ prefill: Object.keys(p).length ? p : undefined });
                 }}
               />
+              )}
             </Field>
           ))}
         </details>
       )}
       <div className="row">
-        <Field label="Wait for" hint="Default 7d">
-          <input value={cfg.timeout ?? ""} placeholder="7d" onChange={(e) => set({ timeout: e.target.value })} />
+        <Field label="Wait for" hint={advanced ? "Default 7d" : "A week if you choose none"}>
+          {advanced ? (
+            <input value={cfg.timeout ?? ""} placeholder="7d" onChange={(e) => set({ timeout: e.target.value })} />
+          ) : (
+            <DurationPicker label="Wait for" allowNone value={cfg.timeout ?? ""} onChange={(timeout) => set({ timeout: timeout || undefined })} />
+          )}
         </Field>
-        <Field label="Reminders after" hint="Comma-separated, e.g. 24h, 60h">
+        <Field label="Reminders after" hint={advanced ? "Comma-separated, e.g. 24h, 60h" : "Remind them once, after this long"}>
+          {!advanced ? (
+            <DurationPicker label="Reminders after" allowNone value={(cfg.remind ?? [])[0] ?? ""} onChange={(d) => set({ remind: d ? [d] : undefined })} />
+          ) : (
           <input
             value={(cfg.remind ?? []).join(", ")}
             onChange={(e) => {
@@ -680,22 +734,25 @@ export function FormStepEditor({ cfg, onChange, problems }: { cfg: FormStepConfi
               set({ remind: r.length ? r : undefined });
             }}
           />
+          )}
         </Field>
       </div>
       <Field label="If nobody answers in time">
         <select value={cfg.on_timeout ?? "fail"} onChange={(e) => set({ on_timeout: e.target.value === "fail" ? undefined : e.target.value })}>
           <option value="fail">Fail the step</option>
-          <option value="continue">Carry on (output timed_out: true)</option>
+          <option value="continue">{advanced ? "Carry on (output timed_out: true)" : "Carry on without the answers"}</option>
         </select>
       </Field>
       <details>
         <summary>Preview</summary>
         <FormView title={cfg.title} description={cfg.description} schema={schema} preview />
       </details>
-      <details>
-        <summary>Edit the configuration as JSON</summary>
-        <JsonInput value={cfg} onChange={(v) => v && typeof v === "object" && onChange(v as FormStepConfig)} rows={14} />
-      </details>
+      {advanced && (
+        <details>
+          <summary>Edit the configuration as JSON</summary>
+          <JsonInput value={cfg} onChange={(v) => v && typeof v === "object" && onChange(v as FormStepConfig)} rows={14} />
+        </details>
+      )}
     </div>
   );
 }

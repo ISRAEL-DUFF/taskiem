@@ -3,7 +3,9 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Background, Controls, ReactFlow, useReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
 import type { Step, WorkflowDefinition } from "@sdk/wd";
 import { ApiError, get, post, put, type ConnectorInfo, type JSONSchema, type MergeConflict, type Problem, type TriggerInfo, type VersionInfo, type WorkflowSummary } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
+import { SchedulePicker } from "../canvas/PlainPickers";
+import { sourcesFor } from "../lib/plaincanvas";
 import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
 import { FormTriggerEditor, startFormTrigger } from "../canvas/FormEditor";
@@ -20,6 +22,14 @@ import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 const nodeTypes = { step: StepNode };
 const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
+
+/** The steps an owner adds without Advanced, in their words. */
+const PLAIN_PALETTE: [Step["type"], string][] = [
+  ["connector", "Use a service"],
+  ["approval", "Ask for approval"],
+  ["form", "Ask someone to fill in a form"],
+  ["wait", "Wait"],
+];
 
 interface Loaded {
   workflow: WorkflowSummary;
@@ -51,6 +61,7 @@ export function Editor() {
   const [params, setParams] = useSearchParams();
   const nav = useNavigate();
   const { can } = useAuth();
+  const advanced = useAdvanced();
   const wf = useLoad(() => get<Loaded>(`/v1/workflows/${id}`), [id]);
   const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
   const version = Number(params.get("v")) || wf.data?.workflow.latest_version || 0;
@@ -63,7 +74,8 @@ export function Editor() {
   const [needs, setNeeds] = useState<{ version: number; needs: ReadyNeed[] }>();
   const [selected, setSelected] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [tab, setTab] = useState<"canvas" | "settings" | "code" | "json" | "triggers">("canvas");
+  // ?tab=settings opens on the trigger (a new form opens on its questions).
+  const [tab, setTab] = useState<"canvas" | "settings" | "code" | "json" | "triggers">(() => (params.get("tab") === "settings" ? "settings" : "canvas"));
   const [notice, setNotice] = useState("");
   const [starting, setStarting] = useState(false);
   const [merge, setMerge] = useState<{ conflicts: MergeConflict[]; latest: number }>();
@@ -304,9 +316,9 @@ export function Editor() {
         </div>
       )}
       <div className="tabs" role="tablist">
-        {(["canvas", "settings", "code", "json", "triggers"] as const).map((t) => (
+        {(advanced ? (["canvas", "settings", "code", "json", "triggers"] as const) : (["canvas", "settings", "triggers"] as const)).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-            {{ canvas: "Canvas", settings: "Trigger & settings", code: "Code", json: "JSON", triggers: "Endpoints" }[t]}
+            {(advanced ? { canvas: "Canvas", settings: "Trigger & settings", code: "Code", json: "JSON", triggers: "Endpoints" } : { canvas: "Steps", settings: "When it runs", code: "", json: "", triggers: "Web addresses" })[t]}
           </button>
         ))}
       </div>
@@ -336,11 +348,17 @@ export function Editor() {
               <>
                 <div className="hint">Add a step{selected ? ` after ${selected}` : ""}:</div>
                 <div className="palette">
-                  {PALETTE.map((t) => (
-                    <button key={t} onClick={() => addStep(t)}>
-                      + {t}
-                    </button>
-                  ))}
+                  {advanced
+                    ? PALETTE.map((t) => (
+                        <button key={t} onClick={() => addStep(t)}>
+                          + {t}
+                        </button>
+                      ))
+                    : PLAIN_PALETTE.map(([t, words]) => (
+                        <button key={t} onClick={() => addStep(t)}>
+                          + {words}
+                        </button>
+                      ))}
                 </div>
               </>
             )}
@@ -349,6 +367,8 @@ export function Editor() {
                 key={sel.id}
                 step={sel}
                 others={def.steps.filter((s) => s.id !== sel.id).map((s) => s.id)}
+                names={Object.fromEntries(def.steps.map((s) => [s.id, s.name ?? ""]))}
+                sources={sourcesFor(def as Parameters<typeof sourcesFor>[0], sel.id, connectors.data?.connectors ?? [])}
                 connectors={connectors.data?.connectors ?? []}
                 onChange={(s) => editSteps(def.steps.map((x) => (x.id === sel.id ? s : x)))}
                 onRename={(to) => {
@@ -371,7 +391,7 @@ export function Editor() {
         </div>
       )}
       {tab === "settings" && <SettingsTab def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} problems={problems} />}
-      {tab === "code" && (
+      {advanced && tab === "code" && (
         <CodeTab
           def={def}
           onApply={(next, probs) => {
@@ -380,7 +400,7 @@ export function Editor() {
           }}
         />
       )}
-      {tab === "json" && (
+      {advanced && tab === "json" && (
         <div className="card">
           <p className="hint">The whole definition (wd/v1). Edits apply as you type, once the JSON is valid.</p>
           <JsonInput value={def} onChange={(v) => v && typeof v === "object" && edit(v as WorkflowDefinition)} rows={30} />
@@ -475,6 +495,7 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
     onChange({ ...def, settings: Object.keys(next).length ? next : undefined } as WorkflowDefinition);
   };
   const conn = connectors.find((c) => c.ref === cfg.connector);
+  const advanced = useAdvanced();
   return (
     <>
     <div className="card" style={{ maxWidth: 760 }}>
@@ -484,8 +505,8 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
       <Field label="Description">
         <textarea rows={2} value={def.description ?? ""} onChange={(e) => onChange({ ...def, description: e.target.value || undefined } as WorkflowDefinition)} />
       </Field>
-      <h2>Trigger</h2>
-      <Field label="Type">
+      <h2>{advanced ? "Trigger" : "When it runs"}</h2>
+      <Field label={advanced ? "Type" : "It runs"}>
         <select
           value={t.type}
           onChange={(e) => {
@@ -496,15 +517,16 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
             onChange({ ...def, trigger: config ? { type, config } : { type } });
           }}
         >
-          <option value="manual">Manual / API</option>
-          <option value="webhook">Webhook</option>
-          <option value="schedule">Schedule</option>
-          <option value="connector_event">Connector event</option>
-          <option value="form">Form</option>
+          <option value="manual">{advanced ? "Manual / API" : "When someone starts it"}</option>
+          {(advanced || t.type === "webhook") && <option value="webhook">{advanced ? "Webhook" : "When another system calls it"}</option>}
+          <option value="schedule">{advanced ? "Schedule" : "On a schedule"}</option>
+          <option value="connector_event">{advanced ? "Connector event" : "When something happens in a service"}</option>
+          <option value="form">{advanced ? "Form" : "When someone fills in a form"}</option>
           {!["manual", "webhook", "schedule", "connector_event", "form"].includes(t.type) && <option value={t.type}>{t.type.replaceAll("_", " ")}</option>}
         </select>
       </Field>
-      {t.type === "webhook" && (
+      {t.type === "webhook" && !advanced && <p className="hint">Another system starts it at its web address (under Web addresses). Turn on Advanced in Settings to change how.</p>}
+      {t.type === "webhook" && advanced && (
         <>
           <div className="row">
             <Field label="Path">
@@ -523,7 +545,8 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
           </Field>
         </>
       )}
-      {t.type === "schedule" && (
+      {t.type === "schedule" && !advanced && <SchedulePicker cron={String(cfg.cron ?? "")} onChange={(cron) => setCfg({ cron, timezone: cfg.timezone ?? "Africa/Lagos" })} />}
+      {t.type === "schedule" && advanced && (
         <div className="row">
           <Field label="Cron" hint="Five fields: minute hour day month weekday">
             <input className="mono" value={String(cfg.cron ?? "")} onChange={(e) => setCfg({ cron: e.target.value })} />
@@ -547,10 +570,12 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
                   ))}
               </select>
             </Field>
-            <Field label="Trigger">
+            <Field label={advanced ? "Trigger" : "What happens"}>
               <select value={String(cfg.trigger ?? "")} onChange={(e) => setCfg({ trigger: e.target.value })}>
                 {conn?.triggers.map((x) => (
-                  <option key={x}>{x}</option>
+                  <option key={x} value={x}>
+                    {advanced ? x : x.replace(/_event$/, "").replace(/_/g, " ")}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -566,13 +591,15 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
           </Field>
         </>
       )}
-      {t.type !== "form" && (
+      {t.type !== "form" && advanced && (
         <>
           <h2>Inputs schema</h2>
           <p className="hint">JSON Schema for trigger.body; fields marked "x-pii" are encrypted per data subject.</p>
           <JsonInput value={def.inputs?.schema} onChange={(v) => onChange({ ...def, inputs: v === undefined ? undefined : { schema: v as object } } as WorkflowDefinition)} rows={8} />
         </>
       )}
+      {advanced && (
+      <>
       <h2>Run settings</h2>
       <div className="row">
         <Field label="Run timeout">
@@ -590,6 +617,8 @@ function SettingsTab({ def, onChange, connectors, problems }: { def: WorkflowDef
           <input type="number" min={1} value={settings.max_concurrency ?? ""} onChange={(e) => setSettings({ max_concurrency: e.target.value ? Number(e.target.value) : undefined })} />
         </Field>
       </div>
+      </>
+      )}
     </div>
     {t.type === "form" && <FormTriggerEditor def={def} onChange={onChange} problems={problems} />}
     </>
@@ -635,7 +664,7 @@ function Endpoints({ workflow }: { workflow: string }) {
           <tr>
             <th>Environment</th>
             <th>Type</th>
-            <th>Endpoint or schedule</th>
+            <th>Web address or schedule</th>
             <th>Version</th>
           </tr>
         </thead>
@@ -746,7 +775,7 @@ function StartRun({ workflow, def, onClose, onStarted }: { workflow: string; def
       {schema?.properties && !advanced ? (
         <SchemaForm schema={schema} value={input as Record<string, unknown> | undefined} onChange={setInput} expressions={false} />
       ) : (
-        <Field label="Input (JSON)">
+        <Field label="Input (JSON)" data-technical>
           <JsonInput value={input} onChange={setInput} rows={8} />
         </Field>
       )}
@@ -794,7 +823,7 @@ function CodeTab({ def, onApply }: { def: WorkflowDefinition; onApply: (def: Wor
   }, [def]);
   const changed = base !== undefined && code !== base;
   return (
-    <div className="card">
+    <div className="card" data-technical>
       <p className="hint">
         This workflow as TypeScript with <code>@taskiem/sdk</code>, the same code <code>taskiem codegen</code> writes. Edit it and apply: the code is
         compiled to a definition, and the canvas shows the result. Expressions are arrow functions or CEL strings; logic belongs in code steps.
