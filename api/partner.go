@@ -418,13 +418,15 @@ func (s *Server) listSubTenantWorkflows(w http.ResponseWriter, r *http.Request) 
 	}
 	var out []workflowSummary
 	err = s.partnerTx(r, sub, "partner.subtenant.workflows.read", nil, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`, w.git_path
+		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`, w.git_path, `+liveTrigger+`
 			FROM workflows w LEFT JOIN workflow_versions v ON v.workflow_id = w.id GROUP BY w.id ORDER BY w.name`)
 		if err != nil {
 			return err
 		}
-		out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[workflowSummary])
-		return err
+		if out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[workflowSummary]); err != nil {
+			return err
+		}
+		return recentRuns(r.Context(), tx, out, "Africa/Lagos")
 	})
 	if err != nil {
 		s.fail(w, r, err)

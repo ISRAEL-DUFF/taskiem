@@ -12,7 +12,7 @@ func TestValidateResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	const wf = `{"workflows":[{"id":"0190a5d2-7e1c-7f00-8000-000000000001","name":"loan","active_version":null,"latest_version":1,
-		"created_at":"2026-10-07T10:00:00Z","key":"wf_loan","git_path":null}]}`
+		"created_at":"2026-10-07T10:00:00Z","key":"wf_loan","git_path":null,"trigger":{"type":"manual"},"recent":[0,0,0,0,0,0,0,0,0,0,0,0,0,1]}]}`
 	cases := []struct {
 		method, path string
 		status       int

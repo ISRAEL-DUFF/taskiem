@@ -96,6 +96,10 @@ const recentDays = 14
 
 const latestKey = `COALESCE((SELECT definition->>'id' FROM workflow_versions WHERE workflow_id = w.id ORDER BY version DESC LIMIT 1), '')`
 
+// liveTrigger selects a summary's Trigger: the published version's, else
+// the latest draft's.
+const liveTrigger = `COALESCE((SELECT definition->'trigger' FROM workflow_versions WHERE workflow_id = w.id ORDER BY version = w.active_version DESC, version DESC LIMIT 1), 'null')`
+
 func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
 	tz := r.URL.Query().Get("tz")
 	if tz == "" {
@@ -107,8 +111,7 @@ func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
 	}
 	var out []workflowSummary
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`, w.git_path,
-			COALESCE((SELECT definition->'trigger' FROM workflow_versions WHERE workflow_id = w.id ORDER BY version = w.active_version DESC, version DESC LIMIT 1), 'null')
+		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`, w.git_path, `+liveTrigger+`
 			FROM workflows w LEFT JOIN workflow_versions v ON v.workflow_id = w.id GROUP BY w.id ORDER BY w.name`)
 		if err != nil {
 			return err
@@ -331,10 +334,15 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	var deployments []deployment
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path
-			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key, &sum.GitPath); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path, `+liveTrigger+`
+			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key, &sum.GitPath, &sum.Trigger); err != nil {
 			return err
 		}
+		one := []workflowSummary{sum}
+		if err := recentRuns(ctx, tx, one, "Africa/Lagos"); err != nil {
+			return err
+		}
+		sum = one[0]
 		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id
 			FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC`, wf)
 		if err != nil {
