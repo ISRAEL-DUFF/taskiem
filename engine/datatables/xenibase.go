@@ -156,7 +156,12 @@ func (c *client) do(ctx context.Context, method, path string, body, out any) err
 	defer cancel()
 	err := mapError(connector.DoJSON(ctx, c.hc, method, c.base+path, map[string]string{"Authorization": "Bearer " + c.token}, body, out))
 	if e, ok := AsError(err); ok {
+		// With the server URL's own path: one ending in /api/v1 shows
+		// as /api/v1/api/v1/… here.
 		call, _, _ := strings.Cut(path, "?")
+		if u, perr := url.Parse(c.base); perr == nil {
+			call = strings.TrimRight(u.Path, "/") + call
+		}
 		e.Call = method + " " + call
 	}
 	return err

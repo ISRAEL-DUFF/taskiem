@@ -205,3 +205,25 @@ func jsonNum(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+// The first photo makes the business's data project, where photos live, as
+// the first table does; when the platform's Xenibase refuses (here, a
+// server address that already ends in /api/v1), the owner is told what
+// was refused, not "Internal error".
+func TestStorefrontPhotoMakesTheDataProject(t *testing.T) {
+	w := newTablesWorld(t)
+	w.srv.Media = &media.Service{Credentials: w.svc.Credentials, Guard: w.env.Egress}
+	owner := w.tenant(t, "Ada Stores", "ada@ada.test")
+	w.svc.Platform.URL = w.pg.URL + "/api/v1"
+	s, body := owner.rawPost(t, "/v1/storefront/media", "image/jpeg", photo(t))
+	if s == 500 || !strings.Contains(toJSON(body), "GET /api/v1/api/v1/projects") {
+		t.Fatalf("a wrong server address: %d %v", s, body)
+	}
+	// With the right address, the photo's upload makes the project first.
+	w.svc.Platform.URL = w.pg.URL
+	s, body = owner.rawPost(t, "/v1/storefront/media", "image/jpeg", photo(t))
+	st := owner.must(200, "GET", "/v1/tables/status", nil)
+	if st["status"] != "ready" {
+		t.Fatalf("the project after a photo: %v (upload %d %v)", st, s, body)
+	}
+}
