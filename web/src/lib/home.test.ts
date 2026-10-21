@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moneyToday, ordersToday, runWords, triggerWords } from "./home";
+import { moneyToday, ordersToday, runWords, startedByWords, triggerWords } from "./home";
 
 const now = new Date(2026, 9, 21, 12, 0);
 const at = (h: number, day = 21) => new Date(2026, 9, day, h).toISOString();
@@ -45,5 +45,16 @@ describe("runWords", () => {
   it("ends a sentence about a run", () => {
     expect(runWords("completed")).toBe("finished");
     expect(runWords("needs_reconciliation")).toBe("needs checking");
+  });
+});
+
+describe("startedByWords", () => {
+  const names = new Map([["u1", "Ada Obi"]]);
+  it("names the member, else says what started it", () => {
+    expect(startedByWords("u1", "manual", names)).toBe("Ada Obi");
+    expect(startedByWords("k9", "manual", names)).toBe("an app or API key");
+    expect(startedByWords(null, "schedule", names)).toBe("its schedule");
+    expect(startedByWords(null, "storefront", names)).toBe("an order");
+    expect(startedByWords(null, undefined, names)).toBe("Taskiem");
   });
 });

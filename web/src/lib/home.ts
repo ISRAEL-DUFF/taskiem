@@ -85,3 +85,32 @@ export function runWords(status: string): string {
       return status.replaceAll("_", " ");
   }
 }
+
+/** Who or what started a run, for "Started by …": a member's name, else
+ * what its trigger is ("its schedule", "an order"); an id that is no
+ * member's is an app or API key. */
+export function startedByWords(startedBy: string | null, triggerType: string | undefined, names: Map<string, string>): string {
+  if (startedBy) return names.get(startedBy) ?? "an app or API key";
+  switch (triggerType) {
+    case "schedule":
+      return "its schedule";
+    case "storefront":
+      return "an order";
+    case "form":
+      return "a form";
+    case "whatsapp":
+      return "a WhatsApp message";
+    case "ussd":
+      return "a USSD session";
+    case "email":
+      return "an email";
+    case "webhook":
+    case "connector_event":
+    case "polling":
+      return "another app";
+    case "subflow":
+      return "another workflow";
+    default:
+      return "Taskiem";
+  }
+}

@@ -786,3 +786,4 @@ table.audit code { font-size: 12px; white-space: nowrap; }
 @keyframes grow-y { from { transform: scaleY(0); } }
 @keyframes pop { from { opacity: 0; transform: scale(0.9); } }
 @keyframes live { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tone, var(--ok)) 45%, transparent); } 50% { box-shadow: 0 0 0 4px transparent; } }
+.run-summary { margin: -8px 0 20px; color: var(--muted); }

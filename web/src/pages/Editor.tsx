@@ -817,22 +817,29 @@ function StartRun({ workflow, def, onClose, onStarted }: { workflow: string; def
   const [input, setInput] = useState<unknown>({});
   const [env, setEnv] = useState("prod");
   const [advanced, setAdvanced] = useState(false);
+  // Environments and raw input are for businesses with Advanced on.
+  const technical = useAdvanced();
   const act = useAction();
   // A form from the workflow's inputs, as chat's run asks them (N5).
   const schema = resolveSchema(def?.inputs?.schema as JSONSchema | undefined, (def?.types ?? {}) as Record<string, JSONSchema>);
+  const asks = !!schema?.properties && Object.keys(schema.properties).length > 0;
   return (
     <Modal title="Start a run" onClose={onClose}>
-      <Field label="Environment">
-        <EnvSelect value={env} onChange={setEnv} />
-      </Field>
-      {schema?.properties && !advanced ? (
-        <SchemaForm schema={schema} value={input as Record<string, unknown> | undefined} onChange={setInput} expressions={false} />
-      ) : (
+      {technical && (
+        <Field label="Environment">
+          <EnvSelect value={env} onChange={setEnv} />
+        </Field>
+      )}
+      {asks && !advanced ? (
+        <SchemaForm schema={schema as JSONSchema} value={input as Record<string, unknown> | undefined} onChange={setInput} expressions={false} />
+      ) : technical || advanced ? (
         <Field label="Input (JSON)" data-technical>
           <JsonInput value={input} onChange={setInput} rows={8} />
         </Field>
+      ) : (
+        <p>{def?.name ?? "This workflow"} needs nothing from you to start. Start it now to see it work.</p>
       )}
-      {schema?.properties && (
+      {asks && technical && (
         <label className="inline hint" data-technical>
           <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: enter JSON
         </label>

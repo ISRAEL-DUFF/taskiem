@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { get, post, type RunEvent, type RunSummary } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
+import { startedByWords } from "../lib/home";
 import { RunCanvas } from "../canvas/RunCanvas";
 import { RepairPanel } from "./RepairPanel";
 import { duration, timeline, type StepRow } from "../lib/timeline";
@@ -44,6 +45,12 @@ export function RunPage() {
   const [view, setView] = useState<"canvas" | "timeline">("canvas");
   const [resolving, setResolving] = useState<string | null>(null);
   const act = useAction();
+  const advanced = useAdvanced();
+  const { me } = useAuth();
+  // Who started it, by name, for whoever may list the members.
+  const members = useLoad(() => (can("member.manage") ? get<{ members: { user_id: string; name: string; email: string }[] }>("/v1/members") : Promise.resolve({ members: [] })), []);
+  const names = new Map((members.data?.members ?? []).map((m) => [m.user_id, m.name || m.email]));
+  if (me?.user) names.set(me.user.id, me.user.name || me.user.email);
   const status = data?.run.status;
   // Which secrets and connections each step decrypted (audit.read only).
   const reads = useLoad(
@@ -89,42 +96,42 @@ export function RunPage() {
   const form = started?.trigger?.form;
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          <Link to={`/workflows/${r.workflow_id}?v=${r.version}`}>{r.workflow}</Link> <span className="hint">run</span>
-        </h1>
-        <Badge value={shownStatus} />
-        {!reveal && !TERMINAL.has(shownStatus) && <span className="hint live-dot">live</span>}
-        {can("pii.reveal") && (
-          <label className="inline" title="Decrypt personal data for this view; the access is audited">
-            <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
-          </label>
-        )}
-        {can("run.cancel") && !TERMINAL.has(shownStatus) && (
-          <button
-            className="danger"
-            disabled={act.busy}
-            onClick={() => confirm("Cancel this run? Steps already sent to a provider still record their results.") && void act.run(async () => (await post(`/v1/runs/${id}/cancel`), reload()))}
-          >
-            Cancel run
-          </button>
-        )}
+      <p className="crumbs">
+        <Link to="/runs">Activity</Link>
+      </p>
+      <div className="editor-head">
+        <div className="editor-title">
+          <h1>{r.workflow}</h1>
+          <Badge value={shownStatus} />
+          {!reveal && !TERMINAL.has(shownStatus) && <span className="hint live-dot">live</span>}
+        </div>
+        <div className="page-actions">
+          {can("pii.reveal") && (
+            <label className="inline" title="Decrypt personal data for this view; the access is audited">
+              <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
+            </label>
+          )}
+          <Link className="button" to={`/workflows/${r.workflow_id}?v=${r.version}`}>
+            Open the workflow
+          </Link>
+          {can("run.cancel") && !TERMINAL.has(shownStatus) && (
+            <button
+              className="danger"
+              disabled={act.busy}
+              onClick={() => confirm("Cancel this run? Steps already sent to a provider still record their results.") && void act.run(async () => (await post(`/v1/runs/${id}/cancel`), reload()))}
+            >
+              Cancel run
+            </button>
+          )}
+        </div>
       </div>
+      <p className="run-summary">
+        Started {fmtTime(r.started_at)} by {startedByWords(r.started_by, started?.trigger?.type, names)}
+        {r.ended_at && ` · took ${duration(r.started_at, r.ended_at)}`}
+      </p>
       <ErrorBox error={act.error} />
       <div className="card">
         <dl className="kv">
-          <dt>Run</dt>
-          <dd>
-            <code>{r.id}</code>
-          </dd>
-          <dt>Version</dt>
-          <dd>v{r.version}</dd>
-          <dt>Environment</dt>
-          <dd>{r.environment}</dd>
-          <dt>Started</dt>
-          <dd>
-            {fmtTime(r.started_at)} by {r.started_by ?? "—"}
-          </dd>
           {form && (
             <>
               <dt>Form answers</dt>
@@ -136,7 +143,16 @@ export function RunPage() {
             </>
           )}
           <dt>Ended</dt>
-          <dd>{r.ended_at ? `${fmtTime(r.ended_at)} (${duration(r.started_at, r.ended_at)})` : "—"}</dd>
+          <dd>{r.ended_at ? `${fmtTime(r.ended_at)} (${duration(r.started_at, r.ended_at)})` : "Not yet"}</dd>
+          <dt>Version</dt>
+          <dd>
+            {r.version}
+            {(advanced || r.environment !== "prod") && <span className="hint"> · {r.environment}</span>}
+          </dd>
+          <dt>Run</dt>
+          <dd>
+            <code>{r.id}</code>
+          </dd>
           {data.forks?.parent_run_id && (
             <>
               <dt>Resumed from</dt>
