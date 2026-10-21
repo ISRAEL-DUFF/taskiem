@@ -96,6 +96,12 @@ func TestEmailTrigger(t *testing.T) {
 	v2 := owner.must(201, "POST", "/v1/workflows/"+wfID+"/versions", map[string]any{"definition": json.RawMessage(keep)})
 	owner.must(409, "POST", "/v1/workflows/"+wfID+"/versions/"+fmt.Sprint(v2["version"])+"/publish", nil)
 
+	// Undeployed, the address stops taking mail.
+	owner.must(200, "DELETE", "/v1/workflows/"+wfID+"/deployments/prod", nil)
+	if _, ok, _ := st.Recipient(t.Context(), strings.TrimSuffix(fresh, "@in.taskiem.test")); ok {
+		t.Error("an undeployed workflow's address still takes mail")
+	}
+
 	// Members who may not publish cannot change the address.
 	approver := addMember(t, w, owner, "app", "approver")
 	approver.must(403, "POST", "/v1/workflows/"+wfID+"/email/prod/address", nil)

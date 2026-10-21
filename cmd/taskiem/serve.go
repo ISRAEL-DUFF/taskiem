@@ -892,7 +892,7 @@ func serve(ctx context.Context, args []string) error {
 		defer closePool()
 		tasks = append(tasks, task)
 	}
-	if *role == "all" && cfg.Mail.Domain != "" && len(cfg.Public.Key) > 0 {
+	if *role == "all" && cfg.Mail.Enabled {
 		task, closePool, err := mailTask(ctx, cfg, log)
 		if err != nil {
 			return fmt.Errorf("serve: %w", err)

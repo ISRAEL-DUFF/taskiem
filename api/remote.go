@@ -109,6 +109,16 @@ func (s *Server) undeploy(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(r.Context(), `DELETE FROM triggers WHERE workflow_id = $1 AND environment = $2`, wf, env); err != nil {
 			return err
 		}
+		// Nothing runs there now: its form and email address stop taking
+		// submissions and mail (deploying again opens them).
+		for _, q := range []string{
+			`UPDATE form_endpoints SET status = 'closed', updated_at = now() WHERE workflow_id = $1 AND environment = $2 AND status IN ('live', 'paused')`,
+			`UPDATE email_endpoints SET status = 'closed', updated_at = now() WHERE workflow_id = $1 AND environment = $2 AND status = 'live'`,
+		} {
+			if _, err := tx.Exec(r.Context(), q, wf, env); err != nil {
+				return err
+			}
+		}
 		if err := remote.Release(r.Context(), tx, wf, []string{env}); err != nil {
 			return err
 		}

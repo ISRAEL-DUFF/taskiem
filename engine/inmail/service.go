@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -239,6 +240,7 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 			}
 		}
 	}
+	telemetry.Ingest.WithLabelValues("email", rec.status).Inc()
 	size := len(raw)
 	domain := ""
 	if msg != nil {

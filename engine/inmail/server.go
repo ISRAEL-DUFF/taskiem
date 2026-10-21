@@ -24,6 +24,8 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/google/uuid"
 	"golang.org/x/net/netutil"
+
+	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
 // Store is what the mail role may do in the database, through the narrow
@@ -178,6 +180,7 @@ func (ss *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 		return errTryLater
 	}
 	if !ok {
+		telemetry.Ingest.WithLabelValues("email_smtp", "unknown_recipient").Inc()
 		return errNoSuchAddress
 	}
 	for _, r := range ss.rcpts {
@@ -237,9 +240,11 @@ func (ss *session) Data(r io.Reader) error {
 			return errTryLater
 		}
 		if !ok {
+			telemetry.Ingest.WithLabelValues("email_smtp", "deferred").Inc()
 			return errTryLater
 		}
 	}
+	telemetry.Ingest.WithLabelValues("email_smtp", "accepted").Inc()
 	ss.s.log().Info("mail: received", "recipients", len(ss.rcpts), "size", len(raw), "spf", auth.SPF, "aligned", auth.Aligned)
 	return nil
 }

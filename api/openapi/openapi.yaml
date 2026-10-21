@@ -11277,6 +11277,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: workflow.publish
+      x-taskiem-all-environments: true
       parameters:
       - name: wf
         in: path
@@ -11318,6 +11319,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: workflow.edit
+      x-taskiem-all-environments: true
       parameters:
       - name: wf
         in: path

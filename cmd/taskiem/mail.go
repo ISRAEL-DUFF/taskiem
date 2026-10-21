@@ -24,6 +24,10 @@ import (
 // mailConfig is the mail role's (decision 0038, docs/email.md): the SMTP
 // server that takes mail for workflows' email triggers.
 type mailConfig struct {
+	// Enabled runs the mail role inside `--role all` too
+	// (TASKIEM_MAIL_ENABLED), as TASKIEM_PUBLIC_ENABLED does the public
+	// host. `--role mail` always runs it. The api role needs only Domain.
+	Enabled bool
 	// Domain is the mail domain (TASKIEM_MAIL_DOMAIN, such as
 	// in.taskiem.app): its MX record points at the mail role, and
 	// workflows' addresses are <id>@Domain. Unset, email triggers can be
@@ -45,6 +49,7 @@ var mailDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([
 
 func mailConfigFromEnv() (mailConfig, error) {
 	c := mailConfig{
+		Enabled:  envBool("TASKIEM_MAIL_ENABLED", false),
 		Domain:   strings.TrimSuffix(strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_MAIL_DOMAIN"))), "."),
 		Listen:   env("TASKIEM_MAIL_LISTEN", ":2525"),
 		Hostname: strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_MAIL_HOSTNAME"))),
