@@ -26,8 +26,8 @@ regions: [KE, UG, TZ, RW, NG, MW, ZM, CI, ET, ZA]
 auth:
   type: api_key
   fields:
-    - { key: username, label: "Application username (sandbox for the sandbox)" }
-    - { key: api_key, label: API key, secret: true }
+    - { key: username, label: "Application username", help: "Your app's username (sandbox when you are practising).", where: Africa's Talking dashboard → your app }
+    - { key: api_key, label: API key, secret: true, where: Africa's Talking dashboard → your app → Settings → API Key }
     - { key: sender_id, label: Default sender ID or short code, required: false }
     - { key: environment, label: "Environment: live (default) or sandbox", required: false }
     - { key: callback_token, label: "Callback token: a long random value you add to each callback URL as ?token=", secret: true, required: false }

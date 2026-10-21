@@ -153,6 +153,8 @@ sudo nano /opt/taskiem/taskiem.env
 | `TASKIEM_SMS_TERMII_API_KEY=`, `TASKIEM_SMS_TERMII_SENDER_ID=` | SMS to customers: order texts, form codes | Customers who gave an email still get it |
 | `TASKIEM_PUBLIC_ADDRESSES=<the VPS's IPv4>` | The A record shown to a business connecting its own domain | The editor suggests an ALIAS record |
 | `TASKIEM_ALLOW_SIGNUP=true` | Self-serve sign-up, to test it | Only invited people join. **Re-running setup sets it back to false** |
+| `TASKIEM_OAUTH_GOOGLESHEETS_CLIENT_ID=`, `TASKIEM_OAUTH_GOOGLESHEETS_CLIENT_SECRET=` (and `TASKIEM_OAUTH_GMAIL_*`) | **Connect Google Sheets** (and Gmail) in one click. Register the app as [Google Sheets](../integrations/googlesheets.md#one-click-taskiems-google-app) says, with the redirect URI `https://staging.<domain>/v1/connections/oauth/callback`, and add each tester's Google account under the consent screen's **Test users** | Google connections are made by pasting a service account key |
+| `TASKIEM_AI_MODERATION_MODEL=` | A cheaper model for storefront moderation than for building | Moderation uses the building model |
 
 Billing stays off on staging unless you are testing plans: every organisation is then on the self-hosted plan, with no storefront limits.
 

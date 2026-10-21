@@ -4,7 +4,20 @@ The connector is `connectors/googlesheets` (`googlesheets@1`), on the Sheets API
 
 ## Connections
 
-### A service account (simplest)
+### One click (Taskiem's Google app)
+
+Where the platform has registered Taskiem with Google (`TASKIEM_OAUTH_GOOGLESHEETS_CLIENT_ID` and `_CLIENT_SECRET`), an owner connects with **Connect Google Sheets**: they sign in to Google, approve, and come back connected. Taskiem asks for `spreadsheets` and `drive.file`, with offline access, and keeps the refresh token with Taskiem's client; nothing is pasted. A spreadsheet is then chosen by pasting its link from the browser (`POST /v1/sheets/resolve` answers its title and tabs), never its id.
+
+Registering the app (operators, once per platform):
+
+1. In the Google Cloud console, create a project, enable the **Google Sheets API** and the **Google Drive API**.
+2. **APIs & Services → OAuth consent screen**: External, the app name, support email and the privacy policy URL. Add the scopes `.../auth/spreadsheets` and `.../auth/drive.file`. Until Google verifies the app (`spreadsheets` is a sensitive scope, which takes a review of some weeks: decision N0-2), only the **test users** listed there can connect, and Google shows a warning.
+3. **Credentials → Create credentials → OAuth client ID → Web application**, with the authorised redirect URI `https://<your Taskiem>/v1/connections/oauth/callback`.
+4. Set `TASKIEM_OAUTH_GOOGLESHEETS_CLIENT_ID` and `TASKIEM_OAUTH_GOOGLESHEETS_CLIENT_SECRET` and restart. Gmail takes its own pair (`TASKIEM_OAUTH_GMAIL_*`), which may be the same client.
+
+Rotating the client secret needs connections made with the old one to be connected again: each keeps the client it was granted to.
+
+### A service account
 
 1. In the Google Cloud console, enable the **Google Sheets API** in a project.
 2. **IAM & Admin → Service accounts → Create service account**, then **Keys → Add key → JSON**.

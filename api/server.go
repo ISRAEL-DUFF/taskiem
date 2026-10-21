@@ -413,6 +413,9 @@ func (s *Server) Handler() http.Handler {
 
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
+			r.With(s.need(PermConnectionManage)).Post("/connections/check", s.checkConnection)
+			r.With(s.need(PermWorkflowRead)).Get("/connection-names", s.listConnectionNames)
+			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
 			r.With(s.need(PermConnectionManage)).Post("/connections/oauth/start", s.startOAuthConnection) // connect by OAuth (oauthconnections.go)
 			r.With(s.need(PermConnectionManage)).Put("/connections/{id}/credentials", s.mergeConnectionCredentials)
 			r.With(s.need(PermConnectionManage)).Delete("/connections/{id}", s.deleteConnection)

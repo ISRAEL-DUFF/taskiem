@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -142,13 +144,16 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		s.failOAuth(w, r, err)
 		return
 	}
-	if req.Name == "" {
-		req.Name = "default"
-	}
 	var state, browser, verifier string
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_connections"); err != nil {
 			return err
+		}
+		if req.Name == "" {
+			var err error
+			if req.Name, err = freeConnectionName(r.Context(), tx, env, c.Manifest.ID); err != nil {
+				return err
+			}
 		}
 		var exists bool
 		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM connections WHERE environment = $1 AND connector = $2 AND name = $3)`, env, c.Manifest.ID, req.Name).Scan(&exists); err != nil {
@@ -172,6 +177,9 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		"state":                 {state},
 		"code_challenge":        {base64.RawURLEncoding.EncodeToString(sum[:])},
 		"code_challenge_method": {"S256"},
+	}
+	for k, v := range c.Manifest.Auth.OAuth2.AuthorizeParams {
+		q.Set(k, v)
 	}
 	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: browser, Path: oauthCallbackPath, MaxAge: int(secrets.OAuthRequestTTL.Seconds()), //nolint:gosec // Secure is TASKIEM_SECURE_COOKIES (on by default), as for the session cookie
 		HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode})
@@ -251,6 +259,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	// A token that makes no connection is given back to the provider.
 	token := asString(answer["access_token"])
 	creds, expiresAt, err := oauthCredentials(c.Manifest, answer, prov.server)
+	applyPlatformClient(c.Manifest, creds, prov.client)
 	if err != nil {
 		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
 		s.oauthDone(w, r, "", err)
@@ -407,12 +416,31 @@ func oauthCredentials(m *connector.Manifest, answer map[string]any, server strin
 		}
 		creds[field] = asString(list[0])
 	}
+	// A connection that keeps a refresh token does not expire with its
+	// access token: the connector refreshes it.
+	keepsRefresh := slices.Contains(slices.Collect(maps.Values(m.Auth.OAuth2.FieldsFromToken)), "refresh_token")
 	var expiresAt *time.Time
-	if n, ok := answer["expires_in"].(float64); ok && n > 0 {
+	if n, ok := answer["expires_in"].(float64); ok && n > 0 && !keepsRefresh {
 		t := time.Now().Add(time.Duration(n) * time.Second).UTC()
 		expiresAt = &t
 	}
 	return creds, expiresAt, nil
+}
+
+// applyPlatformClient fills the fields a connector that refreshes its own
+// tokens takes from the client they were granted to: Taskiem's.
+func applyPlatformClient(m *connector.Manifest, creds map[string]string, client OAuthClient) {
+	if creds == nil || m.Auth.OAuth2 == nil {
+		return
+	}
+	for field, which := range m.Auth.OAuth2.PlatformClientFields {
+		switch which {
+		case "id":
+			creds[field] = client.ID
+		case "secret":
+			creds[field] = client.Secret
+		}
+	}
 }
 
 func asString(v any) string {
@@ -427,15 +455,20 @@ func asString(v any) string {
 	return ""
 }
 
-// oauthToken is the access token among a connection's credentials: the
-// field the manifest fills from access_token.
+// oauthToken is the token to give back among a connection's credentials:
+// the field the manifest fills from refresh_token (revoking it ends the
+// grant), else from access_token.
 func oauthToken(c *connector.Connector, creds map[string]string) string {
+	access := ""
 	for field, from := range c.Manifest.Auth.OAuth2.FieldsFromToken {
-		if from == "access_token" {
+		switch from {
+		case "refresh_token":
 			return creds[field]
+		case "access_token":
+			access = creds[field]
 		}
 	}
-	return ""
+	return access
 }
 
 // oauthRevoke gives a token back to the provider (RFC 7009) when it will

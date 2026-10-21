@@ -12,8 +12,18 @@ regions: [NG, GH, KE, ZA, UG, TZ, RW]
 auth:
   type: api_key
   fields:
-    - { key: secret_key, label: Secret key (FLWSECK-… or FLWSECK_TEST-…), secret: true }
-    - { key: webhook_hash, label: Webhook secret hash (Settings → Webhooks), secret: true, required: false }
+    - key: secret_key
+      label: Secret key
+      secret: true
+      help: Taskiem uses it to take and check payments for your business. Keep it private.
+      where: Flutterwave dashboard → Settings → API Keys
+      link: https://app.flutterwave.com/dashboard/settings/apis
+      prefixes:
+        - { prefix: FLWSECK-, mode: live, label: Live (real money) }
+        - { prefix: FLWSECK_TEST-, mode: test, label: Test (practice) }
+      refuse:
+        - { prefix: FLWPUBK, message: "That is your public key. Copy the secret key from the same page: it starts with FLWSECK." }
+    - { key: webhook_hash, label: Webhook secret hash, secret: true, required: false, help: Only to receive Flutterwave's events., where: Flutterwave dashboard → Settings → Webhooks }
   test: { action: list_banks }
 # "Bearer" keys select test or live mode; one host serves both.
 base_url: https://api.flutterwave.com/v3

@@ -5,6 +5,7 @@ import type { Step } from "@sdk/wd";
 import type { ConnectorInfo, Problem } from "../api";
 import { FormStepEditor } from "./FormEditor";
 import { RolePicker } from "../forms/RolePicker";
+import { ConnectionPicker } from "../forms/ConnectionPicker";
 import type { FormStepConfig } from "../lib/forms";
 import { SchemaForm } from "../forms/SchemaForm";
 import { merge } from "../lib/schema";
@@ -272,8 +273,8 @@ function ConnectorConfig({ step, connectors, set }: { step: Extract<Step, { type
         </Field>
       </div>
       {action && <div className="hint" style={{ marginBottom: 8 }}>Class: {action.class.replaceAll("_", " ")}</div>}
-      <Field label="Connection" hint="Name of the connection to use; empty uses the only one">
-        <input value={step.connection ?? ""} onChange={(e) => set({ connection: e.target.value })} />
+      <Field label="Connection" hint="Which of your connections to this service it uses">
+        <ConnectionPicker connector={step.connector ?? ""} value={step.connection ?? ""} onChange={(connection) => set({ connection: connection || undefined })} />
       </Field>
       <h3>Input</h3>
       <SchemaForm schema={action?.input} value={step.input} onChange={(v) => set({ input: v })} />

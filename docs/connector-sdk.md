@@ -47,6 +47,36 @@ taskiem connector validate manifest.yaml connector.wasm
 
 Warnings (shown, not blocking): an `unsafe_write` (it will park on timeouts), no `auth.test` action, an idempotency field the input schema does not declare, a missing description for your own connector.
 
+### Guiding the person who connects
+
+Most people connecting a service are not developers, so each field can say what it is and where it is (no-technical-steps plan, N2). The web app shows them on a guided screen and checks a pasted value as it is typed and again, with the service, before it is saved (`POST /v1/connections` with `check: true`, or `POST /v1/connections/check`):
+
+```yaml
+auth:
+  type: api_key
+  fields:
+    - key: secret_key
+      label: Secret key
+      secret: true
+      help: Taskiem uses it to take and check payments for your business. Keep it private.
+      where: Paystack dashboard → Settings → API Keys & Webhooks
+      link: https://dashboard.paystack.com/#/settings/developers
+      prefixes:
+        - { prefix: sk_live_, mode: live, label: Live (real money) }
+        - { prefix: sk_test_, mode: test, label: Test (practice) }
+      refuse:
+        - { prefix: pk_, message: "That is your public key. Copy the secret key from the same page: it starts with sk_." }
+  test: { action: check_balance }
+```
+
+- `help` is one plain line; `where` says where the value is in the provider's dashboard, and `link` opens that page.
+- `prefixes` are what a right value starts with. When they name modes, the person chooses one (**Live** or **Test**) instead of knowing a prefix, and a key for the other is refused in plain words. The connection records the mode, and pickers say when one holds a test key.
+- `refuse` are values that are the wrong one, such as a public key, each with what to tell the person.
+- Optional fields are shown under **More options**.
+- `auth.test` is the action the service is asked with before saving; a connector without one is saved after the field checks alone.
+
+A connection nobody names is called `main` (then `main_2` …), the name templates, the AI builder and storefront payments use.
+
 ### Connecting by OAuth
 
 A connector keeps its `auth.fields` (people can always paste credentials) and adds `auth.oauth2` when the provider supports the OAuth 2.0 authorization code grant with PKCE ([decision 0034](decisions/0034-oauth-connections.md); rule 13 of the [contract](contracts/connector-v1.md)):
@@ -70,6 +100,11 @@ auth:
 - `authorize_url`, `token_url` and `revoke_url` are `https://` URLs, or start with `${server}/` to be resolved from the connector's `base_url` (the platform's server for that provider, such as `TASKIEM_XENIBASE_URL`) when a connection is linked. A connector whose URLs need a server is not linkable on a platform that names none; a connection's own server (a self-hosted instance) is never used for OAuth, since Taskiem is not registered there.
 - `scopes` is what Taskiem asks for; the person may grant less.
 - `fields_from_token` fills auth fields from the token answer: a field of the answer (`access_token`, `org_id`), one element of a list field (`project_ids[0]`: the grant must then name exactly one, or the person is asked to connect again and choose one), or `${server}` for the server the token came from. Every required field must be filled this way, or a linked connection would be missing it. Optional fields the token does not fill (Xenibase's secret key and data API URL) are added afterwards from the Connections page (`PUT /v1/connections/{id}/credentials`).
+
+Two more keys serve providers whose tokens are short-lived and refreshed by the connector itself (Google):
+
+- `authorize_params` adds query parameters to the consent URL (`{ access_type: offline, prompt: consent }`, without which Google issues no refresh token).
+- `platform_client_fields` fills auth fields from Taskiem's own registration, `id` or `secret` (`{ client_id: id, client_secret: secret }`), since a refresh token only works with the client it was granted to. A connection that keeps a `refresh_token` from `fields_from_token` does not expire with its access token.
 
 The flow is Taskiem's, not the connector's: `POST /v1/connections/oauth/start` records a ten-minute request and answers the consent URL (client id, redirect URI, scopes, state, PKCE challenge); the provider sends the browser back to `/v1/connections/oauth/callback`, which exchanges the code at `token_url` with the client secret and the verifier and saves the connection with `auth_type: oauth2` and the token's expiry. The state and the verifier never leave the server; the client secret never leaves the process. Taskiem's registration with the provider is per connector in the environment: `TASKIEM_OAUTH_<CONNECTOR>_CLIENT_ID` and `_CLIENT_SECRET` ([operations](operations.md#configuration)); without it, `GET /v1/connectors` says `oauth_linkable: false` and start answers 503 `oauth_unavailable`.
 

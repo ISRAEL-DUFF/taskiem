@@ -27,6 +27,19 @@ auth:
     - { key: client_secret, label: OAuth client secret, secret: true, required: false }
     - { key: refresh_token, label: OAuth refresh token, secret: true, required: false }
     - { key: scopes, label: "Scopes for service accounts (default https://www.googleapis.com/auth/spreadsheets)", required: false }
+  # One click (no-technical-steps N2): Taskiem's own Google app
+  # (TASKIEM_OAUTH_GOOGLESHEETS_CLIENT_ID and _CLIENT_SECRET). Google issues a
+  # refresh token only with access_type=offline and prompt=consent; the
+  # connector refreshes access tokens with Taskiem's client.
+  oauth2:
+    authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+    token_url: https://oauth2.googleapis.com/token
+    revoke_url: https://oauth2.googleapis.com/revoke
+    scopes: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file"]
+    pkce: true
+    authorize_params: { access_type: offline, prompt: consent, include_granted_scopes: "true" }
+    fields_from_token: { refresh_token: refresh_token }
+    platform_client_fields: { client_id: id, client_secret: secret }
 base_url: https://sheets.googleapis.com/v4
 egress_hosts: [sheets.googleapis.com, oauth2.googleapis.com]
 actions:

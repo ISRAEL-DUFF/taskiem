@@ -49,9 +49,12 @@ test("sign up, set up a template, and run it once", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Text the owner about each new order" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create and publish" })).toBeDisabled();
 
-  const connect = page.getByRole("form", { name: "Connect Termii" });
+  // The guided screen: the service and its name are fixed, the key is
+  // checked with Termii before it is saved.
+  await page.getByRole("button", { name: "Connect Termii" }).click();
+  const connect = page.getByRole("dialog", { name: "Connect Termii" });
   await connect.getByLabel("API key").fill("TL-e2e-key");
-  await connect.getByRole("button", { name: "Save connection" }).click();
+  await connect.getByRole("button", { name: "Check and save" }).click();
   await expect(page.getByTestId("connected-termii")).toContainText("connected as main");
   await page.getByLabel("owner_phone").fill("2348012345678");
   await page.getByRole("button", { name: "Save owner_phone" }).click();

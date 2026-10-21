@@ -3692,6 +3692,53 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/connection-names:
+    get:
+      operationId: listConnectionNames
+      tags:
+      - Connectors
+      summary: The business's connections by name, for pickers
+      description: Service, name, environment, status and live or test only, for wherever a step, template or form names a connection.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      parameters:
+      - name: connector
+        in: query
+        schema:
+          type: string
+        description: Only this service's (`paystack` or `paystack@1`).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [connections]
+                properties:
+                  connections:
+                    type: array
+                    items:
+                      type: object
+                      required: [connector, name, environment, status, mode]
+                      properties:
+                        connector:
+                          type: string
+                        name:
+                          type: string
+                        environment:
+                          type: string
+                        status:
+                          type: string
+                        mode:
+                          type:
+                          - string
+                          - 'null'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/connections:
     get:
       operationId: listConnections
@@ -3756,6 +3803,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/connections/check:
+    post:
+      operationId: checkConnection
+      tags:
+      - Connectors
+      summary: Check a connection's details without saving them
+      description: The checks saving makes (the fields, the key's start for the chosen mode, and the service's own answer to its test action), as a key is pasted.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: connection.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionRequest'
+      responses:
+        '200':
+          description: The details are accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
         default:
           $ref: '#/components/responses/Error'
   /v1/connections/oauth/start:
@@ -9497,6 +9576,50 @@ paths:
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sheets/resolve:
+    post:
+      operationId: resolveSpreadsheet
+      tags:
+      - Connectors
+      summary: A spreadsheet from its link
+      description: Opens the spreadsheet a pasted Google Sheets link names, with the business's Google Sheets connection in prod (the named one, or the only one), and answers its id, title and tabs, so nobody copies an id. 409 when Google Sheets is not connected.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [link]
+              properties:
+                link:
+                  type: string
+                connection:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [spreadsheet_id, title, tabs]
+                properties:
+                  spreadsheet_id:
+                    type: string
+                  title:
+                    type: string
+                  tabs:
+                    type: array
+                    items:
+                      type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/signup:
@@ -17364,6 +17487,11 @@ components:
           - string
           - 'null'
           description: What made the connection when it was not a person, e.g. `taskiem:data_tables` for the data tables project's.
+        mode:
+          type:
+          - string
+          - 'null'
+          description: '`live` or `test`, when the key says which.'
         remote:
           type: object
           description: Its subscriptions at the provider, when it has any.
@@ -17407,12 +17535,18 @@ components:
           description: '`id@major`, e.g. `paystack@1`.'
         name:
           type: string
-          description: Defaults to `default`.
+          description: Defaults to `main`, or `main_2`, `main_3` … when the business already has a `main` for the service there.
         credentials:
           type: object
           additionalProperties:
             type: string
           description: The fields the connector's auth asks for. Stored in the vault; never shown again.
+        mode:
+          type: string
+          description: The choice the person made (`live` or `test`) when the connector's keys say which they are; a key for the other, or a wrong one (a public key), is refused in plain words.
+        check:
+          type: boolean
+          description: Ask the service first (the connector's test action); a key it refuses is not saved.
       additionalProperties: false
     ConnectionCreated:
       type: object

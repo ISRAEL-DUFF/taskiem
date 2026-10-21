@@ -6,6 +6,10 @@ The connector is `connectors/gmail` (`gmail@1`), on the Gmail API v1. Built from
 
 A connection is **one** of:
 
+### One click (Taskiem's Google app)
+
+With `TASKIEM_OAUTH_GMAIL_CLIENT_ID` and `_CLIENT_SECRET` set (registered as for [Google Sheets](googlesheets.md#one-click-taskiems-google-app), with the Gmail API enabled), an owner connects with **Connect Gmail** and nothing is pasted. It asks for `gmail.modify`, a **restricted** scope: until Google verifies the app, which for restricted scopes includes a yearly third-party security assessment (decision N0-2), only the consent screen's test users can connect. Businesses that only need to send email to customers can use the platform's own mail instead, as storefronts do.
+
 ### A service account with domain-wide delegation (Google Workspace)
 
 Gmail has no mailbox of its own for a service account, so it must act as a Workspace user.

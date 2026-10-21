@@ -5,6 +5,7 @@ package connector
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"net/url"
@@ -63,6 +64,13 @@ type OAuth2 struct {
 	// list field (project_ids[0]: the list must then hold exactly one), or
 	// ${server} for the server the token was issued by.
 	FieldsFromToken map[string]string `json:"fields_from_token,omitempty"`
+	// AuthorizeParams are extra query parameters on the consent URL
+	// (Google: access_type=offline and prompt=consent for a refresh token).
+	AuthorizeParams map[string]string `json:"authorize_params,omitempty"`
+	// PlatformClientFields fill auth fields from Taskiem's registration
+	// with the provider ("id" or "secret"), for connectors that refresh
+	// their own tokens with the client that was granted them.
+	PlatformClientFields map[string]string `json:"platform_client_fields,omitempty"`
 }
 
 // ServerPlaceholder starts an OAuth URL resolved from the connector's base
@@ -107,12 +115,113 @@ func TokenField(v string) (field string, element bool) {
 	return v, false
 }
 
-// AuthField is one credential a connection supplies.
+// AuthField is one credential a connection supplies. Help, Where and Link
+// guide the person connecting (no-technical-steps N2); Prefixes and Refuse
+// check a pasted value before anything is saved.
 type AuthField struct {
 	Key      string `json:"key"`
 	Label    string `json:"label"`
 	Secret   bool   `json:"secret"`
 	Required *bool  `json:"required"`
+	Help     string `json:"help,omitempty"`
+	Where    string `json:"where,omitempty"`
+	Link     string `json:"link,omitempty"`
+	// Prefixes are what a right value starts with; a Mode is a choice the
+	// person makes (live or test) instead of knowing a prefix.
+	Prefixes []KeyPrefix `json:"prefixes,omitempty"`
+	// Refuse are values that are the wrong one, with a plain message.
+	Refuse []KeyRefusal `json:"refuse,omitempty"`
+}
+
+// KeyPrefix is a start a right value has, for one mode.
+type KeyPrefix struct {
+	Prefix string `json:"prefix"`
+	Mode   string `json:"mode,omitempty"`
+	Label  string `json:"label,omitempty"`
+}
+
+// KeyRefusal is a start of a wrong value, and what to tell the person.
+type KeyRefusal struct {
+	Prefix  string `json:"prefix"`
+	Message string `json:"message"`
+}
+
+// IsRequired reports whether the field must be given.
+func (f AuthField) IsRequired() bool { return f.Required == nil || *f.Required }
+
+// CheckValue checks a pasted value against the field's prefixes, for the
+// mode the person chose ("" for any), in plain words.
+func (f AuthField) CheckValue(v, mode string) error {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil
+	}
+	for _, r := range f.Refuse {
+		if strings.HasPrefix(v, r.Prefix) {
+			return errors.New(r.Message)
+		}
+	}
+	if len(f.Prefixes) == 0 {
+		return nil
+	}
+	var other *KeyPrefix
+	for i, p := range f.Prefixes {
+		if !strings.HasPrefix(v, p.Prefix) {
+			continue
+		}
+		if mode == "" || p.Mode == "" || p.Mode == mode {
+			return nil
+		}
+		other = &f.Prefixes[i]
+	}
+	if other != nil {
+		want := mode
+		for _, p := range f.Prefixes {
+			if p.Mode == mode && p.Label != "" {
+				want = p.Label
+			}
+		}
+		got := other.Label
+		if got == "" {
+			got = other.Mode
+		}
+		return fmt.Errorf("that is a %s %s, but you chose %s; copy the %s %s instead", strings.ToLower(got), strings.ToLower(f.Label), strings.ToLower(want), strings.ToLower(want), strings.ToLower(f.Label))
+	}
+	var starts []string
+	for _, p := range f.Prefixes {
+		if mode == "" || p.Mode == "" || p.Mode == mode {
+			starts = append(starts, p.Prefix)
+		}
+	}
+	return fmt.Errorf("that does not look like your %s: it starts with %s", strings.ToLower(f.Label), strings.Join(starts, " or "))
+}
+
+// ModeOf is the mode credentials are for, read from the values' starts
+// (sk_live_ is live), or "" when the fields say nothing.
+func (a Auth) ModeOf(creds map[string]string) string {
+	for _, f := range a.Fields {
+		v := strings.TrimSpace(creds[f.Key])
+		for _, p := range f.Prefixes {
+			if p.Mode != "" && v != "" && strings.HasPrefix(v, p.Prefix) {
+				return p.Mode
+			}
+		}
+	}
+	return ""
+}
+
+// Modes are the choices a connector's fields offer (live, test), in order,
+// with their labels.
+func (a Auth) Modes() []KeyPrefix {
+	var out []KeyPrefix
+	for _, f := range a.Fields {
+		for _, p := range f.Prefixes {
+			if p.Mode != "" && !slices.ContainsFunc(out, func(x KeyPrefix) bool { return x.Mode == p.Mode }) {
+				out = append(out, KeyPrefix{Mode: p.Mode, Label: p.Label})
+			}
+		}
+	}
+	return out
 }
 
 type ActionSpec struct {

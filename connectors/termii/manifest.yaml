@@ -8,8 +8,8 @@ regions: [NG, GH, KE, ZA, UG, TZ, RW]
 auth:
   type: api_key
   fields:
-    - { key: api_key, label: API key, secret: true }
-    - { key: sender_id, label: Default sender ID, required: false }
+    - { key: api_key, label: API key, secret: true, help: Taskiem uses it to send texts from your Termii account., where: Termii dashboard → the API key shown on your dashboard's home, link: "https://accounts.termii.com/" }
+    - { key: sender_id, label: Default sender ID, required: false, help: The name texts come from once Termii approves it. }
   test: { action: check_balance }
 rate_limit: { requests: 20, per: 1s, scope: connection }
 base_url: https://api.ng.termii.com

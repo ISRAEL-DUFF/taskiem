@@ -76,7 +76,34 @@
               "key": { "$ref": "#/$defs/name" },
               "label": { "type": "string" },
               "secret": { "type": "boolean", "default": false },
-              "required": { "type": "boolean", "default": true }
+              "required": { "type": "boolean", "default": true },
+              "help": { "type": "string", "description": "One line, in plain words, for the person connecting." },
+              "where": { "type": "string", "description": "Where the value is in the provider's dashboard, e.g. Paystack → Settings → API Keys & Webhooks." },
+              "link": { "type": "string", "pattern": "^https://", "description": "The provider's page that shows the value." },
+              "prefixes": {
+                "description": "What a right value starts with; mode names a choice offered to the person (live or test), shown with its label.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["prefix"],
+                  "properties": {
+                    "prefix": { "type": "string", "minLength": 1 },
+                    "mode": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+                    "label": { "type": "string" }
+                  }
+                }
+              },
+              "refuse": {
+                "description": "Values that are the wrong one (a public key), refused with a plain message.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["prefix", "message"],
+                  "properties": { "prefix": { "type": "string", "minLength": 1 }, "message": { "type": "string", "minLength": 1 } }
+                }
+              }
             }
           }
         },
@@ -91,6 +118,17 @@
             "revoke_url": { "type": "string", "pattern": "^(https://|\\$\\{server\\}/)" },
             "scopes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
             "pkce": { "const": true },
+            "authorize_params": {
+              "description": "Extra query parameters on the consent URL (Google: access_type offline, prompt consent, for a refresh token).",
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "platform_client_fields": {
+              "description": "Auth fields filled from Taskiem's own registration with the provider, for connectors that refresh tokens themselves: id and secret.",
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/name" },
+              "additionalProperties": { "enum": ["id", "secret"] }
+            },
             "fields_from_token": {
               "description": "Auth fields filled from the token answer: a field of the answer, one element of a list field (project_ids[0]), or ${server}.",
               "type": "object",
