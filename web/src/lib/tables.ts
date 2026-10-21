@@ -157,7 +157,7 @@ export function parseCSV(text: string): { header: string[]; rows: string[][] } {
     row.push(cell);
     rows.push(row);
   }
-  const header = (rows.shift() ?? []).map((h) => h.trim().toLowerCase());
+  const header = (rows.shift() ?? []).map((h) => h.trim());
   return { header, rows: rows.filter((r) => r.some((c) => c.trim() !== "")) };
 }
 
@@ -174,14 +174,58 @@ export function toCSV(columns: string[], rows: Row[]): string {
   return lines.join("\r\n") + "\r\n";
 }
 
-/** Checks a CSV's header against the table: unknown columns, or none of the table's. id, created_at and updated_at are allowed. */
-export function importError(header: string[], columns: Column[]): string | null {
+/** A header or column name as matched: lower case, letters and digits only ("Phone Number" is phone_number), as the server matches. */
+export const headerKey = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+/** Each header's column, by name or title loosely (no-technical-steps N5); the headers that match none. */
+export function matchHeaders(header: string[], columns: Column[]): { matched: Record<string, string>; unmatched: string[] } {
+  const byKey = new Map<string, string>();
+  for (const r of RESERVED) byKey.set(headerKey(r), r);
+  for (const c of columns) byKey.set(headerKey(c.name), c.name);
+  for (const c of columns) if (c.title && !byKey.has(headerKey(c.title))) byKey.set(headerKey(c.title), c.name);
+  const matched: Record<string, string> = {};
+  const unmatched: string[] = [];
+  for (const h of header) {
+    const c = byKey.get(headerKey(h));
+    if (c) matched[h] = c;
+    else unmatched.push(h);
+  }
+  return { matched, unmatched };
+}
+
+/** Checks a CSV's header against the table once the person has matched the rest (mapping: header to column, "" to leave out). */
+export function importError(header: string[], columns: Column[], mapping: Record<string, string> = {}): string | null {
   if (header.length === 0) return "The file has no header row.";
-  const known = new Set([...RESERVED, ...columns.map((c) => c.name)]);
-  const unknown = header.filter((h) => !known.has(h));
-  if (unknown.length > 0) return `The table has no column ${unknown.join(", ")}. The header row names columns.`;
-  if (!header.some((h) => columns.some((c) => c.name === h))) return "The header names none of the table's columns.";
+  const { matched, unmatched } = matchHeaders(header, columns);
+  const left = unmatched.filter((h) => !(h in mapping));
+  if (left.length > 0) return `Match ${left.map((h) => `“${h}”`).join(", ")} to a column of the table, or leave it out.`;
+  const used = [...Object.values(matched), ...Object.values(mapping)].filter((c) => c && !RESERVED.includes(c));
+  if (used.length === 0) return "The file has none of the table's columns.";
   return null;
+}
+
+/** A table to make from a file's header (Make a table from this file): a column per header, typed from its values. */
+export function tableFromCSV(name: string, header: string[], rows: string[][]): { name: string; title: string; columns: { name: string; title: string; type: string }[] } {
+  const snake = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/^([0-9])/, "c_$1").slice(0, 63) || "column";
+  const seen = new Set<string>();
+  const columns = header
+    .filter((h) => !RESERVED.includes(headerKey(h)) && !["createdat", "updatedat"].includes(headerKey(h)))
+    .map((h, i) => {
+      let n = snake(h);
+      while (seen.has(n)) n = `${n}_${i}`;
+      seen.add(n);
+      const values = rows.map((r) => (r[header.indexOf(h)] ?? "").trim()).filter(Boolean);
+      const type =
+        values.length > 0 && values.every((v) => /^-?\d+(\.\d+)?$/.test(v.replace(/[,₦]/g, "")) && !/^0\d/.test(v))
+          ? "number"
+          : values.length > 0 && values.every((v) => /^(\+?234|0)[789][01]\d{8}$/.test(v.replace(/[\s-]/g, "")))
+            ? "phone"
+            : values.length > 0 && values.every((v) => /^\d{4}-\d{2}-\d{2}$/.test(v))
+              ? "date"
+              : "text";
+      return { name: n, title: h.trim(), type };
+    });
+  return { name: snake(name), title: name.trim(), columns };
 }
 
 /** The wd/v1 step that reads the table, for the "Use in a workflow" panel. */

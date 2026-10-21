@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -313,7 +314,14 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 		kind, outcome = "run_cancelled", "wa.outcome.cancelled"
 	}
 	title := tr(l, outcome, "workflow", wf, "env", env)
-	m := whatsapp.AlertMessage(name, kind, title, tr(l, "wa.outcome.body"), link, map[string]any{"workflow": wf, "environment": env})
+	body := tr(l, "wa.outcome.body")
+	// Why, in plain words: the step that failed (N5).
+	if status == "failed" {
+		if why := s.runFailureText(ctx, it.Tenant, *it.Run); why != "" {
+			body = why + "\n" + body
+		}
+	}
+	m := whatsapp.AlertMessage(name, kind, title, body, link, map[string]any{"workflow": wf, "environment": env})
 	m.Tenant = it.Tenant
 	if ch.OwnTenant() != uuid.Nil {
 		m.Text = strings.TrimPrefix(m.Text, "["+name+"] ")
@@ -898,4 +906,34 @@ func (s *Server) waNotifyRuns(ctx context.Context, tenant uuid.UUID) error {
 		}
 		return nil
 	})
+}
+
+// runFailureText is why a run failed, in plain words: its last failed
+// step's error, naming the step by its name ("" when there is none).
+func (s *Server) runFailureText(ctx context.Context, tenant, run uuid.UUID) string {
+	var step string
+	var payload, def []byte
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT step_id, payload FROM run_events WHERE run_id = $1 AND type = 'StepFailed' ORDER BY seq DESC LIMIT 1`, run).Scan(&step, &payload); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT wv.definition FROM runs r JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version WHERE r.id = $1`, run).Scan(&def)
+	})
+	if err != nil {
+		return ""
+	}
+	var p struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(payload, &p) != nil || p.Error.Message == "" {
+		return ""
+	}
+	base, _, _ := strings.Cut(step, "[")
+	name := plain.StepsOf(def).Name(base)
+	if name == "" {
+		name = strings.ReplaceAll(base, "_", " ")
+	}
+	return plain.RunError(name, p.Error.Message)
 }

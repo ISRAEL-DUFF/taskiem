@@ -14,6 +14,8 @@ import {
   columnErrors,
   exampleStep,
   importError,
+  matchHeaders,
+  tableFromCSV,
   nameError,
   newColumn,
   parseCSV,
@@ -48,10 +50,13 @@ export function Tables() {
         description="Records your business keeps (customers, debtors, staff, stock) that workflows read and write. No spreadsheet needed."
         actions={
           edit && (
-            <button className="primary" disabled={!!unavailable} onClick={() => setAdding(true)}>
-              <Icon name="plus" />
-              New table
-            </button>
+            <>
+              <button className="primary" disabled={!!unavailable} onClick={() => setAdding(true)}>
+                <Icon name="plus" />
+                New table
+              </button>
+              <TableFromFile disabled={!!unavailable} onDone={list.reload} />
+            </>
           )
         }
       />
@@ -457,15 +462,24 @@ function Rows({ table, edit, onChanged }: { table: Table; edit: boolean; onChang
   const [adding, setAdding] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  // The file's headers that match no column, matched by the person (N5).
+  const [csvHeader, setCsvHeader] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
   const act = useAction();
   const reload = () => (page.reload(), onChanged());
   const textColumns = table.columns.filter((c) => c.type === "text" || c.type === "phone" || c.type === "email");
   const header = ["id", ...table.columns.map((c) => c.name)];
   useEffect(() => {
     setFileError(null);
+    setCsvHeader([]);
+    setMapping({});
     if (!file) return;
-    void file.text().then((text) => setFileError(importError(parseCSV(text).header, table.columns)));
-  }, [file, table.columns]);
+    void file.text().then((text) => setCsvHeader(parseCSV(text).header));
+  }, [file]);
+  useEffect(() => {
+    setFileError(file ? importError(csvHeader, table.columns, mapping) : null);
+  }, [file, csvHeader, mapping, table.columns]);
+  const unmatched = matchHeaders(csvHeader, table.columns).unmatched;
   return (
     <section className="card">
       <div className="toolbar" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -500,6 +514,7 @@ function Rows({ table, edit, onChanged }: { table: Table; edit: boolean; onChang
               if (!file || fileError) return;
               const form = new FormData();
               form.append("file", file);
+              if (Object.keys(mapping).length > 0) form.append("mapping", JSON.stringify(mapping));
               void act.run(async () => {
                 const out = await upload<{ imported: number; rows: number }>(`/v1/tables/${table.id}/import`, form);
                 setFile(null);
@@ -509,9 +524,24 @@ function Rows({ table, edit, onChanged }: { table: Table; edit: boolean; onChang
               });
             }}
           >
-            <Field label="Import CSV" hint={fileError ?? "A header row naming the columns; up to 5,000 rows"}>
+            <Field label="Import CSV" hint={fileError ?? "A header row naming the columns, in any case; up to 5,000 rows"}>
               <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </Field>
+            {unmatched.map((h) => (
+              <Field key={h} label={`“${h}” goes in`}>
+                <select value={mapping[h] ?? "__ask"} onChange={(e) => setMapping({ ...mapping, [h]: e.target.value })}>
+                  <option value="__ask" disabled>
+                    Choose a column…
+                  </option>
+                  <option value="">Leave it out</option>
+                  {table.columns.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.title || c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ))}
             <button disabled={act.busy || !file || !!fileError}>Import</button>
           </form>
         )}
@@ -645,5 +675,40 @@ function UseInWorkflow({ table }: { table: Table }) {
       </dl>
       <pre>{exampleStep(table)}</pre>
     </section>
+  );
+}
+
+/** Make a table from this file (N5): a column per header, typed from its values, then the rows imported. */
+function TableFromFile({ disabled, onDone }: { disabled: boolean; onDone: () => void }) {
+  const nav = useNavigate();
+  const act = useAction();
+  return (
+    <label className={`button${disabled || act.busy ? " disabled" : ""}`}>
+      {act.busy ? "Making the table…" : "Make a table from a file"}
+      <input
+        type="file"
+        accept=".csv,text/csv"
+        hidden
+        disabled={disabled || act.busy}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          void act.run(async () => {
+            const { header, rows } = parseCSV(await file.text());
+            const spec = tableFromCSV(file.name.replace(/\.csv$/i, ""), header, rows);
+            const made = await post<{ id: string }>("/v1/tables", { ...spec, columns: spec.columns.map((c) => ({ ...c, required: false })) });
+            const form = new FormData();
+            form.append("file", file);
+            const mapping = Object.fromEntries(header.map((h) => [h, spec.columns.find((c) => c.title === h.trim())?.name ?? ""]));
+            form.append("mapping", JSON.stringify(mapping));
+            await upload(`/v1/tables/${made.id}/import`, form);
+            onDone();
+            void nav(`/tables/${made.id}`);
+          });
+        }}
+      />
+      {act.error ? <ErrorBox error={act.error} /> : null}
+    </label>
   );
 }

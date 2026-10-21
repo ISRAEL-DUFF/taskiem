@@ -160,7 +160,8 @@ export function isUpgrade(tiers: string[], from: Plan, fromInterval: string, to:
   return to.monthly_kobo > from.monthly_kobo;
 }
 
-export const tiers = ["internal", "starter", "growth", "business", "enterprise"];
+// The order engine/billing.Tiers gives, cheapest first (shop came with S8).
+export const tiers = ["internal", "shop", "starter", "growth", "business", "enterprise"];
 
 export const featureNames: Record<string, string> = {
   sso: "Single sign-on",

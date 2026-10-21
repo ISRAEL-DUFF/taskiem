@@ -7,6 +7,10 @@ import { parseSession, sessionEnded, withAgentHeader, type AgentSession } from "
 export interface Problem {
   path: string;
   message: string;
+  /** In plain words, naming the step by its name (no-technical-steps N5). */
+  plain?: string;
+  /** Where it is put right: a web app path, or #step=<id> in the editor. */
+  fix?: { label: string; path: string };
 }
 
 export class ApiError extends Error {

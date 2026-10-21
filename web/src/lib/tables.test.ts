@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cellText, cellValue, columnErrors, csvCell, exampleStep, importError, nameError, newColumn, parseCSV, personalByDefault, toCSV, type Column, type Table } from "./tables";
+import { cellText, cellValue, columnErrors, csvCell, exampleStep, importError, matchHeaders, nameError, newColumn, parseCSV, personalByDefault, tableFromCSV, toCSV, type Column, type Table } from "./tables";
 
 const cols: Column[] = [
   { name: "name", title: "Name", type: "text", required: true, personal: false },
@@ -42,7 +42,7 @@ describe("data tables", () => {
 
   it("parses CSV with quotes, doubled quotes and newlines", () => {
     const { header, rows } = parseCSV('﻿Name,phone,balance_kobo\r\n"Ada, Mrs",2348012345678,500\n"Say ""hi""\nthere",,0\n\n,,\n');
-    expect(header).toEqual(["name", "phone", "balance_kobo"]);
+    expect(header).toEqual(["Name", "phone", "balance_kobo"]); // as written: matched loosely later
     expect(rows).toEqual([
       ["Ada, Mrs", "2348012345678", "500"],
       ['Say "hi"\nthere', "", "0"],
@@ -69,6 +69,30 @@ describe("data tables", () => {
     expect(importError([], cols)).toContain("header");
     expect(importError(["name", "colour"], cols)).toContain("colour");
     expect(importError(["id"], cols)).toContain("none");
+  });
+
+  it("matches headers loosely, and asks about the rest (N5)", () => {
+    const withTitles = cols.map((c) => (c.name === "balance_kobo" ? { ...c, title: "Balance owed" } : c));
+    expect(matchHeaders(["Name", "PHONE", "Balance Owed", "Notes"], withTitles)).toEqual({
+      matched: { Name: "name", PHONE: "phone", "Balance Owed": "balance_kobo" },
+      unmatched: ["Notes"],
+    });
+    expect(importError(["Name", "Notes"], withTitles)).toContain("“Notes”");
+    expect(importError(["Name", "Notes"], withTitles, { Notes: "" })).toBeNull();
+  });
+
+  it("makes a table from a file's header and values", () => {
+    const t = tableFromCSV("My customers", ["Name", "Phone number", "Amount owed", "Joined"], [
+      ["Ada", "0803 123 4567", "5,000", "2026-01-05"],
+      ["Bola", "+2348031234567", "300", "2026-02-01"],
+    ]);
+    expect(t.name).toBe("my_customers");
+    expect(t.columns).toEqual([
+      { name: "name", title: "Name", type: "text" },
+      { name: "phone_number", title: "Phone number", type: "phone" },
+      { name: "amount_owed", title: "Amount owed", type: "number" },
+      { name: "joined", title: "Joined", type: "date" },
+    ]);
   });
 
   it("writes the example step", () => {

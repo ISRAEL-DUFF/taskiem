@@ -11989,7 +11989,7 @@ paths:
       - Data tables
       summary: Import rows from CSV
       description: >-
-        A multipart form with a `file` field holding a CSV whose header row names the table's columns (`created_at` and `updated_at` are ignored). Up to 5,000 rows per call, written in batches of 500: upserted on `id` when the file has an `id` column (an export imported back), inserted otherwise. Each batch carries its own key from the import id and the batch's index; the import id comes from the `Idempotency-Key` header, or without one from the file and the table, so a retried import writes nothing twice (`replayed_batches`). Send a new key to import the same file again on purpose. Audited as `table.import` with counts only.
+        A multipart form with a `file` field holding a CSV whose header row names the table's columns, by name or title in any case or spacing (`created_at` and `updated_at` are ignored), and an optional `mapping` field: a JSON object from each header that matches no column to the column it goes in, or `""` to leave it out. Up to 5,000 rows per call, written in batches of 500: upserted on `id` when the file has an `id` column (an export imported back), inserted otherwise. Each batch carries its own key from the import id and the batch's index; the import id comes from the `Idempotency-Key` header, or without one from the file and the table, so a retried import writes nothing twice (`replayed_batches`). Send a new key to import the same file again on purpose. Audited as `table.import` with counts only.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -12023,6 +12023,9 @@ paths:
                   type: string
                   format: binary
                   description: The CSV file (at most 16 MB)
+                mapping:
+                  type: string
+                  description: 'JSON: each header that matches no column, to the column it goes in, or "" to leave it out.'
       responses:
         '200':
           description: Imported
@@ -12754,6 +12757,17 @@ components:
           description: JSON pointer into the definition, e.g. `/steps/2/needs`.
         message:
           type: string
+        plain:
+          type: string
+          description: The problem in plain words for a business owner, naming the step by its name.
+        fix:
+          type: object
+          description: Where it is put right, as a web app path (`/connections?connect=paystack`), or `#step=<id>` for the step in the editor.
+          properties:
+            label:
+              type: string
+            path:
+              type: string
     Problems:
       type: array
       items:
@@ -13139,6 +13153,11 @@ components:
             $ref: '#/components/schemas/HistoryEvent'
         revealed:
           type: boolean
+        plain_errors:
+          type: object
+          description: Each failed step's error in plain words, by step instance, naming the step by its name.
+          additionalProperties:
+            type: string
         forks:
           type: object
           required:

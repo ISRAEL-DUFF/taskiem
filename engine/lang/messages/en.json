@@ -2055,9 +2055,9 @@
       "context": "Under an email column's question"
     },
     "wa.table.hint.json": {
-      "text": "Structured data as JSON",
+      "text": "Several values together, such as a list",
       "reviewed": true,
-      "context": "Under a json column's question"
+      "context": "Hint for a table column holding structured data"
     },
     "wa.table.hint.phone": {
       "text": "A phone number with the country code, like 2348012345678",

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/templates"
@@ -79,7 +82,7 @@ func (s *Server) publishFromChat(ctx context.Context, c *chat, wf uuid.UUID, v i
 		by := c.p.UserID
 		probs, digest, _, err := s.publishTx(ctx, tx, c.tenant.ID, wf, v, &by, "")
 		if errors.Is(err, errInvalid) && len(probs) > 0 {
-			return fmt.Errorf("%w: %s", errConflict, probs[0].Message)
+			return fmt.Errorf("%w: %s", errConflict, problemText(probs[0]))
 		}
 		if err != nil {
 			return err
@@ -332,17 +335,33 @@ func (s *Server) waPublishWorkflow(ctx context.Context, c *chat, name string) (b
 	return true, c.say(ctx, s, s.publishReply(c, state, real, needs, wf))
 }
 
-// plainValue is a value typed in chat as it is meant: text, or true or
-// false (N5 infers numbers and phone numbers the same way everywhere).
+// plainValue is a value typed as it is meant (no-technical-steps N5, as
+// the web app's plainValue): true or false; a phone number in any common
+// form, as +234…; a plain number (not one with a leading zero, an id or a
+// phone); otherwise the text as typed.
 func plainValue(text string) any {
-	switch strings.ToLower(text) {
+	t := strings.TrimSpace(text)
+	switch strings.ToLower(t) {
 	case "true":
 		return true
 	case "false":
 		return false
 	}
-	return text
+	digits := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "", ".", "").Replace(t)
+	if strings.HasPrefix(digits, "+234") || strings.HasPrefix(digits, "234") && len(digits) == 13 || strings.HasPrefix(digits, "0") && len(digits) == 11 {
+		if p, err := sender.NormalisePhone(t, []string{"234"}); err == nil {
+			return p
+		}
+	}
+	if plainNumber.MatchString(t) {
+		if f, err := strconv.ParseFloat(t, 64); err == nil {
+			return f
+		}
+	}
+	return t
 }
+
+var plainNumber = regexp.MustCompile(`^-?(0|[1-9]\d{0,14})(\.\d+)?$`)
 
 // yesNoButtons are yes, publish, and no.
 func yesNoButtons(c *chat) []whatsapp.Button {
