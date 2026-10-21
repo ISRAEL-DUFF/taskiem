@@ -130,6 +130,9 @@ func TestAuthAndCSRF(t *testing.T) {
 	if !strings.Contains(toJSON(me["permissions"]), "workflow.publish") {
 		t.Fatalf("owner permissions: %v", me["permissions"])
 	}
+	if me["tenant_name"] != "Acme" {
+		t.Errorf("business name: %v", me["tenant_name"])
+	}
 
 	anon := &client{t: t, base: w.base}
 	if st, _ := anon.do("GET", "/v1/me", nil); st != 401 {

@@ -7,7 +7,7 @@ test("conflicting edits are resolved in the editor", async ({ page }) => {
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 
   const api = async (method: string, path: string, data?: unknown) => {
     const r = await page.request.fetch(path, { method, data, headers: { "X-Taskiem-Request": "1" } });

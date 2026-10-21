@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type R
 import { ApiError } from "./api";
 import { Icon } from "./icons";
 import { redact } from "./lib/timeline";
+import { whenWords } from "./lib/time";
 
 /** Loads data, reloads on demand, and optionally polls while `poll` is true. */
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[], poll = false): { data: T | undefined; error: unknown; reload: () => void } {
@@ -302,4 +303,4 @@ export function JsonInput({ value, onChange, rows = 6 }: { value: unknown; onCha
   );
 }
 
-export const fmtTime = (s: string | null | undefined) => (s ? new Date(s).toLocaleString() : "—");
+export const fmtTime = (s: string | null | undefined) => (s ? whenWords(new Date(s)) : "—");

@@ -48,7 +48,7 @@ async function signIn(page: Page, email: string, password: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 }
 
 test("forgot password, reset it from the email, then change it", async ({ page }) => {
@@ -143,7 +143,7 @@ test("an invited person joins a sub-tenant with a passkey from the emailed link"
   await expect(page.getByText(`You are invited to ${company} as owner.`)).toBeVisible();
   await page.getByLabel("Your name").fill("Ada Holder");
   await page.getByRole("button", { name: "Create a passkey and join" }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   const me = await (await page.request.get(`${base}/v1/me`)).json();
   expect(me.tenant_id).toBe(sub);
   expect(me.auth_method).toBe("passkey");

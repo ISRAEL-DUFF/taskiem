@@ -1,6 +1,8 @@
 // Encryption keys (docs/byok.md): the tenant key hierarchy and bring your
 // own key. Pure helpers for the Settings > Encryption keys page.
 
+import { whenWords } from "./time";
+
 export type Provider = "vault_transit" | "aws_kms" | "gcp_kms" | "azure_key_vault";
 
 export interface BYOKKey {
@@ -147,10 +149,10 @@ export function missingFields(p: Provider, values: Record<string, string>, auth:
 /** A sentence for the key's health. */
 export function healthLine(k: BYOKKey): string {
   if (k.status === "unavailable") {
-    return `Unavailable since ${k.failing_since ? new Date(k.failing_since).toLocaleString() : "recently"}: steps that need secrets are paused and resume when it works again.`;
+    return `Unavailable since ${k.failing_since ? whenWords(new Date(k.failing_since)) : "recently"}: steps that need secrets are paused and resume when it works again.`;
   }
   if (k.check_failures > 0) return `The last ${k.check_failures === 1 ? "check" : `${k.check_failures} checks`} failed; it is marked unavailable after two in a row.`;
-  return k.last_ok_at ? `Working; last checked ${new Date(k.last_ok_at).toLocaleString()}.` : "Working.";
+  return k.last_ok_at ? `Working; last checked ${whenWords(new Date(k.last_ok_at))}.` : "Working.";
 }
 
 /** The state of a tenant key version, for the versions table. */

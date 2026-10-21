@@ -4,6 +4,7 @@ import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof } from "../passkeys";
 import { ErrorBox, Field, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 import { ChangePassword } from "./Password";
+import { savedTheme, setTheme, type Theme } from "../theme";
 
 interface Passkey {
   id: string;
@@ -378,6 +379,7 @@ export function Account() {
   return (
     <>
       <PageHeader title="Account" description="Your sign-in methods, invitations, and linked WhatsApp number and Telegram account." />
+      <Appearance />
       <Invitations />
       <ChangePassword />
       <Passkeys />
@@ -440,5 +442,37 @@ export function Account() {
         )}
       </section>
     </>
+  );
+}
+
+/** Light, dark, or the device's setting; kept in this browser (theme.ts). */
+function Appearance() {
+  const [theme, set] = useState<Theme>(savedTheme);
+  const choices: [Theme, string][] = [
+    ["light", "Light"],
+    ["dark", "Dark"],
+    ["system", "Match this device"],
+  ];
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Appearance</h2>
+      <div className="tabs" role="radiogroup" aria-label="Theme" style={{ marginBottom: 0 }}>
+        {choices.map(([t, label]) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={theme === t}
+            className={theme === t ? "active" : ""}
+            onClick={() => {
+              setTheme(t);
+              set(t);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }

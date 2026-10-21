@@ -5,6 +5,9 @@ import "@xyflow/react/dist/style.css";
 import "./styles.css";
 import { App } from "./App";
 import { Skeleton } from "./ui";
+import { applyTheme, savedTheme } from "./theme";
+
+applyTheme(savedTheme());
 
 // The operator console (/ops) is its own app with its own session; it
 // never mounts the tenant console's providers (docs/operator-console.md).

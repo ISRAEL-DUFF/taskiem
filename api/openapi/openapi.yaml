@@ -13760,6 +13760,9 @@ components:
         advanced:
           type: boolean
           description: Whether the business sees the web app's technical parts (the Advanced switch).
+        tenant_name:
+          type: string
+          description: The business's name, as the web app's sidebar shows it.
         factors:
           description: What the person proves themselves with to change their factors.
     AdvancedSetting:

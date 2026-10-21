@@ -5,7 +5,7 @@ test("a gated environment takes a version by promotion", async ({ page }) => {
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 
   // uat takes versions only by promotion from dev.
   await page.getByRole("link", { name: /Secrets/ }).click();
