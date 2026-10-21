@@ -384,6 +384,15 @@ type columnReq struct {
 	Personal *bool  `json:"personal"`
 }
 
+// columns are the request's columns as the tables service takes them.
+func (t tableReq) columns() []datatables.Column {
+	out := make([]datatables.Column, len(t.Columns))
+	for i, c := range t.Columns {
+		out[i] = c.column()
+	}
+	return out
+}
+
 func (c columnReq) column() datatables.Column {
 	out := datatables.Column{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required, Personal: datatables.PersonalByDefault(c.Type)}
 	if c.Personal != nil {
@@ -396,37 +405,39 @@ func (c columnReq) column() datatables.Column {
 // on the first one, and creates the Postgres table through Xenibase's
 // schema API.
 func (s *Server) createTable(w http.ResponseWriter, r *http.Request) {
-	svc, err := s.tables()
-	if err != nil {
-		s.failTables(w, r, err)
-		return
-	}
 	var req tableReq
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	p := principalFrom(r.Context())
+	t, err := s.newDataTable(r, principalFrom(r.Context()), req)
+	if err != nil {
+		s.failTables(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, tableView(t))
+}
+
+// newDataTable makes a table for p: the Tables page, and an AI draft's
+// tables when it is saved (ai.go). Its errors are answered by failTables.
+func (s *Server) newDataTable(r *http.Request, p *Principal, req tableReq) (datatables.Table, error) {
+	svc, err := s.tables()
+	if err != nil {
+		return datatables.Table{}, err
+	}
 	lim, err := s.Store.LimitsFor(r.Context(), p.TenantID)
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return datatables.Table{}, err
 	}
 	if err := datatables.CheckName("table", req.Name); err != nil {
-		s.failTables(w, r, err)
-		return
+		return datatables.Table{}, err
 	}
-	cols := make([]datatables.Column, len(req.Columns))
-	for i, c := range req.Columns {
-		cols[i] = c.column()
-	}
+	cols := req.columns()
 	if err := datatables.CheckColumns(cols, lim.MaxDataTableColumns); err != nil {
-		s.failTables(w, r, err)
-		return
+		return datatables.Table{}, err
 	}
 	if len(req.Title) > 120 || len(req.Description) > 2000 {
-		writeErr(w, http.StatusBadRequest, "the title is at most 120 characters and the description 2,000")
-		return
+		return datatables.Table{}, fmt.Errorf("%w: the title is at most 120 characters and the description 2,000", errBadRequest)
 	}
 	// The limit and the name are checked before anything is made.
 	if err := s.tx(r, func(tx pgx.Tx) error {
@@ -442,17 +453,14 @@ func (s *Server) createTable(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	}); err != nil {
-		s.fail(w, r, err)
-		return
+		return datatables.Table{}, err
 	}
 	proj, err := svc.EnsureProject(r.Context(), p.TenantID)
 	if err != nil {
-		s.failTables(w, r, err)
-		return
+		return datatables.Table{}, err
 	}
 	if !proj.Ready() {
-		s.failTables(w, r, datatables.ErrProvisioning)
-		return
+		return datatables.Table{}, datatables.ErrProvisioning
 	}
 	t := datatables.Table{Name: req.Name, Title: req.Title, Description: req.Description, Columns: cols, CreatedBy: p.Actor()}
 	err = s.tx(r, func(tx pgx.Tx) error {
@@ -469,16 +477,14 @@ func (s *Server) createTable(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
 			err = fmt.Errorf("%w: a table named %q already exists", errConflict, req.Name)
 		}
-		s.fail(w, r, err)
-		return
+		return datatables.Table{}, err
 	}
 	if err := svc.Apply(r.Context(), p.TenantID, p.Actor(), datatables.CreateTableChange(t.Name, t.Columns)); err != nil {
 		// The record goes with the table that was not made.
 		_ = s.tx(r, func(tx pgx.Tx) error { return datatables.DeleteTable(r.Context(), tx, t.ID) })
-		s.failTables(w, r, err)
-		return
+		return datatables.Table{}, err
 	}
-	writeJSON(w, http.StatusCreated, tableView(t))
+	return t, nil
 }
 
 func columnNames(cols []datatables.Column) []string {

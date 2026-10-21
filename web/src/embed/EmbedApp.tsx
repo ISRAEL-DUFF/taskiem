@@ -14,6 +14,7 @@ import { timeline } from "../lib/timeline";
 import { Badge, ErrorBox, Field, JsonInput, fmtTime, useAction, useLoad } from "../ui";
 import type { EmbedClient, EmbedMe } from "./client";
 import { addFontStylesheet, parseBranding, themeVariables } from "./theme";
+import { workflowID } from "../lib/aitables";
 
 const nodeTypes = { step: StepNode };
 /** Step types an app's end users may add; http and code only when the app allows them. */
@@ -31,10 +32,9 @@ export interface EmbedProps {
 
 /** A new workflow's first draft: a manual trigger and one step. */
 function starter(name: string): WorkflowDefinition {
-  const slug = name.replace(/[^0-9A-Za-z]/g, "").slice(0, 40) || "workflow";
   return {
     schema: "wd/v1",
-    id: `wf_${slug}`,
+    id: workflowID(name),
     version: 1,
     name,
     trigger: { type: "manual" },

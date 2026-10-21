@@ -22,7 +22,7 @@ import (
 var envelopeSchema = map[string]any{
 	"type":                 "object",
 	"additionalProperties": false,
-	"required":             []any{"summary", "assumptions", "workflow", "tests", "template", "template_params"},
+	"required":             []any{"summary", "assumptions", "workflow", "tests", "template", "template_params", "tables"},
 	"properties": map[string]any{
 		"summary": map[string]any{"type": "string",
 			"description": "Plain-language summary of what the workflow does, step by step, for the person reviewing it."},
@@ -34,6 +34,21 @@ var envelopeSchema = map[string]any{
 			"description": "The id of the starting template the draft is built from, or empty."},
 		"template_params": map[string]any{"type": "string",
 			"description": "With template and an empty workflow: the template's parameter values the goal states, serialised as one JSON object (leave out any the goal does not state). Otherwise empty."},
+		"tables": map[string]any{"type": "array",
+			"description": "Data tables the workflow reads or writes that are not among the context's data_tables, to be created when the draft is saved. Empty when every table it uses exists.",
+			"items": map[string]any{"type": "object", "additionalProperties": false, "required": []any{"name", "title", "columns"},
+				"properties": map[string]any{
+					"name":  map[string]any{"type": "string", "description": "lower_snake_case, as the workflow's input.table"},
+					"title": map[string]any{"type": "string"},
+					"columns": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false,
+						"required": []any{"name", "title", "type", "required"},
+						"properties": map[string]any{
+							"name":     map[string]any{"type": "string", "description": "lower_snake_case; never id, created_at or updated_at"},
+							"title":    map[string]any{"type": "string"},
+							"type":     map[string]any{"type": "string", "enum": columnTypesAny()},
+							"required": map[string]any{"type": "boolean"},
+						}}},
+				}}},
 		"tests": map[string]any{"type": "array",
 			"description": "Up to 3 wd-test/v1 cases, each serialised as one JSON object with trigger, mocks, approvals, signals and expect.",
 			"items": map[string]any{"type": "object", "additionalProperties": false, "required": []any{"name", "case"},
@@ -60,6 +75,36 @@ type Envelope struct {
 		Name string `json:"name"`
 		Case string `json:"case"`
 	} `json:"tests"`
+	// Tables are new data tables the workflow needs.
+	Tables []TableSpec `json:"tables"`
+}
+
+// TableSpec is a data table a draft needs that does not exist yet: shown
+// to the reviewer, who may change it, and made when the draft is saved.
+type TableSpec struct {
+	Name    string       `json:"name"`
+	Title   string       `json:"title"`
+	Columns []ColumnSpec `json:"columns"`
+}
+
+// ColumnSpec is a proposed table's column.
+type ColumnSpec struct {
+	Name     string `json:"name"`
+	Title    string `json:"title"`
+	Type     string `json:"type"`
+	Required bool   `json:"required"`
+}
+
+// ColumnTypes are the data tables' column types (engine/datatables.Types,
+// which the builder may not import: the API's test keeps them the same).
+var ColumnTypes = []string{"text", "integer", "number", "boolean", "date", "datetime", "phone", "email", "json"}
+
+func columnTypesAny() []any {
+	out := make([]any, len(ColumnTypes))
+	for i, t := range ColumnTypes {
+		out[i] = t
+	}
+	return out
 }
 
 const instructions = `You are Taskiem's workflow builder. You turn a person's description of an automation into a Taskiem workflow definition (wd/v1) for a review: a person reads your draft, its tests and its warnings, and decides whether to save it as a draft. You cannot publish, approve, run or read secrets; nothing you write runs until people have reviewed it, published it and, where policy requires, approved it.
@@ -73,7 +118,8 @@ Answer with JSON matching the response schema:
 - assumptions: everything the reviewer must confirm or create (connection names, variables, secrets, payload fields).
 - workflow: the complete wd/v1 document serialised as a JSON string. It must be valid against the schema below and the rules that follow.
 - template, template_params: see "Starting templates" below; empty strings when no template is used.
-- tests: up to 3 wd-test/v1 cases (each serialised as a JSON object string with "trigger", "mocks", "approvals", "signals", "forms" and "expect"; no "name" inside: the name goes in the name field). Mock every connector, http and code step; decide every approval; deliver every signal; answer every form step ("forms": {"<step id>": {"answers": {...}}} or {"timeout": true}).
+- tables: the data tables the workflow uses that do not exist yet (see rule 12); empty when it uses none, or only existing ones.
+- tests: up to 3 wd-test/v1 cases (each serialised as a JSON object string with "trigger", "mocks", "approvals", "signals", "forms" and "expect"; no "name" inside: the name goes in the name field). Mock every connector, http and code step; decide every approval; deliver every signal; answer every form step ("forms": {"<step id>": {"answers": {...}}} or {"timeout": true}). "expect" is {"status": "completed" (or failed, blocked, needs_reconciliation), "steps": {"<step id>": "completed" | "failed" | "skipped" | "cancelled" | "not_run"}, "outputs": {"<step id>": {...}}}: each "steps" value is one of those words, never an object.
 
 # wd/v1 rules
 
@@ -88,7 +134,7 @@ Answer with JSON matching the response schema:
 9. Approval outputs {decision, decided_by}; signal outputs the signal payload; form outputs the answers plus respondent ({timed_out: true} after a timeout with on_timeout continue); branch outputs {path, steps}; foreach outputs a list of objects keyed by body step id; transform outputs its config.output.
 10. Durations are like 90s, 15m, 24h, 7d.
 11. Use only connectors and actions from the catalogue. Prefer the tenant's existing connections (by name) and variables (by name). Keep the workflow as small as the goal allows.
-12. Data tables (the context's data_tables, with their columns) are read and written with xenibase@1 actions (read_rows, insert_rows, upsert_rows, update_rows, delete_rows) on the connection named data_tables, with input.table the table's name; every table also has id, created_at and updated_at.
+12. Data tables (the context's data_tables, with their columns) are read and written with xenibase@1 actions (read_rows, insert_rows, upsert_rows, update_rows, delete_rows) on the connection named data_tables, with input.table the table's name; every table also has id, created_at and updated_at. Use an existing table as it is, with its own column names. When the goal needs a table that does not exist, describe it in tables: a lower_snake_case name, a title, and the columns the workflow writes or reads, each with the type that fits what goes in it (date for dates, phone for phone numbers, number for amounts, boolean for yes or no; text otherwise), never id, created_at or updated_at; the workflow then uses exactly those names. Never describe a table that already exists. Do not ask the reviewer to create a table you describe.
 13. Forms: when people fill something in to start the work (a form, an application, an intake, a registration), use a "form" trigger ({"title", "access": public|link|members, optional "pages"}); its fields are inputs.schema, with display hints in "x-form", and trigger.body holds the answers. To ask someone for answers mid-run, use a "form" step ({"title", "to": {"phone"|"email": expression} or {"role"}, "schema"}). Never ask for passwords, PINs, card details or one-time codes; mark BVN, NIN and account number fields with "x-pii" (bvn, nin, account_number), and such forms are not public without "verify".
 
 # Starting templates

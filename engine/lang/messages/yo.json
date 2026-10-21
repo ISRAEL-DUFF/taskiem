@@ -528,6 +528,10 @@
       "text": "Mo ṣì ń kọ ìlànà iṣẹ́ yín; màá fi ránṣẹ́ nígbà tó bá ṣetán. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
       "reviewed": false
     },
+    "wa.build.tables_needed": {
+      "text": "Kí o tó tẹ̀ ẹ́ jáde, ṣẹ̀dá àwọn tábìlì tí ó nílò nínú àpù náà: {tables} ({link}).",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "Ìyẹn ti gùn jù fún mi; ẹ ṣàlàyé rẹ̀ ní ìsàlẹ̀ ohun kikọ {max}.",
       "reviewed": false

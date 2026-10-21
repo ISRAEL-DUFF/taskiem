@@ -38,7 +38,7 @@ type Problem struct {
 // Warning is something the reviewer should know: a policy rule the draft
 // breaks, a failing dry-run test, a correction loop cut short.
 type Warning struct {
-	Kind    string `json:"kind"` // policy | test | budget | refusal | truncated
+	Kind    string `json:"kind"` // policy | test | budget | refusal | truncated | table
 	Rule    string `json:"rule,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Message string `json:"message"`
@@ -94,8 +94,11 @@ type Builder struct {
 	// Validate runs the platform's publishing checks (wdcheck). Nil runs
 	// the wd/v1 contract checks only.
 	Validate func(doc []byte) []Problem
-	Meter    Meter
-	Recorder Recorder
+	// CheckTable runs the platform's checks on a table a draft proposes
+	// (names, types, the column limit). Nil runs the builder's own.
+	CheckTable func(TableSpec) error
+	Meter      Meter
+	Recorder   Recorder
 	// Progress reports stages: context, draft, validate, correct N, dry_run.
 	Progress func(stage string)
 	// MaxCorrections bounds the self-correction loop (default 3).
@@ -145,8 +148,11 @@ type Proposal struct {
 	// Template is the one the draft started from, if any.
 	TemplatesOffered []string     `json:"templates_offered"`
 	Template         *TemplateUse `json:"template,omitempty"`
-	Usage            ai.Usage     `json:"usage"`
-	Model            string       `json:"model"`
+	// Tables are the new data tables the draft uses, made when it is saved
+	// (the person may change them first).
+	Tables []TableSpec `json:"tables"`
+	Usage  ai.Usage    `json:"usage"`
+	Model  string      `json:"model"`
 }
 
 // Valid reports whether the proposal passes the publishing checks.
@@ -214,7 +220,8 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 	digest := sha256.Sum256([]byte(system[0].Text + "\x00" + system[1].Text))
 	sysDigest := hex.EncodeToString(digest[:])
 
-	p := &Proposal{Connectors: refs, TemplatesOffered: offered, Problems: []Problem{}, Warnings: []Warning{}, Results: []TestResult{}, Assumptions: []string{}}
+	p := &Proposal{Connectors: refs, TemplatesOffered: offered, Problems: []Problem{}, Warnings: []Warning{}, Results: []TestResult{}, Assumptions: []string{},
+		Tables: []TableSpec{}}
 	var use *TemplateUse
 	var env *Envelope
 	var doc []byte
@@ -343,6 +350,9 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 		p.Problems = []Problem{}
 	}
 	p.Warnings = append(p.Warnings, findings...)
+	var tableWarnings []Warning
+	p.Tables, tableWarnings = reviewTables(env.Tables, req.Context.Tables, doc, b.CheckTable)
+	p.Warnings = append(p.Warnings, tableWarnings...)
 
 	// Dry run, when the definition loads.
 	if def, err := wd.Load(doc); err == nil && def != nil {

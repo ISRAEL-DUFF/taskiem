@@ -7,13 +7,13 @@ import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTim
 import { Icon } from "../icons";
 import { AIBuilder } from "./AIBuild";
 import { filterWorkflows } from "../lib/lists";
+import { workflowID } from "../lib/aitables";
 
 /** A new workflow's first draft: a manual trigger and one step. */
 export function starter(name: string): WorkflowDefinition {
-  const slug = name.replace(/[^0-9A-Za-z]/g, "").slice(0, 40) || "workflow";
   return {
     schema: "wd/v1",
-    id: `wf_${slug}`,
+    id: workflowID(name),
     version: 1,
     name,
     trigger: { type: "manual" },

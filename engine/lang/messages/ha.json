@@ -528,6 +528,10 @@
       "text": "Har yanzu ina tsara aikinka; zan aiko shi idan ya shirya. Aika *cancel* don tsayawa.",
       "reviewed": false
     },
+    "wa.build.tables_needed": {
+      "text": "Kafin ka wallafa shi, ƙirƙiri teburin da yake buƙata a cikin manhajar: {tables} ({link}).",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "Wannan ya yi tsayi a gare ni; bayyana shi cikin ƙasa da haruffa {max}.",
       "reviewed": false

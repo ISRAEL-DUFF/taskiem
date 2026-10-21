@@ -528,6 +528,10 @@
       "text": "I still dey draft your workflow; I go send am when e ready. Send *cancel* to stop.",
       "reviewed": false
     },
+    "wa.build.tables_needed": {
+      "text": "Before you publish am, create the tables wey e need for the app: {tables} ({link}).",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "E too long for me; talk am for less than {max} characters.",
       "reviewed": false

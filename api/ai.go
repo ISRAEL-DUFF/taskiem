@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/policy"
@@ -218,6 +220,17 @@ func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) (*buil
 	b := &builder.Builder{
 		Provider:   s.AI.Provider,
 		Connectors: reg,
+		// A table the draft proposes is checked as the Tables page checks one.
+		CheckTable: func(t builder.TableSpec) error {
+			lim, err := s.Store.LimitsFor(ctx, who.tenant)
+			if err != nil {
+				return err
+			}
+			if err := datatables.CheckName("table", t.Name); err != nil {
+				return err
+			}
+			return datatables.CheckColumns(tableReqOf(t).columns(), lim.MaxDataTableColumns)
+		},
 		Validate: func(doc []byte) []builder.Problem {
 			var out []builder.Problem
 			for _, p := range s.check(ctx, who.tenant, doc) {
@@ -569,6 +582,9 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Name string `json:"name,omitempty"`
+		// Tables are the new data tables to make with the draft: the
+		// proposal's, as the person reviewed them (changed or left out).
+		Tables []tableReq `json:"tables,omitempty"`
 	}
 	if r.ContentLength != 0 {
 		if err := decodeBody(r, &req); err != nil {
@@ -591,9 +607,65 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// The tables, after the draft: making one may provision the data
+	// project, which no transaction can hold. One that fails is reported,
+	// and the draft is saved either way.
+	tables := make([]aiTableResult, 0, len(req.Tables))
+	for _, t := range req.Tables {
+		res := aiTableResult{Name: t.Name, Status: "created"}
+		if !p.Can(PermTableEdit) {
+			res.Status, res.Error = "skipped", "making tables needs table.edit: ask an owner or admin to create it on the Tables page"
+		} else if _, err := s.newDataTable(r, p, t); err != nil {
+			res.Status, res.Error = "failed", errorText(s, r, err)
+			if errors.Is(err, errConflict) && strings.Contains(err.Error(), "already exists") {
+				res.Status = "exists"
+			}
+		}
+		tables = append(tables, res)
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": version, "state": "draft", "ai_assisted": true,
-		"problems": nonNil(s.checkFor(r, doc))})
+		"problems": nonNil(s.checkFor(r, doc)), "tables": tables})
 }
+
+// aiTableResult is what became of a table saved with an AI draft.
+type aiTableResult struct {
+	Name   string `json:"name"`
+	Status string `json:"status"` // created, exists, skipped or failed
+	Error  string `json:"error,omitempty"`
+}
+
+// tableReqOf is a proposed table as the Tables page would send it.
+func tableReqOf(t builder.TableSpec) tableReq {
+	out := tableReq{Name: t.Name, Title: t.Title}
+	for _, c := range t.Columns {
+		out.Columns = append(out.Columns, columnReq{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required})
+	}
+	return out
+}
+
+// errorText is the message the API would answer err with: the tables
+// service's, or the general one.
+func errorText(s *Server, r *http.Request, err error) string {
+	rec := &bodyRecorder{header: http.Header{}}
+	s.failTables(rec, r, err)
+	var body struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(rec.body.Bytes(), &body) == nil && body.Error != "" {
+		return body.Error
+	}
+	return "the table could not be made"
+}
+
+// bodyRecorder keeps an answer written for errorText.
+type bodyRecorder struct {
+	header http.Header
+	body   bytes.Buffer
+}
+
+func (b *bodyRecorder) Header() http.Header         { return b.header }
+func (b *bodyRecorder) Write(p []byte) (int, error) { return b.body.Write(p) }
+func (b *bodyRecorder) WriteHeader(int)             {}
 
 // saveAIBuildTx saves build id's proposal as a draft version by p: a new
 // workflow (named name, or the definition's name), or the next version of

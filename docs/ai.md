@@ -12,6 +12,7 @@ From the workflow list (**Build with AI**) or the editor (**Change with AI**), a
 4. **Self-correct.** Problems and policy findings are sent back to the model, up to three times. Whatever remains is shown: problems as "would not publish yet", policy findings as warnings.
 5. **Dry run.** The draft runs in `engine/wdtest` (the real orchestrator on a virtual clock, every connector, HTTP and code step mocked): a generated happy path, with every step's output sampled from its action's output schema and every approval approved, and the cases the model proposed.
 6. **Review.** The panel shows the proposal on a read-only canvas with the template it started from (if any), the summary, assumptions, problems, warnings, dry-run results, rounds and tokens. **Save as draft** creates a new workflow, or a new version of the one being changed, in state `draft`.
+7. **New tables.** When the draft keeps records in a [data table](data-tables.md) that does not exist yet, the proposal carries it (`tables`: names, titles, and columns typed by what goes in them). The builder checks it as the Tables page checks a table, never proposes one that exists (the draft uses an existing table as it is), and warns about a table the workflow uses that neither exists nor is proposed. The panel shows each new table: rename, retype, add or remove columns, or leave a table out. Saving makes the ticked tables with the draft (`table.edit`, the plan's table limits, audited as `table.create`); one that cannot be made is reported and the draft is saved all the same. A draft saved from chat names the tables it needs, to make in the app.
 
 The same pipeline answers [`build` on WhatsApp](whatsapp.md#build), shown back as plain steps and saved only as a draft after an explicit yes.
 
@@ -22,7 +23,7 @@ Builds run in the background (`POST /v1/ai/build` answers 202 with an id; `GET /
 | `GET /v1/ai/status` | `workflow.read` | Whether AI building is on, the model, this month's budget and use |
 | `POST /v1/ai/build` | `workflow.edit` | `{goal, workflow?, environment?}`; starts a build. 503 `ai_disabled` when no provider is configured, 429 `ai_budget_exhausted` over budget, 429 `rate_limited` beyond five builds at once per tenant (one more every 20 seconds) |
 | `GET /v1/ai/builds/{id}` | `workflow.edit` | Status (`running`, `proposed`, `failed`, `saved`), stage, proposal |
-| `POST /v1/ai/builds/{id}/save` | `workflow.edit` | `{name?}`; saves the proposal as a draft version, once |
+| `POST /v1/ai/builds/{id}/save` | `workflow.edit` | `{name?, tables?}`; saves the proposal as a draft version, once, and makes the `tables` sent (as `POST /v1/tables` takes them; needs `table.edit`), reporting each as `created`, `exists`, `skipped` or `failed` |
 | `GET /v1/ai/builds/{id}/interactions` | `audit.read` | Every model call of the build, as logged |
 
 ## Safety model
