@@ -7,6 +7,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/anchor"
 	"github.com/israel-duff/taskiem/connectors/breet"
 	"github.com/israel-duff/taskiem/connectors/dojah"
+	"github.com/israel-duff/taskiem/connectors/email"
 	"github.com/israel-duff/taskiem/connectors/flutterwave"
 	"github.com/israel-duff/taskiem/connectors/form"
 	"github.com/israel-duff/taskiem/connectors/gmail"
@@ -59,6 +60,9 @@ type Options struct {
 	// Forms binds the forms platform connector (docs/forms.md); nil: its
 	// actions fail plainly.
 	Forms form.Ops
+	// Email binds the inbound email platform connector (docs/email.md);
+	// nil: its actions fail plainly.
+	Email email.Ops
 	// Notify delivers Tell me messages (notify@1) to the business's own
 	// people; nil: they fail plainly.
 	Notify notify.Teller
@@ -97,6 +101,7 @@ func Register(r *connector.Registry, o Options) error {
 		sftp.New(),
 		storefront.New(o.Storefront),
 		form.New(o.Forms),
+		email.New(o.Email),
 		notify.New(o.Notify),
 	} {
 		if err := r.Register(c); err != nil {

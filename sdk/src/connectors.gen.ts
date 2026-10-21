@@ -209,6 +209,17 @@ export const dojah = {
   lookup_nin: (input: DojahLookupNinInput, extra?: ConnectorExtra): StepSpec => connector("dojah@1", "lookup_nin", input, extra),
 };
 
+// Email received (email@1)
+export interface EmailFileUrlInput {
+  /** The attachment's id (trigger.body.attachments[0].id) */
+  file: Val<string>;
+  ttl_minutes?: Val<number>;
+}
+export const email = {
+  /** Get a link to an attachment (read) */
+  file_url: (input: EmailFileUrlInput, extra?: ConnectorExtra): StepSpec => connector("email@1", "file_url", input, extra),
+};
+
 // Flutterwave (flutterwave@1)
 export interface FlutterwaveGetBalanceInput {
   currency?: Val<string>;
@@ -2287,6 +2298,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "anchor@1": "anchor",
   "breet@1": "breet",
   "dojah@1": "dojah",
+  "email@1": "email",
   "flutterwave@1": "flutterwave",
   "form@1": "form",
   "gmail@1": "gmail",
@@ -2322,6 +2334,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
+  "email@1": ["file_url"],
   "flutterwave@1": ["get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "resolve_account", "transfer", "verify_payment"],
   "form@1": ["file_url", "respond"],
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],

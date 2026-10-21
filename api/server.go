@@ -34,6 +34,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/embedsites"
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
+	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -95,6 +96,11 @@ type Server struct {
 	Orders *storefront.Orders
 	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
 	Forms *forms.Service
+	// Email is inbound email's api side (N10); MailDomain is where
+	// workflows' addresses are (TASKIEM_MAIL_DOMAIN). Without either,
+	// email triggers publish but have no address yet.
+	Email      *inmail.Service
+	MailDomain string
 	// Static serves the web app; nil omits it.
 	Static http.Handler
 	// EmbedDir holds the embedded builder's bundle (taskiem.js, served at
@@ -364,6 +370,10 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRunRead)).Get("/form-submissions", s.listFormSubmissions)
 			r.With(s.need(PermRunRead)).Get("/form-submissions/{id}", s.getFormSubmission)
 			r.With(s.need(PermPIIReveal)).Get("/form-files/{id}", s.formFileURL)
+			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/email", s.getWorkflowEmail)
+			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/workflows/{wf}/email/{env}/address", s.newEmailAddress)
+			r.With(s.need(PermWorkflowEdit), s.tenantWide).Post("/workflows/{wf}/email/{env}/test", s.sendTestEmail)
+			r.With(s.need(PermPIIReveal)).Get("/email-files/{id}", s.emailFileURL)
 			r.Get("/form-requests", s.listFormRequests)
 			r.Get("/form-requests/{id}", s.getFormRequest)
 			r.With(s.tenantWide).Post("/form-requests/{id}/answers", s.answerFormRequest)

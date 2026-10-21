@@ -1613,6 +1613,43 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "email"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "senders": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 254,
+                      "pattern": "^[^@\\s]*@?[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+                    }
+                  },
+                  "attachments": {
+                    "enum": [
+                      "keep",
+                      "ignore"
+                    ],
+                    "default": "ignore"
+                  }
+                }
+              }
+            }
+          }
         }
       ]
     },

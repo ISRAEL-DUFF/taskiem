@@ -173,6 +173,9 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 		// The pages, conditions and fields are checked by wd.Validate.
 		_, err := def.FormTriggerConfig()
 		return err
+	case "email":
+		// The senders and attachments are checked by the schema.
+		return nil
 	}
 	return fmt.Errorf("%s triggers are not available yet", def.Trigger.Type)
 }
@@ -221,6 +224,13 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 	if def.Trigger.Type != "form" {
 		if _, err := tx.Exec(ctx, `UPDATE form_endpoints SET status = 'closed', updated_at = now()
 			WHERE workflow_id = $1 AND environment = ANY ($2) AND status IN ('live', 'paused')`, wf, envs); err != nil {
+			return err
+		}
+	}
+	// One that no longer starts from email stops taking mail.
+	if def.Trigger.Type != "email" {
+		if _, err := tx.Exec(ctx, `UPDATE email_endpoints SET status = 'closed', updated_at = now()
+			WHERE workflow_id = $1 AND environment = ANY ($2) AND status = 'live'`, wf, envs); err != nil {
 			return err
 		}
 	}
@@ -290,6 +300,19 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 					VALUES ($1, $2, $3, $4, $5, $6, $7)
 					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version, form = EXCLUDED.form, updated_at = now()`,
 					uuid.Must(uuid.NewV7()), tenant, wf, env, NewFormID(), version, formCopy(def))
+			}
+		case "email":
+			// Mail is taken at the endpoint's address, which stays the same
+			// across versions; a closed one opens again (a suspended one
+			// stays so).
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type)
+				VALUES ($1, $2, $3, $4, $5, 'email')`, id, tenant, wf, version, env)
+			if err == nil {
+				_, err = tx.Exec(ctx, `INSERT INTO email_endpoints (id, tenant_id, workflow_id, environment, public_id, version)
+					VALUES ($1, $2, $3, $4, $5, $6)
+					ON CONFLICT (workflow_id, environment) DO UPDATE SET version = EXCLUDED.version,
+					  status = CASE WHEN email_endpoints.status = 'suspended' THEN 'suspended' ELSE 'live' END, updated_at = now()`,
+					uuid.Must(uuid.NewV7()), tenant, wf, env, NewFormID(), version)
 			}
 		}
 		if err != nil {

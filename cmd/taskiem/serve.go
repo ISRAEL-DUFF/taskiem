@@ -26,6 +26,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
+	emailconn "github.com/israel-duff/taskiem/connectors/email"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
@@ -45,6 +46,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
@@ -62,7 +64,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
-var roles = map[string]bool{"api": true, "edge": true, "orchestrator": true, "scheduler": true, "worker": true, "public": true, "all": true}
+var roles = map[string]bool{"api": true, "edge": true, "orchestrator": true, "scheduler": true, "worker": true, "public": true, "mail": true, "all": true}
 
 // config is read from the environment (twelve-factor); see docs/operations.md.
 type config struct {
@@ -98,6 +100,8 @@ type config struct {
 	Public publicConfig
 	// Messages are SMS and email to people outside a tenant (messages.go).
 	Messages messagesConfig
+	// Mail is the mail role's SMTP server for email triggers (mail.go).
+	Mail mailConfig
 	// Limits are the platform's default plan limits (TASKIEM_DEFAULT_*).
 	Limits runtime.Limits
 	// WhatsApp is the platform number (TASKIEM_WHATSAPP_*); nil: off.
@@ -411,6 +415,9 @@ func loadConfig() (config, error) {
 	if c.Public, err = publicConfigFromEnv(); err != nil {
 		return c, err
 	}
+	if c.Mail, err = mailConfigFromEnv(); err != nil {
+		return c, err
+	}
 	if c.Messages, err = messagesConfigFromEnv(); err != nil {
 		return c, err
 	}
@@ -474,7 +481,9 @@ type engine struct {
 	// host's key.
 	orders *storefront.Orders
 	// forms are hosted forms' api side (S7); nil without the public key.
-	forms    *forms.Service
+	forms *forms.Service
+	// email is inbound email's api side (N10); nil without the public key.
+	email    *inmail.Service
 	cfg      config
 	log      *slog.Logger
 	pool     *pgxpool.Pool
@@ -521,10 +530,12 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// once the vault exists (below).
 	orders := &sfconn.Late{}
 	formOps := &formconn.Late{}
+	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
 	copts := cfg.Connectors
 	copts.Storefront = orders
 	copts.Forms = formOps
+	copts.Email = emailOps
 	copts.Notify = tell
 	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
@@ -562,6 +573,13 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	if e.forms != nil {
 		formOps.Set(e.forms)
+	}
+	if e.email, err = emailService(cfg, e, log); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	if e.email != nil {
+		emailOps.Set(e.email)
 	}
 	if cfg.WhatsApp != nil {
 		e.wa = whatsapp.New(pool, *cfg.WhatsApp, &egress.Guard{Logger: log}, log)
@@ -670,7 +688,7 @@ func edgeServer(e *engine, cfg config, log *slog.Logger) (*api.Server, error) {
 // serve runs one role, or all of them in one process, until ctx ends.
 func serve(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	role := fs.String("role", env("TASKIEM_ROLE", "all"), "api, edge, orchestrator, scheduler, worker, public, or all")
+	role := fs.String("role", env("TASKIEM_ROLE", "all"), "api, edge, orchestrator, scheduler, worker, public, mail, or all")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -679,9 +697,10 @@ func serve(ctx context.Context, args []string) error {
 	}
 	var cfg config
 	var err error
-	if *role == "public" {
-		// The public host runs on its own database login and nothing else
-		// of the platform's configuration (public.go).
+	if *role == "public" || *role == "mail" {
+		// The public host and the mail role run on their own database
+		// login and nothing else of the platform's configuration
+		// (public.go, mail.go).
 		cfg, err = loadPublicConfig()
 	} else {
 		cfg, err = loadConfig()
@@ -703,6 +722,9 @@ func serve(ctx context.Context, args []string) error {
 		// The public host needs nothing of the engine, and must not hold a
 		// pool as taskiem_app: it connects as taskiem_public alone.
 		return servePublic(ctx, cfg, log)
+	}
+	if *role == "mail" {
+		return serveMail(ctx, cfg, log)
 	}
 	e, err := newEngine(ctx, cfg, log)
 	if err != nil {
@@ -822,6 +844,11 @@ func serve(ctx context.Context, args []string) error {
 		// Storefront photos in tenants' Xenibase storage (docs/media.md).
 		srv.Orders = e.orders
 		srv.Forms = e.forms
+		srv.Email = e.email
+		srv.MailDomain = cfg.Mail.Domain
+		if e.email != nil {
+			tasks = append(tasks, func(ctx context.Context) error { e.email.Run(ctx, emailDrainInterval); return nil })
+		}
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms)
@@ -860,6 +887,14 @@ func serve(ctx context.Context, args []string) error {
 		var task func(context.Context) error
 		var closePool func()
 		if pub, task, closePool, err = publicTask(ctx, cfg, log); err != nil {
+			return fmt.Errorf("serve: %w", err)
+		}
+		defer closePool()
+		tasks = append(tasks, task)
+	}
+	if *role == "all" && cfg.Mail.Domain != "" && len(cfg.Public.Key) > 0 {
+		task, closePool, err := mailTask(ctx, cfg, log)
+		if err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
 		defer closePool()

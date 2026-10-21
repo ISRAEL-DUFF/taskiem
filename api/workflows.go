@@ -683,6 +683,8 @@ type triggerInfo struct {
 	NextFireAt  *time.Time `json:"next_fire_at,omitempty"`
 	ServiceCode *string    `json:"service_code,omitempty"` // ussd: the code the edge routes by
 	URL         string     `json:"url,omitempty"`
+	// Email is an email trigger's address.
+	Email string `json:"email,omitempty"`
 	// Remote is the subscription Taskiem keeps at the provider for a
 	// remotely registered trigger (decision 0021); its URL is Taskiem's to
 	// manage.
@@ -705,6 +707,7 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var out []triggerInfo
 	var subs []remote.Status
+	addrs := map[string]string{}
 	err = s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT id, environment, type, version, path, auth, secret_name, connector, trigger_name, cron, timezone, NULLIF(next_fire_at, 'infinity'), service_code
 			FROM triggers WHERE workflow_id = $1 ORDER BY environment`, wf)
@@ -719,8 +722,22 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		subs, err = remote.List(r.Context(), tx, `workflow_id = $1`, wf)
-		return err
+		if subs, err = remote.List(r.Context(), tx, `workflow_id = $1`, wf); err != nil {
+			return err
+		}
+		rows, err = tx.Query(r.Context(), `SELECT environment, public_id FROM email_endpoints WHERE workflow_id = $1 AND status = 'live'`, wf)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var env, public string
+			if err := rows.Scan(&env, &public); err != nil {
+				return err
+			}
+			addrs[env] = public
+		}
+		return rows.Err()
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -734,6 +751,9 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		base := "/hooks/" + p.TenantID.String()
+		if t.Type == "email" && s.MailDomain != "" && addrs[t.Environment] != "" {
+			out[i].Email = addrs[t.Environment] + "@" + s.MailDomain
+		}
 		switch {
 		case t.Path != nil:
 			out[i].URL = base + *t.Path + "?env=" + t.Environment
