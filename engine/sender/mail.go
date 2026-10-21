@@ -14,7 +14,13 @@ import (
 // email off as anyone else's, and Reply-To takes answers to the business.
 func buildEmail(from, senderName, to, replyTo, subject, text, id string, now time.Time) []byte {
 	clean := func(s string) string { return strings.NewReplacer("\r", " ", "\n", " ").Replace(s) }
-	addr := mail.Address{Name: CleanName(senderName) + " via Taskiem", Address: from}
+	// The platform's sender may be written with a name of its own; the
+	// business's name replaces it.
+	bare := from
+	if a, err := mail.ParseAddress(strings.TrimSpace(from)); err == nil {
+		bare = a.Address
+	}
+	addr := mail.Address{Name: CleanName(senderName) + " via Taskiem", Address: bare}
 	var b strings.Builder
 	fmt.Fprintf(&b, "From: %s\r\n", addr.String())
 	fmt.Fprintf(&b, "To: %s\r\n", clean(to))
