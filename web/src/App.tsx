@@ -109,7 +109,9 @@ function Shell() {
   }
   if (me.invitations_only) return alone(<InviteeHome />);
   if (me.enrol_passkey) return alone(<EnrolPasskey />);
-  if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || "/workflows"} replace />;
+  if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || (me.field_agent ? "/agent" : "/workflows")} replace />;
+  // A field agent's home is the agent app, not the workspace's workflows (N6).
+  if (me.field_agent && !agentSession && (loc.pathname === "/" || loc.pathname === "/workflows")) return <Navigate to="/agent" replace />;
   if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
   // Field agents (docs/agents.md): their own pages, and a business's page
   // and tables while they work in it.

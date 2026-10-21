@@ -236,6 +236,12 @@ func CheckClosedMessage(message string) error {
 
 // Close shows message instead of the catalogue until reopened.
 func Close(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, message string) (Storefront, error) {
+	return CloseUntil(ctx, tx, tenant, message, nil)
+}
+
+// CloseUntil is Close, reopening by itself at until when it is set
+// ("close shop today": the next morning).
+func CloseUntil(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, message string, until *time.Time) (Storefront, error) {
 	message = strings.TrimSpace(message)
 	if err := CheckClosedMessage(message); err != nil {
 		return Storefront{}, err
@@ -243,8 +249,8 @@ func Close(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, message string) (St
 	if message == "" {
 		message = DefaultClosedMessage
 	}
-	s, err := scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = 'closed', closed_message = $2, updated_at = now()
-		WHERE tenant_id = $1 AND status IN ('published', 'closed') RETURNING `+cols, tenant, message))
+	s, err := scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = 'closed', closed_message = $2, reopen_at = $3, updated_at = now()
+		WHERE tenant_id = $1 AND status IN ('published', 'closed') RETURNING `+cols, tenant, message, until))
 	if errors.Is(err, ErrNotFound) {
 		return Storefront{}, ErrNotPublished
 	}
@@ -253,7 +259,7 @@ func Close(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, message string) (St
 
 // Reopen undoes Close.
 func Reopen(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Storefront, error) {
-	s, err := scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = 'published', closed_message = NULL, updated_at = now()
+	s, err := scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = 'published', closed_message = NULL, reopen_at = NULL, updated_at = now()
 		WHERE tenant_id = $1 AND status IN ('published', 'closed') RETURNING `+cols, tenant))
 	if errors.Is(err, ErrNotFound) {
 		return Storefront{}, ErrNotPublished

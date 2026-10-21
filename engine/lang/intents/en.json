@@ -10,7 +10,12 @@
     "yes": ["yes", "y", "confirm", "run it", "go"],
     "no": ["no", "n"],
     "switch": ["organisations", "organizations", "tenants"],
-    "tables": ["tables", "my tables", "data tables", "list tables", "show tables"]
+    "tables": ["tables", "my tables", "data tables", "list tables", "show tables"],
+    "make_page": ["make my page", "make my shop"],
+    "my_page": ["my page", "my shop", "my storefront"],
+    "orders": ["orders", "my orders", "open orders"],
+    "open_shop": ["open shop", "open my shop", "reopen shop", "reopen"],
+    "qr": ["qr", "qr code", "my qr", "my qr code"]
   },
   "prefixes": {
     "switch": ["switch"],
@@ -18,7 +23,11 @@
     "build": ["build", "create"],
     "language": ["language", "lang"],
     "add": ["add to", "add"],
-    "find": ["find", "search", "look up", "lookup"]
+    "find": ["find", "search", "look up", "lookup"],
+    "publish": ["publish"],
+    "close_shop": ["close my shop", "close shop"],
+    "order_ready": ["ready"],
+    "order_delivered": ["delivered", "collected"]
   },
   "fillers": ["please", "pls", "kindly"],
   "markers": []

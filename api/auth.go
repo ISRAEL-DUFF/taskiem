@@ -540,6 +540,13 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 			out["factors"] = f
 		}
 	}
+	// A field agent signed in as themselves lands on the agent app (N6).
+	if p.UserID != uuid.Nil && p.Agent == nil && p.KeyID == uuid.Nil {
+		var active bool
+		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM taskiem_agent_of($1) WHERE status = 'active')`, p.UserID).Scan(&active); err == nil && active {
+			out["field_agent"] = true
+		}
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 

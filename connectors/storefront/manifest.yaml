@@ -68,10 +68,12 @@ actions:
       limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
     input:
       type: object
-      required: [reference, text]
+      required: [reference]
       properties:
         reference: { type: string }
         text:      { type: string, maxLength: 1000, description: "The message; an SMS starts with the business's name and is at most three parts. {link} becomes the customer's status link, where a booking is moved or cancelled" }
+        say:       { type: string, description: "Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed…), in the business's own language" }
+        vars:      { type: object, description: "With say: the message's values (reference, total, url, service, when)" }
         subject:   { type: string, description: The email's subject }
     output:
       type: object

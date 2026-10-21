@@ -90,7 +90,7 @@
         "action": "notify_customer",
         "input": {
           "reference": "=trigger.body.reference",
-          "text": "='We have your question (' + trigger.body.reference + ') and will reply soon.'"
+          "say": "enquiry_thanks", "vars": {"reference": "=trigger.body.reference"}
         }
       },
       {

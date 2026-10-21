@@ -195,6 +195,8 @@ export interface Me {
    * authenticator: a passkey or authenticator if they have one, else their
    * password. */
   factors?: { passkey: boolean; totp: boolean; password: boolean };
+  /** A Taskiem field agent signed in as themselves: they land on the agent app. */
+  field_agent?: boolean;
 }
 
 /** A tenant inviting the signed-in person (GET /v1/me/invitations). */

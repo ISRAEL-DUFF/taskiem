@@ -55,6 +55,9 @@ export function Connections() {
   const linkedConnector = linked ? connectorOf(connectors.data?.connectors, linked.connector) : undefined;
   const toComplete = fieldsToComplete(linkedConnector) ?? [];
   const dismiss = () => void navigate("/connections", { replace: true });
+  // A link from chat or a readiness fix: ?connect=paystack opens that
+  // service's guided screen (N6).
+  const connectID = new URLSearchParams(location.search).get("connect") ?? "";
   const returnTo = back.linked || back.error ? readReturn() : "";
   return (
     <>
@@ -177,6 +180,15 @@ export function Connections() {
       )}
       {adding && connectors.data && (
         <NewConnection connectors={connectors.data.connectors} onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} onLink={startLink} />
+      )}
+      {!adding && connectID && connectors.data?.connectors.some((c) => c.id === connectID) && (
+        <NewConnection
+          connectors={connectors.data.connectors}
+          preset={{ connector: connectID, environment: "prod", name: "" }}
+          onClose={dismiss}
+          onDone={() => (dismiss(), list.reload())}
+          onLink={startLink}
+        />
       )}
       {completing && (
         <CompleteConnection

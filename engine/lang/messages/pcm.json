@@ -112,6 +112,78 @@
       "text": "Yes, save am",
       "reviewed": false
     },
+    "customer.booking_confirmed": {
+      "text": "E don book: {service}, {when}. To change or cancel: {link}",
+      "reviewed": false
+    },
+    "customer.booking_declined": {
+      "text": "Sorry, we no fit take your booking {reference} ({service}, {when}). Abeg choose another time: you fit book again.",
+      "reviewed": false
+    },
+    "customer.booking_declined_refund": {
+      "text": "Sorry, we no fit take your booking {reference} ({service}, {when}). We go return your money.",
+      "reviewed": false
+    },
+    "customer.booking_moved": {
+      "text": "We don move your booking {reference} to {when}. To change or cancel: {link}",
+      "reviewed": false
+    },
+    "customer.booking_pay": {
+      "text": "To keep your booking {reference}, pay {total} before one day: {url}",
+      "reviewed": false
+    },
+    "customer.booking_reminder_day": {
+      "text": "Reminder: {service} tomorrow, {when} ({reference}). To change or cancel: {link}",
+      "reviewed": false
+    },
+    "customer.booking_reminder_hours": {
+      "text": "We go see you soon: {service} by {when} ({reference}).",
+      "reviewed": false
+    },
+    "customer.callback_thanks": {
+      "text": "Thank you. We go call you back soon ({reference}).",
+      "reviewed": false
+    },
+    "customer.enquiry_thanks": {
+      "text": "We don get your question ({reference}) and we go reply soon.",
+      "reviewed": false
+    },
+    "customer.order_confirmed_delivery": {
+      "text": "Your order {reference} don confirm. We go deliver am soon.",
+      "reviewed": false
+    },
+    "customer.order_confirmed_pickup": {
+      "text": "Your order {reference} don confirm. We go text you when e ready make you come collect.",
+      "reviewed": false
+    },
+    "customer.order_declined": {
+      "text": "Sorry, we no fit take your order {reference}.",
+      "reviewed": false
+    },
+    "customer.order_declined_refund": {
+      "text": "Sorry, we no fit take your order {reference}. We go return your {total}.",
+      "reviewed": false
+    },
+    "customer.order_link_expired": {
+      "text": "The payment link for {reference} don expire, so the order don cancel. You fit order again.",
+      "reviewed": false
+    },
+    "customer.order_paid_delivery": {
+      "text": "We don receive payment for {reference}. We go deliver am soon.",
+      "reviewed": false
+    },
+    "customer.order_paid_pickup": {
+      "text": "We don receive payment for {reference}. We go text you when e ready make you come collect.",
+      "reviewed": false
+    },
+    "customer.order_pay": {
+      "text": "We don accept your order {reference}. Pay {total} here before one day: {url}",
+      "reviewed": false
+    },
+    "customer.order_ready": {
+      "text": "{name}: your order {reference} don ready.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "I dey write you for {language}. Languages wey dey here: {languages}. Send *language* and the name to change.",
       "reviewed": false
@@ -476,6 +548,14 @@
       "text": "(dem never confirm am)",
       "reviewed": false
     },
+    "wa.build.ask_setting": {
+      "text": "Wetin *{name}* go be? Reply am, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.build.before_publish": {
+      "text": "Before e fit publish:",
+      "reviewed": false
+    },
     "wa.build.budget": {
       "text": "The AI budget for {org} for this month don finish, so I no fit build am now. You still fit build workflows for the web app.",
       "reviewed": false
@@ -548,12 +628,20 @@
       "text": "Building with AI never set up for this Taskiem. You fit build workflows for the web app.",
       "reviewed": false
     },
+    "wa.build.offer_publish": {
+      "text": "Make I publish *{name}* now so e start work? Reply *yes* or *no*.",
+      "reviewed": false
+    },
+    "wa.build.publish_later": {
+      "text": "When you ready, send *publish {name}*.",
+      "reviewed": false
+    },
     "wa.build.refused": {
       "text": "I no fit build that one. Try talk am another way.",
       "reviewed": false
     },
     "wa.build.save_question": {
-      "text": "Make I save this one as draft workflow? Reply *yes* or *no*. (Draft no dey run until dem publish am for Taskiem.)",
+      "text": "Make I save am as draft? Reply *yes* or *no*. (Draft no dey work until dem publish am: I go ask you next.)",
       "reviewed": false
     },
     "wa.build.save_reminder": {
@@ -561,11 +649,19 @@
       "reviewed": false
     },
     "wa.build.saved": {
-      "text": "I don save *{name}* as draft. E never dey live: check am, set any connections and variables wey e need, and publish am for Taskiem{link}.",
+      "text": "I don save *{name}* as draft{link}.",
+      "reviewed": false
+    },
+    "wa.build.setting_saved": {
+      "text": "I don save {name}.",
       "reviewed": false
     },
     "wa.build.still_drafting": {
       "text": "I still dey draft your workflow; I go send am when e ready. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.build.tables_made": {
+      "text": "I don make the table wey e dey use: {tables}.",
       "reviewed": false
     },
     "wa.build.tables_needed": {
@@ -585,7 +681,7 @@
       "reviewed": false
     },
     "wa.build.variables": {
-      "text": "Before e run, set these variables for Taskiem: {names}.",
+      "text": "When e don save, I go ask you for: {names}.",
       "reviewed": false
     },
     "wa.build.warn_policy": {
@@ -872,6 +968,34 @@
       "text": "{label} no dey available now.",
       "reviewed": false
     },
+    "wa.publish.ask_someone": {
+      "text": "E don save as draft. Person wey fit publish for your organisation fit publish am now.",
+      "reviewed": false
+    },
+    "wa.publish.denied": {
+      "text": "You no fit publish workflow for {org}; ask the owner.",
+      "reviewed": false
+    },
+    "wa.publish.done": {
+      "text": "*{name}* don publish: e go dey work from now.",
+      "reviewed": false
+    },
+    "wa.publish.failed": {
+      "text": "E no fit publish: {reason}.",
+      "reviewed": false
+    },
+    "wa.publish.in_app": {
+      "text": "Your organisation dey check changes for Git, so publish am for the app: {link}",
+      "reviewed": false
+    },
+    "wa.publish.not_ready": {
+      "text": "*{name}* never ready to publish:",
+      "reviewed": false
+    },
+    "wa.publish.waiting": {
+      "text": "*{name}* dey wait make another person publish am: dem go decide for Approvals inside Taskiem.",
+      "reviewed": false
+    },
     "wa.run.bad_inputs": {
       "text": "The inputs no fit {workflow}: {problems}. Send *run* again.",
       "reviewed": false
@@ -978,6 +1102,10 @@
     },
     "wa.shop.bad_answer": {
       "text": "Dat one no fit: {reason}\n\n{prompt}",
+      "reviewed": false
+    },
+    "wa.shop.bookings_on": {
+      "text": "Bookings don on too.",
       "reviewed": false
     },
     "wa.shop.cannot_complete": {
@@ -1168,8 +1296,20 @@
       "text": "Open orders, di newest first:",
       "reviewed": false
     },
+    "wa.shop.orders_no_paystack": {
+      "text": "Customers go pay when dem collect or receive their order. To collect money online, connect Paystack: {link}",
+      "reviewed": false
+    },
+    "wa.shop.orders_on": {
+      "text": "Orders don on: customers fit order from your page, and each order go come meet you here.",
+      "reviewed": false
+    },
     "wa.shop.orders_tail": {
       "text": "Reply *order* and di reference for one.",
+      "reviewed": false
+    },
+    "wa.shop.other_edits_live": {
+      "text": "Other changes wey you save for your page but never publish don go live with am.",
       "reviewed": false
     },
     "wa.shop.page_closed": {
@@ -1268,12 +1408,16 @@
       "text": "We dey tell di customer say order {ref} don ready. Reply *order {ref} delivered* when dem collect am.",
       "reviewed": false
     },
+    "wa.shop.reopens": {
+      "text": "E go open again by itself for {time}.",
+      "reviewed": false
+    },
     "wa.shop.service_added": {
       "text": "We don add di service *{name}*.",
       "reviewed": false
     },
     "wa.shop.service_hint": {
-      "text": "Customers fit book am once di booking form dey on, under Storefront for di web app.",
+      "text": "Customers fit book am once bookings don on: reply *turn on orders*.",
       "reviewed": false
     },
     "wa.shop.service_how": {
@@ -1344,6 +1488,10 @@
       "text": "Na plenty changes at once. Wait small, then reply *yes* again.",
       "reviewed": false
     },
+    "wa.shop.turn_on_orders": {
+      "text": "Make I on orders now? Customers go fit order from your page, and each order go come meet you here make you accept or decline.",
+      "reviewed": false
+    },
     "wa.shop.which_item": {
       "text": "Pass one match. Which one?\n{list}\nReply with di number.",
       "reviewed": false
@@ -1354,6 +1502,18 @@
     },
     "wa.shop.with_photo": {
       "text": " (with di photo)",
+      "reviewed": false
+    },
+    "wa.signin.link": {
+      "text": "Open this link make you choose your password and enter Taskiem for web. E go work once, for one hour; no give anybody:\n{link}",
+      "reviewed": false
+    },
+    "wa.signin.sso": {
+      "text": "Your organisation dey sign in with their company account: {link}",
+      "reviewed": false
+    },
+    "wa.signin.unavailable": {
+      "text": "Sign in for web never set up for this Taskiem.",
       "reviewed": false
     },
     "wa.status.denied": {

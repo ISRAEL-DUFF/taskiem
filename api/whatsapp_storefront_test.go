@@ -334,7 +334,7 @@ func TestWhatsAppMakeMyPage(t *testing.T) {
 	if r := w.say(t, cn, "add service Braids 2h 15k"); !strings.Contains(r, "*Braids*, 120 minutes, ₦15,000") {
 		t.Fatalf("service asked: %q", r)
 	}
-	if r := w.yes(t, cn); !strings.Contains(r, "Added the service *Braids*") || !strings.Contains(r, "booking form") {
+	if r := w.yes(t, cn); !strings.Contains(r, "Added the service *Braids*") || !strings.Contains(r, "*turn on orders*") {
 		t.Fatalf("service: %q", r)
 	}
 	srows := w.rows(t, "services")
