@@ -216,12 +216,17 @@ type ApprovalLevel struct {
 type ApprovalConstraints struct {
 	ForbidSelfApproval bool `json:"forbid_self_approval"`
 	DistinctApprovers  bool `json:"distinct_approvers"`
+	// ForbidSoleApprover holds four-eyes even for the only person who can
+	// decide (who then cannot approve what they made).
+	ForbidSoleApprover bool `json:"forbid_sole_approver,omitempty"`
 }
 
 type ApprovalDecidedPayload struct {
 	Decision  string `json:"decision"` // approved | rejected
 	DecidedBy string `json:"decided_by"`
 	Channel   string `json:"channel,omitempty"`
+	// SelfApproved: a maker approved, as the only person who could.
+	SelfApproved bool `json:"self_approved,omitempty"`
 }
 
 type SignalPayload struct {

@@ -414,6 +414,11 @@
       "reviewed": true,
       "context": "After a recorded decision"
     },
+    "wa.approval.sole": {
+      "text": "You are the only person who can approve this.",
+      "reviewed": true,
+      "context": "On an approval request: nobody else in the business can decide it, so its maker may"
+    },
     "wa.approval.stale": {
       "text": "That button is not valid any more. Send *approvals* for what is waiting for you.",
       "reviewed": true,

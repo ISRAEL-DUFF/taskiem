@@ -332,6 +332,10 @@
       "text": "E still dey wait for more approvals.",
       "reviewed": false
     },
+    "wa.approval.sole": {
+      "text": "Na only you fit approve dis one.",
+      "reviewed": false
+    },
     "wa.approval.stale": {
       "text": "That button no valid again. Send *approvals* to see wetin dey wait for you.",
       "reviewed": false

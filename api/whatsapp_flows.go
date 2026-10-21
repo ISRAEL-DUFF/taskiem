@@ -555,8 +555,8 @@ func (s *Server) waFlowPin(ctx context.Context, row flowRow, req whatsapp.FlowRe
 		s.Logger.Error("whatsapp: recording a decision", "err", err)
 		return screen("Something went wrong; try again.")
 	}
-	audit("approval.decide", map[string]any{"decision": *row.decision, "result": res.Status, "level": res.Level + 1, "levels": res.Levels,
-		"step_up": runtime.StepUpWhatsAppPIN, "via": "flow_pin"})
+	audit("approval.decide", voteDetail(map[string]any{"decision": *row.decision, "result": res.Status, "level": res.Level + 1, "levels": res.Levels,
+		"step_up": runtime.StepUpWhatsAppPIN, "via": "flow_pin"}, res))
 	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{row.tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `DELETE FROM chat_sessions WHERE tenant_id = $1 AND user_id = $2 AND state = $3`, row.tenant, user, stateStepUp)
 		return err

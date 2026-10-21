@@ -332,6 +332,10 @@
       "text": "Ó ń dúró de ìfọwọ́sí sí i.",
       "reviewed": false
     },
+    "wa.approval.sole": {
+      "text": "Ẹ̀yin nìkan ni ẹ lè fọwọ́ sí èyí.",
+      "reviewed": false
+    },
     "wa.approval.stale": {
       "text": "Bọ́tìnnì yẹn kò wúlò mọ́. Ẹ fi *approvals* ránṣẹ́ láti rí ohun tó ń dúró dè yín.",
       "reviewed": false

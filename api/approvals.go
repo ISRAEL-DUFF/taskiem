@@ -16,22 +16,27 @@ import (
 )
 
 type approvalItem struct {
-	RunID       uuid.UUID `json:"run_id"`
-	StepID      string    `json:"step_id"`
-	Workflow    string    `json:"workflow"`
-	Environment string    `json:"environment"`
-	Role        *string   `json:"role"`
-	Required    int       `json:"required"`
-	Approvals   int       `json:"approvals"`
-	Level       int       `json:"level"`  // 1-based
-	Levels      int       `json:"levels"` // 1 without a policy
-	StepUp      *string   `json:"step_up"`
-	Policy      *string   `json:"policy"`
+	RunID  uuid.UUID `json:"run_id"`
+	StepID string    `json:"step_id"`
+	// StepName is the step's name in the workflow (its id when it has none).
+	StepName    string  `json:"step_name"`
+	Workflow    string  `json:"workflow"`
+	Environment string  `json:"environment"`
+	Role        *string `json:"role"`
+	Required    int     `json:"required"`
+	Approvals   int     `json:"approvals"`
+	Level       int     `json:"level"`  // 1-based
+	Levels      int     `json:"levels"` // 1 without a policy
+	StepUp      *string `json:"step_up"`
+	Policy      *string `json:"policy"`
 	// OnBehalfOf names whose delegated role makes this approval yours.
-	OnBehalfOf  *string    `json:"on_behalf_of,omitempty"`
-	RequestedAt time.Time  `json:"requested_at"`
-	TimeoutAt   *time.Time `json:"timeout_at"`
-	Subject     any        `json:"subject"`
+	OnBehalfOf *string `json:"on_behalf_of,omitempty"`
+	// SoleApprover: nobody else can decide it, so the caller may approve
+	// even what they made (a one-person business, N0-1).
+	SoleApprover bool       `json:"sole_approver"`
+	RequestedAt  time.Time  `json:"requested_at"`
+	TimeoutAt    *time.Time `json:"timeout_at"`
+	Subject      any        `json:"subject"`
 }
 
 // listApprovals is the caller's inbox: open approvals for a role they hold
@@ -49,18 +54,20 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		// The caller's roles, and roles delegated to them now.
-		rows, err := tx.Query(ctx, `SELECT a.run_id, a.step_id, w.name, r.environment, a.role, a.required,
+		rows, err := tx.Query(ctx, `SELECT a.run_id, a.step_id, taskiem_step_name(wv.definition, a.step_id), w.name, r.environment, a.role, a.required,
 				(SELECT count(*) FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.decision = 'approved')::int,
 				a.level + 1, COALESCE(jsonb_array_length(a.levels), 1), a.step_up, a.policy,
-				CASE WHEN a.role IS NULL OR a.role = ANY ($1) THEN NULL ELSE
+				CASE WHEN a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) THEN NULL ELSE
 				  (SELECT u.email FROM delegations g JOIN users u ON u.id = g.from_user WHERE g.to_user = $2 AND a.role = ANY (g.roles)
 				     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
-				     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = a.role) ORDER BY g.created_at LIMIT 1) END,
+				     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner')) ORDER BY g.created_at LIMIT 1) END,
+				COALESCE((a.constraints->>'forbid_sole_approver')::boolean, false) = false AND taskiem_sole_approver(a.role, $2),
 				a.requested_at, a.timeout_at, a.subject
 			FROM approvals a JOIN runs r ON r.id = a.run_id JOIN workflows w ON w.id = r.workflow_id
-			WHERE a.status = 'open' AND (a.role IS NULL OR a.role = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
+			JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
+			WHERE a.status = 'open' AND (a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
 			    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
-			    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = a.role)))
+			    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner'))))
 			  AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.user_id = $2)
 			ORDER BY a.requested_at`, p.Roles, p.UserID)
 		if err != nil {
@@ -70,8 +77,8 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var it approvalItem
 			var subj []byte
-			if err := rows.Scan(&it.RunID, &it.StepID, &it.Workflow, &it.Environment, &it.Role, &it.Required, &it.Approvals,
-				&it.Level, &it.Levels, &it.StepUp, &it.Policy, &it.OnBehalfOf, &it.RequestedAt, &it.TimeoutAt, &subj); err != nil {
+			if err := rows.Scan(&it.RunID, &it.StepID, &it.StepName, &it.Workflow, &it.Environment, &it.Role, &it.Required, &it.Approvals,
+				&it.Level, &it.Levels, &it.StepUp, &it.Policy, &it.OnBehalfOf, &it.SoleApprover, &it.RequestedAt, &it.TimeoutAt, &subj); err != nil {
 				return err
 			}
 			out = append(out, it)
@@ -160,6 +167,9 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 	}
 	status := result.Status
 	detail := map[string]any{"decision": req.Decision, "result": status, "level": result.Level + 1, "levels": result.Levels, "step_up": vote.StepUp}
+	if result.SelfApproved {
+		detail["self_approved"] = true
+	}
 	if req.Comment != "" {
 		detail["comment"] = req.Comment
 	}
@@ -169,5 +179,5 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"run_id": run, "step_id": step, "status": status, "level": result.Level + 1, "levels": result.Levels})
+	writeJSON(w, http.StatusOK, map[string]any{"run_id": run, "step_id": step, "status": status, "level": result.Level + 1, "levels": result.Levels, "self_approved": result.SelfApproved})
 }
