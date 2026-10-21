@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -353,6 +354,37 @@ func formCopy(def *wd.Definition) []byte {
 			out["types"] = ty
 		}
 	}
+	if f := ReachFields(def); len(f) > 0 {
+		out["reach"], _ = json.Marshal(f)
+	}
 	raw, _ := json.Marshal(out)
 	return raw
+}
+
+var (
+	bodyFieldRe  = regexp.MustCompile(`trigger\.body\.([A-Za-z_][A-Za-z0-9_]*)`)
+	respondentRe = regexp.MustCompile(`trigger\.form\.respondent\.phone`)
+)
+
+// ReachFields are the form fields holding phones the workflow messages
+// with notify@1 message ("$respondent" for the phone the form verified):
+// the form's thank-you page offers to send those updates on WhatsApp or
+// Telegram (no-technical-steps N11).
+func ReachFields(def *wd.Definition) []string {
+	var out []string
+	def.Walk(func(st *wd.Step) {
+		if st.Type != "connector" || st.Connector != "notify@1" || st.Action != "message" {
+			return
+		}
+		phone, _ := st.Input["phone"].(string)
+		for _, m := range bodyFieldRe.FindAllStringSubmatch(phone, -1) {
+			if !slices.Contains(out, m[1]) {
+				out = append(out, m[1])
+			}
+		}
+		if respondentRe.MatchString(phone) && !slices.Contains(out, "$respondent") {
+			out = append(out, "$respondent")
+		}
+	})
+	return out
 }

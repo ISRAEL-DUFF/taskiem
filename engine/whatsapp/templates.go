@@ -83,10 +83,16 @@ var (
 		Vars:    []string{"tenant", "title", "link"},
 		Purpose: "Any other alert rule (slow runs, drift, credentials, plan limits).",
 	}
+	TplUpdate = Template{
+		Name: "taskiem_update", Category: "UTILITY",
+		Body:    "[{{1}}] Update on {{2}}: {{3}}",
+		Vars:    []string{"tenant", "about", "message"},
+		Purpose: "A workflow's message to someone outside the business who asked for updates (notify@1 message): about says what they asked about.",
+	}
 )
 
 // AllTemplates lists the library, for documentation and tests.
-var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert}
+var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)
 

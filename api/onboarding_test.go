@@ -362,3 +362,7 @@ func (r *recordTeller) all() []notify.Message {
 	defer r.mu.Unlock()
 	return append([]notify.Message(nil), r.msgs...)
 }
+
+func (r *recordTeller) Message(context.Context, notify.Outside) (notify.Delivery, error) {
+	return notify.Delivery{Via: "nobody"}, nil
+}

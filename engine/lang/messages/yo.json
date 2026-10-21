@@ -204,6 +204,50 @@
       "text": "{name} kò sí níbí. Àwọn èdè tó wà níbí: {languages}.",
       "reviewed": false
     },
+    "reach.about": {
+      "text": "Ìjíròrò yìí ń fi ìròyìn ránṣẹ́ sí ọ láti ọ̀dọ̀ {businesses}. Fi STOP ránṣẹ́ láti dá èyí tó kẹ́yìn dúró.",
+      "reviewed": false
+    },
+    "reach.code_invalid": {
+      "text": "Ìjápọ̀ yìí ti parí tàbí wọ́n ti lò ó tẹ́lẹ̀. Ṣí ìjápọ̀ ilé iṣẹ́ náà lẹ́ẹ̀kan sí i láti gba òmíràn.",
+      "reviewed": false
+    },
+    "reach.linked": {
+      "text": "Wà á máa gba ìròyìn láti ọ̀dọ̀ {business} níbí. Fi STOP ránṣẹ́ láti dá wọn dúró.",
+      "reviewed": false
+    },
+    "reach.number_unreachable": {
+      "text": "Má bínú, {business} kò lè fi ìròyìn ránṣẹ́ sí nọ́mbà yìí níbí.",
+      "reviewed": false
+    },
+    "reach.resumed": {
+      "text": "Wà á tún máa gba ìròyìn láti ọ̀dọ̀ {business} níbí. Fi STOP ránṣẹ́ láti dá wọn dúró.",
+      "reviewed": false
+    },
+    "reach.share_number": {
+      "text": "Láti gba ìròyìn láti ọ̀dọ̀ {business} níbí, tẹ Share my number nísàlẹ̀. Telegram yóò fi nọ́mbà tó wà lórí àkọọ́lẹ̀ rẹ ránṣẹ́, kí {business} lè mọ̀ pé tìrẹ ni.",
+      "reviewed": false
+    },
+    "reach.share_number_request": {
+      "text": "Wà á máa gba ìròyìn láti ọ̀dọ̀ {business} nípa ìbéèrè rẹ níbí. Láti gba gbogbo ìròyìn wọn níbí, tẹ Share my number nísàlẹ̀: Telegram yóò fi nọ́mbà tó wà lórí àkọọ́lẹ̀ rẹ ránṣẹ́, kí {business} lè mọ̀ pé tìrẹ ni.",
+      "reviewed": false
+    },
+    "reach.share_own": {
+      "text": "Jọ̀wọ́ pín nọ́mbà tìrẹ, pẹ̀lú bọ́tìnnì Share my number nísàlẹ̀.",
+      "reviewed": false
+    },
+    "reach.stopped": {
+      "text": "O kò ní gba ìròyìn láti ọ̀dọ̀ {business} níbí mọ́. Fi START ránṣẹ́ láti tún gbà wọ́n.",
+      "reviewed": false
+    },
+    "reach.stopped_none": {
+      "text": "O kò gba ìròyìn láti ọ̀dọ̀ ẹnikẹ́ni níbí.",
+      "reviewed": false
+    },
+    "ready.chat_id": {
+      "text": "Fọ́ọ̀mù náà ń béèrè {field}, èyí tí àwọn ènìyàn kò mọ̀. Béèrè nọ́mbà fóònù wọn dípò rẹ̀, kí o sì fi Message a person ránṣẹ́ sí wọn: wọn yóò gbà á lórí WhatsApp tàbí Telegram pẹ̀lú títẹ̀ kan, tàbí nípasẹ̀ àtẹ̀jíṣẹ́.",
+      "reviewed": false
+    },
     "ready.connection_ambiguous": {
       "text": "Ẹ ní ìsopọ̀ {service} ju ẹyọ kan lọ; ẹ yan èyí tí ẹ fẹ́ lò.",
       "reviewed": false

@@ -71,6 +71,11 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 		trig["email"] = map[string]any{"address": "sample@in.taskiem.app", "received_at": "2026-01-01T09:00:00Z",
 			"auth": map[string]any{"spf": "pass", "dkim": []any{"example.com"}, "dmarc": "", "aligned": true}}
 	}
+	if def.Trigger.Type == "form" {
+		// What a submission carries beside the answers (forms 8.2).
+		trig["form"] = map[string]any{"submission_id": "00000000-0000-7000-8000-000000000000", "reference": "F-SAMPLE23", "submitted_at": "2026-01-01T09:00:00Z",
+			"respondent": map[string]any{"kind": "verified", "phone": "+2348030000000"}, "channel": "direct", "consents": []any{}}
+	}
 	if def.Trigger.Type == "connector_event" {
 		if evs, ok := def.Trigger.Config["events"].([]any); ok && len(evs) > 0 {
 			trig["event"] = evs[0]

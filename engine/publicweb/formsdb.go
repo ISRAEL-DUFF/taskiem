@@ -34,6 +34,9 @@ type PublicForm struct {
 	// reference, as JSON values (expr.DecodeJSON).
 	Schema map[string]any
 	Types  map[string]any
+	// Reach are the fields holding phones the workflow messages
+	// (ingest.ReachFields): the thank-you page offers updates for them.
+	Reach []string
 }
 
 // FormLink is a one-time link to a link form.
@@ -125,11 +128,12 @@ func ParsePublicForm(publicID string, raw []byte) (PublicForm, error) {
 		Trigger       json.RawMessage `json:"trigger"`
 		Inputs        json.RawMessage `json:"inputs"`
 		Types         json.RawMessage `json:"types"`
+		Reach         []string        `json:"reach"`
 	}
 	if err := json.Unmarshal(raw, &x); err != nil {
 		return PublicForm{}, err
 	}
-	f := PublicForm{Endpoint: x.Endpoint, Tenant: x.Tenant, PublicID: publicID, Status: x.Status, Open: x.Open, Business: x.Business}
+	f := PublicForm{Endpoint: x.Endpoint, Tenant: x.Tenant, PublicID: publicID, Status: x.Status, Open: x.Open, Business: x.Business, Reach: x.Reach}
 	if x.ClosedMessage != nil {
 		f.ClosedMessage = *x.ClosedMessage
 	}

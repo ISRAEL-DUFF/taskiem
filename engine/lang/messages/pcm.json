@@ -204,6 +204,50 @@
       "text": "{name} no dey here. Languages wey dey here: {languages}.",
       "reviewed": false
     },
+    "reach.about": {
+      "text": "Dis chat dey send you update from {businesses}. Send STOP make the last one stop.",
+      "reviewed": false
+    },
+    "reach.code_invalid": {
+      "text": "Dis link don expire or dem don use am before. Open the business link again make you get new one.",
+      "reviewed": false
+    },
+    "reach.linked": {
+      "text": "You go dey get update from {business} for here. Send STOP make e stop.",
+      "reviewed": false
+    },
+    "reach.number_unreachable": {
+      "text": "Sorry, {business} no fit send update to dis number for here.",
+      "reviewed": false
+    },
+    "reach.resumed": {
+      "text": "You go dey get update from {business} for here again. Send STOP make e stop.",
+      "reviewed": false
+    },
+    "reach.share_number": {
+      "text": "To get update from {business} for here, tap Share my number for down. Telegram go send the number wey dey your account, so {business} go know say na your own.",
+      "reviewed": false
+    },
+    "reach.share_number_request": {
+      "text": "You go dey get update from {business} about your request for here. To get all their update for here, tap Share my number for down: Telegram go send the number wey dey your account, so {business} go know say na your own.",
+      "reviewed": false
+    },
+    "reach.share_own": {
+      "text": "Abeg share your own number, with the Share my number button for down.",
+      "reviewed": false
+    },
+    "reach.stopped": {
+      "text": "You no go dey get update from {business} for here again. Send START make e start again.",
+      "reviewed": false
+    },
+    "reach.stopped_none": {
+      "text": "Nobody dey send you update for here.",
+      "reviewed": false
+    },
+    "ready.chat_id": {
+      "text": "The form dey ask for {field}, wey people no know. Ask for their phone number instead and send dem message with Message a person: dem go get am for WhatsApp or Telegram with one tap, or by text.",
+      "reviewed": false
+    },
     "ready.connection_ambiguous": {
       "text": "You get pass one {service} connection; choose the one wey you go use.",
       "reviewed": false

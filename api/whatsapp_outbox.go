@@ -42,7 +42,7 @@ func (s *Server) listWhatsAppOutbox(w http.ResponseWriter, r *http.Request) {
 	}
 	var out []outboxView
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT o.id, o.kind, o.status, o.user_id, COALESCE(u.email, ''), o.run_id, o.step_id, o.alert_id, o.attempts, o.last_error,
+		rows, err := tx.Query(r.Context(), `SELECT o.id, o.kind, o.status, COALESCE(o.user_id, '00000000-0000-0000-0000-000000000000'), COALESCE(u.email, ''), o.run_id, o.step_id, o.alert_id, o.attempts, o.last_error,
 			CASE WHEN o.status = 'pending' THEN o.next_attempt_at END, o.created_at, o.finished_at
 			FROM whatsapp_outbox o LEFT JOIN users u ON u.id = o.user_id WHERE o.status = $1 ORDER BY o.created_at DESC LIMIT 200`, status)
 		if err != nil {

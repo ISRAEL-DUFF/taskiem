@@ -2,7 +2,7 @@
 
 Taskiem is for Nigerian small businesses and the people who run their offices: traders, shop owners, salon owners, finance and HR staff. Most are not technical. Deploying staging (October 2026) showed, and an audit of the code confirmed, that an owner still meets steps that assume a developer: API keys, JSON, expressions, ids typed by hand, names that must match, messages in developer terms, and one bug that stops a one-person business from accepting its own orders.
 
-This plan removes them. It is a workstream of its own, **N0 to N10**, one pull request per milestone, and it runs **before the Phase 5 pilot** (S8's six weeks with traders and field agents): the pilot should test the product owners will actually meet.
+This plan removes them. It is a workstream of its own, **N0 to N11**, one pull request per milestone, and it runs **before the Phase 5 pilot** (S8's six weeks with traders and field agents): the pilot should test the product owners will actually meet.
 
 ## The rule
 
@@ -40,6 +40,7 @@ Everything a non-technical person needs can be done from a guided screen, or fro
 | **N0-6 Meta Embedded Signup.** A business's own WhatsApp number needs Taskiem to be a Meta Tech Provider | Apply when the shared number is not enough for a pilot business; until then, the guided screen | N9 |
 | **N0-7 Chat publishing.** Letting chat publish workflows | Yes, with the same checks and approvals as the web app, and a WhatsApp PIN or step-up where policy asks | N6 |
 | **N0-8 Receiving email.** "When an email comes in" needs mail received somewhere. Gmail's own notifications need restricted scopes (N0-2), and cover Gmail only | An address per workflow on Taskiem's own mail domain, received by a Taskiem `mail` role (no mail company sees the messages); owners forward from any mailbox with a filter. An inbound-mail service only as a fallback for operators who cannot open port 25 ([decision 0038](../decisions/0038-inbound-email.md)) | N10 |
+| **N0-9 Reaching outsiders on chat.** Staff who are not members and customers can be reached only by SMS and email; chat is linked to Taskiem accounts | Outsiders opt in once per business with a one-tap link on the platform's Telegram bot and WhatsApp number (or the business's own number). A link reaches them from every workflow only once their phone is proven; a business's own bot is later | N11 |
 
 ## Milestones
 
@@ -211,6 +212,62 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 - A gate owner sets up Gmail forwarding with only the guide, and the next matching email runs the workflow.
 - No owner-facing text from Appendix C on the new screens.
 
+### N11: Reaching people who are not on Taskiem (L)
+
+**Problem.** Most of a small business's people never sign in to Taskiem: staff other than the owner, HR and managers, and every customer. A workflow can reach them only by SMS (`notify@1` `text`) or email ([messages](../messages.md)), though nearly all of them use WhatsApp and many use Telegram. The chat channels serve members only: a WhatsApp number or Telegram account is linked to a Taskiem account ([decision 0035](../decisions/0035-telegram-channel.md)). So when an owner asks for "tell the employee on Telegram when their leave is decided", the AI builder reaches for `telegram@1`'s `send_message`, which needs a chat id. It puts a **Telegram chat ID** field on the form, which no employee can fill in. Asking for a username does not help: a bot cannot message a username, only a chat whose person pressed **Start**.
+
+**Build** (one tap from the person, once per business, then every workflow reaches them):
+
+- **Contacts.** Each business gets a contact for each outsider who opts in. A contact holds:
+  - the phone number, as E.164, sealed under its personal-data subject;
+  - each channel they linked: a Telegram account (`tg:<user id>`, never a username) and/or WhatsApp (the number itself);
+  - for each channel: whether the phone is **proven** (below), when it was linked, when they last wrote (WhatsApp's 24-hour window), and whether they said **STOP**.
+  
+  Contacts are the business's, unlike the person-level `telegram_bindings` and `whatsapp_bindings` of members. A tenant reads its own contacts under row-level security. Erasing a person erases their contacts and anything queued for them.
+- **Linking: one tap, on the platform's bot and number.** A link carries a one-time code: 24 random bytes, stored as SHA-256, single use, valid 7 days, and tied to the business and to the submission or run it came from.
+  - **Telegram:** `t.me/<bot>?start=<code>`. On **Start**, the bot says who the updates are from ("You'll get updates from Acme Ltd here. Send STOP to stop."). It then offers Telegram's **Share my phone number** button. A shared contact counts only when its `user_id` is the sender's own.
+  - **WhatsApp:** `wa.me/<number>?text=<message with the code>`, on the business's own number if it has one, otherwise on the shared number with the `[Business name]` prefix. Sending that message is the opt-in Meta asks for. It also opens the 24-hour window, and WhatsApp itself proves the sender's number.
+- **Proof decides the reach.** A typed phone number proves nothing, and binding a chat to it would let anyone receive another person's updates by typing their number.
+  - A link becomes the contact for a phone, and reaches that person from every workflow, only when the phone is proven. That means it was shared through Telegram, it is the WhatsApp sender's own number, or the form verified it with a code (`verify: phone`).
+  - Otherwise the link reaches the person only about the submission or run it was made from.
+- **Where the link is offered:**
+  - On a form's thank-you page, as **Get updates on WhatsApp** and **Get updates on Telegram** buttons, when the workflow messages the respondent (a `message` step whose `phone` is a form field) and the phone is not already linked. The page lives on the form host, so the `public` role mints the codes through a narrow function, as it stores submissions.
+  - On a standing page per business, `/u/<business handle>`, that the owner can share once, for example in the staff WhatsApp group. It is shown in Settings with **Copy** and a QR code. Links made there carry no run, so they reach the person only after the phone is proven.
+- **One step that finds the person: `notify@1` `message`.** Its inputs are `phone` and/or `email`, `message`, an optional `title`, and `about` (one line on what it concerns, used by WhatsApp's template). It tries, in order:
+  1. the channel the contact linked most recently, then the other;
+  2. SMS (`sms_monthly`);
+  3. email.
+
+  A stopped channel is skipped, and a WhatsApp message outside the window goes as a template. The step goes through the existing outbox and the per-recipient limits (5 an hour, 20 a day per person, across every business). It succeeds with `via` (`telegram`, `whatsapp`, `sms`, `email` or `nobody`). `text` stays as it is (SMS only). The workflow and its author never see a chat id.
+- **WhatsApp template:** a new utility template, `taskiem_update`: `[{{1}}] Update on {{2}}: {{3}}` (the business, `about`, the message). Utility templates must concern something the person asked for, so `about` is required, for example "your leave request LR-1042".
+  - It counts in the plan's WhatsApp template allowance like the others.
+  - The operator submits it with the rest: the runbook and `docs/whatsapp.md` gain it.
+  - Until it is approved, `message` uses WhatsApp only inside the window and otherwise moves on to the next channel.
+- **STOP and what outsiders may say:**
+  - `STOP` (or `/stop`, or blocking the bot) stops that business's messages on that channel at once, and the bot confirms it.
+  - `START`, or a new link, resumes them.
+  - Anything else an outsider sends gets one fixed answer: who messages them here, and how to stop. Members' commands, approvals and building are never offered to a contact; a person who is both is a member on their linked account.
+  - On WhatsApp, an organisation's [public menu](../whatsapp.md#public-menus) on its own number keeps working as it does.
+- **AI builder:**
+  - A rule: messages to someone outside the business, or to staff who are not members, use `notify@1` `message` with the phone from the form or table. A goal that names Telegram or WhatsApp does not change that. A form never asks for a chat id, a username or a Telegram id.
+  - Forms whose answers lead to messaging the person use `verify: phone` when the message carries anything personal (a leave decision, a balance).
+  - A readiness check (N3) flags a form field that asks for a chat id: "People don't know their chat ID. Message them by phone number instead."
+  - The aieval suite gains cases: the leave request ("tell the employee on Telegram"), an order update to a customer, and a staff shift reminder from a table of phone numbers. None of them may use `telegram@1`/`whatsapp@1` sends or ask for an id. The baseline is regenerated.
+- **Templates:** a **Leave request** template. A link form (name, phone with `verify: phone`, dates, type, reason) records a row in a leave table, asks the manager role to approve, updates the row, and messages the employee with the decision.
+- **Owners see who they can reach:** Settings gains **People you message**, which lists each contact's masked phone, its channels and whether it stopped. It offers **Remove**. A run's step shows how it went ("Sent on WhatsApp").
+
+**Accept:**
+- An end-to-end test for each channel, against the fake Telegram and WhatsApp servers:
+  1. A form submitted with a verified phone shows the buttons; **Start** with a shared phone links it.
+  2. The workflow's `message` arrives on that channel, without the workflow knowing an id.
+  3. A second workflow messaging the same phone reaches them with no new tap.
+  4. After STOP, it goes by SMS.
+- An unproven link reaches its own run only: a later run for the same typed phone goes by SMS. A Telegram contact shared for someone else's number is refused.
+- WhatsApp outside the window sends `taskiem_update`. Before the template is approved, it falls through to SMS.
+- The leave template, built from chat with "tell them on Telegram", asks for no chat id and passes the aieval cases.
+- A gate owner, with no help, sends the standing link to two staff; both get the next workflow's message on the app they chose.
+- No owner-facing text from Appendix C on the new screens.
+
 ## Order and timing
 
 | Order | Milestone | Size | Why here |
@@ -225,6 +282,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 | 8 | N8 Templates and canvas | L | The long tail; parts can ship separately |
 | 9 | N9 Optional steps | M | Optional features; domains wait on the domain platform |
 | 10 | N10 An email starts a workflow | L | Asked for after N1 to N9 were planned; needs N0-8, the mail domain and port 25 on the VMs, and reuses forms' file storage and N4's channel. M if an inbound-mail service is used instead of the `mail` role |
+| 11 | N11 Reaching people not on Taskiem | L | Asked for after N10, from a leave-request workflow that asked staff for their chat ID; needs N0-9, reuses N4's step and outbox, the forms' verification and the chat channels. WhatsApp's half waits on the Business account and the `taskiem_update` template's approval, and falls back to SMS until then |
 
 About 14 to 18 weeks for one engineer, or 8 to 10 for two working in parallel (N2 and N8 split well). The Phase 5 pilot starts after N1 to N7 and the gate's observed sessions; N8 and N9 can finish during the pilot.
 

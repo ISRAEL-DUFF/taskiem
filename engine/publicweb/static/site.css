@@ -107,3 +107,10 @@ a { color: var(--accent); }
 .has-error input, .has-error textarea, .has-error select { border-color: #b91c1c; }
 .ff-report { margin: 1.5rem 0 0; }
 .btn-link { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: .875rem; text-decoration: underline; cursor: pointer; }
+/* Updates on WhatsApp and Telegram (N11) */
+.ff-updates { margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; }
+.ff-updates h2 { font-size: 1.125rem; margin: 0 0 .5rem; }
+.ff-update-links { display: flex; flex-wrap: wrap; gap: .5rem; }
+.btn-whatsapp { background: #128c4a; border-color: #128c4a; color: #fff; }
+.btn-telegram { background: #1f6fb2; border-color: #1f6fb2; color: #fff; }
+.sf-note { font-size: .875rem; color: var(--muted); }

@@ -5,6 +5,7 @@ import { useAdvanced, useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
 import { ErrorBox, Field, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
+import { PeopleYouMessage } from "./PeopleYouMessage";
 import { USSDChannels } from "./USSDChannels";
 import { Help } from "../onboarding";
 
@@ -61,6 +62,7 @@ export function Settings() {
       <Variables env={env} editable={can("secret.manage")} />
       {advanced && can("secret.manage") && <Egress env={env} />}
       {advanced && can("git.manage") && <Git env={env} />}
+      {can("workflow.read") && <PeopleYouMessage />}
       {can("secret.manage") && <WhatsAppNumber />}
       {can("secret.manage") && <USSDChannels />}
       <Governance />

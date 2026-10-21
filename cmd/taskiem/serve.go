@@ -50,6 +50,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
+	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
@@ -496,6 +497,11 @@ type engine struct {
 	wa *whatsapp.Platform
 	// tg is the platform Telegram bot, when configured.
 	tg *telegram.Platform
+	// messages queue SMS and email to people outside a tenant, and reach
+	// is who of them asked for updates on a chat app (N11); nil without
+	// TASKIEM_MESSAGE_HASH_KEY.
+	messages *sender.Queue
+	reach    *reach.Book
 }
 
 // tables is the data tables service (decision 0033): provisioning in the
@@ -603,7 +609,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		n.Chat = append(n.Chat, "telegram")
 	}
 	if len(cfg.Messages.HashKey) == 32 {
-		n.Messages = &sender.Queue{Vault: vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries, Allowance: e.smsAllowance}
+		e.messages = &sender.Queue{Vault: vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries, Allowance: e.smsAllowance}
+		e.reach = &reach.Book{Pool: pool, Vault: vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries}
+		n.Messages, n.Reach = e.messages, e.reach
 	}
 	tell.Set(n)
 	return e, nil
@@ -834,6 +842,7 @@ func serve(ctx context.Context, args []string) error {
 		if e.tg != nil {
 			tasks = append(tasks, func(ctx context.Context) error { setTelegramWebhook(ctx, e.tg, cfg.PublicURL, log); return nil })
 		}
+		tasks = append(tasks, e.reachTargets)
 		if srv.Languages, srv.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
 			return err
 		}
@@ -844,6 +853,9 @@ func serve(ctx context.Context, args []string) error {
 		// Storefront photos in tenants' Xenibase storage (docs/media.md).
 		srv.Orders = e.orders
 		srv.Forms = e.forms
+		if e.forms != nil {
+			srv.ReachHost = e.forms.FormHost
+		}
 		srv.Email = e.email
 		srv.MailDomain = cfg.Mail.Domain
 		if e.email != nil {
@@ -1187,6 +1199,34 @@ func (e *engine) chat(srv *api.Server) {
 	if e.wa == nil && len(e.cfg.ChatTokenKey) > 0 {
 		srv.ChatSigner = whatsapp.Signer{Key: e.cfg.ChatTokenKey}
 	}
+	// Updates for people outside a tenant (N11): links they send back,
+	// STOP, and messages to them.
+	srv.Reach, srv.Messages = e.reach, e.messages
+	if e.forms != nil {
+		keys := e.forms.Keys
+		srv.ReachKeys = &keys
+	}
+}
+
+// reachTargets records where update links point: the bot, and the
+// platform number people message (TASKIEM_WHATSAPP_DISPLAY_NUMBER).
+func (e *engine) reachTargets(ctx context.Context) error {
+	if !e.reach.Ready() {
+		return nil
+	}
+	var bot, number string
+	if e.tg != nil {
+		bot = e.tg.Config.BotUsername
+	}
+	if e.wa != nil {
+		if number = e.wa.Config.DisplayNumber; number == "" {
+			e.log.Warn("WhatsApp update links are off: set TASKIEM_WHATSAPP_DISPLAY_NUMBER to the platform number (+234…)")
+		}
+	}
+	if err := reach.SetTargets(ctx, e.pool, bot, number); err != nil {
+		e.log.Error("update links", "err", err)
+	}
+	return nil
 }
 
 // setTelegramWebhook points the platform bot's updates at this deployment

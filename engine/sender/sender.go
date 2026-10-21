@@ -168,6 +168,22 @@ func (q *Queue) Enqueue(ctx context.Context, tx pgx.Tx, m Message) (bool, error)
 	return tag.RowsAffected() == 1, nil
 }
 
+// TakeRecipient counts one message to a recipient on another channel (a
+// chat app) against the same limits across tenants, in tx: false when they
+// have had too many.
+func (q *Queue) TakeRecipient(ctx context.Context, tx pgx.Tx, channel, to string) (bool, error) {
+	perHour, perDay := q.PerHour, q.PerDay
+	if perHour <= 0 {
+		perHour = 5
+	}
+	if perDay <= 0 {
+		perDay = 20
+	}
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT taskiem_platform_recipient_take($1, $2, $3)`, q.hash(channel, to), perHour, perDay).Scan(&ok)
+	return ok, err
+}
+
 // check normalises m in place and returns its address and the personal-
 // data category it is sealed under.
 func (q *Queue) check(m *Message) (to, category string, err error) {

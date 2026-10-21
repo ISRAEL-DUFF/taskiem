@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -210,6 +211,16 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 	if err != nil {
 		return err
 	}
+	// Updates from a business for someone outside it (reach.go): its
+	// link's code, then the phone the bot asked for.
+	if code, ok := strings.CutPrefix(in.Text, "/start u_"); ok && u.Kind == "message" {
+		return s.reachStart(ctx, tg, reach.Telegram, addr, strings.TrimSpace(code))
+	}
+	if u.Kind == "message" && u.Contact != nil {
+		if done, err := s.reachContact(ctx, u); done || err != nil {
+			return err
+		}
+	}
 	// An owner agreeing to a field agent, or ending their sessions (agents.go).
 	if u.Kind == "message" {
 		if done, err := s.tgAgentMessage(ctx, u, user); done || err != nil {
@@ -221,6 +232,12 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		return s.tgRedeem(ctx, u, strings.TrimSpace(code))
 	}
 	if user == uuid.Nil {
+		if done, err := s.reachStopStart(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
+			return err
+		}
+		if done, err := s.reachAbout(ctx, tg, reach.Telegram, addr); done || err != nil {
+			return err
+		}
 		return s.tgUnbound(ctx, addr, in.Text)
 	}
 	switch {

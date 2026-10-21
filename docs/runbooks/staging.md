@@ -255,6 +255,29 @@ Answer the installer's "Mail domain" question with `$MAIL` (step 3), after creat
 
 To turn it off again: re-run setup and clear the mail domain. Published email triggers then refuse mail; senders retry for a few days.
 
+## 10. Updates for people outside a business
+
+[Updates](../updates.md) let a business's staff and customers, who never sign in, get its workflows' messages on Telegram or WhatsApp with one tap, instead of by text. The feature needs no setup of its own. It uses the Telegram bot and WhatsApp number the server already has, `TASKIEM_MESSAGE_HASH_KEY` (the installer always sets it) and the public key (set when public pages are on).
+
+### On a new or upgraded server
+
+1. **Upgrade** as for any release (`sudo taskiem-vps update --now`, or wait for the automatic one). The migration adds the contacts tables. **Check:** `sudo taskiem-vps status` shows the new commit.
+2. **Telegram:** nothing to do when the bot is set (step 3). **Check:** in the app, **Settings > People you message** shows a link, and the text says people can use Telegram.
+3. **WhatsApp**, once the Business account is approved: set the platform number's settings ([whatsapp](../whatsapp.md#for-operators-setting-up-the-platform-number)), including `TASKIEM_WHATSAPP_DISPLAY_NUMBER=+234…`. Update links point at that number. Submit the `taskiem_update` template with the others ([templates](../whatsapp.md#templates)). Until Meta approves it, WhatsApp updates go only to people who wrote in the last 24 hours, and the rest by text. **Check:** **Settings > People you message** mentions WhatsApp.
+
+### Try it
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 1 | **Templates** → **Leave requests from your staff**, accept it, make the leave table if asked, publish | The workflow is live; its form has a link |
+| 2 | On your phone, open the form's link, fill it in with your own number, enter the code | The thank-you page shows **Get updates on Telegram** (and WhatsApp, when on) |
+| 3 | Tap **Get updates on Telegram**, press **Start** | The bot: "You'll get updates from <your business> here" |
+| 4 | In the app, approve the request | Within a minute, the decision arrives in Telegram, not by text |
+| 5 | Send `STOP` to the bot, then submit and approve another request | The bot confirms the stop; the next decision comes by text |
+| 6 | **Settings > People you message** | Your number, masked, with Telegram (stopped); **Remove** removes it |
+
+**Check:** `sudo taskiem-vps logs taskiem` shows no `ERROR` mentioning `reach` or `whatsapp: send failed` for these messages.
+
 ## When something fails
 
 | Symptom | Look at |
@@ -271,6 +294,8 @@ To turn it off again: re-run setup and clear the mail domain. Published email tr
 | Mail to a workflow never arrives | `dig MX $MAIL` (it must name `$APP`); `nc -vz $APP 25` from outside (the provider's firewall); `sudo taskiem-vps logs taskiem-mail`. A sender told `550 No such address here` used an address that is not a published workflow's, or one replaced by **Get a new address** |
 | Publishing an email workflow says this Taskiem cannot receive email | No mail domain: [step 9](#9-email-triggers). "Keeping attachments needs a malware scanner": `clamav` is not running (`sudo taskiem-vps logs clamav`) |
 | Mail arrives but says "not one this workflow takes mail from" | The sender is not on the workflow's list, or could not be proven (no DKIM signature for its domain): widen the list, or leave it empty |
+| A form's thank-you page shows no **Get updates** buttons | The workflow must message a phone from the form with **Message a person**; the bot or `TASKIEM_WHATSAPP_DISPLAY_NUMBER` must be set; `TASKIEM_MESSAGE_HASH_KEY` and the public key must be set (`sudo grep -c HASH_KEY /opt/taskiem/taskiem.env`) |
+| Updates go by text although the person tapped the link | They stopped (STOP) or blocked the bot; or, on WhatsApp outside 24 hours, the `taskiem_update` template is not approved yet. **Settings > People you message** shows a stop |
 
 ## Starting over
 
