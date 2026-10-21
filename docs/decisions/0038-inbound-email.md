@@ -1,6 +1,6 @@
 # 0038 — Inbound email: an address per workflow, received by Taskiem
 
-Date: 2026-10-21 · Status: **Proposed** (to build: [N10](../spec/no-technical-steps.md#n10-an-email-starts-a-workflow-l))
+Date: 2026-10-21 · Status: **Accepted** 2026-10-21 (built: N10, [email triggers](../email.md))
 
 ## Context
 
@@ -14,7 +14,7 @@ The Gmail connector cannot fill the gap. Google's push notifications (`users.wat
    - The id is 12 random characters, like a form's public id: stable across versions, one per workflow and environment, and changeable (the old address stops working).
    - An owner sends mail there directly, or forwards it from any mailbox with a filter (Gmail, Outlook, Zoho, cPanel). Taskiem never sees the rest of the mailbox.
 2. **Taskiem receives the mail itself.** A new `mail` role is an SMTP server for the mail domain's MX record, accepting mail only for known addresses (others are refused at `RCPT`, not bounced later). It is the same reasoning as running ClamAV ourselves ([0037](0037-forms.md) §6): message bodies, invoices and bank alerts never pass through a mail company, which would be a new data processor (NDPA).
-   - Its job is narrow: SMTP with STARTTLS, a size limit, and recording SPF, DKIM, DMARC and ARC results. It does not filter spam by content; most mail arrives already filtered by the mailbox that forwards it.
+   - Its job is narrow: SMTP with STARTTLS, a size limit, and recording SPF, DKIM and DMARC results. It does not filter spam by content; most mail arrives already filtered by the mailbox that forwards it.
    - Like the form host, it writes received messages to an inbox table through narrow database functions, and the api role drains them into runs. A message is acknowledged (`250`) only once it is stored.
 3. **The parsing is provider-neutral:** raw RFC 5322 in, `trigger.body` out. An HTTP endpoint that takes raw MIME from an inbound-mail service (Postmark, Mailgun, SendGrid and SES can all deliver raw) can be added later for an operator who cannot run port 25, without changing workflows.
 4. **What a run sees** is `trigger.body`:

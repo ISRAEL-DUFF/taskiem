@@ -130,6 +130,31 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  # Mail for workflows' email triggers (decision 0038, docs/email.md): an
+  # SMTP server on port 25 for the mail domain's MX record. Like the public
+  # pages it connects as taskiem_public and holds only the public key, which
+  # it seals messages with. mail.env sets TASKIEM_MAIL_DOMAIN (also set in
+  # taskiem.env, so the app shows addresses) and, optionally, the
+  # certificate it offers with STARTTLS.
+  taskiem-mail:
+    <<: *hardening
+    profiles: [mail]
+    image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
+    command: ["serve", "--role", "mail"]
+    env_file: [public.env, mail.env]
+    read_only: true
+    cap_drop: [ALL]
+    tmpfs: [/tmp]
+    ports:
+      - "25:2525"
+      - "127.0.0.1:9092:9090"
+    healthcheck:
+      test: ["CMD", "/taskiem", "healthcheck", "127.0.0.1:9090"]
+      interval: 10s
+      retries: 6
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
   # The malware scanner for files sent in forms (docs/forms.md#files), with
   # the public pages. Not published: only Taskiem reaches it, on the Compose
   # network (TASKIEM_CLAMD_ADDR=clamav:3310). Its own freshclam fetches

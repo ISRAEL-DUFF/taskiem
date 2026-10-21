@@ -659,7 +659,7 @@ A trigger turns an outside event into a `RunStarted` event, and every trigger pa
 | Manual / API | UI button or `POST /v1/workflows/{id}/runs` with `Idempotency-Key` header | Client key |
 | WhatsApp | Inbound message or button reply matched to a workflow (section 11) | Message id |
 | USSD | Session callback from an aggregator, mapped to a menu workflow | Session id plus step |
-| Email | Inbound address per workflow, parsed to structured fields | Message-ID header |
+| Email | Inbound address per workflow, parsed to structured fields ([email triggers](../email.md)) | Message-ID header |
 | Subflow | Called by another workflow | Parent run and step |
 | Form (proposed) | A hosted form submitted: public, by one-time link, or by a signed-in member ([forms](forms.md)) | Submission id |
 | Storefront (proposed) | A hosted form on a business's public storefront submitted ([storefronts](storefronts.md)) | Submission id |

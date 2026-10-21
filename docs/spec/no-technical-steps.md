@@ -180,7 +180,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 **Build** (the design is [decision 0038](../decisions/0038-inbound-email.md)):
 - **Definition:** the `email` trigger's config in the schema (`senders`, a list of addresses or domains; `attachments`, `keep` or `ignore`), in the [wd/v1 contract](../contracts/wd-v1.md), `ingest.Check`, the validator's messages and the `triggers.type` check. The OpenAPI `Trigger.type` enum gains `email` and the `storefront` and `form` it lacks.
 - **Addresses:** `email_endpoints` (12-character public id, per workflow and environment, stable across versions), made in `SyncEnvironments` like form endpoints; a **New address** action that retires the old one; the address in `GET /v1/workflows/{wf}/triggers`.
-- **Receiving:** a `mail` role, an SMTP server (STARTTLS, `SIZE` 30 MB, recipients checked at `RCPT` against known addresses, SPF/DKIM/DMARC/ARC recorded) writing to an `email_inbox` table through narrow functions, as the form host does; the api role drains it. Settings `TASKIEM_MAIL_DOMAIN`, `TASKIEM_MAIL_LISTEN` and the certificate. The VM kit gains the role, port 25 and the MX record in its runbook.
+- **Receiving:** a `mail` role, an SMTP server (STARTTLS, `SIZE` 30 MB, recipients checked at `RCPT` against known addresses, SPF/DKIM/DMARC recorded) writing to an `email_inbox` table through narrow functions, as the form host does; the api role drains it. Settings `TASKIEM_MAIL_DOMAIN`, `TASKIEM_MAIL_LISTEN` and the certificate. The VM kit gains the role, port 25 and the MX record in its runbook.
 - **Parsing:** raw MIME to `trigger.body`:
   - fields: `from`, `to`, `cc`, `reply_to`, `subject`, `date`, `message_id`, `text`, `latest` (without the quoted thread), `html`, `attachments`, `forwarded_by`;
   - character sets, HTML-only mail made into text, and a long body cut to `max_payload_bytes` with `truncated: true`;
@@ -200,7 +200,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
   - **Keep attachments**.
   - A step-by-step guide with screens for forwarding from Gmail and Outlook (filter by sender or subject).
   - A live **Waiting for your first email…** that turns into the received message.
-  - **Send a test email**, from the platform's mail.
+  - **Try it with a sample email**, which runs the workflow as if a sample message had arrived.
   - The canvas's trigger card shows the address.
 - **Chat:** an owner can ask for "a workflow for when my bank emails me an alert"; the AI builder knows the trigger (`engine/ai/builder/prompt.go`) and the aieval suite covers it. Chat replies with the address and the forwarding guide's link.
 - **Templates:** two in the library that start from email: a bank-alert email recorded in a table with the owner told, and a supplier's invoice saved with its PDF.
