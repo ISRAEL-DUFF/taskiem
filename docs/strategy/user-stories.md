@@ -278,3 +278,11 @@ Stories are grouped by who benefits. Numbers are for reference in planning, not 
 202. As anyone, I can be rate-limited rather than locked out when my phone sends too much, and have every start need an explicit **yes**.
 203. As anyone, I can unlink my number in one step if my phone is lost, and everything stops.
 204. As anyone, I can ask for help in chat and reach a person when the agent cannot answer.
+
+## X. The shop's POS terminals
+
+205. As a shop owner with Moniepoint terminals, I can connect them once, following the steps Taskiem shows me in Moniepoint Business, and have every sale on every terminal recorded in my own table within seconds.
+206. As a shop owner, I can hear every evening how much each counter took, by card and by transfer, and how many payments did not go through, without opening the Moniepoint app.
+207. As a shop owner who is not in the shop, I can be told the moment a big sale happens, and the moment a payment is declined or reversed, so goods are not released for money that never came.
+208. As a cashier at closing, I can give the terminal's name and what my sales book says, from the web or by chat, and hear the difference and what to look for, with the check kept for the owner and the accountant.
+209. As an accountant, I can export a month of a client's terminal transactions and cash-ups from their tables, by terminal and by day, without screenshots.

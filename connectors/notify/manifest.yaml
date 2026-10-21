@@ -2,7 +2,7 @@
 # business's own people on the WhatsApp or Telegram they linked to
 # Taskiem, and by email when they linked neither. It needs no connection
 # and no account elsewhere; it acts for the run's tenant only, and only
-# ever reaches the business's own members. message (N11, decision 0039)
+# ever reaches the business's own members. message (N11, decision 0040)
 # reaches people outside the business, on the chat app they asked for
 # updates on, else by SMS or email.
 manifest: connector/v1

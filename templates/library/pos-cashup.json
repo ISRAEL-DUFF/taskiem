@@ -1,0 +1,385 @@
+{
+  "id": "pos-cashup",
+  "title": "End-of-day POS cash-up",
+  "summary": "Check a terminal's day against the sales book: enter what the book says and hear the difference, with a record kept.",
+  "description": "Run it at closing time, from the web app or by chat, for each terminal: give the terminal (its name or serial number) and the total in that counter's sales book, and Taskiem adds up what the terminal took today from your POS sales table (kept by the 'Record every Moniepoint POS sale' workflow), tells you and the owner the difference and what to look for, and keeps the check in your cash-ups table so the accountant has every day's figures. Amounts are in naira.",
+  "category": "reporting",
+  "tags": [
+    "reporting",
+    "pos",
+    "moniepoint",
+    "cash-up",
+    "reconciliation"
+  ],
+  "keywords": [
+    "pos",
+    "terminal",
+    "terminals",
+    "moniepoint",
+    "cash up",
+    "cashup",
+    "cash-up",
+    "closing",
+    "reconcile",
+    "reconciliation",
+    "sales book",
+    "end of day",
+    "balance the till",
+    "shortage"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Starts the message.",
+      "required": true,
+      "example": "Mama Nkechi Provisions",
+      "max_length": 60
+    },
+    {
+      "name": "table",
+      "type": "string",
+      "title": "POS sales table",
+      "description": "The table the recording workflow writes to.",
+      "required": false,
+      "default": "pos_sales",
+      "example": "pos_sales",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "terminals_table",
+      "type": "string",
+      "title": "Terminals table",
+      "description": "Your terminals and the names you call them.",
+      "required": false,
+      "default": "pos_terminals",
+      "example": "pos_terminals",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "cashups_table",
+      "type": "string",
+      "title": "Cash-ups table",
+      "description": "Where each day's check is kept. Taskiem makes it for you.",
+      "required": false,
+      "default": "pos_cashups",
+      "example": "pos_cashups",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{table}}",
+      "title": "POS sales",
+      "description": "Every transaction your Moniepoint terminals make, one row per event Moniepoint sends. Amounts are in naira.",
+      "columns": [
+        {
+          "name": "reference",
+          "title": "Reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "terminal",
+          "title": "Terminal",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "approved",
+          "title": "Approved",
+          "type": "boolean"
+        },
+        {
+          "name": "amount",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "happened_at",
+          "title": "When",
+          "type": "datetime"
+        },
+        {
+          "name": "sale_date",
+          "title": "Day",
+          "type": "date"
+        },
+        {
+          "name": "customer",
+          "title": "Customer",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "narration",
+          "title": "Narration",
+          "type": "text"
+        },
+        {
+          "name": "response",
+          "title": "Terminal's answer",
+          "type": "text"
+        },
+        {
+          "name": "event",
+          "title": "Event",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "{{terminals_table}}",
+      "title": "POS terminals",
+      "description": "Your terminals by serial number, with the name you call each one (Counter 1, Ikeja shop). Fill it in so summaries name terminals instead of serial numbers.",
+      "columns": [
+        {
+          "name": "serial",
+          "title": "Serial number",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "title": "Branch",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "{{cashups_table}}",
+      "title": "POS cash-ups",
+      "description": "Each end-of-day check of a terminal: what the sales book says against what the terminal took.",
+      "columns": [
+        {
+          "name": "cashup_date",
+          "title": "Day",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "terminal",
+          "title": "Terminal",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "book_total",
+          "title": "Sales book (naira)",
+          "type": "number"
+        },
+        {
+          "name": "pos_total",
+          "title": "Terminal total (naira)",
+          "type": "number"
+        },
+        {
+          "name": "difference",
+          "title": "Difference (naira)",
+          "type": "number"
+        },
+        {
+          "name": "sales",
+          "title": "Sales counted",
+          "type": "integer"
+        },
+        {
+          "name": "note",
+          "title": "Note",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_posCashup",
+    "version": 1,
+    "name": "POS cash-up",
+    "description": "Compares a terminal's day with the sales book and keeps the check.",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "terminal",
+          "book_total"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "terminal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "title": "Terminal",
+            "description": "The terminal's name as in your terminals table, or its serial number."
+          },
+          "book_total": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "title": "Sales book total (naira)",
+            "description": "What the counter's sales book says was paid by POS today."
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Note",
+            "description": "Anything to remember about today (optional)."
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "today",
+        "type": "code",
+        "name": "Work out today's date in Lagos",
+        "input": {
+          "now": "=run.started_at"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "export default function (input) {\n  const now = new Date(input.now);\n  const lagos = new Date((isNaN(now.getTime()) ? new Date() : now).getTime() + 3600 * 1000);\n  return { date: lagos.toISOString().slice(0, 10) };\n}\n"
+        }
+      },
+      {
+        "id": "read_sales",
+        "type": "connector",
+        "name": "Read today's sales from the POS sales table",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "needs": [
+          "today"
+        ],
+        "input": {
+          "table": "{{table}}",
+          "filters": [
+            {
+              "column": "sale_date",
+              "op": "eq",
+              "value": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)"
+            }
+          ],
+          "order": [
+            {
+              "column": "happened_at"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "read_terminals",
+        "type": "connector",
+        "name": "Read your terminals' names",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{terminals_table}}",
+          "limit": 1000
+        }
+      },
+      {
+        "id": "compare",
+        "type": "code",
+        "name": "Compare the terminal's day with the sales book",
+        "needs": [
+          "settings",
+          "read_sales",
+          "read_terminals"
+        ],
+        "input": {
+          "rows": "=has(steps.read_sales.output.rows) ? steps.read_sales.output.rows : []",
+          "terminals": "=has(steps.read_terminals.output.rows) ? steps.read_terminals.output.rows : []",
+          "terminal": "=trigger.body.terminal",
+          "book_total": "=trigger.body.book_total",
+          "date": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)",
+          "business_name": "=steps.settings.output.business_name"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "function naira(n) { return 'NGN ' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }\nfunction latestByReference(rows) {\n  const by = {};\n  for (const r of rows || []) {\n    if (!r || !r.reference) continue;\n    const seen = by[r.reference];\n    if (!seen || String(r.happened_at || '') >= String(seen.happened_at || '')) by[r.reference] = r;\n  }\n  return Object.keys(by).map(function (k) { return by[k]; });\n}\nexport default function (input) {\n  const asked = String(input.terminal || '').trim().toLowerCase();\n  let serial = asked, label = String(input.terminal || '').trim();\n  for (const t of input.terminals || []) {\n    if (!t) continue;\n    if (String(t.serial || '').toLowerCase() === asked || String(t.name || '').toLowerCase() === asked) { serial = String(t.serial).toLowerCase(); label = t.name ? String(t.name) : String(t.serial); break; }\n  }\n  let total = 0, count = 0;\n  for (const s of latestByReference(input.rows)) {\n    if (!s.approved || String(s.terminal || '').toLowerCase() !== serial) continue;\n    const a = Number(s.amount); if (!isFinite(a)) continue;\n    total += a; count += 1;\n  }\n  const book = Number(input.book_total); const bookTotal = isFinite(book) ? book : 0;\n  const difference = Math.round((bookTotal - total) * 100) / 100;\n  let verdict = 'They match.';\n  if (difference > 0) verdict = 'The sales book is ' + naira(difference) + ' more than the terminal took: look for sales not paid by POS, or payments that did not go through.';\n  if (difference < 0) verdict = 'The terminal took ' + naira(-difference) + ' more than the sales book shows: look for sales not written down.';\n  const message = input.business_name + ' cash-up for ' + label + ', ' + input.date + ': terminal ' + naira(total) + ' (' + count + ' sale(s)), sales book ' + naira(bookTotal) + '. ' + verdict;\n  return { terminal: serial, label: label, pos_total: Math.round(total * 100) / 100, count: count, book_total: bookTotal, difference: difference, message: message };\n}\n"
+        }
+      },
+      {
+        "id": "keep",
+        "type": "connector",
+        "name": "Keep the check in the cash-ups table",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "compare"
+        ],
+        "input": {
+          "table": "{{cashups_table}}",
+          "return": "minimal",
+          "row": {
+            "cashup_date": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)",
+            "terminal": "=has(steps.compare.output.terminal) ? steps.compare.output.terminal : trigger.body.terminal",
+            "book_total": "=trigger.body.book_total",
+            "pos_total": "=has(steps.compare.output.pos_total) ? steps.compare.output.pos_total : 0",
+            "difference": "=has(steps.compare.output.difference) ? steps.compare.output.difference : 0",
+            "sales": "=has(steps.compare.output.count) ? steps.compare.output.count : 0",
+            "note": "=has(trigger.body.note) ? trigger.body.note : ''"
+          }
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell the owner the result",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "compare"
+        ],
+        "input": {
+          "title": "POS cash-up",
+          "message": "=has(steps.compare.output.message) ? steps.compare.output.message : steps.settings.output.business_name + ' cash-up: the terminal\\'s day could not be added up.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

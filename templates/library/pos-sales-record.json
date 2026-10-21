@@ -1,0 +1,274 @@
+{
+  "id": "pos-sales-record",
+  "title": "Record every Moniepoint POS sale in a table",
+  "summary": "Every time one of your Moniepoint terminals takes a payment, keep it in a data table: terminal, amount, kind, whether it was approved.",
+  "description": "Whenever Moniepoint reports a transaction on one of your POS terminals (a card purchase, a transfer to the terminal, a withdrawal, a bill payment), adds a row to your POS sales table with the terminal, the kind, the amount in naira, the day, whether it was approved and the terminal's answer. This is the record the POS summary and cash-up workflows read. Connect your terminals once under Connections (Taskiem shows where in Moniepoint Business to create the webhook subscription); every terminal of the business is covered. Nothing is sent to anyone.",
+  "category": "sales",
+  "tags": [
+    "pos",
+    "moniepoint",
+    "terminal",
+    "terminals",
+    "data table"
+  ],
+  "keywords": [
+    "pos",
+    "terminal",
+    "terminals",
+    "moniepoint",
+    "card machine",
+    "counter",
+    "pos sale",
+    "pos sales",
+    "pos payment",
+    "pos transaction"
+  ],
+  "connectors": [
+    "moniepoint_pos@1",
+    "xenibase@1"
+  ],
+  "params": [
+    {
+      "name": "table",
+      "type": "string",
+      "title": "POS sales table",
+      "description": "Where each sale is kept. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "pos_sales",
+      "example": "pos_sales",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "terminals_table",
+      "type": "string",
+      "title": "Terminals table",
+      "description": "Your terminals and the names you call them, which the summaries use. Taskiem makes it for you; fill it in when you can.",
+      "required": false,
+      "default": "pos_terminals",
+      "example": "pos_terminals",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "pos_connection",
+      "type": "connection",
+      "connector": "moniepoint_pos",
+      "title": "Moniepoint POS connection",
+      "description": "The Moniepoint POS terminals connection whose transactions start this workflow.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{table}}",
+      "title": "POS sales",
+      "description": "Every transaction your Moniepoint terminals make, one row per event Moniepoint sends. Amounts are in naira.",
+      "columns": [
+        {
+          "name": "reference",
+          "title": "Reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "terminal",
+          "title": "Terminal",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "approved",
+          "title": "Approved",
+          "type": "boolean"
+        },
+        {
+          "name": "amount",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "happened_at",
+          "title": "When",
+          "type": "datetime"
+        },
+        {
+          "name": "sale_date",
+          "title": "Day",
+          "type": "date"
+        },
+        {
+          "name": "customer",
+          "title": "Customer",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "narration",
+          "title": "Narration",
+          "type": "text"
+        },
+        {
+          "name": "response",
+          "title": "Terminal's answer",
+          "type": "text"
+        },
+        {
+          "name": "event",
+          "title": "Event",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "{{terminals_table}}",
+      "title": "POS terminals",
+      "description": "Your terminals by serial number, with the name you call each one (Counter 1, Ikeja shop). Fill it in so summaries name terminals instead of serial numbers.",
+      "columns": [
+        {
+          "name": "serial",
+          "title": "Serial number",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "title": "Branch",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_posSalesRecord",
+    "version": 1,
+    "name": "Record every POS sale",
+    "description": "Keeps each transaction your Moniepoint terminals make in the POS sales table.",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "moniepoint_pos@1",
+        "trigger": "transaction",
+        "events": [
+          "V1_POS_PURCHASE_TRANSACTION",
+          "V1_POS_TRANSFER_TRANSACTION",
+          "V1_POS_CARD_TRANSFER_TRANSACTION",
+          "V1_POS_WITHDRAWAL_TRANSACTION",
+          "V1_POS_BILL_PAYMENT_TRANSACTION",
+          "V1_POS_COLLECTION_TRANSACTION",
+          "V1_POS_PAY_CODE_TRANSACTION",
+          "V1_POS_AIRTIME_TRANSACTION",
+          "V1_POS_BOOM_TRANSACTION",
+          "V1_TRANSFER_TRANSACTION"
+        ],
+        "connection": "{{pos_connection}}"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "terminalSerial": {
+                "type": "string"
+              },
+              "amount": {
+                "type": "integer"
+              },
+              "transactionReference": {
+                "type": "string"
+              },
+              "merchantReference": {
+                "type": "string"
+              },
+              "transactionTime": {
+                "type": "string"
+              },
+              "transactionType": {
+                "type": "string"
+              },
+              "transactionStatus": {
+                "type": "string"
+              },
+              "responseCode": {
+                "type": "string"
+              },
+              "responseMessage": {
+                "type": "string"
+              },
+              "narration": {
+                "type": "string"
+              },
+              "metaData": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "prepare",
+        "type": "code",
+        "name": "Read the sale from Moniepoint's report",
+        "input": {
+          "event": "=trigger.body",
+          "received_at": "=run.started_at"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "export default function (input) {\n  const e = input.event || {};\n  const d = e.data || {};\n  const kinds = { PURCHASE: 'card purchase', CARD_PURCHASE: 'card purchase', TRANSFER: 'transfer to terminal', CARD_TRANSFER: 'card transfer',\n    WITHDRAWAL: 'withdrawal', BILL_PAYMENT: 'bill payment', COLLECTION: 'collection', PAY_CODE: 'pay code', AIRTIME: 'airtime', BOOM: 'boom' };\n  const short = String(e.eventType || '').replace(/^V1_/, '').replace(/_TRANSACTION$/, '').replace(/^POS_/, '');\n  const kind = kinds[short] || (d.transactionType ? String(d.transactionType).toLowerCase().replace(/_/g, ' ') : 'other');\n  const status = String(d.transactionStatus || '').toUpperCase();\n  const approved = ['COMPLETED', 'APPROVED', 'SUCCESS', 'SUCCESSFUL'].indexOf(status) >= 0;\n  const pending = status === 'PENDING' || status === '';\n  const kobo = Number(d.amount);\n  const amount = isFinite(kobo) ? Math.round(kobo) / 100 : 0;\n  let when = null;\n  const t = String(d.transactionTime || '');\n  if (/^\\d{4}\\/\\d{2}\\/\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(t)) when = new Date(t.replace(/\\//g, '-').replace(' ', 'T') + '+01:00');\n  else if (t) when = new Date(t);\n  if (!when || isNaN(when.getTime())) when = new Date(input.received_at);\n  if (isNaN(when.getTime())) when = new Date(0);\n  const lagos = new Date(when.getTime() + 3600 * 1000);\n  let customer = '';\n  try { const m = JSON.parse(d.metaData || '{}'); customer = String((m && m.customerName) || ''); } catch (err) { customer = ''; }\n  return { row: {\n    reference: String(d.transactionReference || e.eventId || ''), terminal: String(d.terminalSerial || ''), kind: kind,\n    status: status ? status.toLowerCase() : 'unknown', approved: approved, amount: amount, happened_at: when.toISOString(),\n    sale_date: lagos.toISOString().slice(0, 10), customer: customer, narration: String(d.narration || ''),\n    response: String(d.responseMessage || ''), event: String(e.eventType || '') }, pending: pending, naira: amount };\n}\n"
+        }
+      },
+      {
+        "id": "record",
+        "type": "connector",
+        "name": "Add the sale to the POS sales table",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "prepare"
+        ],
+        "input": {
+          "table": "{{table}}",
+          "row": "=has(steps.prepare.output.row) ? steps.prepare.output.row : {}",
+          "return": "minimal"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

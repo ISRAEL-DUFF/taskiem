@@ -90,6 +90,7 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
   const nav = useNavigate();
   const [values, setValues] = useState(() => initialValues(t.params));
   const [name, setName] = useState("");
+  const tables = t.tables ?? [];
   const act = useAction();
   const fieldErrors = useMemo(() => {
     const e = act.error;
@@ -101,7 +102,16 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
   }, [act.error]);
   const create = () =>
     act.run(async () => {
-      const r = await post<{ id: string }>(`/v1/templates/${t.id}/instantiate`, { params: toParams(t.params, values), name: name.trim() || undefined });
+      const r = await post<{ id: string; tables?: { name: string; status: string; error?: string }[] }>(`/v1/templates/${t.id}/instantiate`, {
+        params: toParams(t.params, values),
+        name: name.trim() || undefined,
+      });
+      const notMade = (r.tables ?? []).filter((x) => x.status === "failed" || x.status === "skipped");
+      if (notMade.length > 0) {
+        throw new Error(
+          `The draft was created (find it under Workflows), but ${notMade.map((x) => `the table ${x.name} could not be made: ${x.error ?? "unknown reason"}`).join("; ")}.`,
+        );
+      }
       nav(`/workflows/${r.id}`);
     });
   return (
@@ -134,6 +144,18 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
             {t.variables.map((v) => (
               <li key={v.name}>
                 <code>{v.name}</code>: {v.why}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {tables.length > 0 && (
+        <div className="notice">
+          It keeps its records in {tables.length === 1 ? "a data table" : "data tables"} Taskiem makes for you if you do not have {tables.length === 1 ? "it" : "them"} yet:
+          <ul>
+            {tables.map((tb) => (
+              <li key={tb.name}>
+                <strong>{tb.title || tb.name}</strong> ({tb.columns.map((c) => c.title || c.name).join(", ")})
               </li>
             ))}
           </ul>

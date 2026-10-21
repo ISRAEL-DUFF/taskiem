@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v1/transactions",
+  "headers": {
+   "Authorization": "Bearer tok-1"
+  },
+  "body": {
+   "terminalSerial": "P260TEST01",
+   "amount": 1100000,
+   "merchantReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+   "transactionType": "PURCHASE",
+   "paymentMethod": "CARD_PURCHASE"
+  }
+ },
+ "response": {
+  "status": 202,
+  "body": null
+ }
+}

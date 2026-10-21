@@ -10,6 +10,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // The builder's copy of the column types is the tables service's.
@@ -20,6 +21,9 @@ func TestAIBuilderColumnTypes(t *testing.T) {
 	}
 	if !slices.Equal(builder.ColumnTypes, want) {
 		t.Fatalf("builder.ColumnTypes %v, datatables.Types %v", builder.ColumnTypes, want)
+	}
+	if !slices.Equal(templates.ColumnTypes, want) {
+		t.Fatalf("templates.ColumnTypes %v, datatables.Types %v", templates.ColumnTypes, want)
 	}
 }
 

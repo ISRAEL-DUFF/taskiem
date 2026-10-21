@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v1/auth",
+  "body": {
+   "clientId": "api-client-taskiem",
+   "clientSecret": "pos-secret-0000000000000001"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "message": "Invalid credentials",
+   "errors": [
+    "Invalid credentials"
+   ],
+   "timestamp": "2026-10-21T01:13:59.659193234",
+   "status": "UNAUTHORIZED"
+  }
+ }
+}

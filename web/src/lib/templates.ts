@@ -27,6 +27,13 @@ export interface TemplateLine {
   text: string;
 }
 
+export interface TemplateTable {
+  name: string;
+  title?: string;
+  description?: string;
+  columns: { name: string; title?: string; type: string; required?: boolean; personal?: boolean }[];
+}
+
 export interface Template {
   id: string;
   title: string;
@@ -41,6 +48,8 @@ export interface Template {
   available: boolean;
   /** It starts from a web address another system calls: someone technical sets it up. */
   needs_developer?: boolean;
+  /** Data tables the workflow works on; Taskiem makes them when the template is used if they do not exist. */
+  tables?: TemplateTable[];
 }
 
 export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];

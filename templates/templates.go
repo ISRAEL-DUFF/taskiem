@@ -37,6 +37,7 @@ import (
 	"math"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -84,6 +85,39 @@ type Need struct {
 	Why       string `json:"why"`
 }
 
+// Table is a data table a template works on. When the template is used,
+// Taskiem makes the table for the business if it does not exist yet
+// (docs/templates.md, "Tables a template makes"). Its name is a plain
+// table name, or a marker naming a string parameter with the table picker
+// ({{table}}), so the person may point the template at a table of their
+// own instead.
+type Table struct {
+	Name        string   `json:"name"`
+	Title       string   `json:"title,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Columns     []Column `json:"columns"`
+}
+
+// Column is a column of a template's table, as the Tables page takes one.
+type Column struct {
+	Name     string `json:"name"`
+	Title    string `json:"title,omitempty"`
+	Type     string `json:"type"`
+	Required bool   `json:"required,omitempty"`
+	// Personal marks a column as personal data; left out, phone and email
+	// columns are personal and the rest are not.
+	Personal *bool `json:"personal,omitempty"`
+}
+
+// ColumnTypes are the data tables' column types (engine/datatables.Types;
+// the API's test keeps them the same).
+var ColumnTypes = []string{"text", "integer", "number", "boolean", "date", "datetime", "phone", "email", "json"}
+
+var tableName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+
+// reservedColumns are the columns every table already has.
+var reservedColumns = map[string]bool{"id": true, "created_at": true, "updated_at": true}
+
 // Template is one library entry.
 type Template struct {
 	ID          string   `json:"id"`
@@ -97,8 +131,11 @@ type Template struct {
 	Connectors []string `json:"connectors"`
 	// Variables are tenant variables the workflow reads (personal data
 	// such as an owner's phone number lives there, not in parameters).
-	Variables  []Need          `json:"variables,omitempty"`
-	Params     []Param         `json:"params"`
+	Variables []Need  `json:"variables,omitempty"`
+	Params    []Param `json:"params"`
+	// Tables are the data tables the workflow reads and writes, made for
+	// the business when the template is used if they do not exist.
+	Tables     []Table         `json:"tables,omitempty"`
 	Definition json.RawMessage `json:"definition"`
 }
 
@@ -231,12 +268,77 @@ func (t *Template) check() error {
 		}
 		used[m[1]] = true
 	}
+	for _, tb := range t.Tables {
+		if m := marker.FindStringSubmatch(tb.Name); m != nil && m[0] == tb.Name && seen[m[1]] {
+			used[m[1]] = true // a table the person chooses
+		}
+	}
 	for _, p := range t.Params {
 		if !used[p.Name] {
 			return fmt.Errorf("parameter %q is not used by the definition", p.Name)
 		}
 	}
+	tables := map[string]bool{}
+	for _, tb := range t.Tables {
+		if m := marker.FindStringSubmatch(tb.Name); m != nil && m[0] == tb.Name {
+			p, ok := t.Param(m[1])
+			if !ok || p.Picker != "table" || m[2] != "" {
+				return fmt.Errorf("table %q: the marker must name a parameter with the table picker", tb.Name)
+			}
+		} else if !tableName.MatchString(tb.Name) || strings.HasPrefix(tb.Name, "xb_") || strings.HasPrefix(tb.Name, "pg_") {
+			return fmt.Errorf("table %q: the name must be lower-case letters, digits and underscores, starting with a letter", tb.Name)
+		}
+		if tables[tb.Name] {
+			return fmt.Errorf("table %q is declared twice", tb.Name)
+		}
+		tables[tb.Name] = true
+		if len(tb.Columns) == 0 {
+			return fmt.Errorf("table %q has no columns", tb.Name)
+		}
+		cols := map[string]bool{}
+		for _, c := range tb.Columns {
+			switch {
+			case !tableName.MatchString(c.Name) || reservedColumns[c.Name]:
+				return fmt.Errorf("table %q: the column name %q is not allowed", tb.Name, c.Name)
+			case cols[c.Name]:
+				return fmt.Errorf("table %q has the column %q twice", tb.Name, c.Name)
+			case !slices.Contains(ColumnTypes, c.Type):
+				return fmt.Errorf("table %q: the column %q has the unknown type %q", tb.Name, c.Name, c.Type)
+			}
+			cols[c.Name] = true
+		}
+	}
 	return nil
+}
+
+// TablesFor returns the template's tables with their names resolved from
+// the parameter values (a {{table}} marker takes the chosen table's name),
+// as Instantiate would see them: values that do not fit are ignored, since
+// Instantiate refuses them first.
+func (t *Template) TablesFor(values map[string]any) []Table {
+	vals, _, err := t.Resolve(values)
+	if err != nil {
+		vals = map[string]any{}
+	}
+	out := make([]Table, 0, len(t.Tables))
+	for _, tb := range t.Tables {
+		if m := marker.FindStringSubmatch(tb.Name); m != nil && m[0] == tb.Name {
+			name := ""
+			if v, ok := vals[m[1]]; ok {
+				name, _ = v.(string)
+			} else if p, ok := t.Param(m[1]); ok {
+				if v, err := p.Coerce(p.Example); err == nil {
+					name, _ = v.(string)
+				}
+			}
+			if !tableName.MatchString(name) {
+				continue
+			}
+			tb.Name = name
+		}
+		out = append(out, tb)
+	}
+	return out
 }
 
 // List returns every template, in id order.

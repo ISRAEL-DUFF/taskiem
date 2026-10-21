@@ -99,6 +99,7 @@ Built on 6 October 2026 from each provider's public documentation, clean-room, w
 | Connector | Covers | Webhooks | Guide |
 | --- | --- | --- | --- |
 | `moniepoint@1` | Monnify (Moniepoint's developer API): transfers with status and name enquiry, reserved accounts, collections, balance; duplicate references looked up | HMAC-SHA512 | [moniepoint.md](integrations/moniepoint.md) |
+| `moniepoint_pos@1` | Moniepoint's POS terminals (21 October 2026): every terminal transaction as an event, payment requests pushed to a terminal with status; duplicate references looked up | HMAC-SHA256 over id, timestamp and body, checked by the connector | [moniepoint_pos.md](integrations/moniepoint_pos.md) |
 | `interswitch@1` | Payouts with status, banks, name enquiry, Web Checkout status with an amount check | HMAC-SHA512 | [interswitch.md](integrations/interswitch.md) |
 | `opay@1` | Cashier and bank-transfer collections, status, close, refunds; signed requests (payouts are not publicly documented) | In-body HMAC-SHA3-512, checked by the connector | [opay.md](integrations/opay.md) |
 | `remita@1` | Funds transfer (single and bulk), invoices (RRR), banks, name enquiry | URL token, `Ok` reply, one event per payment | [remita.md](integrations/remita.md) |

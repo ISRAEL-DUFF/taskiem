@@ -706,6 +706,31 @@ export const moniepoint = {
   transfer: (input: MoniepointTransferInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint@1", "transfer", input, extra),
 };
 
+// Moniepoint POS terminals (moniepoint_pos@1)
+export interface MoniepointPosCheckAccessInput {
+  [key: string]: Value;
+}
+export interface MoniepointPosGetTransactionInput {
+  merchant_reference: Val<string>;
+}
+export interface MoniepointPosRequestPaymentInput {
+  /** Kobo */
+  amount: Val<number>;
+  merchant_reference?: Val<string>;
+  /** What the terminal offers the customer */
+  payment_method?: Val<"CARD_PURCHASE" | "POS_TRANSFER" | "ANY">;
+  /** The terminal's serial number (on the device */
+  terminal_serial: Val<string>;
+}
+export const moniepoint_pos = {
+  /** Check the connection (read) */
+  check_access: (input?: MoniepointPosCheckAccessInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint_pos@1", "check_access", input, extra),
+  /** Get a payment request (read) */
+  get_transaction: (input: MoniepointPosGetTransactionInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint_pos@1", "get_transaction", input, extra),
+  /** Ask a terminal to take a payment (idempotent_write) */
+  request_payment: (input: MoniepointPosRequestPaymentInput, extra?: ConnectorExtra): StepSpec => connector("moniepoint_pos@1", "request_payment", input, extra),
+};
+
 // Mono (mono@1)
 export interface MonoCancelMandateInput {
   mandate_id: Val<string>;
@@ -2321,6 +2346,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "iswallet@1": "iswallet",
   "lenco@1": "lenco",
   "moniepoint@1": "moniepoint",
+  "moniepoint_pos@1": "moniepoint_pos",
   "mono@1": "mono",
   "mpesa@1": "mpesa",
   "mtnmomo@1": "mtnmomo",
@@ -2357,6 +2383,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "iswallet@1": ["get_balance", "get_payout", "list_banks", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
+  "moniepoint_pos@1": ["check_access", "get_transaction", "request_payment"],
   "mono@1": ["cancel_mandate", "check_mandate_balance", "create_customer", "create_mandate", "debit_mandate", "exchange_token", "get_account", "get_balance", "get_debit", "get_identity", "get_income_records", "get_mandate", "get_statement", "get_statement_pdf", "initiate_account_linking", "initiate_mandate", "initiate_payment", "initiate_reauthorisation", "list_banks", "list_transactions", "pause_mandate", "reinstate_mandate", "request_creditworthiness", "request_income", "unlink_account", "verify_payment"],
   "mpesa@1": ["account_balance", "b2c_payment", "check_credentials", "register_c2b_urls", "reversal", "stk_push", "stk_query", "transaction_status"],
   "mtnmomo@1": ["get_account_holder_name", "get_balance", "get_payment", "get_transfer", "request_to_pay", "transfer", "validate_account_holder"],

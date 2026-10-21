@@ -1,0 +1,280 @@
+{
+  "id": "pos-daily-summary",
+  "title": "Evening POS summary to the owner",
+  "summary": "Every evening, add up today's Moniepoint POS sales from the POS sales table, per terminal, and tell the owner.",
+  "description": "Every day at the time you choose, reads today's sales from your POS sales table (kept by the 'Record every Moniepoint POS sale' workflow), counts the approved ones, adds them up per terminal and per kind (card, transfer), notes the biggest sale and any payment that did not go through, and sends the owner a short message. Terminals are named from your terminals table when you have filled it in. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
+  "category": "reporting",
+  "tags": [
+    "reporting",
+    "pos",
+    "moniepoint",
+    "terminals"
+  ],
+  "keywords": [
+    "pos",
+    "terminal",
+    "terminals",
+    "moniepoint",
+    "card machine",
+    "counter",
+    "pos sales",
+    "pos summary",
+    "pos total",
+    "per terminal"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Starts the summary message.",
+      "required": true,
+      "example": "Mama Nkechi Provisions",
+      "max_length": 60
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the summary is sent, Lagos time.",
+      "required": true,
+      "default": "20:30",
+      "example": "20:30"
+    },
+    {
+      "name": "table",
+      "type": "string",
+      "title": "POS sales table",
+      "description": "The table the recording workflow writes to.",
+      "required": false,
+      "default": "pos_sales",
+      "example": "pos_sales",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "terminals_table",
+      "type": "string",
+      "title": "Terminals table",
+      "description": "Your terminals and the names you call them.",
+      "required": false,
+      "default": "pos_terminals",
+      "example": "pos_terminals",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{table}}",
+      "title": "POS sales",
+      "description": "Every transaction your Moniepoint terminals make, one row per event Moniepoint sends. Amounts are in naira.",
+      "columns": [
+        {
+          "name": "reference",
+          "title": "Reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "terminal",
+          "title": "Terminal",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "approved",
+          "title": "Approved",
+          "type": "boolean"
+        },
+        {
+          "name": "amount",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "happened_at",
+          "title": "When",
+          "type": "datetime"
+        },
+        {
+          "name": "sale_date",
+          "title": "Day",
+          "type": "date"
+        },
+        {
+          "name": "customer",
+          "title": "Customer",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "narration",
+          "title": "Narration",
+          "type": "text"
+        },
+        {
+          "name": "response",
+          "title": "Terminal's answer",
+          "type": "text"
+        },
+        {
+          "name": "event",
+          "title": "Event",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "{{terminals_table}}",
+      "title": "POS terminals",
+      "description": "Your terminals by serial number, with the name you call each one (Counter 1, Ikeja shop). Fill it in so summaries name terminals instead of serial numbers.",
+      "columns": [
+        {
+          "name": "serial",
+          "title": "Serial number",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "title": "Branch",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_posDailySummary",
+    "version": 1,
+    "name": "Evening POS summary",
+    "description": "Adds up today's POS sales per terminal and tells the owner.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "today",
+        "type": "code",
+        "name": "Work out today's date in Lagos",
+        "input": {
+          "now": "=run.started_at"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "export default function (input) {\n  const now = new Date(input.now);\n  const lagos = new Date((isNaN(now.getTime()) ? new Date() : now).getTime() + 3600 * 1000);\n  return { date: lagos.toISOString().slice(0, 10) };\n}\n"
+        }
+      },
+      {
+        "id": "read_sales",
+        "type": "connector",
+        "name": "Read today's sales from the POS sales table",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "needs": [
+          "today"
+        ],
+        "input": {
+          "table": "{{table}}",
+          "filters": [
+            {
+              "column": "sale_date",
+              "op": "eq",
+              "value": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)"
+            }
+          ],
+          "order": [
+            {
+              "column": "happened_at"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "read_terminals",
+        "type": "connector",
+        "name": "Read your terminals' names",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{terminals_table}}",
+          "limit": 1000
+        }
+      },
+      {
+        "id": "totals",
+        "type": "code",
+        "name": "Add up the day per terminal",
+        "needs": [
+          "settings",
+          "read_sales",
+          "read_terminals"
+        ],
+        "input": {
+          "rows": "=has(steps.read_sales.output.rows) ? steps.read_sales.output.rows : []",
+          "terminals": "=has(steps.read_terminals.output.rows) ? steps.read_terminals.output.rows : []",
+          "date": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)",
+          "business_name": "=steps.settings.output.business_name"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "function naira(n) { return 'NGN ' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }\nfunction latestByReference(rows) {\n  const by = {};\n  for (const r of rows || []) {\n    if (!r || !r.reference) continue;\n    const seen = by[r.reference];\n    if (!seen || String(r.happened_at || '') >= String(seen.happened_at || '')) by[r.reference] = r;\n  }\n  return Object.keys(by).map(function (k) { return by[k]; });\n}\nfunction nameOf(terminals, serial) {\n  for (const t of terminals || []) if (t && String(t.serial) === String(serial)) return t.name ? String(t.name) : String(serial);\n  return String(serial || 'unknown terminal');\n}\nexport default function (input) {\n  const sales = latestByReference(input.rows);\n  const perTerminal = {}, perKind = {};\n  let total = 0, count = 0, declined = 0, biggest = 0;\n  for (const s of sales) {\n    if (!s.approved) { if (String(s.status) !== 'pending') declined += 1; continue; }\n    const a = Number(s.amount); if (!isFinite(a)) continue;\n    total += a; count += 1; if (a > biggest) biggest = a;\n    const t = nameOf(input.terminals, s.terminal);\n    perTerminal[t] = perTerminal[t] || { total: 0, count: 0 }; perTerminal[t].total += a; perTerminal[t].count += 1;\n    const k = String(s.kind || 'other');\n    perKind[k] = perKind[k] || { total: 0, count: 0 }; perKind[k].total += a; perKind[k].count += 1;\n  }\n  const lines = [input.business_name + ' POS, ' + input.date + ': ' + count + ' sale(s), ' + naira(total) + '.'];\n  const terminals = Object.keys(perTerminal).sort();\n  if (terminals.length > 1) for (const t of terminals) lines.push(t + ': ' + perTerminal[t].count + ' sale(s), ' + naira(perTerminal[t].total));\n  const kinds = Object.keys(perKind).sort();\n  if (kinds.length > 1) lines.push('By kind: ' + kinds.map(function (k) { return k + ' ' + naira(perKind[k].total); }).join(', ') + '.');\n  if (biggest > 0 && count > 1) lines.push('Biggest sale: ' + naira(biggest) + '.');\n  if (declined > 0) lines.push(declined + ' payment(s) did not go through.');\n  if (count === 0) lines[0] = input.business_name + ' POS, ' + input.date + ': no sales recorded today.';\n  return { total: Math.round(total * 100) / 100, count: count, declined: declined, message: lines.join('\\n') };\n}\n"
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell the owner today's POS takings",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "totals"
+        ],
+        "input": {
+          "title": "POS summary",
+          "message": "=has(steps.totals.output.message) ? steps.totals.output.message : steps.settings.output.business_name + ' POS summary: today\\'s sales could not be added up.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

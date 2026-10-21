@@ -1,6 +1,6 @@
 # Updates on WhatsApp and Telegram for people outside the business
 
-Most of the people a small business's workflows message never sign in to Taskiem: customers, applicants, and the staff other than the owner, HR and managers. A workflow reaches them by their **phone number**. They can choose, with one tap, to get those messages on WhatsApp or Telegram instead of by text ([decision 0039](decisions/0039-reaching-people-outside.md)). Nobody is ever asked for a chat ID.
+Most of the people a small business's workflows message never sign in to Taskiem: customers, applicants, and the staff other than the owner, HR and managers. A workflow reaches them by their **phone number**. They can choose, with one tap, to get those messages on WhatsApp or Telegram instead of by text ([decision 0040](decisions/0039-reaching-people-outside.md)). Nobody is ever asked for a chat ID.
 
 Members of the business (people who sign in) link WhatsApp or Telegram on their account page instead, and hear from **Tell me** ([notify](integrations/notify.md)).
 

@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v1/auth",
+  "body": {
+   "clientId": "api-client-taskiem",
+   "clientSecret": "pos-secret-0000000000000001"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "accessToken": "tok-2",
+   "tokenType": {
+    "value": "bearer"
+   },
+   "expiresIn": 8699,
+   "scope": "profile",
+   "jti": "f884300f-13b8-88bc-0002"
+  }
+ }
+}
