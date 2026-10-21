@@ -1,12 +1,38 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import type { Step } from "@sdk/wd";
+import type { Step, Trigger } from "@sdk/wd";
 import { Icon } from "../icons";
+import type { GraphNode } from "../lib/graph";
+import { triggerWords } from "../lib/home";
 
 export type StepNodeData = { step: Step; invalid: boolean; status?: string };
 export type StepFlowNode = Node<StepNodeData, "step">;
 /** What starts the workflow, drawn before its first steps; not a step. */
-export type TriggerFlowNode = Node<{ words: string; type: string }, "trigger">;
+export type TriggerFlowNode = Node<{ words: string; type: string; status?: string }, "trigger">;
 export const TRIGGER_NODE = "__trigger";
+
+/** What starts the workflow as a card left of the steps that need nothing,
+ * joined to them; none for a workflow without steps. */
+export function triggerCard(
+  steps: GraphNode[],
+  trigger: Trigger,
+  extra: Partial<Omit<TriggerFlowNode, "data">> & { data?: Partial<TriggerFlowNode["data"]> } = {},
+): { node: TriggerFlowNode; edges: { id: string; source: string; target: string; deletable: boolean; className: string }[] } | null {
+  const roots = steps.filter((n) => !(n.step.needs ?? []).length);
+  if (roots.length === 0) return null;
+  return {
+    node: {
+      id: TRIGGER_NODE,
+      type: "trigger",
+      position: { x: Math.min(...steps.map((n) => n.position.x)) - 300, y: roots.reduce((a, n) => a + n.position.y, 0) / roots.length },
+      draggable: false,
+      deletable: false,
+      selectable: false,
+      ...extra,
+      data: { words: triggerWords(trigger), type: trigger.type, ...extra.data },
+    },
+    edges: roots.map((n) => ({ id: `${TRIGGER_NODE}->${n.id}`, source: TRIGGER_NODE, target: n.id, deletable: false, className: "trigger-edge" })),
+  };
+}
 
 export function summary(s: Step): string {
   switch (s.type) {
@@ -88,7 +114,7 @@ export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
 
 export function TriggerNode({ data }: NodeProps<TriggerFlowNode>) {
   return (
-    <div className="step-node trigger-node" data-testid="node-trigger" title="Change when it runs">
+    <div className={`step-node trigger-node${data.status ? ` status-${data.status}` : ""}`} data-testid="node-trigger" title={data.status ? undefined : "Change when it runs"}>
       <span className="step-icon" aria-hidden="true">
         <Icon name={data.type === "schedule" ? "clock" : "bolt"} />
       </span>

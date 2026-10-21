@@ -6,8 +6,7 @@ import { ApiError, get, post, put, type ConnectorInfo, type JSONSchema, type Mer
 import { useAdvanced, useAuth } from "../auth";
 import { SchedulePicker } from "../canvas/PlainPickers";
 import { sourcesFor } from "../lib/plaincanvas";
-import { StepNode, TRIGGER_NODE, TriggerNode, type StepFlowNode, type TriggerFlowNode } from "../canvas/StepNode";
-import { triggerWords } from "../lib/home";
+import { StepNode, TRIGGER_NODE, TriggerNode, triggerCard, type StepFlowNode, type TriggerFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
 import { FormTriggerEditor, startFormTrigger } from "../canvas/FormEditor";
 import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph, type Layout } from "../lib/graph";
@@ -118,27 +117,9 @@ export function Editor() {
     data: { step: n.step, invalid: invalid.has(n.id) },
   }));
   // What starts it, left of the steps that need nothing, joined to them.
-  const roots = graph.nodes.filter((n) => !(n.step.needs ?? []).length);
-  const trigger: TriggerFlowNode | null =
-    def && roots.length > 0
-      ? {
-          id: TRIGGER_NODE,
-          type: "trigger",
-          position: {
-            x: Math.min(...graph.nodes.map((n) => n.position.x)) - 300,
-            y: roots.reduce((a, n) => a + n.position.y, 0) / roots.length,
-          },
-          draggable: false,
-          deletable: false,
-          selectable: false,
-          measured: sizes[TRIGGER_NODE],
-          data: { words: triggerWords(def.trigger), type: def.trigger.type },
-        }
-      : null;
-  const nodes: (StepFlowNode | TriggerFlowNode)[] = trigger ? [trigger, ...stepNodes] : stepNodes;
-  const edges = trigger
-    ? [...graph.edges, ...roots.map((n) => ({ id: `${TRIGGER_NODE}->${n.id}`, source: TRIGGER_NODE, target: n.id, deletable: false, className: "trigger-edge" }))]
-    : graph.edges;
+  const trigger = def ? triggerCard(graph.nodes, def.trigger, { measured: sizes[TRIGGER_NODE] }) : null;
+  const nodes: (StepFlowNode | TriggerFlowNode)[] = trigger ? [trigger.node, ...stepNodes] : stepNodes;
+  const edges = trigger ? [...graph.edges, ...trigger.edges] : graph.edges;
 
   const onNodesChange = (changes: NodeChange<StepFlowNode | TriggerFlowNode>[]) => {
     let l = layout;

@@ -425,6 +425,8 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
   .tabs button { flex: none; }
   .toolbar > select, .toolbar > input { max-width: 100%; }
   .kv { grid-template-columns: 1fr; gap: 2px; }
+  .editor-title { flex-wrap: wrap; }
+  .editor-title h1 { white-space: normal; }
   .kv dd { margin-bottom: 8px; }
 }
 
