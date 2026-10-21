@@ -2,7 +2,7 @@
 TASKIEM_TEST_DATABASE_URL ?= postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: check lint test test-db validate licences ts web e2e build spike load up down db-up db-down image chart docs docs-check
+.PHONY: check lint test test-db validate licences ts web e2e build spike load up down db-up db-down image chart docs docs-check site-css
 
 check: lint test validate licences ts
 
@@ -69,13 +69,24 @@ chart:
 	  echo "# Do not edit; change the chart and regenerate (docs/kubernetes.md). Create the taskiem Secret first."; \
 	  helm template taskiem deploy/helm/taskiem --namespace taskiem --set ingress.enabled=true; } > deploy/kubernetes/taskiem.yaml
 
-# The public docs site and API reference (CONTRIBUTING.md#docs-and-the-api-reference). Checks
-# every docs link first; the site is written to site/ (not committed).
+# The public site: the product website and, under docs/, the docs and API
+# reference (CONTRIBUTING.md#docs-and-the-api-reference, docs/strategy/website.md).
+# Checks every docs link first; the site is written to site/ (not committed).
 # DOCS_BASE is the path it is served under; DOCS_SOURCE links unpublished files.
+# SITE_APP, SITE_WHATSAPP and SITE_EMAIL are the website's sign-up address,
+# WhatsApp number and contact email; each is left off the site while empty.
 DOCS_BASE ?= /
 DOCS_SOURCE ?=
-docs:
-	go run ./tools/docsite -out site -base '$(DOCS_BASE)' -source '$(DOCS_SOURCE)'
+SITE_APP ?=
+SITE_WHATSAPP ?=
+SITE_EMAIL ?=
+docs: site-css
+	go run ./tools/docsite -out site -base '$(DOCS_BASE)' -source '$(DOCS_SOURCE)' -app '$(SITE_APP)' -whatsapp '$(SITE_WHATSAPP)' -email '$(SITE_EMAIL)'
+
+# The website's stylesheet: the designer's Tailwind configuration compiled
+# to tools/docsite/assets/www.css, which is committed (CI checks it is current).
+site-css:
+	pnpm site:css
 
 docs-check:
 	go run ./tools/docsite -check

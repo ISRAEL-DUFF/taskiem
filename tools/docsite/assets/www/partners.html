@@ -1,0 +1,18 @@
+{{define "content"}}
+<div class="legacy">
+<section class="page-head">
+  <h1>Taskiem inside your product.</h1>
+  <p class="lead">Lenders, payroll companies and banks embed Taskiem so their customers get approvals, payouts and reminders under their own brand. Your users never see Taskiem; you keep the relationship.</p>
+</section>
+<section class="tight"><div class="cards three">
+  <article class="card"><span class="tile">{{template "icon-plug"}}</span><h3>Embedded, white-labelled.</h3><p>Sub-tenants, embed apps, your own domain, and a partner API for routing events and runs. Your users sign in with you; Taskiem mints short-lived tokens server-side.</p><p><a class="more" href="{{.Docs}}embedding">Embedding {{template "icon-arrow"}}</a></p></article>
+  <article class="card"><span class="tile">{{template "icon-shield"}}</span><h3>Built for regulated money movement.</h3><p>Durable, replayable runs with exactly-once external effects, approval policies with step-up, a tamper-evident audit chain, and personal data sealed by default.</p><p><a class="more" href="{{.Docs}}compliance">Compliance {{template "icon-arrow"}}</a></p></article>
+  <article class="card"><span class="tile">{{template "icon-server"}}</span><h3>Run it where you must.</h3><p>Hosted, or self-hosted on one VM or Kubernetes with a Helm chart, bring your own key, SSO and SCIM.</p><p><a class="more" href="{{.Docs}}operations">Operations {{template "icon-arrow"}}</a></p></article>
+</div></section>
+<section class="tight">
+  <h2>Talk to us</h2>
+  <p>Partner plans are priced by contract. <a href="{{.Base}}contact">Get in touch</a> with what you are building and how many businesses it serves.</p>
+</section>
+<section class="closing"></section>
+</div>
+{{end}}

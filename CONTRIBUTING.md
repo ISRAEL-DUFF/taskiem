@@ -33,15 +33,17 @@ Run `make check` before pushing; CI runs the same targets.
 
 ## Docs and the API reference
 
-The public docs site is built from `docs/` and `api/openapi/openapi.yaml` by `tools/docsite` ([decision 0025](docs/decisions/0025-public-docs-and-api-reference.md)):
+The public site is built by `tools/docsite`: the product website at the root ([structure and copy](docs/strategy/website.md); the prose in `tools/docsite/assets/www/`, the lists from `templates/library`, `connectors/*/manifest.yaml` and `deploy/plans.yaml`) and, under `/docs/`, the docs site from `docs/` and `api/openapi/openapi.yaml` ([decision 0025](docs/decisions/0025-public-docs-and-api-reference.md)):
 
 ```sh
 make docs-check     # every relative link and anchor in docs/, README.md and this file resolves
 make docs           # check, then build the site into site/ (gitignored)
+make docs SITE_APP=https://app.example.ng SITE_WHATSAPP=2348000000000 SITE_EMAIL=hello@example.ng
 ```
 
+- **The website is the designer's pages** (`tools/docsite/assets/www/`, Tailwind markup) with its stylesheet compiled by `pnpm site:css` from `tools/docsite/tailwind/` and committed as `tools/docsite/assets/www.css`; CI fails if it is stale, so run `pnpm site:css` (or `make docs`) after changing a page. Prices come from `deploy/plans.yaml`; the claims register in [the website page](docs/strategy/website.md#claims-register) lists what the copy asserts that still has to be made true.
 - **A new doc** goes either into the site's navigation or onto its internal list, both in `tools/docsite/pages.go`; a test fails until you choose.
-- **Page URLs are stable**: `docs/templates.md` is `/templates`, `docs/integrations/slack.md` is `/integrations/slack`. The web app's help panels link to them (`web/src/lib/onboarding.ts`); a test fails if one is not a public page. Renaming a public doc breaks links people have saved.
+- **Page URLs are stable**: `docs/templates.md` is `/docs/templates`, `docs/integrations/slack.md` is `/docs/integrations/slack` (`-site=false` builds the docs alone at `-base`). The web app's help panels link to them (`web/src/lib/onboarding.ts`); a test fails if one is not a public page. Renaming a public doc breaks links people have saved.
 - **A new or changed route** goes into `api/openapi/openapi.yaml` in the same change. `api/openapi_test.go` fails when a route is missing or extra, or when the permission, plan feature or authentication the document gives an operation differs from the router's source; and every request body the API tests send, and every answer they receive, is checked against the document's schemas (a test sending an invalid body on purpose either gets a 400, 413, 415 or 422, which is not checked, or marks the request with `invalidBody`). Every operation has a full request and response schema: write it from the handler's Go types (shared shapes under `components/schemas`, `additionalProperties: false` where the handler answers a closed struct, `type: [x, 'null']` for pointers and slices that can be nil), list the error statuses it answers with a specific meaning, and make sure a test receives its success answer so the schema is checked.
 - **Links** between docs are relative (`[billing](billing.md#plans)`). Anchors are GitHub's heading ids.
 

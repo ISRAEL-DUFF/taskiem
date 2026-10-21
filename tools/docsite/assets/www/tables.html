@@ -1,0 +1,27 @@
+{{define "content"}}
+<div class="legacy">
+<section class="page-head">
+  <h1>Your debtors, stock and staff, kept in Taskiem.</h1>
+  <p class="lead">Most small businesses keep their lists in a notebook or a spreadsheet, if anywhere. A table in Taskiem is a list your workflows can read and write: your debtors with their balances, your stock with reorder levels, your staff with their account numbers.</p>
+</section>
+<section class="tight">
+  {{template "window-tables" .}}
+</section>
+<section class="tight">
+  <div class="cards">
+    <article class="card"><span class="tile">{{template "icon-chat"}}</span><h3>Make one in chat.</h3><p><em>make a debtors table with name, phone and balance</em>. Or let a workflow make the one it needs.</p></article>
+    <article class="card"><span class="tile">{{template "icon-table"}}</span><h3>Bring in your spreadsheet.</h3><p>Upload the CSV. Taskiem matches the columns and asks about any it cannot place.</p></article>
+    <article class="card"><span class="tile">{{template "icon-wa"}}</span><h3>Add and find from WhatsApp.</h3><p><em>add debtors</em> asks you column by column and shows the row before saving. <em>find debtors Chidi</em> answers with the matches.</p></article>
+    <article class="card"><span class="tile">{{template "icon-list"}}</span><h3>Edit in the web app.</h3><p>A grid you can search, edit, import and export.</p></article>
+    <article class="card"><span class="tile">{{template "icon-bolt"}}</span><h3>Your workflows use it.</h3><p>Remind everyone with a balance. Mark a debtor paid when Paystack confirms. Start a workflow the moment a row is added.</p></article>
+    <article class="card"><span class="tile">{{template "icon-door"}}</span><h3>Take it with you.</h3><p>Export everything as a CSV at any time. Your tables are yours.</p></article>
+  </div>
+</section>
+<section>
+  <h2>Private by default</h2>
+  <p>Phone numbers and emails in a table are personal data: hidden in logs, never shown to the AI, and visible only to the people you have given the permission. Your records live in a database project of your own, which you can also reach with your own tools.</p>
+  <p><a class="more" href="{{.Docs}}guide/tables">The owner's guide to tables {{template "icon-arrow"}}</a> · <a class="more" href="{{.Docs}}data-tables">The full documentation {{template "icon-arrow"}}</a></p>
+</section>
+{{template "banner" .}}
+</div>
+{{end}}

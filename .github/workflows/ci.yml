@@ -45,11 +45,12 @@ jobs:
         run: go test -count=1 ./...
       - name: Validate contracts and dogfood workflows
         run: go run ./cmd/taskiem validate flows/*/*.wd.json connectors/*/manifest.yaml
-      # Every docs link and anchor resolves, and the docs site and API
-      # reference build (decision 0025). The OpenAPI route, permission and
-      # response checks run with the unit tests above (api/openapi_test.go).
+      # Every docs link and anchor resolves, and the website, docs site and
+      # API reference build (decision 0025, docs/strategy/website.md). The
+      # OpenAPI route, permission and response checks run with the unit
+      # tests above (api/openapi_test.go).
       - name: Docs links and site
-        run: go run ./tools/docsite -out "$RUNNER_TEMP/site"
+        run: go run ./tools/docsite -out "$RUNNER_TEMP/site" -app https://app.example.ng -whatsapp 2348000000000
       - name: Migrations apply cleanly with the CLI
         run: go run ./cmd/taskiem migrate --dsn "$TASKIEM_TEST_DATABASE_URL"
 
@@ -66,6 +67,11 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # The website's stylesheet is compiled from the designer's Tailwind
+      # configuration and committed (docs/strategy/website.md); it must be
+      # current.
+      - name: Website stylesheet is current
+        run: pnpm site:css && git diff --exit-code -- tools/docsite/assets/www.css
 
   # The web app in a real browser against the real binary (web/e2e).
   web:

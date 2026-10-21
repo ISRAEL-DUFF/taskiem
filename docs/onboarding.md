@@ -15,7 +15,7 @@ Signup is off by default. Before turning it on for the public:
 | `TASKIEM_ALLOW_SIGNUP` | `false` | Offers "Create an account" on the sign-in page and accepts `POST /v1/signup` |
 | `TASKIEM_SIGNUP_PER_ADDRESS` | `5` | Signups one client address may make a day, counted in the database across every API replica; negative means no limit. Behind a load balancer, set `TASKIEM_TRUST_PROXY=true` so the address is the client's |
 | `TASKIEM_SIGNUP_BLOCKED_DOMAINS` | — | Comma-separated email domains (and their subdomains) that may not sign up, besides the built-in list of throwaway mailbox services |
-| `TASKIEM_DOCS_URL` | — | The public docs site. Help panels link to `<url>/<page>`; without it they show only their in-product text |
+| `TASKIEM_DOCS_URL` | — | The public docs site, the website's `/docs`. Help panels link to `<url>/<page>`; without it they show only their in-product text |
 
 ## Signup
 

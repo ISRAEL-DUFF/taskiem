@@ -9,7 +9,10 @@
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="{{.Base}}">Taskiem docs</a>
+  {{- if .Home}}
+  <a class="home" href="{{.Home}}">Taskiem</a>
+  {{- end}}
+  <a class="brand" href="{{.Base}}">{{if .Home}}Docs{{else}}Taskiem docs{{end}}</a>
   <div class="search" role="search">
     <input id="q" type="search" placeholder="Search the docs" autocomplete="off" aria-label="Search the docs" aria-controls="results">
     <ol id="results" hidden></ol>

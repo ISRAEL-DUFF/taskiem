@@ -4,7 +4,7 @@ Taskiem sells flat-priced plans (spec 16): a monthly or annual fee per tier, nev
 
 **Billing is off by default.** A self-hosted deployment, and any deployment without `TASKIEM_BILLING=on`, puts every tenant on the internal `self_hosted` plan: the platform's default limits (`TASKIEM_DEFAULT_*`), every feature, no invoices. Nothing on this page applies until billing is turned on.
 
-> The prices in `deploy/plans.yaml` are **placeholders** pending decision B1 ([needs people](needs-people.md#phase-4)). The billing page says so while `placeholder_prices: true`.
+> Prices were decided on 21 October 2026 (B1): three public tiers, Starter Trader, Growing Business and Enterprise & Regulated, as [the website](strategy/website.md) shows them. The storefront plans and Business stay active for tenants on them but are not offered self-serve.
 
 ## For operators
 
@@ -37,7 +37,7 @@ The tiers, cheapest first: `shop` (the storefront plans **Shop** and **Shop Plus
 
 | Field | Meaning |
 | --- | --- |
-| `placeholder_prices` | `true` until B1 decides the prices |
+| `placeholder_prices` | `false` since B1 decided the prices; `true` makes the CLI warn and the billing page say so |
 | `vat_percent` | VAT shown separately on invoices (7.5) |
 | `invoice_prefix` | Invoice numbers: `TKM-2026-000001`, without gaps per year |
 | `trial_days`, `trial_plan` | Each new tenant's trial |

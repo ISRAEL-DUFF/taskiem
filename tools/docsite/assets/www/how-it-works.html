@@ -1,0 +1,65 @@
+{{define "content"}}
+<div class="legacy">
+<section class="page-head">
+  <h1>How it works</h1>
+  <p class="lead">You do not install anything or learn anything. You talk to Taskiem the way you talk to a manager, and it tells you what it understood before it does it.</p>
+</section>
+
+<section class="convo">
+  <span class="eyebrow">Start to finish</span>
+  <h2>One conversation</h2>
+  <div class="chat annotated">
+    <p class="you">hi</p>
+    <div class="bot"><p>Welcome. I run things for your business so you do not have to remember them. What is your business called?</p></div>
+    <p class="note">A business account is made for you from the chat. No website, email or app to install.</p>
+
+    <p class="you">Ada's Kitchen</p>
+    <div class="bot"><p>What do you sell, and how do customers usually pay you?</p></div>
+
+    <p class="you">food, mostly transfer to Moniepoint</p>
+    <div class="bot"><p>Here are three things businesses like yours set up first:</p><ol><li>Tell me each time money arrives in Moniepoint.</li><li>A sales total every evening.</li><li>Weekly reminders to customers who owe you.</li></ol><p>Pick one, or tell me what you want in your own words.</p></div>
+    <p class="note">Three suggestions that fit your business, not a menu of fifty.</p>
+
+    <p class="you">every evening tell me how much I sold today</p>
+    <div class="bot"><p>I need your Moniepoint account to see payments. Tap below to connect it.</p></div>
+    <p class="note">A WhatsApp form. You paste one key from your Moniepoint dashboard, never a password.</p>
+
+    <div class="bot"><p>Connected. Every day at 18:00 I will add up the payments received into Moniepoint since midnight and send you the total and the count. Shall I set it up?</p></div>
+    <p class="you">yes</p>
+    <div class="bot"><p>Done. The first summary comes today at 18:00. Send <strong>status</strong> any time.</p></div>
+
+    <p class="time">18:00</p>
+    <div class="bot"><p>Today: ₦86,500 from 23 payments. Busiest hour: 13:00.</p></div>
+    <p class="note">The result lands in the same chat, every day.</p>
+  </div>
+</section>
+
+<section>
+  <h2>What a workflow is</h2>
+  <p>A workflow is something Taskiem does for you again and again: on a schedule, or when something happens, such as a payment arriving or a row being added to your table. Each one is a few plain steps. You can read them, change them, pause them, and see every time they ran.</p>
+</section>
+
+<section>
+  <h2>On the web too</h2>
+  <p>Everything you can do in chat you can do in the web app: the same workflows as a list of steps, your tables as a grid, your team and their permissions, every run and what it did. Use whichever is in your hand.</p>
+</section>
+
+<section>
+  <h2>In your language</h2>
+  <p>Taskiem speaks English today, and understands voice notes (in beta). Nigerian Pidgin, Yoruba, Hausa and Igbo are being reviewed by native speakers and will be switched on when they are right.</p>
+</section>
+
+<section class="split">
+  <div>
+    <span class="eyebrow">Approvals</span>
+    <h2>Money waits for your yes</h2>
+    <p>Salaries, supplier payments and transfers stop and ask. The request comes to you on WhatsApp or Telegram with buttons; you approve or reject with one tap, and a PIN where you set one. Taskiem then pays each person once, texts them, and tells you when it is done.</p>
+    <h3>Your team</h3>
+    <p>Add your accountant, your manager or your sales staff. Each gets their own role: your accountant can see payments but not approve them; your manager can approve up to a limit you set. Everyone's actions are on record under their own name.</p>
+  </div>
+  <div>{{template "sim-telegram" .}}</div>
+</section>
+
+{{template "banner" .}}
+</div>
+{{end}}
