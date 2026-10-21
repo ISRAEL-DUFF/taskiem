@@ -157,7 +157,7 @@
         ],
         "input": {
           "reference": "=trigger.body.reference",
-          "text": "='Sorry, we cannot take your order ' + trigger.body.reference + (steps.decline.output.refund_due ? '. Your payment of ' + trigger.body.total + ' will be refunded.' : '.')"
+          "say": "=steps.decline.output.refund_due ? 'order_declined_refund' : 'order_declined'", "vars": {"reference": "=trigger.body.reference", "total": "=trigger.body.total"}
         }
       },
       {
@@ -220,7 +220,7 @@
         ],
         "input": {
           "reference": "=trigger.body.reference",
-          "text": "='Your order ' + trigger.body.reference + ' is confirmed. ' + (trigger.body.fulfilment == 'delivery' ? 'We will deliver it soon.' : 'We will text you when it is ready to collect.')"
+          "say": "=trigger.body.fulfilment == 'delivery' ? 'order_confirmed_delivery' : 'order_confirmed_pickup'", "vars": {"reference": "=trigger.body.reference"}
         }
       },
       {
@@ -295,7 +295,7 @@
         ],
         "input": {
           "reference": "=trigger.body.reference",
-          "text": "='Your order ' + trigger.body.reference + ' is accepted. Pay ' + steps.link.output.total + ' here within a day: ' + steps.link.output.url"
+          "say": "order_pay", "vars": {"reference": "=trigger.body.reference", "total": "=steps.link.output.total", "url": "=steps.link.output.url"}
         }
       },
       {
@@ -323,7 +323,7 @@
         "when": "=steps.wait_pay.output.status == 'paid'",
         "input": {
           "reference": "=trigger.body.reference",
-          "text": "='Payment received for ' + trigger.body.reference + '. ' + (trigger.body.fulfilment == 'delivery' ? 'We will deliver it soon.' : 'We will text you when it is ready to collect.')"
+          "say": "=trigger.body.fulfilment == 'delivery' ? 'order_paid_delivery' : 'order_paid_pickup'", "vars": {"reference": "=trigger.body.reference"}
         }
       },
       {
@@ -371,7 +371,7 @@
         "when": "=steps.wait_pay.output.status == 'expired'",
         "input": {
           "reference": "=trigger.body.reference",
-          "text": "='The payment link for ' + trigger.body.reference + ' has expired, so the order is cancelled. You are welcome to order again.'"
+          "say": "order_link_expired", "vars": {"reference": "=trigger.body.reference"}
         }
       }
     ],

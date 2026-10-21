@@ -34,11 +34,23 @@ const (
 	IntentTables Intent = "tables"
 	IntentAdd    Intent = "add"
 	IntentFind   Intent = "find"
+	// Publishing a workflow from chat (no-technical-steps N6).
+	IntentPublish Intent = "publish"
+	// The storefront from chat (docs/storefronts.md#from-chat), in every
+	// language (N6): each is answered as its English command.
+	IntentMakePage  Intent = "make_page"
+	IntentMyPage    Intent = "my_page"
+	IntentOrders    Intent = "orders"
+	IntentOpenShop  Intent = "open_shop"
+	IntentCloseShop Intent = "close_shop"
+	IntentQR        Intent = "qr"
+	IntentReady     Intent = "order_ready"
+	IntentDelivered Intent = "order_delivered"
 )
 
 // Intents are every intent, in a fixed order.
 var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
-	IntentTables, IntentAdd, IntentFind}
+	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered}
 
 // Word lists live in intents/<tag>.json: whole messages that mean an
 // intent (phrases), words that start one and are followed by what it is
@@ -63,7 +75,7 @@ type Words struct {
 }
 
 // prefixIntents take what follows them; the others are whole messages.
-var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind}
+var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered}
 
 var (
 	wordsOnce sync.Once

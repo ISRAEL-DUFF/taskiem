@@ -71,3 +71,7 @@ A request in a session that has ended, or is not the agent's, is refused with `4
 - Owners with neither WhatsApp nor Telegram: the owner agrees from one of them.
 - Paying agents (commission on businesses that stay active), and agents' own performance pages.
 - Owners of agent-made businesses signing in to the web app: they have no email or password until they add them.
+
+## Signing in
+
+An agent signing in on the web lands on the agent app (`/agent`; `field_agent` in `GET /v1/me`), not the workspace's workflows. The owner of a business an agent made has no password at first: they send `sign in` in WhatsApp or Telegram and get a one-time link to choose one ([WhatsApp](whatsapp.md#signing-in-on-the-web)).

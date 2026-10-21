@@ -139,6 +139,96 @@
       "reviewed": true,
       "context": "Reply button, at most 20 characters"
     },
+    "customer.booking_confirmed": {
+      "text": "Booked: {service}, {when}. To change or cancel: {link}",
+      "reviewed": true,
+      "context": "SMS to a customer: a booking confirmed; {link} is their status page"
+    },
+    "customer.booking_declined": {
+      "text": "Sorry, we cannot take your booking {reference} ({service}, {when}). Please choose another time: you are welcome to book again.",
+      "reviewed": true,
+      "context": "SMS to a customer: a booking was declined"
+    },
+    "customer.booking_declined_refund": {
+      "text": "Sorry, we cannot take your booking {reference} ({service}, {when}). Your payment will be refunded.",
+      "reviewed": true,
+      "context": "SMS to a customer: a paid booking was declined"
+    },
+    "customer.booking_moved": {
+      "text": "Your booking {reference} is moved to {when}. To change or cancel: {link}",
+      "reviewed": true,
+      "context": "SMS to a customer: a booking was moved"
+    },
+    "customer.booking_pay": {
+      "text": "To keep your booking {reference}, pay {total} within a day: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer: the booking's payment link"
+    },
+    "customer.booking_reminder_day": {
+      "text": "Reminder: {service} tomorrow, {when} ({reference}). To change or cancel: {link}",
+      "reviewed": true,
+      "context": "SMS to a customer the day before a booking"
+    },
+    "customer.booking_reminder_hours": {
+      "text": "See you soon: {service} at {when} ({reference}).",
+      "reviewed": true,
+      "context": "SMS to a customer a few hours before a booking"
+    },
+    "customer.callback_thanks": {
+      "text": "Thank you. We will call you back soon ({reference}).",
+      "reviewed": true,
+      "context": "SMS to a customer who asked to be called back"
+    },
+    "customer.enquiry_thanks": {
+      "text": "We have your question ({reference}) and will reply soon.",
+      "reviewed": true,
+      "context": "SMS to a customer who sent a question"
+    },
+    "customer.order_confirmed_delivery": {
+      "text": "Your order {reference} is confirmed. We will deliver it soon.",
+      "reviewed": true,
+      "context": "SMS to a customer: order accepted, for delivery"
+    },
+    "customer.order_confirmed_pickup": {
+      "text": "Your order {reference} is confirmed. We will text you when it is ready to collect.",
+      "reviewed": true,
+      "context": "SMS to a customer: order accepted, for collection"
+    },
+    "customer.order_declined": {
+      "text": "Sorry, we cannot take your order {reference}.",
+      "reviewed": true,
+      "context": "SMS to a storefront customer: the order was declined"
+    },
+    "customer.order_declined_refund": {
+      "text": "Sorry, we cannot take your order {reference}. Your payment of {total} will be refunded.",
+      "reviewed": true,
+      "context": "SMS to a customer: a paid order was declined"
+    },
+    "customer.order_link_expired": {
+      "text": "The payment link for {reference} has expired, so the order is cancelled. You are welcome to order again.",
+      "reviewed": true,
+      "context": "SMS to a customer: the payment link expired"
+    },
+    "customer.order_paid_delivery": {
+      "text": "Payment received for {reference}. We will deliver it soon.",
+      "reviewed": true,
+      "context": "SMS to a customer: paid, for delivery"
+    },
+    "customer.order_paid_pickup": {
+      "text": "Payment received for {reference}. We will text you when it is ready to collect.",
+      "reviewed": true,
+      "context": "SMS to a customer: paid, for collection"
+    },
+    "customer.order_pay": {
+      "text": "Your order {reference} is accepted. Pay {total} here within a day: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer: the payment link"
+    },
+    "customer.order_ready": {
+      "text": "{name}: your order {reference} is ready.",
+      "reviewed": true,
+      "context": "SMS to a customer: the owner said the order is ready"
+    },
     "lang.current": {
       "text": "I write to you in {language}. Languages here: {languages}. Send *language* and a name to change.",
       "reviewed": true,
@@ -594,6 +684,16 @@
       "reviewed": true,
       "context": "After a booking the owner has not accepted"
     },
+    "wa.build.ask_setting": {
+      "text": "What should *{name}* be? Reply with it, or *cancel*.",
+      "reviewed": true,
+      "context": "A setting (variable) a saved draft reads, asked in chat"
+    },
+    "wa.build.before_publish": {
+      "text": "Before it can be published:",
+      "reviewed": true,
+      "context": "Blocking readiness needs follow"
+    },
     "wa.build.budget": {
       "text": "This month's AI budget for {org} is used up, so I cannot build this now. You can still build workflows in the web app.",
       "reviewed": true,
@@ -684,15 +784,25 @@
       "reviewed": true,
       "context": "No model configured"
     },
+    "wa.build.offer_publish": {
+      "text": "Publish *{name}* now, so it starts working? Reply *yes* or *no*.",
+      "reviewed": true,
+      "context": "Offering to publish a saved draft"
+    },
+    "wa.build.publish_later": {
+      "text": "When you are ready, send *publish {name}*.",
+      "reviewed": true,
+      "context": "How to publish a saved draft later from chat"
+    },
     "wa.build.refused": {
       "text": "I cannot build that. Try describing it differently.",
       "reviewed": true,
       "context": "The model declined"
     },
     "wa.build.save_question": {
-      "text": "Save this as a draft workflow? Reply *yes* or *no*. (A draft does not run until it is published in Taskiem.)",
+      "text": "Save this as a draft workflow? Reply *yes* or *no*. (A draft does not run until it is published: I will offer that next.)",
       "reviewed": true,
-      "context": "The question before saving a draft"
+      "context": "Confirming an AI draft in chat"
     },
     "wa.build.save_reminder": {
       "text": "Reply *yes* to save the draft, or *no*.",
@@ -700,14 +810,24 @@
       "context": "Waiting for yes or no to save"
     },
     "wa.build.saved": {
-      "text": "Saved *{name}* as a draft. It is not live yet: review it, set any connections and variables it needs, and publish it in Taskiem{link}.",
+      "text": "Saved *{name}* as a draft{link}.",
       "reviewed": true,
-      "context": "The draft was saved"
+      "context": "An AI draft saved from chat; what it needs and publishing follow"
+    },
+    "wa.build.setting_saved": {
+      "text": "Saved {name}.",
+      "reviewed": true,
+      "context": "A setting typed in chat was saved"
     },
     "wa.build.still_drafting": {
       "text": "I am still drafting your workflow; I will send it when it is ready. Send *cancel* to stop.",
       "reviewed": true,
       "context": "A message while the model drafts"
+    },
+    "wa.build.tables_made": {
+      "text": "I made the table it uses: {tables}.",
+      "reviewed": true,
+      "context": "Tables a chat draft proposed, made after saving"
     },
     "wa.build.tables_needed": {
       "text": "Before publishing it, create the tables it needs in the app: {tables} ({link}).",
@@ -730,9 +850,9 @@
       "context": "The draft could not be described"
     },
     "wa.build.variables": {
-      "text": "Before it runs, set these variables in Taskiem: {names}.",
+      "text": "Once it is saved, I will ask you for: {names}.",
       "reviewed": true,
-      "context": "Variables a template reads"
+      "context": "The settings a template reads, asked after saving"
     },
     "wa.build.warn_policy": {
       "text": "Warning: a step moves money without an approval before it.",
@@ -1089,6 +1209,41 @@
       "reviewed": true,
       "context": "Public menu: item not deployed"
     },
+    "wa.publish.ask_someone": {
+      "text": "It is saved as a draft. Someone who can publish in your organisation can now publish it.",
+      "reviewed": true,
+      "context": "Saved, and the person cannot publish"
+    },
+    "wa.publish.denied": {
+      "text": "You cannot publish workflows in {org}; ask the owner.",
+      "reviewed": true,
+      "context": "No workflow.publish"
+    },
+    "wa.publish.done": {
+      "text": "*{name}* is published: it works from now on.",
+      "reviewed": true,
+      "context": "A workflow published from chat"
+    },
+    "wa.publish.failed": {
+      "text": "It could not be published: {reason}.",
+      "reviewed": true,
+      "context": "Publishing from chat failed"
+    },
+    "wa.publish.in_app": {
+      "text": "Your organisation reviews changes in Git, so publish it in the app: {link}",
+      "reviewed": true,
+      "context": "Chat cannot publish for a Git-reviewed organisation"
+    },
+    "wa.publish.not_ready": {
+      "text": "*{name}* is not ready to publish yet:",
+      "reviewed": true,
+      "context": "Readiness: what is missing follows"
+    },
+    "wa.publish.waiting": {
+      "text": "*{name}* waits for a second person to publish it: they decide under Approvals in Taskiem.",
+      "reviewed": true,
+      "context": "Four-eyes publishing: a request was made"
+    },
     "wa.run.bad_inputs": {
       "text": "The inputs do not fit {workflow}: {problems}. Send *run* again.",
       "reviewed": true,
@@ -1223,6 +1378,11 @@
       "text": "That does not fit: {reason}\n\n{prompt}",
       "reviewed": true,
       "context": "A set-up answer was refused; the question again"
+    },
+    "wa.shop.bookings_on": {
+      "text": "Bookings are on too.",
+      "reviewed": true,
+      "context": "Bookings turned on with orders"
     },
     "wa.shop.cannot_complete": {
       "text": "Order {ref} is {status} and cannot be completed now.",
@@ -1459,10 +1619,25 @@
       "reviewed": true,
       "context": "orders, the list's heading"
     },
+    "wa.shop.orders_no_paystack": {
+      "text": "Customers pay when they collect or receive their order. To take payment online, connect Paystack: {link}",
+      "reviewed": true,
+      "context": "Orders on without Paystack"
+    },
+    "wa.shop.orders_on": {
+      "text": "Orders are on: customers can order from your page, and each order comes to you here.",
+      "reviewed": true,
+      "context": "Orders turned on from chat"
+    },
     "wa.shop.orders_tail": {
       "text": "Reply *order* and a reference for one.",
       "reviewed": true,
       "context": "orders, after the list"
+    },
+    "wa.shop.other_edits_live": {
+      "text": "Other changes you saved to your page and had not published went live with it.",
+      "reviewed": true,
+      "context": "A chat change republished other unpublished draft edits"
     },
     "wa.shop.page_closed": {
       "text": "*{name}* is closed ({message}): {link}\nOrders today: {count}\nReply *open shop* to take orders again.",
@@ -1584,15 +1759,20 @@
       "reviewed": true,
       "context": "Done: the customer is told an order is ready; keep the command words in English"
     },
+    "wa.shop.reopens": {
+      "text": "It opens again by itself on {time}.",
+      "reviewed": true,
+      "context": "After close shop today: when the page reopens, Lagos time"
+    },
     "wa.shop.service_added": {
       "text": "Added the service *{name}*.",
       "reviewed": true,
       "context": "Done: a service was added"
     },
     "wa.shop.service_hint": {
-      "text": "Customers can book it once the booking form is on, under Storefront in the web app.",
+      "text": "Customers can book it once bookings are on: reply *turn on orders*.",
       "reviewed": true,
-      "context": "After add service"
+      "context": "After adding a service in chat"
     },
     "wa.shop.service_how": {
       "text": "Write it like *add service Haircut 30 2000*: the name, the minutes it takes, then the price.",
@@ -1679,6 +1859,11 @@
       "reviewed": true,
       "context": "Rate limit on storefront changes from chat"
     },
+    "wa.shop.turn_on_orders": {
+      "text": "Turn on orders now? Customers can then order from your page, and each order comes to you here to accept or decline.",
+      "reviewed": true,
+      "context": "Offered after the page is published from chat"
+    },
     "wa.shop.which_item": {
       "text": "More than one matches. Which one?\n{list}\nReply with its number.",
       "reviewed": true,
@@ -1693,6 +1878,21 @@
       "text": " (with the photo)",
       "reviewed": true,
       "context": "Confirming a product sent as a photo; starts with a space"
+    },
+    "wa.signin.link": {
+      "text": "Open this link to choose your password and sign in to Taskiem on the web. It works once, for an hour; keep it to yourself:\n{link}",
+      "reviewed": true,
+      "context": "A one-time sign-in link sent in chat"
+    },
+    "wa.signin.sso": {
+      "text": "Your organisation signs in with its own company account: {link}",
+      "reviewed": true,
+      "context": "Single sign-on is enforced: no password link"
+    },
+    "wa.signin.unavailable": {
+      "text": "Signing in on the web is not set up on this Taskiem.",
+      "reviewed": true,
+      "context": "No public URL for links"
     },
     "wa.status.denied": {
       "text": "You cannot see runs in {org} (it takes run.read).",

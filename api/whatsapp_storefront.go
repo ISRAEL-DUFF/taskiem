@@ -53,8 +53,10 @@ type chatShop struct {
 	Photo     string            `json:"photo,omitempty"` // a storefront_media id
 	Minutes   int               `json:"minutes,omitempty"`
 	Hours     *storefront.Hours `json:"hours,omitempty"`
-	Message   string            `json:"message,omitempty"`   // close: what the page says
-	Reference string            `json:"reference,omitempty"` // ready, delivered
+	Message   string            `json:"message,omitempty"` // close: what the page says
+	// ReopenAt: closed for today, the page opens again by itself then.
+	ReopenAt  *time.Time `json:"reopen_at,omitempty"`
+	Reference string     `json:"reference,omitempty"` // ready, delivered
 	// Pick are the items offered for a numbered pick, when a name matched
 	// several.
 	Pick []shopChoice `json:"pick,omitempty"`
@@ -137,6 +139,11 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 		do = func() error { return s.waShopHours(ctx, c, args(n)) }
 	case closeShop.MatchString(text):
 		do = func() error { return s.waShopClose(ctx, c, strings.TrimSpace(closeShop.FindStringSubmatch(text)[1])) }
+	case cmd == "turn on orders" || cmd == "take orders" || cmd == "start taking orders":
+		if s.Orders == nil {
+			return false, nil
+		}
+		return true, s.shopAsk(ctx, c, &chatShop{Action: "orders_on"}, c.t("wa.shop.turn_on_orders"))
 	case cmd == "open shop" || cmd == "open my shop" || cmd == "reopen shop" || cmd == "reopen":
 		do = func() error { return s.waShopOpen(ctx, c) }
 	case s.Orders != nil && (cmd == "orders" || cmd == "my orders" || cmd == "open orders"):
@@ -621,7 +628,29 @@ func (s *Server) waShopPublish(ctx context.Context, c *chat) error {
 	if err := c.sayImage(ctx, link+"/qr.png", c.t("wa.shop.qr_caption", "name", name, "link", link)); err != nil {
 		s.Logger.Warn("chat: sending the QR code", "channel", c.ch.Name(), "err", err)
 	}
-	return c.say(ctx, s, c.t("wa.shop.status_post", "name", name, "link", link))
+	if err := c.say(ctx, s, c.t("wa.shop.status_post", "name", name, "link", link)); err != nil {
+		return err
+	}
+	// Then: take orders from chat as well (N6).
+	if s.Orders != nil && c.p.Can(PermWorkflowPublish) && !s.ordersOn(ctx, c.tenant.ID) {
+		return s.shopAsk(ctx, c, &chatShop{Action: "orders_on"}, c.t("wa.shop.turn_on_orders"))
+	}
+	return nil
+}
+
+// ordersOn reports whether the page's order form is on.
+func (s *Server) ordersOn(ctx context.Context, tenant uuid.UUID) bool {
+	on := false
+	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		list, err := storefront.Actions(ctx, tx, tenant)
+		for _, a := range list {
+			if a.Kind == "order" && a.Enabled {
+				on = true
+			}
+		}
+		return err
+	})
+	return on
 }
 
 // waShopQR sends the page's QR code (the public host's /qr.png) with its
@@ -1138,9 +1167,12 @@ func (s *Server) waShopClose(ctx context.Context, c *chat, rest string) error {
 		return c.say(ctx, s, c.t("wa.shop.not_published"))
 	}
 	msg := rest
+	var reopen *time.Time
 	switch strings.ToLower(strings.Trim(rest, " .!")) {
 	case "today", "for today":
 		msg = closedToday
+		t := storefront.TomorrowMorning(time.Now())
+		reopen = &t
 	case "", "now":
 		msg = ""
 	}
@@ -1151,7 +1183,11 @@ func (s *Server) waShopClose(ctx context.Context, c *chat, rest string) error {
 	if shown == "" {
 		shown = storefront.DefaultClosedMessage
 	}
-	return s.shopAsk(ctx, c, &chatShop{Action: "close", Message: msg}, c.t("wa.shop.confirm_close", "message", whatsapp.SafeText(shown)))
+	ask := c.t("wa.shop.confirm_close", "message", whatsapp.SafeText(shown))
+	if reopen != nil {
+		ask += "\n" + c.t("wa.shop.reopens", "time", reopen.Format("Monday 3pm"))
+	}
+	return s.shopAsk(ctx, c, &chatShop{Action: "close", Message: msg, ReopenAt: reopen}, ask)
 }
 
 func (s *Server) waShopOpen(ctx context.Context, c *chat) error {
@@ -1326,11 +1362,13 @@ func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 	case "hours":
 		return s.shopSaveHours(ctx, c, *sh.Hours)
 	case "close", "open":
-		return s.shopCloseOpen(ctx, c, sh.Action, sh.Message)
+		return s.shopCloseOpen(ctx, c, sh.Action, sh.Message, sh.ReopenAt)
 	case "ready":
 		return s.shopReady(ctx, c, sh.Reference)
 	case "delivered":
 		return s.shopComplete(ctx, c, sh.Reference)
+	case "orders_on":
+		return s.shopTurnOnOrders(ctx, c)
 	}
 	return nil
 }
@@ -1481,19 +1519,33 @@ func (s *Server) shopAddService(ctx context.Context, c *chat) error {
 	}); err != nil {
 		return err
 	}
+	var others bool
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		cur, err := storefront.Get(ctx, tx, c.tenant.ID)
+		others = err == nil && pendingEdits(cur)
+		return err
+	}); err != nil {
+		return err
+	}
 	if sf, err = s.shopRepublish(ctx, c); err != nil {
 		s.Logger.Warn("chat: republishing", "tenant", c.tenant.ID, "err", err)
 	}
-	return c.say(ctx, s, c.t("wa.shop.service_added", "name", whatsapp.SafeText(sh.Name))+" "+c.t("wa.shop.service_hint")+s.waLink(c, "/storefront"))
+	msg := c.t("wa.shop.service_added", "name", whatsapp.SafeText(sh.Name)) + " " + c.t("wa.shop.service_hint")
+	if others && sf.PublishedVersion > 0 {
+		msg += "\n" + c.t("wa.shop.other_edits_live")
+	}
+	return c.say(ctx, s, msg)
 }
 
 func (s *Server) shopSaveHours(ctx context.Context, c *chat, h storefront.Hours) error {
 	var sf storefront.Storefront
+	var others bool
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		cur, err := storefront.Get(ctx, tx, c.tenant.ID)
 		if err != nil {
 			return err
 		}
+		others = pendingEdits(cur)
 		card := cur.Draft
 		h.Note = card.Hours.Note
 		card.Hours = h
@@ -1516,15 +1568,26 @@ func (s *Server) shopSaveHours(ctx context.Context, c *chat, h storefront.Hours)
 			return err
 		}
 	}
-	return c.say(ctx, s, c.t("wa.shop.hours_saved")+" "+s.shopPublishedNote(c, sf))
+	msg := c.t("wa.shop.hours_saved") + " " + s.shopPublishedNote(c, sf)
+	if others && sf.PublishedVersion > 0 {
+		msg += "\n" + c.t("wa.shop.other_edits_live")
+	}
+	return c.say(ctx, s, msg)
 }
 
-func (s *Server) shopCloseOpen(ctx context.Context, c *chat, action, message string) error {
+// pendingEdits reports whether a published page's draft holds changes
+// saved since it was published: republishing for one change from chat
+// makes those live too, and the owner is told (N6).
+func pendingEdits(sf storefront.Storefront) bool {
+	return sf.PublishedVersion > 0 && sf.PublishedAt != nil && sf.UpdatedAt.After(sf.PublishedAt.Add(time.Second))
+}
+
+func (s *Server) shopCloseOpen(ctx context.Context, c *chat, action, message string, reopen *time.Time) error {
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var sf storefront.Storefront
 		var err error
 		if action == "close" {
-			sf, err = storefront.Close(ctx, tx, c.tenant.ID, message)
+			sf, err = storefront.CloseUntil(ctx, tx, c.tenant.ID, message, reopen)
 		} else {
 			sf, err = storefront.Reopen(ctx, tx, c.tenant.ID)
 		}
@@ -1540,6 +1603,8 @@ func (s *Server) shopCloseOpen(ctx context.Context, c *chat, action, message str
 		return c.say(ctx, s, c.t("wa.shop.close_how"))
 	case err != nil:
 		return err
+	case action == "close" && reopen != nil:
+		return c.say(ctx, s, c.t("wa.shop.closed")+" "+c.t("wa.shop.reopens", "time", reopen.Format("Monday 3pm")))
 	case action == "close":
 		return c.say(ctx, s, c.t("wa.shop.closed"))
 	}
@@ -1560,7 +1625,8 @@ func (s *Server) shopReady(ctx context.Context, c *chat, ref string) error {
 	}
 	// To the customer, in the page's words: the business's name and the
 	// reference, nothing else.
-	text := fmt.Sprintf("%s: your order %s is ready.", sf.Draft.Name, ref)
+	// In the business's language for its customers (N6).
+	text := tr(s.Orders.CustomerLanguage(ctx, c.tenant.ID), "customer.order_ready", "name", sf.Draft.Name, "reference", ref)
 	out, err := s.Orders.NotifyCustomer(ctx, c.tenant.ID, ref, text, "", "ready:"+ref)
 	if err != nil {
 		s.Logger.Warn("chat: telling a customer", "tenant", c.tenant.ID, "err", err)

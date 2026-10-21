@@ -9,7 +9,12 @@
     "cancel": ["fagilé", "fagilé e", "dúró", "ẹ dúró"],
     "yes": ["bẹ́ẹ̀ni", "bẹ́ẹ̀ ni", "ó dáa", "ṣe é"],
     "no": ["rárá", "bẹ́ẹ̀kọ́", "má ṣe é"],
-    "tables": ["àwọn tábìlì", "àwọn tábìlì mi", "tábìlì mi", "fi àwọn tábìlì mi hàn"]
+    "tables": ["àwọn tábìlì", "àwọn tábìlì mi", "tábìlì mi", "fi àwọn tábìlì mi hàn"],
+    "make_page": ["ṣe ojú-ìwé mi", "ṣe ṣọ́ọ̀bù mi"],
+    "my_page": ["ojú-ìwé mi", "ṣọ́ọ̀bù mi"],
+    "orders": ["àwọn àṣẹ mi", "àwọn ọjà tí wọ́n bèèrè"],
+    "open_shop": ["ṣí ṣọ́ọ̀bù mi", "ṣí ṣọ́ọ̀bù"],
+    "qr": ["kóòdù qr mi"]
   },
   "prefixes": {
     "switch": ["yí padà sí", "lọ sí"],
@@ -17,7 +22,11 @@
     "build": ["kọ́", "ṣẹ̀dá"],
     "language": ["èdè", "yí èdè padà sí"],
     "add": ["fi kún", "fi sí", "ṣàfikún sí", "fi sínú"],
-    "find": ["wá nínú", "wá", "ṣàwárí", "ṣàwárí nínú"]
+    "find": ["wá nínú", "wá", "ṣàwárí", "ṣàwárí nínú"],
+    "publish": ["tẹ̀ jáde"],
+    "close_shop": ["ti ṣọ́ọ̀bù mi", "ti ṣọ́ọ̀bù"],
+    "order_ready": ["ti ṣetán"],
+    "order_delivered": ["ti dé ọ̀dọ̀ wọn", "wọ́n ti gbà á"]
   },
   "fillers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "ẹ jọ̀ọ́"],
   "markers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "mo fẹ́", "kí ni", "báwo", "owó", "ọjọ́", "lónìí", "ṣé", "àwọn", "fún", "ẹ kú", "ìrànlọ́wọ́", "kùnà", "fagilé", "bẹ́ẹ̀ni", "rárá", "ẹ ṣé", "oníbàárà"]

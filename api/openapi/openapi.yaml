@@ -13402,6 +13402,9 @@ components:
         totp:
           type: boolean
           description: Whether an authenticator is enrolled.
+        field_agent:
+          type: boolean
+          description: A Taskiem field agent signed in as themselves; the web app lands them on the agent app.
         factors:
           description: What the person proves themselves with to change their factors.
     SignupOptions:

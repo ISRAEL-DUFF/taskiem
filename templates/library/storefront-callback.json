@@ -90,7 +90,7 @@
         "action": "notify_customer",
         "input": {
           "reference": "=trigger.body.reference",
-          "text": "='Thank you. We will call you back soon (' + trigger.body.reference + ').'"
+          "say": "callback_thanks", "vars": {"reference": "=trigger.body.reference"}
         }
       },
       {

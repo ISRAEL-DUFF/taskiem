@@ -277,6 +277,14 @@ func TestMatchIntent(t *testing.T) {
 		{"a'a", []lang.Tag{lang.HA, lang.EN}, lang.IntentNo, ""},
 		{"kagbuo", []lang.Tag{lang.IG, lang.EN}, lang.IntentCancel, ""},
 		{"asụsụ hausa", []lang.Tag{lang.IG, lang.EN}, lang.IntentLanguage, "hausa"},
+		// The storefront and publishing, in every language (N6).
+		{"àwọn àṣẹ mi", []lang.Tag{lang.YO, lang.EN}, lang.IntentOrders, ""},
+		{"ti ṣetán AK-7QX2M4", []lang.Tag{lang.YO, lang.EN}, lang.IntentReady, "AK-7QX2M4"},
+		{"rufe shagona today", []lang.Tag{lang.HA, lang.EN}, lang.IntentCloseShop, "today"},
+		{"mepee ụlọ ahịa m", []lang.Tag{lang.IG, lang.EN}, lang.IntentOpenShop, ""},
+		{"wetin people order", []lang.Tag{lang.PCM, lang.EN}, lang.IntentOrders, ""},
+		{"publish Visitors log", all, lang.IntentPublish, "Visitors log"},
+		{"my page", all, lang.IntentMyPage, ""},
 		// Another language's words mean nothing unless it is that person's.
 		{"fagilé", all, lang.IntentNone, ""},
 		{"please pay salaries every friday", all, lang.IntentNone, ""},

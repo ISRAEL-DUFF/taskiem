@@ -1798,10 +1798,14 @@ export interface StorefrontGetBookingInput {
 }
 export interface StorefrontNotifyCustomerInput {
   reference: Val<string>;
+  /** Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed…), in the business's own language */
+  say?: Val<string>;
   /** The email's subject */
   subject?: Val<string>;
   /** The message; an SMS starts with the business's name and is at most three parts. {link} becomes the customer's status link, where a booking is moved or cancelled */
-  text: Val<string>;
+  text?: Val<string>;
+  /** With say: the message's values (reference, total, url, service, when) */
+  vars?: Value;
 }
 export interface StorefrontPaymentLinkInput {
   reference: Val<string>;

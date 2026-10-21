@@ -17,6 +17,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/sender"
 	sf "github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -31,6 +32,9 @@ type Ops interface {
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error)
 	GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
 	Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
+	// CustomerLanguage is the business's language for its customers
+	// (its default chat language), English when it has none.
+	CustomerLanguage(ctx context.Context, tenant uuid.UUID) lang.Tag
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -90,6 +94,22 @@ func (a *actions) notify(ctx context.Context, req connector.Request) (connector.
 	}
 	text, _ := req.Input["text"].(string)
 	subject, _ := req.Input["subject"].(string)
+	// A message by name, in the business's language (no-technical-steps
+	// N6): customer.<say> in the catalogue, filled from vars.
+	if say, _ := req.Input["say"].(string); say != "" {
+		id := "customer." + say
+		l := a.ops.CustomerLanguage(ctx, c.Tenant)
+		if !lang.Default().Has(id) {
+			return connector.Response{}, fmt.Errorf("no customer message %q: %w", say, effects.ErrFatal)
+		}
+		var kv []string
+		if vars, ok := req.Input["vars"].(map[string]any); ok {
+			for k, v := range vars {
+				kv = append(kv, k, fmt.Sprint(v))
+			}
+		}
+		text = lang.Default().Text(l, id, kv...)
+	}
 	key := req.IdempotencyKey
 	if key == "" {
 		key = c.Run.String() + ":" + c.Step
@@ -173,6 +193,14 @@ func (l *Late) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, 
 		return nil, err
 	}
 	return ops.NotifyCustomer(ctx, tenant, reference, text, subject, key)
+}
+
+func (l *Late) CustomerLanguage(ctx context.Context, tenant uuid.UUID) lang.Tag {
+	ops, err := l.get()
+	if err != nil {
+		return lang.EN
+	}
+	return ops.CustomerLanguage(ctx, tenant)
 }
 
 func (l *Late) GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error) {

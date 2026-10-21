@@ -45,12 +45,21 @@ type waBuild struct {
 	Missing  []string       `json:"missing,omitempty"`
 	// Asking is how many parameters were missing when the draft came.
 	Asking int `json:"asking,omitempty"`
+	// Once saved (N6): the draft, the settings still to ask, one at a
+	// time, and its name.
+	Workflow uuid.UUID `json:"workflow,omitempty"`
+	Version  int       `json:"version,omitempty"`
+	Name     string    `json:"name,omitempty"`
+	Settings []string  `json:"settings,omitempty"`
 }
 
 const (
 	buildBuilding = "building"
 	buildParams   = "params"
 	buildConfirm  = "confirm"
+	// After saving (N6): asking its settings, then offering to publish.
+	buildSettings = "settings"
+	buildPublish  = "publish"
 )
 
 // waBuildPhrase recognises a goal written without "build": a schedule or
@@ -334,6 +343,10 @@ func (s *Server) waBuildReply(ctx context.Context, c *chat, text, cmd string) er
 			return c.say(ctx, s, c.t("wa.build.not_saved"))
 		}
 		return c.say(ctx, s, c.t("wa.build.save_reminder"), confirmSaveButtons(c)...)
+	case buildSettings:
+		return s.waBuildSetting(ctx, c, text)
+	case buildPublish:
+		return s.waBuildPublishAnswer(ctx, c, cmd)
 	}
 	return s.saveSession(ctx, c, stateIdle, chatData{}, 0)
 }
@@ -424,12 +437,13 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 		return c.say(ctx, s, c.t("wa.build.denied_save", "org", c.tenant.Name))
 	}
 	var wf uuid.UUID
+	var version int
 	var name string
-	var tables []string
+	var specs []builder.TableSpec
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		var doc []byte
-		wf, _, doc, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", func(action, target string, detail map[string]any) error {
+		wf, version, doc, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", func(action, target string, detail map[string]any) error {
 			return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 		})
 		if err == nil {
@@ -438,10 +452,11 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 			}
 			_ = json.Unmarshal(doc, &d)
 			name = d.Name
-			// New tables the draft needs: made in the app, where their
-			// columns can be checked (chat cannot show them well).
-			err = tx.QueryRow(ctx, `SELECT COALESCE(ARRAY(SELECT t->>'name' FROM jsonb_array_elements(COALESCE(proposal->'tables', '[]')) t), '{}')
-				FROM ai_builds WHERE id = $1`, b.ID).Scan(&tables)
+			// New tables the draft needs, made next (N6).
+			var raw []byte
+			if err = tx.QueryRow(ctx, `SELECT COALESCE(proposal->'tables', '[]') FROM ai_builds WHERE id = $1`, b.ID).Scan(&raw); err == nil {
+				err = json.Unmarshal(raw, &specs)
+			}
 		}
 		return err
 	})
@@ -455,8 +470,10 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 		return err
 	}
 	msg := c.t("wa.build.saved", "name", whatsapp.SafeText(name), "link", s.waLink(c, "/workflows/"+wf.String()))
-	if len(tables) > 0 {
-		msg += "\n\n" + c.t("wa.build.tables_needed", "tables", whatsapp.SafeText(strings.Join(tables, ", ")), "link", s.waLink(c, "/tables"))
+	// Then chat goes on: its tables, its settings, publishing.
+	next, err := s.waBuildFinish(ctx, c, &waBuild{ID: b.ID, Workflow: wf, Version: version, Name: name}, specs)
+	if err != nil {
+		return err
 	}
-	return c.say(ctx, s, msg)
+	return c.say(ctx, s, msg+"\n\n"+next)
 }

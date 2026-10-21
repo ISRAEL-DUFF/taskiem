@@ -504,6 +504,17 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
+		// A way into the web app for someone with no password (N6).
+		switch cmd {
+		case "sign in", "signin", "log in", "login", "web link", "sign in link", "web app":
+			return s.waSignInLink(ctx, c)
+		}
+		// "publish <workflow>": a draft published from chat (N6).
+		if name, ok := strings.CutPrefix(cmd, "publish "); ok && name != "" {
+			if done, err := s.waPublishWorkflow(ctx, c, name); done || err != nil {
+				return err
+			}
+		}
 	}
 	if matched {
 		if done, err := s.waIntent(ctx, c, m); done || err != nil {
@@ -554,6 +565,22 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 			return false, nil
 		}
 		return true, s.waStartBuild(ctx, c, arg)
+	case lang.IntentMakePage, lang.IntentMyPage, lang.IntentOrders, lang.IntentOpenShop, lang.IntentCloseShop, lang.IntentQR, lang.IntentReady, lang.IntentDelivered:
+		// The storefront commands in any language: answered as their
+		// English command (N6).
+		if c.state != stateIdle {
+			return false, nil
+		}
+		en := shopCommandOf(m.Intent, arg)
+		if en == "" {
+			return false, nil
+		}
+		return s.waShopCommand(ctx, c, en, normalizeCommand(en))
+	case lang.IntentPublish:
+		if arg == "" || c.state != stateIdle {
+			return false, nil
+		}
+		return s.waPublishWorkflow(ctx, c, arg)
 	case lang.IntentTables:
 		return true, s.waTables(ctx, c)
 	case lang.IntentAdd:
@@ -1029,4 +1056,33 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 		msg += "\n" + s.PublicURL + "/runs/" + ref.ID.String()
 	}
 	return c.say(ctx, s, msg)
+}
+
+// shopCommandOf is the English storefront command an intent stands for;
+// "" when it needs an argument it lacks.
+func shopCommandOf(i lang.Intent, arg string) string {
+	switch i {
+	case lang.IntentMakePage:
+		return "make my page"
+	case lang.IntentMyPage:
+		return "my page"
+	case lang.IntentOrders:
+		return "orders"
+	case lang.IntentOpenShop:
+		return "open shop"
+	case lang.IntentQR:
+		return "qr"
+	case lang.IntentCloseShop:
+		return strings.TrimSpace("close shop " + arg)
+	case lang.IntentReady, lang.IntentDelivered:
+		ref := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(arg), "order ")))
+		if ref == "" {
+			return ""
+		}
+		if i == lang.IntentReady {
+			return "order " + ref + " ready"
+		}
+		return "order " + ref + " delivered"
+	}
+	return ""
 }

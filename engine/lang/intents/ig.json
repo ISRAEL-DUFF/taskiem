@@ -9,7 +9,12 @@
     "cancel": ["kagbuo", "kwụsị", "hapụ ya"],
     "yes": ["ee", "ọ dị mma", "mee ya"],
     "no": ["mba", "emela ya"],
-    "tables": ["tebụl m", "tebụl niile", "ndepụta tebụl", "gosi m tebụl m"]
+    "tables": ["tebụl m", "tebụl niile", "ndepụta tebụl", "gosi m tebụl m"],
+    "make_page": ["mee peeji m", "mee ụlọ ahịa m"],
+    "my_page": ["peeji m", "ụlọ ahịa m"],
+    "orders": ["iwu m", "ihe e nyere m iwu"],
+    "open_shop": ["mepee ụlọ ahịa m", "mepee ụlọ ahịa"],
+    "qr": ["qr m"]
   },
   "prefixes": {
     "switch": ["gbanwee gaa", "gaa na"],
@@ -17,7 +22,11 @@
     "build": ["wuo", "mepụta"],
     "language": ["asụsụ", "gbanwee asụsụ gaa"],
     "add": ["tinye na", "tinye n'ime", "gbakwunye na", "tinye"],
-    "find": ["chọọ", "chọọ na", "chọta", "chọta na"]
+    "find": ["chọọ", "chọọ na", "chọta", "chọta na"],
+    "publish": ["bipụta"],
+    "close_shop": ["mechie ụlọ ahịa m", "mechie ụlọ ahịa"],
+    "order_ready": ["adịla njikere"],
+    "order_delivered": ["eruola ha", "ha anatala"]
   },
   "fillers": ["biko"],
   "markers": ["biko", "kedu", "ndewo", "ego", "ziga", "enyemaka", "taa", "gịnị", "achọrọ m", "m chọrọ", "nke", "ndị", "kagbuo", "mba", "daalụ", "ụbọchị", "ndị ahịa"]
