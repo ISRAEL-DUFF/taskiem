@@ -58,13 +58,15 @@ The checklist is worked out from what the organisation has done, not from stored
 | Step | Done when |
 | --- | --- |
 | Confirm your email | The signed-in person's email is confirmed |
-| Connect an app | The organisation has a connection |
+| Link WhatsApp or Telegram | The signed-in person has linked one |
+| Make your page | The organisation's storefront is published |
+| Connect an app | The organisation has a connection, or a published workflow (publishing checks it has what it needs, so one that needs nothing counts) |
 | Create a workflow | It has a workflow |
 | Publish it | It has a published version |
 | Run it once | It has a completed run |
 | Invite a teammate | It has a second member, or an invitation waiting |
 
-The guided first workflow (`/start/guide?template=<id>`) takes one [template](templates.md) through four steps on one page: its details; its connection (saved as the name the template uses, `main` by default, in prod) and the variables it reads (such as `owner_phone`); create and publish; and a test run with an input sampled from the workflow's inputs schema, whose status updates until it ends. Starter templates (one connector, nothing to wait for) are offered first. A template's page in **Templates** links to the same guide.
+The guided first workflow (`/start/guide?template=<id>`) takes one [template](templates.md) through four steps on one page: its details; what it connects, on the guided screen (saved as the name the template uses, `main` by default, in prod), and the variables it reads; create and publish; and a test run with an input sampled from the workflow's inputs schema, whose status updates until it ends. Starter templates are offered first: the first, **Remind me every day**, needs nothing connected, and templates that need a developer come last. A template's page in **Templates** links to the same guide.
 
 ## In-product help
 

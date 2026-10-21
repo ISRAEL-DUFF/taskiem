@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  paystackLine,
   ORDER_FILTERS,
   ORDER_STATUS,
   BOOKING_PAYMENT_CHOICES,
@@ -222,5 +223,14 @@ describe("the customer, masked or shown", () => {
     expect(whatsappLink("+2348031234567")).toBe("https://wa.me/2348031234567");
     expect(whatsappLink("•••4567")).toBeNull();
     expect(whatsappLink("")).toBeNull();
+  });
+});
+
+describe("the storefront's Paystack", () => {
+  it("says whether payments are real", () => {
+    expect(paystackLine(undefined)).toBe("Connect Paystack so customers can pay.");
+    expect(paystackLine({ status: "active", mode: "test" })).toContain("practice, not real money");
+    expect(paystackLine({ status: "active", mode: "live" })).toContain("real money into this Paystack account");
+    expect(paystackLine({ status: "expired" })).toContain("connect it again");
   });
 });

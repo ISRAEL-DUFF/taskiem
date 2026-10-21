@@ -18,7 +18,7 @@ const tpl = (id: string, connectors: string[], available = true): Template => ({
 
 describe("getting started", () => {
   it("words every checklist step", () => {
-    for (const id of ["verify_email", "connection", "workflow", "publish", "first_run", "invite"] as const) {
+    for (const id of ["verify_email", "chat", "page", "connection", "workflow", "publish", "first_run", "invite"] as const) {
       expect(CHECKLIST[id].title).not.toBe("");
       expect(CHECKLIST[id].href.startsWith("/")).toBe(true);
     }

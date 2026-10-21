@@ -390,3 +390,25 @@ export async function tidy<T>(p: Promise<T>): Promise<T> {
     throw e;
   }
 }
+
+/**
+ * A catalogue table row from what the owner types in the editor
+ * (no-technical-steps N7): a name and a price in naira ("1,500" or
+ * "1500.50"), in the table's own columns and price unit. An error says
+ * what is wrong, in plain words.
+ */
+export function itemRow(columns: Columns, name: string, price: string): { row: Record<string, unknown> } | { error: string } {
+  const n = name.trim();
+  if (!n) return { error: "Give the item a name." };
+  if (!columns.name) return { error: "The catalogue has no name column." };
+  const row: Record<string, unknown> = { [columns.name]: n };
+  const p = price.replace(/[₦,\s]/g, "");
+  if (p !== "") {
+    if (!/^\d+(\.\d{1,2})?$/.test(p)) return { error: "Write the price as a number of naira, such as 1500." };
+    if (!columns.price) return { error: "The catalogue has no price column." };
+    const naira = Number(p);
+    row[columns.price] = columns.price_unit === "kobo" ? Math.round(naira * 100) : naira;
+  }
+  if (columns.available) row[columns.available] = true;
+  return { row };
+}

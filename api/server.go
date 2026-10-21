@@ -342,6 +342,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/reopen", s.reopenStorefront)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/catalogue", s.getStorefrontCatalogue)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/refresh", s.refreshStorefrontCatalogue)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/make", s.makeStorefrontTable)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/rows/{row}/photo", s.setStorefrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/media", s.uploadStorefrontMedia)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/trust", s.getStorefrontTrust) // trust and safety (trust.go)
