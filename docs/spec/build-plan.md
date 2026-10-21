@@ -245,6 +245,8 @@ It comes after launch because it rests on what Phases 3 and 4 finish: chat appro
 | S7 | Forms | The `form` trigger (public, link and members access; pages and conditions; files with malware scanning; prefill; codes; the three after-submit modes) and the `form` step on signals; the form editor and preview in the canvas; the AI builder drafting forms | Forms 6, 8 | S1; a malware scanner. Runs alongside S3–S6 |
 | S8 | Trust, plans and pilot | Moderation pipeline and review queue; reports and suspension in the operator console; verification levels; Shop and Shop Plus plans with SMS metering; a security review of the public host; then a **6-week pilot** in one market with a small team of field agents | Storefronts 7, 11, 12 | All of the above |
 
+**Before the pilot:** the [no technical steps](no-technical-steps.md) workstream (N0 to N9) removes the developer steps an owner still meets (API keys, JSON, expressions, names to match, developer messages) and a bug that stops one-person businesses accepting their own orders. N1 to N7 and its observed sessions come before S8's pilot.
+
 S3 is the heart of the phase: it proves the loop of a customer ordering, the owner accepting in chat, and the customer being sent a payment link. It is shown to real traders before S4 starts. S6 depends on the domain platform's API, the least certain dependency; storefronts work on the preview address until it is ready, so it never blocks S2 to S5.
 
 ### Staffing
