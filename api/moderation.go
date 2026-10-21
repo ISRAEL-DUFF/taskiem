@@ -33,7 +33,10 @@ var errNeedsVerification = errors.New("verification needed")
 // moderator is the checker, with the AI layer's model when there is one.
 func (s *Server) moderator() *moderation.Checker {
 	c := &moderation.Checker{}
-	if s.AI != nil && s.AI.Provider != nil {
+	switch {
+	case s.AI != nil && s.AI.Moderation != nil:
+		c.Model = s.AI.Moderation
+	case s.AI != nil && s.AI.Provider != nil:
 		c.Model = s.AI.Provider
 	}
 	return c

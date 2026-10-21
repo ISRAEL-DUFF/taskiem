@@ -485,7 +485,15 @@ func (s *Server) waFlowPin(ctx context.Context, row flowRow, req whatsapp.FlowRe
 			return waAudit(ctx, tx, "whatsapp", p, action, row.run.String()+"/"+*row.step, detail)
 		})
 	}
-	if perr != nil || !p.Can(PermApprovalDecide) {
+	var role *string
+	if perr == nil {
+		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{row.tenant}, func(tx pgx.Tx) error {
+			var err error
+			role, err = currentApprovalRole(ctx, tx, *row.run, *row.step)
+			return err
+		})
+	}
+	if perr != nil || !p.mayDecide(role) {
 		const m = "You cannot decide approvals in this organisation any more."
 		return finish("refused", m, m)
 	}

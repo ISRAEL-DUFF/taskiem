@@ -46,7 +46,7 @@ type approvalItem struct {
 // with their decision.
 func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
-	if p.UserID == uuid.Nil || !p.Can(PermApprovalDecide) {
+	if p.UserID == uuid.Nil || !p.mayDecideAny() {
 		writeJSON(w, http.StatusOK, map[string]any{"approvals": []approvalItem{}})
 		return
 	}
@@ -80,6 +80,11 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 			if err := rows.Scan(&it.RunID, &it.StepID, &it.StepName, &it.Workflow, &it.Environment, &it.Role, &it.Required, &it.Approvals,
 				&it.Level, &it.Levels, &it.StepUp, &it.Policy, &it.OnBehalfOf, &it.SoleApprover, &it.RequestedAt, &it.TimeoutAt, &subj); err != nil {
 				return err
+			}
+			// A delegation needs approval.decide; a business role decides
+			// only the approvals naming it.
+			if !p.Can(PermApprovalDecide) && (it.OnBehalfOf != nil || !p.mayDecide(it.Role)) {
+				continue
 			}
 			out = append(out, it)
 			raws = append(raws, subj)
@@ -141,6 +146,21 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	step := chi.URLParam(r, "step")
+	if !p.Can(PermApprovalDecide) {
+		var role *string
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			var err error
+			role, err = currentApprovalRole(r.Context(), tx, run, step)
+			return err
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if !p.mayDecide(role) {
+			s.fail(w, r, fmt.Errorf("%w: deciding this approval needs %s or its role", errForbidden, PermApprovalDecide))
+			return
+		}
+	}
 	ref := runtime.RunRef{ID: run, TenantID: p.TenantID}
 	vote := runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: req.Decision, Channel: "web", IP: clientIP(r)}
 	// A passkey must have been asked for this decision on this approval.

@@ -88,6 +88,7 @@ type approvalTarget struct {
 	step  string
 	level int
 	user  uuid.UUID
+	role  *string
 	// channel is where the request goes ("whatsapp" or "telegram"), addr
 	// the person's number or account there.
 	channel string
@@ -131,7 +132,7 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, g.to_user FROM open o JOIN delegations g ON o.role = ANY (g.roles)
 			     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
 			     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (o.role, 'owner')))
-			SELECT DISTINCT c.run_id, c.step_id, c.level, c.user_id FROM cand c
+			SELECT DISTINCT c.run_id, c.step_id, c.level, c.user_id, c.role FROM cand c
 			  JOIN runs r ON r.id = c.run_id JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
 			 WHERE NOT EXISTS (SELECT 1 FROM whatsapp_notices n WHERE n.run_id = c.run_id AND n.step_id = c.step_id AND n.level = c.level AND n.user_id = c.user_id
 			                     AND n.channel = $1)
@@ -146,7 +147,7 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 		}
 		targets, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (approvalTarget, error) {
 			var t approvalTarget
-			return t, r.Scan(&t.run, &t.step, &t.level, &t.user)
+			return t, r.Scan(&t.run, &t.step, &t.level, &t.user, &t.role)
 		})
 		if err != nil || len(targets) == 0 {
 			return err
@@ -178,12 +179,9 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 		p, seen := allowed[t.user]
 		if !seen {
 			p, _ = s.principalOf(ctx, tenant, t.user)
-			if p != nil && !p.Can(PermApprovalDecide) {
-				p = nil
-			}
 			allowed[t.user] = p
 		}
-		if p == nil {
+		if p == nil || !p.mayDecide(t.role) {
 			continue
 		}
 		if err := s.waQueueApproval(ctx, tenant, t); err != nil {
@@ -253,7 +251,15 @@ func (s *Server) waSendApprovalItem(ctx context.Context, it whatsapp.OutboxItem)
 	}); err != nil {
 		return err
 	}
-	if p, _ := s.principalOf(ctx, it.Tenant, it.User); p == nil || !p.Can(PermApprovalDecide) {
+	var role *string
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
+		var err error
+		role, err = currentApprovalRole(ctx, tx, *it.Run, *it.Step)
+		return err
+	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if p, _ := s.principalOf(ctx, it.Tenant, it.User); p == nil || !p.mayDecide(role) {
 		return fmt.Errorf("%w: the person no longer decides approvals", whatsapp.ErrNothingToSend)
 	}
 	_, addr, err := s.chatAddrOf(ctx, it.Channel, it.Tenant, it.User)
@@ -451,17 +457,18 @@ func truncateErr(err error) string {
 // waResendApprovals answers "approvals": what is waiting for the person,
 // sent again with fresh buttons (at most three).
 func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
-	if !c.p.Can(PermApprovalDecide) {
+	if !c.p.mayDecideAny() {
 		return c.say(ctx, s, c.t("wa.approvals.denied", "org", c.tenant.Name))
 	}
 	var targets []approvalTarget
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT a.run_id, a.step_id, a.level FROM approvals a WHERE a.status = 'open'
+			AND ($3 OR a.role = ANY ($1))
 			AND (a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
 			    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
 			    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner'))))
 			AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.user_id = $2)
-			ORDER BY a.requested_at LIMIT 3`, c.p.Roles, c.p.UserID)
+			ORDER BY a.requested_at LIMIT 3`, c.p.Roles, c.p.UserID, c.p.Can(PermApprovalDecide))
 		if err != nil {
 			return err
 		}
@@ -549,6 +556,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	refusal := ""
 	var level int
 	var status string
+	var role *string
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		row, err = s.loadToken(ctx, tx, tok, whatsapp.PurposeDecide)
@@ -566,7 +574,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 			refusal = "used"
 			return nil
 		}
-		if err := tx.QueryRow(ctx, `SELECT status, level FROM approvals WHERE run_id = $1 AND step_id = $2 FOR UPDATE`, row.claims.Run, row.claims.Step).Scan(&status, &level); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT status, level, role FROM approvals WHERE run_id = $1 AND step_id = $2 FOR UPDATE`, row.claims.Run, row.claims.Step).Scan(&status, &level, &role); err != nil {
 			return err
 		}
 		// Single use: spending one button spends its pair.
@@ -595,7 +603,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 		return say(c.t("wa.approval.already", "status", c.t("approval.status."+status)))
 	case level != row.claims.Level:
 		return say(c.t("wa.approval.next_level"))
-	case !p.Can(PermApprovalDecide):
+	case !p.mayDecide(role):
 		return say(c.t("wa.approval.denied", "org", tenant.Name))
 	}
 	return s.waVote(ctx, c, tenant, p, row.claims, "", "button")

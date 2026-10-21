@@ -447,10 +447,12 @@ func TestConnectorBridge(t *testing.T) {
 		t.Fatalf("A's run: %v\n%s", st, toJSON(got))
 	}
 	ua.call(404, "GET", "/connections", nil)
-	// B's end user, same app, same connector: A's credential is not B's.
+	// B's end user, same app, same connector: A's credential is not B's,
+	// so B's workflow is not ready to publish.
 	ub := p.endUser(t, w, app, b, "bob", "", perms...)
-	if st := runLedger(ub)["run"].(map[string]any)["status"]; st == "completed" {
-		t.Error("B's run used A's credential")
+	wfB := ub.call(201, "POST", "/workflows", map[string]any{"name": "pay", "definition": json.RawMessage(ledgerFlow)})["id"].(string)
+	if out := ub.call(422, "POST", "/workflows/"+wfB+"/versions/1/publish", nil); out["code"] != "not_ready" {
+		t.Errorf("B's publish without its own connection: %v", out)
 	}
 	mu.Lock()
 	if len(auths) != 1 || auths[0] != "Bearer ledger-key-A" {

@@ -386,6 +386,10 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		if err := s.refuseGitManaged(r.Context(), tx, wf); err != nil {
 			return err
 		}
+		// Ready: nothing a run would fail on at once is missing.
+		if err := s.checkReady(r.Context(), tx, p.TenantID, wf, v); err != nil {
+			return err
+		}
 		// Four-eyes: a publish waits for a second person.
 		g, err := governanceTx(r.Context(), tx)
 		if err != nil {
@@ -427,6 +431,11 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	})
 	if errors.Is(err, errInvalid) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "definition is not valid", "problems": probs})
+		return
+	}
+	var notReady *errNotReady
+	if errors.As(err, &notReady) {
+		writeNotReady(w, notReady.needs)
 		return
 	}
 	if err != nil {

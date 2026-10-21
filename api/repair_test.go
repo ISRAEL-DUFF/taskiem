@@ -372,7 +372,11 @@ func TestRepairTransientRetry(t *testing.T) {
 // Credential: prompt to reconnect, without asking the model.
 func TestRepairCredential(t *testing.T) {
 	rw := newRepairWorld(t, nil)
+	// Published with its connection (readiness would refuse otherwise),
+	// which is then removed: the run fails for want of it.
+	conn := rw.owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "crm@1", "credentials": map[string]string{"api_key": "k"}})["id"].(string)
 	wf := rw.publish(t, `{"id":"contact","type":"connector","connector":"crm@1","action":"get_contact","input":{"id":"=trigger.body.id"}}`)
+	rw.owner.must(204, "DELETE", "/v1/connections/"+conn+"?force=true", nil)
 	run := rw.failRun(t, wf, map[string]any{"id": "c-1"}, "failed")
 	p := rw.only(t, run)
 	act := p["action"].(map[string]any)

@@ -155,6 +155,10 @@ type Config struct {
 	// Fallbacks opts Anthropic requests into server-side refusal
 	// fallbacks ("default"); on unless TASKIEM_AI_FALLBACKS=off.
 	Fallbacks bool
+	// ModerationModel, when set, is the model storefront moderation uses
+	// on the same provider (a cheaper one than building needs);
+	// TASKIEM_AI_MODERATION_MODEL.
+	ModerationModel string
 }
 
 // Defaults.
@@ -176,6 +180,8 @@ func ConfigFromEnv(lookup func(string) (string, bool)) (Config, error) {
 		Effort:    get("TASKIEM_AI_EFFORT"),
 		MaxTokens: DefaultMaxTokens,
 		Fallbacks: !strings.EqualFold(get("TASKIEM_AI_FALLBACKS"), "off"),
+
+		ModerationModel: get("TASKIEM_AI_MODERATION_MODEL"),
 	}
 	key := get("ANTHROPIC_API_KEY")
 	if c.Provider == "" && key != "" {

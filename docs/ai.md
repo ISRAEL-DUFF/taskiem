@@ -50,6 +50,7 @@ The rule (spec 12, gate G3): **the AI can never publish, approve, read secrets, 
 | `ANTHROPIC_API_KEY` | — | Turns AI building on with Claude. Read from the environment (a Kubernetes secret) only; never stored or logged |
 | `TASKIEM_AI_PROVIDER` | `anthropic` when the key is set, otherwise off | `anthropic`, `selfhosted`, or `off` |
 | `TASKIEM_AI_MODEL` | `claude-opus-5-5` | Required for `selfhosted` |
+| `TASKIEM_AI_MODERATION_MODEL` | the building model | Optional: the model [storefront moderation](moderation.md) uses, on the same provider. A cheap, fast model suits moderation; building wants a strong one |
 | `TASKIEM_AI_BASE_URL` | — | `selfhosted`: an OpenAI-compatible endpoint (`http://llm.internal:8000/v1`); `anthropic`: optional gateway |
 | `TASKIEM_AI_API_KEY` | — | `selfhosted` bearer token, if the server wants one |
 | `TASKIEM_AI_EFFORT` | `high` | Thinking depth for drafting: `low`, `medium`, `high`, `xhigh`, `max` |

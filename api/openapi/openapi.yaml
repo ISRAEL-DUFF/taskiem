@@ -2236,14 +2236,14 @@ paths:
       tags:
       - Governance
       summary: Decide an approval
-      description: Approve or reject a waiting approval step. A policy may ask for step-up (a TOTP code or passkey
-        assertion); without it the answer is 403 with `step_up`.
+      description: Approve or reject a waiting approval step. Needs `approval.decide`, or holding the business role
+        the approval names. A policy may ask for step-up (a TOTP code or passkey assertion); without it the answer
+        is 403 with `step_up`.
       security:
       - sessionCookie: []
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: approval.decide
       parameters:
       - name: run
         in: path
@@ -2295,6 +2295,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/approver-roles:
+    get:
+      operationId: listApproverRoles
+      tags:
+      - Governance
+      summary: Roles an approval can name
+      description: The roles an approval or form step can name, for pickers, so nobody types one; and how many active members the business has. Owners count for every role.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [roles, members]
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, builtin, holders]
+                      properties:
+                        name:
+                          type: string
+                        builtin:
+                          type: boolean
+                          description: owner or approver; otherwise a business or custom role.
+                        holders:
+                          type: integer
+                          description: Active members who hold it.
+                  members:
+                    type: integer
         default:
           $ref: '#/components/responses/Error'
   /v1/audit:
@@ -8875,6 +8914,34 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/readiness:
+    post:
+      operationId: draftReadiness
+      tags:
+      - Workflows
+      summary: What a definition needs before it can run
+      description: For a definition not saved yet (the AI review, the canvas), what it needs where a publish deploys it, each with a plain message.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/roles:
     get:
       operationId: listRoles
@@ -10842,6 +10909,41 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/versions/{v}/readiness:
+    get:
+      operationId: versionReadiness
+      tags:
+      - Workflows
+      summary: What a version needs before it can run
+      description: What the version needs in the environments a publish deploys to (connections, variables, secrets, tables, approvers). Blocking needs stop a publish.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      - name: v
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Version number
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/versions/{v}/publish:
     post:
       operationId: publish
@@ -10849,7 +10951,8 @@ paths:
       - Workflows
       summary: Publish a version
       description: Makes a valid version the one new runs use. With four-eyes publishing a person's request waits
-        for approval (202). An invalid definition answers 422 with its problems.
+        for approval (202). An invalid definition answers 422 with its problems; a version missing something a run
+        would fail on at once (a connection, a secret, a table) answers 422 with `code` `not_ready` and its `needs`.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -12367,6 +12470,56 @@ components:
         created_at:
           type: string
           format: date-time
+    Readiness:
+      type: object
+      required: [ready, needs]
+      properties:
+        ready:
+          type: boolean
+          description: Nothing blocking is missing.
+        needs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadyNeed'
+      additionalProperties: false
+    ReadyNeed:
+      type: object
+      description: One thing a workflow needs before it can run, with what to fix.
+      required: [kind, name, problem, environment, steps, blocking, message]
+      properties:
+        kind:
+          type: string
+          enum: [connection, variable, secret, table, role]
+        name:
+          type: string
+          description: The connection's, variable's, secret's, table's or role's name; empty for a connection a step does not name.
+        connector:
+          type: string
+        service:
+          type: string
+          description: The connector's display name.
+        problem:
+          type: string
+          enum: [missing, expired, disabled, ambiguous, nobody]
+        environment:
+          type: string
+        steps:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+        blocking:
+          type: boolean
+          description: A run would fail at once, so publishing waits for it. A variable can be set later; owners decide for a role nobody holds.
+        message:
+          type: string
+          description: The need in plain words.
+      additionalProperties: false
     Error:
       type: object
       required:
@@ -12391,6 +12544,11 @@ components:
           description: What stops a downgrade.
         problems:
           description: Why a definition or an input is not valid.
+        needs:
+          description: What a workflow needs before it can be published (`not_ready`); see Readiness.
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadyNeed'
         conflicts:
           description: Edits that conflict with a newer version (409 on save).
         step_up:
@@ -13811,6 +13969,13 @@ components:
       properties:
         definition:
           $ref: '#/components/schemas/Definition'
+        needs:
+          description: What the draft needs before it can run, each with a fix in the review.
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ReadyNeed'
         tables:
           description: New data tables the draft uses, to be made when it is saved (send them, as reviewed, with the save).
           type:

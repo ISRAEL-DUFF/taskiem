@@ -328,6 +328,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/workflows/{wf}/versions", s.createVersion)
 			r.With(s.need(PermWorkflowEdit)).Put("/workflows/{wf}/versions/{v}/layout", s.putLayout)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide, s.tenantCode).Post("/workflows/{wf}/versions/{v}/publish", s.publish)
+			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/versions/{v}/readiness", s.versionReadiness)
 			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/triggers", s.listTriggers)
 			r.With(s.need(PermSecretManage)).Post("/workflows/{wf}/signing-secret", s.newSigningSecret)
 			r.With(s.need(PermWorkflowPublish), s.tenantCode).Post("/workflows/{wf}/promote", s.promote)
@@ -389,6 +390,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/environments", s.createEnvironment)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/environments/{env}", s.putEnvironment)
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/validate", s.validate)
+			r.With(s.need(PermWorkflowRead)).Post("/readiness", s.draftReadiness)
+			r.With(s.need(PermWorkflowRead)).Get("/approver-roles", s.listApproverRoles)
 			r.With(s.feature(billing.FeatureAI, true)).Route("/ai", s.aiRoutes)
 			r.Get("/templates", s.listTemplates) // the SME template library (templates.go)
 			r.With(s.tenantCode).Get("/templates/{id}", s.getTemplate)
@@ -406,7 +409,7 @@ func (s *Server) Handler() http.Handler {
 			r.Group(s.repairRoutes) // self-repair proposals (repair.go)
 
 			r.Get("/approvals", s.listApprovals)
-			r.With(s.need(PermApprovalDecide)).Post("/approvals/{run}/{step}", s.decide)
+			r.Post("/approvals/{run}/{step}", s.decide) // approval.decide, or the business role it names
 
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)

@@ -132,6 +132,38 @@
       "text": "{name} adịghị ebe a. Asụsụ dị ebe a: {languages}.",
       "reviewed": false
     },
+    "ready.connection_ambiguous": {
+      "text": "Ị nwere njikọ {service} karịa otu; họrọ nke a ga-eji.",
+      "reviewed": false
+    },
+    "ready.connection_disabled": {
+      "text": "Agbanyụọla njikọ {service} gị; gbanye ya ma ọ bụ jikọọ ya ọzọ.",
+      "reviewed": false
+    },
+    "ready.connection_expired": {
+      "text": "Njikọ {service} gị agwụla; jikọọ ya ọzọ.",
+      "reviewed": false
+    },
+    "ready.connection_missing": {
+      "text": "Jikọọ {service}.",
+      "reviewed": false
+    },
+    "ready.role": {
+      "text": "Ọ dịbeghị onye nwere ọrụ {role}, ya mere a ga-ajụ ndị nwe ya; nye ya mmadụ ma ọ bụrụ na ha kwesịrị ikpebi.",
+      "reviewed": false
+    },
+    "ready.secret": {
+      "text": "Tinye uru nzuzo {name}.",
+      "reviewed": false
+    },
+    "ready.table": {
+      "text": "Mee tebụl {name}.",
+      "reviewed": false
+    },
+    "ready.variable": {
+      "text": "Dejupụta {name}.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "akagbuola",
       "reviewed": false
@@ -502,6 +534,10 @@
     },
     "wa.build.need_details": {
       "text": "Achọrọ m nkọwa {count} ọzọ iji mezue ya. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.build.needs": {
+      "text": "Tupu ya enwee ike ịrụ ọrụ:",
       "reviewed": false
     },
     "wa.build.not_saved": {

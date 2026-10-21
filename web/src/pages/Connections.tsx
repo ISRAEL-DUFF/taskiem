@@ -189,7 +189,7 @@ export function Connections() {
 /** Starts connecting a connector by OAuth: the API records the request
  * and the browser goes to the provider's consent page, which sends it
  * back to this page with ?linked= or ?error=. */
-async function startLink(c: ConnectorInfo, environment = "prod", name = "default") {
+export async function startLink(c: ConnectorInfo, environment = "prod", name = "default") {
   const out = await post<{ url: string }>("/v1/connections/oauth/start", { connector: c.ref, environment, name });
   window.location.assign(out.url);
 }
@@ -434,15 +434,32 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
   );
 }
 
-function NewConnection({ connectors, onClose, onDone, onLink }: { connectors: ConnectorInfo[]; onClose: () => void; onDone: () => void; onLink: (c: ConnectorInfo, environment: string, name: string) => Promise<void> }) {
-  const [ref, setRef] = useState(connectors[0]?.ref ?? "");
-  const [env, setEnv] = useState("prod");
-  const [name, setName] = useState("default");
+/**
+ * A new connection. With preset (a workflow's need: its connector id,
+ * environment and name) the service, environment and name are fixed, so
+ * nothing has to match by hand.
+ */
+export function NewConnection({
+  connectors,
+  onClose,
+  onDone,
+  onLink,
+  preset,
+}: {
+  connectors: ConnectorInfo[];
+  onClose: () => void;
+  onDone: () => void;
+  onLink: (c: ConnectorInfo, environment: string, name: string) => Promise<void>;
+  preset?: { connector: string; environment: string; name: string };
+}) {
+  const [ref, setRef] = useState((preset && connectors.find((x) => x.id === preset.connector)?.ref) ?? connectors[0]?.ref ?? "");
+  const [env, setEnv] = useState(preset?.environment ?? "prod");
+  const [name, setName] = useState(preset?.name ?? "default");
   const [creds, setCreds] = useState<Record<string, string>>({});
   const act = useAction();
   const c = connectors.find((x) => x.ref === ref);
   return (
-    <Modal title="New connection" onClose={onClose}>
+    <Modal title={preset && c ? `Connect ${c.name}` : "New connection"} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -463,6 +480,7 @@ function NewConnection({ connectors, onClose, onDone, onLink }: { connectors: Co
             )}
           </div>
         )}
+        {!preset && (
         <div className="row">
           <Field label="Connector">
             <select value={ref} onChange={(e) => (setRef(e.target.value), setCreds({}))}>
@@ -480,9 +498,12 @@ function NewConnection({ connectors, onClose, onDone, onLink }: { connectors: Co
             </select>
           </Field>
         </div>
-        <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </Field>
+        )}
+        {!preset && (
+          <Field label="Name">
+            <input value={name} onChange={(e) => setName(e.target.value)} required />
+          </Field>
+        )}
         {c?.auth.fields?.map((f) => (
           <Field key={f.key} label={f.label + (f.required === false ? "" : " *")}>
             <input

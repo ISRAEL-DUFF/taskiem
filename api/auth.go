@@ -105,6 +105,40 @@ type Principal struct {
 
 func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
 
+// businessRoles are the principal's roles that are not built in (a
+// "credit_officer"): each lets its holder decide approvals naming it.
+func (p *Principal) businessRoles() []string {
+	var out []string
+	for _, r := range p.Roles {
+		if _, builtin := rolePermissions[r]; !builtin {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// mayDecide reports whether the principal may decide an approval for role
+// (nil: any approver): with approval.decide, or by holding the business
+// role it names (no-technical-steps N3).
+func (p *Principal) mayDecide(role *string) bool {
+	if p.Can(PermApprovalDecide) {
+		return true
+	}
+	return role != nil && slices.Contains(p.businessRoles(), *role)
+}
+
+// mayDecideAny reports whether the principal may decide some approvals.
+func (p *Principal) mayDecideAny() bool {
+	return p.Can(PermApprovalDecide) || len(p.businessRoles()) > 0
+}
+
+// currentApprovalRole is an approval's current role.
+func currentApprovalRole(ctx context.Context, tx pgx.Tx, run uuid.UUID, step string) (*string, error) {
+	var role *string
+	err := tx.QueryRow(ctx, `SELECT role FROM approvals WHERE run_id = $1 AND step_id = $2`, run, step).Scan(&role)
+	return role, err
+}
+
 // HasRole reports whether the principal holds a membership role (an
 // owner counts for every role, as for approvals).
 func (p *Principal) HasRole(role string) bool {

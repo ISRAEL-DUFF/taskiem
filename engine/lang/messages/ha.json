@@ -132,6 +132,38 @@
       "text": "{name} ba ya samuwa a nan. Harsunan da ke nan: {languages}.",
       "reviewed": false
     },
+    "ready.connection_ambiguous": {
+      "text": "Kuna da haɗin {service} fiye da ɗaya; zaɓi wanda za a yi amfani da shi.",
+      "reviewed": false
+    },
+    "ready.connection_disabled": {
+      "text": "An kashe haɗin {service} ɗinku; kunna shi ko sake haɗa shi.",
+      "reviewed": false
+    },
+    "ready.connection_expired": {
+      "text": "Haɗin {service} ɗinku ya ƙare; sake haɗa shi.",
+      "reviewed": false
+    },
+    "ready.connection_missing": {
+      "text": "Haɗa {service}.",
+      "reviewed": false
+    },
+    "ready.role": {
+      "text": "Babu wanda ke da matsayin {role} tukuna, don haka za a tambayi masu shi; ba wani idan ya kamata su yanke shawara.",
+      "reviewed": false
+    },
+    "ready.secret": {
+      "text": "Ƙara ɓoyayyen ƙimar {name}.",
+      "reviewed": false
+    },
+    "ready.table": {
+      "text": "Yi teburin {name}.",
+      "reviewed": false
+    },
+    "ready.variable": {
+      "text": "Cika {name}.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "an soke",
       "reviewed": false
@@ -502,6 +534,10 @@
     },
     "wa.build.need_details": {
       "text": "Ina buƙatar ƙarin bayanai {count} don kammala shi. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.build.needs": {
+      "text": "Kafin ya fara aiki:",
       "reviewed": false
     },
     "wa.build.not_saved": {
