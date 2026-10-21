@@ -195,7 +195,7 @@ export function Home() {
                       </Link>
                     ))}
                 </div>
-                <Link to="/start" className="hint">
+                <Link to="/start" className="panel-more">
                   See every step
                 </Link>
               </div>

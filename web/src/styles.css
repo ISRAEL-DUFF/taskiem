@@ -94,7 +94,7 @@ table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .brand-name span { font-size: 12px; color: var(--nav-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand-mark {
   width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; flex: none;
-  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+  background: var(--accent); color: var(--accent-text); font-size: 13px; font-weight: 600;
 }
 .nav .section { font-size: 12px; font-weight: 500; color: var(--nav-muted); padding: 16px 10px 6px; }
 .nav a, .nav .nav-toggle {
@@ -109,7 +109,7 @@ table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .nav .nav-toggle svg.chev { width: 14px; height: 14px; margin-left: auto; transition: transform 0.15s; }
 .nav .nav-toggle[aria-expanded="true"] svg.chev { transform: rotate(90deg); }
 .nav .count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--nav-muted); font-variant-numeric: tabular-nums; }
-.nav .count.alert { color: #8a4b0a; background: #fdf1e3; border-radius: 999px; padding: 0 7px; }
+.nav .count.alert { color: color-mix(in srgb, var(--warn) 80%, var(--text)); background: color-mix(in srgb, var(--warn) 13%, var(--panel)); border-radius: 999px; padding: 0 7px; }
 .nav .spacer { flex: 1; min-height: 16px; }
 .nav .who { display: flex; align-items: center; gap: 10px; padding: 10px 8px 4px; border-top: 1px solid var(--border); margin-top: 8px; font-size: 12px; color: var(--nav-muted); }
 .nav .who a { height: auto; padding: 0; color: var(--text); font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -243,7 +243,7 @@ body:has(.login) { background: var(--bg); min-height: 100vh; }
 .login { max-width: 400px; margin: 12vh auto; padding: 32px 32px 28px; border-radius: 16px; box-shadow: var(--shadow-lg); border-color: var(--border); }
 .login::before {
   content: "T"; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; margin-bottom: 20px;
-  background: var(--accent); color: #fff; font-weight: 600; font-size: 17px;
+  background: var(--accent); color: var(--accent-text); font-weight: 600; font-size: 17px;
 }
 .login h1 { font-size: 22px; margin-bottom: 22px; }
 .login button.primary, .login button[type="submit"] { min-height: 40px; width: 100%; }
@@ -324,13 +324,14 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ok); }
 .dot.failed { background: var(--danger); }
 .dot.waiting, .dot.running, .dot.queued { background: var(--info); }
-.pill-count { font-size: 12px; font-weight: 500; color: #8a4b0a; background: #fdf1e3; border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+.pill-count { font-size: 12px; font-weight: 500; color: color-mix(in srgb, var(--warn) 80%, var(--text)); background: color-mix(in srgb, var(--warn) 13%, var(--panel)); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
 .progress { height: 4px; border-radius: 999px; background: var(--code-bg); overflow: hidden; }
 .progress > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .setup-item { display: flex; align-items: center; gap: 10px; color: var(--text); padding: 6px 0; }
 .setup-item:hover { text-decoration: none; }
 .setup-item .ring { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--border-strong); flex: none; }
 .setup-item .go { margin-left: auto; color: var(--muted); }
+.panel-more { display: inline-flex; align-items: center; min-height: 28px; font-size: 13px; color: var(--muted); }
 
 /* Workflows list (pages/Workflows.tsx). */
 .describe-bar { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 8px 0 16px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); margin-bottom: 24px; }
@@ -706,8 +707,8 @@ a.inline-link { text-decoration: underline; text-underline-offset: 2px; }
 .sf-phone { width: 300px; border-radius: 34px; border: 1px solid var(--border-strong); background: var(--panel); padding: 9px; box-shadow: var(--shadow-lg); }
 .sf-screen { border-radius: 26px; overflow: hidden; background: #fbfaf7; color: #0e0f0c; min-height: 480px; }
 .sf-cover { height: 104px; display: flex; align-items: flex-end; padding: 0 16px; }
-.sf-logo { width: 52px; height: 52px; border-radius: 13px; background: #fff; transform: translateY(26px); display: grid; place-items: center; font-size: 21px; font-weight: 600; box-shadow: 0 2px 8px rgba(14, 15, 12, 0.14); overflow: hidden; }
-.sf-logo img { width: 100%; height: 100%; object-fit: cover; }
+.sf-pv-logo { width: 52px; height: 52px; border-radius: 13px; background: #fff; transform: translateY(26px); display: grid; place-items: center; font-size: 21px; font-weight: 600; box-shadow: 0 2px 8px rgba(14, 15, 12, 0.14); overflow: hidden; }
+.sf-pv-logo img { width: 100%; height: 100%; object-fit: cover; }
 .sf-body { padding: 34px 16px 18px; display: flex; flex-direction: column; gap: 8px; }
 .sf-name { font-size: 18px; letter-spacing: -0.01em; }
 .sf-tagline { font-size: 13px; line-height: 1.45; color: #575b55; }

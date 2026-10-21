@@ -14,7 +14,7 @@ export function StorefrontPreview({ form, accents, logoURL, items }: { form: For
       <div className="sf-phone">
         <div className="sf-screen">
           <div className="sf-cover" style={{ background: accent }}>
-            <span className="sf-logo" style={{ color: accent }}>
+            <span className="sf-pv-logo" style={{ color: accent }}>
               {logoURL ? <img src={logoURL} alt="" /> : name.charAt(0).toUpperCase()}
             </span>
           </div>
