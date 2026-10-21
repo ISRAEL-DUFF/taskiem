@@ -87,6 +87,14 @@ func (s *stack) login(t *testing.T, email string) string {
 	return s.must(t, 200, "", "POST", "/v1/auth/login", map[string]any{"email": email, "password": "correct horse battery", "bearer": true})["token"].(string)
 }
 
+// secret stores a prod secret through the API, which readiness checks
+// before a publish, and gives the harness worker the same value.
+func (s *stack) secret(t *testing.T, owner, name, value string) {
+	t.Helper()
+	s.must(t, 204, owner, "PUT", "/v1/secrets/prod/"+name, map[string]any{"value": value})
+	s.Secrets[name] = value
+}
+
 // publishFile creates and publishes a dogfood workflow through the API and
 // returns its id and its trigger URL in prod.
 func (s *stack) publishFile(t *testing.T, owner, file string) (string, string) {
@@ -149,7 +157,7 @@ func TestPayrollaDisbursementEndToEnd(t *testing.T) {
 	s.must(t, 204, owner, "PUT", "/v1/secrets/prod/webhook_wf_payrollaSalaryDisbursement", map[string]any{"value": "payrolla-hook-key"})
 	s.must(t, 204, owner, "PUT", "/v1/variables/prod/payrolla_api_url", map[string]any{"value": payrolla.URL})
 	s.must(t, 204, owner, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "127.0.0.1"})
-	s.Secrets["payrolla_api_token"] = "pr_token"
+	s.secret(t, owner, "payrolla_api_token", "pr_token")
 
 	_, hook := s.publishFile(t, owner, "payrolla-salary-disbursement.wd.json")
 	if !strings.HasPrefix(hook, "/hooks/"+tenant+"/payrolla/payroll-approved") {
@@ -352,7 +360,7 @@ func TestOpsPayoutFailureAlertEndToEnd(t *testing.T) {
 	s.must(t, 201, owner, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "termii@1", "credentials": map[string]string{"api_key": "tm_key", "sender_id": "Holdco"}})
 	s.must(t, 204, owner, "PUT", "/v1/variables/prod/ops_on_call_phone", map[string]any{"value": "2348000000001"})
 	s.must(t, 204, owner, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "127.0.0.1"})
-	s.Secrets["ops_slack_webhook_url"] = slackSrv.URL + "/services/T/B/X"
+	s.secret(t, owner, "ops_slack_webhook_url", slackSrv.URL+"/services/T/B/X")
 	_, hook := s.publishFile(t, owner, "ops-payout-failure-alert.wd.json")
 	if hook != "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?env=prod" {
 		t.Fatalf("hook %q", hook)
@@ -419,8 +427,8 @@ func TestISpendCreditExceptionsEndToEnd(t *testing.T) {
 		"credentials": map[string]string{"api_key": "isw_ispend", "webhook_secret": "whsec_ispend"}})
 	s.must(t, 204, owner, "PUT", "/v1/variables/prod/ispend_api_url", map[string]any{"value": ispend.URL})
 	s.must(t, 204, owner, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "127.0.0.1"})
-	s.Secrets["ispend_api_token"] = "isp_token"
-	s.Secrets["ops_slack_webhook_url"] = slackSrv.URL + "/services/T/B/X"
+	s.secret(t, owner, "ispend_api_token", "isp_token")
+	s.secret(t, owner, "ops_slack_webhook_url", slackSrv.URL+"/services/T/B/X")
 	_, hook := s.publishFile(t, owner, "ispend-credit-exceptions.wd.json")
 	if hook != "/hooks/"+tenant+"/connectors/iswallet@1/credit_event?env=prod" {
 		t.Fatalf("hook %q", hook)
