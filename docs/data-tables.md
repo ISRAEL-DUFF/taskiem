@@ -24,7 +24,7 @@ curl -X POST $TASKIEM/v1/tables -H "Authorization: Bearer $KEY" -H 'Content-Type
   "columns": [
     {"name": "name", "title": "Name", "type": "text", "required": true},
     {"name": "phone", "type": "phone"},
-    {"name": "balance_kobo", "title": "Balance (kobo)", "type": "integer"},
+    {"name": "balance", "title": "Balance (naira)", "type": "number"},
     {"name": "paid", "type": "boolean"}
   ]}'
 ```
@@ -77,7 +77,7 @@ A data table is an ordinary Xenibase table to a workflow: the connector is `xeni
 
 ```json
 {"id": "read_debtors", "type": "connector", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
- "input": {"table": "debtors", "filters": [{"column": "balance_kobo", "op": "gt", "value": 0}], "order": [{"column": "name"}], "limit": 1000}}
+ "input": {"table": "debtors", "filters": [{"column": "balance", "op": "gt", "value": 0}], "order": [{"column": "name"}], "limit": 1000}}
 ```
 
 ```json
@@ -85,7 +85,7 @@ A data table is an ordinary Xenibase table to a workflow: the connector is `xeni
  "needs": ["read_debtors"], "input": {"table": "debtors", "key": "=item.id", "set": {"paid": true}}}
 ```
 
-The template [`debtor-reminder-table`](templates.md) is the weekly debtor reminder over a `debtors` table (`name`, `phone`, `balance_kobo`) instead of a sheet. The AI builder's context lists the organisation's tables with their columns and types (never rows), so a goal such as "remind my customers who owe me" names the table rather than a spreadsheet, and a goal that needs a table that does not exist proposes it, to be made when the draft is saved ([AI](ai.md)); `wdtext` reads such a step as any Xenibase step ("Read rows (data API) (Xenibase)"), since it never prints a step's inputs.
+The template [`debtor-reminder-table`](templates.md) is the weekly debtor reminder over a `debtors` table (`name`, `phone`, `balance` in naira) instead of a sheet. The AI builder's context lists the organisation's tables with their columns and types (never rows), so a goal such as "remind my customers who owe me" names the table rather than a spreadsheet, and a goal that needs a table that does not exist proposes it, to be made when the draft is saved ([AI](ai.md)); `wdtext` reads such a step as any Xenibase step ("Read rows (data API) (Xenibase)"), since it never prints a step's inputs.
 
 ### The row-changed trigger
 

@@ -2,14 +2,14 @@
   "id": "debtor-reminder-table",
   "title": "Weekly SMS reminders from your debtors data table",
   "summary": "Every week, text each customer in your debtors data table who still has a balance, with no spreadsheet.",
-  "description": "Once a week at the day and time you choose, reads your debtors from a data table in Taskiem (columns: name, phone, balance_kobo) and sends each customer with a balance above zero a polite SMS reminder with the amount and how to pay. Customers with nothing owed or no phone number are skipped. At most five messages go out at a time. Make the table under Tables first, or let Taskiem make it when you accept the workflow; no Google Sheet is needed.",
+  "description": "Once a week at the day and time you choose, reads your debtors from a data table in Taskiem (columns: name, phone, balance) and sends each customer with a balance above zero a polite SMS reminder with the amount and how to pay. Customers with nothing owed or no phone number are skipped. At most five messages go out at a time. Make the table under Tables first, or let Taskiem make it when you accept the workflow; no Google Sheet is needed.",
   "category": "collections",
   "tags": ["collections", "debtors", "reminders", "sms", "schedule", "data table"],
   "keywords": ["owe", "owing", "debt", "debtor", "credit", "remind", "reminder", "customer", "outstanding", "unpaid", "balance", "table", "record", "records", "database"],
   "connectors": ["xenibase@1", "notify@1"],
   "params": [
     {"name": "business_name", "type": "string", "title": "Business name", "description": "How your customers know you; it starts every message.", "required": true, "example": "Mama Nkechi Provisions", "max_length": 60},
-    {"name": "table", "type": "string", "title": "Debtors table", "description": "The name of the data table with name, phone and balance_kobo columns.", "required": false, "default": "debtors", "example": "debtors", "pattern": "^[a-z][a-z0-9_]{0,62}$"},
+    {"name": "table", "type": "string", "title": "Debtors table", "description": "Your table with name, phone and balance (naira) columns.", "required": false, "default": "debtors", "example": "debtors", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"},
     {"name": "day", "type": "weekday", "title": "Day", "description": "The day of the week the reminders go out.", "required": true, "default": "friday", "example": "friday"},
     {"name": "send_time", "type": "time", "title": "Time", "description": "The time the reminders go out, Lagos time.", "required": true, "default": "10:00", "example": "10:00"},
     {"name": "payment_details", "type": "string", "title": "How to pay", "description": "Added to each reminder, e.g. your account number and bank.", "required": true, "example": "Pay to 0123456789, GTBank. Thank you!", "max_length": 160}
@@ -25,12 +25,12 @@
       {"id": "settings", "type": "transform", "name": "Use your business name and payment details",
        "config": {"output": {"business_name": "{{business_name}}", "payment_details": "{{payment_details}}"}}},
       {"id": "read_debtors", "type": "connector", "name": "Read the customers who still owe from the data table", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
-       "input": {"table": "{{table}}", "filters": [{"column": "balance_kobo", "op": "gt", "value": 0}], "order": [{"column": "name"}], "limit": 1000}},
+       "input": {"table": "{{table}}", "filters": [{"column": "balance", "op": "gt", "value": 0}], "order": [{"column": "name"}], "limit": 1000}},
       {"id": "remind_each", "type": "foreach", "name": "For each customer who owes", "needs": ["settings", "read_debtors"],
        "config": {"items": "=has(steps.read_debtors.output.rows) ? steps.read_debtors.output.rows : []", "max_concurrency": 5, "max_items": 1000, "steps": [
          {"id": "send_reminder", "type": "connector", "name": "Text the customer a reminder of what they owe", "connector": "notify@1", "action": "text",
-          "when": "=has(item.phone) && item.phone != null && has(item.balance_kobo) && item.balance_kobo != null && double(item.balance_kobo) > 0.0",
-          "input": {"to": "=string(item.phone)", "message": "=steps.settings.output.business_name + ': Hello ' + (has(item.name) && item.name != null ? string(item.name) : 'there') + ', a friendly reminder that NGN ' + string(double(item.balance_kobo) / 100.0) + ' is still outstanding. ' + steps.settings.output.payment_details"}}
+          "when": "=has(item.phone) && item.phone != null && has(item.balance) && item.balance != null && double(item.balance) > 0.0",
+          "input": {"to": "=string(item.phone)", "message": "=steps.settings.output.business_name + ': Hello ' + (has(item.name) && item.name != null ? string(item.name) : 'there') + ', a friendly reminder that NGN ' + string(item.balance) + ' is still outstanding. ' + steps.settings.output.payment_details"}}
        ]}}
     ],
     "settings": {"timeout": "2h"}

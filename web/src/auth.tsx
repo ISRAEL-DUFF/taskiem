@@ -48,6 +48,12 @@ export function useAuth(): Auth {
   return a;
 }
 
+/** Whether the business has Advanced on: the technical parts (expressions,
+ * cron, JSON, a blank canvas, the dev environment) are shown only then. */
+export function useAdvanced(): boolean {
+  return !!useAuth().me?.advanced;
+}
+
 /** Inside a field agent's session in a business, the pages see what the
  * agent may do there rather than what they may do in their own workspace. */
 export function AgentPermissions({ allowed, children }: { allowed: string[]; children: ReactNode }) {

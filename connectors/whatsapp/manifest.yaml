@@ -21,6 +21,7 @@ auth:
     - { key: phone_number_id, label: Business phone number ID (not the phone number) }
     - { key: app_secret, label: App secret (verifies webhook signatures), secret: true, required: false }
     - { key: verify_token, label: Verify token (any string; enter the same in the App Dashboard), secret: true, required: false }
+    - { key: business_account_id, label: WhatsApp Business Account ID (to choose your message templates by name), required: false }
   test: { action: get_phone_number }
 # Meta: 80 messages a second per business phone number by default.
 rate_limit: { requests: 80, per: 1s, scope: connection }
@@ -39,6 +40,24 @@ actions:
         verified_name:            { type: string }
         quality_rating:           { type: string }
         code_verification_status: { type: string }
+  list_templates:
+    title: List approved message templates
+    description: The business's approved message templates with their language and words, to choose one by what it says. Needs the WhatsApp Business Account ID on the connection.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        templates:
+          type: array
+          items:
+            type: object
+            properties:
+              name:      { type: string }
+              language:  { type: string }
+              category:  { type: string }
+              body:      { type: string, description: "The body's words, with {{1}}, {{2}} where the values go" }
+              variables: { type: integer, description: How many values the body takes }
   send_text:
     title: Send a text message
     description: >-

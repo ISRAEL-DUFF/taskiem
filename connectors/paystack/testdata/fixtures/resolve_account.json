@@ -1,0 +1,2 @@
+{"request":{"method":"GET","path":"/bank/resolve","query":{"account_number":"0123456789","bank_code":"058"},"headers":{"Authorization":"Bearer sk_test_xyz"}},
+ "response":{"status":200,"body":{"status":true,"message":"Account number resolved","data":{"account_number":"0123456789","account_name":"BOLA ADE","bank_id":9}}}}

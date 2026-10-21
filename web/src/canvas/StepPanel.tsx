@@ -10,6 +10,10 @@ import type { FormStepConfig } from "../lib/forms";
 import { SchemaForm } from "../forms/SchemaForm";
 import { merge } from "../lib/schema";
 import { Field, JsonInput } from "../ui";
+import { useAdvanced } from "../auth";
+import { isExpression } from "../lib/schema";
+import type { Source } from "../lib/plaincanvas";
+import { DurationPicker, RulesBuilder, ValuePicker } from "./PlainPickers";
 
 const ID = /^[a-z][a-z0-9_]{0,62}$/;
 
@@ -22,6 +26,27 @@ interface Props {
   onDelete: () => void;
   /** The validator's problems with this step, at paths relative to it (/config/...). */
   problems?: Problem[];
+  /** The values this step can use from what came before (no-technical-steps N8). */
+  sources?: Source[];
+  /** Step names by id, for "Runs after". */
+  names?: Record<string, string>;
+}
+
+/** What an owner reads where a step's technical settings would be. */
+function ByHand() {
+  return <p className="hint">This part was set up by hand. Turn on Advanced in Settings to change it.</p>;
+}
+
+/** A flat object of fixed values (a transform's output, an approval's subject), editable without JSON. */
+function flatValues(v: unknown): Record<string, string | number | boolean> | null {
+  if (v === undefined || v === null) return {};
+  if (typeof v !== "object" || Array.isArray(v)) return null;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, x] of Object.entries(v as Any)) {
+    if (typeof x === "string" || typeof x === "number" || typeof x === "boolean") out[k] = x;
+    else return null;
+  }
+  return out;
 }
 
 type Any = Record<string, unknown>;
@@ -30,7 +55,8 @@ type Any = Record<string, unknown>;
 const JS_TEMPLATE = "export default (input: Record<string, unknown>) => {\n  return { ok: true };\n};\n";
 const PYTHON_TEMPLATE = "def main(input, host):\n    return {\"ok\": True}\n";
 
-export function StepPanel({ step, others, connectors, onChange, onRename, onDelete, problems = [] }: Props) {
+export function StepPanel({ step, others, connectors, onChange, onRename, onDelete, problems = [], sources = [], names = {} }: Props) {
+  const advanced = useAdvanced();
   const [id, setId] = useState(step.id);
   const [idError, setIdError] = useState("");
   const set = (patch: Any) => onChange(merge(step, patch));
@@ -46,6 +72,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           Delete
         </button>
       </div>
+      {advanced && (
       <Field label="ID" hint={idError || "Lower-case letters, digits and _. Expressions refer to steps.<id>."}>
         <input
           className="mono"
@@ -59,6 +86,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           }}
         />
       </Field>
+      )}
       <Field label="Name">
         <input value={step.name ?? ""} onChange={(e) => set({ name: e.target.value })} />
       </Field>
@@ -75,19 +103,26 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
                     set({ needs: needs.length ? needs : undefined });
                   }}
                 />
-                {o}
+                {names[o] || o.replace(/_/g, " ")}
               </label>
             ))}
           </div>
         </Field>
       )}
-      <Field label="Run only when" hint="An expression, e.g. =steps.approve.output.decision == 'approved'">
-        <input className="mono" value={step.when ?? ""} placeholder="=" onChange={(e) => set({ when: e.target.value })} />
-      </Field>
+      {advanced ? (
+        <Field label="Run only when" hint="An expression, e.g. =steps.approve.output.decision == 'approved'">
+          <input className="mono" value={step.when ?? ""} placeholder="=" onChange={(e) => set({ when: e.target.value })} />
+        </Field>
+      ) : (
+        <Field label="Run only when">
+          <RulesBuilder sources={sources} value={step.when ?? ""} onChange={(when) => set({ when: when || undefined })} />
+        </Field>
+      )}
 
       <h3>Configuration</h3>
-      {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} />}
-      {step.type === "http" && (
+      {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
+      {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel"].includes(step.type) && <ByHand />}
+      {advanced && step.type === "http" && (
         <>
           <div className="row">
             <Field label="Method">
@@ -120,7 +155,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           </Field>
         </>
       )}
-      {step.type === "code" && (
+      {advanced && step.type === "code" && (
         <>
           <Field label="Language">
             <select
@@ -152,12 +187,18 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           </Field>
         </>
       )}
-      {step.type === "transform" && (
+      {step.type === "transform" && advanced && (
         <Field label="Output (JSON; values may be expressions)">
           <JsonInput value={cfg.output} onChange={(v) => setCfg({ output: v === undefined ? null : v })} rows={8} />
         </Field>
       )}
-      {step.type === "wait" && (
+      {step.type === "transform" && !advanced && <FixedValues value={cfg.output} onChange={(output) => setCfg({ output })} />}
+      {step.type === "wait" && !advanced && (
+        <Field label="Wait for">
+          {cfg.until !== undefined ? <ByHand /> : <DurationPicker label="Wait for" value={String(cfg.duration ?? "1h")} onChange={(duration) => set({ config: { duration } })} />}
+        </Field>
+      )}
+      {step.type === "wait" && advanced && (
         <div className="row">
           <Field label="Duration" hint="e.g. 30m, 2h, 1d">
             <input value={String(cfg.duration ?? "")} onChange={(e) => set({ config: e.target.value ? { duration: e.target.value } : { until: cfg.until ?? "=" } })} />
@@ -167,7 +208,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           </Field>
         </div>
       )}
-      {step.type === "signal" && (
+      {advanced && step.type === "signal" && (
         <>
           <Field label="Event" hint="Connector events are <connector>:<trigger>, e.g. paystack@1:transfer_event">
             <input className="mono" value={String(cfg.event ?? "")} onChange={(e) => setCfg({ event: e.target.value })} />
@@ -190,33 +231,41 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
               <input type="number" min={1} value={Number(cfg.count ?? 1)} onChange={(e) => setCfg({ count: Number(e.target.value) > 1 ? Number(e.target.value) : undefined })} />
             </Field>
           </div>
-          <div className="row">
-            <Field label="Timeout">
-              <input value={String(cfg.timeout ?? "")} onChange={(e) => setCfg({ timeout: e.target.value })} />
-            </Field>
-            <Field label="On timeout">
-              <input value={String(cfg.on_timeout ?? "")} placeholder="reject | fail | escalate:<role>" onChange={(e) => setCfg({ on_timeout: e.target.value })} />
-            </Field>
-          </div>
-          <Field label="Subject shown to approvers (JSON; values may be expressions)">
-            <JsonInput value={cfg.subject} onChange={(v) => setCfg({ subject: v })} rows={5} />
-          </Field>
+          {advanced ? (
+            <>
+              <div className="row">
+                <Field label="Timeout">
+                  <input value={String(cfg.timeout ?? "")} onChange={(e) => setCfg({ timeout: e.target.value })} />
+                </Field>
+                <Field label="On timeout">
+                  <input value={String(cfg.on_timeout ?? "")} placeholder="reject | fail | escalate:<role>" onChange={(e) => setCfg({ on_timeout: e.target.value })} />
+                </Field>
+              </div>
+              <Field label="Subject shown to approvers (JSON; values may be expressions)">
+                <JsonInput value={cfg.subject} onChange={(v) => setCfg({ subject: v })} rows={5} />
+              </Field>
+            </>
+          ) : (
+            <ApprovalPlain cfg={cfg} setCfg={setCfg} sources={sources} />
+          )}
         </>
       )}
       {step.type === "form" && (
         <FormStepEditor
+          advanced={advanced}
+          sources={sources}
           cfg={cfg as FormStepConfig}
           onChange={(c) => set({ config: c })}
           problems={problems.filter((p) => p.path.startsWith("/config")).map((p) => ({ ...p, path: p.path.slice("/config".length) }))}
         />
       )}
-      {(step.type === "branch" || step.type === "foreach" || step.type === "parallel") && (
+      {advanced && (step.type === "branch" || step.type === "foreach" || step.type === "parallel") && (
         <Field label="Configuration (JSON)" hint="Nested steps are edited here.">
           <JsonInput value={cfg} onChange={(v) => v && set({ config: v })} rows={14} />
         </Field>
       )}
 
-      {(step.type === "connector" || step.type === "http" || step.type === "code") && (
+      {advanced && (step.type === "connector" || step.type === "http" || step.type === "code") && (
         <>
           <h3>Retries</h3>
           <div className="row">
@@ -234,18 +283,118 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           </div>
         </>
       )}
-      <Field label="Step timeout">
-        <input value={step.timeout ?? ""} placeholder="e.g. 30s" onChange={(e) => set({ timeout: e.target.value })} />
-      </Field>
-      <details>
-        <summary>Edit this step as JSON</summary>
-        <JsonInput value={step} onChange={(v) => v && typeof v === "object" && onChange(v as Step)} rows={14} />
-      </details>
+      {advanced && (
+        <>
+          <Field label="Step timeout">
+            <input value={step.timeout ?? ""} placeholder="e.g. 30s" onChange={(e) => set({ timeout: e.target.value })} />
+          </Field>
+          <details>
+            <summary>Edit this step as JSON</summary>
+            <JsonInput value={step} onChange={(v) => v && typeof v === "object" && onChange(v as Step)} rows={14} />
+          </details>
+        </>
+      )}
     </div>
   );
 }
 
-function ConnectorConfig({ step, connectors, set }: { step: Extract<Step, { type: "connector" }>; connectors: ConnectorInfo[]; set: (p: Any) => void }) {
+/** Named fixed values, each typed (a transform's settings). */
+function FixedValues({ value, onChange }: { value: unknown; onChange: (v: Any) => void }) {
+  const flat = flatValues(value);
+  if (!flat || Object.values(flat).some((v) => isExpression(v))) return <ByHand />;
+  return (
+    <>
+      {Object.entries(flat).map(([k, v]) => (
+        <Field key={k} label={k.replace(/_/g, " ")}>
+          <input
+            value={String(v)}
+            onChange={(e) => onChange({ ...flat, [k]: typeof v === "number" && e.target.value.trim() !== "" && !Number.isNaN(Number(e.target.value)) ? Number(e.target.value) : e.target.value })}
+          />
+        </Field>
+      ))}
+    </>
+  );
+}
+
+const ON_TIMEOUT: [string, string][] = [
+  ["reject", "Count it as rejected"],
+  ["fail", "Stop the workflow"],
+  ["escalate", "Ask someone else"],
+];
+
+/** An approval's time limit, what happens then, and what approvers see, without JSON. */
+function ApprovalPlain({ cfg, setCfg, sources }: { cfg: Any; setCfg: (p: Any) => void; sources: Source[] }) {
+  const onTimeout = String(cfg.on_timeout ?? "");
+  const escalate = onTimeout.startsWith("escalate:");
+  const subject = (cfg.subject ?? {}) as Any;
+  const plainSubject = typeof subject === "object" && !Array.isArray(subject) && Object.values(subject).every((v) => typeof v !== "object" || v === null);
+  return (
+    <>
+      <div className="row">
+        <Field label="Time to decide">
+          <DurationPicker label="Time to decide" allowNone value={String(cfg.timeout ?? "")} onChange={(timeout) => setCfg({ timeout: timeout || undefined })} />
+        </Field>
+        <Field label="If nobody decides in time">
+          <select value={escalate ? "escalate" : onTimeout || "reject"} onChange={(e) => setCfg({ on_timeout: e.target.value === "escalate" ? "escalate:owner" : e.target.value === "reject" ? undefined : e.target.value })}>
+            {ON_TIMEOUT.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {escalate && (
+          <Field label="Ask">
+            <RolePicker label="Ask" value={onTimeout.slice("escalate:".length)} onChange={(role) => setCfg({ on_timeout: `escalate:${role}` })} />
+          </Field>
+        )}
+      </div>
+      <Field label="What the approver sees">
+        {plainSubject ? (
+          <div>
+            {Object.entries(subject).map(([k, v]) => (
+              <span key={k} className="toolbar" style={{ marginBottom: 4 }}>
+                <span>{k.replace(/_/g, " ")}:</span>
+                {isExpression(v) ? (
+                  <ValuePicker label={k} sources={sources} value={String(v)} onChange={(x) => setCfg({ subject: { ...subject, [k]: x } })} />
+                ) : (
+                  <input aria-label={k} value={String(v ?? "")} onChange={(e) => setCfg({ subject: { ...subject, [k]: e.target.value } })} />
+                )}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    const next = Object.fromEntries(Object.entries(subject).filter(([x]) => x !== k));
+                    setCfg({ subject: Object.keys(next).length ? next : undefined });
+                  }}
+                >
+                  Remove
+                </button>
+              </span>
+            ))}
+            {sources.length > 0 && (
+              <ValuePicker
+                label="Show another detail"
+                sources={sources.filter((s) => !Object.values(subject).includes(s.expr))}
+                value=""
+                onChange={(x) => {
+                  const src = sources.find((s) => s.expr === x);
+                  if (!src) return;
+                  const key = (src.label.split(": ").pop() ?? "detail").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "detail";
+                  setCfg({ subject: { ...subject, [key]: x } });
+                }}
+              />
+            )}
+          </div>
+        ) : (
+          <ByHand />
+        )}
+      </Field>
+    </>
+  );
+}
+
+function ConnectorConfig({ step, connectors, set, advanced, sources }: { step: Extract<Step, { type: "connector" }>; connectors: ConnectorInfo[]; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {
   const conn = connectors.find((c) => c.ref === step.connector);
   const action = conn?.actions[step.action];
   return (
@@ -256,7 +405,7 @@ function ConnectorConfig({ step, connectors, set }: { step: Extract<Step, { type
             {!conn && <option value={step.connector}>{step.connector} (not available)</option>}
             {connectors.map((c) => (
               <option key={c.ref} value={c.ref}>
-                {c.name} ({c.ref})
+                {advanced ? `${c.name} (${c.ref})` : c.name}
               </option>
             ))}
           </select>
@@ -272,13 +421,13 @@ function ConnectorConfig({ step, connectors, set }: { step: Extract<Step, { type
           </select>
         </Field>
       </div>
-      {action && <div className="hint" style={{ marginBottom: 8 }}>Class: {action.class.replaceAll("_", " ")}</div>}
+      {advanced && action && <div className="hint" style={{ marginBottom: 8 }}>Class: {action.class.replaceAll("_", " ")}</div>}
       <Field label="Connection" hint="Which of your connections to this service it uses">
         <ConnectionPicker connector={step.connector ?? ""} value={step.connection ?? ""} onChange={(connection) => set({ connection: connection || undefined })} />
       </Field>
       <h3>Input</h3>
-      <SchemaForm schema={action?.input} value={step.input} onChange={(v) => set({ input: v })} />
-      {action && action.class !== "read" && (
+      <SchemaForm schema={action?.input} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
+      {advanced && action && action.class !== "read" && (
         <Field label="Idempotency seed" hint="Optional expression replacing the run id in the idempotency key, e.g. =trigger.body.payroll_id + ':' + item.employee_id">
           <input className="mono" value={step.effect?.idempotency_seed ?? ""} onChange={(e) => set({ effect: e.target.value ? { idempotency_seed: e.target.value } : undefined })} />
         </Field>

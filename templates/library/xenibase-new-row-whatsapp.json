@@ -8,11 +8,11 @@
   "keywords": ["xenibase"],
   "connectors": ["xenibase@1", "whatsapp@1"],
   "params": [
-    {"name": "table", "type": "string", "title": "Table", "description": "The table to watch, as schema.table or table (in public).", "required": true, "default": "orders", "example": "orders", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$"},
-    {"name": "phone_column", "type": "string", "title": "Phone column", "description": "The column holding the number to message, with + and country code.", "required": true, "default": "phone", "example": "phone", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"},
-    {"name": "name_column", "type": "string", "title": "Name column", "description": "The column whose value fills the template's first body variable.", "required": false, "default": "customer", "example": "customer", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"},
-    {"name": "template_name", "type": "string", "title": "WhatsApp template", "description": "Your approved template, with one body variable for the name.", "required": true, "default": "new_order", "example": "new_order", "pattern": "^[a-z0-9_]{1,512}$"},
-    {"name": "language", "type": "string", "title": "Template language", "description": "The template's language code.", "required": false, "default": "en", "example": "en", "pattern": "^[a-z]{2}(_[A-Z]{2})?$"},
+    {"name": "table", "type": "string", "title": "Table", "description": "The table to watch.", "required": true, "default": "orders", "example": "orders", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$", "picker": "table"},
+    {"name": "phone_column", "type": "string", "title": "Phone column", "description": "The column holding the number to message.", "required": true, "default": "phone", "example": "phone", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$", "picker": "column", "from": "table"},
+    {"name": "name_column", "type": "string", "title": "Name column", "description": "The column with the person's name.", "required": false, "default": "customer", "example": "customer", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$", "picker": "column", "from": "table"},
+    {"name": "template_name", "type": "string", "title": "WhatsApp template", "description": "Your approved template, chosen by what it says. Its words take the person's name.", "required": true, "default": "new_order", "example": "new_order", "pattern": "^[a-z0-9_]{1,512}$", "picker": "whatsapp_template"},
+    {"name": "language", "type": "string", "title": "Template language", "description": "Filled in when you choose the template.", "required": false, "default": "en", "example": "en", "pattern": "^[a-z]{2}(_[A-Z]{2})?$", "picker": "whatsapp_language", "from": "template_name"},
     {"name": "xenibase_connection", "type": "connection", "connector": "xenibase", "title": "Xenibase connection", "description": "The Xenibase connection (an API token restricted to the project) whose table is watched.", "required": false, "default": "main", "example": "main"},
     {"name": "whatsapp_connection", "type": "connection", "connector": "whatsapp", "title": "WhatsApp connection", "description": "The name of your WhatsApp Business connection.", "required": false, "default": "main", "example": "main"}
   ],

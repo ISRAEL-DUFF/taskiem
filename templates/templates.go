@@ -66,6 +66,13 @@ type Param struct {
 	// Connector, for a connection parameter: the connector it names a
 	// connection of.
 	Connector string `json:"connector,omitempty"`
+	// Picker is how a person chooses the value instead of typing an id
+	// (no-technical-steps N8): sheet, sheet_tab, table, column, role,
+	// whatsapp_template or whatsapp_language. From names the parameter it
+	// depends on: a tab's spreadsheet, a column's table, a language's
+	// template.
+	Picker string `json:"picker,omitempty"`
+	From   string `json:"from,omitempty"`
 
 	re *regexp.Regexp
 }
@@ -128,6 +135,10 @@ var IDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 
 var paramName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
+// pickers are the choosers a parameter may name, with whether it needs
+// From.
+var pickers = map[string]bool{"sheet": false, "sheet_tab": true, "table": false, "column": true, "role": false, "whatsapp_template": false, "whatsapp_language": true}
+
 var paramTypes = map[string]bool{"string": true, "text": true, "integer": true, "number": true, "boolean": true, "time": true, "weekday": true, "connection": true}
 
 // Load reads every library/*.json file of fsys.
@@ -186,6 +197,9 @@ func (t *Template) check() error {
 		if p.Title == "" || p.Description == "" {
 			return fmt.Errorf("parameter %q: title and description are required", p.Name)
 		}
+		if needsFrom, ok := pickers[p.Picker]; p.Picker != "" && (!ok || needsFrom != (p.From != "")) {
+			return fmt.Errorf("parameter %q: picker %q (from %q) is not one Taskiem has", p.Name, p.Picker, p.From)
+		}
 		if p.Pattern != "" {
 			re, err := regexp.Compile(p.Pattern)
 			if err != nil {
@@ -203,6 +217,11 @@ func (t *Template) check() error {
 			if _, err := p.Coerce(p.Default); err != nil {
 				return fmt.Errorf("parameter %q: default: %w", p.Name, err)
 			}
+		}
+	}
+	for _, p := range t.Params {
+		if p.From != "" && !seen[p.From] {
+			return fmt.Errorf("parameter %q: from %q is not a parameter", p.Name, p.From)
 		}
 	}
 	used := map[string]bool{}
@@ -258,6 +277,12 @@ var weekdayNames = map[string]int{"sunday": 0, "sun": 0, "monday": 1, "mon": 1, 
 
 var connName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 
+// sheetLink finds a spreadsheet id in a Google Sheets link.
+var sheetLink = regexp.MustCompile(`/spreadsheets/d/([A-Za-z0-9_-]{20,})`)
+
+// plainTab is a tab name a range may use without quotes.
+var plainTab = regexp.MustCompile(`^[A-Za-z0-9_]+$|^'.*'$`)
+
 // Coerce checks a value against the parameter and returns it in its
 // canonical form: numbers as float64 or int64, a weekday as its lower-case
 // English name, a time as HH:MM. Text a person typed (WhatsApp, a form)
@@ -268,6 +293,17 @@ func (p *Param) Coerce(v any) (any, error) {
 		if strings.HasPrefix(v.(string), "=") {
 			return nil, errors.New("a value cannot start with '='")
 		}
+	}
+	// A spreadsheet is given by its link as often as by its id
+	// (no-technical-steps N8): the id is taken from the link.
+	if s, ok := v.(string); ok && (p.Name == "spreadsheet_id" || strings.HasSuffix(p.Name, "_spreadsheet_id")) {
+		if m := sheetLink.FindStringSubmatch(s); m != nil {
+			v = m[1]
+		}
+	}
+	// A tab is chosen by its name; the whole tab is the range.
+	if s, ok := v.(string); ok && p.Picker == "sheet_tab" && s != "" && !strings.Contains(s, "!") && !plainTab.MatchString(s) {
+		v = "'" + strings.ReplaceAll(s, "'", "''") + "'"
 	}
 	switch p.Type {
 	case "string", "text":

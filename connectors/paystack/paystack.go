@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -33,6 +34,9 @@ func New(o Options) *connector.Connector {
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"check_balance":          connector.ActionFunc(c.checkBalance),
 		"list_transactions":      connector.ActionFunc(c.listSince("/transaction", "success")),
+		"list_banks":             connector.ActionFunc(c.listBanks),
+		"resolve_account":        connector.ActionFunc(c.resolveAccount),
+		"create_recipient":       connector.ActionFunc(c.createRecipient),
 		"list_transfers":         connector.ActionFunc(c.listSince("/transfer", "")),
 		"transfer":               connector.ActionFunc(c.transfer),
 		"verify_transfer":        connector.ActionFunc(c.verifyTransfer),
@@ -283,4 +287,132 @@ func orDefault(v any, d string) any {
 		return s
 	}
 	return d
+}
+
+// listBanks lists Nigerian banks by name and code (GET /bank).
+func (c *client) listBanks(ctx context.Context, req connector.Request) (connector.Response, error) {
+	var env struct {
+		Data []struct {
+			Name string `json:"name"`
+			Code string `json:"code"`
+		} `json:"data"`
+	}
+	if err := c.do(ctx, req, http.MethodGet, "/bank?country=nigeria&perPage=200", nil, &env); err != nil {
+		return connector.Response{}, err
+	}
+	banks := make([]any, 0, len(env.Data))
+	for _, b := range env.Data {
+		banks = append(banks, map[string]any{"name": b.Name, "code": b.Code})
+	}
+	return connector.Response{Output: map[string]any{"banks": banks}}, nil
+}
+
+var accountNumber = regexp.MustCompile(`^\d{10}$`)
+
+// resolveAccount reads the name on an account (GET /bank/resolve).
+func (c *client) resolveAccount(ctx context.Context, req connector.Request) (connector.Response, error) {
+	acct, _ := req.Input["account_number"].(string)
+	bank, _ := req.Input["bank_code"].(string)
+	if !accountNumber.MatchString(acct) || bank == "" {
+		return connector.Response{}, fmt.Errorf("paystack: an account number is 10 digits, with its bank: %w", effects.ErrFatal)
+	}
+	var env struct {
+		Data struct {
+			AccountName   string `json:"account_name"`
+			AccountNumber string `json:"account_number"`
+		} `json:"data"`
+	}
+	if err := c.do(ctx, req, http.MethodGet, "/bank/resolve?account_number="+url.QueryEscape(acct)+"&bank_code="+url.QueryEscape(bank), nil, &env); err != nil {
+		return connector.Response{}, err
+	}
+	return connector.Response{Output: map[string]any{"account_name": env.Data.AccountName, "account_number": env.Data.AccountNumber}}, nil
+}
+
+// createRecipient saves a NUBAN transfer recipient (POST /transferrecipient);
+// Paystack answers the existing recipient for an account saved before.
+func (c *client) createRecipient(ctx context.Context, req connector.Request) (connector.Response, error) {
+	acct, _ := req.Input["account_number"].(string)
+	bank, _ := req.Input["bank_code"].(string)
+	name, _ := req.Input["name"].(string)
+	acct = strings.TrimSpace(acct)
+	if bank == "" {
+		// A bank by its name, as a staff sheet has it.
+		bankName, _ := req.Input["bank"].(string)
+		code, err := c.bankCode(ctx, req, bankName)
+		if err != nil {
+			return connector.Response{}, err
+		}
+		bank = code
+	}
+	if !accountNumber.MatchString(acct) || bank == "" || strings.TrimSpace(name) == "" {
+		return connector.Response{}, fmt.Errorf("paystack: a recipient needs a 10-digit account number, its bank and its name: %w", effects.ErrFatal)
+	}
+	var env struct {
+		Data struct {
+			RecipientCode string `json:"recipient_code"`
+			Name          string `json:"name"`
+		} `json:"data"`
+	}
+	body := map[string]any{"type": "nuban", "name": name, "account_number": acct, "bank_code": bank, "currency": "NGN"}
+	if err := c.do(ctx, req, http.MethodPost, "/transferrecipient", body, &env); err != nil {
+		return connector.Response{}, err
+	}
+	return connector.Response{Output: map[string]any{"recipient_code": env.Data.RecipientCode, "name": env.Data.Name}}, nil
+}
+
+// bankCode finds a bank's code by the name people write: the same name,
+// or the only bank whose name starts with or contains it ("GTBank",
+// "first bank", "opay").
+func (c *client) bankCode(ctx context.Context, req connector.Request, name string) (string, error) {
+	want := BankKey(name)
+	if want == "" {
+		return "", fmt.Errorf("paystack: a recipient needs its bank: %w", effects.ErrFatal)
+	}
+	resp, err := c.listBanks(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	banks, _ := resp.Output.(map[string]any)["banks"].([]any)
+	var prefix, contains []string
+	for _, b := range banks {
+		m, _ := b.(map[string]any)
+		n, _ := m["name"].(string)
+		code, _ := m["code"].(string)
+		k := BankKey(n)
+		switch {
+		case k == want:
+			return code, nil
+		case strings.HasPrefix(k, want):
+			prefix = append(prefix, code)
+		case strings.Contains(k, want):
+			contains = append(contains, code)
+		}
+	}
+	if len(prefix) == 1 {
+		return prefix[0], nil
+	}
+	if len(prefix) == 0 && len(contains) == 1 {
+		return contains[0], nil
+	}
+	return "", fmt.Errorf("paystack: no single bank is called %q; write its full name: %w", name, effects.ErrFatal)
+}
+
+var bankAliases = map[string]string{"gtbank": "guaranty trust", "gtb": "guaranty trust", "uba": "united for africa", "fcmb": "first city monument",
+	"firstbank": "first", "stanbic": "stanbic ibtc", "fidelity": "fidelity", "zenith": "zenith", "access": "access", "opay": "opay", "palmpay": "palmpay",
+	"kuda": "kuda", "moniepoint": "moniepoint", "wema": "wema", "sterling": "sterling", "union": "union", "polaris": "polaris", "ecobank": "ecobank"}
+
+var bankNoise = regexp.MustCompile(`\b(bank|plc|limited|ltd|nigeria|of|mfb|microfinance)\b|[^a-z0-9 ]`)
+
+// BankKey is a bank's name for matching: lower case, without "bank",
+// "plc" and the like, with the common short names spelt out.
+func BankKey(name string) string {
+	k := strings.ToLower(strings.TrimSpace(name))
+	if a, ok := bankAliases[strings.ReplaceAll(strings.ReplaceAll(k, " ", ""), "bank", "")]; ok {
+		return a
+	}
+	if a, ok := bankAliases[strings.ReplaceAll(k, " ", "")]; ok {
+		return a
+	}
+	k = bankNoise.ReplaceAllString(k, " ")
+	return strings.Join(strings.Fields(k), " ")
 }

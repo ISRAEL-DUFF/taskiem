@@ -76,6 +76,7 @@ Every file is scanned for malware before the submission is accepted. The scanner
 
 ## In the web app
 
+- **New form** on the Forms page (`workflow.edit`) makes a form and the workflow behind it: its title, a starter question or two, and what happens with each answer (Tell me on WhatsApp or by email, or just keep them). The editor opens on its questions; publishing it gives its link.
 - **Forms** lists every form: its workflow and environment, link, status and submissions this week; pause, reopen or close it, set opening and closing times or a maximum number of submissions, and make one-time links for link forms (`form.links`, owners and admins).
 - **Submissions** are masked like runs; `pii.reveal` shows them (audited), and file downloads are audited.
 - **Members forms** and **form steps for a role** open in the app.

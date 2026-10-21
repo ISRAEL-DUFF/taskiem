@@ -50,6 +50,14 @@ const OWNER_FILES = [
   "forms/RolePicker.tsx",
   "forms/SheetChooser.tsx",
   "forms/ProblemLine.tsx",
+  "forms/Pickers.tsx",
+  "forms/RecipientField.tsx",
+  "canvas/PlainPickers.tsx",
+  "canvas/StepPanel.tsx",
+  "canvas/FormEditor.tsx",
+  "pages/Editor.tsx",
+  "pages/Workflows.tsx",
+  "pages/Forms.tsx",
 ];
 
 const SHOWN_ATTRS = new Set(["label", "hint", "placeholder", "title", "aria-label", "description"]);
@@ -65,6 +73,18 @@ export function shownText(file: string, src: string): string[] {
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const out: string[] = [];
   const visit = (n: ts.Node, hidden: boolean) => {
+    // What only Advanced shows: `advanced && …`, and `advanced ? … : …`'s first branch.
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && n.left.getText().split("&&").some((c) => c.trim() === "advanced")) {
+      visit(n.left, hidden);
+      visit(n.right, true);
+      return;
+    }
+    if (ts.isConditionalExpression(n) && /^!?advanced$/.test(n.condition.getText().trim())) {
+      const neg = n.condition.getText().trim().startsWith("!");
+      visit(n.whenTrue, hidden || !neg);
+      visit(n.whenFalse, hidden || neg);
+      return;
+    }
     if (ts.isJsxElement(n) && technical(n.openingElement)) hidden = true;
     if (ts.isJsxSelfClosingElement(n) && technical(n)) hidden = true;
     if (!hidden) {

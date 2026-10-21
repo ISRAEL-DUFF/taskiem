@@ -9,8 +9,8 @@
   "connectors": ["googlesheets@1", "notify@1"],
   "params": [
     {"name": "business_name", "type": "string", "title": "Business name", "description": "How your customers know you; it starts every message.", "required": true, "example": "Mama Nkechi Provisions", "max_length": 60},
-    {"name": "spreadsheet_id", "type": "string", "title": "Debtors spreadsheet", "description": "The spreadsheet's id, from its link (the long part between /d/ and /edit).", "required": true, "example": "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789", "pattern": "^[A-Za-z0-9_-]{20,100}$"},
-    {"name": "sheet_range", "type": "string", "title": "Sheet and columns", "description": "Where the list is, with a header row of name, phone and amount_owed.", "required": false, "default": "Debtors!A:C", "example": "Debtors!A:C"},
+    {"name": "spreadsheet_id", "type": "string", "title": "Debtors spreadsheet", "description": "Paste the sheet's link from your browser.", "required": true, "example": "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789", "pattern": "^[A-Za-z0-9_-]{20,100}$", "picker": "sheet"},
+    {"name": "sheet_range", "type": "string", "title": "Tab", "description": "The tab with the list. Its first row names the columns: name, phone and amount_owed.", "required": false, "default": "Debtors", "example": "Debtors", "picker": "sheet_tab", "from": "spreadsheet_id"},
     {"name": "day", "type": "weekday", "title": "Day", "description": "The day of the week the reminders go out.", "required": true, "default": "friday", "example": "friday"},
     {"name": "send_time", "type": "time", "title": "Time", "description": "The time the reminders go out, Lagos time.", "required": true, "default": "10:00", "example": "10:00"},
     {"name": "payment_details", "type": "string", "title": "How to pay", "description": "Added to each reminder, e.g. your account number and bank.", "required": true, "example": "Pay to 0123456789, GTBank. Thank you!", "max_length": 160},
