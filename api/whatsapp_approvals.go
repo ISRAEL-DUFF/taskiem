@@ -121,14 +121,16 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 		rows, err := tx.Query(ctx, `WITH open AS (
 			  SELECT a.run_id, a.step_id, a.level, a.role,
 			         COALESCE((a.constraints->>'forbid_self_approval')::boolean, true) AS forbid_self,
-			         COALESCE((a.constraints->>'distinct_approvers')::boolean, true) AS distinct_ap
+			         COALESCE((a.constraints->>'distinct_approvers')::boolean, true) AS distinct_ap,
+			         COALESCE((a.constraints->>'forbid_sole_approver')::boolean, false) AS forbid_sole
 			    FROM approvals a WHERE a.status = 'open' AND a.requested_at > now() - interval '7 days'),
 			cand AS (
-			  SELECT o.run_id, o.step_id, o.level, o.forbid_self, o.distinct_ap, m.user_id FROM open o JOIN memberships m ON o.role IS NULL OR m.role = o.role
+			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, m.user_id FROM open o
+			    JOIN memberships m ON o.role IS NULL OR m.role IN (o.role, 'owner')
 			  UNION
-			  SELECT o.run_id, o.step_id, o.level, o.forbid_self, o.distinct_ap, g.to_user FROM open o JOIN delegations g ON o.role = ANY (g.roles)
+			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, g.to_user FROM open o JOIN delegations g ON o.role = ANY (g.roles)
 			     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
-			     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = o.role))
+			     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (o.role, 'owner')))
 			SELECT DISTINCT c.run_id, c.step_id, c.level, c.user_id FROM cand c
 			  JOIN runs r ON r.id = c.run_id JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
 			 WHERE NOT EXISTS (SELECT 1 FROM whatsapp_notices n WHERE n.run_id = c.run_id AND n.step_id = c.step_id AND n.level = c.level AND n.user_id = c.user_id
@@ -136,7 +138,8 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			   AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = c.run_id AND d.step_id = c.step_id
 			                     AND (d.level = c.level OR c.distinct_ap) AND (d.user_id = c.user_id OR d.on_behalf_of = c.user_id))
 			   AND NOT (c.forbid_self AND c.user_id::text IN (COALESCE(taskiem_actor_human(r.started_by), ''),
-			                COALESCE(taskiem_actor_human(wv.created_by), ''), COALESCE(taskiem_actor_human(wv.published_by::text), '')))
+			                COALESCE(taskiem_actor_human(wv.created_by), ''), COALESCE(taskiem_actor_human(wv.published_by::text), ''))
+			            AND (c.forbid_sole OR NOT taskiem_sole_approver(c.role, c.user_id)))
 			 LIMIT 200`, channel)
 		if err != nil {
 			return err
@@ -332,13 +335,16 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 				return err
 			}
 		}
-		var wf, env string
+		var wf, env, stepName string
 		var levels int
 		var subject []byte
 		var timeout *time.Time
-		err = tx.QueryRow(ctx, `SELECT w.name, r.environment, COALESCE(jsonb_array_length(a.levels), 1), a.subject, a.timeout_at
+		var sole bool
+		err = tx.QueryRow(ctx, `SELECT w.name, r.environment, COALESCE(jsonb_array_length(a.levels), 1), a.subject, a.timeout_at, taskiem_step_name(wv.definition, a.step_id),
+				COALESCE((a.constraints->>'forbid_sole_approver')::boolean, false) = false AND taskiem_sole_approver(a.role, $4)
 			FROM approvals a JOIN runs r ON r.id = a.run_id JOIN workflows w ON w.id = r.workflow_id
-			WHERE a.run_id = $1 AND a.step_id = $2 AND a.status = 'open' AND a.level = $3`, t.run, t.step, t.level).Scan(&wf, &env, &levels, &subject, &timeout)
+			JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
+			WHERE a.run_id = $1 AND a.step_id = $2 AND a.status = 'open' AND a.level = $3`, t.run, t.step, t.level, t.user).Scan(&wf, &env, &levels, &subject, &timeout, &stepName, &sole)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errApprovalClosed // decided meanwhile
 		}
@@ -371,7 +377,7 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 			}
 			tokens[d] = s.chatSigner().Sign(c)
 		}
-		title := whatsapp.SafeText(wf) + " · " + t.step
+		title := whatsapp.SafeText(wf) + " · " + whatsapp.SafeText(stepName)
 		where := env
 		if levels > 1 {
 			where = fmt.Sprintf("%s, level %d of %d", env, t.level+1, levels)
@@ -384,10 +390,16 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 		if len(lines) > 0 {
 			text += "\n\n" + strings.Join(lines, "\n")
 		}
+		if sole {
+			text += "\n\n" + tr(l, "wa.approval.sole")
+		}
 		text += "\n\n" + tr(l, "wa.approval.expires", "time", exp.UTC().Format("2 Jan 15:04"))
 		summary := strings.Join(lines, "; ")
 		if summary == "" {
 			summary = "No details."
+		}
+		if sole {
+			summary = tr(l, "wa.approval.sole") + " " + summary
 		}
 		tpl := whatsapp.TplApprovalRequest
 		msg = whatsapp.Message{Text: text, Buttons: []whatsapp.Button{{ID: tokens["approved"], Title: tr(l, "button.approve")}, {ID: tokens["rejected"], Title: tr(l, "button.reject")}},
@@ -419,6 +431,15 @@ func (s *Server) waSendApproval(ctx context.Context, tenant tenantRef, t approva
 
 var errApprovalClosed = errors.New("the approval was decided or has expired")
 
+// voteDetail is a vote's audit detail, marking a maker's approval allowed
+// as the only person who could decide it.
+func voteDetail(d map[string]any, res runtime.VoteResult) map[string]any {
+	if res.SelfApproved {
+		d["self_approved"] = true
+	}
+	return d
+}
+
 func truncateErr(err error) string {
 	s := err.Error()
 	if len(s) > 500 {
@@ -436,9 +457,9 @@ func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
 	var targets []approvalTarget
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT a.run_id, a.step_id, a.level FROM approvals a WHERE a.status = 'open'
-			AND (a.role IS NULL OR a.role = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
+			AND (a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
 			    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
-			    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = a.role)))
+			    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner'))))
 			AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.user_id = $2)
 			ORDER BY a.requested_at LIMIT 3`, c.p.Roles, c.p.UserID)
 		if err != nil {
@@ -614,14 +635,19 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 		return err
 	}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-		return waAudit(ctx, tx, c.ch.Name(), p, "approval.decide", cl.Run.String()+"/"+cl.Step, map[string]any{"decision": cl.Decision, "result": res.Status,
-			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "via": via})
+		return waAudit(ctx, tx, c.ch.Name(), p, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
+			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "via": via}, res))
 	}); err != nil {
 		return err
 	}
-	msg := c.t("wa.approval.recorded_approved", "step", cl.Step)
+	step := cl.Step
+	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT taskiem_step_name(wv.definition, $2) FROM runs r
+			JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version WHERE r.id = $1`, cl.Run, cl.Step).Scan(&step)
+	})
+	msg := c.t("wa.approval.recorded_approved", "step", step)
 	if cl.Decision == "rejected" {
-		msg = c.t("wa.approval.recorded_rejected", "step", cl.Step)
+		msg = c.t("wa.approval.recorded_rejected", "step", step)
 	}
 	switch res.Status {
 	case "approved":
@@ -807,8 +833,8 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		addr = addrs[p.UserID]
-		return auditTx(r, tx, "approval.decide", cl.Run.String()+"/"+cl.Step, map[string]any{"decision": cl.Decision, "result": res.Status,
-			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "channel": row.channel, "via": "handoff"})
+		return auditTx(r, tx, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
+			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "channel": row.channel, "via": "handoff"}, res))
 	})
 	if err != nil {
 		s.fail(w, r, err)

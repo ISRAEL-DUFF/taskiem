@@ -739,9 +739,9 @@ func (s *Server) waStatus(ctx context.Context, c *chat) error {
 func openApprovalsFor(ctx context.Context, tx pgx.Tx, p *Principal) (int, error) {
 	var n int
 	err := tx.QueryRow(ctx, `SELECT count(*) FROM approvals a WHERE a.status = 'open'
-		AND (a.role IS NULL OR a.role = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
+		AND (a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
 		    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
-		    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = a.role)))
+		    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner'))))
 		AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.user_id = $2)`,
 		p.Roles, p.UserID).Scan(&n)
 	return n, err

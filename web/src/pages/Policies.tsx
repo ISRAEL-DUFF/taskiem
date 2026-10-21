@@ -8,7 +8,7 @@ const example = {
     { when: "=subject.amount_kobo < 50000000", levels: [{ role: "credit_officer" }] },
     { when: "=subject.amount_kobo >= 50000000", levels: [{ role: "credit_officer" }, { role: "head_of_credit" }], step_up: "totp" },
   ],
-  constraints: { forbid_self_approval: true, distinct_approvers: true },
+  constraints: { forbid_self_approval: true, distinct_approvers: true, allow_sole_approver: true },
   timeout: "24h",
   on_timeout: "escalate:head_of_operations",
 };

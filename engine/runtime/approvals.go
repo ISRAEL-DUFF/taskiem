@@ -81,6 +81,9 @@ type VoteResult struct {
 	Status string // open | approved | rejected
 	Level  int    // the level now open (0-based), when open
 	Levels int    // how many levels the step has
+	// SelfApproved: the voter was a maker, allowed as the only person who
+	// can decide the approval.
+	SelfApproved bool
 }
 
 type approvalRow struct {
@@ -101,7 +104,9 @@ type approvalRow struct {
 //   - an approval that needs step-up counts the vote only with it;
 //   - whoever started the run, or wrote or published the workflow version,
 //     cannot approve it, nor can anyone acting for them (maker-checker;
-//     a policy may relax this);
+//     a policy may relax this), unless they are the only active person who
+//     can decide it (a one-person business), when the vote is marked
+//     self-approved (a policy may forbid that too);
 //   - each approver counts once per level, and with distinct approvers
 //     (the default) once per step;
 //   - a level approves with "count" approvals and opens the next; any
@@ -140,19 +145,20 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 		if a.status != "open" {
 			return fmt.Errorf("approval %q is %s: %w", step, a.status, ErrApprovalClosed)
 		}
-		forbidSelf, distinct := true, true
+		forbidSelf, distinct, soleAllowed := true, true, true
 		if a.constraints != nil {
 			forbidSelf, distinct = a.constraints.ForbidSelfApproval, a.constraints.DistinctApprovers
+			soleAllowed = !a.constraints.ForbidSoleApprover
 		}
 
-		// Role: the voter's own, or one delegated to them now by someone
-		// who still holds it.
+		// Role: the voter's own (an owner holds every role), or one
+		// delegated to them now by someone who still holds it.
 		var onBehalfOf *uuid.UUID
-		if a.role != nil && !slices.Contains(v.Roles, *a.role) {
+		if a.role != nil && !slices.Contains(v.Roles, *a.role) && !slices.Contains(v.Roles, "owner") {
 			var from uuid.UUID
 			err := tx.QueryRow(ctx, `SELECT g.from_user FROM delegations g WHERE g.to_user = $1 AND $2 = ANY (g.roles)
 				AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
-				AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role = $2) ORDER BY g.created_at LIMIT 1`, v.UserID, *a.role).Scan(&from)
+				AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN ($2, 'owner')) ORDER BY g.created_at LIMIT 1`, v.UserID, *a.role).Scan(&from)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return fmt.Errorf("approval %q needs role %q: %w", step, *a.role, ErrNotAllowed)
 			}
@@ -175,9 +181,22 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 				return err
 			}
 			for _, maker := range []*string{startedBy, createdBy, publishedBy} {
-				if maker != nil && slices.Contains(people, *maker) {
-					return fmt.Errorf("the maker of a run or workflow cannot approve it, nor can someone acting for them: %w", ErrNotAllowed)
+				if maker == nil || !slices.Contains(people, *maker) {
+					continue
 				}
+				// Nobody else could ever decide it: a one-person business
+				// approves its own, on the record.
+				if soleAllowed && onBehalfOf == nil {
+					sole, err := SoleApprover(ctx, tx, a.role, v.UserID)
+					if err != nil {
+						return err
+					}
+					if sole {
+						res.SelfApproved = true
+						break
+					}
+				}
+				return fmt.Errorf("the maker of a run or workflow cannot approve it, nor can someone acting for them: %w", ErrNotAllowed)
 			}
 		}
 		// One voice per person per level, whether they vote or someone votes
@@ -206,9 +225,9 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 		if a.stepUp != nil && !StepUpSatisfies(*a.stepUp, v.StepUp) {
 			return &StepUpError{Method: *a.stepUp}
 		}
-		tag, err := tx.Exec(ctx, `INSERT INTO approval_decisions (tenant_id, run_id, step_id, level, user_id, decision, channel, ip, shown, step_up, on_behalf_of)
-			SELECT tenant_id, run_id, step_id, $3, $4, $5, $6, NULLIF($7, ''), subject, NULLIF($8, ''), $9 FROM approvals WHERE run_id = $1 AND step_id = $2
-			ON CONFLICT DO NOTHING`, ref.ID, step, a.level, v.UserID, v.Decision, v.Channel, v.IP, v.StepUp, onBehalfOf)
+		tag, err := tx.Exec(ctx, `INSERT INTO approval_decisions (tenant_id, run_id, step_id, level, user_id, decision, channel, ip, shown, step_up, on_behalf_of, self_approved)
+			SELECT tenant_id, run_id, step_id, $3, $4, $5, $6, NULLIF($7, ''), subject, NULLIF($8, ''), $9, $10 FROM approvals WHERE run_id = $1 AND step_id = $2
+			ON CONFLICT DO NOTHING`, ref.ID, step, a.level, v.UserID, v.Decision, v.Channel, v.IP, v.StepUp, onBehalfOf, res.SelfApproved)
 		if err != nil {
 			return err
 		}
@@ -217,7 +236,7 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 		}
 		if v.Decision == "rejected" {
 			res.Status = "rejected"
-			return s.decideApproval(ctx, tx, ref, step, "rejected", v.UserID.String(), v.Channel)
+			return s.decideApproval(ctx, tx, ref, step, "rejected", v.UserID.String(), v.Channel, false)
 		}
 		var approvals int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM approval_decisions WHERE run_id = $1 AND step_id = $2 AND level = $3 AND decision = 'approved'`,
@@ -242,15 +261,28 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 		if err != nil {
 			return err
 		}
+		var self bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM approval_decisions WHERE run_id = $1 AND step_id = $2 AND self_approved)`, ref.ID, step).Scan(&self); err != nil {
+			return err
+		}
 		res.Status = "approved"
-		return s.decideApproval(ctx, tx, ref, step, "approved", strings.Join(approvers, ","), v.Channel)
+		return s.decideApproval(ctx, tx, ref, step, "approved", strings.Join(approvers, ","), v.Channel, self)
 	})
 	return res, err
 }
 
-func (s *Store) decideApproval(ctx context.Context, tx pgx.Tx, ref RunRef, step, status, by, channel string) error {
+// SoleApprover reports whether user is the only active person who can
+// decide an approval for role (nil: any member with approval.decide): no
+// other member holds the role or owner, and it is delegated to nobody else.
+func SoleApprover(ctx context.Context, tx pgx.Tx, role *string, user uuid.UUID) (bool, error) {
+	var sole bool
+	err := tx.QueryRow(ctx, `SELECT taskiem_sole_approver($1, $2)`, role, user).Scan(&sole)
+	return sole, err
+}
+
+func (s *Store) decideApproval(ctx context.Context, tx pgx.Tx, ref RunRef, step, status, by, channel string, self bool) error {
 	if _, err := appendEvent(ctx, tx, ref.ID, history.ApprovalDecided, step, 0,
-		history.ApprovalDecidedPayload{Decision: status, DecidedBy: by, Channel: channel}, history.OriginAPI); err != nil {
+		history.ApprovalDecidedPayload{Decision: status, DecidedBy: by, Channel: channel, SelfApproved: self}, history.OriginAPI); err != nil {
 		return err
 	}
 	return s.decideInline(ctx, tx, ref)

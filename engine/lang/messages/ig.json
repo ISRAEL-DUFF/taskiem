@@ -332,6 +332,10 @@
       "text": "Ọ na-eche nkwado ndị ọzọ.",
       "reviewed": false
     },
+    "wa.approval.sole": {
+      "text": "Ọ bụ naanị gị nwere ike ịkwado nke a.",
+      "reviewed": false
+    },
     "wa.approval.stale": {
       "text": "Bọtịnụ ahụ adịghịzi mma. Ziga *approvals* ka ị hụ ihe na-eche gị.",
       "reviewed": false

@@ -13,8 +13,8 @@ export function Approvals() {
     <>
       <PageHeader title="Approvals" description="Decisions waiting for a role you hold, or one delegated to you." />
       <p className="hint">
-        You cannot approve a run you started or a workflow version you wrote or published, and with distinct approvers you approve one level of a request
-        at most.
+        You cannot approve a run you started or a workflow version you wrote or published, unless nobody else can, and with distinct approvers you approve
+        one level of a request at most.
       </p>
       <ErrorBox error={error} />
       {!data && !error && <Skeleton rows={2} />}
@@ -25,7 +25,7 @@ export function Approvals() {
         <div className="card" key={`${a.run_id}/${a.step_id}`} data-testid="approval">
           <div className="toolbar">
             <strong className="grow">
-              {a.workflow} · {a.step_id}
+              {a.workflow} · {a.step_name || a.step_id}
             </strong>
             <span className="hint">
               {a.levels > 1 && `level ${a.level} of ${a.levels} · `}
@@ -33,6 +33,7 @@ export function Approvals() {
             </span>
           </div>
           {a.on_behalf_of && <p className="hint">You are covering for {a.on_behalf_of} under a delegation.</p>}
+          {a.sole_approver && <p className="hint">You are the only person who can approve this.</p>}
           {a.step_up && (
             <p className="hint">
               {a.step_up === "passkey"
@@ -89,7 +90,7 @@ function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "appr
   return (
     <Modal title={decision === "approved" ? "Approve" : "Reject"} onClose={onClose}>
       <p>
-        {decision === "approved" ? "Approve" : "Reject"} <strong>{a.step_id}</strong> on {a.workflow}? Your decision and what you were shown are recorded.
+        {decision === "approved" ? "Approve" : "Reject"} <strong>{a.step_name || a.step_id}</strong> on {a.workflow}? Your decision and what you were shown are recorded.
       </p>
       <Field label="Comment (optional, audited)">
         <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />

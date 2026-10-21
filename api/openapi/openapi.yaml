@@ -18097,6 +18097,8 @@ components:
       required:
       - run_id
       - step_id
+      - step_name
+      - sole_approver
       - workflow
       - environment
       - role
@@ -18115,6 +18117,9 @@ components:
           format: uuid
         step_id:
           type: string
+        step_name:
+          type: string
+          description: The step's name in the workflow, or its id when it has none.
         workflow:
           type: string
         environment:
@@ -18123,7 +18128,7 @@ components:
           type:
           - string
           - 'null'
-          description: Who may approve; null is any approver.
+          description: Who may approve (an owner counts for every role); null is any approver.
         required:
           type: integer
           description: Approvals the current level needs.
@@ -18154,6 +18159,9 @@ components:
           - string
           - 'null'
           description: The email of whoever delegated the role, when the caller decides by delegation.
+        sole_approver:
+          type: boolean
+          description: Nobody else can decide it, so the caller may approve it even if they made the run or workflow; the vote is recorded as self-approved. False when a policy sets `allow_sole_approver` to false.
         requested_at:
           $ref: '#/components/schemas/Timestamp'
         timeout_at:
@@ -18216,6 +18224,9 @@ components:
           type: integer
         levels:
           type: integer
+        self_approved:
+          type: boolean
+          description: The caller made the run or workflow and approved it as the only person who can decide it (a one-person business), on the record.
       additionalProperties: false
     Delegation:
       type: object

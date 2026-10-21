@@ -310,6 +310,10 @@ export interface Approval {
   policy: string | null;
   /** Set when a delegated role makes this approval the caller's. */
   on_behalf_of?: string;
+  /** The step's name (its id when it has none). */
+  step_name: string;
+  /** Nobody else can decide it, so the caller may approve even what they made. */
+  sole_approver: boolean;
   requested_at: string;
   timeout_at: string | null;
   subject: unknown;

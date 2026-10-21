@@ -723,7 +723,8 @@ func (d *decider) applyPolicy(name string, subject any, p *history.ApprovalReque
 	}
 	p.Role, p.Count = p.Levels[0].Role, p.Levels[0].Count
 	p.PolicyVersion, p.StepUp = ps.version, rule.StepUp
-	p.Constraints = &history.ApprovalConstraints{ForbidSelfApproval: ps.doc.Constraints.SelfApprovalForbidden(), DistinctApprovers: ps.doc.Constraints.Distinct()}
+	p.Constraints = &history.ApprovalConstraints{ForbidSelfApproval: ps.doc.Constraints.SelfApprovalForbidden(), DistinctApprovers: ps.doc.Constraints.Distinct(),
+		ForbidSoleApprover: ps.doc.Constraints.SoleApproverForbidden()}
 	return nil
 }
 

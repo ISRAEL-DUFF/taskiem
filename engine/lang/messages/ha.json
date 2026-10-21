@@ -332,6 +332,10 @@
       "text": "Yana jiran ƙarin amincewa.",
       "reviewed": false
     },
+    "wa.approval.sole": {
+      "text": "Kai kaɗai ne za ka iya amincewa da wannan.",
+      "reviewed": false
+    },
     "wa.approval.stale": {
       "text": "Wannan maɓallin ba shi da inganci kuma. Aika *approvals* don ganin abin da ke jiran ka.",
       "reviewed": false

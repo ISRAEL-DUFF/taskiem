@@ -57,11 +57,20 @@ type Level struct {
 	Count int    `json:"count,omitempty"` // default 1
 }
 
-// Constraints are separation-of-duties rules. Both default to true: a
-// policy has to say so to relax them.
+// Constraints are separation-of-duties rules. The first two default to
+// true: a policy has to say so to relax them. A maker who is the only
+// person able to decide may approve (a one-person business) unless the
+// policy sets allow_sole_approver to false.
 type Constraints struct {
 	ForbidSelfApproval *bool `json:"forbid_self_approval,omitempty"`
 	DistinctApprovers  *bool `json:"distinct_approvers,omitempty"`
+	AllowSoleApprover  *bool `json:"allow_sole_approver,omitempty"`
+}
+
+// SoleApproverForbidden reports whether even the only person able to
+// decide may not approve what they made.
+func (c Constraints) SoleApproverForbidden() bool {
+	return c.AllowSoleApprover != nil && !*c.AllowSoleApprover
 }
 
 // SelfApprovalForbidden reports whether makers are barred from approving.

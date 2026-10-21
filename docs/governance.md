@@ -23,7 +23,7 @@ Approvals are a step type (spec 9.1). An approval step either names a role and a
 | `rules` | Tried in order; the first whose `when` (CEL over the approval step's `subject`) holds applies. A rule without `when` always applies. If none applies, the approval step fails with kind `policy`: nobody can approve what the policy does not cover |
 | `levels` | Approved in order: level 2 opens when level 1 has `count` approvals (default 1). Any rejection rejects the step |
 | `step_up` | The weakest second factor a vote under the rule needs: `passkey`; `totp` (a fresh authenticator code, or a passkey); or `whatsapp_pin` (the approver's WhatsApp PIN entered in a WhatsApp form bound to that decision, or an authenticator code, or a passkey; [WhatsApp](whatsapp.md#approval-pin)) |
-| `constraints` | `forbid_self_approval`: whoever started the run, or wrote or published the workflow version, cannot approve, nor can anyone acting for them. `distinct_approvers`: one person approves one level at most. Both default to true |
+| `constraints` | `forbid_self_approval`: whoever started the run, or wrote or published the workflow version, cannot approve, nor can anyone acting for them. `distinct_approvers`: one person approves one level at most. Both default to true. `allow_sole_approver` (default true): see [one-person businesses](#one-person-businesses); false holds four-eyes even then |
 | `timeout`, `on_timeout` | Used when the step sets none: `reject` (default), `fail`, or `escalate:<role>` (once, to a single approver with that role) |
 
 The step names it: `{"type": "approval", "config": {"policy": "high_value", "subject": {"amount_kobo": "=trigger.body.amount"}}}`.
@@ -129,6 +129,16 @@ A tenant is suspended by its partner (a sub-tenant: `POST /v1/partner/sub-tenant
 - **Repair jobs** wait.
 
 Resuming (`…/resume`) re-enables all of it. Queued runs are admitted at the tenant's rate, and deliveries are taken again. **Schedules continue from the resume and do not catch up**: a fire that fell due while the tenant was suspended is skipped (logged, `taskiem_ingest_deliveries_total{kind="schedule",result="skipped_suspended"}`) and the schedule moves to its next time after now, so a long suspension never ends in a storm of missed runs. The time of each change is kept (`tenants.suspended_at`, `resumed_at`).
+
+## One-person businesses
+
+Maker-checker would leave a business with one person unable to approve anything it made: a trader who turns storefront orders on publishes the order workflow, and could then never accept an order. So when the person approving made the run or workflow but is the **only active person who can decide the approval**, they may approve it:
+
+- nobody else who is active holds the step's role or `owner` (an owner counts for every role in approvals), and nobody else has the role delegated to them now; for a step naming no role, nobody else holds `owner`, `approver` or a role with `approval.decide`;
+- the vote is recorded as self-approved: `self_approved` on the decision, on the run's `ApprovalDecided` event and in the `approval.decide` audit entry;
+- the request says so: "You are the only person who can approve this" in the web inbox (`sole_approver` in `GET /v1/approvals`) and in WhatsApp and Telegram.
+
+Once a second person can decide (a partner joins as owner, or someone is given the role), four-eyes applies again. A policy with `"constraints": {"allow_sole_approver": false}` never allows it. Someone voting under a delegation is never treated as the only approver.
 
 ## Four-eyes on change
 
