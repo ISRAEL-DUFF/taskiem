@@ -275,6 +275,7 @@ function SignedIn() {
       </nav>
       <main className="main" id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
+        <div className="page" key={pathname}>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Home />} />
@@ -313,6 +314,7 @@ function SignedIn() {
           <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<EmptyState icon="search">There is no page at this address.</EmptyState>} />
         </Routes>
+        </div>
       </main>
       <nav className="tabbar" aria-label="Quick" inert={drawer || undefined}>
         <NavLink to="/home">

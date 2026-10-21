@@ -126,13 +126,27 @@ table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .toolbar .grow { flex: 1; }
 button, .button {
   font: inherit; font-size: 13.5px; font-weight: 500; border: 1px solid var(--border-strong); background: var(--panel); color: var(--text);
-  border-radius: var(--radius-sm); min-height: 34px; padding: 0 14px; cursor: pointer; line-height: 1.2; box-shadow: var(--shadow);
-  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, transform 0.06s;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
+  border-radius: var(--radius-sm); min-height: 34px; padding: 6px 14px; cursor: pointer; line-height: 1.2; box-shadow: var(--shadow);
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.15s, transform 0.08s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-align: center;
 }
+.page-actions > button, .page-actions > .button, .toolbar > button, .toolbar > .button, .describe-bar > button { white-space: nowrap; }
+/* A card that is a button (a template to pick): laid out as a card. */
+button.card, .button.card {
+  display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; text-align: left; white-space: normal;
+  font-size: 14px; font-weight: 400; line-height: 1.5; padding: 18px 20px; min-height: 0; box-shadow: none; width: 100%;
+}
+button.card:hover:not(:disabled) { background: var(--panel); }
+/* A checkbox with its words in a row. */
+label.row:has(> input[type="checkbox"], > input[type="radio"]) { justify-content: flex-start; align-items: center; gap: 8px; margin: 0 0 16px; cursor: pointer; }
+label.row:has(> input[type="checkbox"], > input[type="radio"]) > * { flex: none; }
+.perms { display: flex; flex-wrap: wrap; gap: 4px; }
+.perms code { font-size: 11.5px; color: var(--muted); }
+textarea.mono, pre { background: var(--code-bg); }
+textarea.mono { line-height: 1.6; tab-size: 2; }
 button svg, .button svg { width: 15px; height: 15px; }
 button:hover:not(:disabled), .button:hover { background: var(--panel-2); border-color: color-mix(in srgb, var(--border-strong) 60%, var(--muted)); text-decoration: none; }
-button:active:not(:disabled) { transform: translateY(1px); }
+button:active:not(:disabled), .button:active { transform: scale(0.98); }
 button.primary, .button.primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); box-shadow: 0 1px 2px rgba(14, 15, 12, 0.12); }
 button.primary:hover:not(:disabled), .button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
 button.danger { color: var(--danger); }
@@ -485,7 +499,8 @@ button.link {
 .template-card { align-items: stretch; justify-content: flex-start; padding: 18px 20px; }
 .template-card, .template-card * { text-align: left; }
 .template-card { transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s; }
-.template-card:hover, .template-card:focus-visible { border-color: var(--accent, var(--info)); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.template-card:hover, .template-card:focus-visible { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.template-card strong { font-weight: 500; }
 .plain-steps { list-style: none; padding-left: 0; }
 .plain-steps li { margin: 4px 0; }
 .capitalize { text-transform: capitalize; }
@@ -727,3 +742,45 @@ a.inline-link { text-decoration: underline; text-underline-offset: 2px; }
   .sf-layout { grid-template-columns: 1fr; }
   .sf-preview { position: static; }
 }
+
+/* Audit log (pages/Audit.tsx): one line per entry. */
+td.nowrap, th.nowrap { white-space: nowrap; }
+table.audit td { vertical-align: middle; }
+table.audit code { font-size: 12px; white-space: nowrap; }
+.audit-detail { color: var(--muted); font-size: 13px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Motion: quick and quiet, and none for people who ask for less. */
+:root { --ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: no-preference) {
+  body { transition: background-color 0.25s, color 0.25s; }
+  .page { animation: page-in 0.32s var(--ease) both; }
+  .stats .stat, .home-col > .panel, tbody tr, .list-row, .template-card, .checklist li, .panel > .list-row { animation: rise-in 0.36s var(--ease) both; }
+  .stats .stat:nth-child(2), tbody tr:nth-child(2), .list-row:nth-child(3), .template-card:nth-child(2) { animation-delay: 30ms; }
+  .stats .stat:nth-child(3), tbody tr:nth-child(3), .list-row:nth-child(4), .template-card:nth-child(3) { animation-delay: 60ms; }
+  .stats .stat:nth-child(4), tbody tr:nth-child(4), .list-row:nth-child(5), .template-card:nth-child(4) { animation-delay: 90ms; }
+  tbody tr:nth-child(5), .list-row:nth-child(6) { animation-delay: 120ms; }
+  tbody tr:nth-child(6), .list-row:nth-child(7) { animation-delay: 150ms; }
+  tbody tr:nth-child(n + 7) { animation-delay: 170ms; }
+  .home-col:last-child > .panel { animation-delay: 80ms; }
+  .progress > span, .meter-fill { animation: grow-x 0.8s var(--ease) both; transform-origin: left; transition: width 0.4s var(--ease); }
+  .bars span { animation: grow-y 0.5s var(--ease) both; transform-origin: bottom; }
+  .bars span:nth-child(n + 5) { animation-delay: 40ms; }
+  .bars span:nth-child(n + 10) { animation-delay: 80ms; }
+  .badge.published::before, .badge.running::before, .sf-open.on .dot { animation: live 2.4s ease-in-out infinite; }
+  #nav-more:not([hidden]) > a { animation: fade-down 0.2s var(--ease) both; }
+  .notice, .error, .warning { animation: rise-in 0.24s var(--ease) both; }
+  .stat, a.list-row, .panel, .card, .step-node { transition: background-color 0.15s, border-color 0.15s, box-shadow 0.2s, transform 0.2s var(--ease); }
+  a.stat:hover { transform: translateY(-1px); }
+  .nav a svg { transition: transform 0.2s var(--ease); }
+  .nav a:hover svg { transform: translateX(1px); }
+  .empty-icon { animation: pop 0.4s var(--ease) both; }
+  .sf-cover, .sf-cta, .sf-pv-logo { transition: background-color 0.3s, color 0.3s; }
+  .tabs button, .tabs a { transition: background-color 0.15s, color 0.15s, box-shadow 0.15s; }
+}
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(4px); } }
+@keyframes fade-down { from { opacity: 0; transform: translateY(-3px); } }
+@keyframes grow-x { from { transform: scaleX(0); } }
+@keyframes grow-y { from { transform: scaleY(0); } }
+@keyframes pop { from { opacity: 0; transform: scale(0.9); } }
+@keyframes live { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tone, var(--ok)) 45%, transparent); } 50% { box-shadow: 0 0 0 4px transparent; } }

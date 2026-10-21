@@ -8,7 +8,7 @@ import { moneyToday, ordersToday, runWords, triggerWords } from "../lib/home";
 import type { Order } from "../lib/orders";
 import { formatPrice } from "../lib/storefront";
 import { greeting, shortWhen } from "../lib/time";
-import { ErrorBox, Skeleton, useLiveRefresh, useLoad } from "../ui";
+import { ErrorBox, Skeleton, useCountUp, useLiveRefresh, useLoad } from "../ui";
 import type { FormRequest } from "./FormFill";
 
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -62,28 +62,36 @@ export function Home() {
         {money && (
           <Link className="stat" to="/storefront/orders">
             <span className="stat-label">Money in today</span>
-            <span className="stat-value">{formatPrice(money.kobo)}</span>
+            <span className="stat-value">
+              <Count value={money.kobo} money />
+            </span>
             <span className="stat-hint">{money.count === 1 ? "1 payment" : `${money.count} payments`}</span>
           </Link>
         )}
         {counts && (
           <Link className="stat" to="/storefront/orders">
             <span className="stat-label">Orders today</span>
-            <span className="stat-value">{counts.count}</span>
+            <span className="stat-value">
+              <Count value={counts.count} />
+            </span>
             <span className="stat-hint">{counts.waiting > 0 ? `${counts.waiting} waiting for you` : "None waiting for you"}</span>
           </Link>
         )}
         {week.data && (
           <Link className="stat" to="/runs">
             <span className="stat-label">Workflows ran this week</span>
-            <span className="stat-value">{week.data.runs.total}</span>
+            <span className="stat-value">
+              <Count value={week.data.runs.total} />
+            </span>
             <span className="stat-hint">{week.data.runs.failed > 0 ? `${week.data.runs.failed} did not finish` : week.data.runs.total > 0 ? "All went well" : "Nothing yet"}</span>
           </Link>
         )}
         {workflows.data && (
           <Link className="stat" to="/workflows">
             <span className="stat-label">Working for you</span>
-            <span className="stat-value">{live.length}</span>
+            <span className="stat-value">
+              <Count value={live.length} />
+            </span>
             <span className="stat-hint">{live.length === 1 ? "workflow is live" : "workflows are live"}</span>
           </Link>
         )}
@@ -231,4 +239,10 @@ export function Home() {
       </div>
     </>
   );
+}
+
+/** A figure on Home: counts up when the page opens. */
+function Count({ value, money }: { value: number; money?: boolean }) {
+  const n = useCountUp(value);
+  return <>{money ? formatPrice(n) : n}</>;
 }

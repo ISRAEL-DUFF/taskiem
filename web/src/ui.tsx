@@ -304,3 +304,31 @@ export function JsonInput({ value, onChange, rows = 6 }: { value: unknown; onCha
 }
 
 export const fmtTime = (s: string | null | undefined) => (s ? whenWords(new Date(s)) : "—");
+
+/** A number that counts up to `to` when it first shows, then follows it;
+ * no counting for people who ask for less motion. */
+const stillMotion = () => typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+export function useCountUp(to: number, ms = 700): number {
+  const [shown, setShown] = useState(() => (stillMotion() ? to : 0));
+  const from = useRef<number | null>(null);
+  useEffect(() => {
+    const still = stillMotion();
+    const start = from.current ?? 0;
+    from.current = to;
+    if (still || start === to) {
+      setShown(to);
+      return;
+    }
+    let frame = 0;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms);
+      setShown(Math.round(start + (to - start) * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [to, ms]);
+  return shown;
+}
