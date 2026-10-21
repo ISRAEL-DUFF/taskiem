@@ -222,7 +222,7 @@ func TestEmailStartsARun(t *testing.T) {
 		var s, n string
 		return n, r.Scan(&s, &n)
 	})
-	if err != nil || len(notes) != 3 || !strings.Contains(notes[0], "not one this workflow") || !strings.Contains(notes[1], "could not be proven") ||
+	if err != nil || len(notes) != 3 || !strings.Contains(notes[0], "not one this workflow") || strings.Contains(notes[0], "proven") || !strings.Contains(notes[1], "could not be proven") ||
 		!strings.Contains(notes[2], "automatic reply") {
 		t.Fatalf("refusals: %q %v", notes, err)
 	}

@@ -225,7 +225,10 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 			rec.note = "Not started: " + why + "."
 		} else if !sample(meta) && !SenderAllowed(cfg.Senders, msg.From.Address, meta.Auth) {
 			rec.note = "Not started: the sender is not one this workflow takes mail from"
-			if len(cfg.Senders) > 0 && !meta.Auth.Aligned {
+			proven := meta.Auth
+			proven.Aligned = true
+			if !meta.Auth.Aligned && SenderAllowed(cfg.Senders, msg.From.Address, proven) {
+				// On the list, but the message does not prove it.
 				rec.note += " (the sender could not be proven, so the list does not trust it)"
 			}
 			rec.note += "."

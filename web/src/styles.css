@@ -138,7 +138,7 @@ button.card, .button.card {
 }
 button.card:hover:not(:disabled) { background: var(--panel); }
 /* A checkbox with its words in a row. */
-label.row:has(> input[type="checkbox"], > input[type="radio"]) { justify-content: flex-start; align-items: center; gap: 8px; margin: 0 0 16px; cursor: pointer; }
+label.row:has(> input[type="checkbox"], > input[type="radio"]) { justify-content: flex-start; align-items: center; gap: 8px; margin: 0 0 16px; cursor: pointer; flex-wrap: nowrap; }
 label.row:has(> input[type="checkbox"], > input[type="radio"]) > * { flex: none; }
 .perms { display: flex; flex-wrap: wrap; gap: 4px; }
 .perms code { font-size: 11.5px; color: var(--muted); }
@@ -822,7 +822,8 @@ table.audit code { font-size: 12px; white-space: nowrap; }
 .email-waiting .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .email-messages { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .email-msg { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
-.email-msg .grow { display: grid; gap: 2px; min-width: 0; }
+.email-msg .grow { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.email-msg a { flex: none; }
 .email-msg.refused strong { color: var(--muted); font-weight: 500; }
 @media (prefers-reduced-motion: no-preference) {
   .email-waiting .dot { animation: email-pulse 1.4s ease-in-out infinite; }
