@@ -65,7 +65,7 @@
     {
       "name": "{{table}}",
       "title": "POS sales",
-      "description": "Every transaction your Moniepoint terminals make, one row per event Moniepoint sends. Amounts are in naira.",
+      "description": "Every transaction your terminals make, one row per event the provider sends. Amounts are in naira; fee and settled are filled when the provider reports them (OPay does, Moniepoint does not).",
       "columns": [
         {
           "name": "reference",
@@ -97,6 +97,16 @@
         {
           "name": "amount",
           "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "fee",
+          "title": "Fee (naira)",
+          "type": "number"
+        },
+        {
+          "name": "settled",
+          "title": "Settled (naira)",
           "type": "number"
         },
         {

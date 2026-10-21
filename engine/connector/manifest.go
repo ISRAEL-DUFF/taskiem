@@ -131,6 +131,14 @@ type AuthField struct {
 	Prefixes []KeyPrefix `json:"prefixes,omitempty"`
 	// Refuse are values that are the wrong one, with a plain message.
 	Refuse []KeyRefusal `json:"refuse,omitempty"`
+	// Multiline: the value spans lines (a PEM key), so the person pastes
+	// it into a text area.
+	Multiline bool `json:"multiline,omitempty"`
+	// Generate names a value Taskiem can make for the person instead of
+	// asking them to: rsa_key_pair makes an RSA key pair in their browser,
+	// keeps the private key as the value and shows the public key to paste
+	// into the provider's dashboard.
+	Generate string `json:"generate,omitempty"`
 }
 
 // KeyPrefix is a start a right value has, for one mode.

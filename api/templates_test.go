@@ -193,7 +193,7 @@ func TestTemplateMakesItsTables(t *testing.T) {
 		m := x.(map[string]any)
 		names[m["name"].(string)] = len(m["columns"].([]any))
 	}
-	if names["pos_sales"] != 12 || names["shop_terminals"] != 3 {
+	if names["pos_sales"] != 14 || names["shop_terminals"] != 3 {
 		t.Fatalf("tables after the template: %v", names)
 	}
 	def := string(mustJSON(t, owner.must(200, "GET", "/v1/workflows/"+out["id"].(string)+"/versions/1", nil)["definition"]))

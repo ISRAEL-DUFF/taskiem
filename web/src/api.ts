@@ -309,6 +309,10 @@ export interface AuthField {
   prefixes?: { prefix: string; mode?: string; label?: string }[];
   /** Wrong values, with what to tell the person. */
   refuse?: { prefix: string; message: string }[];
+  /** The value spans lines (a PEM key): a text area. */
+  multiline?: boolean;
+  /** A value Taskiem makes for the person: rsa_key_pair makes a key pair in the browser, keeps the private key and shows the public key to paste at the provider. */
+  generate?: "rsa_key_pair";
 }
 
 export interface ConnectorInfo {

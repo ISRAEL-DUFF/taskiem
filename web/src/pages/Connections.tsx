@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ApiError, del, get, post, put, upload, type AuthField, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
 import { useAdvanced, useAuth } from "../auth";
-import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, splitFields } from "../lib/connections";
+import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, splitFields, generateRsaKeyPair } from "../lib/connections";
 import { Help } from "../onboarding";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
@@ -510,6 +510,9 @@ export function NewConnection({
   const [mode, setMode] = useState("");
   const chosen = mode || modes[0]?.mode || "";
   const [paste, setPaste] = useState(false);
+  // Public keys of the key pairs made here, by field, to show once.
+  const [generated, setGenerated] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState("");
   const act = useAction();
   const { main, more } = splitFields(c);
   const linkable = !!c?.auth.oauth2 && !!c.oauth_linkable;
@@ -548,15 +551,65 @@ export function NewConnection({
         </>
       }
     >
-      <input
-        type={f.secret ? "password" : "text"}
-        autoComplete="off"
-        spellCheck={false}
-        value={creds[f.key] ?? ""}
-        required={f.required !== false}
-        aria-invalid={!!problems[f.key]}
-        onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value.trim() })}
-      />
+      {f.multiline ? (
+        <textarea
+          autoComplete="off"
+          spellCheck={false}
+          rows={generated[f.key] ? 2 : 5}
+          value={generated[f.key] ? "(made for you and kept private)" : (creds[f.key] ?? "")}
+          readOnly={!!generated[f.key]}
+          required={f.required !== false}
+          aria-invalid={!!problems[f.key]}
+          onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value.trim() })}
+        />
+      ) : (
+        <input
+          type={f.secret ? "password" : "text"}
+          autoComplete="off"
+          spellCheck={false}
+          value={creds[f.key] ?? ""}
+          required={f.required !== false}
+          aria-invalid={!!problems[f.key]}
+          onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value.trim() })}
+        />
+      )}
+      {f.generate === "rsa_key_pair" && !generated[f.key] && (
+        <p className="hint">
+          <button
+            type="button"
+            disabled={act.busy}
+            onClick={() =>
+              void act.run(async () => {
+                const pair = await generateRsaKeyPair();
+                setCreds((old) => ({ ...old, [f.key]: pair.privatePem }));
+                setGenerated((old) => ({ ...old, [f.key]: pair.publicPem }));
+              })
+            }
+          >
+            Make a key pair for me
+          </button>{" "}
+          Taskiem keeps the private key; you give the public key to the service.
+        </p>
+      )}
+      {generated[f.key] && (
+        <div className="notice">
+          <p style={{ marginTop: 0 }}>
+            <strong>Copy this public key now</strong> and paste it where the service asks for your public key{f.where ? <> ({f.where})</> : null}. It is shown only once; to get
+            another, connect again.
+          </p>
+          <textarea readOnly rows={6} value={generated[f.key]} onFocus={(e) => e.target.select()} aria-label={`${f.label}: the public key to give the service`} />
+          <p style={{ marginBottom: 0 }}>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(generated[f.key] ?? "").then(() => setCopied(f.key));
+              }}
+            >
+              {copied === f.key ? "Copied" : "Copy the public key"}
+            </button>
+          </p>
+        </div>
+      )}
     </Field>
   );
   return (

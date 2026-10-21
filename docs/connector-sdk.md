@@ -72,6 +72,7 @@ auth:
 - `help` is one plain line; `where` says where the value is in the provider's dashboard, and `link` opens that page.
 - `prefixes` are what a right value starts with. When they name modes, the person chooses one (**Live** or **Test**) instead of knowing a prefix, and a key for the other is refused in plain words. The connection records the mode, and pickers say when one holds a test key.
 - `refuse` are values that are the wrong one, such as a public key, each with what to tell the person.
+- `multiline` fields are pasted into a text area (a PEM key); a field with `generate: rsa_key_pair` offers to make an RSA key pair in the person's browser, keeps the private key as the value and shows the public key once to paste into the provider's dashboard (OPay Business).
 - Optional fields are shown under **More options**.
 - `auth.test` is the action the service is asked with before saving; a connector without one is saved after the field checks alone.
 

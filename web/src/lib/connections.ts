@@ -81,3 +81,28 @@ export function splitFields(c: ConnectorInfo | undefined): { main: AuthField[]; 
   const fields = c?.auth.fields ?? [];
   return { main: fields.filter((f) => f.required !== false), more: fields.filter((f) => f.required === false) };
 }
+
+/**
+ * Makes an RSA key pair in the browser for a provider that authenticates
+ * with RSA (OPay Business, `generate: rsa_key_pair`): the private key as a
+ * PKCS #8 PEM block, kept as the connection's value, and the public key as
+ * a PEM block to paste into the provider's dashboard. OPay documents
+ * 1024-bit keys.
+ */
+export async function generateRsaKeyPair(bits = 1024): Promise<{ privatePem: string; publicPem: string }> {
+  const pair = await crypto.subtle.generateKey(
+    { name: "RSASSA-PKCS1-v1_5", modulusLength: bits, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+    true,
+    ["sign", "verify"],
+  );
+  const priv = await crypto.subtle.exportKey("pkcs8", pair.privateKey);
+  const pub = await crypto.subtle.exportKey("spki", pair.publicKey);
+  return { privatePem: pemBlock("PRIVATE KEY", priv), publicPem: pemBlock("PUBLIC KEY", pub) };
+}
+
+function pemBlock(label: string, der: ArrayBuffer): string {
+  let bin = "";
+  for (const b of new Uint8Array(der)) bin += String.fromCharCode(b);
+  const lines = btoa(bin).match(/.{1,64}/g) ?? [];
+  return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
+}

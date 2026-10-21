@@ -1,0 +1,285 @@
+{
+  "id": "pos-opay-nightly-sync",
+  "title": "Every night, check OPay for terminal payments the notifications missed",
+  "summary": "Late every night, ask OPay for each terminal's successful payments of the day and add any that are not in the POS sales table yet.",
+  "description": "Every night at the time you choose, for each terminal in your terminals table, asks OPay for the day's successful payments on that terminal and adds them to your POS sales table. A payment already recorded from a notification is recognised by its reference, so nothing is counted twice, and a notification that never arrived is made good before the day closes. Fill in your terminals table with each terminal's serial number first.",
+  "category": "sales",
+  "tags": [
+    "sales",
+    "pos",
+    "opay",
+    "terminal",
+    "data table",
+    "nightly"
+  ],
+  "keywords": [
+    "opay",
+    "opay pos",
+    "opay terminal",
+    "missed",
+    "sync",
+    "nightly",
+    "check",
+    "terminal payments"
+  ],
+  "connectors": [
+    "opay_business@1",
+    "xenibase@1"
+  ],
+  "params": [
+    {
+      "name": "run_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When to check, Lagos time; late, after the shop closes.",
+      "required": true,
+      "default": "23:45",
+      "example": "23:45"
+    },
+    {
+      "name": "table",
+      "type": "string",
+      "title": "POS sales table",
+      "description": "The table the recording workflows write to.",
+      "required": false,
+      "default": "pos_sales",
+      "example": "pos_sales",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "terminals_table",
+      "type": "string",
+      "title": "Terminals table",
+      "description": "Your terminals with their serial numbers.",
+      "required": false,
+      "default": "pos_terminals",
+      "example": "pos_terminals",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "opay_connection",
+      "type": "connection",
+      "connector": "opay_business",
+      "title": "OPay Business connection",
+      "description": "The OPay Business connection to ask.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{table}}",
+      "title": "POS sales",
+      "description": "Every transaction your terminals make, one row per event the provider sends. Amounts are in naira; fee and settled are filled when the provider reports them (OPay does, Moniepoint does not).",
+      "columns": [
+        {
+          "name": "reference",
+          "title": "Reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "terminal",
+          "title": "Terminal",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "approved",
+          "title": "Approved",
+          "type": "boolean"
+        },
+        {
+          "name": "amount",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "fee",
+          "title": "Fee (naira)",
+          "type": "number"
+        },
+        {
+          "name": "settled",
+          "title": "Settled (naira)",
+          "type": "number"
+        },
+        {
+          "name": "happened_at",
+          "title": "When",
+          "type": "datetime"
+        },
+        {
+          "name": "sale_date",
+          "title": "Day",
+          "type": "date"
+        },
+        {
+          "name": "customer",
+          "title": "Customer",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "narration",
+          "title": "Narration",
+          "type": "text"
+        },
+        {
+          "name": "response",
+          "title": "Terminal's answer",
+          "type": "text"
+        },
+        {
+          "name": "event",
+          "title": "Event",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "{{terminals_table}}",
+      "title": "POS terminals",
+      "description": "Your terminals by serial number, with the name you call each one (Counter 1, Ikeja shop). Fill it in so summaries name terminals instead of serial numbers.",
+      "columns": [
+        {
+          "name": "serial",
+          "title": "Serial number",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "title": "Branch",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_posOpayNightlySync",
+    "version": 1,
+    "name": "Nightly OPay terminal check",
+    "description": "Adds the day's OPay terminal payments that the notifications missed.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{run_time:minute}} {{run_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "today",
+        "type": "code",
+        "name": "Work out today's date in Lagos",
+        "input": {
+          "now": "=run.started_at"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "export default function (input) {\n  const now = new Date(input.now);\n  const lagos = new Date((isNaN(now.getTime()) ? new Date() : now).getTime() + 3600 * 1000);\n  return { date: lagos.toISOString().slice(0, 10) };\n}\n"
+        }
+      },
+      {
+        "id": "read_terminals",
+        "type": "connector",
+        "name": "Read your terminals",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{terminals_table}}",
+          "limit": 100
+        }
+      },
+      {
+        "id": "each_terminal",
+        "type": "foreach",
+        "name": "For each terminal",
+        "needs": [
+          "today",
+          "read_terminals"
+        ],
+        "config": {
+          "items": "=has(steps.read_terminals.output.rows) ? steps.read_terminals.output.rows : []",
+          "max_concurrency": 2,
+          "max_items": 100,
+          "steps": [
+            {
+              "id": "list_payments",
+              "type": "connector",
+              "name": "Ask OPay for the terminal's payments today",
+              "connector": "opay_business@1",
+              "action": "list_terminal_transactions",
+              "connection": "{{opay_connection}}",
+              "when": "=has(item.serial) && item.serial != null && string(item.serial) != ''",
+              "input": {
+                "terminal_serial": "=string(item.serial)",
+                "from": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)",
+                "to": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)",
+                "all": true
+              }
+            },
+            {
+              "id": "rows",
+              "type": "code",
+              "name": "Turn them into table rows",
+              "needs": [
+                "list_payments"
+              ],
+              "input": {
+                "records": "=has(steps.list_payments.output.records) ? steps.list_payments.output.records : []",
+                "terminal": "=has(item.serial) ? string(item.serial) : ''",
+                "now": "=run.started_at"
+              },
+              "config": {
+                "language": "javascript",
+                "source": "export default function (input) {\n  const rows = [];\n  const naira = function (kobo) { const n = Number(kobo); return isFinite(n) ? Math.round(n) / 100 : 0; };\n  for (const r of input.records || []) {\n    if (!r) continue;\n    const method = String(r.pay_method || '').toLowerCase();\n    const kinds = { bankcard: 'card purchase', balancepayment: 'OPay wallet payment', banktransfer: 'transfer to terminal', bankaccount: 'transfer to terminal' };\n    const when = new Date(r.completed_time || r.transaction_time || input.now);\n    const t = isNaN(when.getTime()) ? new Date(input.now) : when;\n    const lagos = new Date(t.getTime() + 3600 * 1000);\n    const row = {\n      reference: String(r.pay_no || r.order_no || ''), terminal: String(r.terminal_serial || input.terminal || ''),\n      kind: kinds[method] || (method ? method.replace(/_/g, ' ') : 'pos payment'), status: String(r.status || 'success').toLowerCase(),\n      approved: String(r.status || 'SUCCESS').toUpperCase() === 'SUCCESS', amount: naira(r.amount), fee: naira(r.fee || 0),\n      happened_at: t.toISOString(), sale_date: lagos.toISOString().slice(0, 10), customer: String(r.sender_name || ''),\n      narration: String(r.remark || ''), response: String(r.error_message || ''), event: 'opay:' + String(r.pay_type || 'pos').toLowerCase() };\n    if (r.settlement_amount !== undefined && r.settlement_amount !== null) row.settled = naira(r.settlement_amount);\n    if (row.reference) rows.push(row);\n  }\n  return { rows: rows, count: rows.length };\n}\n"
+              }
+            },
+            {
+              "id": "add_rows",
+              "type": "connector",
+              "name": "Add the payments to the POS sales table",
+              "connector": "xenibase@1",
+              "action": "insert_rows",
+              "connection": "data_tables",
+              "needs": [
+                "rows"
+              ],
+              "when": "=has(steps.rows.output.rows) && size(steps.rows.output.rows) > 0",
+              "input": {
+                "table": "{{table}}",
+                "rows": "=steps.rows.output.rows",
+                "return": "minimal"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  }
+}

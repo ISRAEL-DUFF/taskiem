@@ -1,0 +1,269 @@
+{
+  "id": "pos-opay-settlement-check",
+  "title": "Evening OPay settlement check",
+  "summary": "Every evening, add up what OPay took today, the fees and what was settled to you, and tell the owner with the account balance.",
+  "description": "Every day at the time you choose, reads today's OPay payments from your POS sales table (kept by the OPay recording workflow), adds up the amounts taken, OPay's fees and the amounts settled to you, asks OPay for the account balance, and sends the owner one message with the figures. This is the gross-against-net check: what customers paid, what OPay kept, what reached you. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
+  "category": "reporting",
+  "tags": [
+    "reporting",
+    "pos",
+    "opay",
+    "fees",
+    "owner"
+  ],
+  "keywords": [
+    "opay",
+    "opay balance",
+    "settled",
+    "fees",
+    "charges",
+    "gross",
+    "net",
+    "what opay kept",
+    "opay money"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "opay_business@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Starts the message.",
+      "required": true,
+      "example": "Mama Nkechi Provisions",
+      "max_length": 60
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the check is sent, Lagos time.",
+      "required": true,
+      "default": "21:00",
+      "example": "21:00"
+    },
+    {
+      "name": "table",
+      "type": "string",
+      "title": "POS sales table",
+      "description": "The table the recording workflows write to.",
+      "required": false,
+      "default": "pos_sales",
+      "example": "pos_sales",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "opay_connection",
+      "type": "connection",
+      "connector": "opay_business",
+      "title": "OPay Business connection",
+      "description": "The OPay Business connection to ask.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{table}}",
+      "title": "POS sales",
+      "description": "Every transaction your terminals make, one row per event the provider sends. Amounts are in naira; fee and settled are filled when the provider reports them (OPay does, Moniepoint does not).",
+      "columns": [
+        {
+          "name": "reference",
+          "title": "Reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "terminal",
+          "title": "Terminal",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "approved",
+          "title": "Approved",
+          "type": "boolean"
+        },
+        {
+          "name": "amount",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "fee",
+          "title": "Fee (naira)",
+          "type": "number"
+        },
+        {
+          "name": "settled",
+          "title": "Settled (naira)",
+          "type": "number"
+        },
+        {
+          "name": "happened_at",
+          "title": "When",
+          "type": "datetime"
+        },
+        {
+          "name": "sale_date",
+          "title": "Day",
+          "type": "date"
+        },
+        {
+          "name": "customer",
+          "title": "Customer",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "narration",
+          "title": "Narration",
+          "type": "text"
+        },
+        {
+          "name": "response",
+          "title": "Terminal's answer",
+          "type": "text"
+        },
+        {
+          "name": "event",
+          "title": "Event",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_posOpaySettlementCheck",
+    "version": 1,
+    "name": "Evening OPay settlement check",
+    "description": "Gross taken, fees and settled today, with the OPay balance, to the owner.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "today",
+        "type": "code",
+        "name": "Work out today's date in Lagos",
+        "input": {
+          "now": "=run.started_at"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "export default function (input) {\n  const now = new Date(input.now);\n  const lagos = new Date((isNaN(now.getTime()) ? new Date() : now).getTime() + 3600 * 1000);\n  return { date: lagos.toISOString().slice(0, 10) };\n}\n"
+        }
+      },
+      {
+        "id": "read_payments",
+        "type": "connector",
+        "name": "Read today's OPay payments from the POS sales table",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "needs": [
+          "today"
+        ],
+        "input": {
+          "table": "{{table}}",
+          "filters": [
+            {
+              "column": "sale_date",
+              "op": "eq",
+              "value": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)"
+            },
+            {
+              "column": "event",
+              "op": "like",
+              "value": "opay%"
+            }
+          ],
+          "order": [
+            {
+              "column": "happened_at"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "balance",
+        "type": "connector",
+        "name": "Ask OPay for the account balance",
+        "connector": "opay_business@1",
+        "action": "get_balance",
+        "connection": "{{opay_connection}}",
+        "input": {}
+      },
+      {
+        "id": "totals",
+        "type": "code",
+        "name": "Add up taken, fees and settled",
+        "needs": [
+          "settings",
+          "read_payments",
+          "balance"
+        ],
+        "input": {
+          "rows": "=has(steps.read_payments.output.rows) ? steps.read_payments.output.rows : []",
+          "balance_kobo": "=has(steps.balance.output.available_balance) ? steps.balance.output.available_balance : null",
+          "date": "=has(steps.today.output.date) ? steps.today.output.date : run.started_at.substring(0, 10)",
+          "business_name": "=steps.settings.output.business_name"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "function naira(n) { return 'NGN ' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }\nfunction latestByReference(rows) {\n  const by = {};\n  for (const r of rows || []) {\n    if (!r || !r.reference) continue;\n    const seen = by[r.reference];\n    if (!seen || String(r.happened_at || '') >= String(seen.happened_at || '')) by[r.reference] = r;\n  }\n  return Object.keys(by).map(function (k) { return by[k]; });\n}\nexport default function (input) {\n  let gross = 0, fees = 0, settled = 0, count = 0, unsettledKnown = 0;\n  for (const s of latestByReference(input.rows)) {\n    if (!s.approved) continue;\n    const a = Number(s.amount); if (!isFinite(a)) continue;\n    count += 1; gross += a;\n    const f = Number(s.fee); if (isFinite(f)) fees += f;\n    if (s.settled !== undefined && s.settled !== null && s.settled !== '') { const n = Number(s.settled); if (isFinite(n)) settled += n; }\n    else { unsettledKnown += 1; settled += a - (isFinite(f) ? f : 0); }\n  }\n  const round = function (n) { return Math.round(n * 100) / 100; };\n  const balance = input.balance_kobo === undefined || input.balance_kobo === null ? null : Number(input.balance_kobo) / 100;\n  const lines = [input.business_name + ' OPay, ' + input.date + ': ' + count + ' payment(s), ' + naira(gross) + ' taken, ' + naira(fees) + ' in fees, ' + naira(settled) + ' settled to you.'];\n  if (unsettledKnown > 0) lines.push(unsettledKnown + ' payment(s) carried no settlement figure; amount less fee was used.');\n  if (balance !== null && isFinite(balance)) lines.push('OPay balance now: ' + naira(balance) + '.');\n  if (count === 0) lines[0] = input.business_name + ' OPay, ' + input.date + ': no payments recorded today.';\n  return { gross: round(gross), fees: round(fees), settled: round(settled), count: count, balance: balance, message: lines.join('\\n') };\n}\n"
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell the owner the settlement figures",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "totals"
+        ],
+        "input": {
+          "title": "OPay settlement",
+          "message": "=has(steps.totals.output.message) ? steps.totals.output.message : steps.settings.output.business_name + ' OPay settlement: today\\'s figures could not be added up.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

@@ -1284,6 +1284,71 @@ export const opay = {
   verify_callback: (input: OpayVerifyCallbackInput, extra?: ConnectorExtra): StepSpec => connector("opay@1", "verify_callback", input, extra),
 };
 
+// OPay Business (terminals) (opay_business@1)
+export interface OpayBusinessGetBalanceInput {
+  /** A branch to ask about; defaults to the connection's */
+  merchant_id?: Val<string>;
+}
+export interface OpayBusinessGetPaymentRequestInput {
+  /** Defaults to the connection's */
+  merchant_id?: Val<string>;
+  order_no?: Val<string>;
+  out_order_no?: Val<string>;
+}
+export interface OpayBusinessGetTerminalInput {
+  /** Defaults to the connection's */
+  merchant_id?: Val<string>;
+  terminal_serial: Val<string>;
+}
+export interface OpayBusinessGetTransactionInput {
+  /** The branch the transaction belongs to; defaults to the connection's */
+  merchant_id?: Val<string>;
+  /** OPay's order number */
+  order_no: Val<string>;
+}
+export interface OpayBusinessListTerminalTransactionsInput {
+  /** Fetch every page (up to 1 */
+  all?: Val<boolean>;
+  /** The first day, YYYY-MM-DD (Nigerian time) */
+  from: Val<string>;
+  /** Defaults to the connection's */
+  merchant_id?: Val<string>;
+  page?: Val<number>;
+  page_size?: Val<number>;
+  /** Only this OPay payment number */
+  pay_no?: Val<string>;
+  terminal_serial: Val<string>;
+  /** The terminal's dedicated account number; looked up when empty */
+  tn?: Val<string>;
+  /** The last day, YYYY-MM-DD; at most six days after from */
+  to: Val<string>;
+}
+export interface OpayBusinessRequestPaymentInput {
+  /** Kobo */
+  amount: Val<number>;
+  /** Seconds the terminal keeps asking for the payment */
+  expires_in?: Val<number>;
+  /** Defaults to the connection's */
+  merchant_id?: Val<string>;
+  out_order_no?: Val<string>;
+  remark?: Val<string>;
+  terminal_serial: Val<string>;
+}
+export const opay_business = {
+  /** Get the account balance (read) */
+  get_balance: (input?: OpayBusinessGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "get_balance", input, extra),
+  /** Get a payment request (read) */
+  get_payment_request: (input?: OpayBusinessGetPaymentRequestInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "get_payment_request", input, extra),
+  /** Get a terminal's account (read) */
+  get_terminal: (input: OpayBusinessGetTerminalInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "get_terminal", input, extra),
+  /** Get a transaction (read) */
+  get_transaction: (input: OpayBusinessGetTransactionInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "get_transaction", input, extra),
+  /** List a terminal's successful transactions (read) */
+  list_terminal_transactions: (input: OpayBusinessListTerminalTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "list_terminal_transactions", input, extra),
+  /** Ask a terminal to take a payment (idempotent_write) */
+  request_payment: (input: OpayBusinessRequestPaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "request_payment", input, extra),
+};
+
 // Paystack (paystack@1)
 export interface PaystackCheckBalanceInput {
   [key: string]: Value;
@@ -2353,6 +2418,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "mysql@1": "mysql",
   "notify@1": "notify",
   "opay@1": "opay",
+  "opay_business@1": "opay_business",
   "paystack@1": "paystack",
   "postgres@1": "postgres",
   "prembly@1": "prembly",
@@ -2390,6 +2456,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "mysql@1": ["execute", "query"],
   "notify@1": ["message", "tell", "text"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
+  "opay_business@1": ["get_balance", "get_payment_request", "get_terminal", "get_transaction", "list_terminal_transactions", "request_payment"],
   "paystack@1": ["check_balance", "create_recipient", "initialize_transaction", "list_banks", "list_transactions", "list_transfers", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],

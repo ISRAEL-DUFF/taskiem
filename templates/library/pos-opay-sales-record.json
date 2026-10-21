@@ -1,0 +1,278 @@
+{
+  "id": "pos-opay-sales-record",
+  "title": "Record every OPay payment in the POS sales table",
+  "summary": "Every payment on your OPay business account, your POS terminals included, kept in your POS sales table with the fee and what was settled.",
+  "description": "Whenever OPay reports a payment on your business account (a card paid on a terminal, a transfer to a terminal's account, a wallet payment), adds a row to your POS sales table with the terminal, the kind, the amount, OPay's fee, the amount settled to you, the day and whether it went through. The same table the Moniepoint recording workflow writes to, so the evening summary and cash-up cover both. Connect OPay Business once under Connections (Taskiem makes the key pair and shows where in the OPay dashboard to paste the public key and the webhook address). Nothing is sent to anyone.",
+  "category": "sales",
+  "tags": [
+    "sales",
+    "pos",
+    "opay",
+    "terminal",
+    "data table"
+  ],
+  "keywords": [
+    "opay",
+    "opay pos",
+    "opay terminal",
+    "opay business",
+    "card machine",
+    "pos",
+    "terminal",
+    "settlement",
+    "fee"
+  ],
+  "connectors": [
+    "opay_business@1",
+    "xenibase@1"
+  ],
+  "params": [
+    {
+      "name": "table",
+      "type": "string",
+      "title": "POS sales table",
+      "description": "Where each payment is kept. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "pos_sales",
+      "example": "pos_sales",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "terminals_table",
+      "type": "string",
+      "title": "Terminals table",
+      "description": "Your terminals and the names you call them, which the summaries use. Taskiem makes it for you; fill it in when you can.",
+      "required": false,
+      "default": "pos_terminals",
+      "example": "pos_terminals",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "opay_connection",
+      "type": "connection",
+      "connector": "opay_business",
+      "title": "OPay Business connection",
+      "description": "The OPay Business connection whose notifications start this workflow.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{table}}",
+      "title": "POS sales",
+      "description": "Every transaction your terminals make, one row per event the provider sends. Amounts are in naira; fee and settled are filled when the provider reports them (OPay does, Moniepoint does not).",
+      "columns": [
+        {
+          "name": "reference",
+          "title": "Reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "terminal",
+          "title": "Terminal",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "approved",
+          "title": "Approved",
+          "type": "boolean"
+        },
+        {
+          "name": "amount",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "fee",
+          "title": "Fee (naira)",
+          "type": "number"
+        },
+        {
+          "name": "settled",
+          "title": "Settled (naira)",
+          "type": "number"
+        },
+        {
+          "name": "happened_at",
+          "title": "When",
+          "type": "datetime"
+        },
+        {
+          "name": "sale_date",
+          "title": "Day",
+          "type": "date"
+        },
+        {
+          "name": "customer",
+          "title": "Customer",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "narration",
+          "title": "Narration",
+          "type": "text"
+        },
+        {
+          "name": "response",
+          "title": "Terminal's answer",
+          "type": "text"
+        },
+        {
+          "name": "event",
+          "title": "Event",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "{{terminals_table}}",
+      "title": "POS terminals",
+      "description": "Your terminals by serial number, with the name you call each one (Counter 1, Ikeja shop). Fill it in so summaries name terminals instead of serial numbers.",
+      "columns": [
+        {
+          "name": "serial",
+          "title": "Serial number",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "title": "Branch",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_posOpaySalesRecord",
+    "version": 1,
+    "name": "Record every OPay payment",
+    "description": "Keeps each payment OPay reports on the business account in the POS sales table.",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "opay_business@1",
+        "trigger": "payment",
+        "events": [
+          "payment"
+        ],
+        "connection": "{{opay_connection}}"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "payNo": {
+            "type": "string"
+          },
+          "outOrderNo": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "fee": {
+            "type": "string"
+          },
+          "settlementAmount": {
+            "type": "string"
+          },
+          "payMethod": {
+            "type": "string"
+          },
+          "payType": {
+            "type": "string"
+          },
+          "transactionType": {
+            "type": "string"
+          },
+          "transactionName": {
+            "type": "string"
+          },
+          "sn": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "errorMsg": {
+            "type": "string"
+          },
+          "senderName": {
+            "type": "string"
+          },
+          "transactionTime": {
+            "type": "string"
+          },
+          "completedTime": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "prepare",
+        "type": "code",
+        "name": "Read the payment from OPay's notification",
+        "input": {
+          "event": "=trigger.body",
+          "received_at": "=run.started_at"
+        },
+        "config": {
+          "language": "javascript",
+          "source": "export default function (input) {\n  const d = input.event || {};\n  const status = String(d.status || '').toUpperCase();\n  const approved = status === 'SUCCESS';\n  const pending = status === 'PENDING' || status === 'INITIAL' || status === '';\n  const naira = function (v) { const n = Number(v); return isFinite(n) ? Math.round(n * 100) / 100 : 0; };\n  const method = String(d.payMethod || '').toLowerCase();\n  const kinds = { bankcard: 'card purchase', balancepayment: 'OPay wallet payment', banktransfer: 'transfer to terminal', bankaccount: 'transfer to terminal', ussd: 'USSD payment', qrcode: 'QR payment' };\n  let kind = kinds[method] || '';\n  if (!kind && /virtual account|transfer/i.test(String(d.remark || '') + ' ' + String(d.transactionName || ''))) kind = 'transfer to terminal';\n  if (!kind) kind = method ? method.replace(/_/g, ' ') : (String(d.payType || '') === 'POS' ? 'pos payment' : 'payment');\n  const ms = Number(d.completedTime || d.transactionTime);\n  let when = isFinite(ms) && ms > 0 ? new Date(ms) : new Date(input.received_at);\n  if (isNaN(when.getTime())) when = new Date(0);\n  const lagos = new Date(when.getTime() + 3600 * 1000);\n  const row = {\n    reference: String(d.payNo || d.orderNo || ''), terminal: String(d.sn || ''), kind: kind,\n    status: status ? status.toLowerCase() : 'unknown', approved: approved, amount: naira(d.amount), fee: naira(d.fee),\n    happened_at: when.toISOString(), sale_date: lagos.toISOString().slice(0, 10), customer: String(d.senderName || ''),\n    narration: String(d.remark || ''), response: String(d.errorMsg || ''), event: 'opay:' + String(d.payType || d.transactionType || 'payment').toLowerCase() };\n  if (d.settlementAmount !== undefined && d.settlementAmount !== null && d.settlementAmount !== '') row.settled = naira(d.settlementAmount);\n  return { row: row, pending: pending, naira: row.amount };\n}\n"
+        }
+      },
+      {
+        "id": "record",
+        "type": "connector",
+        "name": "Add the payment to the POS sales table",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "prepare"
+        ],
+        "input": {
+          "table": "{{table}}",
+          "row": "=has(steps.prepare.output.row) ? steps.prepare.output.row : {}",
+          "return": "minimal"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

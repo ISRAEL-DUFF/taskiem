@@ -112,3 +112,18 @@ describe("connection pickers", () => {
     expect(needsConnection({ ...xenibase, auth: { type: "", fields: null } })).toBe(false);
   });
 });
+
+describe("generateRsaKeyPair", () => {
+  it("makes a private key to keep and a public key to give the provider, as PEM blocks", async () => {
+    const { generateRsaKeyPair } = await import("./connections");
+    const pair = await generateRsaKeyPair();
+    expect(pair.privatePem.startsWith("-----BEGIN PRIVATE KEY-----\n")).toBe(true);
+    expect(pair.privatePem.trimEnd().endsWith("-----END PRIVATE KEY-----")).toBe(true);
+    expect(pair.publicPem.startsWith("-----BEGIN PUBLIC KEY-----\n")).toBe(true);
+    expect(pair.publicPem.trimEnd().endsWith("-----END PUBLIC KEY-----")).toBe(true);
+    // Base64 lines of at most 64 characters, and the public key is short.
+    const lines = pair.publicPem.trim().split("\n").slice(1, -1);
+    expect(lines.every((l) => l.length <= 64 && /^[A-Za-z0-9+/=]+$/.test(l))).toBe(true);
+    expect(lines.length).toBeGreaterThan(2);
+  });
+});
