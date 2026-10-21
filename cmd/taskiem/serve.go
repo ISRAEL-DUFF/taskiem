@@ -624,7 +624,15 @@ func aiSettings(c ai.Config) (*api.AISettings, error) {
 	if err != nil || prov == nil {
 		return nil, err
 	}
-	return &api.AISettings{Provider: prov, Effort: c.Effort, MaxTokens: c.MaxTokens}, nil
+	out := &api.AISettings{Provider: prov, Effort: c.Effort, MaxTokens: c.MaxTokens}
+	if c.ModerationModel != "" && c.ModerationModel != c.Model {
+		m := c
+		m.Model = c.ModerationModel
+		if out.Moderation, err = ai.New(m); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // edgeServer is the edge role's server: git pushes, and WhatsApp and USSD

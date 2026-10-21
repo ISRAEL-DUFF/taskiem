@@ -373,6 +373,21 @@ func (s *Step) Children() [][]*Step {
 	return out
 }
 
+// Walk calls fn for every step, in any scope, parents before children,
+// in definition order.
+func (d *Definition) Walk(fn func(*Step)) {
+	var walk func([]*Step)
+	walk = func(steps []*Step) {
+		for _, s := range steps {
+			fn(s)
+			for _, sub := range s.Children() {
+				walk(sub)
+			}
+		}
+	}
+	walk(d.Steps)
+}
+
 // Step returns the step with the given id, in any scope.
 func (d *Definition) Step(id string) *Step { return d.byID[id] }
 

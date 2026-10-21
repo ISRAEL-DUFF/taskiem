@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import type { WorkflowDefinition } from "@sdk/wd";
 import { get, type Problem } from "../api";
 import { FormView } from "../forms/FormView";
+import { RolePicker } from "../forms/RolePicker";
 import {
   FIELD_NAME,
   FIELD_TYPES,
@@ -606,7 +607,11 @@ export function FormStepEditor({ cfg, onChange, problems }: { cfg: FormStepConfi
           </select>
         </Field>
         <Field label={kind === "role" ? "Role" : kind === "phone" ? "Phone (expression)" : "Email (expression)"} hint={kind === "role" ? "They find it under To fill in" : `e.g. =trigger.body.${kind}`}>
-          <input className={kind === "role" ? undefined : "mono"} value={toValue} onChange={(e) => set({ to: { [kind]: e.target.value } })} />
+          {kind === "role" ? (
+            <RolePicker value={toValue} onChange={(role) => set({ to: { role } })} />
+          ) : (
+            <input className="mono" value={toValue} onChange={(e) => set({ to: { [kind]: e.target.value } })} />
+          )}
         </Field>
       </div>
       {kind !== "role" && (

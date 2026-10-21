@@ -267,6 +267,14 @@ func buildNotes(c *chat, prop *builder.Proposal) string {
 	if len(notes) > 4 {
 		notes = notes[:4]
 	}
+	// What it needs before it can run, in the chat's language.
+	var needs []string
+	for _, n := range prop.Needs {
+		needs = append(needs, "• "+needMessage(c.lang.Tag, n.Kind, n.Problem, n.Service, n.Name))
+	}
+	if len(needs) > 0 {
+		notes = append(notes, c.t("wa.build.needs")+"\n"+strings.Join(dedupe(needs), "\n"))
+	}
 	return strings.Join(dedupe(notes), "\n")
 }
 

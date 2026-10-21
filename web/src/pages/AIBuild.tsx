@@ -15,6 +15,8 @@ import {
   type ReviewedTable,
   type TableResult,
 } from "../lib/aitables";
+import type { ReadyNeed, Readiness } from "../lib/readiness";
+import { NeedsList } from "./Readiness";
 
 // "Build with AI" (docs/ai.md): describe a goal, the server drafts,
 // validates, self-corrects and dry-runs a workflow, and the person reviews
@@ -59,6 +61,8 @@ interface Proposal {
   model: string;
   /** New data tables the draft uses, made when it is saved. */
   tables?: ProposedTable[];
+  /** What the draft needs before it can run (connections, settings, roles). */
+  needs?: ReadyNeed[];
 }
 
 interface Build {
@@ -213,6 +217,7 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
           <Review proposal={p}>
             {build.status === "proposed" && p.definition && (
               <>
+                <DraftNeeds proposal={p} />
                 {tables.length > 0 && <TablesReview tables={tables} onChange={setTables} canMake={can("table.edit")} />}
                 {!workflow && (
                   <Field label="Name">
@@ -239,6 +244,24 @@ export function AIBuilder({ workflow, onClose, onSaved }: { workflow?: string; o
       </div>
     </Modal>
   );
+}
+
+/**
+ * What the draft needs, checked again after each fix: the proposal's
+ * needs first, then the server's answer for the same definition.
+ */
+function DraftNeeds({ proposal: p }: { proposal: Proposal }) {
+  const [tick, setTick] = useState(0);
+  const [live, setLive] = useState<ReadyNeed[]>();
+  useEffect(() => {
+    if (tick === 0 || !p.definition) return;
+    let on = true;
+    void post<Readiness>("/v1/readiness", { definition: p.definition }).then((r) => on && setLive(r.needs));
+    return () => {
+      on = false;
+    };
+  }, [tick, p.definition]);
+  return <NeedsList needs={live ?? p.needs ?? []} onChanged={() => setTick((n) => n + 1)} tablesHere />;
 }
 
 function Review({ proposal: p, children }: { proposal: Proposal; children: ReactNode }) {
@@ -283,7 +306,7 @@ function Review({ proposal: p, children }: { proposal: Proposal; children: React
       {p.summary && <p>{p.summary}</p>}
       {p.assumptions.length > 0 && (
         <>
-          <h3>To confirm</h3>
+          <h3>What the AI assumed</h3>
           <ul>
             {p.assumptions.map((a, i) => (
               <li key={i}>{a}</li>

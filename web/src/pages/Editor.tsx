@@ -12,6 +12,8 @@ import { merge } from "../lib/schema";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
 import { Badge, ErrorBox, Field, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { AIBuilder } from "./AIBuild";
+import { NeedsList } from "./Readiness";
+import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 const nodeTypes = { step: StepNode };
 const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
@@ -54,6 +56,8 @@ export function Editor() {
   const [def, setDef] = useState<WorkflowDefinition>();
   const [layout, setLayout] = useState<Layout>({});
   const [problems, setProblems] = useState<Problem[]>([]);
+  // A publish refused for what the version still needs.
+  const [needs, setNeeds] = useState<{ version: number; needs: ReadyNeed[] }>();
   const [selected, setSelected] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<"canvas" | "settings" | "code" | "json" | "triggers">("canvas");
@@ -183,9 +187,15 @@ export function Editor() {
       try {
         r = await post(`/v1/workflows/${id}/versions/${v}/publish`);
       } catch (e) {
+        // Not ready: what it needs, each with its fix, instead of an error.
+        if (e instanceof ApiError && e.status === 422 && e.body.code === "not_ready") {
+          setNeeds({ version: v, needs: (e.body.needs as ReadyNeed[] | undefined) ?? [] });
+          return;
+        }
         if (e instanceof ApiError && e.status === 422) setProblems(e.problems as Problem[]);
         throw e;
       }
+      setNeeds(undefined);
       if (r.state === "pending_approval") {
         setNotice(`Version ${v} is waiting for a second person to publish it (Approvals → Publishing to review).`);
         wf.reload();
@@ -253,6 +263,19 @@ export function Editor() {
         )}
       </div>
       <ErrorBox error={act.error} />
+      {needs && (
+        <div>
+          <p>Version {needs.version} is saved, but not published yet: fix these, then publish again.</p>
+          <NeedsList
+            needs={needs.needs}
+            onChanged={() =>
+              void get<Readiness>(`/v1/workflows/${id}/versions/${needs.version}/readiness`).then((r) =>
+                setNeeds(r.ready ? undefined : { version: needs.version, needs: r.needs }),
+              )
+            }
+          />
+        </div>
+      )}
       <Deployments workflow={id} deployments={wf.data.deployments} canPromote={can("workflow.publish")} onChange={wf.reload} />
       {managed && (
         <div className="notice" role="status">

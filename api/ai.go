@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -40,6 +41,9 @@ type AISettings struct {
 	Provider  ai.Provider
 	Effort    string // default high
 	MaxTokens int    // default ai.DefaultMaxTokens
+	// Moderation is the model storefront moderation uses, when it is not
+	// Provider (TASKIEM_AI_MODERATION_MODEL).
+	Moderation ai.Provider
 }
 
 // aiRoutes is every route under /v1/ai, with the one permission each
@@ -251,6 +255,22 @@ func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) (*buil
 		},
 	}
 	prop, err := b.Build(ctx, req)
+	// What the draft needs before it can run, for the review to fix.
+	if err == nil && prop != nil && len(prop.Definition) > 0 {
+		if rerr := inTx(func(tx pgx.Tx) error {
+			envs, blocking, err := readyEnvs(ctx, tx)
+			if err != nil {
+				return err
+			}
+			needs, err := s.readiness(ctx, tx, who.tenant, prop.Definition, envs, blocking, lang.EN)
+			if needs != nil {
+				prop.Needs = needs
+			}
+			return err
+		}); rerr != nil {
+			s.Logger.Warn("ai build: readiness", "build", id, "err", rerr)
+		}
+	}
 	s.finishBuild(ctx, id, who, prop, err)
 	return prop, err
 }
@@ -408,6 +428,22 @@ func aiContext(ctx context.Context, tx pgx.Tx, env string, skip *uuid.UUID) (bui
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
+		return c, err
+	}
+	// Roles by how many hold them, never who.
+	if err := tx.QueryRow(ctx, `SELECT count(DISTINCT m.user_id) FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.status = 'active'`).Scan(&c.Members); err != nil {
+		return c, err
+	}
+	rows, err = tx.Query(ctx, `SELECT m.role, count(DISTINCT m.user_id)::int FROM memberships m JOIN users u ON u.id = m.user_id
+		WHERE u.status = 'active' GROUP BY m.role ORDER BY m.role LIMIT 100`)
+	if err != nil {
+		return c, err
+	}
+	c.Roles, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (builder.Role, error) {
+		var x builder.Role
+		return x, r.Scan(&x.Name, &x.Holders)
+	})
+	if err != nil {
 		return c, err
 	}
 	rows, err = tx.Query(ctx, `SELECT environment, name FROM variables WHERE ($1 = '' OR environment = $1) ORDER BY environment, name LIMIT 500`, env)

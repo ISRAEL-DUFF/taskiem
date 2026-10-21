@@ -132,6 +132,38 @@
       "text": "{name} no dey here. Languages wey dey here: {languages}.",
       "reviewed": false
     },
+    "ready.connection_ambiguous": {
+      "text": "You get pass one {service} connection; choose the one wey you go use.",
+      "reviewed": false
+    },
+    "ready.connection_disabled": {
+      "text": "Your {service} connection dey off; on am or connect am again.",
+      "reviewed": false
+    },
+    "ready.connection_expired": {
+      "text": "Your {service} connection don expire; connect am again.",
+      "reviewed": false
+    },
+    "ready.connection_missing": {
+      "text": "Connect {service}.",
+      "reviewed": false
+    },
+    "ready.role": {
+      "text": "Nobody get the role {role} yet, so na owners we go ask; give am to person if na dem suppose decide.",
+      "reviewed": false
+    },
+    "ready.secret": {
+      "text": "Add the private value {name}.",
+      "reviewed": false
+    },
+    "ready.table": {
+      "text": "Make the table {name}.",
+      "reviewed": false
+    },
+    "ready.variable": {
+      "text": "Fill {name}.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "don cancel",
       "reviewed": false
@@ -502,6 +534,10 @@
     },
     "wa.build.need_details": {
       "text": "I need {count} more detail to finish am. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.build.needs": {
+      "text": "Before e fit run:",
       "reviewed": false
     },
     "wa.build.not_saved": {

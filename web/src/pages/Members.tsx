@@ -4,6 +4,7 @@ import { useAuth } from "../auth";
 import { AgentVisits } from "./AgentVisits";
 import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
+import { roleLabel, roleName, type ApproverRole } from "../forms/RolePicker";
 
 interface Permission {
   name: string;
@@ -307,6 +308,25 @@ function EditRole({ role, onClose, onDone }: { role: Role | null; onClose: () =>
   );
 }
 
+/** The business roles already in use, to tick instead of typing. */
+function BusinessRoles({ chosen, onChoose }: { chosen: string[]; onChoose: (roles: string[]) => void }) {
+  const roles = useLoad(() => get<{ roles: ApproverRole[] }>("/v1/approver-roles"), []);
+  const business = roles.data?.roles.filter((r) => !r.builtin) ?? [];
+  if (business.length === 0) return null;
+  return (
+    <Field label="Business roles">
+      <div>
+        {business.map((r) => (
+          <label key={r.name} className="inline">
+            <input type="checkbox" checked={chosen.includes(r.name)} onChange={(e) => onChoose(e.target.checked ? [...chosen, r.name] : chosen.filter((x) => x !== r.name))} />
+            {roleLabel(r)}
+          </label>
+        ))}
+      </div>
+    </Field>
+  );
+}
+
 function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClose: () => void; onDone: () => void }) {
   const { me, can } = useAuth();
   const [email, setEmail] = useState("");
@@ -320,7 +340,7 @@ function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClo
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const all = [...roles, ...custom.split(",").map((s) => s.trim()).filter(Boolean)];
+          const all = [...roles, ...custom.split(",").map(roleName).filter(Boolean)];
           void act.run(async () => (await post("/v1/members", { email, name, password, roles: all }), onDone()));
         }}
       >
@@ -346,7 +366,8 @@ function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClo
             ))}
           </div>
         </Field>
-        <Field label="Business roles" hint="Comma-separated, e.g. payroll_approver; approval steps name these">
+        <BusinessRoles chosen={roles} onChoose={setRoles} />
+        <Field label="A new business role" hint="In words, e.g. Payroll approver. Approval steps can name it, and its holders decide those approvals.">
           <input value={custom} onChange={(e) => setCustom(e.target.value)} />
         </Field>
         <ErrorBox error={act.error} />

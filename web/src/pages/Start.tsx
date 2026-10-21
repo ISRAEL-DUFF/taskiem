@@ -7,6 +7,8 @@ import { CHECKLIST, formatDuration, sampleInput, starterTemplates } from "../lib
 import { initialValues, toParams, type Template } from "../lib/templates";
 import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from "../ui";
 import { ParamField } from "./Templates";
+import { NeedsList } from "./Readiness";
+import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 // Get started (docs/onboarding.md): the checklist, derived from what the
 // organisation has done, and the guided first workflow: pick a template,
@@ -269,6 +271,8 @@ function CreateAndPublish({
   onDone: (wf: { id: string; published: boolean; problems: Problem[] }) => void;
 }) {
   const act = useAction();
+  // Made, but not ready to publish: what it needs, fixed here.
+  const [needs, setNeeds] = useState<{ id: string; needs: ReadyNeed[] }>();
   const fieldErrors = act.error instanceof ApiError && Array.isArray(act.error.body.params) ? (act.error.body.params as { param: string; message: string }[]) : [];
   if (wf?.published) {
     return (
@@ -298,6 +302,12 @@ function CreateAndPublish({
         </ul>
       )}
       <ErrorBox error={fieldErrors.length > 0 ? null : act.error} />
+      {needs && (
+        <NeedsList
+          needs={needs.needs}
+          onChanged={() => void get<Readiness>(`/v1/workflows/${needs.id}/versions/1/readiness`).then((r) => setNeeds({ id: needs.id, needs: r.needs }))}
+        />
+      )}
       <button
         className="primary"
         disabled={!ready || act.busy}
@@ -312,7 +322,18 @@ function CreateAndPublish({
                 return;
               }
             }
-            const p = await post<{ state: string }>(`/v1/workflows/${id}/versions/1/publish`);
+            let p: { state: string };
+            try {
+              p = await post<{ state: string }>(`/v1/workflows/${id}/versions/1/publish`);
+            } catch (e) {
+              if (e instanceof ApiError && e.status === 422 && e.body.code === "not_ready") {
+                setNeeds({ id, needs: (e.body.needs as ReadyNeed[] | undefined) ?? [] });
+                onDone({ id, published: false, problems: [] });
+                return;
+              }
+              throw e;
+            }
+            setNeeds(undefined);
             onDone({ id, published: p.state === "published", problems: [] });
           })
         }

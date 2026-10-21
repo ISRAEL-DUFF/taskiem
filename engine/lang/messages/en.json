@@ -164,6 +164,46 @@
       "reviewed": true,
       "context": "A language that is not on"
     },
+    "ready.connection_ambiguous": {
+      "text": "You have more than one {service} connection; choose which one to use.",
+      "reviewed": true,
+      "context": "Readiness: several connections and the step names none"
+    },
+    "ready.connection_disabled": {
+      "text": "Your {service} connection is switched off; switch it on or connect it again.",
+      "reviewed": true,
+      "context": "Readiness: the connection is disabled"
+    },
+    "ready.connection_expired": {
+      "text": "Your {service} connection has expired; connect it again.",
+      "reviewed": true,
+      "context": "Readiness: the connection's sign-in expired"
+    },
+    "ready.connection_missing": {
+      "text": "Connect {service}.",
+      "reviewed": true,
+      "context": "Readiness: a step needs a service the business has not connected"
+    },
+    "ready.role": {
+      "text": "Nobody has the role {role} yet, so owners will be asked; give it to someone if they should decide.",
+      "reviewed": true,
+      "context": "Readiness: an approval or form names a role no member holds"
+    },
+    "ready.secret": {
+      "text": "Add the private value {name}.",
+      "reviewed": true,
+      "context": "Readiness: a secret the workflow reads is not stored"
+    },
+    "ready.table": {
+      "text": "Make the table {name}.",
+      "reviewed": true,
+      "context": "Readiness: a data table the workflow uses does not exist"
+    },
+    "ready.variable": {
+      "text": "Fill in {name}.",
+      "reviewed": true,
+      "context": "Readiness: a setting (variable) the workflow reads is not set"
+    },
     "run.status.cancelled": {
       "text": "cancelled",
       "reviewed": true,
@@ -628,6 +668,11 @@
       "text": "I need {count} more detail(s) to finish it. Send *cancel* to stop.",
       "reviewed": true,
       "context": "A template needs details"
+    },
+    "wa.build.needs": {
+      "text": "Before it can run:",
+      "reviewed": true,
+      "context": "AI build in chat: a list of what the draft still needs follows"
     },
     "wa.build.not_saved": {
       "text": "OK, nothing was saved.",

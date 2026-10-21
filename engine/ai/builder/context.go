@@ -24,6 +24,16 @@ type Context struct {
 	// Tables are the tenant's data tables (decision 0033): names and
 	// column types only, never rows.
 	Tables []DataTable `json:"data_tables,omitempty"`
+	// Roles are the roles the business's members hold, with how many hold
+	// each (never who); Members is how many active members it has.
+	Roles   []Role `json:"roles,omitempty"`
+	Members int    `json:"members,omitempty"`
+}
+
+// Role is a membership role and how many active members hold it.
+type Role struct {
+	Name    string `json:"name"`
+	Holders int    `json:"holders"`
 }
 
 // DataTable is a data table, reached with xenibase@1 actions on the

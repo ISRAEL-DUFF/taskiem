@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Step } from "@sdk/wd";
 import type { ConnectorInfo, Problem } from "../api";
 import { FormStepEditor } from "./FormEditor";
+import { RolePicker } from "../forms/RolePicker";
 import type { FormStepConfig } from "../lib/forms";
 import { SchemaForm } from "../forms/SchemaForm";
 import { merge } from "../lib/schema";
@@ -181,8 +182,8 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       {step.type === "approval" && (
         <>
           <div className="row">
-            <Field label="Role" hint="Members with this role may decide">
-              <input value={String(cfg.role ?? "")} onChange={(e) => setCfg({ role: e.target.value })} />
+            <Field label="Who decides" hint="Members with this role, and the business's owners">
+              <RolePicker label="Who decides" value={String(cfg.role ?? "")} allowNone onChange={(role) => setCfg({ role: role || undefined })} />
             </Field>
             <Field label="Approvals needed">
               <input type="number" min={1} value={Number(cfg.count ?? 1)} onChange={(e) => setCfg({ count: Number(e.target.value) > 1 ? Number(e.target.value) : undefined })} />

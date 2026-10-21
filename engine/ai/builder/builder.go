@@ -151,8 +151,42 @@ type Proposal struct {
 	// Tables are the new data tables the draft uses, made when it is saved
 	// (the person may change them first).
 	Tables []TableSpec `json:"tables"`
-	Usage  ai.Usage    `json:"usage"`
-	Model  string      `json:"model"`
+	// Needs are what the draft needs before it can run (connections,
+	// variables, secrets, tables, roles), found by the platform's
+	// readiness check, each something the review offers to fix.
+	Needs []Need   `json:"needs"`
+	Usage ai.Usage `json:"usage"`
+	Model string   `json:"model"`
+}
+
+// Need is one thing a workflow needs before it can run where it is
+// published (no-technical-steps N3).
+type Need struct {
+	// Kind is connection, variable, secret, table or role.
+	Kind string `json:"kind"`
+	// Name is the connection's, variable's, secret's, table's or role's
+	// name; "" for a connection a step does not name (the only one of its
+	// service is used).
+	Name string `json:"name"`
+	// Connector and Service are a connection's connector id and its
+	// display name.
+	Connector string `json:"connector,omitempty"`
+	Service   string `json:"service,omitempty"`
+	// Problem is missing; for a connection also expired, disabled or
+	// ambiguous; for a role, nobody (no member holds it: owners decide).
+	Problem     string     `json:"problem"`
+	Environment string     `json:"environment"`
+	Steps       []NeedStep `json:"steps"`
+	// Blocking needs stop a publish: a run would fail at once.
+	Blocking bool `json:"blocking"`
+	// Message says it in plain words.
+	Message string `json:"message"`
+}
+
+// NeedStep is a step that has a need, by id and name.
+type NeedStep struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // Valid reports whether the proposal passes the publishing checks.
@@ -221,7 +255,7 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 	sysDigest := hex.EncodeToString(digest[:])
 
 	p := &Proposal{Connectors: refs, TemplatesOffered: offered, Problems: []Problem{}, Warnings: []Warning{}, Results: []TestResult{}, Assumptions: []string{},
-		Tables: []TableSpec{}}
+		Tables: []TableSpec{}, Needs: []Need{}}
 	var use *TemplateUse
 	var env *Envelope
 	var doc []byte
@@ -538,6 +572,8 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 		"data_tables":         nonNil(req.Context.Tables),
 		"variables":           nonNil(req.Context.Variables),
 		"approval_policies":   nonNil(req.Context.Policies),
+		"roles":               nonNil(req.Context.Roles),
+		"members":             req.Context.Members,
 		"similar_workflows":   nonNil(similar(req.Goal, req.Context.Workflows, 3)),
 	}
 	if req.Environment != "" {

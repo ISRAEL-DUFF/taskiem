@@ -18,7 +18,7 @@ Every way of publishing (the web app, chat, a field agent, a settings change tha
 
 1. **A word list** catches the obvious first: "double your money", "verify your account", weapons, drugs, counterfeit and the like, after undoing look-alike characters (`d0uble`, `p1stol`). Some words block; others (loans, "first copy", tramadol) only flag, since they are often innocent.
 2. **Prices:** ₦0, or above ₦10,000,000, is flagged.
-3. **A model** through Taskiem's AI layer judges the words against a written policy (below), in the five languages. A piece of text is checked once per organisation: the verdict is kept by its digest. If no model is configured, or it fails, the words and prices still apply.
+3. **A model** through Taskiem's AI layer (`TASKIEM_AI_MODERATION_MODEL` when set, else the building model) judges the words against a written policy (below), in the five languages. A piece of text is checked once per organisation: the verdict is kept by its digest. If no model is configured, or it fails, the words and prices still apply.
 
 Each answers **allowed**, **flagged** (a person looks) or **blocked** (refused), with a category and a reason.
 

@@ -132,6 +132,38 @@
       "text": "{name} kò sí níbí. Àwọn èdè tó wà níbí: {languages}.",
       "reviewed": false
     },
+    "ready.connection_ambiguous": {
+      "text": "Ẹ ní ìsopọ̀ {service} ju ẹyọ kan lọ; ẹ yan èyí tí ẹ fẹ́ lò.",
+      "reviewed": false
+    },
+    "ready.connection_disabled": {
+      "text": "Ìsopọ̀ {service} yín ti wà ní pípa; ẹ tàn án tàbí kí ẹ so ó pọ̀ lẹ́ẹ̀kan sí i.",
+      "reviewed": false
+    },
+    "ready.connection_expired": {
+      "text": "Ìsopọ̀ {service} yín ti parí; ẹ so ó pọ̀ lẹ́ẹ̀kan sí i.",
+      "reviewed": false
+    },
+    "ready.connection_missing": {
+      "text": "Ẹ so {service} pọ̀.",
+      "reviewed": false
+    },
+    "ready.role": {
+      "text": "Kò sí ẹni tó ní ipa {role} síbẹ̀, nítorí náà a ó béèrè lọ́wọ́ àwọn olùní; ẹ fi fún ẹnìkan bí ó bá yẹ kí wọ́n pinnu.",
+      "reviewed": false
+    },
+    "ready.secret": {
+      "text": "Ẹ fi iye àṣírí {name} kún un.",
+      "reviewed": false
+    },
+    "ready.table": {
+      "text": "Ẹ ṣe tábìlì {name}.",
+      "reviewed": false
+    },
+    "ready.variable": {
+      "text": "Ẹ kọ {name} sí.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "ti fagilé",
       "reviewed": false
@@ -502,6 +534,10 @@
     },
     "wa.build.need_details": {
       "text": "Mo nílò àlàyé {count} sí i láti parí rẹ̀. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
+      "reviewed": false
+    },
+    "wa.build.needs": {
+      "text": "Kí ó tó lè ṣiṣẹ́:",
       "reviewed": false
     },
     "wa.build.not_saved": {

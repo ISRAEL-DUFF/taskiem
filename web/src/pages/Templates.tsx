@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { Help } from "../onboarding";
 import { byCategory, initialValues, inputKind, lineLabel, toParams, WEEKDAYS, type Template, type TemplateParam } from "../lib/templates";
 import { Badge, ErrorBox, Field, useAction, useLoad } from "../ui";
+import { RolePicker } from "../forms/RolePicker";
 
 // The SME template library (docs/templates.md): browse ready workflows,
 // read their steps in plain words, and create a draft from one by filling
@@ -181,6 +182,14 @@ export function ParamField({ param: p, value, error, onChange }: { param: Templa
     </>
   );
   let input;
+  // A role a template's approval names is picked, never typed.
+  if (/(^|_)role$/.test(p.name) && p.type === "string") {
+    return (
+      <Field label={label} hint={hint}>
+        <RolePicker label={label} value={value} onChange={onChange} />
+      </Field>
+    );
+  }
   switch (kind) {
     case "textarea":
       input = <textarea rows={3} value={value} maxLength={p.max_length ?? 900} onChange={(e) => onChange(e.target.value)} aria-invalid={!!error} />;
