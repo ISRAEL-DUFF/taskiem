@@ -11,7 +11,8 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
 
   // Create a workflow; the editor opens on its first draft.
   await page.getByRole("button", { name: "New workflow" }).click();
@@ -47,7 +48,7 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
   await shot(page, "run");
 
   // The run shows in the list, and the audit chain verifies.
-  await page.getByRole("link", { name: "Runs" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Activity" }).click();
   await expect(page.getByRole("cell", { name: /Smoke flow/ })).toBeVisible();
   await page.getByRole("link", { name: "Audit log" }).click();
   await expect(page.getByText("workflow.publish").first()).toBeVisible();

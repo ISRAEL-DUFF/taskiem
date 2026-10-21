@@ -1,26 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  cleanColumns,
-  formFrom,
-  requestFrom,
-  sameRequest,
-  tidyMessage,
-  columnsFor,
-  catalogueTables,
-  formatPrice,
-  guessColumns,
-  hoursErrors,
-  hoursFromForm,
-  hoursToForm,
-  imageProblem,
-  pastMidnight,
-  sameAsMonday,
-  slugError,
-  slugify,
-  thumb,
-  type Hours,
-  itemRow,
-} from "./storefront";
+import { cleanColumns, formFrom, requestFrom, sameRequest, tidyMessage, columnsFor, catalogueTables, formatPrice, guessColumns, hoursErrors, hoursFromForm, hoursToForm, imageProblem, pastMidnight, sameAsMonday, slugError, slugify, thumb, type Hours, itemRow, openNow, type HoursForm } from "./storefront";
 import type { Column, Table } from "./tables";
 
 /** a[i], which the test knows is there. */
@@ -226,5 +205,28 @@ describe("catalogue items typed in the editor", () => {
   it("says what is wrong", () => {
     expect(itemRow(cols, "", "100")).toEqual({ error: "Give the item a name." });
     expect(itemRow(cols, "Rice", "a lot")).toEqual({ error: "Write the price as a number of naira, such as 1500." });
+  });
+});
+
+const closedDay = { open: false, spans: [{ open: "09:00", close: "17:00" }] };
+const hours: HoursForm = {
+  note: "",
+  days: [
+    { open: true, spans: [{ open: "09:00", close: "13:00" }, { open: "15:00", close: "20:00" }] },
+    closedDay, closedDay, closedDay, closedDay, closedDay, closedDay,
+  ],
+};
+
+describe("openNow", () => {
+  // 19 October 2026 is a Monday.
+  it("is open inside an opening, until its close", () => {
+    expect(openNow(hours, new Date(2026, 9, 19, 10, 30))).toEqual({ open: true, until: "13:00" });
+  });
+  it("says when it opens again today", () => {
+    expect(openNow(hours, new Date(2026, 9, 19, 14, 0))).toEqual({ open: false, opens: "15:00" });
+  });
+  it("is closed after the last opening and on closed days", () => {
+    expect(openNow(hours, new Date(2026, 9, 19, 21, 0))).toEqual({ open: false });
+    expect(openNow(hours, new Date(2026, 9, 20, 10, 0))).toEqual({ open: false });
   });
 });

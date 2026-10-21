@@ -34,7 +34,7 @@ test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   const added = await page.request.post("/v1/members", { headers: { "X-Taskiem-Request": "1" }, data: { email, password: "correct horse battery", roles: ["viewer"] } });
   expect(added.status()).toBe(201);
   await page.request.post("/v1/auth/logout", { headers: { "X-Taskiem-Request": "1" } });
@@ -44,7 +44,7 @@ test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 
   await page.goto("/account");
   const wa = page.getByTestId("whatsapp");

@@ -130,6 +130,9 @@ func TestAuthAndCSRF(t *testing.T) {
 	if !strings.Contains(toJSON(me["permissions"]), "workflow.publish") {
 		t.Fatalf("owner permissions: %v", me["permissions"])
 	}
+	if me["tenant_name"] != "Acme" {
+		t.Errorf("business name: %v", me["tenant_name"])
+	}
 
 	anon := &client{t: t, base: w.base}
 	if st, _ := anon.do("GET", "/v1/me", nil); st != 401 {
@@ -199,6 +202,18 @@ func TestWorkflowLifecycleAndRuns(t *testing.T) {
 	runs := owner.must(200, "GET", "/v1/runs?workflow="+wf, nil)["runs"].([]any)
 	if len(runs) != 1 {
 		t.Fatalf("runs: %v", runs)
+	}
+	// The list says what starts each workflow and counts today's run last.
+	owner.must(400, "GET", "/v1/workflows?tz=Mars/Olympus", nil)
+	for _, it := range owner.must(200, "GET", "/v1/workflows?tz=UTC", nil)["workflows"].([]any) {
+		s := it.(map[string]any)
+		if s["id"] != wf {
+			continue
+		}
+		recent := s["recent"].([]any)
+		if s["trigger"].(map[string]any)["type"] != "manual" || len(recent) != 14 || recent[13] != float64(1) || recent[12] != float64(0) {
+			t.Errorf("summary: trigger %v, recent %v", s["trigger"], recent)
+		}
 	}
 
 	// History is sealed unless revealed, and revealing is audited.

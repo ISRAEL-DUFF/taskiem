@@ -10875,6 +10875,13 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: workflow.read
+      parameters:
+      - name: tz
+        in: query
+        schema:
+          type: string
+          default: Africa/Lagos
+        description: An IANA time zone for the days `recent` counts.
       responses:
         '200':
           description: The workflows, by name
@@ -13096,6 +13103,8 @@ components:
       - created_at
       - key
       - git_path
+      - trigger
+      - recent
       properties:
         id:
           type: string
@@ -13119,6 +13128,28 @@ components:
           - string
           - 'null'
           description: The file a Git-led repository keeps this workflow in; the workflow is then read-only here.
+        trigger:
+          description: What starts it, from the published version (else the latest draft); null when it has no version.
+          type:
+          - object
+          - 'null'
+          required:
+          - type
+          properties:
+            type:
+              type: string
+              description: manual, webhook, schedule, connector_event, …
+            config:
+              type: object
+              description: The trigger's settings, as in the definition (a schedule's `cron` and `timezone`).
+        recent:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+          minItems: 14
+          maxItems: 14
+          description: Runs started on each of the last 14 days, oldest first, in the `tz` time zone.
     WorkflowList:
       type: object
       required:
@@ -13729,6 +13760,9 @@ components:
         advanced:
           type: boolean
           description: Whether the business sees the web app's technical parts (the Advanced switch).
+        tenant_name:
+          type: string
+          description: The business's name, as the web app's sidebar shows it.
         factors:
           description: What the person proves themselves with to change their factors.
     AdvancedSetting:

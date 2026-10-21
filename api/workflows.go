@@ -83,26 +83,76 @@ type workflowSummary struct {
 	// GitPath is the file a Git-led repository keeps this workflow in; the
 	// workflow is then read-only here.
 	GitPath *string `json:"git_path"`
+	// Trigger is what starts it: the published version's trigger, else the
+	// latest draft's (the list says "Every day at 08:00").
+	Trigger json.RawMessage `json:"trigger"`
+	// Recent counts the runs started on each of the last 14 days, oldest
+	// first, in the time zone the list asks for (?tz=, default Africa/Lagos).
+	Recent []int `json:"recent" db:"-"`
 }
+
+// recentDays is how many days a workflow summary's Recent covers.
+const recentDays = 14
 
 const latestKey = `COALESCE((SELECT definition->>'id' FROM workflow_versions WHERE workflow_id = w.id ORDER BY version DESC LIMIT 1), '')`
 
+// liveTrigger selects a summary's Trigger: the published version's, else
+// the latest draft's.
+const liveTrigger = `COALESCE((SELECT definition->'trigger' FROM workflow_versions WHERE workflow_id = w.id ORDER BY version = w.active_version DESC, version DESC LIMIT 1), 'null')`
+
 func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
+	tz := r.URL.Query().Get("tz")
+	if tz == "" {
+		tz = "Africa/Lagos"
+	}
+	if _, err := time.LoadLocation(tz); err != nil {
+		s.fail(w, r, fmt.Errorf("%w: unknown time zone %q", errBadRequest, tz))
+		return
+	}
 	var out []workflowSummary
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`, w.git_path
+		rows, err := tx.Query(r.Context(), `SELECT w.id, w.name, w.active_version, COALESCE(max(v.version), 0), w.created_at, `+latestKey+`, w.git_path, `+liveTrigger+`
 			FROM workflows w LEFT JOIN workflow_versions v ON v.workflow_id = w.id GROUP BY w.id ORDER BY w.name`)
 		if err != nil {
 			return err
 		}
-		out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[workflowSummary])
-		return err
+		if out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[workflowSummary]); err != nil {
+			return err
+		}
+		return recentRuns(r.Context(), tx, out, tz)
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"workflows": nonNil(out)})
+}
+
+// recentRuns fills each summary's Recent: runs started per day over the
+// last recentDays days in time zone tz, today last.
+func recentRuns(ctx context.Context, tx pgx.Tx, out []workflowSummary, tz string) error {
+	at := make(map[uuid.UUID]int, len(out))
+	for i := range out {
+		out[i].Recent = make([]int, recentDays)
+		at[out[i].ID] = i
+	}
+	rows, err := tx.Query(ctx, `SELECT workflow_id, (now() AT TIME ZONE $1)::date - (started_at AT TIME ZONE $1)::date, count(*)
+		FROM runs WHERE started_at > now() - make_interval(days => $2 + 1) GROUP BY 1, 2`, tz, recentDays)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var wf uuid.UUID
+		var ago, n int
+		if err := rows.Scan(&wf, &ago, &n); err != nil {
+			return err
+		}
+		if i, ok := at[wf]; ok && ago >= 0 && ago < recentDays {
+			out[i].Recent[recentDays-1-ago] = n
+		}
+	}
+	return rows.Err()
 }
 
 type versionReq struct {
@@ -284,10 +334,15 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	var deployments []deployment
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path
-			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key, &sum.GitPath); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path, `+liveTrigger+`
+			FROM workflows w WHERE w.id = $1`, wf).Scan(&sum.ID, &sum.Name, &sum.ActiveVersion, &sum.LatestVersion, &sum.CreatedAt, &sum.Key, &sum.GitPath, &sum.Trigger); err != nil {
 			return err
 		}
+		one := []workflowSummary{sum}
+		if err := recentRuns(ctx, tx, one, "Africa/Lagos"); err != nil {
+			return err
+		}
+		sum = one[0]
 		rows, err := tx.Query(ctx, `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id
 			FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC`, wf)
 		if err != nil {

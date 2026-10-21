@@ -4,7 +4,8 @@ import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
 import { Help } from "../onboarding";
 import { byCategory, initialValues, inputKind, lineLabel, toParams, WEEKDAYS, type Template, type TemplateParam } from "../lib/templates";
-import { Badge, ErrorBox, Field, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Field, PageHeader, useAction, useLoad } from "../ui";
+import { Icon } from "../icons";
 import { RolePicker } from "../forms/RolePicker";
 import { ConnectionPicker } from "../forms/ConnectionPicker";
 import { SheetChooser } from "../forms/SheetChooser";
@@ -25,34 +26,32 @@ export function Templates() {
   const current = data?.templates.find((t) => t.id === selected);
   return (
     <>
-      <div className="toolbar">
-        <h1 className="grow" style={{ margin: 0 }}>
-          Templates
-        </h1>
-        <form
-          className="toolbar"
-          role="search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setParams(q.trim() ? { q: q.trim() } : {});
-          }}
-        >
-          <input aria-label="Search templates" placeholder="e.g. every Friday text my customers who owe me" value={q} onChange={(e) => setQ(e.target.value)} />
-          <button type="submit">Search</button>
-          {query && (
-            <button
-              type="button"
-              onClick={() => {
-                setQ("");
-                setParams({});
-              }}
-            >
-              Show all
-            </button>
-          )}
-        </form>
-      </div>
-      <p className="hint">Ready workflows for small businesses. Pick one, fill in the details, and it becomes a draft you can review and publish.</p>
+      <PageHeader title="Templates" description="Ready workflows for small businesses. Pick one, fill in the details, and it becomes a draft you can review and publish." />
+      <form
+        className="describe-bar"
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setParams(q.trim() ? { q: q.trim() } : {});
+        }}
+      >
+        <Icon name="search" />
+        <input aria-label="Search templates" placeholder="What should it do? e.g. every Friday text my customers who owe me" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button type="submit" className="primary">
+          Search
+        </button>
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              setQ("");
+              setParams({});
+            }}
+          >
+            Show all
+          </button>
+        )}
+      </form>
       <Help topic="templates" />
       <ErrorBox error={error} />
       {data && data.templates.length === 0 && <div className="empty card">No template matches. Try other words, or build it with AI from the Workflows page.</div>}

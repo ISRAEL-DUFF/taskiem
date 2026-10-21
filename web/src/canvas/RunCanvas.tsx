@@ -5,9 +5,9 @@ import { get } from "../api";
 import { toGraph, type Layout } from "../lib/graph";
 import { topLevelStatus, type StepRow } from "../lib/timeline";
 import { ErrorBox, useLoad } from "../ui";
-import { StepNode, type StepFlowNode } from "./StepNode";
+import { StepNode, TriggerNode, triggerCard, type StepFlowNode, type TriggerFlowNode } from "./StepNode";
 
-const nodeTypes = { step: StepNode };
+const nodeTypes = { step: StepNode, trigger: TriggerNode };
 
 /** The workflow's canvas with each step lit by its state in a run. */
 export function RunCanvas({
@@ -34,8 +34,15 @@ export function RunCanvas({
   );
   // Once the run has ended, a step still open never finished.
   if (ended) for (const [id, st] of Object.entries(status)) if (["scheduled", "running", "retrying", "waiting"].includes(st)) status[id] = "cancelled";
-  const nodes: StepFlowNode[] = graph.nodes.map((n) => ({ id: n.id, type: "step", position: n.position, data: { step: n.step, invalid: false, status: status[n.id] }, draggable: false }));
-  const edges = graph.edges.map((e) => ({ ...e, animated: status[e.source] === "completed" && ["running", "retrying", "waiting", "scheduled"].includes(status[e.target] ?? "") }));
+  const steps: StepFlowNode[] = graph.nodes.map((n) => ({ id: n.id, type: "step", position: n.position, data: { step: n.step, invalid: false, status: status[n.id] }, draggable: false }));
+  // What started the run, already done: the run exists because it fired.
+  const trigger = doc.data ? triggerCard(graph.nodes, doc.data.definition.trigger, { data: { status: "completed" } }) : null;
+  const nodes: (StepFlowNode | TriggerFlowNode)[] = trigger ? [trigger.node, ...steps] : steps;
+  const running = (id: string) => ["running", "retrying", "waiting", "scheduled"].includes(status[id] ?? "");
+  const edges = [
+    ...(trigger?.edges.map((e) => ({ ...e, animated: running(e.target) })) ?? []),
+    ...graph.edges.map((e) => ({ ...e, animated: status[e.source] === "completed" && running(e.target) })),
+  ];
   if (doc.error) return <ErrorBox error={doc.error} />;
   return (
     <div className="canvas run-canvas" role="group" aria-label="Run canvas">
@@ -46,7 +53,7 @@ export function RunCanvas({
         nodesConnectable={false}
         nodesDraggable={false}
         elementsSelectable={!!onSelect}
-        onNodeClick={(_, n) => onSelect?.(n.id)}
+        onNodeClick={(_, n) => n.type === "step" && onSelect?.(n.id)}
         fitView
         fitViewOptions={{ maxZoom: 1 }}
         proOptions={{ hideAttribution: true }}

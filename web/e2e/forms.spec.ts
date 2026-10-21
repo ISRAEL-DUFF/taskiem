@@ -14,7 +14,8 @@ test("an owner builds a members form in the canvas, finds it on Forms and fills 
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
 
   await page.getByRole("button", { name: "New workflow" }).click();
   await page.getByLabel("Name").fill("Leave request");
@@ -77,7 +78,7 @@ test("an owner builds a members form in the canvas, finds it on Forms and fills 
   // The member fills it in, in the app.
   await card.getByRole("link", { name: /\/forms\// }).click();
   await expect(page).toHaveURL(/\/forms\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { name: "Leave request" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Leave request" })).toBeVisible();
   await expect(page.getByLabel(/Full name/)).toHaveValue("Owner");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("This question needs an answer.").first()).toBeVisible();

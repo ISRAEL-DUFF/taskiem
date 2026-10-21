@@ -2,6 +2,8 @@ import { useState } from "react";
 import { get } from "../api";
 import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
+import { useAuth } from "../auth";
+import { detailWords, shortIds } from "../lib/audit";
 
 interface Entry {
   seq: number;
@@ -14,10 +16,14 @@ interface Entry {
 }
 
 export function Audit() {
+  const { can } = useAuth();
   const [action, setAction] = useState("");
   const { data, error } = useLoad(() => get<{ entries: Entry[] }>(`/v1/audit?limit=200${action ? `&action=${encodeURIComponent(action)}` : ""}`), [action]);
   const [verdict, setVerdict] = useState<{ intact: boolean; first_broken_seq: number | null } | null>(null);
   const act = useAction();
+  // Who did it, by name, for whoever may list the members.
+  const members = useLoad(() => (can("member.manage") ? get<{ members: { user_id: string; name: string; email: string }[] }>("/v1/members") : Promise.resolve({ members: [] })), []);
+  const names = new Map((members.data?.members ?? []).map((m) => [m.user_id, m.name || m.email]));
   return (
     <>
       <PageHeader
@@ -58,10 +64,10 @@ export function Audit() {
         </EmptyState>
       )}
       {data && data.entries.length > 0 && (
-        <table>
+        <table className="audit">
           <thead>
             <tr>
-              <th>#</th>
+              <th className="num">#</th>
               <th>When</th>
               <th>Who</th>
               <th>Action</th>
@@ -72,17 +78,23 @@ export function Audit() {
           <tbody>
             {data.entries.map((e) => (
               <tr key={e.seq}>
-                <td>{e.seq}</td>
-                <td>{fmtTime(e.at)}</td>
-                <td>
-                  <span className="hint">{e.actor_type}</span> {e.actor_id}
+                <td className="num hint">{e.seq}</td>
+                <td className="nowrap">{fmtTime(e.at)}</td>
+                <td className="nowrap" title={e.actor_id}>
+                  {names.get(e.actor_id) ?? (
+                    <>
+                      <span className="hint">{e.actor_type}</span> <code>{shortIds(e.actor_id)}</code>
+                    </>
+                  )}
                 </td>
                 <td>
                   <code>{e.action}</code>
                 </td>
-                <td style={{ wordBreak: "break-all" }}>{e.target}</td>
-                <td>
-                  <code style={{ fontSize: 11 }}>{JSON.stringify(e.detail)}</code>
+                <td title={e.target}>
+                  <code>{shortIds(e.target)}</code>
+                </td>
+                <td className="audit-detail" title={JSON.stringify(e.detail)}>
+                  {detailWords(e.detail)}
                 </td>
               </tr>
             ))}

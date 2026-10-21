@@ -3,6 +3,7 @@
 // A field agent working in a business adds its session's header (below).
 
 import { parseSession, sessionEnded, withAgentHeader, type AgentSession } from "./lib/agent";
+import type { Trigger } from "@sdk/wd";
 
 export interface Problem {
   path: string;
@@ -203,6 +204,8 @@ export interface Me {
   field_agent?: boolean;
   /** Whether the business sees the technical parts (the Advanced switch, N0-5). */
   advanced?: boolean;
+  /** The business's name, for the sidebar. */
+  tenant_name?: string;
 }
 
 /** A tenant inviting the signed-in person (GET /v1/me/invitations). */
@@ -222,6 +225,10 @@ export interface WorkflowSummary {
   key: string;
   /** Set when a Git-led repository holds this workflow: it is read-only here. */
   git_path: string | null;
+  /** What starts it: the published version's trigger, else the latest draft's. */
+  trigger?: Trigger | null;
+  /** Runs started on each of the last 14 days, oldest first. */
+  recent?: number[];
 }
 
 export interface VersionInfo {

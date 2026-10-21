@@ -412,3 +412,14 @@ export function itemRow(columns: Columns, name: string, price: string): { row: R
   if (columns.available) row[columns.available] = true;
   return { row };
 }
+
+/** Whether the page says "Open now" at `now`, local time: open until when,
+ * or when it opens next today. Monday is days[0]. */
+export function openNow(h: HoursForm, now = new Date()): { open: boolean; until?: string; opens?: string } {
+  const day = h.days[(now.getDay() + 6) % 7];
+  if (!day?.open) return { open: false };
+  const at = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  for (const s of day.spans) if (s.open <= at && at < s.close) return { open: true, until: s.close };
+  const next = day.spans.map((s) => s.open).filter((o) => o > at).sort()[0];
+  return next ? { open: false, opens: next } : { open: false };
+}

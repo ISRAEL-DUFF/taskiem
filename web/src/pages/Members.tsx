@@ -182,7 +182,13 @@ export function Members() {
                   {r.name} {r.built_in && <span className="hint">built-in</span>}
                   {r.description && <div className="hint">{r.description}</div>}
                 </td>
-                <td className="hint">{r.permissions.join(", ")}</td>
+                <td>
+                  <span className="perms">
+                    {r.permissions.map((p) => (
+                      <code key={p}>{p}</code>
+                    ))}
+                  </span>
+                </td>
                 <td>{r.members}</td>
                 <td>
                   {!r.built_in && can("role.manage") && (
@@ -230,7 +236,13 @@ export function Members() {
                 <td>
                   <code>{k.prefix}…</code>
                 </td>
-                <td className="hint">{k.permissions.join(", ")}</td>
+                <td>
+                  <span className="perms">
+                    {k.permissions.map((p) => (
+                      <code key={p}>{p}</code>
+                    ))}
+                  </span>
+                </td>
                 <td>{fmtTime(k.expires_at)}</td>
                 <td>{fmtTime(k.last_used_at)}</td>
                 <td>

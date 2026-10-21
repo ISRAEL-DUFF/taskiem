@@ -34,3 +34,11 @@
 .tk-body { padding: 12px 16px; flex: 1; min-width: 0; }
 .tk-root .editor { height: 560px; }
 .tk-footer { color: var(--muted); font-size: 11px; text-align: right; padding: 4px 16px 8px; }
+
+/* The console's main buttons are near-black; in a partner's builder they
+   take the partner's brand colour. */
+.tk-root {
+  --primary: var(--accent);
+  --primary-hover: color-mix(in srgb, var(--accent) 86%, #000);
+  --primary-text: var(--accent-text);
+}

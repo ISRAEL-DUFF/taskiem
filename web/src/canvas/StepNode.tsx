@@ -1,13 +1,43 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import type { Step } from "@sdk/wd";
+import type { Step, Trigger } from "@sdk/wd";
+import { Icon } from "../icons";
+import type { GraphNode } from "../lib/graph";
+import { triggerWords } from "../lib/home";
 
 export type StepNodeData = { step: Step; invalid: boolean; status?: string };
 export type StepFlowNode = Node<StepNodeData, "step">;
+/** What starts the workflow, drawn before its first steps; not a step. */
+export type TriggerFlowNode = Node<{ words: string; type: string; status?: string }, "trigger">;
+export const TRIGGER_NODE = "__trigger";
+
+/** What starts the workflow as a card left of the steps that need nothing,
+ * joined to them; none for a workflow without steps. */
+export function triggerCard(
+  steps: GraphNode[],
+  trigger: Trigger,
+  extra: Partial<Omit<TriggerFlowNode, "data">> & { data?: Partial<TriggerFlowNode["data"]> } = {},
+): { node: TriggerFlowNode; edges: { id: string; source: string; target: string; deletable: boolean; className: string }[] } | null {
+  const roots = steps.filter((n) => !(n.step.needs ?? []).length);
+  if (roots.length === 0) return null;
+  return {
+    node: {
+      id: TRIGGER_NODE,
+      type: "trigger",
+      position: { x: Math.min(...steps.map((n) => n.position.x)) - 300, y: roots.reduce((a, n) => a + n.position.y, 0) / roots.length },
+      draggable: false,
+      deletable: false,
+      selectable: false,
+      ...extra,
+      data: { words: triggerWords(trigger), type: trigger.type, ...extra.data },
+    },
+    edges: roots.map((n) => ({ id: `${TRIGGER_NODE}->${n.id}`, source: TRIGGER_NODE, target: n.id, deletable: false, className: "trigger-edge" })),
+  };
+}
 
 export function summary(s: Step): string {
   switch (s.type) {
     case "connector":
-      return `${s.connector} · ${s.action}`;
+      return `${words(s.connector.split("@")[0] ?? "")} · ${words(s.action)}`;
     case "http":
       return `${s.config.method} ${s.config.url}`;
     case "code":
@@ -35,19 +65,64 @@ export function summary(s: Step): string {
   }
 }
 
+/** "send_sms" as "Send sms", "paystack" as "Paystack". */
+const words = (id: string) => (id.charAt(0).toUpperCase() + id.slice(1)).replaceAll("_", " ");
+
+/** Each kind of step in plain words, and its icon. */
+const KINDS: Record<string, [string, string]> = {
+  connector: ["Service", "connections"],
+  approval: ["Approval", "approvals"],
+  form: ["Form", "forms"],
+  wait: ["Wait", "runs"],
+  signal: ["Wait for a reply", "inbox"],
+  transform: ["Prepare", "templates"],
+  branch: ["Choice", "workflows"],
+  parallel: ["At the same time", "workflows"],
+  foreach: ["For each", "tables"],
+  http: ["Web request", "catalogue"],
+  code: ["Code", "audit"],
+  container: ["Container", "catalogue"],
+  subflow: ["Workflow", "workflows"],
+};
+
 export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {
   const s = data.step;
+  const [kind, icon] = KINDS[s.type] ?? [words(s.type), "workflows"];
   return (
     <div className={`step-node${selected ? " selected" : ""}${data.invalid ? " invalid" : ""}${data.status ? ` status-${data.status}` : ""}`} data-testid={`node-${s.id}`} data-status={data.status}>
       <Handle type="target" position={Position.Left} />
-      <div className="type">
-        {s.type}
-        {data.status && <span className={`badge ${data.status}`} style={{ marginLeft: 6 }}>{data.status}</span>}
+      <span className="step-icon" aria-hidden="true">
+        <Icon name={icon} />
+      </span>
+      <div className="step-text">
+        <div className="type">
+          {kind}
+          {data.status && (
+            <span className={`badge ${data.status}`} style={{ marginLeft: 6, height: 18, fontSize: 11 }}>
+              {data.status}
+            </span>
+          )}
+        </div>
+        <div className="title">{s.name || s.id}</div>
+        <div className="sub">{summary(s)}</div>
+        {s.when && s.type !== "transform" && <div className="sub">when {s.when}</div>}
       </div>
-      <div className="title">{s.name || s.id}</div>
-      <div className="sub">{summary(s)}</div>
-      {s.when && s.type !== "transform" && <div className="sub">when {s.when}</div>}
       <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+
+export function TriggerNode({ data }: NodeProps<TriggerFlowNode>) {
+  return (
+    <div className={`step-node trigger-node${data.status ? ` status-${data.status}` : ""}`} data-testid="node-trigger" title={data.status ? undefined : "Change when it runs"}>
+      <span className="step-icon" aria-hidden="true">
+        <Icon name={data.type === "schedule" ? "clock" : "bolt"} />
+      </span>
+      <div className="step-text">
+        <div className="type">When</div>
+        <div className="title">{data.words}</div>
+      </div>
+      <Handle type="source" position={Position.Right} isConnectable={false} />
     </div>
   );
 }
