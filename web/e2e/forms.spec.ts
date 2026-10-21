@@ -78,7 +78,7 @@ test("an owner builds a members form in the canvas, finds it on Forms and fills 
   // The member fills it in, in the app.
   await card.getByRole("link", { name: /\/forms\// }).click();
   await expect(page).toHaveURL(/\/forms\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { name: "Leave request" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Leave request" })).toBeVisible();
   await expect(page.getByLabel(/Full name/)).toHaveValue("Owner");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("This question needs an answer.").first()).toBeVisible();

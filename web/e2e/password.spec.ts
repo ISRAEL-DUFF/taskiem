@@ -63,6 +63,7 @@ test("forgot password, reset it from the email, then change it", async ({ page }
 
   await page.goto("/login");
   await page.getByRole("link", { name: "Forgot password?" }).click();
+  await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Email me a link" }).click();
   await expect(page.getByRole("status")).toContainText("If that email belongs");

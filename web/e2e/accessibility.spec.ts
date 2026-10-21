@@ -76,6 +76,7 @@ for (const scheme of ["light", "dark"] as const) {
 
 test("dialogs keep focus inside and give it back when they close", async ({ page }) => {
   await signIn(page);
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
   const opener = page.getByRole("button", { name: "New workflow" });
   await opener.click();
   const dialog = page.getByRole("dialog");

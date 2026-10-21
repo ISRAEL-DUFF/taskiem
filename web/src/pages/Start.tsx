@@ -36,7 +36,7 @@ export function Start() {
           {data.done} of {data.total} done
         </span>
         {!data.dismissed && can("workflow.edit") && (
-          <button onClick={() => void act.run(async () => (await post("/v1/onboarding/dismiss"), reload(), nav("/workflows")))}>Hide this</button>
+          <button onClick={() => void act.run(async () => (await post("/v1/onboarding/dismiss"), reload(), nav("/home")))}>Hide this</button>
         )}
       </div>
       <ErrorBox error={act.error} />

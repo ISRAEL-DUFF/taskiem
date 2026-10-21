@@ -106,6 +106,7 @@ export function Editor() {
     }, 600);
   };
 
+  const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   const invalid = useMemo(() => (def ? problemSteps(def, problems) : new Set<string>()), [def, problems]);
   const graph = useMemo(() => (def ? toGraph(def, layout) : { nodes: [], edges: [] }), [def, layout]);
   const stepNodes: StepFlowNode[] = graph.nodes.map((n) => ({
@@ -113,6 +114,7 @@ export function Editor() {
     type: "step",
     position: n.position,
     selected: n.id === selected,
+    measured: sizes[n.id],
     data: { step: n.step, invalid: invalid.has(n.id) },
   }));
   // What starts it, left of the steps that need nothing, joined to them.
@@ -129,6 +131,7 @@ export function Editor() {
           draggable: false,
           deletable: false,
           selectable: false,
+          measured: sizes[TRIGGER_NODE],
           data: { words: triggerWords(def.trigger), type: def.trigger.type },
         }
       : null;
@@ -140,6 +143,15 @@ export function Editor() {
   const onNodesChange = (changes: NodeChange<StepFlowNode | TriggerFlowNode>[]) => {
     let l = layout;
     let steps = def?.steps;
+    // The canvas measures each card and reports it here; a card it has no
+    // size for stays hidden, so the sizes outlive reloads of the definition.
+    const measured = changes.filter((c) => c.type === "dimensions" && c.dimensions);
+    if (measured.length > 0)
+      setSizes((was) => {
+        const next = { ...was };
+        for (const c of measured) if (c.type === "dimensions" && c.dimensions) next[c.id] = c.dimensions;
+        return next;
+      });
     for (const c of changes) {
       if ("id" in c && c.id === TRIGGER_NODE) continue;
       if (c.type === "position" && c.position) {
