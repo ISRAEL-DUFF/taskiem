@@ -273,7 +273,7 @@ function SignedIn() {
           </button>
         </div>
       </nav>
-      <main className="main" id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
+      <main className={/^\/workflows\/[^/]+$/.test(pathname) ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
         <div className="page" key={pathname}>
         <Routes>

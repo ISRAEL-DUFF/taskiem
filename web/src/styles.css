@@ -223,9 +223,22 @@ tr.highlight td { background: color-mix(in srgb, var(--accent) 7%, var(--panel))
 .tabs button:hover:not(:disabled), .tabs a:hover { background: none; color: var(--text); text-decoration: none; }
 .tabs button.active, .tabs a.active { background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border), var(--shadow); }
 
-.editor { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 0; height: calc(100vh - 190px); min-height: 520px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+.editor { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 0; height: 600px; min-height: 520px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
 .canvas { background: var(--panel-2); background-image: radial-gradient(color-mix(in srgb, var(--border-strong) 80%, transparent) 1px, transparent 1px); background-size: 20px 20px; overflow: hidden; position: relative; }
 .editor > .canvas { border: 0; border-radius: 0; }
+.editor.no-side { grid-template-columns: minmax(0, 1fr); }
+.canvas-tools { position: absolute; top: 12px; right: 12px; z-index: 5; display: flex; gap: 6px; }
+.canvas-tools button { min-height: 32px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; background: var(--panel); box-shadow: var(--shadow); }
+.canvas-tools button[aria-label="Full screen"] { width: 32px; padding: 0; justify-content: center; }
+html.no-scroll { overflow: hidden; }
+/* Full screen: the canvas and step panel cover the window, with a slim bar. */
+.editor-full { position: fixed; inset: 0; z-index: 45; display: flex; flex-direction: column; background: var(--bg); }
+.editor-full .editor { flex: 1; height: auto; min-height: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
+.full-bar { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 10px 16px; background: var(--panel); }
+.full-bar .editor-title { flex: 1 1 240px; gap: 10px; }
+.full-bar .full-name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.full-bar .full-notice { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.full-bar button { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .side { background: var(--panel); border-left: 1px solid var(--border); padding: 20px 22px; overflow: auto; }
 .palette { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .palette button { min-height: 28px; padding: 0 10px; font-size: 12.5px; }
@@ -395,6 +408,9 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
   .tabbar svg { width: 22px; height: 22px; }
   .editor { grid-template-columns: 1fr; height: auto; min-height: 0; }
   .canvas { height: 60vh; min-height: 340px; }
+  .editor-full .editor { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+  .editor-full .canvas { height: auto; min-height: 0; }
+  .editor-full .side { max-height: 45dvh; }
   .side { max-height: none; border-left: 0; border-top: 1px solid var(--border); }
   .main { padding: 20px 16px calc(96px + env(safe-area-inset-bottom)); }
   h1 { font-size: 22px; }

@@ -81,7 +81,59 @@ export function Editor() {
   const [starting, setStarting] = useState(false);
   const [merge, setMerge] = useState<{ conflicts: MergeConflict[]; latest: number }>();
   const [ai, setAI] = useState(false);
+  // Full screen: the canvas and step panel over the whole window, for building.
+  const [full, setFull] = useState(false);
+  const [sideOpen, setSideOpen] = useState(true);
+  const box = useRef<HTMLDivElement>(null);
   const act = useAction();
+
+  // F toggles full screen, Esc leaves it; not while typing or in a dialog.
+  useEffect(() => {
+    if (tab !== "canvas") return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey || t?.closest("input, textarea, select, [contenteditable=true], .modal")) return;
+      if (e.key === "Escape") setFull(false);
+      else if (e.key === "f" || e.key === "F") setFull((f) => !f);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab]);
+  useEffect(() => {
+    if (!full) return;
+    document.documentElement.classList.add("no-scroll");
+    return () => document.documentElement.classList.remove("no-scroll");
+  }, [full]);
+  // Something to read outside the canvas (what publishing needs, an error, a
+  // merge to resolve) brings the page back.
+  useEffect(() => {
+    if (needs || act.error || merge) setFull(false);
+  }, [needs, act.error, merge]);
+  // The canvas fills the window below whatever sits above it on the page.
+  const hasDef = !!def;
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "";
+    if (full) return;
+    const wide = window.matchMedia("(min-width: 861px)");
+    const fit = () => {
+      if (!wide.matches) {
+        el.style.height = "";
+        return;
+      }
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      el.style.height = `${Math.max(520, Math.floor(window.innerHeight - top - 24))}px`;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el.closest(".page") ?? document.body);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, [tab, full, hasDef]);
 
   useEffect(() => {
     if (!doc.data) return;
@@ -363,13 +415,53 @@ export function Editor() {
         ))}
       </div>
       {tab === "canvas" && (
-        <div className="editor">
+        <div className={full ? "editor-full" : "editor-wrap"} role={full ? "dialog" : undefined} aria-modal={full || undefined} aria-label={full ? `${wf.data.workflow.name}, full screen` : undefined}>
+          {full && (
+            <div className="full-bar">
+              <div className="editor-title">
+                <strong className="full-name">{wf.data.workflow.name}</strong>
+                {dirty ? <span className="badge warn">Unsaved changes</span> : current?.state === "published" ? <span className="badge published">Live</span> : current && <Badge value={current.state} />}
+                {problems.length > 0 && (
+                  <span className="badge failed">
+                    {problems.length} problem{problems.length > 1 ? "s" : ""}
+                  </span>
+                )}
+                {notice && <span className="hint full-notice">{notice}</span>}
+              </div>
+              <div className="page-actions">
+                {can("workflow.edit") && !managed && (
+                  <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
+                    Save draft
+                  </button>
+                )}
+                {can("workflow.publish") && !managed && (
+                  <button className="primary" onClick={() => void publish()} disabled={act.busy || (!dirty && current?.state === "published")}>
+                    Publish
+                  </button>
+                )}
+                <button onClick={() => setFull(false)} title="Leave full screen (Esc)">
+                  <ExitFullIcon /> Exit full screen
+                </button>
+              </div>
+            </div>
+          )}
+        <div className={`editor${sideOpen ? "" : " no-side"}`} ref={box}>
           <div className="canvas">
+            <div className="canvas-tools">
+              {!full && (
+                <button onClick={() => setFull(true)} title="Full screen (F)" aria-label="Full screen">
+                  <FullIcon />
+                </button>
+              )}
+              <button onClick={() => setSideOpen((o) => !o)} aria-expanded={sideOpen} aria-controls="step-panel" title={sideOpen ? "Hide the step panel" : "Show the step panel"}>
+                <PanelIcon /> {sideOpen ? "Hide panel" : "Show panel"}
+              </button>
+            </div>
             <ReactFlow
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
-              onNodeClick={(_, n) => n.id === TRIGGER_NODE && setTab("settings")}
+              onNodeClick={(_, n) => (n.id === TRIGGER_NODE ? (setFull(false), setTab("settings")) : setSideOpen(true))}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
@@ -381,10 +473,10 @@ export function Editor() {
             >
               <Background />
               <Controls />
-              <FitOnChange count={def.steps.length} />
+              <FitOnChange count={def.steps.length} frame={`${full}${sideOpen}`} />
             </ReactFlow>
           </div>
-          <div className="side">
+          <div className="side" id="step-panel" hidden={!sideOpen}>
             {can("workflow.edit") && (
               <>
                 <div className="hint">Add a step{selected ? ` after ${selected}` : ""}:</div>
@@ -429,6 +521,7 @@ export function Editor() {
               <p className="hint">Select a step to edit it. Drag from a step's right handle to another step to make it run after; select an arrow and press Delete to remove it.</p>
             )}
           </div>
+        </div>
         </div>
       )}
       {tab === "settings" && <SettingsTab workflow={id} def={def} onChange={edit} connectors={connectors.data?.connectors ?? []} problems={problems} />}
@@ -497,7 +590,7 @@ export function Editor() {
 }
 
 /** Refits the view when steps are added or removed, so new steps are visible. */
-function FitOnChange({ count }: { count: number }) {
+function FitOnChange({ count, frame }: { count: number; frame: string }) {
   const rf = useReactFlow();
   const first = useRef(true);
   useEffect(() => {
@@ -507,9 +600,26 @@ function FitOnChange({ count }: { count: number }) {
     }
     const t = setTimeout(() => void rf.fitView({ maxZoom: 1, duration: 200 }), 30);
     return () => clearTimeout(t);
-  }, [count, rf]);
+  }, [count, frame, rf]);
   return null;
 }
+
+const FullIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+    <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" />
+  </svg>
+);
+const ExitFullIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+    <path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5" />
+  </svg>
+);
+const PanelIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    <rect x="2" y="2.5" width="12" height="11" rx="2" />
+    <path d="M10 2.5v11" />
+  </svg>
+);
 
 /** The validator's problems with one top-level step, at paths relative to it. */
 function stepProblemsOf(def: WorkflowDefinition, problems: Problem[], id: string): Problem[] {
