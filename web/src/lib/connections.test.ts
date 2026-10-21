@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuthField, ConnectorInfo } from "../api";
-import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, splitFields } from "./connections";
+import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, needsConnection, splitFields } from "./connections";
 import { connectionLabel, connectorID, pickable } from "../forms/ConnectionPicker";
 import { sheetIdOf } from "../forms/SheetChooser";
 
@@ -105,5 +105,10 @@ describe("connection pickers", () => {
     expect(sheetIdOf("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit#gid=0")).toBe("1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789");
     expect(sheetIdOf("1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789")).toBe("1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789");
     expect(sheetIdOf("my sales sheet")).toBe("");
+  });
+  it("needs no connection for a connector without auth", () => {
+    expect(needsConnection(xenibase)).toBe(true);
+    expect(needsConnection({ ...xenibase, auth: { type: "none", fields: null } })).toBe(false);
+    expect(needsConnection({ ...xenibase, auth: { type: "", fields: null } })).toBe(false);
   });
 });
