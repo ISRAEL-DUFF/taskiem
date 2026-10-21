@@ -12,7 +12,7 @@ category: messaging
 auth:
   type: api_key
   fields:
-    - { key: bot_token, label: Bot token from @BotFather, secret: true }
+    - { key: bot_token, label: Bot token, secret: true, help: "In Telegram, message @BotFather, send /newbot (or /token for a bot you have), and paste the token it sends.", where: Telegram → @BotFather, link: "https://t.me/BotFather" }
     - { key: webhook_secret, label: "Webhook secret token: 1-256 characters of A-Z, a-z, 0-9, _ and - (needed to receive updates)", secret: true, required: false }
   test: { action: get_me }
 # Telegram's FAQ: about 30 messages a second across chats, one a second per chat.

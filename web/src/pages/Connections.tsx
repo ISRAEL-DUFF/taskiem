@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ApiError, del, get, post, put, upload, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
+import { ApiError, del, get, post, put, upload, type AuthField, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
 import { useAuth } from "../auth";
-import { connectorOf, fieldsToComplete, linkResult } from "../lib/connections";
+import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, splitFields } from "../lib/connections";
 import { Help } from "../onboarding";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
@@ -55,6 +55,7 @@ export function Connections() {
   const linkedConnector = linked ? connectorOf(connectors.data?.connectors, linked.connector) : undefined;
   const toComplete = fieldsToComplete(linkedConnector) ?? [];
   const dismiss = () => void navigate("/connections", { replace: true });
+  const returnTo = back.linked || back.error ? readReturn() : "";
   return (
     <>
       <PageHeader
@@ -99,9 +100,15 @@ export function Connections() {
               or later from the row.
             </>
           )}{" "}
-          <button className="link" onClick={dismiss}>
-            Dismiss
-          </button>
+          {returnTo ? (
+            <Link to={returnTo} onClick={() => forgetReturn()}>
+              Go back to what you were doing
+            </Link>
+          ) : (
+            <button className="link" onClick={dismiss}>
+              Dismiss
+            </button>
+          )}
         </div>
       )}
       {!list.data && !list.error && <Skeleton />}
@@ -189,7 +196,34 @@ export function Connections() {
 /** Starts connecting a connector by OAuth: the API records the request
  * and the browser goes to the provider's consent page, which sends it
  * back to this page with ?linked= or ?error=. */
-export async function startLink(c: ConnectorInfo, environment = "prod", name = "default") {
+const RETURN_KEY = "taskiem.connect.return";
+
+/** Where to go back after connecting by OAuth (the provider sends the
+ * browser to the Connections page): the page that asked, kept for the tab. */
+function readReturn(): string {
+  try {
+    const v = sessionStorage.getItem(RETURN_KEY) ?? "";
+    return v.startsWith("/") && !v.startsWith("//") ? v : "";
+  } catch {
+    return "";
+  }
+}
+
+function forgetReturn() {
+  try {
+    sessionStorage.removeItem(RETURN_KEY);
+  } catch {
+    // storage refused: nothing to forget
+  }
+}
+
+export async function startLink(c: ConnectorInfo, environment = "prod", name = "") {
+  try {
+    if (!window.location.pathname.startsWith("/connections")) sessionStorage.setItem(RETURN_KEY, window.location.pathname + window.location.search);
+    else sessionStorage.removeItem(RETURN_KEY);
+  } catch {
+    // storage refused: the person comes back to Connections
+  }
   const out = await post<{ url: string }>("/v1/connections/oauth/start", { connector: c.ref, environment, name });
   window.location.assign(out.url);
 }
@@ -435,9 +469,11 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
 }
 
 /**
- * A new connection. With preset (a workflow's need: its connector id,
- * environment and name) the service, environment and name are fixed, so
- * nothing has to match by hand.
+ * A new connection, as a guided screen (no-technical-steps N2): one click
+ * where the service allows it; otherwise each value with where to find it,
+ * checked as it is pasted and by the service before anything is saved.
+ * With preset (a workflow's need: its connector id, environment and name)
+ * the service, environment and name are fixed, so nothing has to match.
  */
 export function NewConnection({
   connectors,
@@ -454,36 +490,75 @@ export function NewConnection({
 }) {
   const [ref, setRef] = useState((preset && connectors.find((x) => x.id === preset.connector)?.ref) ?? connectors[0]?.ref ?? "");
   const [env, setEnv] = useState(preset?.environment ?? "prod");
-  const [name, setName] = useState(preset?.name ?? "default");
+  const [name, setName] = useState(preset?.name ?? "");
   const [creds, setCreds] = useState<Record<string, string>>({});
-  const act = useAction();
   const c = connectors.find((x) => x.ref === ref);
+  const modes = modesOf(c);
+  const [mode, setMode] = useState("");
+  const chosen = mode || modes[0]?.mode || "";
+  const [paste, setPaste] = useState(false);
+  const act = useAction();
+  const { main, more } = splitFields(c);
+  const linkable = !!c?.auth.oauth2 && !!c.oauth_linkable;
+  const problems = Object.fromEntries((c?.auth.fields ?? []).map((f) => [f.key, keyProblem(f, creds[f.key] ?? "", chosen)]));
+  const blocked = Object.values(problems).some(Boolean);
+  const field = (f: AuthField) => (
+    <Field
+      key={f.key}
+      label={f.label + (f.required === false ? " (optional)" : "")}
+      hint={
+        <>
+          {f.help}
+          {f.where && (
+            <>
+              {f.help ? " " : ""}Find it in <strong>{f.where}</strong>
+              {f.link && (
+                <>
+                  {" "}
+                  (
+                  <a href={f.link} target="_blank" rel="noreferrer">
+                    open it
+                  </a>
+                  )
+                </>
+              )}
+              .
+            </>
+          )}
+          {problems[f.key] && (
+            <span className="error-text" role="alert">
+              {" "}
+              {problems[f.key]?.charAt(0).toUpperCase()}
+              {problems[f.key]?.slice(1)}.
+            </span>
+          )}
+        </>
+      }
+    >
+      <input
+        type={f.secret ? "password" : "text"}
+        autoComplete="off"
+        spellCheck={false}
+        value={creds[f.key] ?? ""}
+        required={f.required !== false}
+        aria-invalid={!!problems[f.key]}
+        onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value.trim() })}
+      />
+    </Field>
+  );
   return (
-    <Modal title={preset && c ? `Connect ${c.name}` : "New connection"} onClose={onClose}>
+    <Modal title={c ? `Connect ${c.name}` : "Connect a service"} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await post("/v1/connections", { connector: ref, environment: env, name, credentials: creds }), onDone()));
+          void act.run(
+            async () => (await post("/v1/connections", { connector: ref, environment: env, name: name || undefined, credentials: creds, mode: chosen || undefined, check: true }), onDone()),
+          );
         }}
       >
-        {c?.auth.oauth2 && (
-          <div className="notice">
-            {c.oauth_linkable ? (
-              <>
-                Connect {c.name} with one click: you approve the connection there and nothing is pasted.{" "}
-                <button type="button" className="link" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name))}>
-                  Connect {c.name}
-                </button>
-              </>
-            ) : (
-              <>This installation is not registered with {c.name}, so paste its credentials below.</>
-            )}
-          </div>
-        )}
         {!preset && (
-        <div className="row">
-          <Field label="Connector">
-            <select value={ref} onChange={(e) => (setRef(e.target.value), setCreds({}))}>
+          <Field label="Service">
+            <select value={ref} onChange={(e) => (setRef(e.target.value), setCreds({}), setMode(""), setPaste(false))}>
               {connectors.map((x) => (
                 <option key={x.ref} value={x.ref}>
                   {x.name}
@@ -491,35 +566,66 @@ export function NewConnection({
               ))}
             </select>
           </Field>
-          <Field label="Environment">
-            <select value={env} onChange={(e) => setEnv(e.target.value)}>
-              <option>prod</option>
-              <option>dev</option>
-            </select>
-          </Field>
-        </div>
         )}
-        {!preset && (
-          <Field label="Name">
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
-          </Field>
+        {c?.auth.oauth2 && (
+          <div className="notice">
+            {linkable ? (
+              <>
+                <p style={{ marginTop: 0 }}>Connect {c.name} with one click: you sign in there and approve, and nothing is copied.</p>
+                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name))}>
+                  Connect {c.name}
+                </button>{" "}
+                {!paste && main.length + more.length > 0 && (
+                  <button type="button" className="link" onClick={() => setPaste(true)}>
+                    Paste details instead
+                  </button>
+                )}
+              </>
+            ) : (
+              <>One-click connecting to {c.name} is not set up on this Taskiem yet, so paste its details below.</>
+            )}
+          </div>
         )}
-        {c?.auth.fields?.map((f) => (
-          <Field key={f.key} label={f.label + (f.required === false ? "" : " *")}>
-            <input
-              type={f.secret ? "password" : "text"}
-              autoComplete="off"
-              value={creds[f.key] ?? ""}
-              required={f.required !== false}
-              onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value })}
-            />
-          </Field>
-        ))}
+        {(!linkable || paste) && (
+          <>
+            {modes.length > 1 && (
+              <fieldset className="choice">
+                <legend>Which kind?</legend>
+                {modes.map((m) => (
+                  <label key={m.mode} className="inline">
+                    <input type="radio" name="mode" checked={chosen === m.mode} onChange={() => setMode(m.mode)} />
+                    {m.label}
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {main.map(field)}
+          </>
+        )}
+        <details>
+          <summary>More options</summary>
+          {(!linkable || paste) && more.map(field)}
+          {!preset && (
+            <div className="row">
+              <Field label="Name" hint="Leave it empty: it is called main, which templates and the AI use.">
+                <input value={name} placeholder="main" onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field label="Environment">
+                <select value={env} onChange={(e) => setEnv(e.target.value)}>
+                  <option value="prod">prod (the real one)</option>
+                  <option value="dev">dev (for trying things)</option>
+                </select>
+              </Field>
+            </div>
+          )}
+        </details>
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy}>
-            Save
-          </button>
+          {(!linkable || paste) && (
+            <button type="submit" className="primary" disabled={act.busy || blocked}>
+              {act.busy ? "Checking…" : "Check and save"}
+            </button>
+          )}
           <button type="button" onClick={onClose}>
             Cancel
           </button>

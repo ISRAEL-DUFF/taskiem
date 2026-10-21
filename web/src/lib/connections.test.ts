@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ConnectorInfo } from "../api";
-import { connectorOf, fieldsToComplete, linkResult } from "./connections";
+import type { AuthField, ConnectorInfo } from "../api";
+import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, splitFields } from "./connections";
+import { connectionLabel, connectorID, pickable } from "../forms/ConnectionPicker";
+import { sheetIdOf } from "../forms/SheetChooser";
 
 const xenibase: ConnectorInfo = {
   ref: "xenibase@1",
@@ -53,5 +55,55 @@ describe("connectorOf", () => {
     expect(connectorOf([plain, xenibase], "xenibase")?.name).toBe("Xenibase");
     expect(connectorOf([plain], "xenibase")).toBeUndefined();
     expect(connectorOf(undefined, "xenibase")).toBeUndefined();
+  });
+});
+
+const secretKey: AuthField = {
+  key: "secret_key",
+  label: "Secret key",
+  secret: true,
+  prefixes: [
+    { prefix: "sk_live_", mode: "live", label: "Live (real money)" },
+    { prefix: "sk_test_", mode: "test", label: "Test (practice)" },
+  ],
+  refuse: [{ prefix: "pk_", message: "That is your public key." }],
+};
+
+describe("guided keys", () => {
+  it("says what is wrong with a pasted key, as the server does", () => {
+    expect(keyProblem(secretKey, "pk_live_1", "live")).toBe("That is your public key.");
+    expect(keyProblem(secretKey, "sk_test_1", "live")).toBe("that is a test (practice) secret key, but you chose live (real money); copy the live (real money) secret key instead");
+    expect(keyProblem(secretKey, "hello", "test")).toBe("that does not look like your secret key: it starts with sk_test_");
+    expect(keyProblem(secretKey, "sk_live_1", "live")).toBe("");
+    expect(keyProblem(secretKey, "", "live")).toBe("");
+    expect(keyProblem({ key: "k", label: "API key" }, "anything")).toBe("");
+  });
+  it("offers live and test as choices, and keeps optional fields aside", () => {
+    const c = { auth: { type: "api_key", fields: [secretKey, { key: "hash", label: "Hash", required: false }] } } as unknown as ConnectorInfo;
+    expect(modesOf(c)).toEqual([
+      { mode: "live", label: "Live (real money)" },
+      { mode: "test", label: "Test (practice)" },
+    ]);
+    expect(splitFields(c).main.map((f) => f.key)).toEqual(["secret_key"]);
+    expect(splitFields(c).more.map((f) => f.key)).toEqual(["hash"]);
+  });
+});
+
+describe("connection pickers", () => {
+  it("offers the service's connections once each, prod's first", () => {
+    const list = [
+      { connector: "paystack", name: "main", environment: "dev", status: "active", mode: "test" },
+      { connector: "paystack", name: "main", environment: "prod", status: "expired", mode: "live" },
+      { connector: "termii", name: "main", environment: "prod", status: "active" },
+    ];
+    expect(pickable(list, "paystack@1")).toEqual([{ name: "main", status: "expired", mode: "live" }]);
+    expect(connectorID("paystack@1")).toBe("paystack");
+    expect(connectionLabel({ name: "main", status: "active", mode: "test" })).toBe("main (test key: no real money)");
+    expect(connectionLabel({ name: "main", status: "expired" })).toBe("main (expired)");
+  });
+  it("finds a spreadsheet's id in its link", () => {
+    expect(sheetIdOf("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit#gid=0")).toBe("1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789");
+    expect(sheetIdOf("1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789")).toBe("1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789");
+    expect(sheetIdOf("my sales sheet")).toBe("");
   });
 });

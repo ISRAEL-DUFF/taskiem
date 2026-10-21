@@ -6,6 +6,8 @@ import { Help } from "../onboarding";
 import { byCategory, initialValues, inputKind, lineLabel, toParams, WEEKDAYS, type Template, type TemplateParam } from "../lib/templates";
 import { Badge, ErrorBox, Field, useAction, useLoad } from "../ui";
 import { RolePicker } from "../forms/RolePicker";
+import { ConnectionPicker } from "../forms/ConnectionPicker";
+import { SheetChooser } from "../forms/SheetChooser";
 
 // The SME template library (docs/templates.md): browse ready workflows,
 // read their steps in plain words, and create a draft from one by filling
@@ -182,6 +184,22 @@ export function ParamField({ param: p, value, error, onChange }: { param: Templa
     </>
   );
   let input;
+  // A connection is picked from the business's own, with Connect in place.
+  if (p.type === "connection") {
+    return (
+      <Field label={label} hint={hint}>
+        <ConnectionPicker label={label} connector={p.connector ?? ""} value={value} onChange={onChange} />
+      </Field>
+    );
+  }
+  // A spreadsheet is chosen by its link, never an id.
+  if (p.name === "spreadsheet_id" || p.name.endsWith("_spreadsheet_id")) {
+    return (
+      <Field label={label} hint={hint}>
+        <SheetChooser value={value} onChange={onChange} />
+      </Field>
+    );
+  }
   // A role a template's approval names is picked, never typed.
   if (/(^|_)role$/.test(p.name) && p.type === "string") {
     return (

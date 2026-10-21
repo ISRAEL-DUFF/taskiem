@@ -1,13 +1,16 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,6 +18,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/audit"
+	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
@@ -65,6 +70,8 @@ type connectionInfo struct {
 	// ProvisionedBy names what made the connection when it was not a
 	// person: "taskiem:data_tables" for the data tables project's.
 	ProvisionedBy *string `json:"provisioned_by"`
+	// Mode is live or test, when the key says which (N2).
+	Mode *string `json:"mode"`
 	// Remote is the state of the subscriptions Taskiem keeps at the
 	// provider through this connection (decision 0021), when there are any.
 	Remote *remoteSummary `json:"remote,omitempty" db:"-"`
@@ -75,7 +82,7 @@ func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	only := principalFrom(r.Context()).Environment // a key limited to one environment sees only it
 	err := s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT c.id, c.environment, c.connector, c.name, c.auth_type, c.status, c.expires_at, c.created_at,
-			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = c.tenant_id AND sr.connection_id = c.id), c.provisioned_by
+			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = c.tenant_id AND sr.connection_id = c.id), c.provisioned_by, c.mode
 			FROM connections c WHERE $1 = '' OR c.environment = $1 ORDER BY c.environment, c.connector, c.name`, only)
 		if err != nil {
 			return err
@@ -94,11 +101,40 @@ func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"connections": nonNil(out)})
 }
 
+// DefaultConnectionName is what a connection is called when nobody names
+// it, and what templates, the AI builder and storefront payments use
+// (no-technical-steps N2): one name, so nothing has to match by hand.
+const DefaultConnectionName = "main"
+
+// freeConnectionName is main, or main_2, main_3 … when the business
+// already has a connection of that name for the service in env.
+func freeConnectionName(ctx context.Context, tx pgx.Tx, env, connector string) (string, error) {
+	rows, err := tx.Query(ctx, `SELECT name FROM connections WHERE environment = $1 AND connector = $2`, env, connector)
+	if err != nil {
+		return "", err
+	}
+	names, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return "", err
+	}
+	name := DefaultConnectionName
+	for i := 2; slices.Contains(names, name); i++ {
+		name = fmt.Sprintf("%s_%d", DefaultConnectionName, i)
+	}
+	return name, nil
+}
+
 type connectionReq struct {
 	Environment string            `json:"environment"`
 	Connector   string            `json:"connector"` // "paystack@1"
 	Name        string            `json:"name"`
 	Credentials map[string]string `json:"credentials"`
+	// Mode is the choice the person made (live or test) when the
+	// connector's keys say which they are; a key for the other is refused.
+	Mode string `json:"mode,omitempty"`
+	// Check asks the provider first (the connector's test action): a key
+	// it refuses is not saved.
+	Check bool `json:"check,omitempty"`
 }
 
 // createConnection stores a connection's credentials, encrypted. They are
@@ -124,14 +160,21 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: connector %q is not available", errBadRequest, req.Connector))
 		return
 	}
-	if req.Name == "" {
-		req.Name = "default"
-	}
 	if err := checkCredentials(c, req.Credentials); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
+	if err := checkKeys(c, req.Credentials, req.Mode); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if req.Check {
+		if err := s.testCredentials(r.Context(), p.TenantID, c, req.Credentials); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	if err := s.tx(r, func(tx pgx.Tx) error { return s.checkCount(r.Context(), tx, p.TenantID, "max_connections") }); err != nil {
 		s.fail(w, r, err)
 		return
@@ -139,8 +182,18 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	var id uuid.UUID
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
+		if req.Name == "" {
+			if req.Name, err = freeConnectionName(r.Context(), tx, env, c.Manifest.ID); err != nil {
+				return err
+			}
+		}
 		if id, err = s.Vault.CreateConnectionTx(r.Context(), tx, p.TenantID, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, req.Credentials, p.Actor(), ""); err != nil {
 			return err
+		}
+		if mode := c.Manifest.Auth.ModeOf(req.Credentials); mode != "" {
+			if _, err := tx.Exec(r.Context(), `UPDATE connections SET mode = $2 WHERE id = $1`, id, mode); err != nil {
+				return err
+			}
 		}
 		return secrets.SetRouteKeysTx(r.Context(), tx, p.TenantID, id, c.Manifest.RouteKeys(req.Credentials))
 	})
@@ -480,4 +533,107 @@ func (s *Server) listAnchors(w http.ResponseWriter, r *http.Request) {
 		resp["key_id"] = audit.KeyID(s.AnchorKey)
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// checkKeys checks pasted values against the manifest's prefixes, for the
+// mode chosen, in plain words (no-technical-steps N2).
+func checkKeys(c *connector.Connector, creds map[string]string, mode string) error {
+	for _, f := range c.Manifest.Auth.Fields {
+		if err := f.CheckValue(creds[f.Key], mode); err != nil {
+			return fmt.Errorf("%w: %w", errBadRequest, err)
+		}
+	}
+	return nil
+}
+
+// testCredentials runs the connector's test action with credentials not
+// saved yet, through the egress guard: a key the provider refuses is
+// answered in plain words.
+func (s *Server) testCredentials(ctx context.Context, tenant uuid.UUID, c *connector.Connector, creds map[string]string) error {
+	if c.Manifest.Auth.Test == nil {
+		return nil
+	}
+	action, ok := c.Actions[c.Manifest.Auth.Test.Action]
+	if !ok {
+		return nil
+	}
+	g := s.Egress
+	if g == nil {
+		g = &egress.Guard{Logger: s.Logger}
+	}
+	hc := g.Client(egress.Policy{Tenant: tenant.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + c.Manifest.ID}, 20*time.Second)
+	tctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	if _, err := action.Execute(tctx, connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1}); err != nil {
+		return fmt.Errorf("%w: %s did not accept these details. Check you copied the whole value from the right page, then try again", errBadRequest, c.Manifest.Name)
+	}
+	return nil
+}
+
+// checkConnection answers POST /v1/connections/check: the same checks as
+// saving, without saving, as a key is pasted.
+func (s *Server) checkConnection(w http.ResponseWriter, r *http.Request) {
+	var req connectionReq
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	reg, err := s.Registry.For(r.Context(), p.TenantID.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	c, ok := reg.Get(req.Connector)
+	if !ok {
+		s.fail(w, r, fmt.Errorf("%w: connector %q is not available", errBadRequest, req.Connector))
+		return
+	}
+	if err := checkCredentials(c, req.Credentials); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := checkKeys(c, req.Credentials, req.Mode); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.testCredentials(r.Context(), p.TenantID, c, req.Credentials); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// listConnectionNames answers GET /v1/connection-names: the business's
+// connections by service, name, environment and status only, for the
+// pickers wherever a step or template names a connection (workflow.read;
+// the Connections page itself needs connection.manage).
+func (s *Server) listConnectionNames(w http.ResponseWriter, r *http.Request) {
+	type conn struct {
+		Connector   string `json:"connector"`
+		Name        string `json:"name"`
+		Environment string `json:"environment"`
+		Status      string `json:"status"`
+		// Mode is live or test, when the key says.
+		Mode *string `json:"mode"`
+	}
+	var out []conn
+	connector := r.URL.Query().Get("connector")
+	if i := strings.IndexByte(connector, '@'); i > 0 {
+		connector = connector[:i]
+	}
+	err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT connector, name, environment, status, mode FROM connections
+			WHERE ($1 = '' OR connector = $1) AND environment NOT LIKE '\_%' ORDER BY connector, environment DESC, name LIMIT 500`, connector)
+		if err != nil {
+			return err
+		}
+		out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[conn])
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"connections": nonNil(out)})
 }

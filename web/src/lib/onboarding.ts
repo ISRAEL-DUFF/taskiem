@@ -30,9 +30,9 @@ export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href:
   },
   connection: {
     title: "Connect an app",
-    text: "Add the credentials of a service your workflow uses, such as your Termii or Paystack account. They are encrypted and never shown again.",
-    href: "/connections",
-    action: "Add a connection",
+    text: "Connect the service your workflow uses, such as Paystack or Google Sheets. Pick a template first: it shows exactly what to connect, and where to find it.",
+    href: "/start/guide",
+    action: "Connect what your template needs",
   },
   workflow: {
     title: "Create a workflow",

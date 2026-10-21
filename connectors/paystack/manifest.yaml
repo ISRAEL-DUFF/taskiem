@@ -9,7 +9,17 @@ regions: [NG, GH, KE, ZA, CI]
 auth:
   type: api_key
   fields:
-    - { key: secret_key, label: Secret key, secret: true }
+    - key: secret_key
+      label: Secret key
+      secret: true
+      help: Taskiem uses it to take and check payments for your business. Keep it private.
+      where: Paystack dashboard → Settings → API Keys & Webhooks
+      link: https://dashboard.paystack.com/#/settings/developers
+      prefixes:
+        - { prefix: sk_live_, mode: live, label: Live (real money) }
+        - { prefix: sk_test_, mode: test, label: Test (practice) }
+      refuse:
+        - { prefix: pk_, message: "That is your public key. Copy the secret key from the same page: it starts with sk_." }
   test: { action: check_balance }
 rate_limit: { requests: 50, per: 1s, scope: connection }
 base_url: https://api.paystack.co

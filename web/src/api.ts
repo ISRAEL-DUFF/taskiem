@@ -278,6 +278,24 @@ export interface RunEvent {
   origin: string;
 }
 
+/** One credential a connection takes, with what guides the person pasting it. */
+export interface AuthField {
+  key: string;
+  label: string;
+  secret?: boolean;
+  required?: boolean;
+  /** One line of plain help. */
+  help?: string;
+  /** Where it is in the provider's dashboard. */
+  where?: string;
+  /** The provider's page that shows it. */
+  link?: string;
+  /** What a right value starts with, per mode (live, test). */
+  prefixes?: { prefix: string; mode?: string; label?: string }[];
+  /** Wrong values, with what to tell the person. */
+  refuse?: { prefix: string; message: string }[];
+}
+
 export interface ConnectorInfo {
   ref: string;
   id: string;
@@ -285,9 +303,17 @@ export interface ConnectorInfo {
   name: string;
   auth: {
     type: string;
-    fields: { key: string; label: string; secret?: boolean; required?: boolean }[] | null;
+    fields: AuthField[] | null;
     /** Declared by a connector that connects by OAuth (docs/connector-sdk.md). */
-    oauth2?: { authorize_url: string; token_url: string; revoke_url?: string; scopes: string[]; pkce: boolean; fields_from_token?: Record<string, string> };
+    oauth2?: {
+      authorize_url: string;
+      token_url: string;
+      revoke_url?: string;
+      scopes: string[];
+      pkce: boolean;
+      fields_from_token?: Record<string, string>;
+      platform_client_fields?: Record<string, string>;
+    };
   };
   /** For a connector with `auth.oauth2`: whether it can be connected by OAuth on this platform. */
   oauth_linkable?: boolean;

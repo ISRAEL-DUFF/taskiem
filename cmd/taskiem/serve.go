@@ -736,8 +736,11 @@ func serve(ctx context.Context, args []string) error {
 		tasks = append(tasks, replica.Run)
 	}
 	if is("api") {
+		// Checking a key before it is saved calls the connector as a run
+		// would, so it reaches the same test fakes.
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
-			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy}
+			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
+			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}}
 		if signer := cfg.anchorSigner(nil); signer != nil {
 			srv.AnchorKey = signer.PublicKey()
 		}

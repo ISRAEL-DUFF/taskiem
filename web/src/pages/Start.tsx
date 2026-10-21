@@ -8,6 +8,7 @@ import { initialValues, toParams, type Template } from "../lib/templates";
 import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from "../ui";
 import { ParamField } from "./Templates";
 import { NeedsList } from "./Readiness";
+import { NewConnection, startLink } from "./Connections";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 // Get started (docs/onboarding.md): the checklist, derived from what the
@@ -194,37 +195,18 @@ function GuideSteps({ t }: { t: Template }) {
   );
 }
 
+/** Connects the service a template needs, on the guided screen, with its name fixed. */
 function ConnectForm({ info, name, onDone }: { info: ConnectorInfo; name: string; onDone: () => void }) {
-  const [creds, setCreds] = useState<Record<string, string>>({});
-  const act = useAction();
+  const [open, setOpen] = useState(false);
   return (
-    <form
-      className="card"
-      aria-label={`Connect ${info.name}`}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void act.run(async () => (await post("/v1/connections", { connector: info.ref, environment: ENV, name, credentials: creds }), onDone()));
-      }}
-    >
-      <strong>
-        {info.name} <span className="hint">(saved as {name})</span>
-      </strong>
-      {info.auth.fields?.map((f) => (
-        <Field key={f.key} label={f.label + (f.required === false ? " (optional)" : "")}>
-          <input
-            type={f.secret ? "password" : "text"}
-            autoComplete="off"
-            value={creds[f.key] ?? ""}
-            required={f.required !== false}
-            onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value })}
-          />
-        </Field>
-      ))}
-      <ErrorBox error={act.error} />
-      <button type="submit" className="primary" disabled={act.busy}>
-        Save connection
+    <div className="card" aria-label={`Connect ${info.name}`}>
+      <button type="button" className="primary" onClick={() => setOpen(true)}>
+        Connect {info.name}
       </button>
-    </form>
+      {open && (
+        <NewConnection connectors={[info]} preset={{ connector: info.id, environment: ENV, name }} onClose={() => setOpen(false)} onDone={() => (setOpen(false), onDone())} onLink={startLink} />
+      )}
+    </div>
   );
 }
 

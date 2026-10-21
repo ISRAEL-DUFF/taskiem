@@ -14,7 +14,17 @@ auth:
   type: api_key
   fields:
     # Sandbox and live share one host; the key decides the environment.
-    - { key: secret_key, label: "Secret key (test_sk_... or live_sk_...)", secret: true }
+    - key: secret_key
+      label: Secret key
+      secret: true
+      where: Mono dashboard → Apps → your app → Keys
+      link: https://app.mono.co/apps
+      prefixes:
+        - { prefix: live_sk_, mode: live, label: Live (real accounts) }
+        - { prefix: test_sk_, mode: test, label: Test (practice) }
+      refuse:
+        - { prefix: live_pk_, message: "That is your public key. Copy the secret key: it has sk_ in it." }
+        - { prefix: test_pk_, message: "That is your public key. Copy the secret key: it has sk_ in it." }
     - { key: webhook_secret, label: Webhook secret (from the app's webhook settings), secret: true, required: false }
   test: { action: list_banks }
 base_url: https://api.withmono.com

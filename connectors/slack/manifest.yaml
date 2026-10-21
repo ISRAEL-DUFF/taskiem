@@ -22,7 +22,14 @@ category: messaging
 auth:
   type: api_key
   fields:
-    - { key: bot_token, label: Bot user OAuth token (xoxb-...), secret: true }
+    - key: bot_token
+      label: Bot token
+      secret: true
+      help: Taskiem posts to your workspace with your Slack app's bot token.
+      where: api.slack.com → Your Apps → your app → OAuth & Permissions → Bot User OAuth Token
+      link: https://api.slack.com/apps
+      prefixes: [{ prefix: xoxb- }]
+      refuse: [{ prefix: xoxp-, message: "That is a user token. Copy the Bot User OAuth Token: it starts with xoxb-." }]
     - { key: signing_secret, label: Signing secret (Basic Information page; needed for events and interactions), secret: true, required: false }
   test: { action: auth_test }
 base_url: https://slack.com/api

@@ -19,6 +19,7 @@ import {
   type FormKind,
   type StorefrontAction,
 } from "../lib/orders";
+import { ConnectionPicker } from "../forms/ConnectionPicker";
 
 /** The storefront's forms (order, question, call-back, booking): each needs
  * a workflow in prod before it can be switched on; a booking also needs the
@@ -202,15 +203,8 @@ function PaymentOptions({ kind, form, set }: { kind: FormKind; form: ActionForm;
         <p className="hint">Taking payment {kind === "booking" ? "when booking" : "when ordering"} needs a business verified by Taskiem (see Trust above) and a plan that includes it.</p>
       )}
       {form.payment !== "none" && (
-        <Field
-          label="Paystack connection"
-          hint={
-            <>
-              The name of your Paystack connection; left empty, “main”. Add one under <Link to="/connections">Connections</Link>.
-            </>
-          }
-        >
-          <input value={form.connection} placeholder="main" autoComplete="off" spellCheck={false} onChange={(e) => set({ connection: e.target.value })} />
+        <Field label="Paystack" hint="Customers pay into this Paystack account.">
+          <ConnectionPicker label="Paystack" connector="paystack" value={form.connection || "main"} onChange={(connection) => set({ connection })} />
         </Field>
       )}
       {kind === "booking" && form.payment !== "none" && (
