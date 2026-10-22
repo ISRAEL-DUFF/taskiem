@@ -9,6 +9,7 @@ import { ApiError, currentAgentSession, get, post, setAgentSession, subscribeAge
 import { AgentPermissions, useAuth } from "../auth";
 import { AGENT_PERMISSIONS, attestPath, consentChannels, endReason, fitWithin, formatLeft, msLeft, type AgentSession, type ConsentChannel } from "../lib/agent";
 import { Badge, ErrorBox, Field, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { brandFile } from "../brand";
 import { Storefront } from "./Storefront";
 import { Look } from "./Look";
 import { TablePage, Tables } from "./Tables";
@@ -105,9 +106,7 @@ export function AgentApp() {
     <div className="agent-app">
       <header className="agent-top">
         <Link to="/agent" className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            T
-          </span>
+          <img className="brand-mark" src={brandFile("mark.svg")} alt="" width={26} height={26} />
           Taskiem agent
         </Link>
         <button onClick={() => void logout()}>Sign out</button>
