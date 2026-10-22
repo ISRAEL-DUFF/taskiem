@@ -286,6 +286,41 @@ func (c *client) createSecretKey(ctx context.Context, project, name string) (str
 	return out.Value, nil
 }
 
+// tokenExpiry is when the client's own token expires (GET /api/v1/me);
+// zero when it does not say.
+func (c *client) tokenExpiry(ctx context.Context) (time.Time, error) {
+	var me struct {
+		Token *struct {
+			ExpiresAt time.Time `json:"expires_at"`
+		} `json:"token"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/v1/me", nil, &me); err != nil {
+		return time.Time{}, err
+	}
+	if me.Token == nil {
+		return time.Time{}, nil
+	}
+	return me.Token.ExpiresAt, nil
+}
+
+// tokenDays is how long a token the client makes may last: a year, or
+// the whole days its own token has left (Xenibase refuses a token that
+// outlives the one making it).
+func (c *client) tokenDays(ctx context.Context, now time.Time) (int, error) {
+	exp, err := c.tokenExpiry(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if exp.IsZero() {
+		return 365, nil
+	}
+	days := int(exp.Sub(now) / (24 * time.Hour))
+	if days < 1 {
+		return 0, fmt.Errorf("%w: the platform's Xenibase token (TASKIEM_XENIBASE_TOKEN) expires within a day: replace it", ErrProjectFailed)
+	}
+	return min(days, 365), nil
+}
+
 // createToken mints a project-restricted token with the scopes, lasting
 // days (at most 365, never past the caller's own expiry).
 func (c *client) createToken(ctx context.Context, org, name, project string, scopes []string, days int) (createdToken, error) {

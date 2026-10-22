@@ -91,7 +91,16 @@ func (s *Service) Renew(ctx context.Context, tenant uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	tok, err := c.createToken(ctx, s.Platform.Org, TokenName, p.ProjectID, []string{"read", "write", "admin"}, 365)
+	days, err := c.tokenDays(ctx, s.now())
+	if err != nil {
+		return err
+	}
+	// A new token cannot outlive the platform's: when that one is what
+	// runs out, renewing gains nothing, and the operator must replace it.
+	if until := s.now().Add(time.Duration(days) * 24 * time.Hour); p.TokenExpiresAt != nil && !until.After(p.TokenExpiresAt.Add(24*time.Hour)) {
+		return fmt.Errorf("%w: the platform's Xenibase token (TASKIEM_XENIBASE_TOKEN) expires before %s: replace it, and this one is renewed", ErrProjectFailed, until.Format("2 January 2006"))
+	}
+	tok, err := c.createToken(ctx, s.Platform.Org, TokenName, p.ProjectID, []string{"read", "write", "admin"}, days)
 	if err != nil {
 		return err
 	}
