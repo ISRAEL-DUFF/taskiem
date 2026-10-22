@@ -133,6 +133,8 @@ export function newStep(type: Step["type"], id: string): Step {
   switch (type) {
     case "connector":
       return { id, type, connector: "paystack@1", action: "check_balance" };
+    case "capability":
+      return { id, type, uses: "balance" };
     case "http":
       return { id, type, config: { method: "GET", url: "https://example.com" } };
     case "code":

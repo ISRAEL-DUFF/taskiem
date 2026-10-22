@@ -15,7 +15,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -46,6 +48,30 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 	}
 	if err := s.formsDeployable(ctx, tx, tenant, d); err != nil {
 		return err
+	}
+	// Capability steps must be able to run on this environment's
+	// connections; the rails they will run on are kept with the deployment.
+	if s.Store != nil {
+		_, _, choices, err := s.Store.Expand(ctx, tx, tenant, wf, v, env)
+		var ce *runtime.CapabilityError
+		switch {
+		case errors.Is(err, expansion.ErrNoConnection):
+			// Not connected here yet: runs are refused, in plain words,
+			// until it is.
+			err, choices = nil, nil
+		case errors.As(err, &ce):
+			return fmt.Errorf("%w: in %s, %s", errConflict, env, ce.Error())
+		}
+		if err != nil {
+			return err
+		}
+		if choices != nil {
+			if _, err := tx.Exec(ctx, `UPDATE deployments SET rails = $3 WHERE workflow_id = $1 AND environment = $2`, wf, env, choices); err != nil {
+				return err
+			}
+		} else if _, err := tx.Exec(ctx, `UPDATE deployments SET rails = NULL WHERE workflow_id = $1 AND environment = $2`, wf, env); err != nil {
+			return err
+		}
 	}
 	if err := s.emailDeployable(d); err != nil {
 		return err

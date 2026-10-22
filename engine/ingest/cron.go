@@ -141,16 +141,21 @@ func (c *Cron) fire(ctx context.Context, tenant, id uuid.UUID) (bool, error) {
 		Trigger:   map[string]any{"type": "schedule", "scheduled_time": fireAt, "body": map[string]any{}},
 		StartedBy: "schedule", TriggerID: "schedule/" + wf.String(), DedupKey: fireAt,
 	}); err != nil {
-		le, ok := runtime.IsLimit(err)
-		if !ok {
+		if ce := (*runtime.CapabilityError)(nil); errors.As(err, &ce) {
+			// Its connections cannot run it: this fire is skipped, as one
+			// beyond a limit is, rather than retried every lease.
+			c.Logger.Warn("schedule fire skipped: capability", "tenant", tenant, "trigger", id, "scheduled_time", fireAt, "err", ce.Error())
+			fired = false
+		} else if le, ok := runtime.IsLimit(err); !ok {
 			return false, err
+		} else {
+			// Beyond a quota or a full backlog this fire is skipped (logged,
+			// counted, and seen by "limit" alert rules) and the schedule
+			// moves on, rather than retrying every lease until it lifts.
+			c.Logger.Warn("schedule fire skipped: tenant limit", "tenant", tenant, "trigger", id, "scheduled_time", fireAt, "limit", le.Limit, "err", le.Message)
+			telemetry.Ingest.WithLabelValues("schedule", "refused").Inc()
+			fired = false
 		}
-		// Beyond a quota or a full backlog this fire is skipped (logged,
-		// counted, and seen by "limit" alert rules) and the schedule moves
-		// on, rather than retrying every lease until the limit lifts.
-		c.Logger.Warn("schedule fire skipped: tenant limit", "tenant", tenant, "trigger", id, "scheduled_time", fireAt, "limit", le.Limit, "err", le.Message)
-		telemetry.Ingest.WithLabelValues("schedule", "refused").Inc()
-		fired = false
 	} else if late := c.now().Sub(at).Seconds(); late >= 0 {
 		telemetry.SchedulerLateness.WithLabelValues("schedule").Observe(late)
 	}

@@ -2,14 +2,15 @@
 // on_error) are edited as JSON inside their parent.
 import { useState } from "react";
 import type { Step } from "@sdk/wd";
-import type { ConnectorInfo, Problem } from "../api";
+import { get, type CapabilityInfo, type ConnectorInfo, type Problem } from "../api";
 import { FormStepEditor } from "./FormEditor";
 import { RolePicker } from "../forms/RolePicker";
-import { ConnectionPicker } from "../forms/ConnectionPicker";
+import { ConnectionPicker, type ConnectionName } from "../forms/ConnectionPicker";
+import { capableConnections } from "../lib/capabilities";
 import type { FormStepConfig } from "../lib/forms";
 import { SchemaForm } from "../forms/SchemaForm";
 import { merge } from "../lib/schema";
-import { Field, JsonInput } from "../ui";
+import { Field, JsonInput, useLoad } from "../ui";
 import { useAdvanced } from "../auth";
 import { isExpression } from "../lib/schema";
 import type { Source } from "../lib/plaincanvas";
@@ -121,6 +122,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
 
       <h3>Configuration</h3>
       {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
+      {step.type === "capability" && <CapabilityConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel"].includes(step.type) && <ByHand />}
       {advanced && step.type === "http" && (
         <>
@@ -390,6 +392,49 @@ function ApprovalPlain({ cfg, setCfg, sources }: { cfg: Any; setCfg: (p: Any) =>
           <ByHand />
         )}
       </Field>
+    </>
+  );
+}
+
+/** A capability step: what to do, on which rail, with what (wd-v1 capability steps). */
+function CapabilityConfig({ step, connectors, set, advanced, sources }: { step: Extract<Step, { type: "capability" }>; connectors: ConnectorInfo[]; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {
+  const caps = useLoad(() => get<{ capabilities: CapabilityInfo[] }>("/v1/capabilities"), []);
+  const names = useLoad(() => get<{ connections: ConnectionName[] }>("/v1/connection-names"), []);
+  const cap = caps.data?.capabilities.find((c) => c.name === step.uses);
+  const options = capableConnections(names.data?.connections ?? [], cap?.rails ?? [], connectors);
+  return (
+    <>
+      <Field label="What to do">
+        <select value={step.uses} onChange={(e) => set({ uses: e.target.value, input: undefined })}>
+          {!cap && <option value={step.uses}>{step.uses}</option>}
+          {(caps.data?.capabilities ?? []).map((c) => (
+            <option key={c.name} value={c.name}>
+              {c.title}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Pay through" hint="Any of your connections whose service can do it. Change it and redeploy to move to another service; runs already going finish where they started.">
+        <select value={step.connection ?? ""} onChange={(e) => set({ connection: e.target.value || undefined })}>
+          <option value="">{options.length === 1 ? `${options[0]?.label} (the only one that can)` : options.length === 0 ? "None of your connections can do this yet" : "Choose a connection…"}</option>
+          {step.connection && !options.some((o) => o.name === step.connection) && <option value={step.connection}>{step.connection} (cannot do this)</option>}
+          {options.map((o) => (
+            <option key={o.name} value={o.name}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {cap && cap.rails.length > 0 && options.length === 0 && (
+        <p className="hint">Services that can: {[...new Set(cap.rails.map((r) => connectors.find((c) => c.ref === r)?.name ?? r))].join(", ")}. Connect one under Connections.</p>
+      )}
+      <h3>Input</h3>
+      <SchemaForm schema={cap?.input as never} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
+      {advanced && cap && !step.uses.startsWith("await_") && !["balance", "resolve_account", "list_banks", "get_payout", "get_payment"].includes(step.uses) && (
+        <Field label="Idempotency seed" hint="Optional expression that makes this payment once per item, e.g. =trigger.body.payroll_id + ':' + item.employee_id">
+          <input className="mono" value={step.effect?.idempotency_seed ?? ""} onChange={(e) => set({ effect: e.target.value ? { idempotency_seed: e.target.value } : undefined })} />
+        </Field>
+      )}
     </>
   );
 }

@@ -73,7 +73,7 @@ func (c CapabilityMap) Plan() []CapabilityStep {
 }
 
 var (
-	mapExprs   = expr.MustNewWithRoots("input", "output", "steps")
+	mapExprs   = capability.MappingEngine
 	eventExprs = expr.MustNewTriggerEngine("body", "headers", "query", "item")
 )
 
@@ -471,7 +471,12 @@ func (m *Manifest) EventOf(trigger string, act map[string]any) (string, map[stri
 }
 
 func resolveMapping(mp map[string]any, act map[string]any) (map[string]any, error) {
-	return resolveWith(mapExprs, mp, act)
+	return capability.ResolveMapping(mp, act["input"], act["output"], asSteps(act["steps"]))
+}
+
+func asSteps(v any) map[string]any {
+	m, _ := v.(map[string]any)
+	return m
 }
 
 func resolveWith(e *expr.Engine, mp map[string]any, act map[string]any) (map[string]any, error) {

@@ -1,6 +1,6 @@
 # Rails and products: specification and build plan
 
-Status: **R1 and R9 built**, R2 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
+Status: **R1, R2 and R9 built**, R3 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
 
 Taskiem connects to two kinds of service. **Rails** move money (Paystack, iswallet, Moniepoint and the rest) and Taskiem builds products on them as workflows. **Products** (Payrolla, and later accounting, HR and POS back offices) already run a whole process, and Taskiem connects to them, embeds their interface, and works around them. This document specifies both halves, and the retirement of the Payrolla integration that mixed them up.
 
@@ -540,6 +540,12 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 - `decide.Verify` and drift checks run on the expanded definition.
 
 **Done when:** a workflow with capability steps deploys on each R1 rail, its runs show the rail's real calls, the same definition redeploys on another rail without edits, exactly-once holds across a crash mid-loop on every rail (§10), and changing rails while runs are in flight leaves them on their version.
+
+**Built** (R2): the `capability` step ([wd-v1, capability steps](../contracts/wd-v1.md#capability-steps)), `await_settlement` and `await_reversal`; expansion (`engine/expansion`) with plain refusals; the run's expansion pinned and stored by digest; decide maps capability input to the action's, the worker maps the answer back (`provider_output` kept); ingest delivers each rail's normalised events as signals; deploys refuse steps the environment cannot run and record the rails; `GET /v1/capabilities`; the SDK's `pay.bank`, `pay.wallet`, `collect.link`, `rail.balance`, `waitFor.settlement` and the rest, round-tripped by codegen; the canvas's capability step with a connection picker among capable connections. Differences from the plan above:
+
+- Expansion happens when a run starts, against the environment's connections, rather than once at deploy: the result is the same for every run until a connection changes, and is stored once by digest. A deploy expands too, to refuse a connection that cannot do a step and to record the rails; an environment not connected yet is let through (publishing deploys to dev and prod at once), and its runs are refused in plain words until it is.
+- `await_settlement` on a rail without payout events (lookups only) is refused for now; none of the R1 rails needs it.
+- In a composite, an earlier call (Paystack's recipient) handles its failure with a copy of the step's `on_error`, its steps renamed `<id>__<name>` and reading that call's error; a `foreach` then reports the failure under the call's id (`pay__recipient`).
 
 ### R3: Run payroll (M)
 

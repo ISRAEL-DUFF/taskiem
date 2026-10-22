@@ -22,11 +22,12 @@ import { ProblemLine } from "../forms/ProblemLine";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 const nodeTypes = { step: StepNode, trigger: TriggerNode };
-const PALETTE: Step["type"][] = ["connector", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
+const PALETTE: Step["type"][] = ["connector", "capability", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
 
 /** The steps an owner adds without Advanced, in their words. */
 const PLAIN_PALETTE: [Step["type"], string][] = [
   ["connector", "Use a service"],
+  ["capability", "Pay or get paid"],
   ["approval", "Ask for approval"],
   ["form", "Ask someone to fill in a form"],
   ["wait", "Wait"],

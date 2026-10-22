@@ -321,6 +321,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso/{id}/domains", s.addSSODomain)
 			r.With(s.need(PermMemberManage)).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
 			r.Get("/connectors", s.listConnectors)
+			r.Get("/capabilities", s.listCapabilities)
 			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
 			r.With(s.need(PermConnectionManage)).Post("/connector-drift/acknowledge", s.acknowledgeDrift)
 			r.With(s.need(PermWorkflowRead)).Get("/tenant-connectors", s.listTenantConnectors)
@@ -685,6 +686,9 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusForbidden, strings.TrimPrefix(err.Error(), "forbidden: "))
 	case errors.Is(err, errConflict):
 		writeErr(w, http.StatusConflict, strings.TrimPrefix(err.Error(), "conflict: "))
+	case errors.As(err, new(*runtime.CapabilityError)):
+		// A capability step its environment's connections cannot run.
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "capability"})
 	default:
 		ref := errorRef()
 		s.Logger.Error("request failed", "path", r.URL.Path, "err", err, "reference", ref)

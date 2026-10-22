@@ -347,8 +347,10 @@ func TestReachingPeopleOutside(t *testing.T) {
 	before = w.texts(t)
 	owner.must(201, "POST", "/v1/workflows/"+shift+"/runs", map[string]any{"input": map[string]any{"phone": chidi}})
 	w.env.Drain(t)
-	if w.texts(t) != before+1 {
-		t.Fatal("a stopped contact was not texted instead")
+	w.tick(t)
+	w.srv.WaitBackground()
+	if n := w.texts(t); n != before+1 {
+		t.Fatalf("a stopped contact was not texted instead: %d texts", n-before)
 	}
 	if sent := w.whatsapp(t, chidi, "start"); len(sent) != 1 || !strings.Contains(sent[0].Text, "from Ada Stores here again") {
 		t.Fatalf("START: %+v", sent)

@@ -5,6 +5,7 @@
 // function only when that compiles to the same CEL text, and kept as a CEL
 // string otherwise.
 
+import { CAPABILITY_HELPERS } from "./connectors.gen.js";
 import { celToFunction } from "./expr.js";
 import type { Step, WorkflowDefinition } from "./wd.js";
 
@@ -149,6 +150,20 @@ class Gen {
         }
         this.use("connector");
         return `connector(${JSON.stringify(ref)}, ${JSON.stringify(action)}${s.input !== undefined || extraArg ? ", " + (s.input === undefined ? "undefined" : this.value(s.input, indent)) : ""}${extraArg ? ", " + this.value(extraArg, indent) : ""})`;
+      }
+      case "capability": {
+        take("uses", "input", "connection", "effect");
+        const extra: Record<string, unknown> = {};
+        for (const k of ["connection", "effect"]) if (s[k] !== undefined) extra[k] = s[k];
+        const extraArg = Object.keys(extra).length > 0 ? extra : undefined;
+        const uses = s.uses as string;
+        const helper = Object.hasOwn(CAPABILITY_HELPERS, uses) ? CAPABILITY_HELPERS[uses] : undefined;
+        if (helper !== undefined) {
+          this.conns.add(helper.split(".")[0] as string);
+          return call(helper, optional(s.input), extraArg);
+        }
+        this.use("capability");
+        return call("capability", uses, optional(s.input), extraArg);
       }
       case "http":
         take("config", "effect");

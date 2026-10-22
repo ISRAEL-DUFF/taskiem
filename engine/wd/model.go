@@ -64,6 +64,20 @@ type Effect struct {
 	IdempotencySeed string `json:"idempotency_seed,omitempty"`
 }
 
+// Expanded is the rail's mapping a capability step was expanded with
+// (connector/v1 rule 16): Input maps the capability's input to the
+// action's (roots input, steps), Output the action's output back to the
+// capability's (roots input, output, steps). Steps names a composite's
+// earlier steps by their expanded ids.
+type Expanded struct {
+	Uses   string            `json:"uses"`
+	Input  map[string]any    `json:"-"`
+	Output map[string]any    `json:"-"`
+	Steps  map[string]string `json:"steps,omitempty"`
+	RawIn  json.RawMessage   `json:"input"`
+	RawOut json.RawMessage   `json:"output"`
+}
+
 type Compensate struct {
 	Action string          `json:"action"`
 	Input  map[string]any  `json:"-"`
@@ -88,6 +102,12 @@ type Step struct {
 	Compensate  *Compensate     `json:"compensate,omitempty"`
 	RawInput    json.RawMessage `json:"input,omitempty"`
 	RawConfig   json.RawMessage `json:"config,omitempty"`
+	// Uses is a capability step's capability (pay_bank, await_settlement).
+	Uses string `json:"uses,omitempty"`
+	// Capability marks a connector step expanded from a capability step:
+	// Input is then the capability's input, and Capability the rail's
+	// mapping between it and the action (engine/expansion).
+	Capability *Expanded `json:"capability,omitempty"`
 
 	Input     map[string]any   `json:"-"`
 	HTTP      *HTTPConfig      `json:"-"`
@@ -273,6 +293,18 @@ func (s *Step) parse() error {
 			return err
 		}
 		s.Input, _ = v.(map[string]any)
+	}
+	if c := s.Capability; c != nil {
+		for _, f := range []struct {
+			raw json.RawMessage
+			dst *map[string]any
+		}{{c.RawIn, &c.Input}, {c.RawOut, &c.Output}} {
+			v, err := expr.DecodeJSON(f.raw)
+			if err != nil {
+				return err
+			}
+			*f.dst, _ = v.(map[string]any)
+		}
 	}
 	if s.Compensate != nil && len(s.Compensate.RawIn) > 0 {
 		v, err := expr.DecodeJSON(s.Compensate.RawIn)

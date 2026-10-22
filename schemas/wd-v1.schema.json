@@ -204,7 +204,8 @@
             "subflow",
             "transform",
             "ai",
-            "form"
+            "form",
+            "capability"
           ]
         },
         "name": {
@@ -451,6 +452,21 @@
           "then": {
             "$ref": "#/$defs/formStep"
           }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "capability"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/capabilityStep"
+          }
         }
       ]
     },
@@ -495,6 +511,36 @@
             },
             "input": {
               "$ref": "#/$defs/values"
+            }
+          }
+        },
+        "capability": {
+          "description": "Set by capability expansion, never written by hand: the step stands for a capability, its input is the capability's, and the rail's mapping turns it into the action's input and the action's output back into the capability's.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "uses",
+            "input",
+            "output"
+          ],
+          "properties": {
+            "uses": {
+              "type": "string"
+            },
+            "input": {
+              "type": "object",
+              "description": "The rail's mapping to the action's input (roots: input, steps)."
+            },
+            "output": {
+              "type": "object",
+              "description": "The rail's mapping to the capability's output (roots: input, output, steps)."
+            },
+            "steps": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/stepId"
+              },
+              "description": "The rail's step names (steps.<name>) for a composite, by the expanded step ids they stand for."
             }
           }
         }
@@ -1961,6 +2007,54 @@
               ]
             }
           }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "capabilityStep": {
+      "description": "A capability (schemas/capabilities-v1.json) done by whichever rail the connection is: expanded into that rail's own action when a run starts (docs/contracts/wd-v1.md, capability steps).",
+      "type": "object",
+      "required": [
+        "type",
+        "uses"
+      ],
+      "properties": {
+        "type": {
+          "const": "capability"
+        },
+        "uses": {
+          "enum": [
+            "balance",
+            "resolve_account",
+            "list_banks",
+            "pay_bank",
+            "pay_wallet",
+            "pay_mobile_money",
+            "get_payout",
+            "pay_many",
+            "collect_link",
+            "collect_push",
+            "get_payment",
+            "virtual_account",
+            "refund",
+            "await_settlement",
+            "await_reversal"
+          ]
+        },
+        "connection": {
+          "type": "string",
+          "description": "Connection name in the run's environment; defaults to the only one whose rail can do it. await_settlement and await_reversal default to the connection of the payment they follow."
+        },
+        "input": {
+          "$ref": "#/$defs/values"
+        },
+        "effect": {
+          "$ref": "#/$defs/effect"
         }
       },
       "unevaluatedProperties": false,

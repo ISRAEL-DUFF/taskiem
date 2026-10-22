@@ -228,6 +228,32 @@ func TestConnectorEventsSignalAndStart(t *testing.T) {
 	}
 }
 
+// A rail's delivery is also its normalised event (connector/v1 rule 16):
+// a capability wait on paystack@1:payout.settled, correlated on the
+// payout id, ends on Paystack's transfer.success.
+func TestConnectorEventsNormalised(t *testing.T) {
+	w := newWorld(t)
+	if _, err := w.Vault.CreateConnection(ctx, w.Tenant, "prod", "paystack", "main", "api_key", map[string]string{"secret_key": "sk_test_x"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	wait := w.Publish(t, `{"schema":"wd/v1","id":"wf_norm","version":1,"name":"norm","trigger":{"type":"manual"},
+	  "steps":[{"id":"wait","type":"signal","config":{"event":"paystack@1:payout.settled","correlation":"=trigger.body.ref","timeout":"1h"}},
+	    {"id":"out","type":"transform","needs":["wait"],"config":{"output":"=steps.wait.output.fields.amount_kobo"}}]}`)
+	run := w.Start(t, wait, map[string]any{"body": map[string]any{"ref": "T-9"}})
+	body := []byte(`{"event":"transfer.success","data":{"reference":"T-9","amount":5000}}`)
+	st, out := w.post(t, "/connectors/paystack@1/transfer_event", body, "x-paystack-signature", sign(sha512.New, "sk_test_x", body))
+	if st != 202 || out["normalised"] != float64(1) {
+		t.Fatalf("delivery: %d %v", st, out)
+	}
+	if s := w.Status(t, run); s != "completed" {
+		t.Errorf("waiting run: %s", s)
+	}
+	// A retry is not delivered twice.
+	if st, out := w.post(t, "/connectors/paystack@1/transfer_event", body, "x-paystack-signature", sign(sha512.New, "sk_test_x", body)); st != 202 || out["normalised"] != nil {
+		t.Errorf("retry: %d %v", st, out)
+	}
+}
+
 func TestScheduleFiresOnceAndAdvances(t *testing.T) {
 	w := newWorld(t)
 	wf := w.publish(t, `{"schema":"wd/v1","id":"wf_payroll","version":1,"name":"payroll","trigger":{"type":"schedule","config":{"cron":"0 9 25 * *"}},

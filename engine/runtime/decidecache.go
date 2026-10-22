@@ -94,7 +94,7 @@ func (s *Store) foldRun(ctx context.Context, tx pgx.Tx, run runRow) (*decide.Sta
 	if err != nil {
 		return nil, nil, err
 	}
-	def, err := s.definition(ctx, tx, run.workflowID, run.version)
+	def, err := s.runDefinition(ctx, tx, run.workflowID, run.version, run.expansion)
 	if err != nil {
 		return nil, nil, err
 	}

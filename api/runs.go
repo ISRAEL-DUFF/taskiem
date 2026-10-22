@@ -349,13 +349,18 @@ func (s *Server) resolveStep(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"run_id": ref.ID, "step": step, "status": st})
 }
 
+// runDefinitionSQL is the definition a run runs (from runs r and
+// workflow_versions wv): its pinned expansion when its version has
+// capability steps, whose provider steps its history names.
+const runDefinitionSQL = `COALESCE((SELECT e.definition FROM workflow_expansions e WHERE e.workflow_id = r.workflow_id AND e.version = r.version AND e.digest = r.expansion), wv.definition)`
+
 // plainRunErrors says each failed step's last error in plain words, by
 // step instance, naming the step by its name (no-technical-steps N5).
 func (s *Server) plainRunErrors(r *http.Request, run uuid.UUID, events []history.Event) map[string]string {
 	out := map[string]string{}
 	var def []byte
 	_ = s.tx(r, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT wv.definition FROM runs r JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version WHERE r.id = $1`, run).Scan(&def)
+		return tx.QueryRow(r.Context(), `SELECT `+runDefinitionSQL+` FROM runs r JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version WHERE r.id = $1`, run).Scan(&def)
 	})
 	steps := plain.StepsOf(def)
 	for _, e := range events {

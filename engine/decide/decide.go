@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/policy"
@@ -452,7 +453,9 @@ func (d *decider) fail(inst, kind string, err error) {
 }
 
 func isTask(t string) bool {
-	return t == "connector" || t == "http" || t == "code" || t == "container" || t == "ai"
+	// An unexpanded capability step runs as a task only in workflow tests,
+	// where it is mocked by its id; a run always expands it first.
+	return t == "connector" || t == "capability" || t == "http" || t == "code" || t == "container" || t == "ai"
 }
 
 // begin starts a ready step.
@@ -1222,6 +1225,9 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 	case "connector":
 		p.Connector, p.Action, p.Connection = s.Connector, s.Action, s.Connection
 		p.Input, err = engine.Resolve(orEmpty(s.Input), act, true)
+		if err == nil && s.Capability != nil {
+			p.Input, p.Capability, err = capabilityInput(s, p.Input, act)
+		}
 	case "http":
 		c := s.HTTP
 		cfg := map[string]any{"method": c.Method, "url": c.URL}
@@ -1256,6 +1262,28 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 		p.KeyStep = s.ID // a business seed identifies the item; keep the key stable across runs
 	}
 	return p, nil
+}
+
+// capabilityInput maps an expanded step's capability input to its
+// action's input through the rail's mapping, which may read the outputs
+// of the composite's earlier steps.
+func capabilityInput(s *wd.Step, in any, act map[string]any) (any, *history.CapabilityScheduled, error) {
+	all, _ := act["steps"].(map[string]any)
+	steps := map[string]any{}
+	for name, id := range s.Capability.Steps {
+		if v, ok := all[id]; ok {
+			steps[name] = v
+		}
+	}
+	out, err := capability.ResolveMapping(s.Capability.Input, in, nil, steps)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s input: %w", s.Capability.Uses, err)
+	}
+	cs := &history.CapabilityScheduled{Uses: s.Capability.Uses, Input: in}
+	if len(steps) > 0 {
+		cs.Steps = steps
+	}
+	return out, cs, nil
 }
 
 func orEmpty(m map[string]any) map[string]any {

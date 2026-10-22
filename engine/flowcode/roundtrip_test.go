@@ -342,6 +342,9 @@ func (g *gen) step(outer scope, earlier []string, depth int) obj {
 	id := g.id(pick(g, "s", "step_", "pay", "x"))
 	s.set("id", id)
 	types := []string{"connector", "connector", "code", "container", "http", "wait", "signal", "approval", "subflow", "transform", "ai"}
+	if len(id) <= 40 && !strings.Contains(id, "__") {
+		types = append(types, "capability")
+	}
 	if depth < 2 {
 		types = append(types, "branch", "parallel", "foreach")
 	}
@@ -413,6 +416,22 @@ func (g *gen) step(outer scope, earlier []string, depth int) obj {
 				c.set("input", obj{{"reference", "=steps." + id + ".output.reference"}, {"why", g.text()}, {"extra", g.values(self, 1)}})
 			}
 			s.set("compensate", c)
+		}
+	case "capability":
+		if g.chance(0.5) {
+			s.set("uses", "balance")
+			if g.chance(0.5) {
+				s.set("input", obj{{"account", "=env.wallet"}, {"currency", "NGN"}})
+			}
+		} else {
+			s.set("uses", "get_payout")
+			s.set("input", obj{{"payout_id", "=run.id + '/" + id + "'"}})
+		}
+		if g.chance(0.3) {
+			s.set("connection", "conn_"+g.word(5))
+		}
+		if g.chance(0.2) {
+			s.set("effect", obj{{"idempotency_seed", "=run.id"}})
 		}
 	case "code":
 		c := obj{{"language", pick(g, "javascript", "typescript", "python")}, {"source", g.source()}}

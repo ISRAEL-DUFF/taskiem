@@ -323,6 +323,19 @@ export interface AuthField {
   generate?: "rsa_key_pair";
 }
 
+/** A capability (schemas/capabilities-v1.json) and the rails that can do it (GET /v1/capabilities). */
+export interface CapabilityInfo {
+  name: string;
+  title: string;
+  description?: string;
+  input: JSONSchemaLike;
+  output?: JSONSchemaLike;
+  /** Connectors (id@major) that can do it. */
+  rails: string[];
+}
+
+type JSONSchemaLike = { type?: string; properties?: Record<string, unknown>; required?: string[] } & Record<string, unknown>;
+
 export interface ConnectorInfo {
   ref: string;
   id: string;

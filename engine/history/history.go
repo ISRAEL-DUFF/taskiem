@@ -112,6 +112,18 @@ type ScheduledPayload struct {
 	// Form is a form step's request, waited for as a signal (FormEvent,
 	// correlated by Form.Request).
 	Form *FormScheduled `json:"form,omitempty"`
+	// Capability is set for a step expanded from a capability step: the
+	// capability's input and the earlier steps' outputs the rail's mapping
+	// read, kept so the worker maps the action's output back the same way.
+	Capability *CapabilityScheduled `json:"capability,omitempty"`
+}
+
+// CapabilityScheduled is what an expanded step's output mapping reads
+// besides the action's output (wd-v1 capability steps).
+type CapabilityScheduled struct {
+	Uses  string         `json:"uses"`
+	Input any            `json:"input"`
+	Steps map[string]any `json:"steps,omitempty"`
 }
 
 // FormEvent is the signal a form step waits for: its answers.
@@ -168,9 +180,12 @@ type FailedPayload struct {
 }
 
 type CompletedPayload struct {
-	Output     any      `json:"output"`
-	Reconciled bool     `json:"reconciled,omitempty"`
-	Logs       []string `json:"logs,omitempty"` // code steps' console output, bounded
+	Output any `json:"output"`
+	// ProviderOutput is what the rail's action answered, for a step
+	// expanded from a capability step, whose Output is the capability's.
+	ProviderOutput any      `json:"provider_output,omitempty"`
+	Reconciled     bool     `json:"reconciled,omitempty"`
+	Logs           []string `json:"logs,omitempty"` // code steps' console output, bounded
 }
 
 type IntentPayload struct {

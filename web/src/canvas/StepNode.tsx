@@ -38,6 +38,8 @@ export function summary(s: Step): string {
   switch (s.type) {
     case "connector":
       return `${words(s.connector.split("@")[0] ?? "")} · ${words(s.action)}`;
+    case "capability":
+      return `${words(s.uses)} · ${s.connection ? `via ${s.connection}` : "whichever rail is connected"}`;
     case "http":
       return `${s.config.method} ${s.config.url}`;
     case "code":
@@ -71,6 +73,7 @@ const words = (id: string) => (id.charAt(0).toUpperCase() + id.slice(1)).replace
 /** Each kind of step in plain words, and its icon. */
 const KINDS: Record<string, [string, string]> = {
   connector: ["Service", "connections"],
+  capability: ["Money", "billing"],
   approval: ["Approval", "approvals"],
   form: ["Form", "forms"],
   wait: ["Wait", "runs"],
