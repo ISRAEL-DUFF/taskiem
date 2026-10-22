@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -437,7 +438,12 @@ func (s *Server) Handler() http.Handler {
 			r.Group(s.repairRoutes) // self-repair proposals (repair.go)
 
 			r.Get("/approvals", s.listApprovals)
-			r.Post("/approvals/{run}/{step}", s.decide) // approval.decide, or the business role it names
+			r.Post("/approvals/{run}/{step}", s.decide)  // approval.decide, or the business role it names
+			r.Get("/notifications", s.listNotifications) // the caller's own (notifications.go)
+			r.Get("/notifications/count", s.notificationCount)
+			r.Post("/notifications/read", s.readNotifications)
+			r.Get("/me/notification-settings", s.getNotificationSettings)
+			r.Put("/me/notification-settings", s.putNotificationSettings)
 
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
@@ -593,8 +599,9 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if v := recover(); v != nil {
-				s.Logger.Error("panic in handler", "path", r.URL.Path, "panic", v)
-				writeErr(w, http.StatusInternalServerError, "internal error")
+				ref := errorRef()
+				s.Logger.Error("panic in handler", "path", r.URL.Path, "panic", v, "reference", ref)
+				writeInternal(w, ref)
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -654,9 +661,29 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errConflict):
 		writeErr(w, http.StatusConflict, strings.TrimPrefix(err.Error(), "conflict: "))
 	default:
-		s.Logger.Error("request failed", "path", r.URL.Path, "err", err)
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		ref := errorRef()
+		s.Logger.Error("request failed", "path", r.URL.Path, "err", err, "reference", ref)
+		writeInternal(w, ref)
 	}
+}
+
+// errorRef is a reference for an unexpected error (no-technical-steps
+// N12): the answer carries it and the log line has it, so what a person
+// quotes ("Reference E-7K2Q9M") finds the error.
+func errorRef() string {
+	const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	for i := range b {
+		b[i] = alphabet[int(b[i])%len(alphabet)]
+	}
+	return "E-" + string(b)
+}
+
+// writeInternal answers an unexpected error, in plain words, with its
+// reference.
+func writeInternal(w http.ResponseWriter, ref string) {
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Something went wrong on our side. Reference " + ref, "code": "internal", "reference": ref})
 }
 
 var (

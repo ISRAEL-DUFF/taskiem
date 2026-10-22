@@ -21,7 +21,7 @@ export function Agents() {
       await withStepUp(`ops.agent.${action}`, a.id, `/agents/${a.id}/${action}`, { note: (notes[a.id] ?? "").trim() });
       setNotes({ ...notes, [a.id]: "" });
       reload();
-    });
+    }, "Agent updated");
   return (
     <>
       <div className="toolbar">
@@ -200,7 +200,7 @@ function Register({ onClose, onDone }: { onClose: () => void; onDone: (msg: stri
               checks: { id_type: f.id_type.trim(), id_checked: f.id_checked, referee_name: f.referee_name.trim(), referee_phone: f.referee_phone.trim() },
             });
             onDone(`${out.agent.name} is registered as ${out.agent.code}. Print the code on their card.`);
-          });
+          }, "Agent added");
         }}
       >
         <div className="row">

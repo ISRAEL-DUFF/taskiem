@@ -24,7 +24,7 @@ export function Signup() {
             await post("/v1/signup", f);
             await refresh();
             nav("/start", { replace: true });
-          });
+          }, false);
         }}
       >
         <Field label="Business or organisation name">
@@ -77,7 +77,7 @@ export function VerifyEmail() {
       setDone(true);
       onboarding.reload();
       await refresh();
-    });
+    }, false);
   }, [token]);
   return (
     <div className="card" style={{ maxWidth: 560 }}>

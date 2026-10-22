@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { get, post, type Me } from "./api";
 import { passkeyLogin } from "./passkeys";
+import { toast } from "./toast";
 
 interface Auth {
   me: Me | null | undefined; // undefined while loading
@@ -18,7 +19,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => get<Me>("/v1/me").then(setMe, () => setMe(null)), []);
   useEffect(() => {
     void refresh();
-    const onUnauthorised = () => setMe(null);
+    const onUnauthorised = () =>
+      setMe((was) => {
+        if (was) toast("You were signed out. Sign in again to carry on.", "info");
+        return null;
+      });
     window.addEventListener("taskiem:unauthorised", onUnauthorised);
     return () => window.removeEventListener("taskiem:unauthorised", onUnauthorised);
   }, [refresh]);

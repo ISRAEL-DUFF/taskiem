@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { onScreen, toast } from "./toast";
 import { ApiError } from "./api";
 import { Icon } from "./icons";
 import { redact } from "./lib/timeline";
@@ -34,12 +35,20 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], poll = false
   return { data, error, reload: useCallback(() => setTick((n) => n + 1), []) };
 }
 
+/** Where each action's error is shown, for a toast's Show me. */
+const anchors = new WeakMap<object, string>();
+
+/** An error's text for people. */
+export function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function ErrorBox({ error }: { error: unknown }) {
   if (!error) return null;
   const e = error instanceof ApiError ? error : null;
   const msg = e ? e.message : error instanceof Error ? error.message : String(error);
   return (
-    <div className="error" role="alert">
+    <div className="error" role="alert" id={typeof error === "object" ? anchors.get(error) : undefined}>
       {msg}
       {e && e.problems.length > 0 && (
         <ul>
@@ -242,22 +251,48 @@ export function useLiveRefresh(reload: () => void) {
 }
 
 /** Runs an async action with a busy flag and an error. */
-export function useAction(): { busy: boolean; error: unknown; run: (fn: () => Promise<unknown>) => Promise<boolean>; clear: () => void } {
+let actionSeq = 0;
+
+/**
+ * An action a person starts (save, publish, upload). run(fn, success)
+ * says success in a toast ("Saved"), or nothing when it is false (the
+ * page shows the result, or moves on). An error is shown where the page
+ * puts its ErrorBox, and in a toast too when that box is not on screen,
+ * with Show me (no-technical-steps N12).
+ */
+export function useAction(): {
+  busy: boolean;
+  error: unknown;
+  run: (fn: () => Promise<unknown>, success: string | false) => Promise<boolean>;
+  clear: () => void;
+} {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
-  const run = useCallback(async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await fn();
-      return true;
-    } catch (e) {
-      setError(e);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+  const [anchor] = useState(() => `action-error-${++actionSeq}`);
+  const run = useCallback(
+    async (fn: () => Promise<unknown>, success: string | false) => {
+      setBusy(true);
+      setError(undefined);
+      try {
+        await fn();
+        if (success) toast(success);
+        return true;
+      } catch (e) {
+        if (typeof e === "object" && e !== null) anchors.set(e, anchor);
+        setError(e);
+        // After the page has drawn the error: toast it if it cannot be seen.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (!onScreen(anchor)) toast(errorText(e), "error", document.getElementById(anchor) ? { target: anchor } : {});
+          }),
+        );
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [anchor],
+  );
   return { busy, error, run, clear: () => setError(undefined) };
 }
 

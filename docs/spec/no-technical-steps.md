@@ -283,10 +283,10 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 **Build:**
 
 - **Messages after an action (toasts).** One component for the whole app (`web/src/toast.tsx`), mounted once in the shell:
-  - **Success:** a short message, "Saved", "Published", "Connected to Paystack", at the bottom on a phone and the top right on a wide screen. It goes after 4 seconds.
-  - **Error:** stays until dismissed. The red box in the section stays too, since it says where to fix the problem; the toast's **Show me** scrolls to it.
+  - **Success:** a short message, "Saved", "Published", "Connected to Paystack", above the tab bar on a phone and at the bottom right on a wide screen (clear of the page's header buttons). It goes after 4 seconds.
+  - **Error:** the red box in the section says it, where the problem is fixed. When that box is off screen, or the screen has none, a toast says it too and stays until dismissed; its **Show me** scrolls to the box.
   - **Screen readers** hear it through an `aria-live` region: polite for success, assertive for errors. Motion respects reduced motion, and several toasts stack, at most three.
-  - **`useAction`** (`web/src/ui.tsx`), which about 50 screens use, takes `{success}`. Every screen gets a success message in plain words, checked by the gate's text test (Appendix C). A screen whose result is already obvious (a page that opens) passes `success: false`, and a test lists every `useAction` call so none is forgotten.
+  - **`useAction`** (`web/src/ui.tsx`), which about 50 screens use, takes the message with each action: `act.run(fn, "Saved")`. A screen whose result is already obvious (a page that opens, a notice the page shows) passes `false`. The message is a required argument, so the type check refuses an action that says nothing.
   - **Problems that are not one action's** are toasted from `web/src/api.ts`:
     - signed out: "You were signed out. Sign in again", with a link;
     - offline: "You're offline. Changes will not be saved";
@@ -307,7 +307,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
   - Its panel lists them newest first, under **Today** and **Earlier**.
   - **Waiting for you** is pinned at the top: approvals and setup problems, which stay until dealt with.
   - Opening an item marks it read and goes to its page (the run, the approval, the settings). **Mark all read** sits at the top of the panel.
-  - **Approvals** in the menu and the phone's tab bar shows how many wait for you.
+  - **Approvals** in the menu shows how many wait for you (on a phone, the bell in the top bar counts them).
   - The count is fetched on load, every 30 seconds while the tab is visible, and when it comes back to view. A new problem while you are looking also shows as a toast.
 - **On your phone too.** Owners hear about failures and setup problems on the WhatsApp or Telegram they linked, through the existing chat outbox (`notify@1`'s path). It is throttled to one message per workflow per hour, which then says how many more failed, and falls back to email. **Settings > Notifications** has a switch per kind for chat and email (the app always shows them). The default is on for failures and setup problems, and off for finished runs.
 - **API:**
@@ -316,7 +316,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
   - `POST /v1/notifications/read` (`{ids}` or `{all: true}`);
   - `GET` and `PUT /v1/me/notification-settings`.
 
-  All are documented in OpenAPI. The chat conversation's `alerts` command lists the same items.
+  All are documented in OpenAPI. A chat command listing them is left for later: owners already hear failures and setup problems on their linked chat.
 - **Docs:** a guide section "Knowing what happened" (owner guide), `docs/alerts.md` (rules are now on top of default notifications), and the operations doc (the error reference).
 
 **Accept:**

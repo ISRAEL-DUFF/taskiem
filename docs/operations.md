@@ -65,6 +65,7 @@ Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`)
 | `TASKIEM_ANCHOR_DIR` | — | Where the scheduler role appends each tenant's anchors (`<tenant>.jsonl`). Point it at write-once storage (an object-lock bucket, an append-only volume): anchors are only worth as much as their copy outside the database. |
 | `TASKIEM_SMTP_URL` | — | Mail server for alert emails and password-reset links: `smtp://user:pass@host:587` (STARTTLS, required when a password is given) or `smtps://user:pass@host:465`. Without it, email alert deliveries fail with a reason ([alerts](alerts.md)), and "Forgot password?" sends nothing (it still answers, and logs a warning; [passwords](governance.md#passwords)) |
 | `TASKIEM_ALERT_FROM` | — | Sender address of alert and password emails; required with `TASKIEM_SMTP_URL` |
+| `TASKIEM_ALERT_INTERVAL` | `30s` | How often the scheduler evaluates alert rules and tells people how runs ended ([notifications](alerts.md#notifications-with-nothing-set-up)); 1s to 1h |
 | `TASKIEM_WASM_CACHE` | the user cache directory | Where workers keep compiled WebAssembly (the Python interpreter takes seconds to compile the first time). Point it at a writable directory that survives restarts |
 | `TASKIEM_LOGIN_BURST` | 10 | Sign-in attempts one address may make at once, then one every six seconds |
 | `TASKIEM_WEB_DIR` | — | Built web app to serve (`/web` in the image). |
@@ -107,6 +108,10 @@ Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`)
 | `TASKIEM_OPS_CONSOLE`, `TASKIEM_OPS_SESSION_TTL`, `TASKIEM_OPS_OIDC_ISSUER`, `TASKIEM_OPS_OIDC_CLIENT_ID`, `TASKIEM_OPS_OIDC_CLIENT_SECRET`, `TASKIEM_OPS_OIDC_NAME` | on, `1h`, —, —, —, `single sign-on` | The operator console's API on the `api` role, its session length (5m to 8h), and optional single sign-on for operators from one issuer ([operator console](operator-console.md#configuration)) |
 | `TASKIEM_CANARY_HOOK_URL`, `TASKIEM_CANARY_SECRET`, `TASKIEM_CANARY_API_URL`, `TASKIEM_CANARY_API_KEY`, `TASKIEM_CANARY_INTERVAL`, `TASKIEM_CANARY_TIMEOUT` | —, —, `TASKIEM_PUBLIC_URL`, —, `1m`, `1m` | The synthetic canary, run by the `scheduler` role when the hook URL is set; `taskiem canary setup` prints the first four. Keep the secret and key in the Secret ([canary](reliability.md#synthetic-canary)) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OpenTelemetry trace export (OTLP/HTTP); standard `OTEL_*` variables apply. |
+
+## Unexpected errors
+
+An error the API did not expect answers 500 with `{"error": "Something went wrong on our side. Reference E-7K2Q9M", "code": "internal", "reference": "E-7K2Q9M"}`. The web app shows the reference, and the server logs the error with the same `reference` attribute, so the line someone quotes can be found: `docker compose logs taskiem | grep E-7K2Q9M` (`sudo taskiem-vps logs taskiem` on the VM kit).
 
 ## Database roles
 

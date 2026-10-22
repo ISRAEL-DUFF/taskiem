@@ -116,7 +116,7 @@ function AppealForm({ onDone }: { onDone: () => void }) {
           await tidy(post("/v1/storefront/appeal", { message: message.trim() }));
           setSent(true);
           onDone();
-        });
+        }, false);
       }}
     >
       <Field label="Appeal" hint={<span className={over ? "error-text" : undefined}>{`Say what you changed, or why the page should be live. ${message.length}/1000`}</span>}>
@@ -241,7 +241,7 @@ function VerifyForm({ onClose, onDone }: { onClose: () => void; onDone: () => vo
             }),
           );
           onDone();
-        });
+        }, "Sent for review");
       }}
     >
       <h3 id="sf-verify">Verify your business</h3>

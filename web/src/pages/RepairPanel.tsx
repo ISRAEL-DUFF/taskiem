@@ -76,7 +76,7 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
   const r = data?.repairs.find((x) => x.status !== "dismissed");
   if (!r) return null;
   const ev = r.evidence ?? {};
-  const decide = (path: string) => void act.run(async () => (await post(`/v1/repairs/${r.id}/${path}`), reload()));
+  const decide = (path: string) => void act.run(async () => (await post(`/v1/repairs/${r.id}/${path}`), reload()), "Done");
   const canAccept = can("run.resolve") && (r.status !== "proposed" || can("workflow.publish"));
   return (
     <div className="card" data-testid="repair-panel">

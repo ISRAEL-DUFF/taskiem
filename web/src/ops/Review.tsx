@@ -91,7 +91,7 @@ export function Submission({ me }: { me: OpsMe }) {
       });
       setDone(out.state);
       reload();
-    });
+    }, "Review recorded");
   const conformance = s.checks.conformance;
   return (
     <>

@@ -645,8 +645,10 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 	case history.StepFailed:
 		p := ev.Payload.(history.FailedPayload)
 		if p.Error.Next == "park" || (p.Error.Next == "fail" && isCompensation(ev.StepID)) {
-			_, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID)
-			return nil, err
+			if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID); err != nil {
+				return nil, err
+			}
+			return nil, QueueOutcome(ctx, tx, run.ref.ID, "needs_reconciliation")
 		}
 	case history.StepCancelled:
 		// A task a worker already holds is left to it: the worker checks for
@@ -758,6 +760,9 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 			return err
 		}
 	}
+	if err := QueueOutcome(ctx, tx, run, status); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM concurrency_slots WHERE run_id = $1`, run); err != nil {
 		return err
 	}
@@ -779,6 +784,18 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 		return err
 	}
 	return s.promote(ctx, tx, r.ref.TenantID, r.workflowID)
+}
+
+// QueueOutcome tells the notifier how a run ended, in tx (no-technical-
+// steps N12): a failure, a wait for reconciliation, or the end of a run a
+// person started (started_by is their user id). Anything else, nothing.
+func QueueOutcome(ctx context.Context, tx pgx.Tx, run uuid.UUID, status string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO run_outcomes (run_id, tenant_id, status)
+		SELECT r.id, r.tenant_id, $2 FROM runs r
+		 WHERE r.id = $1 AND ($2 IN ('failed', 'needs_reconciliation')
+		   OR ($2 = 'completed' AND r.started_by ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'))
+		ON CONFLICT DO NOTHING`, run, status)
+	return err
 }
 
 // recordFirstRun stamps a self-serve tenant's first successful run (gate

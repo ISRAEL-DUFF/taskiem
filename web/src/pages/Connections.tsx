@@ -67,7 +67,7 @@ export function Connections() {
         actions={
           <>
             {linkable.map((c) => (
-              <button key={c.ref} className="primary" disabled={connect.busy} onClick={() => void connect.run(() => startLink(c))}>
+              <button key={c.ref} className="primary" disabled={connect.busy} onClick={() => void connect.run(() => startLink(c), false)}>
                 <Icon name="plus" />
                 Connect {c.name}
               </button>
@@ -251,7 +251,7 @@ function CompleteConnection({ conn, fields, onClose, onDone }: { conn: Conn; fie
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await put(`/v1/connections/${conn.id}/credentials`, { credentials: given }), onDone()));
+          void act.run(async () => (await put(`/v1/connections/${conn.id}/credentials`, { credentials: given }), onDone()), "Credentials saved");
         }}
       >
         <p className="hint">The fields you leave empty are not changed.</p>
@@ -291,7 +291,7 @@ function Disconnect({ conn, connector, onClose, onDone }: { conn: Conn; connecto
         }
         throw e;
       }
-    });
+    }, "Connection deleted");
   return (
     <Modal title={`Disconnect ${conn.name}`} onClose={onClose}>
       <p>
@@ -374,7 +374,7 @@ function Drift() {
                   <button
                     disabled={act.busy}
                     onClick={() =>
-                      void act.run(async () => (await post("/v1/connector-drift/acknowledge", { connector: d.connector, version: d.version, action: d.action, path: d.path, kind: d.kind }), list.reload()))
+                      void act.run(async () => (await post("/v1/connector-drift/acknowledge", { connector: d.connector, version: d.version, action: d.action, path: d.path, kind: d.kind }), list.reload()), "Marked as seen")
                     }
                   >
                     Acknowledge
@@ -435,7 +435,7 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
                 {manage && (
                   <td>
                     {!c.disabled_at && (
-                      <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/tenant-connectors/${c.id}/${c.version}/disable`), changed()))}>
+                      <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/tenant-connectors/${c.id}/${c.version}/disable`), changed()), "Connector disabled")}>
                         Disable
                       </button>
                     )}
@@ -462,7 +462,7 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
               setModule(null);
               (e.target as HTMLFormElement).reset();
               changed();
-            });
+            }, "Connector uploaded");
           }}
         >
           <Field label="Manifest (.yaml)">
@@ -583,7 +583,7 @@ export function NewConnection({
                 const pair = await generateRsaKeyPair();
                 setCreds((old) => ({ ...old, [f.key]: pair.privatePem }));
                 setGenerated((old) => ({ ...old, [f.key]: pair.publicPem }));
-              })
+              }, false)
             }
           >
             Make a key pair for me
@@ -619,6 +619,7 @@ export function NewConnection({
           e.preventDefault();
           void act.run(
             async () => (await post("/v1/connections", { connector: ref, environment: env, name: name || undefined, credentials: creds, mode: chosen || undefined, check: true }), onDone()),
+            "Connected",
           );
         }}
       >
@@ -638,7 +639,7 @@ export function NewConnection({
             {linkable ? (
               <>
                 <p style={{ marginTop: 0 }}>Connect {c.name} with one click: you sign in there and approve, and nothing is copied.</p>
-                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name))}>
+                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name), false)}>
                   Connect {c.name}
                 </button>{" "}
                 {!paste && main.length + more.length > 0 && (

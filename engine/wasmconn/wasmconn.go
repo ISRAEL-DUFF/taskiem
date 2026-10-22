@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tetratelabs/wazero"
@@ -91,6 +92,12 @@ type Runtime struct {
 	mu       sync.Mutex
 	compiled map[string]*compiledModule // by module digest
 	lru      *list.List                 // of *compiledModule, most recently used first
+	// compiling are the compilations under way, by digest: a call that
+	// finds one waits for it instead of compiling the module again
+	// (a large module takes seconds and a core).
+	compiling map[string]chan struct{}
+	// compiles counts compilations (tests).
+	compiles atomic.Int64
 }
 
 // compiledModule is a cached compilation. A call holds a reference while
@@ -123,7 +130,7 @@ func New(ctx context.Context, lim Limits) (*Runtime, error) {
 	if _, err := b.Instantiate(ctx); err != nil {
 		return nil, err
 	}
-	return &Runtime{rt: rt, lim: lim, compiled: map[string]*compiledModule{}, lru: list.New()}, nil
+	return &Runtime{rt: rt, lim: lim, compiled: map[string]*compiledModule{}, lru: list.New(), compiling: map[string]chan struct{}{}}, nil
 }
 
 // Close releases every compiled module.
@@ -141,17 +148,20 @@ func Digest(module []byte) string {
 // Load checks a manifest and module and returns the connector they make.
 // Compiled modules are cached by digest.
 func (r *Runtime) Load(ctx context.Context, manifest, module []byte) (*connector.Connector, error) {
-	return r.load(ctx, manifest, module, connector.TenantPrefix, "a tenant connector's")
+	return r.load(ctx, manifest, module, connector.TenantPrefix, "a tenant connector's", false)
 }
 
 // LoadPublished is Load for a version of the public catalogue, whose id is
 // in a publisher's namespace (p_<publisher>_<name>,
 // docs/connector-submissions.md).
 func (r *Runtime) LoadPublished(ctx context.Context, manifest, module []byte) (*connector.Connector, error) {
-	return r.load(ctx, manifest, module, connector.CataloguePrefix, "a catalogue connector's")
+	// Checked when it was submitted (Inspect): a caller that only reads
+	// manifests (connector.ManifestsOnly) gets it uncompiled, and an
+	// action compiles it when it first runs.
+	return r.load(ctx, manifest, module, connector.CataloguePrefix, "a catalogue connector's", connector.IsManifestsOnly(ctx))
 }
 
-func (r *Runtime) load(ctx context.Context, manifest, module []byte, prefix, what string) (*connector.Connector, error) {
+func (r *Runtime) load(ctx context.Context, manifest, module []byte, prefix, what string, lazy bool) (*connector.Connector, error) {
 	m, problems := connector.Parse(manifest)
 	if len(problems) > 0 {
 		return nil, fmt.Errorf("%w: manifest: %s", ErrInvalid, strings.Join(problems, "; "))
@@ -169,18 +179,20 @@ func (r *Runtime) load(ctx context.Context, manifest, module []byte, prefix, wha
 		return nil, fmt.Errorf("%w: module is %d bytes; the limit is %d", ErrInvalid, len(module), r.lim.MaxModule)
 	}
 	digest := Digest(module)
-	cm, release, err := r.acquire(ctx, digest, module)
-	if err != nil {
-		return nil, err
+	if lazy {
+		// Compiled in the background meanwhile, so whatever runs or
+		// deploys it next finds it ready (or waits for this compilation).
+		r.warm(digest, module)
+	} else {
+		_, release, err := r.acquire(ctx, digest, module)
+		if err != nil {
+			return nil, err
+		}
+		release()
 	}
-	start := []string{}
-	if _, ok := cm.ExportedFunctions()[reactorInit]; ok {
-		start = append(start, reactorInit)
-	}
-	release()
 	c := &connector.Connector{Manifest: m, Actions: map[string]connector.Action{}}
 	for name := range m.Actions {
-		c.Actions[name] = &action{r: r, digest: digest, module: module, start: start, manifest: m, name: name}
+		c.Actions[name] = &action{r: r, digest: digest, module: module, manifest: m, name: name}
 	}
 	return c, nil
 }
@@ -234,14 +246,35 @@ func (r *Runtime) Inspect(ctx context.Context, module []byte) (ModuleInfo, error
 // uses it.
 func (r *Runtime) acquire(ctx context.Context, digest string, module []byte) (wazero.CompiledModule, func(), error) {
 	r.mu.Lock()
-	if e, ok := r.compiled[digest]; ok {
-		e.refs++
-		r.lru.MoveToFront(e.elem)
+	for {
+		if e, ok := r.compiled[digest]; ok {
+			e.refs++
+			r.lru.MoveToFront(e.elem)
+			r.mu.Unlock()
+			return e.cm, r.releaser(e), nil
+		}
+		wait, busy := r.compiling[digest]
+		if !busy {
+			break
+		}
+		// Another call is compiling it: wait, then look again (it may
+		// have failed, and then this call compiles).
 		r.mu.Unlock()
-		return e.cm, r.releaser(e), nil
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		}
+		r.mu.Lock()
 	}
+	done := make(chan struct{})
+	r.compiling[digest] = done
 	r.mu.Unlock()
 	cm, err := r.compile(ctx, module)
+	r.mu.Lock()
+	delete(r.compiling, digest)
+	close(done)
+	r.mu.Unlock()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -273,6 +306,25 @@ func (r *Runtime) acquire(ctx context.Context, digest string, module []byte) (wa
 	return cm, r.releaser(e), nil
 }
 
+// warm compiles a module in the background unless it is compiled or
+// being compiled.
+func (r *Runtime) warm(digest string, module []byte) {
+	r.mu.Lock()
+	_, done := r.compiled[digest]
+	_, busy := r.compiling[digest]
+	r.mu.Unlock()
+	if done || busy {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if _, release, err := r.acquire(ctx, digest, module); err == nil {
+			release()
+		}
+	}()
+}
+
 // releaser drops one reference to e, closing it if it was evicted and
 // this was the last.
 func (r *Runtime) releaser(e *compiledModule) func() {
@@ -296,6 +348,7 @@ func (r *Runtime) releaser(e *compiledModule) func() {
 // compile compiles and checks a module: its imports are the host's and
 // it exports the ABI's entry point.
 func (r *Runtime) compile(ctx context.Context, module []byte) (wazero.CompiledModule, error) {
+	r.compiles.Add(1)
 	cm, err := r.rt.CompileModule(ctx, module)
 	if err != nil {
 		return nil, fmt.Errorf("%w: the module does not compile: %w", ErrInvalid, err)
@@ -325,7 +378,6 @@ type action struct {
 	r        *Runtime
 	digest   string
 	module   []byte // to compile again after eviction
-	start    []string
 	manifest *connector.Manifest
 	name     string
 }
@@ -402,13 +454,17 @@ func (a *action) Execute(ctx context.Context, req connector.Request) (connector.
 }
 
 func (a *action) run(ctx context.Context, c *call) ([]byte, error) {
-	cfg := wazero.NewModuleConfig().WithName("").WithStartFunctions(a.start...).
-		WithSysWalltime().WithSysNanotime().WithRandSource(rand.Reader).
-		WithStdout(&logWriter{c: c}).WithStderr(&logWriter{c: c})
 	cm, release, err := a.r.acquire(ctx, a.digest, a.module)
 	if err != nil {
 		return nil, err
 	}
+	start := []string{}
+	if _, ok := cm.ExportedFunctions()[reactorInit]; ok {
+		start = append(start, reactorInit)
+	}
+	cfg := wazero.NewModuleConfig().WithName("").WithStartFunctions(start...).
+		WithSysWalltime().WithSysNanotime().WithRandSource(rand.Reader).
+		WithStdout(&logWriter{c: c}).WithStderr(&logWriter{c: c})
 	// Released after the instance closes (deferred first, runs last).
 	defer release()
 	mod, err := a.r.rt.InstantiateModule(ctx, cm, cfg)

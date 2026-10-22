@@ -237,7 +237,7 @@ function CancelDialog({ booking, onClose, onDone }: { booking: Order; onClose: (
           type="button"
           className="danger"
           disabled={act.busy}
-          onClick={() => void act.run(async () => onDone((await tidy(post<{ booking: Order }>(`/v1/storefront/bookings/${encodeURIComponent(booking.reference)}/cancel`))).booking))}
+          onClick={() => void act.run(async () => onDone((await tidy(post<{ booking: Order }>(`/v1/storefront/bookings/${encodeURIComponent(booking.reference)}/cancel`))).booking), "Booking cancelled")}
         >
           {act.busy ? "Cancelling…" : "Cancel the booking"}
         </button>
@@ -266,6 +266,7 @@ function MoveDialog({ booking, onClose, onDone }: { booking: Order; onClose: () 
               (await tidy(post<{ booking: Order }>(`/v1/storefront/bookings/${encodeURIComponent(booking.reference)}/move`, { starts_at: lagosInstant(day, time) })))
                 .booking,
             ),
+            "Booking moved",
           );
         }}
       >
@@ -347,7 +348,7 @@ function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables
       setForm(settingsFrom(out));
       setTick((n) => n + 1);
       setNotice(published ? "Saved; your page is updated." : "Saved. Bookings show on your page once you publish it and switch on the booking form.");
-    });
+    }, false);
 
   /** Makes the services' table and maps it, as chat does. */
   const makeServices = () =>
@@ -359,7 +360,7 @@ function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables
       setForm(settingsFrom(out));
       setTick((n) => n + 1);
       setNotice("Your services list is ready: add what customers can book below.");
-    });
+    }, "Services made");
 
   return (
     <form
@@ -529,7 +530,7 @@ function ServicesPreview({ tick, table, columns, stale }: { tick: number; table:
       setPrice("");
       await tidy(post("/v1/storefront/catalogue/refresh"));
       svc.reload();
-    });
+    }, "Added");
   };
   const removeService = (id: string, label: string) =>
     confirm(`Remove ${label} from what customers can book?`) &&
@@ -537,12 +538,12 @@ function ServicesPreview({ tick, table, columns, stale }: { tick: number; table:
       await tidy(del(`/v1/tables/${table}/rows/${encodeURIComponent(id)}`));
       await tidy(post("/v1/storefront/catalogue/refresh"));
       svc.reload();
-    });
+    }, "Deleted");
   const refresh = () =>
     act.run(async () => {
       await tidy(post("/v1/storefront/catalogue/refresh"));
       svc.reload();
-    });
+    }, "Refreshed");
   const shown = svc.data;
   return (
     <div className="sf-copy">

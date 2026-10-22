@@ -48,9 +48,18 @@ func TestRepairAlertsAndForkLinks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	msgs := mail.all()
-	if len(msgs) != 1 {
-		t.Fatalf("emails: %d\n%s", len(msgs), strings.Join(msgs, "\n---\n"))
+	// The rule's email goes to its channel; the owner, who linked no
+	// chat, also hears of the failure itself (N12).
+	var msgs, owner []string
+	for _, m := range mail.all() {
+		if strings.Contains(m, "To: ops@acme.test") {
+			msgs = append(msgs, m)
+		} else {
+			owner = append(owner, m)
+		}
+	}
+	if len(msgs) != 1 || len(owner) != 1 || !strings.Contains(owner[0], "loan failed in prod") {
+		t.Fatalf("emails: %d to the channel, %d to the owner\n%s", len(msgs), len(owner), strings.Join(mail.all(), "\n---\n"))
 	}
 	if !strings.Contains(msgs[0], "Subject: [Taskiem] Fix proposed for loan in prod") || !strings.Contains(msgs[0], "https://taskiem.test/runs/"+run) {
 		t.Errorf("email:\n%s", msgs[0])

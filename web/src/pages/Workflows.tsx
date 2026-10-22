@@ -182,7 +182,7 @@ export function Workflows() {
               void act.run(async () => {
                 const r = await post<{ id: string }>("/v1/workflows", { name, definition: starter(name) });
                 nav(`/workflows/${r.id}`);
-              });
+              }, false);
             }}
           >
             <Field label="Name">

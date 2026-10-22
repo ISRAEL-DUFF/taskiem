@@ -44,7 +44,7 @@ export function Login() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(() => login(email, password));
+          void act.run(() => login(email, password), false);
         }}
       >
         <Field label="Email">
@@ -84,7 +84,7 @@ export function Login() {
           <p className="hint" style={{ textAlign: "center" }}>
             or
           </p>
-          <button type="button" disabled={act.busy} style={{ width: "100%" }} onClick={() => void act.run(loginWithPasskey)}>
+          <button type="button" disabled={act.busy} style={{ width: "100%" }} onClick={() => void act.run(loginWithPasskey, false)}>
             Sign in with a passkey
           </button>
         </>

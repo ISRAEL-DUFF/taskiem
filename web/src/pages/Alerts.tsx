@@ -93,8 +93,8 @@ export function Alerts() {
                           ? `Telegram: ${c.config.emails?.join(", ") ?? ""}`
                           : "Slack incoming webhook"}</td>
                 <td>
-                  <button onClick={() => void act.run(async () => (await post(`/v1/alerts/channels/${c.id}/test`), setNotice(`A test message reached ${c.name}.`)))}>Send test</button>{" "}
-                  <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/channels/${c.id}`), channels.reload(), rules.reload()))}>
+                  <button onClick={() => void act.run(async () => (await post(`/v1/alerts/channels/${c.id}/test`), setNotice(`A test message reached ${c.name}.`)), false)}>Send test</button>{" "}
+                  <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/channels/${c.id}`), channels.reload(), rules.reload()), "Channel deleted")}>
                     Delete
                   </button>
                 </td>
@@ -132,11 +132,11 @@ export function Alerts() {
                     type="checkbox"
                     aria-label={`Rule ${r.name} on`}
                     checked={r.enabled}
-                    onChange={(e) => void act.run(async () => (await put(`/v1/alerts/rules/${r.id}`, { name: r.name, kind: r.kind, config: r.config, channel_ids: r.channel_ids, enabled: e.target.checked }), rules.reload()))}
+                    onChange={(e) => void act.run(async () => (await put(`/v1/alerts/rules/${r.id}`, { name: r.name, kind: r.kind, config: r.config, channel_ids: r.channel_ids, enabled: e.target.checked }), rules.reload()), "Saved")}
                   />
                 </td>
                 <td>
-                  <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/rules/${r.id}`), rules.reload()))}>
+                  <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/rules/${r.id}`), rules.reload()), "Rule deleted")}>
                     Delete
                   </button>
                 </td>
@@ -187,7 +187,7 @@ function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
           setName("");
           setDest("");
           onAdded(r.signing_key);
-        });
+        }, "Channel added");
       }}
     >
       <Field label="Kind">
@@ -235,7 +235,7 @@ function AddRule({ channels, onAdded }: { channels: Channel[]; onAdded: () => vo
           setName("");
           setPicked([]);
           onAdded();
-        });
+        }, "Rule added");
       }}
     >
       <div className="row" style={{ alignItems: "flex-end" }}>

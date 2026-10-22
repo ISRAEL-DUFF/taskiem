@@ -53,7 +53,7 @@ export function Handoff() {
           <Json value={d.subject} />
           {passkeysSupported() && (
             <p>
-              <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => send({ passkey: await stepUpAssert("approval.decide", `${d.run_id}/${d.step_id}/${d.decision}`) }))}>
+              <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => send({ passkey: await stepUpAssert("approval.decide", `${d.run_id}/${d.step_id}/${d.decision}`) }), "Decision recorded")}>
                 Confirm with your passkey
               </button>
             </p>
@@ -64,7 +64,7 @@ export function Handoff() {
               style={{ alignItems: "flex-end" }}
               onSubmit={(e) => {
                 e.preventDefault();
-                void act.run(() => send({ totp: code }));
+                void act.run(() => send({ totp: code }), "Decision recorded");
               }}
             >
               <Field label="Or a code from your authenticator app">

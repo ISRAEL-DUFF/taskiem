@@ -27,6 +27,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -149,6 +150,8 @@ type Alerter struct {
 	Logger    *slog.Logger
 	// Client, when set, replaces the egress-guarded client (tests).
 	Client *http.Client
+	// lastExpiry is when old notifications were last deleted.
+	lastExpiry time.Time
 	// Rewrite, when set, changes a destination URL before sending (tests).
 	Rewrite func(string) string
 	// Now is the clock (tests).
@@ -187,17 +190,22 @@ func (a *Alerter) Run(ctx context.Context) error {
 	}
 }
 
-// Tick evaluates every tenant's rules and delivers what is due.
+// Tick tells people how runs ended, evaluates every tenant's rules and
+// delivers what is due.
 func (a *Alerter) Tick(ctx context.Context) error {
+	var errs []error
+	if err := a.Outcomes(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("run outcomes: %w", err))
+	}
+	a.expireNotices(ctx)
 	rows, err := a.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_alert_tenants()`)
 	if err != nil {
-		return err
+		return errors.Join(append(errs, err)...)
 	}
 	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	if err != nil {
-		return err
+		return errors.Join(append(errs, err)...)
 	}
-	var errs []error
 	for _, t := range tenants {
 		if err := a.Evaluate(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: evaluate: %w", t, err))
@@ -286,9 +294,11 @@ func (a *Alerter) record(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, r *ru
 	if r == nil {
 		return nil
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO alert_deliveries (alert_id, channel_id, tenant_id)
-		SELECT $1, c.id, $2 FROM alert_channels c WHERE c.id = ANY ($3) AND c.disabled_at IS NULL`, id, tenant, r.channels)
-	return err
+	if _, err = tx.Exec(ctx, `INSERT INTO alert_deliveries (alert_id, channel_id, tenant_id)
+		SELECT $1, c.id, $2 FROM alert_channels c WHERE c.id = ANY ($3) AND c.disabled_at IS NULL`, id, tenant, r.channels); err != nil {
+		return err
+	}
+	return ruleNotice(ctx, tx, tenant, r, al, id)
 }
 
 // Notify records an alert that concerns the tenant whatever its rules say
@@ -302,14 +312,27 @@ func Notify(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, al Alert) (bool, e
 		return false, err
 	}
 	id := uuid.Must(uuid.NewV7())
-	detail, _ := json.Marshal(nonNil(al.Detail))
-	if _, err := tx.Exec(ctx, `INSERT INTO alerts (id, tenant_id, rule_id, kind, dedup_key, title, body, link, detail) VALUES ($1, $2, NULL, $3, $4, $5, $6, NULLIF($7, ''), $8)`,
-		id, tenant, al.Kind, al.Dedup, al.Title, al.Body, al.Link, detail); err != nil {
+	if err := insertAlert(ctx, tx, tenant, id, al); err != nil {
 		return false, err
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO alert_deliveries (alert_id, channel_id, tenant_id)
-		SELECT $1, c.id, $2 FROM alert_channels c WHERE c.tenant_id = $2 AND c.disabled_at IS NULL`, id, tenant)
-	return err == nil, err
+	if _, err := tx.Exec(ctx, `INSERT INTO alert_deliveries (alert_id, channel_id, tenant_id)
+		SELECT $1, c.id, $2 FROM alert_channels c WHERE c.tenant_id = $2 AND c.disabled_at IS NULL`, id, tenant); err != nil {
+		return false, err
+	}
+	// The owners see it in the app, whatever channels there are.
+	owners, err := ownersTx(ctx, tx, tenant)
+	if err != nil {
+		return false, err
+	}
+	return true, notices.AddTx(ctx, tx, tenant, owners, setupNotice(al, id))
+}
+
+// insertAlert records an alert no rule found.
+func insertAlert(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, al Alert) error {
+	detail, _ := json.Marshal(nonNil(al.Detail))
+	_, err := tx.Exec(ctx, `INSERT INTO alerts (id, tenant_id, rule_id, kind, dedup_key, title, body, link, detail) VALUES ($1, $2, NULL, $3, $4, $5, $6, NULLIF($7, ''), $8)`,
+		id, tenant, al.Kind, al.Dedup, al.Title, al.Body, al.Link, detail)
+	return err
 }
 
 // ConnectorRevoked is the kind of the alert a tenant gets when a catalogue

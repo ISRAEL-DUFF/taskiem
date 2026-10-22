@@ -15,7 +15,7 @@ export function Publishers() {
     act.run(async () => {
       await withStepUp(`ops.publisher.${action}`, slug, `/catalogue/publishers/${slug}/${action}`, { note: notes[slug] ?? "" });
       reload();
-    });
+    }, "Publisher updated");
   return (
     <>
       <h1>Publishers</h1>
@@ -145,7 +145,7 @@ export function Status() {
       setTitle("");
       setMessage("");
       reload();
-    });
+    }, "Posted on the status page");
   return (
     <>
       <h1>Status page</h1>
@@ -223,7 +223,7 @@ function IncidentCard({ incident: i, onChange }: { incident: Incident; onChange:
       await withStepUp("ops.status.update", updateTarget(i.id, status), `/status/incidents/${i.id}/updates`, { status, message });
       setMessage("");
       onChange();
-    });
+    }, "Update posted");
   return (
     <div className="card" aria-label={i.title}>
       <h3 style={{ marginTop: 0 }}>

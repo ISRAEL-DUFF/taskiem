@@ -130,7 +130,7 @@ function Builder({ client, me, emit }: { client: EmbedClient; me: EmbedMe; emit:
                   const r = await client.post<{ id: string }>("/workflows", { name: name.trim(), definition: starter(name.trim()) });
                   setName("");
                   setOpen(r.id);
-                })
+                }, false)
               }
             >
               Create
@@ -260,7 +260,7 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
       const r = await client.post<{ valid: boolean; problems: Problem[] }>("/validate", { definition: def });
       setProblems(r.problems);
       setNotice(r.valid ? "Valid: this version can be published." : "");
-    });
+    }, false);
   const publish = () =>
     act.run(async () => {
       const n = await save();
@@ -281,14 +281,14 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
       }
       wf.reload();
       doc.reload();
-    });
+    }, "Published");
   const startRun = () =>
     act.run(async () => {
       const r = await client.post<{ run_id: string }>(`/workflows/${id}/runs`, { input: input ?? {} });
       setStarting(false);
       setRun(r.run_id);
       emit("run-started", { run: r.run_id, workflow: id });
-    });
+    }, "Run started");
 
   if (wf.error || doc.error) return <ErrorBox error={wf.error ?? doc.error} />;
   if (!wf.data || !def) return <div className="empty">Loading…</div>;
@@ -307,7 +307,7 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
             <button onClick={() => void validate()} disabled={act.busy}>
               Validate
             </button>
-            <button onClick={() => void act.run(save)} disabled={act.busy || !dirty}>
+            <button onClick={() => void act.run(save, "Saved")} disabled={act.busy || !dirty}>
               Save
             </button>
           </>

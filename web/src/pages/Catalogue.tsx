@@ -55,7 +55,7 @@ export function Catalogue() {
                       <button
                         disabled={act.busy}
                         onClick={() => {
-                          if (window.confirm(`Uninstall ${i.ref}? Workflows that use it stop validating.`)) void act.run(async () => (await del(`/v1/catalogue/installs/${i.connector}/${i.major}`), reload()));
+                          if (window.confirm(`Uninstall ${i.ref}? Workflows that use it stop validating.`)) void act.run(async () => (await del(`/v1/catalogue/installs/${i.connector}/${i.major}`), reload()), "Connector removed");
                         }}
                       >
                         Uninstall
@@ -157,7 +157,7 @@ function InstallDialog({ version, onClose, onDone }: { version: CatalogueVersion
         <button
           className="primary"
           disabled={!agreed || act.busy}
-          onClick={() => void act.run(async () => (await post("/v1/catalogue/installs", { connector: version.id, version: version.version, consent: version.consent }), onDone()))}
+          onClick={() => void act.run(async () => (await post("/v1/catalogue/installs", { connector: version.id, version: version.version, consent: version.consent }), onDone()), "Connector installed")}
         >
           Install
         </button>
@@ -197,7 +197,7 @@ function UpgradeDialog({ install, onClose, onDone }: { install: Install; onClose
             <button
               className="primary"
               disabled={act.busy || (d.needs_consent && !agreed)}
-              onClick={() => void act.run(async () => (await post(`/v1/catalogue/installs/${install.connector}/${install.major}/upgrade`, { version: to, consent: v.consent }), onDone()))}
+              onClick={() => void act.run(async () => (await post(`/v1/catalogue/installs/${install.connector}/${install.major}/upgrade`, { version: to, consent: v.consent }), onDone()), "Connector upgraded")}
             >
               Upgrade
             </button>

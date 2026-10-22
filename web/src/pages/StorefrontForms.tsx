@@ -81,7 +81,7 @@ function FormCard({ action, previewURL, published, onReload }: { action: Storefr
         if (e instanceof ApiError && e.status === 409 && !refusalOf(e)) setNoWorkflow(true);
         throw e;
       }
-    });
+    }, false);
 
   const setUp = () =>
     setup.run(async () => {
@@ -94,7 +94,7 @@ function FormCard({ action, previewURL, published, onReload }: { action: Storefr
         return;
       }
       onReload();
-    });
+    }, false);
 
   const showSetup = !saved.workflow_id || noWorkflow;
   return (

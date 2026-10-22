@@ -71,7 +71,7 @@ export function PeopleYouMessage() {
                   disabled={act.busy}
                   onClick={() =>
                     confirm("Make a new link? The old one stops working; people who already get your updates keep getting them.") &&
-                    void act.run(async () => (await post("/v1/reach/page"), view.reload()))
+                    void act.run(async () => (await post("/v1/reach/page"), view.reload()), "New link made")
                   }
                 >
                   New link
@@ -117,7 +117,7 @@ export function PeopleYouMessage() {
                       disabled={act.busy}
                       onClick={() =>
                         confirm(`Stop messaging ${c.phone} on chat apps? Your workflows text them instead.`) &&
-                        void act.run(async () => (await del(`/v1/reach/contacts/${c.id}`), view.reload()))
+                        void act.run(async () => (await del(`/v1/reach/contacts/${c.id}`), view.reload()), "Removed")
                       }
                     >
                       Remove

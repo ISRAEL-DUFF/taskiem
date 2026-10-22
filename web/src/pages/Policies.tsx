@@ -54,10 +54,10 @@ export function Policies() {
             )}
             {manage && p.state === "pending" && p.created_by !== me?.user?.id && (
               <>
-                <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/policies/${p.name}/versions/${p.version}/approve`), reload()))}>
+                <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/policies/${p.name}/versions/${p.version}/approve`), reload()), "Approved")}>
                   Approve
                 </button>
-                <button className="danger" disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/policies/${p.name}/versions/${p.version}/reject`), reload()))}>
+                <button className="danger" disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/policies/${p.name}/versions/${p.version}/reject`), reload()), "Rejected")}>
                   Reject
                 </button>
               </>
@@ -75,7 +75,7 @@ export function Policies() {
           <Field label="Policy (JSON)">
             <JsonInput value={doc} onChange={setDoc} rows={16} />
           </Field>
-          <button className="primary" disabled={act.busy || !name || doc === undefined} onClick={() => void act.run(async () => (await put(`/v1/policies/${name}`, { document: doc }), reload()))}>
+          <button className="primary" disabled={act.busy || !name || doc === undefined} onClick={() => void act.run(async () => (await put(`/v1/policies/${name}`, { document: doc }), reload()), "Policy saved")}>
             Save
           </button>
         </section>

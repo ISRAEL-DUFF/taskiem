@@ -13,11 +13,13 @@ import { Queue, Submission } from "./Review";
 import { Agents } from "./Agents";
 import { Reports, StorefrontReview, StorefrontReviews } from "./Trust";
 import { Audit, Publishers, Reviewers, Status, Tenant, Tenants } from "./Pages";
+import { Toaster } from "../toast";
 
 export function OpsApp() {
   return (
     <BrowserRouter>
       <OpsShell />
+      <Toaster />
     </BrowserRouter>
   );
 }
@@ -71,7 +73,7 @@ function OpsLogin({ onDone }: { onDone: () => Promise<void> }) {
             void act.run(async () => {
               await opsPasskeySignIn();
               await onDone();
-            })
+            }, false)
           }
         >
           Sign in with your passkey
@@ -114,7 +116,7 @@ function Enrol({ onDone }: { onDone: () => Promise<void> }) {
             await opsEnrol(token, name);
             await onDone();
             navigate("/ops", { replace: true });
-          });
+          }, false);
         }}
       >
         <Field label="Name for this passkey">

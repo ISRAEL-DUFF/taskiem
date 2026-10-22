@@ -66,7 +66,7 @@ export function RecipientField({ label, value, onChange }: { label: string; valu
             type="button"
             className="small"
             disabled={act.busy || !bank || account.length !== 10}
-            onClick={() => void act.run(async () => setFound((await post<{ account_name: string }>("/v1/paystack/resolve", { bank_code: bank, account_number: account })).account_name))}
+            onClick={() => void act.run(async () => setFound((await post<{ account_name: string }>("/v1/paystack/resolve", { bank_code: bank, account_number: account })).account_name), false)}
           >
             {act.busy ? "Checking…" : "Find the name"}
           </button>
@@ -84,7 +84,7 @@ export function RecipientField({ label, value, onChange }: { label: string; valu
                 const r = await post<{ recipient_code: string }>("/v1/paystack/recipients", { bank_code: bank, account_number: account, name: found });
                 setChosen(recipientLine(found, bankName, account));
                 onChange(r.recipient_code);
-              })
+              }, "Recipient added")
             }
           >
             Yes, pay them

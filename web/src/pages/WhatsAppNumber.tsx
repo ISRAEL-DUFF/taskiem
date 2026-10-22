@@ -51,7 +51,7 @@ export function WhatsAppNumber() {
             Taskiem's channel address{v.own_app ? ", with the verify token you entered" : ""}. Publish the <code>taskiem_inputs</code> and <code>taskiem_pin</code> Flows
             and the templates in your WhatsApp Business Account.
           </p>
-          <button className="danger" disabled={act.busy} onClick={() => confirm("Disconnect this number? Messages go from the shared number again.") && void act.run(async () => (await del("/v1/whatsapp/number"), view.reload()))}>
+          <button className="danger" disabled={act.busy} onClick={() => confirm("Disconnect this number? Messages go from the shared number again.") && void act.run(async () => (await del("/v1/whatsapp/number"), view.reload()), "Disconnected")}>
             Disconnect
           </button>
           {can("workflow.publish") && <PublicMenu view={v} onSaved={view.reload} />}
@@ -65,7 +65,7 @@ export function WhatsAppNumber() {
               setNotice(out.flows_key_error ?? "");
               setForm({ ...form, access_token: "", app_secret: "", verify_token: "" });
               view.reload();
-            });
+            }, "Connected");
           }}
         >
           <div className="row">
@@ -145,7 +145,7 @@ function PublicMenu({ view, onSaved }: { view: NumberView; onSaved: () => void }
         </select>
       )}
       <div className="toolbar" style={{ marginTop: 8 }}>
-        <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => (await put("/v1/whatsapp/public-menu", { enabled, workflows: items }), onSaved()))}>
+        <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => (await put("/v1/whatsapp/public-menu", { enabled, workflows: items }), onSaved()), "Saved")}>
           Save menu
         </button>
       </div>

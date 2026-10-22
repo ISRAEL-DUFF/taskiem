@@ -35,7 +35,7 @@ function AdvancedSwitch() {
           type="checkbox"
           checked={!!me?.advanced}
           disabled={act.busy}
-          onChange={(e) => void act.run(async () => (await put("/v1/settings/advanced", { advanced: e.target.checked }), await refresh()))}
+          onChange={(e) => void act.run(async () => (await put("/v1/settings/advanced", { advanced: e.target.checked }), await refresh()), "Saved")}
         />{" "}
         Show the technical parts
       </label>
@@ -184,7 +184,7 @@ function Environments({ editable }: { editable: boolean }) {
                   <select
                     aria-label={`Gate for ${e.name}`}
                     value={e.promotion_from ?? ""}
-                    onChange={(ev) => void act.run(async () => (await put(`/v1/environments/${e.name}`, { promotion_from: ev.target.value }), envs.reload()))}
+                    onChange={(ev) => void act.run(async () => (await put(`/v1/environments/${e.name}`, { promotion_from: ev.target.value }), envs.reload()), "Saved")}
                   >
                     <option value="">when published</option>
                     {list
@@ -219,7 +219,7 @@ function Environments({ editable }: { editable: boolean }) {
               setName("");
               setGate("");
               envs.reload();
-            });
+            }, "Environment added");
           }}
         >
           <Field label="New environment">
@@ -268,7 +268,7 @@ function Secrets({ env }: { env: string }) {
                 </td>
                 <td className="hint">{s.last_used_at ? `last used ${fmtTime(s.last_used_at)}` : "never used"}</td>
                 <td style={{ textAlign: "right" }}>
-                  <button className="danger" onClick={() => confirm(`Delete ${s.name}?`) && void act.run(async () => (await del(`/v1/secrets/${env}/${s.name}`), reload()))}>
+                  <button className="danger" onClick={() => confirm(`Delete ${s.name}?`) && void act.run(async () => (await del(`/v1/secrets/${env}/${s.name}`), reload()), "Secret deleted")}>
                     Delete
                   </button>
                 </td>
@@ -286,7 +286,7 @@ function Secrets({ env }: { env: string }) {
             setName("");
             setValue("");
             reload();
-          });
+          }, "Secret saved");
         }}
       >
         <input className="mono" placeholder="name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -342,7 +342,7 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
               setText("");
               setValue("");
               reload();
-            });
+            }, "Saved");
           }}
         >
           <div className="row">
@@ -385,7 +385,7 @@ function Egress({ env }: { env: string }) {
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await post("/v1/egress", { environment: env, host }), setHost(""), reload()));
+          void act.run(async () => (await post("/v1/egress", { environment: env, host }), setHost(""), reload()), "Host allowed");
         }}
       >
         <input className="mono" placeholder="api.example.com or *.example.com" value={host} onChange={(e) => setHost(e.target.value)} required />
@@ -426,7 +426,7 @@ function Git({ env }: { env: string }) {
       if (r.webhook_secret) setIssued({ secret: r.webhook_secret, url: location.origin + r.webhook_url });
       setForm({});
       reload();
-    });
+    }, "Connected");
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Git</h2>
@@ -489,12 +489,12 @@ function Git({ env }: { env: string }) {
           {conn ? "Save" : "Connect"}
         </button>
         {conn && (
-          <button className="danger" disabled={act.busy} onClick={() => confirm(`Disconnect ${conn.repo}?`) && void act.run(async () => (await del(`/v1/git/${env}`), reload()))}>
+          <button className="danger" disabled={act.busy} onClick={() => confirm(`Disconnect ${conn.repo}?`) && void act.run(async () => (await del(`/v1/git/${env}`), reload()), "Disconnected")}>
             Disconnect
           </button>
         )}
         {conn?.mode === "git_led" && (
-          <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/git/${env}/sync`), syncs.reload()))}>
+          <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/git/${env}/sync`), syncs.reload()), "Sync started")}>
             Deploy from {conn.branch} now
           </button>
         )}
@@ -546,7 +546,7 @@ function Governance() {
   const owner = me?.roles.includes("owner") ?? false;
   if (!data) return error ? <ErrorBox error={error} /> : null;
   const set = (k: "four_eyes_publish" | "four_eyes_policies" | "default_retention", v: boolean | string) =>
-    act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()));
+    act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()), "Saved");
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Four-eyes</h2>

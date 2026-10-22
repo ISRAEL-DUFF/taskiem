@@ -123,7 +123,7 @@ function NewChannel({ providers: options, onSaved, act }: { providers: { id: str
           const c = await put<Channel>(`/v1/ussd/channels/${provider}`, { environment, allowed_cidrs: parseCIDRs(cidrs) });
           setCIDRs("");
           onSaved(c);
-        });
+        }, "Channel added");
       }}
     >
       <div className="row">
@@ -162,7 +162,7 @@ function ChannelRow({ channel: c, onSaved, onRemoved, act }: { channel: Channel;
   const [cidrs, setCIDRs] = useState(c.allowed_cidrs.join("\n"));
   const [disabled, setDisabled] = useState(c.status === "disabled");
   const save = (rotate: boolean) =>
-    act.run(async () => onSaved(await put<Channel>(`/v1/ussd/channels/${c.provider}`, { environment, allowed_cidrs: parseCIDRs(cidrs), disabled, rotate_token: rotate })));
+    act.run(async () => onSaved(await put<Channel>(`/v1/ussd/channels/${c.provider}`, { environment, allowed_cidrs: parseCIDRs(cidrs), disabled, rotate_token: rotate })), "Saved");
   return (
     <div className="card" data-testid={`ussd-channel-${c.provider}`} style={{ marginBottom: 10 }}>
       <p>
@@ -200,7 +200,7 @@ function ChannelRow({ channel: c, onSaved, onRemoved, act }: { channel: Channel;
         <button
           className="danger"
           disabled={act.busy}
-          onClick={() => confirm(`Disconnect ${providerLabel(c.provider)}? Its callbacks get 404.`) && void act.run(async () => (await del(`/v1/ussd/channels/${c.provider}`), onRemoved()))}
+          onClick={() => confirm(`Disconnect ${providerLabel(c.provider)}? Its callbacks get 404.`) && void act.run(async () => (await del(`/v1/ussd/channels/${c.provider}`), onRemoved()), "Channel removed")}
         >
           Disconnect
         </button>

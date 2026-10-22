@@ -830,3 +830,49 @@ table.audit code { font-size: 12px; white-space: nowrap; }
 }
 @keyframes email-pulse { 50% { opacity: 0.3; } }
 .trigger-node .detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+
+/* Toasts (N12): after an action, at the bottom right on a wide screen and above the tab bar on a phone. */
+.toasts { position: fixed; bottom: 16px; right: 16px; z-index: 90; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 32px)); pointer-events: none; }
+.toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-radius: var(--radius-sm); background: var(--panel);
+  color: var(--text); border: 1px solid var(--border-strong); border-left: 4px solid var(--ok); box-shadow: var(--shadow-lg); animation: fade-in 0.15s ease-out;
+}
+.toast-error { border-left-color: var(--danger); }
+.toast-info { border-left-color: var(--info); }
+.toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast-close { background: transparent; border-color: transparent; box-shadow: none; color: var(--muted); width: 28px; height: 28px; padding: 0; font-size: 18px; line-height: 1; }
+@media (max-width: 860px) { .toasts { bottom: 76px; right: 16px; left: 16px; width: auto; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* The bell (N12): in the sidebar's brand row, and in the top bar on a phone. */
+.bell { position: relative; background: transparent; border-color: transparent; box-shadow: none; color: var(--text); }
+.bell .count { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; font-size: 11px; line-height: 18px; font-weight: 600;
+  color: #fff; background: var(--danger); font-variant-numeric: tabular-nums; }
+.nav-bell { margin-left: auto; }
+.topbar .bell { margin-left: auto; }
+.bell-scrim { position: fixed; inset: 0; z-index: 70; background: transparent; }
+.bell-panel {
+  position: fixed; z-index: 75; top: 16px; left: 248px; width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto;
+  background: var(--panel); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 12px 14px 14px;
+}
+.bell-head { display: flex; align-items: center; gap: 8px; }
+.bell-head h2 { margin: 0; font-size: 16px; flex: 1; }
+.bell-panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 14px 0 6px; }
+.bell-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bell-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; padding: 8px 10px; border-radius: var(--radius-sm);
+  background: transparent; border: 1px solid transparent; box-shadow: none; color: var(--text); font-weight: 400; text-decoration: none; height: auto;
+  border-left: 3px solid transparent;
+}
+.bell-item:hover { background: var(--nav-hover); }
+.bell-item strong { font-weight: 500; }
+.bell-item.unread strong { font-weight: 650; }
+.bell-item span { font-size: 13px; }
+.bell-item.level-problem { border-left-color: var(--danger); }
+.bell-item.level-warning { border-left-color: var(--warn); }
+.bell-item.level-success { border-left-color: var(--ok); }
+@media (max-width: 860px) {
+  .nav .nav-bell { display: none; }
+  .bell-panel { left: 16px; right: 16px; top: 64px; width: auto; max-height: calc(100dvh - 150px); }
+  .bell-scrim { background: rgba(14, 15, 12, 0.3); }
+}
