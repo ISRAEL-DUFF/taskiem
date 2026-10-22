@@ -1,0 +1,12 @@
+{
+  "capability": "pay_bank",
+  "input": {
+    "amount_kobo": 200000,
+    "bank_code": "057",
+    "account_number": "2085096393",
+    "account_name": "Ada Obi",
+    "narration": "Sept salary",
+    "currency": "USD"
+  },
+  "error": "fatal"
+}

@@ -1,0 +1,18 @@
+{
+  "trigger": "event",
+  "body": {
+    "event": "charge.completed",
+    "data": {
+      "id": 285959875,
+      "tx_ref": "order-17",
+      "status": "successful",
+      "amount": 1500.5,
+      "currency": "NGN"
+    }
+  },
+  "event": "payment.received",
+  "expect": {
+    "payment_id": "order-17",
+    "amount_kobo": 150050
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "trigger": "event",
+  "body": {
+    "event": "charge.completed",
+    "data": {
+      "id": 285959876,
+      "tx_ref": "order-18",
+      "status": "failed",
+      "amount": 1500
+    }
+  }
+}

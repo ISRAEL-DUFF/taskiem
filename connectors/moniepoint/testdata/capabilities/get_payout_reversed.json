@@ -1,0 +1,19 @@
+{
+  "capability": "get_payout",
+  "credentials": {
+    "api_key": "MK_TEST_TASKIEM01",
+    "secret_key": "TSKSECRET0000000000000000000001",
+    "contract_code": "8389328412",
+    "wallet_account_number": "8016472829"
+  },
+  "input": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "login",
+    "summary_reversed"
+  ],
+  "expect": {
+    "status": "reversed"
+  }
+}

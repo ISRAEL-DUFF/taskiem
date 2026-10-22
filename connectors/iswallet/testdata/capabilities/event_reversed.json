@@ -1,0 +1,16 @@
+{
+  "trigger": "outflow_event",
+  "body": {
+    "id": "evt_reversed",
+    "event_type": "wallet.outflow.reversed",
+    "wallet_id": "6f1e",
+    "data": {
+      "outflow_id": "8d3f",
+      "amount": 4500000
+    }
+  },
+  "event": "payout.reversed",
+  "expect": {
+    "payout_id": "8d3f"
+  }
+}

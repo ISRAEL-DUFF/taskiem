@@ -1,0 +1,17 @@
+{
+  "trigger": "transfer_event",
+  "body": {
+    "event": "transfer.failed",
+    "data": {
+      "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "amount": 100000,
+      "status": "failed",
+      "reason": "Account not found"
+    }
+  },
+  "event": "payout.failed",
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "reason": "Account not found"
+  }
+}

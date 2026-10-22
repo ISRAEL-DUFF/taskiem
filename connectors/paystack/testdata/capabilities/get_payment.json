@@ -1,0 +1,17 @@
+{
+  "capability": "get_payment",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "payment_id": "T685312322670591"
+  },
+  "exchanges": [
+    "verify_charge"
+  ],
+  "expect": {
+    "status": "paid",
+    "amount_kobo": 20000,
+    "currency": "NGN"
+  }
+}

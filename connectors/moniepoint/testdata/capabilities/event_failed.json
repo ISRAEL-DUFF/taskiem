@@ -1,0 +1,18 @@
+{
+  "trigger": "event",
+  "body": {
+    "eventType": "FAILED_DISBURSEMENT",
+    "eventData": {
+      "amount": 2000,
+      "transactionReference": "MFDS|2",
+      "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "status": "FAILED",
+      "transactionDescription": "Invalid account"
+    }
+  },
+  "event": "payout.failed",
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "reason": "Invalid account"
+  }
+}

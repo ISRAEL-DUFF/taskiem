@@ -287,6 +287,10 @@ func (r Report) Failed() int {
 type Options struct {
 	// Timeout bounds one case; default 10s.
 	Timeout time.Duration
+	// Connect, when set, makes the connector afresh for each capability
+	// case, pointed at that case's replay server: for built-in rails, whose
+	// handlers keep the base URL they were made with.
+	Connect func(baseURL string) *connector.Connector
 }
 
 // Run plays every case against c. The connector's base URL is pointed at

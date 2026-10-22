@@ -1,0 +1,58 @@
+{
+  "capability": "pay_bank",
+  "credentials": {
+    "secret_key": "FLWSECK_TEST-abc"
+  },
+  "input": {
+    "amount_kobo": 550000,
+    "bank_code": "044",
+    "account_number": "0690000040",
+    "account_name": "Ada Obi",
+    "narration": "Sept salary"
+  },
+  "keys": {
+    "transfer": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/transfers",
+        "headers": {
+          "Authorization": "Bearer FLWSECK_TEST-abc"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": "success",
+          "message": "Transfer Queued Successfully",
+          "data": {
+            "id": 26251,
+            "account_number": "0690000040",
+            "bank_code": "044",
+            "full_name": "Ada Obi",
+            "created_at": "2026-10-06T16:09:34.000Z",
+            "currency": "NGN",
+            "debit_currency": "NGN",
+            "amount": 5500,
+            "fee": 26.875,
+            "status": "NEW",
+            "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+            "meta": null,
+            "narration": "Sept salary",
+            "complete_message": "",
+            "requires_approval": 0,
+            "is_approved": 1,
+            "bank_name": "ACCESS BANK NIGERIA"
+          }
+        }
+      },
+      "name": "transfer_new"
+    }
+  ],
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "status": "pending"
+  }
+}

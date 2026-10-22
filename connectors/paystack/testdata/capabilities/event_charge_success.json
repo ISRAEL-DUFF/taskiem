@@ -1,0 +1,19 @@
+{
+  "trigger": "charge_event",
+  "body": {
+    "event": "charge.success",
+    "data": {
+      "reference": "T685312322670591",
+      "amount": 20000,
+      "currency": "NGN",
+      "status": "success",
+      "paid_at": "2026-10-20T10:00:00.000Z"
+    }
+  },
+  "event": "payment.received",
+  "expect": {
+    "payment_id": "T685312322670591",
+    "amount_kobo": 20000,
+    "currency": "NGN"
+  }
+}

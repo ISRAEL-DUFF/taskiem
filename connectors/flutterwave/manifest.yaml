@@ -192,3 +192,67 @@ triggers:
     dedup: '=body.event + ":" + string(body.data.id) + ":" + body.data.status'
     # Payouts: the payout's reference. Charges: your tx_ref.
     correlation: '=body.event == "transfer.completed" ? body.data.reference : body.data.tx_ref'
+# What Flutterwave can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
+# Its webhooks carry whole naira; the events below turn them into kobo.
+# It sends no reversal event, so a reversal is found by get_payout.
+capabilities:
+  balance:
+    action: get_balance
+    input: { currency: "=input.currency" }
+    output: { available_kobo: "=output.available_balance", currency: "=output.currency" }
+    unsupported: [account]
+  resolve_account:
+    action: resolve_account
+    input: { account_number: "=input.account_number", bank_code: "=input.bank_code" }
+    output: { account_name: "=output.account_name" }
+  list_banks:
+    action: list_banks
+    input: {}
+    output: { banks: "=output.banks.map(b, {'code': b.code, 'name': b.name})" }
+  pay_bank:
+    # Flutterwave takes whole naira: amount_kobo must be a multiple of 100.
+    action: transfer
+    input:
+      amount: "=input.amount_kobo"
+      account_number: "=input.account_number"
+      bank_code: "=input.bank_code"
+      beneficiary_name: "=input.account_name"
+      narration: "=input.narration"
+    output:
+      payout_id: "=output.reference"
+      status: "=output.status == 'SUCCESSFUL' ? 'settled' : output.status == 'FAILED' ? 'failed' : 'pending'"
+      reason: "=has(output.requires_approval) && output.requires_approval ? optional.of('needs_approval') : optional.none()"
+      fee_kobo: "=output.?fee"
+    unsupported: [source]
+    fixed: { currency: NGN }
+    settles_by: { trigger: event, lookup: get_payout }
+  get_payout:
+    action: get_transfer_by_reference
+    input: { reference: "=input.payout_id" }
+    output:
+      status: "=output.status == 'SUCCESSFUL' ? 'settled' : output.status == 'FAILED' ? 'failed' : 'pending'"
+      reason: "=output.status == 'FAILED' ? output.?complete_message : has(output.requires_approval) && output.requires_approval ? optional.of('needs_approval') : optional.none()"
+      fee_kobo: "=output.?fee"
+  get_payment:
+    action: verify_payment
+    input: { tx_ref: "=input.payment_id" }
+    output:
+      status: "=output.status == 'successful' ? 'paid' : output.status == 'failed' ? 'failed' : 'pending'"
+      amount_kobo: "=output.?amount"
+      currency: "=output.?currency"
+events:
+  payout.settled:
+    trigger: event
+    when: "=body.event == 'transfer.completed' && body.data.status == 'SUCCESSFUL'"
+    fields: { payout_id: "=body.data.reference", amount_kobo: "=int(math.round(double(body.data.amount) * 100.0))" }
+  payout.failed:
+    trigger: event
+    when: "=body.event == 'transfer.completed' && body.data.status == 'FAILED'"
+    fields: { payout_id: "=body.data.reference", reason: "=body.data.?complete_message" }
+  payment.received:
+    trigger: event
+    when: "=body.event == 'charge.completed' && body.data.status == 'successful'"
+    fields:
+      payment_id: "=body.data.tx_ref"
+      amount_kobo: "=int(math.round(double(body.data.amount) * 100.0))"
+      currency: "=body.data.?currency"

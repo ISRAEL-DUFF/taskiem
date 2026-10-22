@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/israel-duff/taskiem/connectors/builtin"
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
@@ -113,7 +114,99 @@ func Generate() ([]byte, error) {
 		fmt.Fprintf(&b, "  %q: [%s],\n", r, strings.Join(q, ", "))
 	}
 	b.WriteString("};\n")
+	if err := capabilities(&b, conns); err != nil {
+		return nil, err
+	}
 	return b.Bytes(), nil
+}
+
+// capabilities renders the capability set's input and output types
+// (schemas/capabilities-v1.json) and which built-in rails declare each.
+func capabilities(b *bytes.Buffer, conns []*connector.Connector) error {
+	b.WriteString("\n// Capabilities (schemas/capabilities-v1.json): the same input and output on every rail.\n")
+	railsOf := map[string][]string{}
+	for _, c := range conns {
+		for n := range c.Manifest.Capabilities {
+			railsOf[n] = append(railsOf[n], c.Ref())
+		}
+	}
+	for _, n := range capability.Names() {
+		spec, _ := capability.Get(n)
+		in, _, err := inputFields(spec.Input)
+		if err != nil {
+			return fmt.Errorf("capability %s: %w", n, err)
+		}
+		fmt.Fprintf(b, "/** %s: input */\nexport interface Capability%sInput {\n%s}\n", spec.Title, typeName(n), in)
+		var out map[string]any
+		if err := json.Unmarshal(spec.Output, &out); err != nil {
+			return fmt.Errorf("capability %s: %w", n, err)
+		}
+		fmt.Fprintf(b, "/** %s: output */\nexport type Capability%sOutput = %s;\n", spec.Title, typeName(n), outType(out, ""))
+	}
+	b.WriteString("\n/** The built-in rails that declare each capability. */\nexport const CAPABILITY_RAILS: Record<string, readonly string[]> = {\n")
+	for _, n := range capability.Names() {
+		rails := railsOf[n]
+		sort.Strings(rails)
+		q := make([]string, len(rails))
+		for i, r := range rails {
+			q[i] = strconv.Quote(r)
+		}
+		fmt.Fprintf(b, "  %s: [%s],\n", n, strings.Join(q, ", "))
+	}
+	b.WriteString("};\n")
+	return nil
+}
+
+// outType is a schema as a plain TypeScript type: what a step's output holds.
+func outType(p map[string]any, indent string) string {
+	if enum, ok := p["enum"].([]any); ok && len(enum) > 0 {
+		parts := make([]string, len(enum))
+		for i, e := range enum {
+			j, _ := json.Marshal(e)
+			parts[i] = string(j)
+		}
+		return strings.Join(parts, " | ")
+	}
+	switch p["type"] {
+	case "string":
+		return "string"
+	case "integer", "number":
+		return "number"
+	case "boolean":
+		return "boolean"
+	case "array":
+		if items, ok := p["items"].(map[string]any); ok {
+			return "Array<" + outType(items, indent) + ">"
+		}
+		return "unknown[]"
+	}
+	props, _ := p["properties"].(map[string]any)
+	if props == nil {
+		return "Record<string, unknown>"
+	}
+	req := map[string]bool{}
+	if r, ok := p["required"].([]any); ok {
+		for _, x := range r {
+			req[fmt.Sprint(x)] = true
+		}
+	}
+	names := make([]string, 0, len(props))
+	for n := range props {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	b.WriteString("{\n")
+	for _, n := range names {
+		sub, _ := props[n].(map[string]any)
+		opt := "?"
+		if req[n] {
+			opt = ""
+		}
+		fmt.Fprintf(&b, "%s  %s%s: %s;\n", indent, n, opt, outType(sub, indent+"  "))
+	}
+	b.WriteString(indent + "}")
+	return b.String()
 }
 
 func typeName(s string) string {

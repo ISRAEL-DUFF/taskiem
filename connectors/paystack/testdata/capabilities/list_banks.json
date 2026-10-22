@@ -1,0 +1,10 @@
+{
+  "capability": "list_banks",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "exchanges": [
+    "list_banks"
+  ],
+  "expect": {}
+}

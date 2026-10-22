@@ -1,0 +1,69 @@
+{
+  "capability": "pay_bank",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "amount_kobo": 100000,
+    "bank_code": "058",
+    "account_number": "0123456789",
+    "account_name": "Bola Ade",
+    "narration": "Salary Oct 2026"
+  },
+  "keys": {
+    "transfer": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    {
+      "name": "create_recipient",
+      "request": {
+        "method": "POST",
+        "path": "/transferrecipient",
+        "headers": {
+          "Authorization": "Bearer sk_test_xyz"
+        },
+        "body": {
+          "type": "nuban",
+          "name": "Bola Ade",
+          "account_number": "0123456789",
+          "bank_code": "058",
+          "currency": "NGN"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "status": true,
+          "data": {
+            "name": "Bola Ade",
+            "recipient_code": "RCP_t6wnmj2a9mp4m8k"
+          }
+        }
+      }
+    },
+    {
+      "name": "transfer_otp",
+      "request": {
+        "method": "POST",
+        "path": "/transfer"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": true,
+          "message": "Transfer requires OTP to continue",
+          "data": {
+            "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+            "status": "otp",
+            "transfer_code": "TRF_1"
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "status": "failed",
+    "reason": "otp_enabled"
+  }
+}

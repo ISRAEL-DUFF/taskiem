@@ -258,3 +258,87 @@ triggers:
     dedup: =body.data.reference + ':' + body.event
     correlation: =body.data.reference
     poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", every: 5m }
+# What Paystack can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
+capabilities:
+  balance:
+    action: check_balance
+    input: {}
+    output:
+      available_kobo: "=sum(output.balances.filter(b, b.currency == input.currency).map(b, b.balance))"
+      currency: =input.currency
+    unsupported: [account]
+  resolve_account:
+    action: resolve_account
+    input: { account_number: "=input.account_number", bank_code: "=input.bank_code" }
+    output: { account_name: "=output.account_name" }
+  list_banks:
+    action: list_banks
+    input: {}
+    output: { banks: "=output.banks.map(b, {'code': b.code, 'name': b.name})" }
+  pay_bank:
+    # A bank account is paid through a saved recipient: two calls, each
+    # exactly once under its own key.
+    steps:
+      - id: recipient
+        action: create_recipient
+        input: { account_number: "=input.account_number", bank_code: "=input.bank_code", name: "=input.account_name" }
+      - id: transfer
+        action: transfer
+        input: { amount: "=input.amount_kobo", recipient: "=steps.recipient.output.recipient_code", reason: "=input.narration", currency: "=input.currency" }
+    output:
+      payout_id: =output.reference
+      status: "=output.status == 'success' ? 'settled' : output.status == 'pending' ? 'pending' : 'failed'"
+      reason: "=output.status == 'otp' ? optional.of('otp_enabled') : output.status == 'reversed' ? optional.of('reversed') : optional.none()"
+    unsupported: [source]
+    settles_by: { trigger: transfer_event, lookup: get_payout }
+    notes: With OTP on transfers turned on in Paystack, a transfer waits for a code Taskiem cannot give; it is reported failed with reason otp_enabled.
+  get_payout:
+    action: verify_transfer
+    input: { reference: "=input.payout_id" }
+    output:
+      status: "=output.status == 'success' ? 'settled' : output.status == 'reversed' ? 'reversed' : output.status == 'pending' ? 'pending' : 'failed'"
+      reason: "=output.status == 'otp' ? optional.of('otp_enabled') : output.status == 'not_found' ? optional.of('not_found') : optional.none()"
+  collect_link:
+    action: initialize_transaction
+    input:
+      amount: =input.amount_kobo
+      email: =input.customer.email
+      currency: =input.currency
+      callback_url: =input.?return_url
+      metadata: "={'description': input.description}"
+    output: { payment_url: "=output.authorization_url", payment_id: "=output.reference" }
+    requires: [customer.email]
+    ignores: [customer.name, customer.phone, customer.bvn]
+  get_payment:
+    action: verify_charge
+    input: { reference: "=input.payment_id" }
+    output:
+      status: "=output.status == 'success' ? 'paid' : output.status == 'reversed' ? 'refunded' : output.status in ['failed', 'abandoned'] ? 'failed' : 'pending'"
+      amount_kobo: =output.?amount
+      currency: =output.?currency
+  refund:
+    action: refund_transaction
+    input: { reference: "=input.payment_id", merchant_note: "=input.?reason" }
+    output:
+      # A payment refunded before answers no refund id: the payment's reference stands for it.
+      refund_id: "=has(output.refund_id) ? string(output.refund_id) : input.payment_id"
+      status: "=output.status in ['processed', 'already'] ? 'refunded' : output.status == 'failed' ? 'failed' : 'pending'"
+      amount_kobo: =output.?amount
+    unsupported: [amount_kobo]
+events:
+  payout.settled:
+    trigger: transfer_event
+    when: =body.event == 'transfer.success'
+    fields: { payout_id: "=body.data.reference", amount_kobo: "=body.data.?amount" }
+  payout.failed:
+    trigger: transfer_event
+    when: =body.event == 'transfer.failed'
+    fields: { payout_id: "=body.data.reference", reason: "=body.data.?reason" }
+  payout.reversed:
+    trigger: transfer_event
+    when: =body.event == 'transfer.reversed'
+    fields: { payout_id: "=body.data.reference", reason: "=body.data.?reason" }
+  payment.received:
+    trigger: charge_event
+    when: =body.event == 'charge.success'
+    fields: { payment_id: "=body.data.reference", amount_kobo: "=body.data.amount", currency: "=body.data.?currency", paid_at: "=body.data.?paid_at" }

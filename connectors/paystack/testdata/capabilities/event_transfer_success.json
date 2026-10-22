@@ -1,0 +1,17 @@
+{
+  "trigger": "transfer_event",
+  "body": {
+    "event": "transfer.success",
+    "data": {
+      "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "amount": 100000,
+      "status": "success",
+      "transfer_code": "TRF_v5tip3zx8nna9o78"
+    }
+  },
+  "event": "payout.settled",
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "amount_kobo": 100000
+  }
+}

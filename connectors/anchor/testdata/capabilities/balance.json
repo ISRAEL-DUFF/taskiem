@@ -1,0 +1,14 @@
+{
+  "capability": "balance",
+  "credentials": {
+    "api_key": "anc_test_key",
+    "account_id": "166012843397415-anc_acc"
+  },
+  "exchanges": [
+    "balance"
+  ],
+  "expect": {
+    "available_kobo": 4950000,
+    "currency": "NGN"
+  }
+}

@@ -290,3 +290,105 @@ triggers:
       : body.eventType == "SETTLEMENT" ? body.eventData.settlementReference
       : body.eventType == "MANDATE_UPDATE" ? body.eventData.externalMandateReference
       : ""
+# What Moniepoint can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
+# Monnify's events carry naira; the events below turn them into kobo.
+capabilities:
+  balance:
+    action: get_balance
+    input: { wallet_account_number: "=input.?account" }
+    output: { available_kobo: "=output.available_balance", currency: NGN }
+    fixed: { currency: NGN }
+  resolve_account:
+    action: resolve_account
+    input: { account_number: "=input.account_number", bank_code: "=input.bank_code" }
+    output: { account_name: "=output.account_name" }
+  list_banks:
+    action: list_banks
+    input: {}
+    output: { banks: "=output.banks.map(b, {'code': b.code, 'name': b.name})" }
+  pay_bank:
+    action: transfer
+    input:
+      amount: "=input.amount_kobo"
+      account_number: "=input.account_number"
+      bank_code: "=input.bank_code"
+      account_name: "=input.account_name"
+      narration: "=input.narration"
+      wallet_account_number: "=input.?source"
+    output:
+      payout_id: "=output.reference"
+      status: "=output.status in ['SUCCESS', 'COMPLETED'] ? 'settled' : output.status in ['FAILED', 'REVERSED'] ? 'failed' : 'pending'"
+      # With two-factor authorisation on, the transfer waits for the OTP Monnify emailed.
+      reason: "=output.status == 'PENDING_AUTHORIZATION' ? optional.of('needs_otp') : optional.none()"
+      fee_kobo: "=output.?fee"
+    fixed: { currency: NGN }
+    settles_by: { trigger: event, lookup: get_payout }
+  get_payout:
+    action: get_transfer
+    input: { reference: "=input.payout_id" }
+    output:
+      status: "=output.status in ['SUCCESS', 'COMPLETED'] ? 'settled' : output.status == 'REVERSED' ? 'reversed' : output.status in ['FAILED', 'OTP_EMAIL_DISPATCH_FAILED'] ? 'failed' : 'pending'"
+      reason: "=output.status == 'PENDING_AUTHORIZATION' ? optional.of('needs_otp') : output.status == 'OTP_EMAIL_DISPATCH_FAILED' ? optional.of('otp_email_failed') : optional.none()"
+      fee_kobo: "=output.?fee"
+  collect_link:
+    # The checkout page is valid for 40 minutes.
+    action: init_transaction
+    input:
+      amount: "=input.amount_kobo"
+      customer_name: "=input.customer.name"
+      customer_email: "=input.customer.email"
+      description: "=input.description"
+      redirect_url: "=input.?return_url"
+    output: { payment_url: "=output.checkout_url", payment_id: "=output.payment_reference" }
+    requires: [customer.email]
+    ignores: [customer.phone, customer.bvn]
+    fixed: { currency: NGN }
+  get_payment:
+    action: get_transaction
+    input: { payment_reference: "=input.payment_id" }
+    output:
+      status: "=output.status in ['PAID', 'OVERPAID'] ? 'paid' : output.status in ['PENDING', 'PARTIALLY_PAID'] ? 'pending' : output.status == 'REVERSED' ? 'refunded' : 'failed'"
+      amount_kobo: "=output.?amount_paid"
+      currency: "=output.?currency"
+      paid_at: "=output.?paid_on"
+  virtual_account:
+    action: create_reserved_account
+    input:
+      account_name: "=input.customer.name"
+      customer_name: "=input.customer.name"
+      customer_email: "=input.customer.email"
+      bvn: "=input.customer.?bvn"
+    output:
+      account_number: "=output.accounts[0].account_number"
+      bank_name: "=output.accounts[0].bank_name"
+      account_name: "=output.accounts[0].account_name"
+      reference: "=output.account_reference"
+    requires: [customer.email]
+    ignores: [customer.phone]
+events:
+  payout.settled:
+    trigger: event
+    when: "=body.eventType == 'SUCCESSFUL_DISBURSEMENT'"
+    fields: { payout_id: "=body.eventData.reference", amount_kobo: "=int(math.round(double(body.eventData.amount) * 100.0))" }
+  payout.failed:
+    trigger: event
+    when: "=body.eventType == 'FAILED_DISBURSEMENT'"
+    fields: { payout_id: "=body.eventData.reference", reason: "=body.eventData.?transactionDescription" }
+  payout.reversed:
+    trigger: event
+    when: "=body.eventType == 'REVERSED_DISBURSEMENT'"
+    fields: { payout_id: "=body.eventData.reference", reason: "=body.eventData.?transactionDescription" }
+  payment.received:
+    trigger: event
+    when: "=body.eventType == 'SUCCESSFUL_TRANSACTION' && !(has(body.eventData.product) && body.eventData.product.type == 'RESERVED_ACCOUNT')"
+    fields:
+      payment_id: "=body.eventData.paymentReference"
+      amount_kobo: "=int(math.round(double(body.eventData.amountPaid) * 100.0))"
+      currency: "=body.eventData.?currency"
+      paid_at: "=body.eventData.?paidOn"
+  virtual_account.credited:
+    trigger: event
+    when: "=body.eventType == 'SUCCESSFUL_TRANSACTION' && has(body.eventData.product) && body.eventData.product.type == 'RESERVED_ACCOUNT'"
+    fields:
+      reference: "=body.eventData.product.reference"
+      amount_kobo: "=int(math.round(double(body.eventData.amountPaid) * 100.0))"

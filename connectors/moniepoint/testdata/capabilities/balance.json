@@ -1,0 +1,17 @@
+{
+  "capability": "balance",
+  "credentials": {
+    "api_key": "MK_TEST_TASKIEM01",
+    "secret_key": "TSKSECRET0000000000000000000001",
+    "contract_code": "8389328412",
+    "wallet_account_number": "8016472829"
+  },
+  "exchanges": [
+    "login",
+    "balance"
+  ],
+  "expect": {
+    "available_kobo": 37893,
+    "currency": "NGN"
+  }
+}

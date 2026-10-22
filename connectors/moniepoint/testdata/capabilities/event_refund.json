@@ -1,0 +1,11 @@
+{
+  "trigger": "event",
+  "body": {
+    "eventType": "SUCCESSFUL_REFUND",
+    "eventData": {
+      "transactionReference": "MNFY|9",
+      "refundReference": "ref001",
+      "refundStatus": "COMPLETED"
+    }
+  }
+}

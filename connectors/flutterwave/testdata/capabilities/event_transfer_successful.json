@@ -1,0 +1,19 @@
+{
+  "trigger": "event",
+  "body": {
+    "event": "transfer.completed",
+    "event.type": "Transfer",
+    "data": {
+      "id": 26251,
+      "status": "SUCCESSFUL",
+      "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "amount": 5500,
+      "currency": "NGN"
+    }
+  },
+  "event": "payout.settled",
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "amount_kobo": 550000
+  }
+}

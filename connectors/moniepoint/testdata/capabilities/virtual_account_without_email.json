@@ -1,0 +1,9 @@
+{
+  "capability": "virtual_account",
+  "input": {
+    "customer": {
+      "name": "Ada Obi"
+    }
+  },
+  "error": "fatal"
+}

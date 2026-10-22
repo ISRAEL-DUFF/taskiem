@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { del, get, post, type ConnectorInfo } from "../api";
 import { useAuth } from "../auth";
-import { KINDS, builtInByKind, diffLines, major, newestPerMajor, writeLines, type CatalogueEntry, type CatalogueVersion, type Diff, type Install } from "../lib/catalogue";
+import { KINDS, builtInByKind, capabilityLine, diffLines, major, newestPerMajor, writeLines, type CatalogueEntry, type CatalogueVersion, type Diff, type Install } from "../lib/catalogue";
 import { needsConnection } from "../lib/connections";
 import { Badge, ErrorBox, Modal, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 
@@ -149,6 +149,7 @@ function BuiltIn() {
                   <article key={c.ref} className="card catalogue-card" aria-label={c.name}>
                     <h4>{c.name}</h4>
                     {c.description && <p>{c.description}</p>}
+                    {capabilityLine(c.capabilities) && <p className="hint">{capabilityLine(c.capabilities)}</p>}
                     {!needsConnection(c) ? (
                       <span className="hint">Built in: nothing to connect.</span>
                     ) : (

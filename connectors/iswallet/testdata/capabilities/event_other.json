@@ -1,0 +1,11 @@
+{
+  "trigger": "credit_event",
+  "body": {
+    "id": "evt_c",
+    "event_type": "wallet.credit.posted",
+    "wallet_id": "6f1e",
+    "data": {
+      "txn_id": "t1"
+    }
+  }
+}

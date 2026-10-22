@@ -2471,3 +2471,198 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],
   "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
 };
+
+// Capabilities (schemas/capabilities-v1.json): the same input and output on every rail.
+/** Check the balance: input */
+export interface CapabilityBalanceInput {
+  /** A wallet or account to read; the connection's own when left out */
+  account?: Val<string>;
+  currency?: Val<string>;
+}
+/** Check the balance: output */
+export type CapabilityBalanceOutput = {
+  available_kobo: number;
+  currency: string;
+};
+/** Make a payment page for a customer: input */
+export interface CapabilityCollectLinkInput {
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  customer: Value;
+  /** What the payment is for, shown to the customer */
+  description: Val<string>;
+  /** Where the customer goes after paying */
+  return_url?: Val<string>;
+}
+/** Make a payment page for a customer: output */
+export type CapabilityCollectLinkOutput = {
+  payment_id: string;
+  payment_url: string;
+};
+/** Ask a customer to approve a payment on their phone or a terminal: input */
+export interface CapabilityCollectPushInput {
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  description: Val<string>;
+  msisdn: Val<string>;
+}
+/** Ask a customer to approve a payment on their phone or a terminal: output */
+export type CapabilityCollectPushOutput = {
+  payment_id: string;
+  status: "paid" | "pending" | "failed";
+};
+/** Look a payment up: input */
+export interface CapabilityGetPaymentInput {
+  /** As collect_link answered it, or the reference a payment event carried */
+  payment_id: Val<string>;
+}
+/** Look a payment up: output */
+export type CapabilityGetPaymentOutput = {
+  amount_kobo?: number;
+  currency?: string;
+  paid_at?: string;
+  status: "paid" | "pending" | "failed" | "refunded";
+};
+/** Look a payout up: input */
+export interface CapabilityGetPayoutInput {
+  /** As the payment capability answered it */
+  payout_id: Val<string>;
+}
+/** Look a payout up: output */
+export type CapabilityGetPayoutOutput = {
+  fee_kobo?: number;
+  reason?: string;
+  settled_at?: string;
+  status: "settled" | "pending" | "failed" | "reversed";
+};
+/** List the banks: input */
+export interface CapabilityListBanksInput {
+  [key: string]: Value;
+}
+/** List the banks: output */
+export type CapabilityListBanksOutput = {
+  banks: Array<{
+    code: string;
+    name: string;
+  }>;
+};
+/** Pay a bank account: input */
+export interface CapabilityPayBankInput {
+  /** As resolve_account found it */
+  account_name: Val<string>;
+  account_number: Val<string>;
+  amount_kobo: Val<number>;
+  /** The bank's NIP code (list_banks) */
+  bank_code: Val<string>;
+  currency?: Val<string>;
+  narration: Val<string>;
+  /** The wallet or account to pay from, on rails that hold several */
+  source?: Val<string>;
+}
+/** Pay a bank account: output */
+export type CapabilityPayBankOutput = {
+  fee_kobo?: number;
+  payout_id: string;
+  reason?: string;
+  status: "settled" | "pending" | "failed";
+};
+/** Pay a list of bank accounts in one batch: input */
+export interface CapabilityPayManyInput {
+  currency?: Val<string>;
+  items: Value;
+  narration: Val<string>;
+  source?: Val<string>;
+}
+/** Pay a list of bank accounts in one batch: output */
+export type CapabilityPayManyOutput = {
+  batch_id: string;
+  items: Array<{
+    fee_kobo?: number;
+    payout_id: string;
+    reason?: string;
+    status: "settled" | "pending" | "failed";
+  }>;
+};
+/** Pay a mobile money wallet: input */
+export interface CapabilityPayMobileMoneyInput {
+  amount_kobo: Val<number>;
+  currency: Val<string>;
+  /** The phone number, international format */
+  msisdn: Val<string>;
+  narration: Val<string>;
+}
+/** Pay a mobile money wallet: output */
+export type CapabilityPayMobileMoneyOutput = {
+  fee_kobo?: number;
+  payout_id: string;
+  reason?: string;
+  status: "settled" | "pending" | "failed";
+};
+/** Pay a wallet on the same rail: input */
+export interface CapabilityPayWalletInput {
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  narration: Val<string>;
+  /** The wallet or account to pay from, on rails that hold several */
+  source?: Val<string>;
+  /** The wallet or account to pay into */
+  wallet_id: Val<string>;
+}
+/** Pay a wallet on the same rail: output */
+export type CapabilityPayWalletOutput = {
+  fee_kobo?: number;
+  payout_id: string;
+  reason?: string;
+  status: "settled" | "pending" | "failed";
+};
+/** Refund a payment: input */
+export interface CapabilityRefundInput {
+  /** Part of the payment; the whole when left out */
+  amount_kobo?: Val<number>;
+  payment_id: Val<string>;
+  reason?: Val<string>;
+}
+/** Refund a payment: output */
+export type CapabilityRefundOutput = {
+  amount_kobo?: number;
+  refund_id: string;
+  status: "refunded" | "pending" | "failed";
+};
+/** Find the name on a bank account: input */
+export interface CapabilityResolveAccountInput {
+  account_number: Val<string>;
+  /** The bank's NIP code (list_banks) */
+  bank_code: Val<string>;
+}
+/** Find the name on a bank account: output */
+export type CapabilityResolveAccountOutput = {
+  account_name: string;
+};
+/** Open a bank account number for a customer to pay into: input */
+export interface CapabilityVirtualAccountInput {
+  customer: Value;
+}
+/** Open a bank account number for a customer to pay into: output */
+export type CapabilityVirtualAccountOutput = {
+  account_name: string;
+  account_number: string;
+  bank_name: string;
+  reference: string;
+};
+
+/** The built-in rails that declare each capability. */
+export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
+  balance: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
+  collect_link: ["moniepoint@1", "paystack@1"],
+  collect_push: [],
+  get_payment: ["flutterwave@1", "moniepoint@1", "paystack@1"],
+  get_payout: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
+  list_banks: ["anchor@1", "flutterwave@1", "moniepoint@1", "paystack@1"],
+  pay_bank: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
+  pay_many: [],
+  pay_mobile_money: [],
+  pay_wallet: ["anchor@1", "iswallet@1"],
+  refund: ["paystack@1"],
+  resolve_account: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
+  virtual_account: ["moniepoint@1"],
+};

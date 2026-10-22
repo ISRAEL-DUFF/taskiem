@@ -159,3 +159,7 @@ func TestWebhookSignature(t *testing.T) {
 		t.Error("wrong token accepted")
 	}
 }
+
+func TestCapabilities(t *testing.T) {
+	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+}

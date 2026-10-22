@@ -1,0 +1,16 @@
+{
+  "capability": "resolve_account",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "bank_code": "044",
+    "account_number": "0690000031"
+  },
+  "exchanges": [
+    "name_enquiry"
+  ],
+  "expect": {
+    "account_name": "ADA OBI"
+  }
+}

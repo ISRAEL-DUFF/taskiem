@@ -1,0 +1,20 @@
+{
+  "capability": "resolve_account",
+  "credentials": {
+    "api_key": "MK_TEST_TASKIEM01",
+    "secret_key": "TSKSECRET0000000000000000000001",
+    "contract_code": "8389328412",
+    "wallet_account_number": "8016472829"
+  },
+  "input": {
+    "bank_code": "232",
+    "account_number": "0068687503"
+  },
+  "exchanges": [
+    "login",
+    "validate"
+  ],
+  "expect": {
+    "account_name": "ADA NGOZI OBI"
+  }
+}

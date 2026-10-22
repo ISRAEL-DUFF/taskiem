@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/conntest"
 )
 
@@ -111,4 +112,26 @@ func norm(v any) any {
 	var out any
 	_ = json.Unmarshal(raw, &out)
 	return out
+}
+
+// Capabilities replays the rail's capability cases
+// (testdata/capabilities/*.json) through its mapping and handlers, made
+// afresh by connect for each case, and fails the test on any problem or
+// on a declared capability or event no case shows working.
+func Capabilities(t *testing.T, connect func(baseURL string) *connector.Connector) {
+	t.Helper()
+	s, err := conntest.LoadCapabilities("testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := connect("")
+	rep := conntest.RunCapabilities(t.Context(), c, s, conntest.Options{Connect: connect})
+	for _, r := range rep.Results {
+		for _, p := range r.Problems {
+			t.Errorf("%s: %s", r.Case, p)
+		}
+	}
+	if len(rep.Uncovered) > 0 {
+		t.Errorf("no passing case shows these working: %s", strings.Join(rep.Uncovered, ", "))
+	}
 }

@@ -1,0 +1,17 @@
+{
+  "capability": "resolve_account",
+  "credentials": {
+    "api_key": "anc_test_key",
+    "account_id": "166012843397415-anc_acc"
+  },
+  "input": {
+    "bank_code": "000014",
+    "account_number": "0000000010"
+  },
+  "exchanges": [
+    "verify_account"
+  ],
+  "expect": {
+    "account_name": "Test Account"
+  }
+}

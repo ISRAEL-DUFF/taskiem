@@ -1,0 +1,20 @@
+{
+  "trigger": "transfer_event",
+  "body": {
+    "data": {
+      "id": "e-nip.transfer.failed",
+      "type": "nip.transfer.failed",
+      "relationships": {
+        "transfer": {
+          "data": {
+            "id": "16942554375340-anc_trsf"
+          }
+        }
+      }
+    }
+  },
+  "event": "payout.failed",
+  "expect": {
+    "payout_id": "16942554375340-anc_trsf"
+  }
+}
