@@ -8,6 +8,7 @@ version: 1.0.0
 name: Breet
 description: Crypto deposit addresses, auto-settlement, crypto and bank withdrawals, and trade and withdrawal events on Breet.
 category: payments
+kind: rail
 regions: [NG, GH]
 auth:
   type: api_key

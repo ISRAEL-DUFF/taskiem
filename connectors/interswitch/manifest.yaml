@@ -16,6 +16,7 @@ version: 1.0.0
 name: Interswitch
 description: Bank payouts from a prefunded Quickteller Business wallet, bank list, name enquiry, and Web Checkout payment confirmation on Interswitch.
 category: payments
+kind: rail
 regions: [NG]
 auth:
   type: api_key

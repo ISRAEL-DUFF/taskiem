@@ -7,6 +7,7 @@ version: 1.0.0
 name: Anchor
 description: NIP and book transfers, balances, name enquiry and transfer events on Anchor deposit accounts.
 category: payments
+kind: rail
 regions: [NG]
 auth:
   type: api_key

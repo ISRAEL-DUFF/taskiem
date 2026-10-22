@@ -18109,6 +18109,14 @@ components:
           type: string
         name:
           type: string
+        kind:
+          type: string
+          enum: [rail, product, tool]
+          description: 'rail: moves money, and Taskiem builds products on it; product: runs a whole process itself; tool: anything else (decision 0044).'
+        category:
+          type: string
+        description:
+          type: string
         auth:
           type: object
           description: How the connector authenticates (its manifest's `auth`, with `oauth2` when it connects by OAuth).

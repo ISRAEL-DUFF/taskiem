@@ -247,3 +247,30 @@ actions:
 		}
 	}
 }
+
+// TestKind: a connector says whether it is a rail, a product or a tool
+// (decision 0044); left out, it is a tool, and anything else is refused.
+func TestKind(t *testing.T) {
+	get := "  get: { title: Get, class: read, input: { type: object } }\n"
+	m, probs := Parse([]byte(head + get))
+	if len(probs) > 0 || m.KindOf() != "tool" {
+		t.Fatalf("no kind: %v %q", probs, m.KindOf())
+	}
+	m, probs = Parse([]byte(strings.Replace(head, "category: other\n", "category: other\nkind: rail\n", 1) + get))
+	if len(probs) > 0 || m.KindOf() != "rail" {
+		t.Fatalf("rail: %v", probs)
+	}
+	if _, probs = Parse([]byte(strings.Replace(head, "category: other\n", "category: other\nkind: bank\n", 1) + get)); len(probs) == 0 {
+		t.Error("an unknown kind was accepted")
+	}
+	// Every payment connector Taskiem ships is a rail.
+	for _, id := range []string{"paystack", "flutterwave", "iswallet", "moniepoint", "anchor", "lenco", "remita", "interswitch", "opay", "mtnmomo", "mpesa"} {
+		src, err := os.ReadFile("../../connectors/" + id + "/manifest.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m, probs := Parse(src); len(probs) > 0 || m.KindOf() != "rail" {
+			t.Errorf("%s: %v %q", id, probs, m.KindOf())
+		}
+	}
+}

@@ -9,6 +9,19 @@ test("browse the connector catalogue and install a connector with consent", asyn
   await page.getByRole("link", { name: "Connector catalogue" }).click();
   await expect(page.getByRole("heading", { name: "Connector catalogue", exact: true })).toBeVisible();
 
+  // Taskiem's own connectors come first, by kind, and connect from here.
+  const rails = page.getByRole("region", { name: "Payments and banking" });
+  await expect(rails.getByRole("article", { name: "Paystack" })).toBeVisible();
+  await page.getByLabel("Find a service").fill("iswallet");
+  const iswallet = rails.getByRole("article", { name: "iswallet" });
+  await expect(iswallet).toContainText("Wallet-to-wallet transfers");
+  await expect(rails.getByRole("article", { name: "Paystack" })).toHaveCount(0);
+  await iswallet.getByRole("link", { name: "Connect iswallet" }).click();
+  await expect(page).toHaveURL(/\/connections\?connect=iswallet/);
+  await expect(page.getByRole("dialog")).toContainText("iswallet");
+  await page.goBack();
+  await page.getByLabel("Find a service").fill("");
+
   const card = page.getByRole("article", { name: "Example ledger" });
   await expect(card).toContainText("by E2E Ledgerworks");
   await expect(card).toContainText("create_payment (reconcilable write)");

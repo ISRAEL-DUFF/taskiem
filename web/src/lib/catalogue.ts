@@ -124,3 +124,38 @@ export function diffLines(d: Diff): string[] {
   if (out.length === 0) out.push("No change to hosts, actions or classes");
   return out;
 }
+
+// --- Taskiem's own connectors (decision 0044) ---
+
+export type Kind = "rail" | "product" | "tool";
+
+/** The groups the catalogue shows Taskiem's own connectors in, in order. */
+export const KINDS: { kind: Kind; title: string; help: string }[] = [
+  { kind: "rail", title: "Payments and banking", help: "Services that move money. Taskiem builds payments, payouts and payroll on them." },
+  { kind: "product", title: "Apps", help: "Apps that run a whole job themselves. Taskiem connects to them and works around them." },
+  { kind: "tool", title: "Messages, records and other tools", help: "Sheets, email, chat and other services your workflows use." },
+];
+
+interface Listed {
+  id: string;
+  name: string;
+  kind?: Kind;
+  category?: string;
+  description?: string;
+}
+
+/** Taskiem's own connectors (not an organisation's own `x_` ones nor
+ * installed catalogue `p_` ones), matching a search, by kind, each
+ * sorted by name. */
+export function builtInByKind<T extends Listed>(connectors: T[], search: string): Record<Kind, T[]> {
+  const q = search.trim().toLowerCase();
+  const out: Record<Kind, T[]> = { rail: [], product: [], tool: [] };
+  for (const c of connectors) {
+    if (c.id.startsWith("x_") || c.id.startsWith("p_")) continue;
+    const text = `${c.name} ${c.id} ${c.description ?? ""} ${(c.category ?? "").replaceAll("_", " ")}`.toLowerCase();
+    if (q && !text.includes(q)) continue;
+    out[c.kind ?? "tool"].push(c);
+  }
+  for (const k of Object.keys(out) as Kind[]) out[k].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  return out;
+}

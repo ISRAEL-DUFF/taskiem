@@ -7,6 +7,7 @@ version: 1.0.0
 name: Lenco
 description: Bank transfers, balances, name enquiry and virtual accounts on Lenco business accounts.
 category: payments
+kind: rail
 regions: [NG]
 auth:
   type: api_key
