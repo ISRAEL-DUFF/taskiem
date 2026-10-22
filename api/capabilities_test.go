@@ -36,13 +36,22 @@ func TestCapabilityStepsDeploy(t *testing.T) {
 
 	out := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "pay", "definition": json.RawMessage(payByAnyRail)})
 	id := out["id"].(string)
-	// Not connected yet: it publishes, and a run is refused in plain words.
-	owner.must(200, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil)
-	if e := owner.must(409, "POST", "/v1/workflows/"+id+"/runs", map[string]any{"environment": "prod", "input": map[string]any{}})["error"].(string); !strings.Contains(e, `there is no connection called "main"`) {
-		t.Fatalf("a run without the connection: %q", e)
+	// Readiness says what it needs, as a run would find it.
+	need := owner.must(200, "GET", "/v1/workflows/"+id+"/versions/1/readiness", nil)
+	if !strings.Contains(toJSON(need), `"capability":"pay_bank"`) || !strings.Contains(toJSON(need), `"paystack"`) || !strings.Contains(toJSON(need), `"problem":"missing"`) {
+		t.Fatalf("readiness: %s", toJSON(need))
+	}
+	// Not connected yet: publishing waits for it, as for any connection.
+	if e := owner.must(422, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil); e["code"] != "not_ready" {
+		t.Fatalf("publish without the connection: %v", e)
 	}
 	owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "paystack@1", "name": "main", "mode": "test",
 		"credentials": map[string]string{"secret_key": "sk_test_good"}})
+	owner.must(200, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil)
+	// A run in an environment that is not connected is refused in plain words.
+	if e := owner.must(409, "POST", "/v1/workflows/"+id+"/runs", map[string]any{"environment": "dev", "input": map[string]any{}})["error"].(string); !strings.Contains(e, `there is no connection called "main"`) {
+		t.Fatalf("a run without the connection: %q", e)
+	}
 	st, run := owner.do("POST", "/v1/workflows/"+id+"/runs", map[string]any{"environment": "prod", "input": map[string]any{}})
 	if st/100 != 2 || run["run_id"] == nil {
 		t.Fatalf("a run once connected: %d %v", st, run)

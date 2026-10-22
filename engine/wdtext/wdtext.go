@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -243,6 +244,15 @@ func (d describer) what(st *wd.Step) string {
 	switch st.Type {
 	case "connector":
 		return d.t("wd.connector", "action", d.actionTitle(st.Connector, st.Action), "connector", d.connectorName(st.Connector))
+	case "capability":
+		what := capability.WaitTitle(st.Uses)
+		if spec, ok := capability.Get(st.Uses); ok {
+			what = spec.Title
+		}
+		if st.Connection != "" {
+			return d.t("wd.capability.via", "what", what, "connection", st.Connection)
+		}
+		return d.t("wd.capability", "what", what)
 	case "approval":
 		a := st.Approval
 		if a == nil {

@@ -22,6 +22,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // problem is one validation failure, as returned to builders.
@@ -333,6 +334,7 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	var sum workflowSummary
 	var versions []versionInfo
 	var deployments []deployment
+	var from string // the template its first version was made from
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path, `+liveTrigger+`
@@ -354,13 +356,26 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		deployments, err = deploymentsOf(ctx, tx, wf)
-		return err
+		if err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT template_id FROM workflow_versions WHERE workflow_id = $1 AND template_id IS NOT NULL ORDER BY version LIMIT 1`, wf).Scan(&from); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"workflow": sum, "versions": versions, "deployments": deployments})
+	out := map[string]any{"workflow": sum, "versions": versions, "deployments": deployments}
+	// Made from a template another now replaces: offer the new one.
+	if t, ok := templates.Default().Get(from); ok && t.SupersededBy != "" {
+		if next, ok := templates.Default().Get(t.SupersededBy); ok {
+			out["upgrade"] = map[string]string{"template": next.ID, "title": next.Title}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func versionParams(r *http.Request) (uuid.UUID, int, error) {

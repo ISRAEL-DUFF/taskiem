@@ -57,3 +57,12 @@ describe("roles", () => {
     expect(roleLabel({ name: "owner", builtin: true, holders: 1 })).toBe("Owner (the business's owners)");
   });
 });
+
+describe("capability needs", () => {
+  it("offers to connect any rail that can, or to choose among several", () => {
+    const base = { kind: "connection" as const, name: "", environment: "prod", steps: [], blocking: true, message: "", capability: "pay_bank", rails: ["paystack", "iswallet"] };
+    expect(fixFor({ ...base, problem: "missing" })).toEqual({ kind: "connect_rail", rails: ["paystack", "iswallet"], environment: "prod", name: "main" });
+    expect(fixFor({ ...base, problem: "cannot", name: "sheets" })).toEqual({ kind: "connect_rail", rails: ["paystack", "iswallet"], environment: "prod", name: "sheets" });
+    expect(fixFor({ ...base, problem: "ambiguous" }).kind).toBe("choose_connection");
+  });
+});

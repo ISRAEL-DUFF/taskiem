@@ -66,7 +66,7 @@ var adapterKinds = map[string]string{"payments": "Payments & Banking", "messagin
 // The home page's picks: the templates it shows as cards, and the
 // services it names, by id. A build fails if one goes missing.
 var (
-	featuredTemplates  = []string{"debtor-reminder-table", "payment-thank-you-sms", "daily-sales-summary", "salary-payout-approval", "stock-reorder-alert", "failed-transfer-alert"}
+	featuredTemplates  = []string{"debtor-reminder-table", "payment-thank-you-sms", "daily-sales-summary", "run-payroll", "stock-reorder-alert", "failed-transfer-alert"}
 	featuredConnectors = []string{"paystack", "flutterwave", "moniepoint", "opay", "interswitch", "remita", "termii", "dojah", "mono", "googlesheets", "gmail", "slack", "telegram", "mpesa", "mtnmomo"}
 )
 
@@ -344,6 +344,9 @@ func groupConnectors(conns []wwwConnector) []wwwConnectorGroup {
 	return out
 }
 
+// anyRail is how a template that runs on any payments account names it.
+const anyRail = "Paystack, Moniepoint, iswallet, Flutterwave or Anchor"
+
 // groupTemplates arranges the embedded library by category, and picks
 // the home page's cards.
 func groupTemplates(app string, names map[string]string) ([]wwwTemplateGroup, []wwwTemplate, error) {
@@ -351,6 +354,13 @@ func groupTemplates(app string, names map[string]string) ([]wwwTemplateGroup, []
 	as := func(t *templates.Template) wwwTemplate {
 		w := wwwTemplate{ID: t.ID, Title: t.Title, Summary: t.Summary}
 		for _, c := range t.Connectors {
+			if strings.HasPrefix(c, templates.CapabilityPrefix) {
+				// Any rail that can: named once, as the business would.
+				if !slices.Contains(w.Uses, anyRail) {
+					w.Uses = append(w.Uses, anyRail)
+				}
+				continue
+			}
 			id, _, _ := strings.Cut(c, "@")
 			if ownConnectors[id] {
 				continue
@@ -367,7 +377,7 @@ func groupTemplates(app string, names map[string]string) ([]wwwTemplateGroup, []
 		return w
 	}
 	byCat := map[string][]wwwTemplate{}
-	for _, t := range lib.List() {
+	for _, t := range lib.Offered() {
 		byCat[t.Category] = append(byCat[t.Category], as(t))
 	}
 	var groups []wwwTemplateGroup

@@ -15,6 +15,8 @@ export interface TemplateParam {
   maximum?: number;
   max_length?: number;
   connector?: string;
+  /** For a connection: the capabilities its rail must have (pay_bank); any rail that can is offered. */
+  capability?: string[];
   /** How the value is chosen instead of typed (no-technical-steps N8). */
   picker?: "sheet" | "sheet_tab" | "table" | "column" | "role" | "whatsapp_template" | "whatsapp_language";
   /** The parameter a picker depends on: a tab's sheet, a column's table, a language's template. */
@@ -50,6 +52,8 @@ export interface Template {
   needs_developer?: boolean;
   /** Data tables the workflow works on; Taskiem makes them when the template is used if they do not exist. */
   tables?: TemplateTable[];
+  /** The template that replaces this one, which is no longer offered. */
+  superseded_by?: string;
 }
 
 export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];

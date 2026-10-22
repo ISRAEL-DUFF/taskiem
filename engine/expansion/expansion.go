@@ -279,6 +279,17 @@ func (x *expander) capability(st map[string]any) ([]any, error) {
 // input is the step's capability input with the capability's defaults,
 // refused when it breaks the rail's requires, unsupported or fixed.
 func (x *expander) input(id string, r Rail, cm connector.CapabilityMap, spec *capability.Spec, given map[string]any) (map[string]any, error) {
+	// An empty value is no value: a template's optional parameter left
+	// blank (the wallet to pay from, on a rail with one balance).
+	if len(given) > 0 {
+		kept := map[string]any{}
+		for k, v := range given {
+			if v != nil && v != "" {
+				kept[k] = v
+			}
+		}
+		given = kept
+	}
 	in := spec.WithDefaults(given)
 	refuse := func(format string, args ...any) error {
 		return &Refusal{Step: id, Message: fmt.Sprintf(format, args...)}
@@ -287,13 +298,13 @@ func (x *expander) input(id string, r Rail, cm connector.CapabilityMap, spec *ca
 		top := strings.Split(n, ".")[0]
 		v, ok := in[top]
 		if !ok {
-			return nil, refuse("%s needs %s to %s", r.Name, n, lowerFirst(spec.Title))
+			return nil, refuse("%s needs %s to %s", r.Name, describe(spec, n), lowerFirst(spec.Title))
 		}
 		// A nested field given as a literal object must be there; one given
 		// by an expression is checked when the step runs.
 		if obj, isObj := v.(map[string]any); isObj && strings.Contains(n, ".") {
 			if _, ok := obj[strings.SplitN(n, ".", 2)[1]]; !ok {
-				return nil, refuse("%s needs %s to %s", r.Name, n, lowerFirst(spec.Title))
+				return nil, refuse("%s needs %s to %s", r.Name, describe(spec, n), lowerFirst(spec.Title))
 			}
 		}
 	}
@@ -366,22 +377,33 @@ func (x *expander) wait(st map[string]any) ([]any, error) {
 	id, uses := st["id"].(string), st["uses"].(string)
 	in, _ := st["input"].(map[string]any)
 	payout := in["payout_id"]
-	pay, err := x.paymentFor(id, payout)
-	if err != nil {
+	var r Rail
+	var cm connector.CapabilityMap
+	var ok bool
+	if pay, err := x.paymentFor(id, payout); err == nil {
+		if r, err = x.rail(pay.ID); err != nil {
+			return nil, err
+		}
+		cm, ok = r.Manifest.Capabilities[pay.Uses]
+	} else if _, named := st["connection"]; named || !expr.IsExpr(fmt.Sprint(payout)) || !readsStep(payout) {
+		// A payout from elsewhere (a list of earlier payouts): the step's
+		// own connection, and how that rail settles a bank payout.
+		if r, err = x.rail(id); err != nil {
+			return nil, err
+		}
+		cm, ok = r.Manifest.Capabilities["pay_bank"]
+	} else {
 		return nil, err
 	}
-	r, err := x.rail(pay.ID)
-	if err != nil {
-		return nil, err
-	}
-	cm, ok := r.Manifest.Capabilities[pay.Uses]
 	if !ok || cm.SettlesBy == nil {
 		return nil, &Refusal{Step: id, Message: fmt.Sprintf("%s finishes a payment when it is made: there is nothing to wait for", r.Name)}
 	}
 	if cm.SettlesBy.Trigger == "" {
 		return nil, &Refusal{Step: id, Message: fmt.Sprintf("%s sends no payment events, and waiting by lookups alone is not supported yet", r.Name)}
 	}
-	x.choices = append(x.choices, Choice{Step: id, Uses: uses, Connection: r.Connection, Connector: r.Ref})
+	if !slices.ContainsFunc(x.choices, func(c Choice) bool { return c.Step == id }) {
+		x.choices = append(x.choices, Choice{Step: id, Uses: uses, Connection: r.Connection, Connector: r.Ref})
+	}
 	corr := asExpr(payout)
 	timeout, _ := st["timeout"].(string)
 	waitID, deadline, lookup := id+"__wait", id+"__deadline", id+"__lookup"
@@ -406,7 +428,7 @@ func (x *expander) wait(st map[string]any) ([]any, error) {
 	}
 	deadlineSteps := []any{map[string]any{"id": deadline, "type": "wait", "name": "Deadline", "config": map[string]any{"duration": timeout}}}
 	if uses == "await_settlement" {
-		look, err := x.lookup(lookup, deadline, pay.ID, r, corr)
+		look, err := x.lookup(lookup, deadline, id, r, corr)
 		if err != nil {
 			return nil, err
 		}
@@ -498,6 +520,13 @@ func (x *expander) paymentFor(id string, payout any) (*wd.Step, error) {
 
 var wdEngine = expr.MustNew()
 
+// readsStep reports whether an expression reads a step's output.
+func readsStep(v any) bool {
+	src, _ := v.(string)
+	refs, err := wdEngine.References(src)
+	return err == nil && len(refs.Steps) > 0
+}
+
 func asExpr(v any) string {
 	if s, ok := v.(string); ok {
 		if expr.IsExpr(s) {
@@ -507,6 +536,22 @@ func asExpr(v any) string {
 	}
 	b, _ := json.Marshal(v)
 	return "=" + string(b)
+}
+
+// describe names a capability input for a person: its description, then
+// its name ("the wallet or account to pay from (source)").
+func describe(spec *capability.Spec, name string) string {
+	var p struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+	_ = json.Unmarshal(spec.Input, &p)
+	if d := p.Properties[name].Description; d != "" {
+		d, _, _ = strings.Cut(d, ",")
+		return lowerFirst(d) + " (" + name + ")"
+	}
+	return name
 }
 
 func titleOf(uses string) string {

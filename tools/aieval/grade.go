@@ -187,6 +187,9 @@ func grade(r *Result, c Case, p *builder.Proposal, reg connector.Lookup) {
 		if st.Connector != "" {
 			usedC[st.Connector] = true
 		}
+		if st.Type == "capability" {
+			usedC["capability:"+st.Uses] = true // any rail that can
+		}
 	})
 	if ref, ok := def.Trigger.Config["connector"].(string); ok {
 		usedC[ref] = true

@@ -29,20 +29,23 @@ var ErrNoConnection = errors.New("no connection")
 func ResolverFor(conns []Connection, reg connector.Lookup) Resolver {
 	return func(name, uses string) (Rail, error) {
 		var rails []Rail
-		for _, c := range conns {
+		var other *Connection // a connection by that name whose service cannot
+		for i, c := range conns {
 			if name != "" && c.Name != name {
 				continue
 			}
 			if r, ok := railOf(c, uses, reg); ok {
 				rails = append(rails, r)
-			} else if name != "" {
-				return Rail{}, cannot(c, uses, reg)
+			} else if name != "" && other == nil {
+				other = &conns[i]
 			}
 		}
 		switch {
 		case len(rails) == 1:
 			return rails[0], nil
-		case name != "":
+		case len(rails) == 0 && other != nil:
+			return Rail{}, cannot(*other, uses, reg)
+		case name != "" && len(rails) == 0:
 			return Rail{}, fmt.Errorf("%w: there is no connection called %q in this environment; connect one, or choose another", ErrNoConnection, name)
 		case len(rails) == 0:
 			return Rail{}, fmt.Errorf("%w: no connection here can %s. %s", ErrNoConnection, lowerFirst(titleOf(uses)), suggest(uses, reg))

@@ -13,6 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -51,6 +52,12 @@ func TestSuiteSizeAndSchema(t *testing.T) {
 			props[p]++
 		}
 		for _, ref := range c.Expect.Connectors {
+			if uses, ok := strings.CutPrefix(ref, "capability:"); ok {
+				if _, known := capability.Get(uses); !known {
+					t.Errorf("%s: %s is not a capability", c.ID, uses)
+				}
+				continue
+			}
 			if _, ok := reg.Get(ref); !ok {
 				t.Errorf("%s: connector %s is not in the catalogue", c.ID, ref)
 			}
@@ -121,12 +128,30 @@ func TestRules(t *testing.T) {
 	reg := registry(t)
 	good, bad := mustLoad(t, goodPayout), mustLoad(t, badPayout)
 	for _, name := range ruleNames() {
+		if name == "capability_when_unnamed" {
+			continue // its good definition pays by capability: below
+		}
 		if ok, why := rules[name](good, reg); !ok {
 			t.Errorf("%s fails the good definition: %s", name, why)
 		}
 		if ok, _ := rules[name](bad, reg); ok {
 			t.Errorf("%s passes the bad definition", name)
 		}
+	}
+}
+
+// A payment by capability runs on whichever rail is connected; one by a
+// connector the goal did not name does not.
+func TestCapabilityWhenUnnamed(t *testing.T) {
+	reg := registry(t)
+	byCapability := mustLoad(t, strings.NewReplacer(
+		`"type":"connector","connector":"paystack@1","action":"transfer","input":{"amount":"=item.amount","recipient":"=item.r"}`,
+		`"type":"capability","uses":"pay_bank","input":{"amount_kobo":"=item.amount","bank_code":"=item.bank","account_number":"=item.account","account_name":"=item.name","narration":"Pay"}`).Replace(goodPayout))
+	if ok, why := rules["capability_when_unnamed"](byCapability, reg); !ok {
+		t.Errorf("a capability payment: %s", why)
+	}
+	if ok, _ := rules["capability_when_unnamed"](mustLoad(t, goodPayout), reg); ok {
+		t.Error("a Paystack payment passes")
 	}
 }
 

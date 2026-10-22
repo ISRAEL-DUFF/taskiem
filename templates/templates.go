@@ -65,8 +65,11 @@ type Param struct {
 	Maximum     *float64 `json:"maximum,omitempty"`
 	MaxLength   int      `json:"max_length,omitempty"`
 	// Connector, for a connection parameter: the connector it names a
-	// connection of.
-	Connector string `json:"connector,omitempty"`
+	// connection of. Capability, instead: the capabilities its rail must
+	// declare (decision 0044), for a connection a capability step uses;
+	// any rail that can do them is offered.
+	Connector  string   `json:"connector,omitempty"`
+	Capability []string `json:"capability,omitempty"`
 	// Picker is how a person chooses the value instead of typing an id
 	// (no-technical-steps N8): sheet, sheet_tab, table, column, role,
 	// whatsapp_template or whatsapp_language. From names the parameter it
@@ -137,7 +140,15 @@ type Template struct {
 	// the business when the template is used if they do not exist.
 	Tables     []Table         `json:"tables,omitempty"`
 	Definition json.RawMessage `json:"definition"`
+	// SupersededBy names the template that replaces this one: it is no
+	// longer offered, but workflows made from it keep working and are
+	// offered the upgrade.
+	SupersededBy string `json:"superseded_by,omitempty"`
 }
+
+// CapabilityPrefix marks a capability among a template's connectors:
+// capability:pay_bank is any rail that can pay bank accounts.
+const CapabilityPrefix = "capability:"
 
 // Library is the set of templates.
 type Library struct {
@@ -209,6 +220,11 @@ func Load(fsys fs.FS) (*Library, error) {
 		lib.byID[t.ID] = &t
 		lib.list = append(lib.list, &t)
 	}
+	for _, t := range lib.list {
+		if s := t.SupersededBy; s != "" && (lib.byID[s] == nil || lib.byID[s].SupersededBy != "") {
+			return nil, fmt.Errorf("%s: superseded_by %q is not a template that is offered", t.ID, s)
+		}
+	}
 	return lib, nil
 }
 
@@ -233,6 +249,12 @@ func (t *Template) check() error {
 		}
 		if p.Title == "" || p.Description == "" {
 			return fmt.Errorf("parameter %q: title and description are required", p.Name)
+		}
+		if p.Type == "connection" && (p.Connector == "") == (len(p.Capability) == 0) {
+			return fmt.Errorf("parameter %q: a connection names a connector or the capabilities its rail needs, not both", p.Name)
+		}
+		if p.Type != "connection" && (p.Connector != "" || len(p.Capability) > 0) {
+			return fmt.Errorf("parameter %q: only a connection names a connector or capabilities", p.Name)
 		}
 		if needsFrom, ok := pickers[p.Picker]; p.Picker != "" && (!ok || needsFrom != (p.From != "")) {
 			return fmt.Errorf("parameter %q: picker %q (from %q) is not one Taskiem has", p.Name, p.Picker, p.From)
@@ -341,8 +363,21 @@ func (t *Template) TablesFor(values map[string]any) []Table {
 	return out
 }
 
-// List returns every template, in id order.
+// List returns every template, in id order, superseded ones included
+// (workflows made from them still load them).
 func (l *Library) List() []*Template { return l.list }
+
+// Offered returns the templates offered to people: every one not
+// superseded, in id order.
+func (l *Library) Offered() []*Template {
+	var out []*Template
+	for _, t := range l.list {
+		if t.SupersededBy == "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
 
 // Get returns a template by id.
 func (l *Library) Get(id string) (*Template, bool) {
@@ -414,6 +449,9 @@ func (p *Param) Coerce(v any) (any, error) {
 			return nil, errors.New("must be text")
 		}
 		if s == "" {
+			if d, ok := p.Default.(string); ok && d == "" {
+				return "", nil // optional, and left blank on purpose
+			}
 			return nil, errors.New("must not be empty")
 		}
 		limit := p.MaxLength
@@ -446,6 +484,9 @@ func (p *Param) Coerce(v any) (any, error) {
 		return s, nil
 	case "connection":
 		s, ok := v.(string)
+		if ok && s == "" && len(p.Capability) > 0 {
+			return "", nil // the only connection whose rail can do it
+		}
 		if !ok || !connName.MatchString(s) {
 			return nil, errors.New("must be a connection name (letters, digits, '.', '_' or '-')")
 		}

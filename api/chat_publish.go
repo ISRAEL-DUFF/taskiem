@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -141,6 +142,15 @@ func (s *Server) emailAddressOf(ctx context.Context, tenant, wf uuid.UUID) strin
 func (s *Server) needLines(c *chat, needs []readyNeed) string {
 	var lines []string
 	for _, n := range needsShown(needs) {
+		if n.Capability != "" {
+			// Any rail that can: named, and connected on the Connections page.
+			line := "• " + n.Message
+			if len(n.Rails) > 0 {
+				line += " (" + strings.Join(s.railNames(c, n.Rails), ", ") + ")"
+			}
+			lines = append(lines, line+" "+s.waLink(c, "/connections"))
+			continue
+		}
 		line := "• " + needMessage(c.lang.Tag, n.Kind, n.Problem, n.Service, n.Name)
 		switch n.Kind {
 		case "connection":
@@ -511,4 +521,22 @@ func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
 		return err
 	}
 	return c.say(ctx, s, c.t("wa.signin.link", "link", strings.TrimRight(s.PublicURL, "/")+"/reset-password#token="+token))
+}
+
+// railNames are rails' display names, by connector id.
+func (s *Server) railNames(c *chat, ids []string) []string {
+	reg, err := s.Registry.For(connector.ManifestsOnly(context.Background()), c.tenant.ID.String())
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		name := id
+		if err == nil {
+			for _, k := range reg.List() {
+				if k.Manifest.ID == id {
+					name = k.Manifest.Name
+				}
+			}
+		}
+		out = append(out, name)
+	}
+	return out
 }

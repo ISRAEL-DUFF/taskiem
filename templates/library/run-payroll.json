@@ -1,0 +1,912 @@
+{
+  "id": "run-payroll",
+  "title": "Run payroll from any payments account",
+  "summary": "On payday, check your staff list and balance, get the payroll approved, pay everyone once through whichever payments account you connected, and keep a record.",
+  "description": "On the day of the month you choose, reads your staff from a table in Taskiem, checks every name with the bank, and asks the person you choose to approve the payroll, showing the total, the balance and anyone who will not be paid. Only then does it pay each person through your payments account (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), once each however often anything is retried, waits for the bank to confirm, and tells them they were paid. Every payment is recorded in a payroll table, the owner gets a summary with anyone not paid and why, and each bank payment is watched for 35 days in case it comes back. Nothing is paid if the payroll is rejected or not approved in time.",
+  "category": "payroll",
+  "tags": [
+    "payroll",
+    "salaries",
+    "approval",
+    "data table",
+    "monthly"
+  ],
+  "keywords": [
+    "salary",
+    "salaries",
+    "payroll",
+    "staff",
+    "wages",
+    "employees",
+    "payday",
+    "workers",
+    "approve",
+    "approval",
+    "pay",
+    "paid",
+    "month",
+    "monthly"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1",
+    "capability:balance",
+    "capability:pay_bank",
+    "capability:resolve_account"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Named in the message each person gets.",
+      "required": true,
+      "example": "Adunni Bakes",
+      "max_length": 60
+    },
+    {
+      "name": "staff_table",
+      "type": "string",
+      "title": "Staff table",
+      "description": "Your table of staff: name, phone, net_pay (naira), bank_code, account_number, account_name and active.",
+      "required": false,
+      "default": "staff",
+      "example": "staff",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "pay_day",
+      "type": "integer",
+      "title": "Payday",
+      "description": "The day of the month salaries are paid (1 to 28), at 8 in the morning.",
+      "required": true,
+      "default": 25,
+      "example": 25,
+      "minimum": 1,
+      "maximum": 28
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "pay_bank"
+      ],
+      "title": "Pay from",
+      "description": "The payments account salaries are paid from: any you connected that can pay bank accounts.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet to pay from",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one salaries come out of. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    },
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role that approves the payroll before anything is paid. Whoever set the workflow up cannot approve it themselves.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    },
+    {
+      "name": "approval_hours",
+      "type": "integer",
+      "title": "Hours to approve",
+      "description": "If nobody approves within this many hours, nothing is paid and the owner is told.",
+      "required": false,
+      "default": 24,
+      "example": 24,
+      "minimum": 1,
+      "maximum": 72
+    },
+    {
+      "name": "tell_staff",
+      "type": "boolean",
+      "title": "Tell each person",
+      "description": "Message each person on WhatsApp or by SMS when their salary has arrived.",
+      "required": false,
+      "default": true,
+      "example": true
+    },
+    {
+      "name": "reversal_days",
+      "type": "integer",
+      "title": "Days to watch for reversals",
+      "description": "How long each bank payment is watched in case the bank sends it back.",
+      "required": false,
+      "default": 35,
+      "example": 35,
+      "minimum": 1,
+      "maximum": 60
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{staff_table}}",
+      "title": "Staff",
+      "description": "The people payroll pays, with their bank details.",
+      "columns": [
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "phone",
+          "title": "Phone",
+          "type": "phone"
+        },
+        {
+          "name": "email",
+          "title": "Email",
+          "type": "email"
+        },
+        {
+          "name": "net_pay",
+          "title": "Net pay (naira)",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "bank_code",
+          "title": "Bank code",
+          "type": "text"
+        },
+        {
+          "name": "account_number",
+          "title": "Account number",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "account_name",
+          "title": "Account name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "active",
+          "title": "Paid this month",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "payroll_runs",
+      "title": "Payroll runs",
+      "description": "One row per payroll: what was paid and who approved it.",
+      "columns": [
+        {
+          "name": "period",
+          "title": "Month",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "staff_count",
+          "title": "People",
+          "type": "integer"
+        },
+        {
+          "name": "total_naira",
+          "title": "Paid (naira)",
+          "type": "number"
+        },
+        {
+          "name": "paid",
+          "title": "Paid",
+          "type": "integer"
+        },
+        {
+          "name": "failed",
+          "title": "Not paid",
+          "type": "integer"
+        },
+        {
+          "name": "fees_naira",
+          "title": "Fees (naira)",
+          "type": "number"
+        },
+        {
+          "name": "approved_by",
+          "title": "Approved by",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "payroll_lines",
+      "title": "Payroll payments",
+      "description": "One row per person per payroll: how their payment went.",
+      "columns": [
+        {
+          "name": "period",
+          "title": "Month",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "staff_name",
+          "title": "Name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "amount_naira",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "rail",
+          "title": "Paid through",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "payout_id",
+          "title": "Payment reference",
+          "type": "text"
+        },
+        {
+          "name": "reason",
+          "title": "Reason",
+          "type": "text"
+        },
+        {
+          "name": "settled_at",
+          "title": "Confirmed at",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_runPayroll",
+    "version": 1,
+    "name": "Run payroll",
+    "description": "Pays every person on the staff list once, after approval, through the connected payments account.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "0 8 {{pay_day}} * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Work out the month and use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}",
+            "period": "=has(trigger.body) && has(trigger.body.period) ? string(trigger.body.period) : string(timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at).getFullYear('Africa/Lagos')) + '-' + (timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at).getMonth('Africa/Lagos') < 9 ? '0' : '') + string(timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at).getMonth('Africa/Lagos') + 1)"
+          }
+        }
+      },
+      {
+        "id": "read_staff",
+        "type": "connector",
+        "name": "Read the staff list",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{staff_table}}",
+          "filters": [
+            {
+              "column": "active",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "order": [
+            {
+              "column": "name"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "check",
+        "type": "transform",
+        "name": "Check each person has an amount and bank details",
+        "needs": [
+          "read_staff"
+        ],
+        "config": {
+          "output": {
+            "people": "=(has(steps.read_staff.output.rows) ? steps.read_staff.output.rows : []).filter(r, has(r.net_pay) && r.net_pay != null && double(r.net_pay) >= 1.0 && has(r.bank_code) && r.bank_code != null && string(r.bank_code) != '' && has(r.account_number) && r.account_number != null && string(r.account_number) != '' && string(r.account_number).size() == 10 && has(r.account_name) && r.account_name != null && string(r.account_name) != '').map(r, {'id': has(r.id) ? string(r.id) : '', 'name': (has(r.name) && r.name != null && string(r.name) != '' ? string(r.name) : (has(r.account_name) && r.account_name != null ? string(r.account_name) : 'Row ' + (has(r.id) ? string(r.id) : ''))), 'kobo': int(math.round(double(r.net_pay) * 100.0)), 'bank_code': string(r.bank_code), 'account_number': string(r.account_number), 'account_name': string(r.account_name), 'phone': (has(r.phone) && r.phone != null ? string(r.phone) : '')})",
+            "refused": "=(has(steps.read_staff.output.rows) ? steps.read_staff.output.rows : []).filter(r, !(has(r.net_pay) && r.net_pay != null && double(r.net_pay) >= 1.0 && has(r.bank_code) && r.bank_code != null && string(r.bank_code) != '' && has(r.account_number) && r.account_number != null && string(r.account_number) != '' && string(r.account_number).size() == 10 && has(r.account_name) && r.account_name != null && string(r.account_name) != '')).map(r, {'name': (has(r.name) && r.name != null && string(r.name) != '' ? string(r.name) : (has(r.account_name) && r.account_name != null ? string(r.account_name) : 'Row ' + (has(r.id) ? string(r.id) : ''))), 'reason': (!(has(r.net_pay) && r.net_pay != null && double(r.net_pay) >= 1.0) ? 'no amount to pay' : !(has(r.account_number) && r.account_number != null && string(r.account_number).size() == 10) ? 'the account number is not 10 digits' : 'the bank details are incomplete')})"
+          }
+        }
+      },
+      {
+        "id": "names",
+        "type": "foreach",
+        "name": "Check each account's name with the bank",
+        "needs": [
+          "check"
+        ],
+        "config": {
+          "items": "=steps.check.output.people",
+          "max_concurrency": 5,
+          "max_items": 5000,
+          "steps": [
+            {
+              "id": "lookup",
+              "type": "capability",
+              "uses": "resolve_account",
+              "name": "Find the name on the account",
+              "connection": "{{rail_connection}}",
+              "input": {
+                "bank_code": "=item.bank_code",
+                "account_number": "=item.account_number"
+              },
+              "retry": {
+                "max": 3,
+                "backoff": "exponential",
+                "initial": "5s"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "lookup_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "id": "=item.id",
+                        "name": "=item.name",
+                        "reason": "the bank did not find this account"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "match",
+              "type": "transform",
+              "name": "Compare it with the staff list",
+              "needs": [
+                "lookup"
+              ],
+              "config": {
+                "output": {
+                  "id": "=item.id",
+                  "name": "=item.name",
+                  "found": "=steps.lookup.output.account_name",
+                  "ok": "=item.account_name.lowerAscii().split(' ').filter(w, w != '').all(w, steps.lookup.output.account_name.lowerAscii().contains(w))"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "ready",
+        "type": "transform",
+        "name": "List who will be paid",
+        "needs": [
+          "check",
+          "names"
+        ],
+        "config": {
+          "output": {
+            "pay": "=steps.check.output.people.filter(p, p.id in steps.names.output.filter(o, has(o.match) && o.match.ok).map(o, o.match.id))",
+            "total_kobo": "=sum(steps.check.output.people.filter(p, p.id in steps.names.output.filter(o, has(o.match) && o.match.ok).map(o, o.match.id)).map(p, p.kobo))",
+            "flagged": "=steps.names.output.filter(o, !(has(o.match) && o.match.ok)).map(o, has(o.match) ? {'name': o.match.name, 'reason': 'the bank has this account as ' + o.match.found} : {'name': o.lookup_failed.name, 'reason': o.lookup_failed.reason})"
+          }
+        }
+      },
+      {
+        "id": "balance",
+        "type": "capability",
+        "uses": "balance",
+        "name": "Check the balance",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "account": "{{funding_account}}"
+        }
+      },
+      {
+        "id": "approve",
+        "type": "approval",
+        "name": "Get the payroll approved",
+        "needs": [
+          "settings",
+          "check",
+          "ready",
+          "balance"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "{{approval_hours}}h",
+          "on_timeout": "reject",
+          "subject": {
+            "warning": "=steps.balance.output.available_kobo >= steps.ready.output.total_kobo ? '' : 'The balance is less than the total to pay'",
+            "period": "=steps.settings.output.period",
+            "people": "=size(steps.ready.output.pay)",
+            "total_naira": "=double(steps.ready.output.total_kobo) / 100.0",
+            "balance_naira": "=double(steps.balance.output.available_kobo) / 100.0",
+            "not_paid": "=steps.ready.output.flagged.map(f, f.name + ': ' + f.reason) + steps.check.output.refused.map(r, r.name + ': ' + r.reason)"
+          }
+        }
+      },
+      {
+        "id": "pay_all",
+        "type": "foreach",
+        "name": "Pay each person",
+        "needs": [
+          "settings",
+          "ready",
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision == 'approved'",
+        "config": {
+          "items": "=steps.ready.output.pay",
+          "max_concurrency": 5,
+          "max_items": 5000,
+          "steps": [
+            {
+              "id": "person",
+              "type": "transform",
+              "name": "The person",
+              "config": {
+                "output": {
+                  "id": "=item.id",
+                  "name": "=item.name",
+                  "kobo": "=item.kobo"
+                }
+              }
+            },
+            {
+              "id": "pay",
+              "type": "capability",
+              "uses": "pay_bank",
+              "name": "Pay the salary",
+              "connection": "{{rail_connection}}",
+              "input": {
+                "amount_kobo": "=item.kobo",
+                "bank_code": "=item.bank_code",
+                "account_number": "=item.account_number",
+                "account_name": "=item.account_name",
+                "narration": "='Salary ' + steps.settings.output.period",
+                "source": "{{funding_account}}"
+              },
+              "effect": {
+                "idempotency_seed": "='payroll:' + steps.settings.output.period + ':' + item.id"
+              },
+              "retry": {
+                "max": 8,
+                "backoff": "exponential",
+                "initial": "5s",
+                "max_delay": "10m",
+                "max_duration": "6h"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "pay_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "reason": "=steps.pay.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "settle",
+              "type": "capability",
+              "uses": "await_settlement",
+              "name": "Wait for the bank to confirm",
+              "needs": [
+                "pay"
+              ],
+              "timeout": "72h",
+              "when": "=steps.pay.output.status == 'pending'",
+              "input": {
+                "payout_id": "=steps.pay.output.payout_id"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "settle_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "reason": "the payment was not confirmed"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "tell_now",
+              "type": "connector",
+              "connector": "notify@1",
+              "action": "message",
+              "needs": [
+                "pay"
+              ],
+              "when": "=({{tell_staff}}) && item.phone != '' && steps.pay.output.status == 'settled'",
+              "name": "Tell the person they were paid",
+              "input": {
+                "phone": "=item.phone",
+                "message": "=steps.settings.output.business_name + ': your salary for ' + steps.settings.output.period + ', NGN ' + string(item.kobo / 100) + ', has been paid. Thank you for your work.'",
+                "about": "your salary"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "tell_now_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "told": false
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "tell_later",
+              "type": "connector",
+              "connector": "notify@1",
+              "action": "message",
+              "needs": [
+                "settle"
+              ],
+              "when": "=({{tell_staff}}) && item.phone != '' && steps.settle.output.status == 'settled'",
+              "name": "Tell the person they were paid",
+              "input": {
+                "phone": "=item.phone",
+                "message": "=steps.settings.output.business_name + ': your salary for ' + steps.settings.output.period + ', NGN ' + string(item.kobo / 100) + ', has been paid. Thank you for your work.'",
+                "about": "your salary"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "tell_later_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "told": false
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "lines",
+        "type": "transform",
+        "name": "Work out each person's outcome",
+        "needs": [
+          "settings",
+          "pay_all"
+        ],
+        "config": {
+          "output": {
+            "rows": "=steps.pay_all.output.map(o, {'period': steps.settings.output.period, 'staff_name': o.person.name, 'amount_naira': double(o.person.kobo) / 100.0, 'rail': {{rail_connection}} != '' ? {{rail_connection}} : 'payments', 'status': (has(o.pay_failed) ? 'failed' : o.pay.status == 'settled' ? 'paid' : o.pay.status == 'failed' ? 'failed' : has(o.settle) ? (o.settle.status == 'settled' ? 'paid' : o.settle.status) : 'unconfirmed'), 'payout_id': has(o.pay) && has(o.pay.payout_id) ? o.pay.payout_id : '', 'reason': (has(o.pay_failed) ? o.pay_failed.reason : has(o.pay.reason) ? o.pay.reason : has(o.settle) && has(o.settle.reason) ? o.settle.reason : has(o.settle_failed) ? 'the payment was not confirmed' : ''), 'settled_at': has(o.settle) && has(o.settle.settled_at) ? o.settle.settled_at : ''})"
+          }
+        }
+      },
+      {
+        "id": "summary",
+        "type": "transform",
+        "name": "Add up the payroll",
+        "needs": [
+          "lines"
+        ],
+        "config": {
+          "output": {
+            "paid": "=size(steps.lines.output.rows.filter(l, l.status == 'paid'))",
+            "failed": "=size(steps.lines.output.rows.filter(l, l.status == 'failed'))",
+            "unconfirmed": "=size(steps.lines.output.rows.filter(l, l.status == 'unconfirmed'))",
+            "paid_naira": "=sum(steps.lines.output.rows.filter(l, l.status == 'paid').map(l, l.amount_naira))",
+            "fees_naira": "=double(sum(steps.pay_all.output.filter(o, has(o.pay) && has(o.pay.fee_kobo)).map(o, o.pay.fee_kobo))) / 100.0",
+            "not_paid": "=steps.lines.output.rows.filter(l, l.status != 'paid').map(l, l.staff_name + ' (' + l.status + (l.reason != '' ? ': ' + l.reason : '') + ')')"
+          }
+        }
+      },
+      {
+        "id": "record_lines",
+        "type": "connector",
+        "name": "Record each payment",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "lines"
+        ],
+        "when": "=size(steps.lines.output.rows) > 0",
+        "input": {
+          "table": "payroll_lines",
+          "rows": "=steps.lines.output.rows",
+          "return": "minimal"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_lines_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.record_lines.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "record_run",
+        "type": "connector",
+        "name": "Record the payroll",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "settings",
+          "approve",
+          "summary"
+        ],
+        "input": {
+          "table": "payroll_runs",
+          "return": "minimal",
+          "row": {
+            "period": "=steps.settings.output.period",
+            "status": "=steps.summary.output.failed + steps.summary.output.unconfirmed == 0 ? 'paid' : 'paid with problems'",
+            "staff_count": "=size(steps.lines.output.rows)",
+            "total_naira": "=steps.summary.output.paid_naira",
+            "paid": "=steps.summary.output.paid",
+            "failed": "=steps.summary.output.failed + steps.summary.output.unconfirmed",
+            "fees_naira": "=steps.summary.output.fees_naira",
+            "approved_by": "=steps.approve.output.decided_by"
+          }
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_run_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.record_run.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell the owner how the payroll went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settings",
+          "summary"
+        ],
+        "input": {
+          "to": "owner",
+          "title": "='Payroll ' + steps.settings.output.period",
+          "message": "=steps.settings.output.business_name + ' payroll for ' + steps.settings.output.period + ': ' + string(steps.summary.output.paid) + ' paid (NGN ' + string(steps.summary.output.paid_naira) + '), ' + string(steps.summary.output.failed) + ' failed, ' + string(steps.summary.output.unconfirmed) + ' not confirmed yet. Fees: NGN ' + string(steps.summary.output.fees_naira) + '.' + (size(steps.summary.output.not_paid) > 0 ? ' Not paid: ' + steps.summary.output.not_paid.join(', ') + '.' : '')"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_owner_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "watch",
+        "type": "foreach",
+        "name": "Watch each bank payment for a reversal",
+        "needs": [
+          "lines"
+        ],
+        "config": {
+          "items": "=steps.lines.output.rows.filter(l, l.status == 'paid' && l.payout_id != '')",
+          "max_concurrency": 1000,
+          "max_items": 5000,
+          "steps": [
+            {
+              "id": "back",
+              "type": "capability",
+              "uses": "await_reversal",
+              "name": "Watch for the payment coming back",
+              "connection": "{{rail_connection}}",
+              "timeout": "{{reversal_days}}d",
+              "input": {
+                "payout_id": "=item.payout_id"
+              }
+            },
+            {
+              "id": "mark_reversed",
+              "type": "connector",
+              "name": "Record the reversal",
+              "connector": "xenibase@1",
+              "action": "update_rows",
+              "connection": "data_tables",
+              "needs": [
+                "back"
+              ],
+              "when": "=steps.back.output.status == 'reversed'",
+              "input": {
+                "table": "payroll_lines",
+                "filters": [
+                  {
+                    "column": "payout_id",
+                    "op": "eq",
+                    "value": "=item.payout_id"
+                  }
+                ],
+                "max_affected": 1,
+                "set": {
+                  "status": "reversed",
+                  "reason": "=has(steps.back.output.reason) ? steps.back.output.reason : 'the bank sent it back'"
+                },
+                "return": "minimal"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "mark_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "reason": "=steps.mark_reversed.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "tell_reversal",
+              "type": "connector",
+              "name": "Tell the owner a salary came back",
+              "connector": "notify@1",
+              "action": "tell",
+              "needs": [
+                "back"
+              ],
+              "when": "=steps.back.output.status == 'reversed'",
+              "input": {
+                "to": "owner",
+                "title": "A salary came back",
+                "message": "=item.staff_name + '\\'s salary for ' + item.period + ' (NGN ' + string(item.amount_naira) + ') came back from the bank. Nobody was paid again: check their account details, then pay them yourself.'"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "tell_reversal_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "told": false
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "record_rejected",
+        "type": "connector",
+        "name": "Record that the payroll was not approved",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "settings",
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision != 'approved'",
+        "input": {
+          "table": "payroll_runs",
+          "return": "minimal",
+          "row": {
+            "period": "=steps.settings.output.period",
+            "status": "=has(steps.approve.output.reason) && steps.approve.output.reason == 'timeout' ? 'not approved in time' : 'rejected'",
+            "staff_count": 0,
+            "paid": 0,
+            "failed": 0
+          }
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_rejected_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.record_rejected.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_rejected",
+        "type": "connector",
+        "name": "Tell the owner nothing was paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settings",
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision != 'approved'",
+        "input": {
+          "to": "owner",
+          "title": "='Payroll ' + steps.settings.output.period + ' not paid'",
+          "message": "=steps.settings.output.business_name + ' payroll for ' + steps.settings.output.period + ' was ' + (has(steps.approve.output.reason) && steps.approve.output.reason == 'timeout' ? 'not approved in time' : 'rejected') + ', so nobody was paid.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_rejected_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "70d"
+    }
+  }
+}

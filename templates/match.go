@@ -116,6 +116,9 @@ func (l *Library) Match(goal string, n int) []Match {
 	total := float64(len(l.list))
 	var out []Match
 	for i, t := range l.list {
+		if t.SupersededBy != "" {
+			continue // replaced: its successor is offered instead
+		}
 		score := 0.0
 		var matched []string
 		// At least one word must be a keyword or tag few templates share:

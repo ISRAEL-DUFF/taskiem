@@ -23,7 +23,8 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | `failed-transfer-alert` | Tell the owner and email the accountant when a transfer fails or is reversed | Paystack, Tell me, Gmail |
 | `stock-reorder-alert` | Every morning, tell the owner the items at or below their reorder level | Google Sheets, Tell me |
 | `payroll-reminder` | Before payday, remind the owner on WhatsApp or Telegram and the accountant by email | Tell me, Gmail |
-| `salary-payout-approval` | On payday, pay each person on the staff sheet by Paystack transfer after the owner approves, and text them | Google Sheets, Paystack, Tell me |
+| `run-payroll` | On payday, check the staff table and every account's name with the bank, get the payroll approved, pay each person once through whichever payments account is connected, wait for the bank to confirm, record every payment and the payroll, tell each person and the owner, and watch each bank payment for 35 days in case it comes back ([rails and products](spec/rails-and-products.md#51-run-payroll)) | Any rail that can pay bank accounts (Paystack, Moniepoint, iswallet, Flutterwave, Anchor), Xenibase (the `data_tables` connection), Tell me |
+| `salary-payout-approval` | Replaced by `run-payroll` (`superseded_by`): no longer offered; workflows made from it keep working and are offered the upgrade | Google Sheets, Paystack, Tell me |
 | `supplier-payment-approval` | Pay a supplier invoice by Paystack transfer after approval and tell the owner the outcome | Paystack, Tell me |
 | `kyc-bvn-check` | Check an applicant's BVN with Dojah; welcome them if the name matches, flag it otherwise | Dojah, Tell me, Gmail |
 | `pos-sales-record` | Every transaction your Moniepoint POS terminals make becomes a row in the `pos_sales` [data table](data-tables.md); the record the next three read ([POS terminals](strategy/pos-terminals.md)) | Moniepoint POS terminals, Xenibase (the `data_tables` connection) |
@@ -39,7 +40,7 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 
 **Tell me** is `notify@1`, built in: no connection or account elsewhere ([Tell me](integrations/notify.md)). Messages to the owner and staff go to the WhatsApp or Telegram they linked to Taskiem, or by email; texts to customers go by Taskiem's own SMS and count in the plan's `sms_monthly`. Termii stays available for a business texting its own customers in bulk from its own account. Templates that start from a web address another system calls (a webhook) are marked **needs a developer** (`needs_developer` in `GET /v1/templates`) and offered after the others; the first starters need no developer.
 
-Every template that moves money does so after an approval step and with an idempotency key, so a retry never pays twice. Every one is a valid wd/v1 definition: `templates_test.go` fills each with its example values and checks that it passes the publishing checks, uses exactly the connectors it declares, has no policy finding, runs its generated dry-run happy path, reads aloud as plain steps without an expression, and round-trips through flow code (spec 10.2) unchanged.
+Every template that moves money does so after an approval step and with an idempotency key, so a retry never pays twice. A template that pays through **capability steps** ([wd-v1](contracts/wd-v1.md#capability-steps)) lists `capability:<name>` among its `connectors` (`capability:pay_bank`): it runs on any rail that can, and is `available` when one the tenant can use declares each. A template may have **workflow tests** of its own in `templates/tests/<id>.test.json` (`{schema: "wd-test/v1", template, params, cases}`, each case optionally with its own `params`), run against the template filled with its examples and those params; `run-payroll`'s re-express the old Payrolla flow's cases. A template replaced by another names it in `superseded_by`: it leaves the gallery, the website and the AI builder's matches, stays loadable, and `GET /v1/workflows/{wf}` answers `upgrade: {template, title}` for workflows made from it. Every one is a valid wd/v1 definition: `templates_test.go` fills each with its example values and checks that it passes the publishing checks, uses exactly the connectors it declares, has no policy finding, runs its generated dry-run happy path, reads aloud as plain steps without an expression, and round-trips through flow code (spec 10.2) unchanged.
 
 ## Tables a template makes
 
@@ -56,7 +57,7 @@ Each template has named, typed and described parameters:
 | `boolean` | yes or no |
 | `time` | A time of day: "09:30", "9am", "5:30 pm" |
 | `weekday` | A day: "Friday", "fri", "Fridays" |
-| `connection` | The name of the tenant's connection for the template's connector (default `main`) |
+| `connection` | The name of the tenant's connection for the template's connector (default `main`); or, with `capability` (`["pay_bank"]`) instead of `connector`, any connection whose rail can do those, where an empty value is the only one that can (the Start page and readiness offer the rails) |
 
 **Pickers** (no-technical-steps N8). A parameter's `picker` says how the web app has a person choose it instead of typing an id, and `from` names the parameter it depends on:
 
@@ -70,7 +71,7 @@ Each template has named, typed and described parameters:
 
 A run form's field with `"format": "paystack-recipient"` asks for a bank and a 10-digit account number, shows the name on the account (`POST /v1/paystack/resolve`) and, once the person confirms it, saves the recipient (`POST /v1/paystack/recipients`); the field's value is Paystack's recipient code, never shown. Amounts are in naira; phone numbers are taken in any form. `TestEveryDetailIsOwnerShaped` keeps every template that does not need a developer free of ids, ranges, kobo and patterns to type.
 
-Required parameters without a default must be given; optional ones take their default. A value that does not fit is refused by name (`400 invalid_params`, with `params: [{param, message}]`), as is a parameter the template does not have. **No value may start with `=`** or contain `{{`: a parameter is data, never an expression.
+Required parameters without a default must be given; optional ones take their default. A `string` whose default is empty may be left blank (`run-payroll`'s wallet to pay from, only for rails that hold several). A value that does not fit is refused by name (`400 invalid_params`, with `params: [{param, message}]`), as is a parameter the template does not have. **No value may start with `=`** or contain `{{`: a parameter is data, never an expression.
 
 **Personal data is not a parameter.** Phone numbers and email addresses of the owner or the accountant are tenant variables the template reads (`env.owner_phone`, `env.owner_email`, `env.accountant_email`), listed with the template, so no definition carries them. Customers' numbers come from the run's data (the sheet, the payment event).
 

@@ -46,15 +46,24 @@ type templateView struct {
 	Available bool `json:"available"`
 	// NeedsDeveloper: it starts from a signed web address another system
 	// calls (a webhook), which takes someone technical to set up.
-	NeedsDeveloper bool            `json:"needs_developer"`
-	Definition     json.RawMessage `json:"definition,omitempty"`
+	NeedsDeveloper bool `json:"needs_developer"`
+	// SupersededBy names the template that replaces this one, which is
+	// no longer offered.
+	SupersededBy string          `json:"superseded_by,omitempty"`
+	Definition   json.RawMessage `json:"definition,omitempty"`
 }
 
 func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templateView {
 	v := templateView{ID: t.ID, Title: t.Title, Summary: t.Summary, Description: t.Description, Category: t.Category,
 		Tags: nonNil(t.Tags), Connectors: nonNil(t.Connectors), Variables: nonNil(t.Variables), Params: nonNil(t.Params),
-		Tables: nonNil(t.Tables), Steps: []wdtext.Line{}, Available: true}
+		Tables: nonNil(t.Tables), Steps: []wdtext.Line{}, Available: true, SupersededBy: t.SupersededBy}
 	for _, c := range t.Connectors {
+		if uses, ok := strings.CutPrefix(c, templates.CapabilityPrefix); ok {
+			if !railCan(reg, uses) {
+				v.Available = false
+			}
+			continue
+		}
 		if _, ok := reg.Get(c); !ok {
 			v.Available = false
 		}
@@ -85,7 +94,7 @@ func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lib := templates.Default()
-	list := lib.List()
+	list := lib.Offered()
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
 		list = nil
 		for _, m := range lib.Match(q, 0) {
@@ -318,4 +327,14 @@ func checkTemplateIDs(ids []string) error {
 		}
 	}
 	return nil
+}
+
+// railCan reports whether a rail the tenant can use declares the capability.
+func railCan(reg connector.Lookup, uses string) bool {
+	for _, c := range reg.List() {
+		if _, ok := c.Manifest.Capabilities[uses]; ok && c.Manifest.KindOf() == "rail" {
+			return true
+		}
+	}
+	return false
 }

@@ -4,6 +4,7 @@
   "summary": "On payday, read the staff sheet, get the owner's approval, then pay each person by Paystack transfer and text them.",
   "description": "On the day of the month you choose, reads your staff sheet (columns: name, account_number, bank, amount, phone), asks someone with the approver role to approve the whole payroll, and only then pays each person into their bank account with a Paystack transfer (each payment carries an idempotency key, so a retry never pays twice) and texts them that their salary was sent. Nothing is paid if the payroll is rejected or not approved within a day.",
   "category": "payroll",
+  "superseded_by": "run-payroll",
   "tags": ["payroll", "salaries", "payments", "approval", "paystack", "sms", "google sheets", "monthly"],
   "keywords": ["salary", "salaries", "payroll", "staff", "pay", "payout", "wages", "employees", "approve", "approval", "transfer", "payday"],
   "connectors": ["googlesheets@1", "paystack@1", "notify@1"],

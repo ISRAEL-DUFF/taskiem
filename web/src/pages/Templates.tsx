@@ -7,7 +7,7 @@ import { byCategory, initialValues, inputKind, lineLabel, toParams, WEEKDAYS, ty
 import { Badge, ErrorBox, Field, PageHeader, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { RolePicker } from "../forms/RolePicker";
-import { ConnectionPicker } from "../forms/ConnectionPicker";
+import { ConnectionPicker, RailPicker } from "../forms/ConnectionPicker";
 import { SheetChooser } from "../forms/SheetChooser";
 import { ColumnPicker, LanguagePicker, TabPicker, TablePicker, WhatsAppTemplatePicker } from "../forms/Pickers";
 
@@ -240,6 +240,13 @@ export function ParamField({
   );
   let input;
   // A connection is picked from the business's own, with Connect in place.
+  if (p.type === "connection" && p.capability?.length) {
+    return (
+      <Field label={label} hint={hint}>
+        <RailPicker label={label} capabilities={p.capability} value={value} onChange={onChange} />
+      </Field>
+    );
+  }
   if (p.type === "connection") {
     return (
       <Field label={label} hint={hint}>

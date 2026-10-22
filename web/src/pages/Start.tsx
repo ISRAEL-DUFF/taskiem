@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ApiError, get, post, put, type ConnectorInfo, type JSONSchema, type Problem } from "../api";
+import { ApiError, get, post, put, type CapabilityInfo, type ConnectorInfo, type JSONSchema, type Problem } from "../api";
 import { useAuth } from "../auth";
 import { Help, useOnboarding } from "../onboarding";
 import { CHECKLIST, formatDuration, sampleInput, starterTemplates } from "../lib/onboarding";
@@ -13,6 +13,7 @@ import { plainValue, resolveSchema } from "../lib/values";
 import { SchemaForm } from "../forms/SchemaForm";
 import { NewConnection, startLink } from "./Connections";
 import { needsConnection } from "../lib/connections";
+import { railsForAll, templateCapabilities } from "../lib/capabilities";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 // Get started (docs/onboarding.md): the checklist, derived from what the
@@ -152,7 +153,20 @@ function GuideSteps({ t }: { t: Template }) {
   // Which connection each connector uses: the template's connection
   // parameter for it, else "main". A connector without auth (notify)
   // needs none.
+  // A template that runs on any rail (capability:pay_bank) needs one
+  // connection whose payments account can do all it does.
+  const caps = useLoad(() => (templateCapabilities(t.connectors).length > 0 ? get<{ capabilities: CapabilityInfo[] }>("/v1/capabilities") : Promise.resolve({ capabilities: [] })), [t.id]);
+  const railNeed = (() => {
+    const uses = templateCapabilities(t.connectors);
+    if (uses.length === 0) return undefined;
+    const rails = railsForAll(caps.data?.capabilities ?? [], uses);
+    const p = t.params.find((x) => x.type === "connection" && (x.capability?.length ?? 0) > 0);
+    const name = (p ? values[p.name] : "") || "";
+    const capable = (conns.data?.connections ?? []).filter((c) => c.environment === ENV && rails.includes(c.connector) && (name === "" || c.name === name));
+    return { rails, name, have: name === "" ? capable.length === 1 : capable.length > 0, using: capable[0] };
+  })();
   const needs = t.connectors
+    .filter((ref) => !ref.startsWith("capability:"))
     .map((ref) => {
       const cid = ref.split("@")[0];
       const p = t.params.find((x) => x.type === "connection" && x.connector === cid);
@@ -163,7 +177,12 @@ function GuideSteps({ t }: { t: Template }) {
     .filter((n) => !n.info || needsConnection(n.info));
   const missingVars = t.variables.filter((v) => !vars.data?.variables.some((x) => x.name === v.name && x.environment === ENV));
   const connected =
-    conns.data !== undefined && connectors.data !== undefined && needs.every((n) => n.have) && vars.data !== undefined && missingVars.length === 0;
+    conns.data !== undefined &&
+    connectors.data !== undefined &&
+    needs.every((n) => n.have) &&
+    (railNeed === undefined || railNeed.have) &&
+    vars.data !== undefined &&
+    missingVars.length === 0;
 
   return (
     <>
@@ -186,8 +205,8 @@ function GuideSteps({ t }: { t: Template }) {
           ))}
         </li>
         <li>
-          <h2>{needs.length > 0 ? `Connect ${needs.map((n) => n.info?.name ?? n.cid).join(" and ")}` : "Connect"}</h2>
-          {connectors.data && needs.length === 0 && t.variables.length === 0 && <p className="hint">Nothing to connect.</p>}
+          <h2>{needs.length > 0 || railNeed ? `Connect ${[...needs.map((n) => n.info?.name ?? n.cid), ...(railNeed ? ["a payments account"] : [])].join(" and ")}` : "Connect"}</h2>
+          {connectors.data && needs.length === 0 && !railNeed && t.variables.length === 0 && <p className="hint">Nothing to connect.</p>}
           {needs.map((n) =>
             n.have ? (
               <p key={n.ref} data-testid={`connected-${n.cid}`}>
@@ -197,6 +216,24 @@ function GuideSteps({ t }: { t: Template }) {
               n.info && <ConnectForm key={n.ref} info={n.info} name={n.name} onDone={conns.reload} />
             ),
           )}
+          {railNeed &&
+            (railNeed.have && railNeed.using ? (
+              <p data-testid="connected-rail">
+                <Badge value="ok" /> Payments go through {connectors.data?.connectors.find((c) => c.id === railNeed.using?.connector)?.name ?? railNeed.using.connector}, connected as <code>{railNeed.using.name}</code>.
+              </p>
+            ) : (
+              <div aria-label="Connect a payments account">
+                <p className="hint">
+                  {railNeed.name === "" && (conns.data?.connections ?? []).filter((c) => c.environment === ENV && railNeed.rails.includes(c.connector)).length > 1
+                    ? "You have more than one payments account that can do this: choose one under Fill in the details."
+                    : "Connect the payments account it should use. Any of these can:"}
+                </p>
+                {railNeed.rails.map((id) => {
+                  const info = connectors.data?.connectors.find((c) => c.id === id);
+                  return info && <ConnectForm key={id} info={info} name={railNeed.name || "main"} onDone={conns.reload} />;
+                })}
+              </div>
+            ))}
           {t.variables.map((v) => (
             <VariableForm key={v.name} name={v.name} why={v.why} saved={!missingVars.includes(v)} onDone={vars.reload} />
           ))}

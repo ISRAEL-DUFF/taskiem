@@ -13698,12 +13698,22 @@ components:
           description: The connection's, variable's, secret's, table's or role's name; empty for a connection a step does not name.
         connector:
           type: string
+          description: The connector id; capability:<uses> for the connection a capability step needs.
         service:
           type: string
           description: The connector's display name.
         problem:
           type: string
-          enum: [missing, expired, disabled, ambiguous, nobody, chat_id]
+          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot]
+          description: cannot, for a capability step whose connection's rail cannot do it.
+        capability:
+          type: string
+          description: For a connection a capability step needs, what its rail must do (pay_bank).
+        rails:
+          type: array
+          items:
+            type: string
+          description: The connector ids of the rails that can.
         environment:
           type: string
         steps:
@@ -13998,6 +14008,18 @@ components:
           - 'null'
           items:
             $ref: '#/components/schemas/Deployment'
+        upgrade:
+          type: object
+          description: The workflow was made from a template that another now replaces (Run payroll replaces the Paystack-only salary template); set up the new one to upgrade.
+          required:
+          - template
+          - title
+          properties:
+            template:
+              type: string
+            title:
+              type: string
+          additionalProperties: false
     VersionRequest:
       type: object
       required:
@@ -18358,6 +18380,11 @@ components:
         connector:
           type: string
           description: For a connection parameter, the connector it is for.
+        capability:
+          type: array
+          items:
+            type: string
+          description: For a connection parameter instead of connector, the capabilities its rail must have (pay_bank); any rail that can is offered, and an empty value is the only one that can.
         picker:
           type: string
           enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language]
@@ -18449,6 +18476,9 @@ components:
           description: The data tables the workflow works on; made for the organisation when the template is used if they do not exist yet.
           items:
             $ref: '#/components/schemas/TemplateTable'
+        superseded_by:
+          type: string
+          description: The template that replaces this one; it is no longer listed, and workflows made from it are offered the upgrade.
         definition:
           description: The template's definition, with placeholders (one template only).
       additionalProperties: false

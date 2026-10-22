@@ -1800,6 +1800,14 @@
       "text": "Pinnu ohun tí a ó ṣe:",
       "reviewed": false
     },
+    "wd.capability": {
+      "text": "{what} pẹ̀lú àkáǹtì ìsanwó tí a so",
+      "reviewed": false
+    },
+    "wd.capability.via": {
+      "text": "{what} pẹ̀lú ìsopọ̀ {connection}",
+      "reviewed": false
+    },
     "wd.code": {
       "text": "Ṣiṣẹ́ kóòdù tirẹ̀",
       "reviewed": false

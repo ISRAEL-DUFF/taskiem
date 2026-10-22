@@ -1800,6 +1800,14 @@
       "text": "Decide wetin to do:",
       "reviewed": false
     },
+    "wd.capability": {
+      "text": "{what} with any payments account wey dey connected",
+      "reviewed": false
+    },
+    "wd.capability.via": {
+      "text": "{what} with the {connection} connection",
+      "reviewed": false
+    },
     "wd.code": {
       "text": "Run code wey una write",
       "reviewed": false

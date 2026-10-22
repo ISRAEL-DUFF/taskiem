@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capableConnections } from "./capabilities";
+import { capableConnections, railsForAll, templateCapabilities } from "./capabilities";
 
 describe("capableConnections", () => {
   const connectors = [
@@ -22,5 +22,17 @@ describe("capableConnections", () => {
       { name: "main", label: "main (Paystack, expired)" },
       { name: "wallet", label: "wallet (iswallet)" },
     ]);
+  });
+});
+
+describe("railsForAll", () => {
+  it("keeps the rails that can do everything, best known first", () => {
+    const caps = [
+      { name: "pay_bank", rails: ["anchor@1", "iswallet@1", "paystack@1", "lenco@1"] },
+      { name: "balance", rails: ["anchor@1", "iswallet@1", "paystack@1"] },
+    ];
+    expect(railsForAll(caps, ["pay_bank", "balance"])).toEqual(["paystack", "iswallet", "anchor"]);
+    expect(railsForAll(caps, ["refund"])).toEqual([]);
+    expect(templateCapabilities(["xenibase@1", "capability:pay_bank", "capability:balance"])).toEqual(["pay_bank", "balance"]);
   });
 });

@@ -1800,6 +1800,14 @@
       "text": "Kpebie ihe a ga-eme:",
       "reviewed": false
     },
+    "wd.capability": {
+      "text": "{what} site na akaụntụ ịkwụ ụgwọ ejikọrọ",
+      "reviewed": false
+    },
+    "wd.capability.via": {
+      "text": "{what} site na njikọ {connection}",
+      "reviewed": false
+    },
     "wd.code": {
       "text": "Gbaa koodu nke gị",
       "reviewed": false
