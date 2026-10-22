@@ -41,6 +41,7 @@ import { Home } from "./pages/Home";
 import { Bell, useBellCount } from "./Bell";
 import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
+import { brandFile } from "./brand";
 
 export function App() {
   return (
@@ -232,9 +233,7 @@ function SignedIn() {
       {/* Narrow screens: a top bar, a tab bar, and the sidebar as a drawer. */}
       <header className="topbar" inert={drawer || undefined}>
         <span className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            {business.slice(0, 1).toUpperCase()}
-          </span>
+          <img className="brand-mark" src={brandFile("mark.svg")} alt="" width={26} height={26} />
           <span>{business}</span>
         </span>
         {me.user && <Bell count={bell} onChange={bell.reload} />}
@@ -242,9 +241,7 @@ function SignedIn() {
       {drawer && <div className="nav-scrim" aria-hidden="true" onClick={() => setDrawer(false)} />}
       <nav id="main-nav" ref={navRef} className={`nav drawer${drawer ? " open" : ""}`} aria-label="Main" tabIndex={-1}>
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            {business.slice(0, 1).toUpperCase()}
-          </span>
+          <img className="brand-mark" src={brandFile("mark.svg")} alt="" width={26} height={26} />
           <span className="brand-name">
             <strong>{business}</strong>
             <span>Taskiem</span>

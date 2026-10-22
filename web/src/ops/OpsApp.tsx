@@ -14,6 +14,7 @@ import { Agents } from "./Agents";
 import { Reports, StorefrontReview, StorefrontReviews } from "./Trust";
 import { Audit, Publishers, Reviewers, Status, Tenant, Tenants } from "./Pages";
 import { Toaster } from "../toast";
+import { brandFile } from "../brand";
 
 export function OpsApp() {
   return (
@@ -155,9 +156,7 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
     <div className="shell">
       <nav className="nav" aria-label="Operator console">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            T
-          </span>
+          <img className="brand-mark" src={brandFile("mark.svg")} alt="" width={26} height={26} />
           Operator console
         </div>
         <div className="section" aria-hidden="true">
