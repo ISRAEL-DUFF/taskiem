@@ -10,14 +10,15 @@
   --muted: #62665f;
   --border: #ecece8;
   --border-strong: #deded8;
-  --accent: #0b6e4f;
-  --accent-hover: #095c42;
+  /* Taskiem's colours (decision 0043): pine, and lime on dark. */
+  --accent: #0d3b2e;
+  --accent-hover: #164a3b;
   --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
   --accent-text: #ffffff;
   /* Buttons that do the page's main thing: near-black in the console, the
      partner's colour in the embedded builder (embed.css). */
-  --primary: #0e0f0c;
-  --primary-hover: #2b2d28;
+  --primary: #0d3b2e;
+  --primary-hover: #164a3b;
   --primary-text: #ffffff;
   --danger: #c4321f;
   --warn: #b45309;
@@ -40,7 +41,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0d0e0c; --panel: #151614; --panel-2: #1a1b19; --text: #ededea; --muted: #9a9d95;
-  --border: #262724; --border-strong: #34362f; --accent: #3cc497; --accent-hover: #5ad3aa; --accent-text: #04140e;
+  --border: #262724; --border-strong: #34362f; --accent: #c8f169; --accent-hover: #d6f58a; --accent-text: #0d3b2e;
   --primary: #ededea; --primary-hover: #ffffff; --primary-text: #0e0f0c;
   --danger: #f97066; --warn: #fdb022; --ok: #47cd89; --info: #84adff; --code-bg: #1c1d1a;
   --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
@@ -50,7 +51,7 @@
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
     --bg: #0d0e0c; --panel: #151614; --panel-2: #1a1b19; --text: #ededea; --muted: #9a9d95;
-    --border: #262724; --border-strong: #34362f; --accent: #3cc497; --accent-hover: #5ad3aa; --accent-text: #04140e;
+    --border: #262724; --border-strong: #34362f; --accent: #c8f169; --accent-hover: #d6f58a; --accent-text: #0d3b2e;
     --primary: #ededea; --primary-hover: #ffffff; --primary-text: #0e0f0c;
     --danger: #f97066; --warn: #fdb022; --ok: #47cd89; --info: #84adff; --code-bg: #1c1d1a;
     --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
@@ -96,6 +97,7 @@ table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; flex: none;
   background: var(--accent); color: var(--accent-text); font-size: 13px; font-weight: 600;
 }
+img.brand-mark { background: none; }
 .nav .section { font-size: 12px; font-weight: 500; color: var(--nav-muted); padding: 16px 10px 6px; }
 .nav a, .nav .nav-toggle {
   display: flex; align-items: center; gap: 10px; color: var(--nav-text); height: 32px; padding: 0 10px; border-radius: 7px;
@@ -269,8 +271,8 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 body:has(.login) { background: var(--bg); min-height: 100vh; }
 .login { max-width: 400px; margin: 12vh auto; padding: 32px 32px 28px; border-radius: 16px; box-shadow: var(--shadow-lg); border-color: var(--border); }
 .login::before {
-  content: "T"; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; margin-bottom: 20px;
-  background: var(--accent); color: var(--accent-text); font-weight: 600; font-size: 17px;
+  content: ""; display: block; width: 40px; height: 40px; margin-bottom: 20px;
+  background: url("/brand/taskiem-mark.svg") center / contain no-repeat;
 }
 .login h1 { font-size: 22px; margin-bottom: 22px; }
 .login button.primary, .login button[type="submit"] { min-height: 40px; width: 100%; }

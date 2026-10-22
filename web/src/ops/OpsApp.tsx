@@ -155,9 +155,7 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
     <div className="shell">
       <nav className="nav" aria-label="Operator console">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            T
-          </span>
+          <img className="brand-mark" src="/brand/taskiem-mark.svg" alt="" width={26} height={26} />
           Operator console
         </div>
         <div className="section" aria-hidden="true">

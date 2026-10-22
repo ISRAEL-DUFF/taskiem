@@ -105,9 +105,7 @@ export function AgentApp() {
     <div className="agent-app">
       <header className="agent-top">
         <Link to="/agent" className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            T
-          </span>
+          <img className="brand-mark" src="/brand/taskiem-mark.svg" alt="" width={26} height={26} />
           Taskiem agent
         </Link>
         <button onClick={() => void logout()}>Sign out</button>
