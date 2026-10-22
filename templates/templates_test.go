@@ -1,9 +1,12 @@
 package templates_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -17,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/flowcode"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
+	"github.com/israel-duff/taskiem/engine/wdtest"
 	"github.com/israel-duff/taskiem/engine/wdtext"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -43,13 +47,24 @@ func TestLibrary(t *testing.T) {
 			t.Errorf("%s: id does not fit allowed_templates", tpl.ID)
 		}
 		for _, c := range tpl.Connectors {
+			if uses, ok := strings.CutPrefix(c, templates.CapabilityPrefix); ok {
+				if !railCan(reg, uses) {
+					t.Errorf("%s: no rail can %s", tpl.ID, uses)
+				}
+				continue
+			}
 			if _, ok := reg.Get(c); !ok {
 				t.Errorf("%s: unknown connector %s", tpl.ID, c)
 			}
 		}
 		for _, p := range tpl.Params {
-			if p.Type == "connection" && p.Connector == "" {
+			if p.Type == "connection" && p.Connector == "" && len(p.Capability) == 0 {
 				t.Errorf("%s: connection parameter %s names no connector", tpl.ID, p.Name)
+			}
+			for _, uses := range p.Capability {
+				if !contains(tpl.Connectors, templates.CapabilityPrefix+uses) {
+					t.Errorf("%s: parameter %s needs %s, which the template does not declare", tpl.ID, p.Name, uses)
+				}
 			}
 		}
 	}
@@ -85,6 +100,9 @@ func TestTemplatesInstantiateCheckDryRunAndRoundTrip(t *testing.T) {
 				for _, st := range steps {
 					if st.Connector != "" {
 						used[st.Connector] = true
+					}
+					if st.Type == "capability" && !wd.IsWait(st.Uses) {
+						used[templates.CapabilityPrefix+st.Uses] = true
 					}
 					for _, sub := range st.Children() {
 						walk(sub)
@@ -314,7 +332,7 @@ func TestMatch(t *testing.T) {
 		"remind me before salaries are due every month":                     "payroll-reminder",
 		"tell me when stock is running low on my inventory sheet":           "stock-reorder-alert",
 		"verify a new customer's BVN before onboarding them":                "kyc-bvn-check",
-		"pay staff salaries from the payroll sheet once the owner approves": "salary-payout-approval",
+		"pay staff salaries from the payroll sheet once the owner approves": "run-payroll",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want {
@@ -444,6 +462,78 @@ func TestEveryDetailIsOwnerShaped(t *testing.T) {
 		// A run form asks nothing technical either.
 		if strings.Contains(string(tp.Definition), "recipient_code") && !strings.Contains(string(tp.Definition), `"format": "paystack-recipient"`) && head.Trigger.Type == "manual" {
 			t.Errorf("%s: its run form asks for a recipient code", tp.ID)
+		}
+	}
+}
+
+// railCan reports whether a built-in rail declares the capability.
+func railCan(reg connector.Lookup, uses string) bool {
+	for _, c := range reg.List() {
+		if _, ok := c.Manifest.Capabilities[uses]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// templateTests is a templates/tests/<id>.test.json file: workflow tests
+// (wd-test/v1 cases) of a template, filled with its examples and Params,
+// and per case with that case's Params.
+type templateTests struct {
+	Schema   string         `json:"schema"`
+	Template string         `json:"template"`
+	Params   map[string]any `json:"params"`
+	Env      map[string]any `json:"env,omitempty"`
+	Cases    []struct {
+		wdtest.Case
+		Params map[string]any `json:"params,omitempty"`
+	} `json:"cases"`
+}
+
+// Each template's own workflow tests pass.
+func TestTemplateWorkflowTests(t *testing.T) {
+	files, err := filepath.Glob("tests/*.test.json")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no template tests: %v", err)
+	}
+	reg := registry(t)
+	for _, f := range files {
+		raw, err := os.ReadFile(f) //nolint:gosec // the package's own test files
+		if err != nil {
+			t.Fatal(err)
+		}
+		var tt templateTests
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&tt); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		tpl, ok := templates.Default().Get(tt.Template)
+		if tt.Schema != wdtest.Schema || !ok || strings.TrimSuffix(filepath.Base(f), ".test.json") != tt.Template {
+			t.Fatalf("%s: schema %q, template %q", f, tt.Schema, tt.Template)
+		}
+		for _, c := range tt.Cases {
+			t.Run(tt.Template+"/"+c.Name, func(t *testing.T) {
+				vals := tpl.Examples()
+				for k, v := range tt.Params {
+					vals[k] = v
+				}
+				for k, v := range c.Params {
+					vals[k] = v
+				}
+				doc, err := tpl.Instantiate(vals, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				def, err := wd.Load(doc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r := wdtest.RunCase(def, reg, tt.Env, c.Case)
+				if !r.Passed() {
+					t.Errorf("%s\n  trace:\n    %s\n  errors: %v", strings.Join(r.Failures, "\n"), strings.Join(r.Trace, "\n    "), r.Errors)
+				}
+			})
 		}
 	}
 }

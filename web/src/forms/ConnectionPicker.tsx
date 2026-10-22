@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { get, type ConnectorInfo } from "../api";
+import { get, type CapabilityInfo, type ConnectorInfo } from "../api";
 import { useAuth } from "../auth";
+import { capableConnections, railsForAll } from "../lib/capabilities";
 import { DEFAULT_CONNECTION } from "../lib/readiness";
 import { useLoad } from "../ui";
 import { NewConnection, startLink } from "../pages/Connections";
@@ -78,5 +79,29 @@ export function ConnectionPicker({ connector, value, onChange, label = "Connecti
       )}
       {connecting && !connectors.data && <span className="hint">Loading {service}…</span>}
     </span>
+  );
+}
+
+/**
+ * Picks the connection a capability step runs on (decision 0044): any of
+ * the business's connections whose payments account can do every one of
+ * capabilities, with "" for the only one that can.
+ */
+export function RailPicker({ capabilities, value, onChange, label = "Pay from" }: { capabilities: string[]; value: string; onChange: (name: string) => void; label?: string }) {
+  const caps = useLoad(() => get<{ capabilities: CapabilityInfo[] }>("/v1/capabilities"), []);
+  const names = useLoad(() => get<{ connections: ConnectionName[] }>("/v1/connection-names"), []);
+  const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
+  const rails = railsForAll(caps.data?.capabilities ?? [], capabilities);
+  const options = capableConnections(names.data?.connections ?? [], rails, connectors.data?.connectors ?? []);
+  return (
+    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{options.length === 1 ? `${options[0]?.label} (the only one that can)` : options.length === 0 ? "Not connected yet" : "The only one that can…"}</option>
+      {value && !options.some((o) => o.name === value) && <option value={value}>{value} (cannot do this)</option>}
+      {options.map((o) => (
+        <option key={o.name} value={o.name}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }

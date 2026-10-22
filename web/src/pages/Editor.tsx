@@ -37,6 +37,8 @@ interface Loaded {
   workflow: WorkflowSummary;
   versions: VersionInfo[];
   deployments: Deployment[];
+  /** Made from a template another now replaces. */
+  upgrade?: { template: string; title: string };
 }
 interface VersionDoc {
   version: VersionInfo;
@@ -385,6 +387,12 @@ export function Editor() {
         </div>
       )}
       <Deployments workflow={id} deployments={wf.data.deployments} canPromote={can("workflow.publish")} onChange={wf.reload} />
+      {wf.data.upgrade && (
+        <div className="notice" role="status">
+          This was made from a template a newer one replaces: <strong>{wf.data.upgrade.title}</strong>.{" "}
+          <Link to={`/start/guide?template=${encodeURIComponent(wf.data.upgrade.template)}`}>Set it up</Link>, then turn this one off. This one keeps working until you do.
+        </div>
+      )}
       {managed && (
         <div className="notice" role="status">
           This workflow is managed in Git (<code>{managed}</code>). Change it in the repository: a push to the connected branch deploys it once its

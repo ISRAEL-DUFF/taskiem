@@ -1,0 +1,1516 @@
+{
+  "schema": "wd-test/v1",
+  "template": "run-payroll",
+  "params": {
+    "business_name": "Adunni Bakes",
+    "pay_day": 25
+  },
+  "cases": [
+    {
+      "name": "pays everyone once, records each payment and tells the owner",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay_all[0].pay": {
+          "output": {
+            "payout_id": "po_ada",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        },
+        "pay_all[1].pay": {
+          "output": {
+            "payout_id": "po_bola",
+            "status": "pending",
+            "fee_kobo": 1075
+          }
+        },
+        "pay_all[1].settle": {
+          "output": {
+            "status": "settled",
+            "settled_at": "2026-10-25T09:00:00Z"
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all[0].settle": "skipped",
+          "pay_all[1].settle": "completed",
+          "pay_all[0].tell_now": "completed",
+          "pay_all[1].tell_later": "completed",
+          "record_rejected": "skipped",
+          "tell_rejected": "skipped",
+          "watch[0].mark_reversed": "skipped",
+          "watch[1].mark_reversed": "skipped"
+        },
+        "inputs": {
+          "pay_all[0].pay": {
+            "amount_kobo": 30000000,
+            "bank_code": "044",
+            "account_number": "0690000031",
+            "account_name": "Ada Obi",
+            "narration": "Salary 2026-10"
+          },
+          "pay_all[1].pay": {
+            "amount_kobo": 20000000,
+            "account_name": "Bola Ade"
+          },
+          "pay_all[0].tell_now": {
+            "phone": "+2348030000001",
+            "message": "Adunni Bakes: your salary for 2026-10, NGN 300000, has been paid. Thank you for your work."
+          },
+          "record_run": {
+            "table": "payroll_runs",
+            "row": {
+              "period": "2026-10",
+              "status": "paid",
+              "staff_count": 2,
+              "paid": 2,
+              "failed": 0,
+              "total_naira": 500000.0,
+              "fees_naira": 21.5,
+              "approved_by": "checker"
+            }
+          }
+        },
+        "outputs": {
+          "summary": {
+            "paid": 2,
+            "failed": 0,
+            "unconfirmed": 0,
+            "paid_naira": 500000.0
+          },
+          "approve": {
+            "decision": "approved",
+            "decided_by": "checker"
+          }
+        },
+        "calls": {
+          "pay": 2,
+          "back": 2,
+          "mark_reversed": 0,
+          "tell_reversal": 0
+        }
+      }
+    },
+    {
+      "name": "a reversal after payment is recorded and the owner told, and nobody is paid again",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay": {
+          "output": {
+            "payout_id": "po_x",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        },
+        "watch[1].back": {
+          "output": {
+            "status": "reversed",
+            "reason": "Beneficiary account closed"
+          }
+        },
+        "mark_reversed": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_reversal": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "watch[0].mark_reversed": "skipped",
+          "watch[1].mark_reversed": "completed",
+          "watch[1].tell_reversal": "completed"
+        },
+        "inputs": {
+          "watch[1].mark_reversed": {
+            "table": "payroll_lines",
+            "filters": [
+              {
+                "column": "payout_id",
+                "op": "eq",
+                "value": "po_x"
+              }
+            ],
+            "set": {
+              "status": "reversed",
+              "reason": "Beneficiary account closed"
+            }
+          }
+        },
+        "calls": {
+          "pay": 2,
+          "mark_reversed": 1,
+          "tell_reversal": 1
+        }
+      }
+    },
+    {
+      "name": "only confirmed bank payments are watched for reversals",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay_all[0].pay": {
+          "output": {
+            "payout_id": "po_ada",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        },
+        "pay_all[1].pay": {
+          "output": {
+            "payout_id": "po_bola",
+            "status": "pending",
+            "fee_kobo": 1075
+          }
+        },
+        "pay_all[1].settle": {
+          "output": {
+            "status": "failed",
+            "reason": "Invalid account"
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "watch[0].back": "completed"
+        },
+        "outputs": {
+          "summary": {
+            "paid": 1,
+            "failed": 1,
+            "unconfirmed": 0,
+            "paid_naira": 300000.0,
+            "not_paid": [
+              "Bola Ade (failed: Invalid account)"
+            ]
+          }
+        },
+        "calls": {
+          "back": 1
+        }
+      }
+    },
+    {
+      "name": "a refused payment does not stop the others and is reported",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay_all[0].pay": {
+          "error": {
+            "kind": "fatal",
+            "message": "EXCEEDS_SINGLE_TXN_LIMIT"
+          }
+        },
+        "pay_all[1].pay": {
+          "output": {
+            "payout_id": "po_bola",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all[0].pay": "failed",
+          "pay_all[1].pay": "completed"
+        },
+        "outputs": {
+          "summary": {
+            "paid": 1,
+            "failed": 1,
+            "not_paid": [
+              "Ada Obi (failed: EXCEEDS_SINGLE_TXN_LIMIT)"
+            ]
+          }
+        },
+        "inputs": {
+          "record_run": {
+            "row": {
+              "status": "paid with problems",
+              "paid": 1,
+              "failed": 1
+            }
+          }
+        },
+        "calls": {
+          "pay": 2,
+          "back": 1
+        }
+      }
+    },
+    {
+      "name": "a lost answer is retried under the same key and pays once",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay_all[0].pay": [
+          {
+            "error": {
+              "kind": "retryable",
+              "message": "connection reset"
+            }
+          },
+          {
+            "output": {
+              "payout_id": "po_ada",
+              "status": "settled",
+              "fee_kobo": 1075
+            }
+          }
+        ],
+        "pay_all[1].pay": {
+          "output": {
+            "payout_id": "po_bola",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "summary": {
+            "paid": 2,
+            "failed": 0
+          }
+        },
+        "calls": {
+          "pay_all[0].pay": 2,
+          "pay_all[1].pay": 1
+        }
+      }
+    },
+    {
+      "name": "a bank payment never confirmed is reported as not confirmed",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay_all[0].pay": {
+          "output": {
+            "payout_id": "po_ada",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        },
+        "pay_all[1].pay": {
+          "output": {
+            "payout_id": "po_bola",
+            "status": "pending",
+            "fee_kobo": 1075
+          }
+        },
+        "pay_all[1].settle": {
+          "output": {
+            "status": "unconfirmed"
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all[1].tell_later": "skipped"
+        },
+        "outputs": {
+          "summary": {
+            "paid": 1,
+            "failed": 0,
+            "unconfirmed": 1
+          }
+        },
+        "calls": {
+          "back": 1
+        }
+      }
+    },
+    {
+      "name": "a rejected payroll pays nobody and is recorded",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "record_rejected": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "rejected",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all": "skipped",
+          "record_rejected": "completed",
+          "tell_rejected": "completed"
+        },
+        "inputs": {
+          "record_rejected": {
+            "table": "payroll_runs",
+            "row": {
+              "period": "2026-10",
+              "status": "rejected",
+              "paid": 0
+            }
+          },
+          "tell_rejected": {
+            "message": "Adunni Bakes payroll for 2026-10 was rejected, so nobody was paid."
+          }
+        },
+        "calls": {
+          "pay": 0
+        }
+      }
+    },
+    {
+      "name": "an approval nobody answers expires and pays nobody",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "record_rejected": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "timeout": true
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all": "skipped"
+        },
+        "inputs": {
+          "record_rejected": {
+            "row": {
+              "status": "not approved in time"
+            }
+          },
+          "tell_rejected": {
+            "message": "Adunni Bakes payroll for 2026-10 was not approved in time, so nobody was paid."
+          }
+        },
+        "calls": {
+          "pay": 0
+        }
+      }
+    },
+    {
+      "name": "a name the bank does not match is not paid and is shown on the approval",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "CHIDI OKAFOR"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay": {
+          "output": {
+            "payout_id": "po_ada",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "approve": {
+            "decision": "approved"
+          },
+          "ready": {
+            "total_kobo": 30000000,
+            "flagged": [
+              {
+                "name": "Bola Ade",
+                "reason": "the bank has this account as CHIDI OKAFOR"
+              }
+            ]
+          }
+        },
+        "calls": {
+          "pay": 1
+        }
+      }
+    },
+    {
+      "name": "a row without an amount or full bank details is never paid",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "12345",
+                "account_name": "Bola Ade",
+                "active": true
+              },
+              {
+                "id": 3,
+                "name": "Chi",
+                "phone": "+2348030000002",
+                "net_pay": 0,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay": {
+          "output": {
+            "payout_id": "po_ada",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "check": {
+            "refused": [
+              {
+                "name": "Bola Ade",
+                "reason": "the account number is not 10 digits"
+              },
+              {
+                "name": "Chi",
+                "reason": "no amount to pay"
+              }
+            ]
+          }
+        },
+        "calls": {
+          "pay": 1,
+          "lookup": 1
+        }
+      }
+    },
+    {
+      "name": "a balance below the total is said on the approval",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 1000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay": {
+          "output": {
+            "payout_id": "po_x",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "ready": {
+            "total_kobo": 50000000
+          }
+        },
+        "calls": {
+          "pay": 2
+        }
+      }
+    },
+    {
+      "name": "nobody is told when telling staff is off",
+      "trigger": {
+        "body": {
+          "period": "2026-10"
+        }
+      },
+      "mocks": {
+        "read_staff": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "name": "Ada Obi",
+                "phone": "+2348030000001",
+                "net_pay": 300000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi",
+                "active": true
+              },
+              {
+                "id": 2,
+                "name": "Bola Ade",
+                "phone": "+2348030000002",
+                "net_pay": 200000,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade",
+                "active": true
+              }
+            ]
+          }
+        },
+        "names[0].lookup": {
+          "output": {
+            "account_name": "ADA OBI"
+          }
+        },
+        "names[1].lookup": {
+          "output": {
+            "account_name": "BOLA ADE"
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_now": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "tell_later": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "back": {
+          "output": {
+            "status": "none"
+          }
+        },
+        "pay": {
+          "output": {
+            "payout_id": "po_x",
+            "status": "settled",
+            "fee_kobo": 1075
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "checker"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all[0].tell_now": "skipped",
+          "pay_all[1].tell_now": "skipped"
+        },
+        "calls": {
+          "tell_now": 0
+        }
+      },
+      "params": {
+        "tell_staff": false
+      }
+    }
+  ]
+}

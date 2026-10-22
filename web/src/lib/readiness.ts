@@ -9,7 +9,7 @@ export interface ReadyNeed {
   name: string;
   connector?: string;
   service?: string;
-  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id";
+  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id" | "cannot";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -17,6 +17,9 @@ export interface ReadyNeed {
   message: string;
   /** A missing table as the workflow uses it, to make in one tap. */
   table?: TableSpec;
+  /** For the connection a capability step needs: what its rail must do, and the rails (connector ids) that can. */
+  capability?: string;
+  rails?: string[];
 }
 
 export interface TableSpec {
@@ -33,6 +36,7 @@ export interface Readiness {
 /** The fix a need offers, done in place. */
 export type Fix =
   | { kind: "connect"; connector: string; environment: string; name: string; service: string }
+  | { kind: "connect_rail"; rails: string[]; environment: string; name: string }
   | { kind: "choose_connection"; connector: string; service: string }
   | { kind: "set_variable"; environment: string; name: string }
   | { kind: "set_secret"; environment: string; name: string }
@@ -46,6 +50,8 @@ export const DEFAULT_CONNECTION = "main";
 export function fixFor(n: ReadyNeed): Fix {
   switch (n.kind) {
     case "connection":
+      if (n.capability && n.problem !== "ambiguous") return { kind: "connect_rail", rails: n.rails ?? [], environment: n.environment, name: n.name || DEFAULT_CONNECTION };
+      if (n.capability) return { kind: "choose_connection", connector: "", service: n.service ?? "" };
       if (n.problem === "ambiguous") return { kind: "choose_connection", connector: n.connector ?? "", service: n.service ?? n.connector ?? "" };
       return { kind: "connect", connector: n.connector ?? "", environment: n.environment, name: n.name || DEFAULT_CONNECTION, service: n.service ?? n.connector ?? "" };
     case "variable":

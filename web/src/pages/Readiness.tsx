@@ -43,6 +43,16 @@ function NeedItem({ need, onChanged }: { need: ReadyNeed; onChanged: () => void 
       </div>
       {fix.kind === "connect" &&
         (can("connection.manage") ? <ConnectFix connector={fix.connector} environment={fix.environment} name={fix.name} service={fix.service} onDone={onChanged} /> : <AskOwner />)}
+      {fix.kind === "connect_rail" &&
+        (can("connection.manage") ? (
+          <div className="toolbar">
+            {fix.rails.map((id) => (
+              <RailConnectFix key={id} connector={id} environment={fix.environment} name={fix.name} onDone={onChanged} />
+            ))}
+          </div>
+        ) : (
+          <AskOwner />
+        ))}
       {fix.kind === "choose_connection" && (
         <p className="hint">
           Choose one on the <Link to="/connections">Connections</Link> page, or remove the ones you no longer use.
@@ -89,6 +99,13 @@ function TableFix({ table, onDone }: { table: TableSpec; onDone: () => void }) {
 
 function AskOwner() {
   return <p className="hint">Ask the business's owner to do this.</p>;
+}
+
+/** Connects one of the rails a capability step can run on, named by the rail's own name. */
+function RailConnectFix({ connector, environment, name, onDone }: { connector: string; environment: string; name: string; onDone: () => void }) {
+  const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
+  const service = connectors.data?.connectors.find((c) => c.id === connector)?.name ?? connector;
+  return <ConnectFix connector={connector} environment={environment} name={name} service={service} onDone={onDone} />;
 }
 
 function ConnectFix({ connector, environment, name, service, onDone }: { connector: string; environment: string; name: string; service: string; onDone: () => void }) {

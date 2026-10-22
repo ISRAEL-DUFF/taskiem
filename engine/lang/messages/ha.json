@@ -1800,6 +1800,14 @@
       "text": "Yanke abin da za a yi:",
       "reviewed": false
     },
+    "wd.capability": {
+      "text": "{what} da asusun biyan kuɗi da aka haɗa",
+      "reviewed": false
+    },
+    "wd.capability.via": {
+      "text": "{what} da haɗin {connection}",
+      "reviewed": false
+    },
     "wd.code": {
       "text": "Gudanar da lamba ta musamman",
       "reviewed": false

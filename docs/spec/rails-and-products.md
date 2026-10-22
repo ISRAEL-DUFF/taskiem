@@ -1,6 +1,6 @@
 # Rails and products: specification and build plan
 
-Status: **R1, R2 and R9 built**, R3 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
+Status: **R1, R2, R3 and R9 built**, R4 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
 
 Taskiem connects to two kinds of service. **Rails** move money (Paystack, iswallet, Moniepoint and the rest) and Taskiem builds products on them as workflows. **Products** (Payrolla, and later accounting, HR and POS back offices) already run a whole process, and Taskiem connects to them, embeds their interface, and works around them. This document specifies both halves, and the retirement of the Payrolla integration that mixed them up.
 
@@ -560,6 +560,17 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 - AI eval: "pay my staff on the 25th from my iswallet" and "…from Paystack" produce the template's shape; baseline regenerated.
 
 **Done when:** an owner with iswallet, and another with Paystack, set up Run payroll from the Start page or chat without help; every guarantee of §5.1 is pinned by a test on both rails; the old dogfood tests' cases all pass against the template.
+
+**Built** (R3): `run-payroll` (`templates/library/run-payroll.json`, with its three tables), `connection` parameters by `capability`, `capability:<name>` connectors, `superseded_by` (the old salary template), twelve workflow tests in `templates/tests/run-payroll.test.json` (the dogfood flow's cases re-expressed, and the name check, refused rows and staff messages), `TestRunPayrollEndToEnd` (`api/runpayroll_test.go`: the template from the API with data tables and Paystack, approval, one payment per person, the events, the records and a reversal), readiness and the Start page and Guide by capability, chat's needs naming the rails, the AI builder's capabilities and rule, the dry run sampling capability outputs, the plain read-back of capability steps, and the eval cases (`capability_when_unnamed`; baseline regenerated). Differences from §5.1:
+
+- **Staff from a data table only**, not yet a sheet; Taskiem makes the table.
+- **Bank payouts only:** `pay_wallet` for rows with a wallet waits until a template can tell which rail it runs on (a capability step the rail cannot do refuses the whole run at expansion).
+- **The idempotency root is the month** (`payroll:<period>:<row id>`), not the run, so a second run for the same month never pays anyone twice; paying someone who failed is done by hand.
+- **No weekly reversal digest and no step-up PIN** on the approval yet; the owner is told of each reversal as it comes.
+- **Names that do not match are not paid**, and the approval lists them, rather than paid after a flag.
+- **Chat asks for no rail:** the connection defaults to the only one that can, and readiness says what to connect, naming the rails.
+- **The real-stack test runs on Paystack;** the other rails are covered by the workflow tests (which mock the capability's output, the same on every rail) and R2's rail tests.
+- **The eval baseline changed:** with the Paystack-only salary template gone from matches, the offline (heuristic) builder finds no template for some generic "approve, then pay a list" requests; R4's *Pay a list* template is the one for them.
 
 ### R4: More templates on rails (M)
 

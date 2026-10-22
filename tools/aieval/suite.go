@@ -40,7 +40,7 @@ type Case struct {
 
 var difficulties = []string{"easy", "medium", "hard"}
 
-var stepTypes = []string{"connector", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "approval", "form"}
+var stepTypes = []string{"connector", "capability", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "approval", "form"}
 
 var triggerTypes = []string{"webhook", "schedule", "connector_event", "polling", "database_change", "manual", "whatsapp", "ussd", "email", "subflow", "storefront", "form"}
 
@@ -69,8 +69,8 @@ func (c *Case) check() error {
 		}
 	}
 	for _, r := range c.Expect.Connectors {
-		if !strings.Contains(r, "@") {
-			return fmt.Errorf("%s: connector %q must be a ref like paystack@1", c.ID, r)
+		if !strings.Contains(r, "@") && !strings.HasPrefix(r, "capability:") {
+			return fmt.Errorf("%s: connector %q must be a ref like paystack@1, or capability:pay_bank for any rail that can", c.ID, r)
 		}
 	}
 	if len(c.Expect.Connectors)+len(c.Expect.Steps) == 0 {

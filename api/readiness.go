@@ -15,7 +15,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/policy"
@@ -36,6 +38,10 @@ var readyExpr = expr.MustNewWithRoots(expr.Roots...)
 type readyNeed = builder.Need
 
 type readyStep = builder.NeedStep
+
+// readyKey identifies a need: what, by which name, of which connector
+// (or capability:<uses>), in which environment.
+type readyKey struct{ kind, name, connector, env string }
 
 // readyEnvs are the environments a publish deploys to, and the one whose
 // gaps block it: prod when it is among them (dev is a rehearsal), else
@@ -69,7 +75,7 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 	if err != nil {
 		return nil, err
 	}
-	type key struct{ kind, name, connector, env string }
+	type key = readyKey
 	found := map[key]*readyNeed{}
 	var order []key
 	add := func(k key, n readyNeed, st *wd.Step) {
@@ -100,6 +106,7 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 	}
 	vars, secs := map[string][]*wd.Step{}, map[string][]*wd.Step{}
 	var tables, roles []use
+	var caps []*wd.Step // capability steps: their connection is any rail that can
 	var policies []use
 	readExprs := func(st *wd.Step, v any) {
 		walkExpressions(v, func(src string) {
@@ -138,6 +145,10 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 		}
 		if st.Form != nil && st.Form.To.Role != "" {
 			roles = append(roles, use{st, st.Form.To.Role})
+		}
+		if st.Type == "capability" {
+			caps = append(caps, st)
+			return
 		}
 		if st.Connector == "" {
 			return
@@ -219,6 +230,11 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 			}
 			add(key{"connection", c.name, c.connector, env}, readyNeed{Service: c.service, Problem: problem, Blocking: true,
 				Message: needMessage(l, "connection", problem, c.service, c.name)}, c.step)
+		}
+		if len(caps) > 0 {
+			if err := capabilityNeeds(ctx, tx, l, env, caps, reg, add); err != nil {
+				return nil, err
+			}
 		}
 		for n, steps := range vars {
 			var ok bool
@@ -577,4 +593,67 @@ func (s *Server) listApproverRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"roles": out, "members": members})
+}
+
+// capabilityNeeds finds what capability steps need in env: a connection
+// whose rail can do what they do, resolved as a run will resolve it
+// (engine/expansion).
+func capabilityNeeds(ctx context.Context, tx pgx.Tx, l lang.Tag, env string, steps []*wd.Step, reg connector.Lookup,
+	add func(k readyKey, n readyNeed, st *wd.Step)) error {
+	rows, err := tx.Query(ctx, `SELECT name, connector FROM connections WHERE environment = $1 AND status = 'active' ORDER BY name`, env)
+	if err != nil {
+		return err
+	}
+	conns, err := pgx.CollectRows(rows, pgx.RowToStructByPos[expansion.Connection])
+	if err != nil {
+		return err
+	}
+	resolve := expansion.ResolverFor(conns, reg)
+	for _, st := range steps {
+		if _, err := resolve(st.Connection, st.Uses); err != nil {
+			uses := st.Uses
+			problem, msg := "cannot", err.Error()
+			switch {
+			case errors.Is(err, expansion.ErrNoConnection):
+				problem = "missing"
+				msg = tr(l, "ready.connection_missing", "service", railService(uses))
+			case strings.HasPrefix(msg, "several connections"):
+				problem = "ambiguous"
+			}
+			msg = strings.TrimPrefix(msg, expansion.ErrNoConnection.Error()+": ")
+			if msg != "" {
+				msg = strings.ToUpper(msg[:1]) + msg[1:]
+			}
+			add(readyKey{"connection", st.Connection, "capability:" + uses, env},
+				readyNeed{Service: railService(uses), Problem: problem, Blocking: true, Message: msg, Capability: uses, Rails: railsFor(reg, uses)}, st)
+		}
+	}
+	return nil
+}
+
+// railService names, for a person, the service a capability needs.
+func railService(uses string) string {
+	if spec, ok := capability.Get(uses); ok {
+		return "a payments account that can " + strings.ToLower(spec.Title[:1]) + spec.Title[1:]
+	}
+	return "a payments account"
+}
+
+// railsFor are the connector ids of the rails that can do uses.
+func railsFor(reg connector.Lookup, uses string) []string {
+	var out []string
+	for _, c := range reg.List() {
+		_, ok := c.Manifest.Capabilities[uses]
+		if wd.IsWait(uses) {
+			ok = false
+			for _, m := range c.Manifest.Capabilities {
+				ok = ok || m.SettlesBy != nil
+			}
+		}
+		if ok && c.Manifest.KindOf() == "rail" && !slices.Contains(out, c.Manifest.ID) {
+			out = append(out, c.Manifest.ID)
+		}
+	}
+	slices.Sort(out)
+	return out
 }

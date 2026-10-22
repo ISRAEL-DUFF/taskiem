@@ -123,7 +123,7 @@ func TestRefusals(t *testing.T) {
 		want      string
 	}{
 		{"no connection", payroll, nil, `there is no connection called "rail"`},
-		{"requires", payroll, []expansion.Connection{{"rail", "iswallet"}}, "iswallet needs source to pay a bank account"},
+		{"requires", payroll, []expansion.Connection{{"rail", "iswallet"}}, "iswallet needs the wallet or account to pay from (source) to pay a bank account"},
 		{"unsupported", strings.Replace(payroll, `"narration": "Salary"}`, `"narration": "Salary", "source": "w1"}`, 1), []expansion.Connection{{"rail", "flutterwave"}}, "Flutterwave cannot take source"},
 		{"fixed", strings.Replace(payroll, `"narration": "Salary"}`, `"narration": "Salary", "currency": "USD"}`, 1), []expansion.Connection{{"rail", "moniepoint"}}, "Moniepoint (Monnify) takes currency NGN only, not USD"},
 		{"not a rail", payroll, []expansion.Connection{{"rail", "googlesheets"}}, "your Google Sheets connection cannot pay a bank account. Connect a rail that can, such as"},
@@ -209,5 +209,24 @@ func TestCompositeOnError(t *testing.T) {
 	}
 	if pay := d.Step("pay"); pay.OnError == nil || pay.OnError.Steps[0].ID != "note" {
 		t.Error("the transfer keeps the on_error as written")
+	}
+}
+
+// A watch over a list of earlier payouts names its connection, and blank
+// inputs count as not given.
+func TestWaitFromAListAndBlankInputs(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_w","version":1,"name":"w","trigger":{"type":"manual"},"steps":[
+	  {"id":"watch","type":"foreach","config":{"items":"=trigger.body.payouts","steps":[
+	    {"id":"back","type":"capability","uses":"await_reversal","connection":"rail","timeout":"35d","input":{"payout_id":"=item"}}]}},
+	  {"id":"pay","type":"capability","uses":"pay_bank","connection":"rail","input":{"amount_kobo":100,"bank_code":"058","account_number":"0123456789","account_name":"A","narration":"n","source":""}}]}`
+	d, _, err := expand(t, doc, expansion.Connection{Name: "rail", Connector: "paystack"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sig := d.Step("back__reversed"); sig == nil || sig.Signal.Event != "paystack@1:payout.reversed" || sig.Signal.Correlation != "=item" {
+		t.Fatalf("watch %+v", sig)
+	}
+	if _, ok := d.Step("pay").Input["source"]; ok {
+		t.Error("a blank source is given")
 	}
 }

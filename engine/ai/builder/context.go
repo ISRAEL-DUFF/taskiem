@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -253,6 +254,46 @@ func Catalogue(reg connector.Lookup) string {
 		}
 		b.WriteString(".\n")
 	}
+	b.WriteString(capabilities(reg))
+	return b.String()
+}
+
+// capabilities lists what rails can do in Taskiem's words (capability
+// steps, decision 0044): each capability's input and output fields, and
+// the rails that declare it.
+func capabilities(reg connector.Lookup) string {
+	var b strings.Builder
+	b.WriteString("\n# Capabilities\n\nWhat a payments rail can do, the same on every rail: a \"capability\" step (rule 16) runs it on whichever rail its connection is. `name`: input fields (* required) -> output fields; the rails that can.\n\n")
+	fields := func(raw json.RawMessage, req bool) string {
+		var parts []string
+		for _, f := range capability.Fields(raw) {
+			if len(f.Path) != 1 {
+				continue
+			}
+			n := f.Name()
+			if req && f.Required {
+				n += "*"
+			}
+			parts = append(parts, n)
+		}
+		return strings.Join(parts, ", ")
+	}
+	for _, n := range capability.Names() {
+		spec, _ := capability.Get(n)
+		var rails []string
+		for _, c := range reg.List() {
+			if _, ok := c.Manifest.Capabilities[n]; ok {
+				rails = append(rails, c.Ref())
+			}
+		}
+		if len(rails) == 0 {
+			continue
+		}
+		sort.Strings(rails)
+		fmt.Fprintf(&b, "- %s (%s): %s -> %s; %s.\n", n, spec.Title, fields(spec.Input, true), fields(spec.Output, false), strings.Join(rails, ", "))
+	}
+	b.WriteString("- await_settlement (" + capability.WaitTitle("await_settlement") + "): payout_id* and a step timeout -> status (settled, failed or unconfirmed), settled_at, reason; any rail above that pays.\n")
+	b.WriteString("- await_reversal (" + capability.WaitTitle("await_reversal") + "): payout_id* and a step timeout -> status (reversed or none), reason.\n")
 	return b.String()
 }
 

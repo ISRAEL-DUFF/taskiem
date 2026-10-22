@@ -185,6 +185,11 @@ type Need struct {
 	// Table is a missing table as the workflow uses it, for making it in
 	// one tap (TableFor); absent when its columns cannot be told.
 	Table *TableSpec `json:"table,omitempty"`
+	// Capability, for a connection a capability step needs (decision
+	// 0044): what its rail must do, and Rails the connector ids that can.
+	// Problem may then also be cannot (the connection's rail cannot).
+	Capability string   `json:"capability,omitempty"`
+	Rails      []string `json:"rails,omitempty"`
 }
 
 // NeedStep is a step that has a need, by id and name.

@@ -3,6 +3,7 @@ package builder
 import (
 	"fmt"
 
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -63,6 +64,10 @@ func PolicyFindings(def *wd.Definition, reg connector.Lookup) []Warning {
 				out = append(out, Warning{Kind: "policy", Rule: RulePaymentWithoutApproval, Path: "/steps/" + st.ID,
 					Message: fmt.Sprintf("step %q moves money (%s %s) but no approval step comes before it; add an approval step it needs, or confirm that this payment may run unapproved", st.ID, st.Connector, st.Action)})
 			}
+			if st.Type == "capability" && !gated && capabilityMovesMoney(st.Uses) {
+				out = append(out, Warning{Kind: "policy", Rule: RulePaymentWithoutApproval, Path: "/steps/" + st.ID,
+					Message: fmt.Sprintf("step %q moves money (%s) but no approval step comes before it; add an approval step it needs, or confirm that this payment may run unapproved", st.ID, st.Uses)})
+			}
 			for _, sub := range st.Children() {
 				walk(sub, p, gated || st.Type == "approval")
 			}
@@ -79,4 +84,11 @@ func moneyMoving(reg connector.Lookup, st *wd.Step) bool {
 	}
 	a, ok := c.Manifest.Actions[st.Action]
 	return ok && c.Manifest.Category == "payments" && a.Class.IsWrite()
+}
+
+// capabilityMovesMoney reports whether a capability sends money out: a
+// payment or a refund, whichever rail does it.
+func capabilityMovesMoney(uses string) bool {
+	spec, ok := capability.Get(uses)
+	return ok && (spec.IsPayout() || uses == "refund")
 }

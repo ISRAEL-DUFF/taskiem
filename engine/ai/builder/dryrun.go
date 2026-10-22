@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
@@ -101,6 +102,24 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 				if con, ok := reg.Get(st.Connector); ok {
 					if a, ok := con.Manifest.Actions[st.Action]; ok {
 						if o := sample(rawAny(a.Output), nil, con.Manifest, 0); o != nil {
+							out = o
+						}
+					}
+				}
+				c.Mocks[st.ID] = wdtest.Mocks{{Output: out}}
+			case "capability":
+				// The capability's output, the same on every rail
+				// (schemas/capabilities-v1.json): a template is checked
+				// without choosing one.
+				var out any = map[string]any{}
+				switch st.Uses {
+				case "await_settlement":
+					out = map[string]any{"status": "settled"}
+				case "await_reversal":
+					out = map[string]any{"status": "none"}
+				default:
+					if spec, ok := capability.Get(st.Uses); ok {
+						if o := sample(rawAny(spec.Output), nil, nil, 0); o != nil {
 							out = o
 						}
 					}

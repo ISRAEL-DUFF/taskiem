@@ -43,6 +43,9 @@ type Env struct {
 	Containers container.Runner
 	Proxy      *egress.Proxy
 	ProxyAddr  string
+	// CallTimeout bounds each provider call a worker makes (default
+	// 200ms); tests whose fakes do real work set more.
+	CallTimeout time.Duration
 }
 
 // New creates an engine environment; it skips without a test database.
@@ -135,8 +138,12 @@ func (e *Env) Worker(id string) *runtime.Worker {
 	if e.VaultSecrets {
 		s = e.Vault
 	}
+	timeout := e.CallTimeout
+	if timeout == 0 {
+		timeout = 200 * time.Millisecond
+	}
 	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: s, Connections: e.Vault, Egress: e.Egress,
-		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: 200 * time.Millisecond}
+		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: timeout}
 }
 
 // ContainerWorker returns a worker for the container queue.

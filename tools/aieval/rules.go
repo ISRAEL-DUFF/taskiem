@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -31,6 +33,7 @@ var rules = map[string]rule{
 	"no_hardcoded_contacts":   ruleNoHardcodedContacts,
 	"no_inline_secrets":       ruleNoInlineSecrets,
 	"reach_by_phone":          ruleReachByPhone,
+	"capability_when_unnamed": ruleCapabilityWhenUnnamed,
 }
 
 // hygiene rules apply to every case.
@@ -56,6 +59,11 @@ func walk(steps []*wd.Step, fn func(st *wd.Step)) {
 }
 
 func isPaymentWrite(reg connector.Lookup, st *wd.Step) bool {
+	if st.Type == "capability" {
+		// A payment or refund on whichever rail the connection is.
+		spec, ok := capability.Get(st.Uses)
+		return ok && (spec.IsPayout() || st.Uses == "refund")
+	}
 	if st.Type != "connector" {
 		return false
 	}
@@ -202,6 +210,15 @@ func ruleReadsBeforePaying(def *wd.Definition, reg connector.Lookup) (bool, stri
 	reads := map[string]bool{}
 	var payments []*wd.Step
 	walk(def.Steps, func(st *wd.Step) {
+		if st.Type == "capability" {
+			if spec, ok := capability.Get(st.Uses); ok && spec.Allows(effects.Read) {
+				reads[st.ID] = true
+			}
+			if isPaymentWrite(reg, st) {
+				payments = append(payments, st)
+			}
+			return
+		}
 		if st.Type != "connector" {
 			return
 		}
@@ -384,4 +401,24 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// For a goal that names no provider (the cases that ask for this
+// property): every payment is a capability step, so it runs on whichever
+// payments account the business connected (decision 0044).
+func ruleCapabilityWhenUnnamed(def *wd.Definition, reg connector.Lookup) (bool, string) {
+	n, why := 0, ""
+	walk(def.Steps, func(st *wd.Step) {
+		if !isPaymentWrite(reg, st) {
+			return
+		}
+		n++
+		if st.Type != "capability" {
+			why = "step " + st.ID + " pays with " + st.Connector + ", a provider the goal does not name; use a capability step"
+		}
+	})
+	if n == 0 {
+		return false, "no step moves money"
+	}
+	return why == "", why
 }

@@ -2249,6 +2249,16 @@
       "reviewed": true,
       "context": "Read-back: a decision between paths"
     },
+    "wd.capability": {
+      "text": "{what} with whichever payments account is connected",
+      "reviewed": true,
+      "context": "Read-back: a capability step with no connection named; {what} is the capability, e.g. Pay a bank account"
+    },
+    "wd.capability.via": {
+      "text": "{what} with the {connection} connection",
+      "reviewed": true,
+      "context": "Read-back: a capability step; {what} is the capability, {connection} the connection's name"
+    },
     "wd.code": {
       "text": "Run custom code",
       "reviewed": true,
