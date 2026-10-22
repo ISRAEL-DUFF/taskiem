@@ -2,7 +2,7 @@
 
 Taskiem is for Nigerian small businesses and the people who run their offices: traders, shop owners, salon owners, finance and HR staff. Most are not technical. Deploying staging (October 2026) showed, and an audit of the code confirmed, that an owner still meets steps that assume a developer: API keys, JSON, expressions, ids typed by hand, names that must match, messages in developer terms, and one bug that stops a one-person business from accepting its own orders.
 
-This plan removes them. It is a workstream of its own, **N0 to N11**, one pull request per milestone, and it runs **before the Phase 5 pilot** (S8's six weeks with traders and field agents): the pilot should test the product owners will actually meet.
+This plan removes them. It is a workstream of its own, **N0 to N12**, one pull request per milestone, and it runs **before the Phase 5 pilot** (S8's six weeks with traders and field agents): the pilot should test the product owners will actually meet.
 
 ## The rule
 
@@ -41,6 +41,7 @@ Everything a non-technical person needs can be done from a guided screen, or fro
 | **N0-7 Chat publishing.** Letting chat publish workflows | Yes, with the same checks and approvals as the web app, and a WhatsApp PIN or step-up where policy asks | N6 |
 | **N0-8 Receiving email.** "When an email comes in" needs mail received somewhere. Gmail's own notifications need restricted scopes (N0-2), and cover Gmail only | An address per workflow on Taskiem's own mail domain, received by a Taskiem `mail` role (no mail company sees the messages); owners forward from any mailbox with a filter. An inbound-mail service only as a fallback for operators who cannot open port 25 ([decision 0038](../decisions/0038-inbound-email.md)) | N10 |
 | **N0-9 Reaching outsiders on chat.** Staff who are not members and customers can be reached only by SMS and email; chat is linked to Taskiem accounts | Outsiders opt in once per business with a one-tap link on the platform's Telegram bot and WhatsApp number (or the business's own number). A link reaches them from every workflow only once their phone is proven; a business's own bot is later | N11 |
+| **N0-10 Who hears about failures.** Alerts are recorded only for rules someone sets up, and new businesses have none, so a failed run tells nobody | Everyone involved hears without setup: in the app always, and owners on their linked chat (throttled) unless they turn it off. Alert rules stay, for other channels and thresholds | N12 |
 
 ## Milestones
 
@@ -268,6 +269,67 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 - A gate owner, with no help, sends the standing link to two staff; both get the next workflow's message on the app they chose.
 - No owner-facing text from Appendix C on the new screens.
 
+### N12: Telling people what happened (M)
+
+**Problem.** The web app gives almost no feedback, in the moment or later.
+
+- **When someone does something** (saves, publishes, uploads, connects), an error is a red box inside the section they used. On a long page it is often scrolled out of sight. Success is mostly silent: about a third of the screens with actions say nothing when it works, and the rest each say it their own way, or only change the page.
+- **An unexpected error reads "Internal error"**, with nothing the operator can find it by. The storefront logo upload showed this when the data project was missing (fixed in #56).
+- **When something happens in the background**, nobody hears it in the app. That covers a run that failed, an approval waiting, or a setup problem (a domain unverified, a data project that could not be made, a token that could not be renewed).
+  - Alerts are recorded only when someone has set up a rule on the **Alerts** page (`alert.manage`), and new businesses have none. So by default **a failed run tells nobody, anywhere.**
+  - Owner alerts (`alerts.TellOwners`) reach chat and email only.
+  - The menu shows no count of approvals waiting.
+
+**Build:**
+
+- **Messages after an action (toasts).** One component for the whole app (`web/src/toast.tsx`), mounted once in the shell:
+  - **Success:** a short message, "Saved", "Published", "Connected to Paystack", at the bottom on a phone and the top right on a wide screen. It goes after 4 seconds.
+  - **Error:** stays until dismissed. The red box in the section stays too, since it says where to fix the problem; the toast's **Show me** scrolls to it.
+  - **Screen readers** hear it through an `aria-live` region: polite for success, assertive for errors. Motion respects reduced motion, and several toasts stack, at most three.
+  - **`useAction`** (`web/src/ui.tsx`), which about 50 screens use, takes `{success}`. Every screen gets a success message in plain words, checked by the gate's text test (Appendix C). A screen whose result is already obvious (a page that opens) passes `success: false`, and a test lists every `useAction` call so none is forgotten.
+  - **Problems that are not one action's** are toasted from `web/src/api.ts`:
+    - signed out: "You were signed out. Sign in again", with a link;
+    - offline: "You're offline. Changes will not be saved";
+    - the plan's limits (402 and 429): their own message.
+- **Errors carry a reference.** A 500 answers `{"error": "Something went wrong on our side", "reference": "E-7K2Q9M"}`, and the error is logged with that reference. The toast and the red box show it ("Reference E-7K2Q9M"), so an owner can quote it and an operator can find it (`taskiem-vps logs taskiem | grep E-7K2Q9M`).
+- **Notifications, per person.** A `notifications` table holds, per tenant and person, the kind, title, body, link, level (info, success, warning, problem), its source (a run, approval, alert or table project), when it was read, and a key so nothing is said twice. It keeps 90 days and at most 500 per person, and each person reads only their own. Nothing needs setting up. Who gets what:
+
+  | What happened | Who is told |
+  | --- | --- |
+  | A run failed, timed out or needs a person (reconciliation, a parked step) | The owners, the member who started it, and whoever published the workflow |
+  | A run a member started from the web app finished | That member ("Your run of *Payroll* finished"), not the owners |
+  | An approval is waiting | Each person who may decide it, until it is decided (it then says who decided) |
+  | A setup problem (every `alerts.TellOwners`, a data project or token that failed, a connection expired, a plan limit reached) | The owners |
+  | An alert rule fired | The members on the rule's channels, besides the channels |
+
+  Repeats are grouped: ten failures of one workflow in an hour are one notification ("*Payroll* failed 10 times"), updated rather than added.
+- **The bell.** A bell in the header shows a count of unread items.
+  - Its panel lists them newest first, under **Today** and **Earlier**.
+  - **Waiting for you** is pinned at the top: approvals and setup problems, which stay until dealt with.
+  - Opening an item marks it read and goes to its page (the run, the approval, the settings). **Mark all read** sits at the top of the panel.
+  - **Approvals** in the menu and the phone's tab bar shows how many wait for you.
+  - The count is fetched on load, every 30 seconds while the tab is visible, and when it comes back to view. A new problem while you are looking also shows as a toast.
+- **On your phone too.** Owners hear about failures and setup problems on the WhatsApp or Telegram they linked, through the existing chat outbox (`notify@1`'s path). It is throttled to one message per workflow per hour, which then says how many more failed, and falls back to email. **Settings > Notifications** has a switch per kind for chat and email (the app always shows them). The default is on for failures and setup problems, and off for finished runs.
+- **API:**
+  - `GET /v1/notifications` (`?unread=true`, paged);
+  - `GET /v1/notifications/count` (unread and waiting, cheap);
+  - `POST /v1/notifications/read` (`{ids}` or `{all: true}`);
+  - `GET` and `PUT /v1/me/notification-settings`.
+
+  All are documented in OpenAPI. The chat conversation's `alerts` command lists the same items.
+- **Docs:** a guide section "Knowing what happened" (owner guide), `docs/alerts.md` (rules are now on top of default notifications), and the operations doc (the error reference).
+
+**Accept:**
+- A browser test (`web/e2e/feedback.spec.ts`):
+  1. Saving a setting shows "Saved".
+  2. A refused save shows the error both as a toast and in its section.
+  3. A forced 500 shows a reference, which is in the server log.
+- A browser test of the bell: a workflow that fails raises the count. Opening the bell lists it under **Today**, opening the item lands on the run, and the count drops. An approval waiting shows under **Waiting for you** and on **Approvals** in the menu.
+- An api test: a failure reaches the owner, the starter and the publisher once each. Ten failures in an hour are one item. A member never reads another's notifications, and another tenant's never show.
+- With nothing set up, a new business's owner hears of a failed run in the app and on their linked Telegram.
+- A test that lists every `useAction` call without a success message or `success: false`.
+- No owner-facing text from Appendix C in the toasts and notifications.
+
 ## Order and timing
 
 | Order | Milestone | Size | Why here |
@@ -283,6 +345,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 | 9 | N9 Optional steps | M | Optional features; domains wait on the domain platform |
 | 10 | N10 An email starts a workflow | L | Asked for after N1 to N9 were planned; needs N0-8, the mail domain and port 25 on the VMs, and reuses forms' file storage and N4's channel. M if an inbound-mail service is used instead of the `mail` role |
 | 11 | N11 Reaching people not on Taskiem | L | Asked for after N10, from a leave-request workflow that asked staff for their chat ID; needs N0-9, reuses N4's step and outbox, the forms' verification and the chat channels. WhatsApp's half waits on the Business account and the `taskiem_update` template's approval, and falls back to SMS until then |
+| 12 | N12 Telling people what happened | M | Asked for after N11: the app gives almost no feedback, and a failed run tells nobody without an alert rule. Toasts are small (one component and `useAction`); notifications reuse alerts, the approval targets and the chat outbox |
 
 About 14 to 18 weeks for one engineer, or 8 to 10 for two working in parallel (N2 and N8 split well). The Phase 5 pilot starts after N1 to N7 and the gate's observed sessions; N8 and N9 can finish during the pilot.
 
