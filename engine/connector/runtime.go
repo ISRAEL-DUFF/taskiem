@@ -42,6 +42,22 @@ type Action interface {
 	Execute(ctx context.Context, req Request) (Response, error)
 }
 
+type manifestsOnlyKey struct{}
+
+// ManifestsOnly marks ctx for a caller that reads connectors' manifests and
+// runs none (checking a definition): a source may skip what only running
+// needs, such as compiling a WebAssembly module, which takes seconds for a
+// large one.
+func ManifestsOnly(ctx context.Context) context.Context {
+	return context.WithValue(ctx, manifestsOnlyKey{}, true)
+}
+
+// IsManifestsOnly reports whether ctx is ManifestsOnly's.
+func IsManifestsOnly(ctx context.Context) bool {
+	v, _ := ctx.Value(manifestsOnlyKey{}).(bool)
+	return v
+}
+
 // ActionFunc adapts a function to Action.
 type ActionFunc func(ctx context.Context, req Request) (Response, error)
 

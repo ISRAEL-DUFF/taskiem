@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -240,5 +242,58 @@ func TestInvalidModuleIsNotCached(t *testing.T) {
 	}
 	if got := rt.cached(); len(got) != 0 {
 		t.Errorf("cache holds %v", got)
+	}
+}
+
+// TestConcurrentLoadsCompileOnce: calls that need a module at the same
+// moment wait for one compilation instead of each compiling it.
+func TestConcurrentLoadsCompileOnce(t *testing.T) {
+	rt, err := New(context.Background(), Limits{MaxCompiled: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rt.Close(context.Background()) }()
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tinyLoad(t, rt, 7)
+		}()
+	}
+	wg.Wait()
+	if n := rt.compiles.Load(); n != 1 {
+		t.Fatalf("compiled %d times, want once", n)
+	}
+}
+
+// TestManifestsOnlyCompilesInTheBackground: a caller that reads manifests
+// only (checking a definition) is not held up by compiling a published
+// module; it is compiled once in the background, and running it uses that.
+func TestManifestsOnlyCompilesInTheBackground(t *testing.T) {
+	rt, err := New(context.Background(), Limits{MaxCompiled: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rt.Close(context.Background()) }()
+	man := strings.Replace(tinyManifest, "id: x_tiny", "id: "+connector.CataloguePrefix+"tiny", 1)
+	c, err := rt.LoadPublished(connector.ManifestsOnly(context.Background()), []byte(man), tinyModule(9))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for len(rt.cached()) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("never compiled in the background")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	open := &gateTransport{entered: make(chan struct{}, 8), release: make(chan struct{})}
+	close(open.release)
+	if out, err := runTiny(c, open); err != nil || fmt.Sprint(out) != "map[n:9]" {
+		t.Fatalf("running it: %v %v", out, err)
+	}
+	if n := rt.compiles.Load(); n != 1 {
+		t.Fatalf("compiled %d times, want once", n)
 	}
 }

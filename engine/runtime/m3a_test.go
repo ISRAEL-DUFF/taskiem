@@ -77,6 +77,11 @@ func TestOperatorResolvesParkedStep(t *testing.T) {
 	if e.Status(t, done) != "needs_reconciliation" || e.Status(t, retry) != "needs_reconciliation" {
 		t.Fatal("setup: both runs should park")
 	}
+	// The notifier is told, once per run (no-technical-steps N12).
+	var told int
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM run_outcomes WHERE run_id IN ($1, $2) AND status = 'needs_reconciliation'`, done.ID, retry.ID).Scan(&told); err != nil || told != 2 {
+		t.Fatalf("run outcomes: %d %v", told, err)
+	}
 	if err := e.Store.ResolveStep(ctx, done, "after", runtime.ResolveCompleted, nil, "", "ops"); err == nil {
 		t.Error("resolving a step that is not parked should fail")
 	}

@@ -18,7 +18,7 @@ export function Keys() {
   const v = view.data;
   if (!v) return view.error ? <ErrorBox error={view.error} /> : <Skeleton />;
   const st = v.status;
-  const run = (fn: () => Promise<string>) => void act.run(async () => (setNotice(await fn()), view.reload()));
+  const run = (fn: () => Promise<string>) => void act.run(async () => (setNotice(await fn()), view.reload()), false);
   return (
     <div>
       <PageHeader title="Encryption keys" description="The keys that protect your secrets, credentials and personal data, and how to rotate them." />
@@ -182,7 +182,7 @@ function Onboard({ providers, request, onDone }: { providers: Provider[]; reques
           const out = await request("use your own key", (p) => put<{ version: number }>("/v1/keys/byok", { ...byokRequest(provider, values, auth), ...p }));
           setValues({});
           onDone(`Your key is in use: tenant key version ${out.version} is wrapped by it. Existing data keys are re-wrapped in the background.`);
-        });
+        }, false);
       }}
     >
       <p className="hint">
@@ -234,7 +234,7 @@ function Credentials({ provider, request, onSaved }: { provider: Provider; reque
           setValues({});
           setOpen(false);
           onSaved(out.health?.ok ? "New credentials saved; your key works." : "New credentials saved.");
-        });
+        }, false);
       }}
     >
       <h3>Replace credentials</h3>

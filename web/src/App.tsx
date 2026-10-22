@@ -37,12 +37,16 @@ import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./p
 import { get } from "./api";
 import { AgentApp, AgentWorkspace, useAgentSession } from "./pages/Agent";
 import { Home } from "./pages/Home";
+import { Bell, useBellCount } from "./Bell";
+import { Toaster } from "./toast";
+import { NotificationSettings } from "./pages/NotificationSettings";
 
 export function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Shell />
+        <Toaster />
       </BrowserRouter>
     </AuthProvider>
   );
@@ -62,7 +66,7 @@ function EnrolPasskey() {
         <>
           <p>Passkey added. Sign in with it now.</p>
           <ErrorBox error={act.error} />
-          <button className="primary" disabled={act.busy} onClick={() => void act.run(loginWithPasskey)}>
+          <button className="primary" disabled={act.busy} onClick={() => void act.run(loginWithPasskey, false)}>
             Sign in with your passkey
           </button>
         </>
@@ -174,6 +178,8 @@ function SignedIn() {
       live = false;
     };
   }, [pathname]);
+  // The bell: a person's notifications and approvals waiting (N12).
+  const bell = useBellCount(!!me?.user, pathname);
   if (!me) return null;
   // The sidebar: what a business uses every day, then everything else
   // under More (open while one of its pages is). [path, label, icon, visible, count].
@@ -190,7 +196,7 @@ function SignedIn() {
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
-    ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish")],
+    ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish"), bell.approvals > 0 ? String(bell.approvals) : undefined],
     ["/connections", "Connections", "connections", can("connection.manage")],
   ];
   const more: Item[] = [
@@ -201,6 +207,7 @@ function SignedIn() {
     ["/catalogue", "Connector catalogue", "catalogue", can("connector.manage") || can("workflow.read")],
     ["/settings", "Secrets & settings", "settings", can("secret.manage") || can("workflow.read")],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
+    ["/settings/notifications", "Notifications", "bell", !!me.user],
     ["/alerts", "Alerts", "alerts", can("alert.manage")],
     ["/audit", "Audit log", "audit", can("audit.read")],
     ["/reports", "Reports", "reports", can("audit.read")],
@@ -229,6 +236,7 @@ function SignedIn() {
           </span>
           <span>{business}</span>
         </span>
+        {me.user && <Bell count={bell} onChange={bell.reload} />}
       </header>
       {drawer && <div className="nav-scrim" aria-hidden="true" onClick={() => setDrawer(false)} />}
       <nav id="main-nav" ref={navRef} className={`nav drawer${drawer ? " open" : ""}`} aria-label="Main" tabIndex={-1}>
@@ -240,6 +248,11 @@ function SignedIn() {
             <strong>{business}</strong>
             <span>Taskiem</span>
           </span>
+          {me.user && (
+            <span className="nav-bell">
+              <Bell count={bell} onChange={bell.reload} />
+            </span>
+          )}
           <button className="icon-button nav-close" aria-label="Close menu" onClick={() => setDrawer(false)}>
             <Icon name="close" />
           </button>
@@ -305,6 +318,7 @@ function SignedIn() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/billing" element={<Billing />} />
           <Route path="/settings/keys" element={<Keys />} />
+          <Route path="/settings/notifications" element={<NotificationSettings />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/members" element={<Members />} />

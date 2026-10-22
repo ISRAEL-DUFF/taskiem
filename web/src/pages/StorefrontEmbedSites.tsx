@@ -41,7 +41,7 @@ export function StorefrontEmbedSites({ pageURL, business }: { pageURL: string; b
             void act.run(async () => {
               await del(`/v1/embed-sites/${s.id}`);
               done(`${s.origin} was removed.`);
-            })
+            }, false)
           }
         />
       ))}
@@ -53,7 +53,7 @@ export function StorefrontEmbedSites({ pageURL, business }: { pageURL: string; b
               const s = await post<EmbedSite>("/v1/embed-sites", { origin: site, method });
               setSite("");
               done(`Added ${s.origin}. Prove it is yours as shown below.`);
-            });
+            }, false);
           }}
         >
           <Field label="Your website" hint="Its address, such as adakitchen.ng.">
@@ -139,7 +139,7 @@ function SiteCard({ s, pageURL, business, onChange, onRemove }: { s: EmbedSite; 
             await post(`/v1/embed-sites/${s.id}/send-to-designer`, { email: designer });
             setDesigner("");
             onChange(`Sent to ${designer}: the code and how to prove the website is yours.`);
-          });
+          }, false);
         }}
       >
         <Field label="Send to my web designer" hint="They get the code and the proof by email.">
@@ -158,7 +158,7 @@ function SiteCard({ s, pageURL, business, onChange, onRemove }: { s: EmbedSite; 
               void act.run(async () => {
                 await post(`/v1/embed-sites/${s.id}/verify`);
                 onChange(`${s.origin} now shows your page.`);
-              })
+              }, false)
             }
           >
             Check now

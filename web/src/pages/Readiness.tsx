@@ -79,7 +79,7 @@ function TableFix({ table, onDone }: { table: TableSpec; onDone: () => void }) {
   return (
     <div>
       <p className="hint">Its columns: {table.columns.map((c) => c.title).join(", ")}.</p>
-      <button type="button" className="small" disabled={act.busy} onClick={() => void act.run(async () => (await post("/v1/tables", table), onDone()))}>
+      <button type="button" className="small" disabled={act.busy} onClick={() => void act.run(async () => (await post("/v1/tables", table), onDone()), "Table made")}>
         {act.busy ? "Making it…" : "Make it"}
       </button>
       <ErrorBox error={act.error} />
@@ -121,7 +121,7 @@ function ValueFix({ label, secret = false, onSave, onDone }: { label: string; se
       className="toolbar"
       onSubmit={(e) => {
         e.preventDefault();
-        void act.run(async () => (await onSave(value), setValue(""), onDone()));
+        void act.run(async () => (await onSave(value), setValue(""), onDone()), "Saved");
       }}
     >
       <input aria-label={label} placeholder={label} type={secret ? "password" : "text"} autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} required />
@@ -150,7 +150,7 @@ function RoleFix({ role, onDone }: { role: string; onDone: () => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         // Adding a role to someone already in the business keeps theirs.
-        void act.run(async () => (await post("/v1/members", { email: who, roles: [role] }), onDone()));
+        void act.run(async () => (await post("/v1/members", { email: who, roles: [role] }), onDone()), "Role given");
       }}
     >
       <select aria-label={`Who is ${words(role)}`} value={who} onChange={(e) => setWho(e.target.value)} required>

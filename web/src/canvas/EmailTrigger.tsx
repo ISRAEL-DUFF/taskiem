@@ -132,7 +132,7 @@ export function EmailAddressCard({ workflow }: { workflow: string }) {
                     }>(`/v1/workflows/${workflow}/email/${ep.environment}/test`);
                     if (r.run_id) nav(`/runs/${r.run_id}`);
                     else setNote(r.note);
-                  })
+                  }, false)
                 }
               >
                 Try it with a sample email
@@ -148,7 +148,7 @@ export function EmailAddressCard({ workflow }: { workflow: string }) {
                   void act.run(async () => {
                     await post(`/v1/workflows/${workflow}/email/${ep.environment}/address`);
                     data.reload();
-                  });
+                  }, "New address made");
                 }}
               >
                 Get a new address

@@ -73,7 +73,7 @@ export function AgentVisits() {
                       className="danger"
                       disabled={act.busy}
                       onClick={() =>
-                        confirm(`End ${v.agent_name}'s session now?`) && void act.run(async () => (await post(`/v1/agent-visits/${v.id}/end`), visits.reload()))
+                        confirm(`End ${v.agent_name}'s session now?`) && void act.run(async () => (await post(`/v1/agent-visits/${v.id}/end`), visits.reload()), "Visit ended")
                       }
                     >
                       End
@@ -101,7 +101,7 @@ function InviteAgent({ onClose, onDone }: { onClose: () => void; onDone: () => v
         onSubmit={(e) => {
           e.preventDefault();
           if (h === null) return;
-          void act.run(async () => (await post("/v1/agent-visits", { agent_code: code.trim().toUpperCase(), hours: h }), onDone()));
+          void act.run(async () => (await post("/v1/agent-visits", { agent_code: code.trim().toUpperCase(), hours: h }), onDone()), "Visit started");
         }}
       >
         <p className="hint">For a support visit: the agent may work on your storefront and its tables from now, for the hours you choose. You can end it any time.</p>

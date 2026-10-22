@@ -927,8 +927,14 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 			var fp history.FailedPayload
 			_ = json.Unmarshal(result.Payload, &fp)
 			if fp.Error.Next == "park" {
-				if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1 AND status NOT IN ('completed', 'failed', 'cancelled')`, p.c.run); err != nil {
+				tag, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1 AND status NOT IN ('completed', 'failed', 'cancelled')`, p.c.run)
+				if err != nil {
 					return err
+				}
+				if tag.RowsAffected() == 1 {
+					if err := QueueOutcome(ctx, tx, p.c.run, "needs_reconciliation"); err != nil {
+						return err
+					}
 				}
 			}
 			if fp.Error.Kind == KindKeyUnavailable {

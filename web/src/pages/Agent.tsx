@@ -190,7 +190,7 @@ function AgentHome() {
             )}
             {s.status === "active" && (
               <div className="toolbar" style={{ margin: "8px 0 0" }}>
-                <button className="primary" disabled={act.busy} onClick={() => void act.run(() => enterSession(s.id, navigate))}>
+                <button className="primary" disabled={act.busy} onClick={() => void act.run(() => enterSession(s.id, navigate), false)}>
                   Work on the page
                 </button>
                 {s.kind === "onboarding" && (
@@ -223,7 +223,7 @@ function NewBusiness() {
           void act.run(async () => {
             const out = await post<{ session: SessionRow; consent: Consent }>("/v1/agent/businesses", { name: name.trim(), owner_name: owner.trim(), owner_phone: phone.trim() });
             navigate(`/agent/sessions/${out.session.id}`, { state: { consent: out.consent } });
-          });
+          }, false);
         }}
       >
         <Field label="Business name">
@@ -283,7 +283,7 @@ function SessionPage() {
   // Agreed while the agent watched: straight to the page.
   useEffect(() => {
     if (session?.status === "pending") sawPending.current = true;
-    if (session?.status === "active" && sawPending.current) void act.run(() => enterSession(id, navigate));
+    if (session?.status === "active" && sawPending.current) void act.run(() => enterSession(id, navigate), false);
     // Only on the status changing: once, on agreeing.
   }, [session?.status]);
 
@@ -307,7 +307,7 @@ function SessionPage() {
           The owner agreed. You may work on the page until {fmtTime(session.expires_at)}.
         </div>
         <ErrorBox error={act.error} />
-        <button className="primary agent-big" disabled={act.busy} onClick={() => void act.run(() => enterSession(id, navigate))}>
+        <button className="primary agent-big" disabled={act.busy} onClick={() => void act.run(() => enterSession(id, navigate), false)}>
           Work on the page
         </button>
         {back}
@@ -323,7 +323,7 @@ function SessionPage() {
       const out = await post<{ session: SessionRow; consent: Consent }>(`/v1/agent/sessions/${id}/code`);
       setConsent(out.consent);
       setSession(out.session);
-    });
+    }, false);
   return (
     <section className="card">
       <h1>{session.business}</h1>
@@ -476,7 +476,7 @@ function RecordVisit() {
           The photo and place are saved. The business is now agent onboarded.
         </div>
         <ErrorBox error={act.error} />
-        <button className="primary agent-big" disabled={act.busy} onClick={() => void act.run(() => enterSession(id, navigate))}>
+        <button className="primary agent-big" disabled={act.busy} onClick={() => void act.run(() => enterSession(id, navigate), false)}>
           Back to the page
         </button>
         <Link to="/agent">My businesses</Link>
@@ -500,7 +500,7 @@ function RecordVisit() {
               const b = await shrink(f);
               setPhoto(b);
               setPreview(await dataURL(b));
-            });
+            }, false);
           }}
         />
       </Field>
@@ -534,7 +534,7 @@ function RecordVisit() {
             await uploadFile(attestPath(id, place.lat, place.lng, note), photo);
             markAttested(id);
             setDone(true);
-          })
+          }, false)
         }
       >
         {act.busy ? "Sending…" : "Send"}
@@ -611,7 +611,7 @@ export function AgentWorkspace({ session: s }: { session: AgentSession }) {
                 void act.run(async () => {
                   await post(`/v1/agent/sessions/${s.id}/end`);
                   leave({ message: `You left ${s.business}.` });
-                })
+                }, false)
               }
             >
               End session

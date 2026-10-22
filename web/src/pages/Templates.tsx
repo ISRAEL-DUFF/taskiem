@@ -113,7 +113,7 @@ function TemplateDetail({ template: t, canCreate, onBack }: { template: Template
         );
       }
       nav(`/workflows/${r.id}`);
-    });
+    }, false);
   return (
     <div className="card">
       <div className="toolbar">

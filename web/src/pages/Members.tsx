@@ -80,7 +80,7 @@ function PendingInvitations({ refresh }: { refresh: unknown }) {
                 <button
                   className="danger"
                   disabled={act.busy}
-                  onClick={() => confirm(`Withdraw the invitation to ${i.email}?`) && void act.run(async () => (await del(`/v1/invitations/${i.user_id}`), list.reload()))}
+                  onClick={() => confirm(`Withdraw the invitation to ${i.email}?`) && void act.run(async () => (await del(`/v1/invitations/${i.user_id}`), list.reload()), "Invitation cancelled")}
                 >
                   Withdraw
                 </button>
@@ -143,7 +143,7 @@ export function Members() {
                         className="chip-x"
                         aria-label={`Take ${r} from ${m.email}`}
                         title={`Take ${r} from ${m.email}`}
-                        onClick={() => confirm(`Take ${r} from ${m.email}?`) && void act.run(async () => (await del(`/v1/members/${m.user_id}/roles/${encodeURIComponent(r)}`), members.reload(), roles.reload()))}
+                        onClick={() => confirm(`Take ${r} from ${m.email}?`) && void act.run(async () => (await del(`/v1/members/${m.user_id}/roles/${encodeURIComponent(r)}`), members.reload(), roles.reload()), "Role removed")}
                       >
                         ×
                       </button>
@@ -194,7 +194,7 @@ export function Members() {
                   {!r.built_in && can("role.manage") && (
                     <>
                       <button onClick={() => setEditing(r)}>Edit</button>{" "}
-                      <button className="danger" disabled={r.members > 0} onClick={() => confirm(`Delete ${r.name}?`) && void act.run(async () => (await del(`/v1/roles/${r.name}`), roles.reload()))}>
+                      <button className="danger" disabled={r.members > 0} onClick={() => confirm(`Delete ${r.name}?`) && void act.run(async () => (await del(`/v1/roles/${r.name}`), roles.reload()), "Role deleted")}>
                         Delete
                       </button>
                     </>
@@ -249,7 +249,7 @@ export function Members() {
                   {k.revoked_at ? (
                     <span className="hint">revoked</span>
                   ) : (
-                    <button className="danger" onClick={() => confirm(`Revoke ${k.name}?`) && void act.run(async () => (await del(`/v1/api-keys/${k.id}`), keys.reload()))}>
+                    <button className="danger" onClick={() => confirm(`Revoke ${k.name}?`) && void act.run(async () => (await del(`/v1/api-keys/${k.id}`), keys.reload()), "Key deleted")}>
                       Revoke
                     </button>
                   )}
@@ -280,7 +280,7 @@ function EditRole({ role, onClose, onDone }: { role: Role | null; onClose: () =>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await put(`/v1/roles/${name}`, { description, permissions: chosen }), onDone()));
+          void act.run(async () => (await put(`/v1/roles/${name}`, { description, permissions: chosen }), onDone()), "Role saved");
         }}
       >
         {!role && (
@@ -353,7 +353,7 @@ function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClo
         onSubmit={(e) => {
           e.preventDefault();
           const all = [...roles, ...custom.split(",").map(roleName).filter(Boolean)];
-          void act.run(async () => (await post("/v1/members", { email, name, password, roles: all }), onDone()));
+          void act.run(async () => (await post("/v1/members", { email, name, password, roles: all }), onDone()), "Member added");
         }}
       >
         <Field label="Email">
@@ -420,7 +420,7 @@ function NewKey({ onClose }: { onClose: () => void }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => setShown((await post<{ key: string }>("/v1/api-keys", { name, permissions: perms, ...(env && { environment: env }) })).key));
+          void act.run(async () => setShown((await post<{ key: string }>("/v1/api-keys", { name, permissions: perms, ...(env && { environment: env }) })).key), false);
         }}
       >
         <Field label="Name">
@@ -490,7 +490,7 @@ function SingleSignOn() {
       const n = { ...c, ...change };
       await put(`/v1/sso/${c.id}`, { default_roles: n.default_roles, group_roles: n.group_roles, jit: n.jit, enforce: n.enforce, disabled: n.disabled });
       list.reload();
-    });
+    }, "Saved");
   return (
     <>
       <div className="toolbar" style={{ marginTop: 24 }}>
@@ -552,7 +552,7 @@ function SingleSignOn() {
                       </>
                     )}
                   </td>
-                  <td>{!d.verified_at && <button onClick={() => void act.run(async () => (await post(`/v1/sso/domains/${d.domain}/verify`), list.reload()))}>Verify</button>}</td>
+                  <td>{!d.verified_at && <button onClick={() => void act.run(async () => (await post(`/v1/sso/domains/${d.domain}/verify`), list.reload()), "Checked")}>Verify</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -561,7 +561,7 @@ function SingleSignOn() {
             <Field label="Add a domain">
               <input value={domain[c.id] ?? ""} placeholder="bank.com" onChange={(e) => setDomain({ ...domain, [c.id]: e.target.value })} />
             </Field>
-            <button disabled={!domain[c.id]} onClick={() => void act.run(async () => (await post(`/v1/sso/${c.id}/domains`, { domain: domain[c.id] }), setDomain({ ...domain, [c.id]: "" }), list.reload()))}>
+            <button disabled={!domain[c.id]} onClick={() => void act.run(async () => (await post(`/v1/sso/${c.id}/domains`, { domain: domain[c.id] }), setDomain({ ...domain, [c.id]: "" }), list.reload()), "Domain added")}>
               Add
             </button>
           </div>
@@ -597,12 +597,12 @@ function Provisioning() {
       await put("/v1/scim", { default_roles: edit.defaults.split(",").map((r) => r.trim()).filter(Boolean), group_roles });
       setEdit(null);
       cfg.reload();
-    });
+    }, "Saved");
   const newToken = () =>
     act.run(async () => {
       const out = await post<{ key: string }>("/v1/api-keys", { name: "SCIM provisioning", permissions: ["scim.provision"], expires_days: 365 });
       setToken(out.key);
-    });
+    }, false);
   return (
     <>
       <div className="toolbar" style={{ marginTop: 24 }}>
@@ -710,7 +710,7 @@ function AddSSO({ onClose, onDone }: { onClose: () => void; onDone: () => void }
             protocol === "oidc"
               ? { protocol, name, oidc: { issuer, client_id: clientID, client_secret: secret, groups_claim: groupsField }, default_roles: roles, group_roles: parseMapping() }
               : { protocol, name, saml: { metadata_xml: metadata, name_attr: "name", groups_attr: groupsField }, default_roles: roles, group_roles: parseMapping() };
-          void act.run(async () => (await post("/v1/sso", body), onDone()));
+          void act.run(async () => (await post("/v1/sso", body), onDone()), "Single sign-on added");
         }}
       >
         <Field label="Protocol">

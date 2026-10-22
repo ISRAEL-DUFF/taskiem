@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -49,7 +50,7 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 	if err := s.emailDeployable(d); err != nil {
 		return err
 	}
-	reg, err := s.Registry.For(ctx, tenant.String())
+	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), tenant.String()) // triggers' manifests only: nothing is compiled
 	if err != nil {
 		return err
 	}

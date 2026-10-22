@@ -1112,6 +1112,15 @@ func redactAttr(_ []string, a slog.Attr) slog.Attr {
 // TASKIEM_ALERT_FROM.
 func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
 	a := &alerts.Alerter{Pool: e.pool, Secrets: e.vault, Egress: &egress.Guard{Logger: log}, PublicURL: c.PublicURL, From: c.AlertFrom, Logger: log}
+	// How often rules are evaluated and run outcomes told (default 30s;
+	// shorter in browser tests).
+	if v := os.Getenv("TASKIEM_ALERT_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Second || d > time.Hour {
+			return nil, errors.New("TASKIEM_ALERT_INTERVAL must be a duration from 1s to 1h")
+		}
+		a.Interval = d
+	}
 	if e.wa != nil {
 		a.WhatsApp = e.wa
 	}

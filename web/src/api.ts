@@ -109,13 +109,21 @@ export async function getBlob(path: string): Promise<Blob> {
   return res.blob();
 }
 
+/** The message for a request that never reached Taskiem. */
+export const OFFLINE = "You're offline, or Taskiem can't be reached. Check your connection and try again.";
+
 async function request<T>(method: string, path: string, body: BodyInit | undefined, headers: Record<string, string>): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    credentials: "same-origin",
-    headers: headersFor(path, headers),
-    body,
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      credentials: "same-origin",
+      headers: headersFor(path, headers),
+      body,
+    });
+  } catch {
+    throw new ApiError(0, OFFLINE);
+  }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   let data: Record<string, unknown>;

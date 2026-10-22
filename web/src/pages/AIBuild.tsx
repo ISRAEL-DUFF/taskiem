@@ -170,7 +170,7 @@ export function AIBuilder({
         saved_workflow_id: null,
         saved_version: null,
       });
-    });
+    }, false);
 
   const save = () =>
     act.run(async () => {
@@ -193,7 +193,7 @@ export function AIBuilder({
       if (troubles.length > 0)
         setSaved({ id: r.id, version: r.version, troubles });
       else onSaved(r.id, r.version);
-    });
+    }, "Saved as a draft");
 
   const p = build?.proposal;
   const budget = status?.budget;

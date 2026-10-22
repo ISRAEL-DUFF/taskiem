@@ -30,7 +30,8 @@ type problem = wdcheck.Problem
 // check validates a WD document against the contract and against this
 // platform: connectors and actions must exist, code must compile.
 func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []problem {
-	reg, err := s.Registry.For(ctx, tenant.String())
+	// Checking reads connectors' manifests: nothing is compiled for it.
+	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), tenant.String())
 	if err != nil {
 		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
 	}

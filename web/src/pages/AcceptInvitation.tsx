@@ -29,7 +29,7 @@ export function AcceptInvitation() {
   const accept = useAction();
   useEffect(() => {
     // Once, for this token.
-    if (token) void load.run(async () => setInvite(await post<LinkOptions>("/v1/auth/invitation/options", { token })));
+    if (token) void load.run(async () => setInvite(await post<LinkOptions>("/v1/auth/invitation/options", { token })), false);
   }, [token]); // not load: it is a new object every render
   const join = () =>
     accept.run(async () => {
@@ -39,7 +39,7 @@ export function AcceptInvitation() {
       await post("/v1/auth/invitation/accept", { token, credential, name, passkey_name: "Passkey" });
       await refresh();
       nav("/home", { replace: true });
-    });
+    }, false);
   return (
     <div className="login card">
       <h1>Accept your invitation</h1>

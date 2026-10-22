@@ -120,7 +120,7 @@ export function RunPage() {
             <button
               className="danger"
               disabled={act.busy}
-              onClick={() => confirm("Cancel this run? Steps already sent to a provider still record their results.") && void act.run(async () => (await post(`/v1/runs/${id}/cancel`), reload()))}
+              onClick={() => confirm("Cancel this run? Steps already sent to a provider still record their results.") && void act.run(async () => (await post(`/v1/runs/${id}/cancel`), reload()), "Run cancelled")}
             >
               Cancel run
             </button>
@@ -344,7 +344,7 @@ function Resolve({ run, step, onClose, onDone }: { run: string; step: string; on
         <button
           className="primary"
           disabled={act.busy || !note}
-          onClick={() => void act.run(async () => (await post(`/v1/runs/${run}/steps/${encodeURIComponent(step)}/resolve`, { resolution, note, ...(resolution === "completed" && { output }) }), onDone()))}
+          onClick={() => void act.run(async () => (await post(`/v1/runs/${run}/steps/${encodeURIComponent(step)}/resolve`, { resolution, note, ...(resolution === "completed" && { output }) }), onDone()), "Step resolved")}
         >
           Resolve
         </button>

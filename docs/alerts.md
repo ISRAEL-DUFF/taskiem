@@ -2,6 +2,25 @@
 
 Under **Alerts** (`alert.manage`), a tenant chooses where alerts go (channels) and what to watch (rules). The scheduler role checks rules every 30 seconds, records each finding once, and delivers it to the rule's channels.
 
+## Notifications, with nothing set up
+
+People hear about what concerns them without any rule (no-technical-steps N12). The **bell** in the web app lists each person's own notifications, and **Waiting for you** shows the approvals they may decide.
+
+| What happened | Who is told |
+| --- | --- |
+| A run failed, or waits for a person (an unknown outcome to reconcile) | The owners, the member who started it, and whoever published its workflow |
+| A run a member started finished | That member |
+| An owner alert: a domain no longer verified, a forwarding confirmation, a data tables token not renewed, a catalogue connector revoked | The owners |
+| A rule found something | The members its channels name (by email), else the owners, besides the channels |
+
+Repeats of one thing are one notification while it is unread, with a count ("Payroll failed 3 times"). Opening it marks it read; notifications are kept 90 days.
+
+**Beyond the app.** Owners also hear of failures and setup problems on the WhatsApp or Telegram they linked, at most once per workflow and hour, else by email (`TASKIEM_SMTP_URL`). Each person chooses under **Notifications** (`GET`, `PUT /v1/me/notification-settings`): chat and email for failed runs, setup problems, and their own runs that finish (off by default). The app always shows everything.
+
+Rules stay for everything else: other channels (Slack, a webhook, a shared inbox), thresholds (a slow run, an approval waiting a day), and watching one workflow or environment.
+
+**API:** `GET /v1/notifications` (`?unread=true`, `?before=` to page), `GET /v1/notifications/count` (unread, and approvals waiting), `POST /v1/notifications/read` (`{"ids": [...]}` or `{"all": true}`). A person's own only: an API key has none.
+
 ## Channels
 
 | Kind | Setup | What arrives |

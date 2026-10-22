@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -171,4 +172,29 @@ func envOr(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// A tenant's first secrets written at the same moment share one tenant
+// key: the second waits for the first to make it, instead of failing on a
+// duplicate version 1.
+func TestFirstKeyMadeOnceUnderConcurrency(t *testing.T) {
+	d := dbtest.New(t)
+	v := localVault(t, d)
+	a := d.SeedTenant(t, nil)
+	errs := make(chan error, 8)
+	for i := range 8 {
+		go func() {
+			_, err := v.Put(ctx, a.ID, "prod", fmt.Sprintf("key_%d", i), []byte("value"), "u1")
+			errs <- err
+		}()
+	}
+	for range 8 {
+		if err := <-errs; err != nil {
+			t.Fatalf("a concurrent first write: %v", err)
+		}
+	}
+	var n int
+	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM tenant_keys WHERE tenant_id = $1`, a.ID).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("tenant keys: %d %v", n, err)
+	}
 }

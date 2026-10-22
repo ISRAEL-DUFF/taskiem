@@ -161,7 +161,7 @@ export function Runs() {
                 next.set("before", last.started_at);
                 const r = await get<{ runs: RunSummary[] }>(`/v1/runs?${next}`);
                 setMore([...more, ...r.runs]);
-              })
+              }, false)
             }
           >
             Load older runs

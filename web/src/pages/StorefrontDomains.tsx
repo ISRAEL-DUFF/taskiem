@@ -49,14 +49,14 @@ export function StorefrontDomains({ published, onChange }: { published: boolean;
             void act.run(async () => {
               await post(`/v1/storefront/domains/${d.id}/primary`);
               changed(`${d.domain} is now your page's address.`);
-            })
+            }, false)
           }
           onRemove={() =>
             confirm(`Stop serving your page on ${d.domain}?`) &&
             void act.run(async () => {
               await del(`/v1/storefront/domains/${d.id}`);
               changed(`${d.domain} was removed.`);
-            })
+            }, false)
           }
         />
       ))}
@@ -70,7 +70,7 @@ export function StorefrontDomains({ published, onChange }: { published: boolean;
               const d = await post<StorefrontDomain>("/v1/storefront/domains", { domain });
               setDomain("");
               changed(`Added ${d.domain}. Create the records below, then check it.`);
-            });
+            }, false);
           }}
         >
           <Field label="Domain" hint="Your domain, or a part of it such as shop.example.com. Adding adakitchen.ng covers www.adakitchen.ng too.">
@@ -195,7 +195,7 @@ function DomainCard({
       )}
       <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
         {d.status !== "live" && (
-          <button disabled={busy || checking.busy} onClick={() => void checking.run(async () => setCheck(await onVerify()))}>
+          <button disabled={busy || checking.busy} onClick={() => void checking.run(async () => setCheck(await onVerify()), false)}>
             {checking.busy ? "Checking…" : "Check now"}
           </button>
         )}

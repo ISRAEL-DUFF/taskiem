@@ -36,7 +36,7 @@ export function Start() {
           {data.done} of {data.total} done
         </span>
         {!data.dismissed && can("workflow.edit") && (
-          <button onClick={() => void act.run(async () => (await post("/v1/onboarding/dismiss"), reload(), nav("/home")))}>Hide this</button>
+          <button onClick={() => void act.run(async () => (await post("/v1/onboarding/dismiss"), reload(), nav("/home")), false)}>Hide this</button>
         )}
       </div>
       <ErrorBox error={act.error} />
@@ -60,7 +60,7 @@ export function Start() {
               {!it.done &&
                 (it.id === "verify_email" ? (
                   data.can_send_email && (
-                    <button disabled={act.busy} onClick={() => void act.run(async () => setSent((await post<{ status?: string }>("/v1/me/email/verify/resend")).status ?? "Your email is confirmed."))}>
+                    <button disabled={act.busy} onClick={() => void act.run(async () => setSent((await post<{ status?: string }>("/v1/me/email/verify/resend")).status ?? "Your email is confirmed."), false)}>
                       {c.action}
                     </button>
                   )
@@ -245,7 +245,7 @@ function VariableForm({ name, why, saved, onDone }: { name: string; why: string;
       className="card"
       onSubmit={(e) => {
         e.preventDefault();
-        void act.run(async () => (await put(`/v1/variables/${ENV}/${name}`, { value: plainValue(value) }), onDone()));
+        void act.run(async () => (await put(`/v1/variables/${ENV}/${name}`, { value: plainValue(value) }), onDone()), "Saved");
       }}
     >
       <Field label={name} hint={why}>
@@ -339,7 +339,7 @@ function CreateAndPublish({
             }
             setNeeds(undefined);
             onDone({ id, published: p.state === "published", problems: [] });
-          })
+          }, false)
         }
       >
         {act.busy ? "Publishing…" : "Create and publish"}
@@ -388,7 +388,7 @@ function TestRun({ workflow, onDone }: { workflow: string; onDone: () => void })
         <button
           className="primary"
           disabled={act.busy || (!!run && !finished)}
-          onClick={() => void act.run(async () => setRun((await post<{ run_id: string }>(`/v1/workflows/${workflow}/runs`, { input: input ?? {}, environment: ENV })).run_id))}
+          onClick={() => void act.run(async () => setRun((await post<{ run_id: string }>(`/v1/workflows/${workflow}/runs`, { input: input ?? {}, environment: ENV })).run_id), "Run started")}
         >
           Run it now
         </button>

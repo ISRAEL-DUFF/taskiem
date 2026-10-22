@@ -55,6 +55,9 @@ tags:
 - name: Telegram
   description: Linking people to the platform's Telegram bot.
   x-taskiem-guide: telegram
+- name: Notifications
+  description: What each person needs to know, for the web app's bell, and how they hear beyond it.
+  x-taskiem-guide: alerts
 - name: Updates
   description: People outside the business who get its workflows' messages on WhatsApp or Telegram, and the business's standing link for them.
   x-taskiem-guide: updates
@@ -6025,6 +6028,81 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/notification-settings:
+    get:
+      operationId: getNotificationSettings
+      tags:
+      - Notifications
+      summary: How the caller hears beyond the app
+      description: Per group (failures, setup, finished), whether chat (the WhatsApp or Telegram they linked) and email are on. The app always shows everything.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [settings]
+                properties:
+                  settings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationSetting'
+        '403':
+          description: An API key has no notifications.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putNotificationSettings
+      tags:
+      - Notifications
+      summary: Change how the caller hears beyond the app
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settings]
+              properties:
+                settings:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/NotificationSetting'
+      responses:
+        '200':
+          description: The settings as saved, defaults filled in.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [settings]
+                properties:
+                  settings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationSetting'
+        '403':
+          description: An API key has no notifications.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/passkeys:
     get:
       operationId: listPasskeys
@@ -6629,6 +6707,128 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: Too many wrong codes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/notifications:
+    get:
+      operationId: listNotifications
+      tags:
+      - Notifications
+      summary: The caller's notifications
+      description: Newest first, 50 at a time. Repeats of one thing are one item while unread, with a count.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: unread
+        in: query
+        schema:
+          type: boolean
+      - name: before
+        in: query
+        description: The next page, before this updated_at.
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notifications, unread]
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  unread:
+                    type: integer
+        '403':
+          description: An API key has no notifications.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/notifications/count:
+    get:
+      operationId: notificationCount
+      tags:
+      - Notifications
+      summary: What the bell shows
+      description: Unread notifications, and the approvals waiting for the caller.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unread, approvals]
+                properties:
+                  unread:
+                    type: integer
+                  approvals:
+                    type: integer
+        '403':
+          description: An API key has no notifications.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/notifications/read:
+    post:
+      operationId: readNotifications
+      tags:
+      - Notifications
+      summary: Mark notifications read
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: string
+                    format: uuid
+                all:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [read]
+                properties:
+                  read:
+                    type: integer
+        '403':
+          description: An API key has no notifications.
           content:
             application/json:
               schema:
@@ -13265,6 +13465,52 @@ components:
         created_at:
           type: string
           format: date-time
+    Notification:
+      type: object
+      required: [id, kind, level, title, body, count, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          description: run_failed, run_needs_check, run_finished, setup or alert.
+        level:
+          type: string
+          enum: [info, success, warning, problem]
+        title:
+          type: string
+        body:
+          type: string
+        link:
+          type: string
+          description: Where it is about, in the app (/runs/…) or absolute.
+        count:
+          type: integer
+          description: How many times it happened while unread.
+        run_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        read_at:
+          type: string
+          format: date-time
+    NotificationSetting:
+      type: object
+      required: [group, chat, email]
+      properties:
+        group:
+          type: string
+          enum: [failures, setup, finished]
+        chat:
+          type: boolean
+        email:
+          type: boolean
     Readiness:
       type: object
       required: [ready, needs]
@@ -13352,6 +13598,9 @@ components:
             `rate_limited` (429, with Retry-After when waiting helps), `billing_degraded` (402), `plan_feature_required`
             (402, with `feature`), `downgrade_blocked` (409, with `blockers`), `key_unavailable` (503), `ai_disabled`,
             `ai_budget_exhausted`, `suspended`, and others named in the guides.'
+        reference:
+          type: string
+          description: 'An unexpected error''s reference (`code` `internal`, 500): the server logged the error with it, so a person can quote it and an operator find it.'
         limit:
           type: string
           description: The plan limit that was reached.

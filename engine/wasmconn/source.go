@@ -51,8 +51,14 @@ func (s *Source) Connectors(ctx context.Context, tenant string) ([]*connector.Co
 	if ttl <= 0 {
 		ttl = 10 * time.Second
 	}
+	// A caller that only reads manifests gets catalogue connectors
+	// uncompiled, kept apart from the compiled ones that run.
+	ck := tenant
+	if connector.IsManifestsOnly(ctx) {
+		ck = manifestsKey + tenant
+	}
 	s.mu.Lock()
-	if c, ok := s.tenants[tenant]; ok && time.Since(c.at) < ttl {
+	if c, ok := s.tenants[ck]; ok && time.Since(c.at) < ttl {
 		s.mu.Unlock()
 		return c.list, nil
 	}
@@ -172,7 +178,7 @@ func (s *Source) Connectors(ctx context.Context, tenant string) ([]*connector.Co
 			s.tenants = map[string]cached{}
 		}
 	}
-	s.tenants[tenant] = cached{at: time.Now(), list: list}
+	s.tenants[ck] = cached{at: time.Now(), list: list}
 	s.mu.Unlock()
 	return list, nil
 }
@@ -252,6 +258,9 @@ func (s *Source) loadShared(ctx context.Context, tenant, partner uuid.UUID, id, 
 // version); reading it goes through the tenant's scope.
 func (s *Source) loadInstalled(ctx context.Context, tenant uuid.UUID, id, version string) (*connector.Connector, error) {
 	key := "catalogue/" + id + "@" + version
+	if connector.IsManifestsOnly(ctx) {
+		key = manifestsKey + key
+	}
 	s.mu.Lock()
 	c, ok := s.loaded[key]
 	s.mu.Unlock()
@@ -286,10 +295,15 @@ func (s *Source) loadInstalled(ctx context.Context, tenant uuid.UUID, id, versio
 	return c, nil
 }
 
+// manifestsKey marks cache entries of connectors loaded for their
+// manifests only (connector.ManifestsOnly).
+const manifestsKey = "manifests:"
+
 // Forget drops a tenant's cached list, after an upload or a disable.
 func (s *Source) Forget(tenant string) {
 	s.mu.Lock()
 	delete(s.tenants, tenant)
+	delete(s.tenants, manifestsKey+tenant)
 	s.mu.Unlock()
 }
 

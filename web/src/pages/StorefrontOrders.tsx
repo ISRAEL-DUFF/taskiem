@@ -202,7 +202,7 @@ export function StorefrontOrder() {
                   disabled={refund.busy}
                   onClick={() =>
                     confirm(`Refund ${formatPrice(o.deposit_kobo ?? o.total_kobo)} to the customer now? It comes from your Paystack balance.`) &&
-                    void refund.run(async () => (await post(`/v1/storefront/orders/${encodeURIComponent(o.reference)}/refund`), reload()))
+                    void refund.run(async () => (await post(`/v1/storefront/orders/${encodeURIComponent(o.reference)}/refund`), reload()), "Refunded")
                   }
                 >
                   Refund through Paystack
@@ -335,7 +335,7 @@ export function StorefrontOrder() {
                     void reveal.run(async () => {
                       const r = await get<{ order: Order; revealed: boolean }>(`/v1/storefront/orders/${encodeURIComponent(reference)}?reveal=true`);
                       setRevealed(r.order);
-                    })
+                    }, false)
                   }
                 >
                   Show customer's details

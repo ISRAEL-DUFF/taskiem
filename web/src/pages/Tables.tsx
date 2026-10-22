@@ -177,7 +177,7 @@ function NewTable({ onClose, onDone }: { onClose: () => void; onDone: () => void
         onSubmit={(e) => {
           e.preventDefault();
           if (!ok) return;
-          void act.run(async () => (await post("/v1/tables", { name, title, description, columns }), onDone()));
+          void act.run(async () => (await post("/v1/tables", { name, title, description, columns }), onDone()), "Table made");
         }}
       >
         <p className="hint">The first table makes your organisation's data project, which takes a minute or two. Every table gets an id, created_at and updated_at.</p>
@@ -260,7 +260,7 @@ function ProjectSettings({ status, tables, onChange }: { status: TablesStatus; t
           onSubmit={(e) => {
             e.preventDefault();
             if (!chosen) return;
-            void act.run(async () => (await put("/v1/tables/project", { connection_id: chosen }), onChange()));
+            void act.run(async () => (await put("/v1/tables/project", { connection_id: chosen }), onChange()), "Saved");
           }}
         >
           <Field label="Use my own Xenibase project" hint="A xenibase connection in prod with the project's secret key and data API URL; it is tested first.">
@@ -396,7 +396,7 @@ function AddColumn({ table, onClose, onDone }: { table: Table; onClose: () => vo
         onSubmit={(e) => {
           e.preventDefault();
           if (bad || !column.name) return;
-          void act.run(async () => (await post(`/v1/tables/${table.id}/columns`, column), onDone()));
+          void act.run(async () => (await post(`/v1/tables/${table.id}/columns`, column), onDone()), "Column added");
         }}
       >
         <p className="hint">A required column cannot be added once the table has rows.</p>
@@ -428,7 +428,7 @@ function ConfirmDelete({ what, name, onClose, run }: { what: string; name: strin
         onSubmit={(e) => {
           e.preventDefault();
           if (typed !== name) return;
-          void act.run(run);
+          void act.run(run, "Deleted");
         }}
       >
         <Field label="Name">
@@ -521,7 +521,7 @@ function Rows({ table, edit, onChanged }: { table: Table; edit: boolean; onChang
                 (e.target as HTMLFormElement).reset();
                 reload();
                 return out;
-              });
+              }, "Imported");
             }}
           >
             <Field label="Import CSV" hint={fileError ?? "A header row naming the columns, in any case; up to 5,000 rows"}>
@@ -572,7 +572,7 @@ function Rows({ table, edit, onChanged }: { table: Table; edit: boolean; onChang
                       disabled={act.busy}
                       onClick={() => {
                         if (!window.confirm(`Delete row ${String(r.id)}?`)) return;
-                        void act.run(async () => (await del(`/v1/tables/${table.id}/rows/${String(r.id)}`), reload()));
+                        void act.run(async () => (await del(`/v1/tables/${table.id}/rows/${String(r.id)}`), reload()), "Row deleted");
                       }}
                     >
                       Delete
@@ -620,7 +620,7 @@ function RowForm({ table, row, onClose, onDone }: { table: Table; row: Row | nul
             if (row) await patch(`/v1/tables/${table.id}/rows/${String(row.id)}`, { set: body });
             else await post(`/v1/tables/${table.id}/rows`, { row: body });
             onDone();
-          });
+          }, "Saved");
         }}
       >
         {table.columns.map((c) => (
@@ -705,7 +705,7 @@ function TableFromFile({ disabled, onDone }: { disabled: boolean; onDone: () => 
             await upload(`/v1/tables/${made.id}/import`, form);
             onDone();
             void nav(`/tables/${made.id}`);
-          });
+          }, "Table made");
         }}
       />
       {act.error ? <ErrorBox error={act.error} /> : null}

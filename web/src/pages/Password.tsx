@@ -29,7 +29,7 @@ export function ForgotPassword() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void act.run(async () => setSent((await post<{ status: string }>("/v1/auth/password/forgot", { email })).status));
+            void act.run(async () => setSent((await post<{ status: string }>("/v1/auth/password/forgot", { email })).status), false);
           }}
         >
           <p className="hint">Enter the email you sign in with. If it signs in with a password, we email a link to choose a new one.</p>
@@ -83,7 +83,7 @@ export function ResetPassword() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void act.run(async () => setDone((await post<{ status: string }>("/v1/auth/password/reset", { token, password })).status));
+            void act.run(async () => setDone((await post<{ status: string }>("/v1/auth/password/reset", { token, password })).status), false);
           }}
         >
           <Field label="New password">
@@ -144,7 +144,7 @@ export function ChangePassword() {
         onSubmit={(e) => {
           e.preventDefault();
           setDone(false);
-          void act.run(submit);
+          void act.run(submit, false);
         }}
       >
         <div className="row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>

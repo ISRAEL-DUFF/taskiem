@@ -64,13 +64,13 @@ export function Billing() {
         }
         throw e;
       }
-    });
+    }, false);
   const pay = () =>
     act.run(async () => {
       const r = await post<Checkout>("/v1/billing/checkout", data.open_invoice ? { invoice: data.open_invoice.id } : {});
       if (r.paid) reload();
       else go(r.checkout_url);
-    });
+    }, false);
 
   return (
     <>
@@ -124,7 +124,7 @@ export function Billing() {
                 <dt>Ends</dt>
                 <dd>
                   {day(sub.period_end)}{" "}
-                  <button disabled={act.busy} onClick={() => void act.run(async () => (await post("/v1/billing/cancel", { resume: true }), reload()))}>
+                  <button disabled={act.busy} onClick={() => void act.run(async () => (await post("/v1/billing/cancel", { resume: true }), reload()), "Subscription resumed")}>
                     Keep my subscription
                   </button>
                 </dd>
@@ -230,7 +230,7 @@ export function Billing() {
                 disabled={act.busy}
                 onClick={() => {
                   if (window.confirm(`Cancel at the end of the period (${day(sub.status === "trial" ? sub.trial_end : sub.period_end)})? New runs stop then; your workflows and history are kept.`))
-                    void act.run(async () => (await post("/v1/billing/cancel", {}), reload()));
+                    void act.run(async () => (await post("/v1/billing/cancel", {}), reload()), "Subscription cancelled");
                 }}
               >
                 Cancel subscription

@@ -29,7 +29,7 @@ export TASKIEM_LISTEN=127.0.0.1:18080 TASKIEM_METRICS_LISTEN=127.0.0.1:19090 TAS
 # Passkeys need a host name: the passkey test browses http://localhost:18080.
 export TASKIEM_PUBLIC_URL=http://localhost:18080 TASKIEM_REQUIRE_ADMIN_PASSKEYS=false
 # Email goes to the SMTP sink password.spec.ts listens on.
-export TASKIEM_SMTP_URL=smtp://127.0.0.1:12525 TASKIEM_ALERT_FROM=taskiem@e2e.test
+export TASKIEM_SMTP_URL=smtp://127.0.0.1:12525 TASKIEM_ALERT_FROM=taskiem@e2e.test TASKIEM_ALERT_INTERVAL=2s
 # The platform WhatsApp number talks to the fake Graph API whatsapp.spec.ts
 # runs (loopback is allowed only because the URL names it).
 export TASKIEM_WHATSAPP_PHONE_NUMBER_ID=106540352242922 TASKIEM_WHATSAPP_ACCESS_TOKEN=EAAe2e TASKIEM_WHATSAPP_APP_SECRET=e2e-app-secret \

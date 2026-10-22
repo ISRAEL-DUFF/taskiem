@@ -84,9 +84,9 @@ function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "appr
     }
     onDone();
   };
-  const submit = () => act.run(() => send(code ? { totp: code } : {}));
+  const submit = () => act.run(() => send(code ? { totp: code } : {}), "Decision recorded");
   // The passkey is asked for this decision on this approval only.
-  const withPasskey = () => act.run(async () => send({ passkey: await stepUpAssert("approval.decide", `${a.run_id}/${a.step_id}/${decision}`) }));
+  const withPasskey = () => act.run(async () => send({ passkey: await stepUpAssert("approval.decide", `${a.run_id}/${a.step_id}/${decision}`) }), "Decision recorded");
   return (
     <Modal title={decision === "approved" ? "Approve" : "Reject"} onClose={onClose}>
       <p>
@@ -127,7 +127,7 @@ function PublishReviews() {
   const act = useAction();
   if (!data || data.requests.length === 0) return error ? <ErrorBox error={error} /> : null;
   const decide = (r: PublishRequest, verdict: "approve" | "reject") =>
-    act.run(async () => (await post(`/v1/workflows/${r.workflow_id}/versions/${r.version}/publish/${verdict}`), reload()));
+    act.run(async () => (await post(`/v1/workflows/${r.workflow_id}/versions/${r.version}/publish/${verdict}`), reload()), "Decision recorded");
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Publishing to review</h2>
@@ -188,7 +188,7 @@ function Delegations() {
                   </td>
                   <td style={{ textAlign: "right" }}>
                     {live && d.from_user === me?.user?.id && (
-                      <button className="danger" disabled={act.busy} onClick={() => void act.run(async () => (await del(`/v1/delegations/${d.id}`), reload()))}>
+                      <button className="danger" disabled={act.busy} onClick={() => void act.run(async () => (await del(`/v1/delegations/${d.id}`), reload()), "Delegation removed")}>
                         Revoke
                       </button>
                     )}
@@ -213,7 +213,7 @@ function Delegations() {
               });
               setForm({ to: "", roles: "", ends: "", reason: "" });
               reload();
-            });
+            }, "Delegation added");
           }}
         >
           <input placeholder="colleague's email" aria-label="Colleague's email" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} required />

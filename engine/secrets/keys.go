@@ -112,9 +112,18 @@ func (v *Vault) unavailable(tenant uuid.UUID, err error) error {
 // currentKEK returns the tenant's newest KEK, creating version 1 if needed.
 func (v *Vault) currentKEK(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int, []byte, error) {
 	var version int
-	err := tx.QueryRow(ctx, `SELECT version FROM tenant_keys WHERE tenant_id = $1 AND retired_at IS NULL ORDER BY version DESC LIMIT 1`, tenant).Scan(&version)
+	const current = `SELECT version FROM tenant_keys WHERE tenant_id = $1 AND retired_at IS NULL ORDER BY version DESC LIMIT 1`
+	err := tx.QueryRow(ctx, current, tenant).Scan(&version)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return v.newKEK(ctx, tx, tenant, 1, nil)
+		// Two first uses at once would both make version 1, and one would
+		// fail on the key: the second waits for the first and uses its key.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem tenant key ' || $1::text, 0))`, tenant); err != nil {
+			return 0, nil, err
+		}
+		err = tx.QueryRow(ctx, current, tenant).Scan(&version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return v.newKEK(ctx, tx, tenant, 1, nil)
+		}
 	}
 	if err != nil {
 		return 0, nil, err

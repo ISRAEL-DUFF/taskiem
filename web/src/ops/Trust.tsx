@@ -156,7 +156,7 @@ export function StorefrontReview() {
       setNote("");
       setRejectPhotos({});
       reload();
-    });
+    }, "Decision recorded");
   const card: Partial<Card> = data.published?.card ?? data.storefront.draft;
   const business = businessDetail(r.detail);
   const appeal = kind === "appeal" ? appealMessage(r.detail) : null;
@@ -432,7 +432,7 @@ export function PageAction({ tenant, business, status, onDone }: { tenant: strin
       setReason("");
       setDone(suspended ? "Restored. The owner is told." : "Suspended. The owner is told, with your reason.");
       onDone();
-    });
+    }, "Page updated");
   return (
     <div className="card">
       <h2>{suspended ? "Restore the page" : "Suspend the page"}</h2>
@@ -470,7 +470,7 @@ export function Reports() {
       const out = await withStepUp<{ contact?: string }>(`ops.report.${action}`, rep.id, `/reports/${rep.id}/${action}`, {});
       if (action === "contact") setContacts({ ...contacts, [rep.id]: out.contact ?? "" });
       else reload();
-    });
+    }, "Report updated");
   return (
     <>
       <h1>Reports</h1>

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,43 +54,9 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 	var out []approvalItem
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		// The caller's roles, and roles delegated to them now.
-		rows, err := tx.Query(ctx, `SELECT a.run_id, a.step_id, taskiem_step_name(wv.definition, a.step_id), w.name, r.environment, a.role, a.required,
-				(SELECT count(*) FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.decision = 'approved')::int,
-				a.level + 1, COALESCE(jsonb_array_length(a.levels), 1), a.step_up, a.policy,
-				CASE WHEN a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) THEN NULL ELSE
-				  (SELECT u.email FROM delegations g JOIN users u ON u.id = g.from_user WHERE g.to_user = $2 AND a.role = ANY (g.roles)
-				     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
-				     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner')) ORDER BY g.created_at LIMIT 1) END,
-				COALESCE((a.constraints->>'forbid_sole_approver')::boolean, false) = false AND taskiem_sole_approver(a.role, $2),
-				a.requested_at, a.timeout_at, a.subject
-			FROM approvals a JOIN runs r ON r.id = a.run_id JOIN workflows w ON w.id = r.workflow_id
-			JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
-			WHERE a.status = 'open' AND (a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
-			    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
-			    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner'))))
-			  AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.user_id = $2)
-			ORDER BY a.requested_at`, p.Roles, p.UserID)
-		if err != nil {
-			return err
-		}
 		var raws [][]byte
-		for rows.Next() {
-			var it approvalItem
-			var subj []byte
-			if err := rows.Scan(&it.RunID, &it.StepID, &it.StepName, &it.Workflow, &it.Environment, &it.Role, &it.Required, &it.Approvals,
-				&it.Level, &it.Levels, &it.StepUp, &it.Policy, &it.OnBehalfOf, &it.SoleApprover, &it.RequestedAt, &it.TimeoutAt, &subj); err != nil {
-				return err
-			}
-			// A delegation needs approval.decide; a business role decides
-			// only the approvals naming it.
-			if !p.Can(PermApprovalDecide) && (it.OnBehalfOf != nil || !p.mayDecide(it.Role)) {
-				continue
-			}
-			out = append(out, it)
-			raws = append(raws, subj)
-		}
-		if err := rows.Err(); err != nil {
+		var err error
+		if out, raws, err = s.openApprovalsTx(ctx, tx, p); err != nil {
 			return err
 		}
 		for i, raw := range raws {
@@ -112,6 +79,53 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"approvals": nonNil(out)})
+}
+
+// openApprovalsTx are the approvals waiting for p to decide (the
+// Approvals page, and the bell's Waiting for you), with their sealed
+// subjects.
+func (s *Server) openApprovalsTx(ctx context.Context, tx pgx.Tx, p *Principal) ([]approvalItem, [][]byte, error) {
+	var out []approvalItem
+	// The caller's roles, and roles delegated to them now.
+	rows, err := tx.Query(ctx, `SELECT a.run_id, a.step_id, taskiem_step_name(wv.definition, a.step_id), w.name, r.environment, a.role, a.required,
+			(SELECT count(*) FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.decision = 'approved')::int,
+			a.level + 1, COALESCE(jsonb_array_length(a.levels), 1), a.step_up, a.policy,
+			CASE WHEN a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) THEN NULL ELSE
+			  (SELECT u.email FROM delegations g JOIN users u ON u.id = g.from_user WHERE g.to_user = $2 AND a.role = ANY (g.roles)
+			     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
+			     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner')) ORDER BY g.created_at LIMIT 1) END,
+			COALESCE((a.constraints->>'forbid_sole_approver')::boolean, false) = false AND taskiem_sole_approver(a.role, $2),
+			a.requested_at, a.timeout_at, a.subject
+		FROM approvals a JOIN runs r ON r.id = a.run_id JOIN workflows w ON w.id = r.workflow_id
+		JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
+		WHERE a.status = 'open' AND (a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
+		    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
+		    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner'))))
+		  AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.user_id = $2)
+		ORDER BY a.requested_at`, p.Roles, p.UserID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var raws [][]byte
+	for rows.Next() {
+		var it approvalItem
+		var subj []byte
+		if err := rows.Scan(&it.RunID, &it.StepID, &it.StepName, &it.Workflow, &it.Environment, &it.Role, &it.Required, &it.Approvals,
+			&it.Level, &it.Levels, &it.StepUp, &it.Policy, &it.OnBehalfOf, &it.SoleApprover, &it.RequestedAt, &it.TimeoutAt, &subj); err != nil {
+			return nil, nil, err
+		}
+		// A delegation needs approval.decide; a business role decides
+		// only the approvals naming it.
+		if !p.Can(PermApprovalDecide) && (it.OnBehalfOf != nil || !p.mayDecide(it.Role)) {
+			continue
+		}
+		out = append(out, it)
+		raws = append(raws, subj)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	return out, raws, nil
 }
 
 type decideReq struct {

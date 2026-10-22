@@ -269,7 +269,7 @@ export function Editor() {
       const r = await post<{ valid: boolean; problems: Problem[] }>("/v1/validate", { definition: def });
       setProblems(r.problems);
       setNotice(r.valid ? "Valid: this version can be published." : "");
-    });
+    }, false);
 
   const publish = () =>
     act.run(async () => {
@@ -298,7 +298,7 @@ export function Editor() {
       setNotice(`Version ${v} is published; new runs use it.${git ? " " + git : ""}`);
       wf.reload();
       doc.reload();
-    });
+    }, "Published");
 
   if (wf.error || doc.error) return <ErrorBox error={wf.error ?? doc.error} />;
   if (!wf.data || !def) return <Skeleton />;
@@ -352,7 +352,7 @@ export function Editor() {
               <button onClick={() => setAI(true)} disabled={act.busy || dirty} title={dirty ? "Save your changes first" : undefined}>
                 Change with AI
               </button>
-              <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
+              <button onClick={() => void act.run(() => save(), "Saved")} disabled={act.busy || !dirty}>
                 Save draft
               </button>
             </>
@@ -430,7 +430,7 @@ export function Editor() {
               </div>
               <div className="page-actions">
                 {can("workflow.edit") && !managed && (
-                  <button onClick={() => void act.run(() => save())} disabled={act.busy || !dirty}>
+                  <button onClick={() => void act.run(() => save(), "Saved")} disabled={act.busy || !dirty}>
                     Save draft
                   </button>
                 )}
@@ -582,7 +582,7 @@ export function Editor() {
           latest={merge.latest}
           busy={act.busy}
           onClose={() => setMerge(undefined)}
-          onResolve={(res) => void act.run(() => save(res))}
+          onResolve={(res) => void act.run(() => save(res), "Saved")}
         />
       )}
     </>
@@ -798,7 +798,7 @@ function Endpoints({ workflow }: { workflow: string }) {
   if (data.triggers.length === 0) return <div className="empty card">The published version is started manually or through the API: POST /v1/workflows/{workflow}/runs.</div>;
   const newSecret = (env: string) =>
     confirm(`Make a new signing secret for ${env}? It replaces the current one at once: whoever sends to this webhook must switch to the new one.`) &&
-    void act.run(async () => setMade(await post<SigningSecret>(`/v1/workflows/${workflow}/signing-secret`, { environment: env })));
+    void act.run(async () => setMade(await post<SigningSecret>(`/v1/workflows/${workflow}/signing-secret`, { environment: env })), false);
   return (
     <>
       {made && (
@@ -909,7 +909,7 @@ function Deployments({ workflow, deployments, canPromote, onChange }: { workflow
                     await post(`/v1/workflows/${workflow}/promote`, { from: e.promotion_from, to: e.name });
                     onChange();
                     envs.reload();
-                  })
+                  }, "Promoted")
                 }
               >
                 Promote v{from.version} from {e.promotion_from}
@@ -963,7 +963,7 @@ function StartRun({ workflow, def, onClose, onStarted }: { workflow: string; def
             void act.run(async () => {
               const r = await post<{ run_id: string }>(`/v1/workflows/${workflow}/runs`, { input: input ?? {}, environment: env });
               onStarted(r.run_id);
-            })
+            }, "Run started")
           }
         >
           Start
@@ -989,7 +989,7 @@ function CodeTab({ def, onApply }: { def: WorkflowDefinition; onApply: (def: Wor
       const r = await post<{ code: string }>("/v1/code/generate", { definition: def });
       setBase(r.code);
       setCode(r.code);
-    });
+    }, false);
   }, [def]);
   const changed = base !== undefined && code !== base;
   return (
@@ -1008,7 +1008,7 @@ function CodeTab({ def, onApply }: { def: WorkflowDefinition; onApply: (def: Wor
             void apply.run(async () => {
               const r = await post<{ definition: WorkflowDefinition; problems: Problem[] }>("/v1/code/compile", { source: code });
               onApply(r.definition, r.problems);
-            })
+            }, false)
           }
         >
           {apply.busy ? "Compiling…" : "Apply to workflow"}

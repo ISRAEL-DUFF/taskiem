@@ -60,7 +60,7 @@ export function useStepUp(): { request: <T>(title: string, send: (p: StepUpProof
 function Confirm({ p, onClose, onDone }: { p: Pending; onClose: () => void; onDone: (v: unknown) => void }) {
   const [code, setCode] = useState("");
   const act = useAction();
-  const send = (proof: StepUpProof) => act.run(async () => onDone(await p.send(proof)));
+  const send = (proof: StepUpProof) => act.run(async () => onDone(await p.send(proof)), false);
   const none = p.methods.length === 0;
   return (
     <Modal title={`Confirm: ${p.title}`} onClose={onClose}>
@@ -73,7 +73,7 @@ function Confirm({ p, onClose, onDone }: { p: Pending; onClose: () => void; onDo
       )}
       {p.methods.includes("passkey") && passkeysSupported() && (
         <p>
-          <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => onDone(await p.send({ passkey: await stepUpAssert(p.operation, p.target) })))}>
+          <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => onDone(await p.send({ passkey: await stepUpAssert(p.operation, p.target) })), false)}>
             Confirm with your passkey
           </button>
         </p>

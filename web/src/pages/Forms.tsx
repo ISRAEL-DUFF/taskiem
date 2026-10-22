@@ -91,7 +91,7 @@ function NewForm({ onClose }: { onClose: () => void }) {
           void act.run(async () => {
             const r = await post<{ id: string }>("/v1/workflows", { name: title.trim(), definition: formWorkflow(title, after) });
             nav(`/workflows/${r.id}?tab=settings`);
-          });
+          }, false);
         }}
       >
         <Field label="What the form is called" hint="People see it at the top of the form.">
@@ -162,7 +162,7 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
   const [links, setLinks] = useState(false);
   const link = formLink(f);
   const headingId = `form-${f.id}`;
-  const setStatus = (status: string) => act.run(async () => (await patch(`/v1/forms/${f.id}`, { status }), onChange()));
+  const setStatus = (status: string) => act.run(async () => (await patch(`/v1/forms/${f.id}`, { status }), onChange()), "Saved");
   const publish = can("workflow.publish") && f.status !== "suspended";
   return (
     <article className="card form-card" aria-labelledby={headingId}>
@@ -285,7 +285,7 @@ function FormSettings({ form: f, onClose, onSaved }: { form: FormInfo; onClose: 
       if (clear.length) body.clear = clear;
       await patch(`/v1/forms/${f.id}`, body);
       onSaved();
-    });
+    }, "Saved");
   return (
     <Modal title={`Opening times: ${f.title}`} onClose={onClose}>
       <div className="row">
@@ -338,7 +338,7 @@ function MakeLinks({ form: f, onClose }: { form: FormInfo; onClose: () => void }
       }
       const r = await post<{ links: MintedLink[] }>(`/v1/forms/${f.id}/links`, body);
       setMade(r.links);
-    });
+    }, false);
   const csv = made ? URL.createObjectURL(new Blob([linksCSV(made)], { type: "text/csv" })) : "";
   return (
     <Modal title={`One-time links: ${f.title}`} onClose={onClose}>
@@ -492,7 +492,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
     act.run(async () => {
       const r = await get<{ url: string; name: string }>(`/v1/form-files/${fileId}`);
       window.open(r.url, "_blank", "noopener");
-    });
+    }, false);
   return (
     <Modal title={s ? `Answers ${s.reference}` : "Answers"} onClose={onClose}>
       <ErrorBox error={error ?? act.error} />

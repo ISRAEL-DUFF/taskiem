@@ -159,7 +159,7 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
       await tidy(post("/v1/storefront/catalogue/make", { kind: "products" }));
       changed(await get<SF>("/v1/storefront"), "Your catalogue is ready: add what you sell below.");
       setCatalogueTick((n) => n + 1);
-    });
+    }, "Catalogue made");
 
   const canSave = !slugBad && hourProblems.length === 0;
   const suspended = saved?.status === "suspended";
@@ -171,14 +171,14 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
         description="A one-page public page for your business: your card, your opening hours and what you sell, with a QR code to share."
         actions={
           <>
-            <button disabled={act.busy || !dirty || !canSave} onClick={() => void act.run(save)}>
+            <button disabled={act.busy || !dirty || !canSave} onClick={() => void act.run(save, "Saved")}>
               Save draft
             </button>
             <button
               className="primary"
               disabled={act.busy || !canSave || suspended}
               title={suspended ? "A suspended page cannot be published until Taskiem restores it" : undefined}
-              onClick={() => void act.run(publish)}
+              onClick={() => void act.run(publish, "Published")}
             >
               {dirty && saved ? "Save and publish" : "Publish"}
             </button>
@@ -245,7 +245,7 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
                 {saved.status === "closed" && (
                   <button
                     disabled={act.busy}
-                    onClick={() => void act.run(async () => changed(await tidy(post<SF>("/v1/storefront/reopen")), "Your storefront is open again."))}
+                    onClick={() => void act.run(async () => changed(await tidy(post<SF>("/v1/storefront/reopen")), "Your storefront is open again."), false)}
                   >
                     Reopen
                   </button>
@@ -446,7 +446,7 @@ function LogoField({ logo, url, onChange }: { logo: string; url?: string; onChan
               if (bad) throw new Error(bad);
               const m = await tidy(uploadFile<Media>("/v1/storefront/media", file));
               onChange(m.id, thumb(m.urls));
-            });
+            }, "Uploaded");
           }}
         />
       </Field>
@@ -609,7 +609,7 @@ function CatalogueCopy({ tick, table, columns, photoColumn, stale }: { tick: num
   const fileInput = useRef<HTMLInputElement>(null);
   const target = useRef<string>("");
   useEffect(() => setData(cat.data), [cat.data]);
-  const refresh = () => act.run(async () => setData(await tidy(post<Catalogue>("/v1/storefront/catalogue/refresh"))));
+  const refresh = () => act.run(async () => setData(await tidy(post<Catalogue>("/v1/storefront/catalogue/refresh"))), "Refreshed");
   const editable = can("table.edit");
   // Adding and removing items here writes the table: nobody opens Tables.
   const addItem = () => {
@@ -624,14 +624,14 @@ function CatalogueCopy({ tick, table, columns, photoColumn, stale }: { tick: num
       setName("");
       setPrice("");
       setData(await tidy(post<Catalogue>("/v1/storefront/catalogue/refresh")));
-    });
+    }, "Added");
   };
   const removeItem = (id: string, label: string) =>
     confirm(`Remove ${label} from your catalogue?`) &&
     void act.run(async () => {
       await tidy(del(`/v1/tables/${table}/rows/${encodeURIComponent(id)}`));
       setData(await tidy(post<Catalogue>("/v1/storefront/catalogue/refresh")));
-    });
+    }, "Deleted");
   const shown = data ?? cat.data;
   return (
     <div className="sf-copy">
@@ -730,7 +730,7 @@ function CatalogueCopy({ tick, table, columns, photoColumn, stale }: { tick: num
                 if (bad) throw new Error(bad);
                 await tidy(uploadFile<Media>(`/v1/storefront/catalogue/rows/${encodeURIComponent(row)}/photo`, file));
                 setData(await tidy(post<Catalogue>("/v1/storefront/catalogue/refresh")));
-              });
+              }, "Photo added");
             }}
           />
           {act.busy && <p className="hint" role="status">Working…</p>}
@@ -845,7 +845,7 @@ function CloseDialog({ onClose, onClosed }: { onClose: () => void; onClosed: (sf
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => onClosed(await tidy(post<SF>("/v1/storefront/close", { message: message.trim() }))));
+          void act.run(async () => onClosed(await tidy(post<SF>("/v1/storefront/close", { message: message.trim() }))), "Storefront closed");
         }}
       >
         <p className="hint">Your page keeps showing your card, with this message instead of the catalogue, until you reopen it.</p>

@@ -31,7 +31,7 @@ export function Audit() {
         description="Every change and decision in your organisation, in order, each entry chained to the one before so tampering shows."
         actions={
           <>
-            <button onClick={() => void act.run(async () => setVerdict(await get("/v1/audit/verify")))} disabled={act.busy}>
+            <button onClick={() => void act.run(async () => setVerdict(await get("/v1/audit/verify")), false)} disabled={act.busy}>
               Verify chain
             </button>
             <a className="button" href="/v1/audit/export" download>

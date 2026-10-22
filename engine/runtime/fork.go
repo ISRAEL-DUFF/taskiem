@@ -274,8 +274,10 @@ func (s *Store) replayTask(ctx context.Context, tx pgx.Tx, run runRow, ev decide
 			history.FailedPayload{Error: history.Error{Kind: "fork_mismatch", Message: msg, Next: "park", MaybeApplied: true}}, history.OriginWorker); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID)
-		return err
+		if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID); err != nil {
+			return err
+		}
+		return QueueOutcome(ctx, tx, run.ref.ID, "needs_reconciliation")
 	}, true, nil
 }
 

@@ -31,7 +31,7 @@ export function SheetChooser({ value, onChange, connection = "", onSheet }: { va
       setSheet(s);
       onChange(s.spreadsheet_id);
       onSheet?.(s);
-    });
+    }, false);
   return (
     <div>
       {sheet ? (

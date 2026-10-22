@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/policy"
@@ -64,7 +65,7 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 	if loadErr != nil {
 		return []readyNeed{}, nil //nolint:nilerr // reported by the publishing checks instead
 	}
-	reg, err := s.Registry.For(ctx, tenant.String())
+	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), tenant.String()) // manifests only: nothing is compiled
 	if err != nil {
 		return nil, err
 	}
