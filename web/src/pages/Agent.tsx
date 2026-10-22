@@ -10,6 +10,7 @@ import { AgentPermissions, useAuth } from "../auth";
 import { AGENT_PERMISSIONS, attestPath, consentChannels, endReason, fitWithin, formatLeft, msLeft, type AgentSession, type ConsentChannel } from "../lib/agent";
 import { Badge, ErrorBox, Field, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Storefront } from "./Storefront";
+import { Look } from "./Look";
 import { TablePage, Tables } from "./Tables";
 
 interface AgentMe {
@@ -628,12 +629,14 @@ export function AgentWorkspace({ session: s }: { session: AgentSession }) {
           <NavLink to="/storefront" end>
             Page
           </NavLink>
+          <NavLink to="/storefront/look">Look</NavLink>
           <NavLink to="/tables">Tables</NavLink>
           <Link to="/agent">My businesses</Link>
         </nav>
         <main className="main agent-main" id="main">
           <Routes>
             <Route path="/storefront" element={<Storefront />} />
+            <Route path="/storefront/look" element={<Look />} />
             <Route path="/tables" element={<Tables />} />
             <Route path="/tables/:id" element={<TablePage />} />
             <Route path="*" element={<Navigate to="/storefront" replace />} />

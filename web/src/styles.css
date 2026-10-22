@@ -754,6 +754,53 @@ a.inline-link { text-decoration: underline; text-underline-offset: 2px; }
 .sf-preview-items li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #eeede8; font-size: 13px; font-weight: 500; }
 .sf-preview-items img, .sf-preview-items .sf-noimg { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; flex: none; background: #f0ede6; }
 .sf-preview-items .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The Look tab (N13): a business's theme, colour, logo and cover, with the
+   real pages previewed in a phone frame. */
+.look { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 32px; align-items: start; }
+.look-edit { min-width: 0; }
+.look-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.look-theme { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); cursor: pointer; }
+.look-theme input { position: absolute; top: 12px; left: 12px; margin: 0; opacity: 0; }
+.look-theme.selected { border-color: var(--accent); box-shadow: var(--ring); }
+.look-theme:has(input:focus-visible) { border-color: var(--accent); box-shadow: var(--ring); }
+.look-mini { display: flex; flex-direction: column; gap: 6px; height: 96px; margin-bottom: 6px; padding-bottom: 8px; border-radius: 8px; background: #f4f5f4; overflow: hidden; }
+.look-mini-top { height: 34px; }
+.look-mini-line { height: 7px; margin: 0 10px; border-radius: 4px; background: #d4d7d4; }
+.look-mini-line.short { width: 45%; }
+.look-mini-btn { height: 14px; margin: auto 10px 0; border-radius: 6px; }
+.look-mini-clean .look-mini-top { opacity: .25; }
+.look-mini-bold { background: #f7f5f3; }
+.look-mini-bold .look-mini-top { height: 44px; border-radius: 0 0 12px 12px; }
+.look-mini-bold .look-mini-line { background: #1c1c1c; height: 8px; }
+.look-mini-bold .look-mini-btn { border-radius: 999px; }
+.look-mini-editorial { background: #fff; border: 1px solid #eee; }
+.look-mini-editorial .look-mini-line { margin: 0 auto; width: 60%; border-radius: 0; background: #1c1c1c; }
+.look-mini-editorial .look-mini-line.short { width: 40%; background: #b9b4ac; }
+.look-mini-editorial .look-mini-btn { border-radius: 0; }
+.look-colour { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 10px; }
+.look-colour input[type="color"] { width: 52px; height: 40px; padding: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); cursor: pointer; }
+.look-colour .field { flex: 1; max-width: 220px; margin: 0; }
+.look-swatch { padding: 4px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--panel); cursor: pointer; }
+.look-swatch.selected { border-color: var(--accent); box-shadow: var(--ring); }
+.look-image + .look-image { margin-top: 14px; }
+.look-image-preview { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.look-image-preview img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border); }
+.look-image-preview img.wide { width: 160px; height: 64px; }
+.look-save { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 0; background: var(--bg); }
+.look-preview { position: sticky; top: 24px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.look-preview-tabs { margin: 0; }
+.look-preview-tabs button { border: 0; background: none; padding: 6px 10px; font: inherit; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+.look-preview-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.look-phone { width: 340px; }
+.look-phone iframe { display: block; width: 100%; height: 640px; border: 0; border-radius: 26px; background: #fff; }
+.sf-look-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.sf-look-summary img { border-radius: 10px; object-fit: cover; }
+.sf-look-dot { width: 32px; height: 32px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); }
+.sf-look-summary a { margin-left: auto; }
+@media (max-width: 1000px) {
+  .look { grid-template-columns: 1fr; }
+  .look-preview { position: static; }
+}
 .sf-where { font-size: 12.5px; color: #575b55; }
 .sf-cta { margin-top: 6px; height: 42px; border-radius: 10px; color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 500; }
 @media (max-width: 1100px) {

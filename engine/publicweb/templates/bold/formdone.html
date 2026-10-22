@@ -1,0 +1,20 @@
+{{template "fhead" .}}{{with .Refresh}}<meta http-equiv="refresh" content="{{.}}">
+{{end}}{{if .Embed}}<script src="{{asset "form-embed.js"}}" defer></script>
+{{end}}{{template "fbody" .}}
+<span class="done">{{template "i-check"}}</span>
+<h1>{{.Headline}}</h1>
+{{template "fmain" .}}
+{{if .Embed}}<div hidden data-embed data-origins="{{.Origins}}" data-submitted="{{.Reference}}"></div>
+{{end}}<div class="dark">
+<p class="ref">Reference <strong>{{.Reference}}</strong></p>
+<div class="message" role="status">{{if .Message}}{{.Message}}{{end}}</div>
+{{range .Lines}}<p>{{.}}</p>
+{{end}}</div>
+{{with .Updates}}<section class="updates" aria-labelledby="updates-h">
+<h2 id="updates-h">Get updates on your phone</h2>
+<p>{{$.Business}} can send you updates about this here. Tap one, then send the message or press Start.</p>
+<p class="update-links">{{range .}}<a class="btn btn-{{.App}}" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Label}}</a> {{end}}</p>
+<p class="hint">Otherwise, updates come by text message.</p>
+</section>
+{{end}}{{with .StatusURL}}<p><a class="btn btn-brand btn-block" href="{{.}}"{{if $.Embed}} target="_blank" rel="noopener noreferrer"{{end}}>See what happens next</a></p>{{end}}
+{{template "ffoot" .}}

@@ -216,7 +216,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	s.initCodeLeases() // the per-tenant code share across replicas (codegate.go)
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, securityHeaders, s.hsts, s.customDomains)
+	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, s.securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
 	if s.Status != nil && s.Status.Page != nil {
@@ -452,6 +452,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
 			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
+			r.Get("/settings/brand", s.getBrand) // how public pages look (brand.go)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/brand", s.putBrand)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/settings/brand/preview", s.previewBrand)
 			r.With(s.need(PermWorkflowRead)).Get("/paystack/banks", s.listBanks) // pickers (lookups.go)
 			r.With(s.need(PermRunStart)).Post("/paystack/resolve", s.resolveAccount)
 			r.With(s.need(PermRunStart)).Post("/paystack/recipients", s.createRecipient)
@@ -571,7 +574,29 @@ func observe(next http.Handler) http.Handler {
 	})
 }
 
-func securityHeaders(next http.Handler) http.Handler { return httpsec.Headers(next) }
+// formOrigin is the form host's origin, where previews of a look are
+// (N13): https, or http when the app itself is (a developer's machine).
+func (s *Server) formOrigin() string {
+	if s.Forms == nil || s.Forms.FormHost == "" {
+		return ""
+	}
+	if strings.HasPrefix(s.PublicURL, "http://") {
+		return "http://" + s.Forms.FormHost
+	}
+	return "https://" + s.Forms.FormHost
+}
+
+// securityHeaders sets httpsec's headers; the app may frame the public
+// host's previews of a look (the brand screen, N13).
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		httpsec.Set(w.Header())
+		if o := s.formOrigin(); o != "" {
+			w.Header().Set("Content-Security-Policy", httpsec.AppCSP([]string{o}))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // hsts sends Strict-Transport-Security (S35) on the platform's own host:
 // the public URL's host, or any host when no public URL is set. A

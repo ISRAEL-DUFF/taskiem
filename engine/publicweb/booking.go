@@ -35,7 +35,6 @@ const (
 type bookingData struct {
 	pageData
 	Business string
-	Accent   string
 	Label    string
 	Action   string // where the form posts
 	Home     string // the storefront page; empty when embedded
@@ -243,17 +242,15 @@ func (s *Server) serveBooking(w http.ResponseWriter, r *http.Request, site Site,
 		return
 	}
 	c := p.Model.Card
-	d := bookingData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Accent: c.Accent, Label: act.Label, Action: "/a/booking", Home: "/",
+	d := bookingData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Label: act.Label, Action: "/a/booking", Home: "/",
 		Honeypot: formguard.HoneypotField, Purpose: purposes["booking"], form: formID(site.ID, "booking")}
+	d.Look = s.lookFor(r.Context(), site.Tenant, c.Name)
 	prefix := ""
 	if embed {
 		prefix, d.Action, d.Home = "/embed", "/embed/a/booking", ""
 	}
 	if d.Lang == "" {
 		d.Lang = "en"
-	}
-	if _, ok := storefront.Accents[d.Accent]; !ok {
-		d.Accent = "green"
 	}
 	var items []storefront.Item
 	if ok {
@@ -425,7 +422,7 @@ func (s *Server) submitBooking(w http.ResponseWriter, r *http.Request, site Site
 		s.showBooking(w, r, http.StatusServiceUnavailable, d, v.Get(tokenField))
 		return
 	case !ok:
-		s.renderPrivate(w, r, http.StatusConflict, "formclosed.html", closedData{pageData: pageData{Title: "Closed", Lang: d.Lang}, Business: d.Business, Accent: d.Accent,
+		s.renderPrivate(w, r, http.StatusConflict, "formclosed.html", closedData{pageData: pageData{Title: "Closed", Lang: d.Lang, Look: d.Look}, Business: d.Business,
 			Message: d.Business + " is not taking bookings right now.", Home: d.Home})
 		return
 	}

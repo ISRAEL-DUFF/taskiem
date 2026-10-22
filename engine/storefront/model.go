@@ -21,8 +21,11 @@ import (
 // ErrInvalid wraps every refusal of a draft.
 var ErrInvalid = errors.New("storefront: invalid")
 
-// Templates are the page's two layouts: classic, a list that suits a menu
-// or a price list; bold, a photo grid that suits a shop.
+// Templates are the page's two layouts before themes: classic, a list;
+// bold, a photo grid. How every public page looks is now the business's
+// brand (engine/brand, decision 0042), which took a storefront's layout,
+// colour and logo when it came; Template and Accent are still checked so
+// older drafts publish.
 var Templates = []string{"classic", "bold"}
 
 // Accents are the colours an owner may pick, each readable as text on

@@ -80,7 +80,6 @@ func (s *Server) ipHashKey() []byte {
 type formData struct {
 	pageData
 	Business string
-	Accent   string
 	Kind     string
 	Label    string
 	Action   string // where the form posts
@@ -115,7 +114,6 @@ type formItem struct {
 type closedData struct {
 	pageData
 	Business string
-	Accent   string
 	Message  string
 	Home     string
 }
@@ -165,6 +163,7 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		return
 	}
 	f := formView(p, act, site, embed)
+	f.Look = s.lookFor(r.Context(), site.Tenant, f.Business)
 	refuse := http.StatusOK
 	if r.Method == http.MethodPost {
 		refuse = http.StatusConflict
@@ -175,12 +174,12 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		if p.ClosedMessage != "" {
 			msg += " " + p.ClosedMessage
 		}
-		s.renderPrivate(w, r, refuse, "formclosed.html", closedData{pageData: pageData{Title: "Closed", Lang: f.Lang}, Business: f.Business, Accent: f.Accent, Message: msg, Home: f.Home})
+		s.renderPrivate(w, r, refuse, "formclosed.html", closedData{pageData: pageData{Title: "Closed", Lang: f.Lang, Look: f.Look}, Business: f.Business, Message: msg, Home: f.Home})
 		return
 	case p.OrdersPaused && (kind == "order" || kind == "booking"):
 		// The plan's month, or the unverified daily limit (docs/moderation.md).
 		what := map[string]string{"order": "orders", "booking": "bookings"}[kind]
-		s.renderPrivate(w, r, refuse, "formclosed.html", closedData{pageData: pageData{Title: "Paused", Lang: f.Lang}, Business: f.Business, Accent: f.Accent,
+		s.renderPrivate(w, r, refuse, "formclosed.html", closedData{pageData: pageData{Title: "Paused", Lang: f.Lang, Look: f.Look}, Business: f.Business,
 			Message: f.Business + " is not taking " + what + " online right now. Please contact them directly.", Home: f.Home})
 		return
 	case !s.formsOpen() || (kind == "booking" && !s.bookingsOpen()):
@@ -189,7 +188,7 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		if kind == "booking" {
 			what = "Bookings"
 		}
-		s.renderPrivate(w, r, http.StatusServiceUnavailable, "formclosed.html", closedData{pageData: pageData{Title: "Not open yet", Lang: f.Lang}, Business: f.Business, Accent: f.Accent,
+		s.renderPrivate(w, r, http.StatusServiceUnavailable, "formclosed.html", closedData{pageData: pageData{Title: "Not open yet", Lang: f.Lang, Look: f.Look}, Business: f.Business,
 			Message: what + " are not open yet. Please try again later, or contact " + f.Business + " directly.", Home: f.Home})
 		return
 	case kind == "booking":
@@ -217,14 +216,11 @@ func (s *Server) formsOpen() bool {
 
 func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bool) formData {
 	c := p.Model.Card
-	f := formData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Accent: c.Accent, Kind: act.Kind, Label: act.Label,
+	f := formData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Kind: act.Kind, Label: act.Label,
 		Action: "/a/" + act.Kind, Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
 		form: formID(site.ID, act.Kind)}
 	if f.Lang == "" {
 		f.Lang = "en"
-	}
-	if _, ok := storefront.Accents[f.Accent]; !ok {
-		f.Accent = "green"
 	}
 	if embed {
 		f.Action, f.Home = "/embed/a/"+act.Kind, ""
@@ -333,7 +329,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 	}
 	if !ok {
 		// Closed or the form turned off since the page was cached.
-		s.renderPrivate(w, r, http.StatusConflict, "formclosed.html", closedData{pageData: pageData{Title: "Closed", Lang: f.Lang}, Business: f.Business, Accent: f.Accent,
+		s.renderPrivate(w, r, http.StatusConflict, "formclosed.html", closedData{pageData: pageData{Title: "Closed", Lang: f.Lang, Look: f.Look}, Business: f.Business,
 			Message: f.Business + " is not taking this form right now.", Home: f.Home})
 		return
 	}

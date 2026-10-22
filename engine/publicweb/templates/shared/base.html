@@ -1,0 +1,24 @@
+{{/* What is the same in every theme: the head's tags, a storefront's
+link preview, and a form's hidden fields. Each theme draws the rest. */}}
+{{define "meta"}}<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<link rel="stylesheet" href="{{asset .Brand.ThemeCSS}}">
+<link rel="stylesheet" href="{{.Brand.CSS}}">
+{{end}}
+
+{{define "og"}}<title>{{.M.Card.Name}}</title>
+{{with .Description}}<meta name="description" content="{{.}}">{{end}}
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{.M.Card.Name}}">
+{{with .Description}}<meta property="og:description" content="{{.}}">{{end}}
+{{with .Image}}<meta property="og:image" content="{{.}}">{{end}}
+{{with .URL}}<meta property="og:url" content="{{.}}">
+<link rel="canonical" href="{{.}}">{{end}}
+{{end}}
+
+{{define "guard"}}<input type="hidden" name="token" value="{{.Token}}">
+<div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="{{.Honeypot}}" value="" autocomplete="off" tabindex="-1"></label></div>
+{{end}}
+
+{{define "safety"}}Never enter a password or card PIN on this page.{{end}}

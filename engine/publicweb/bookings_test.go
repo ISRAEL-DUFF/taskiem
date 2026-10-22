@@ -203,8 +203,8 @@ func refOf(loc string) string {
 func TestStorefrontListsServices(t *testing.T) {
 	e, _ := bookingEnv(t, "after_accept", 0)
 	body := get(e.h, "GET", sfHost, "/").Body.String()
-	for _, want := range []string{"<h2>Services</h2>", "<h3>Haircut</h3>", "30 min · ₦3,000", "1 hr · Price on the day", "1 hr 30 min · ₦5,000",
-		`href="/a/booking?service=7" aria-label="Book Haircut">Book</a>`, `<a class="btn btn-primary" href="/a/booking">Book</a>`} {
+	for _, want := range []string{">Services</h2>", "<h3>Haircut</h3>", "30 min · ₦3,000", "1 hr · Price on the day", "1 hr 30 min · ₦5,000",
+		`href="/a/booking?service=7" aria-label="Book Haircut">Book</a>`, `href="/a/booking">Book</a>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("no %q", want)
 		}
@@ -215,7 +215,7 @@ func TestStorefrontListsServices(t *testing.T) {
 
 	// Without the booking hooks, or without services, no booking is offered.
 	e.s.Book = nil
-	if body := get(e.h, "GET", sfHost, "/").Body.String(); strings.Contains(body, "/a/booking") || strings.Contains(body, "<h2>Services</h2>") {
+	if body := get(e.h, "GET", sfHost, "/").Body.String(); strings.Contains(body, "/a/booking") || strings.Contains(body, ">Services</h2>") {
 		t.Error("bookings are offered with no way to take them")
 	}
 	if w := get(e.h, "GET", sfHost, "/a/booking"); w.Code != 503 || !strings.Contains(w.Body.String(), "Bookings are not open yet") {
@@ -234,10 +234,10 @@ func TestBookingFormRenders(t *testing.T) {
 	c.holds["XX-AAAAAA"] = storefront.Busy{Service: "7", Start: at(20, 9, 0), Until: at(20, 9, 30), Count: 1}
 	body, _ = e.form(t, "/a/booking?service=7")
 	for _, want := range []string{
-		"<strong>Haircut</strong> · 30 min · ₦3,000", `<a href="/a/booking">Choose another</a>`,
+		"Haircut", "30 min · ₦3,000", `href="/a/booking">Choose another</a>`,
 		// The first day is Tuesday (Monday is past its notice); Thursday is off, Sunday closed.
 		`href="/a/booking?service=7&amp;day=2026-10-20" aria-current="date">Tue 20 Oct</a>`, `href="/a/booking?service=7&amp;day=2026-10-21">Wed 21 Oct</a>`,
-		"Times on Tue 20 Oct", `value="` + unix(at(20, 9, 30)) + `" required> 09:30`, `> 11:30`,
+		"Times on Tue 20 Oct", `value="` + unix(at(20, 9, 30)) + `" required>`, `> 09:30`, `> 11:30`,
 		`name="service" value="7"`, "Pay after we confirm.", "to handle your booking", `action="/a/booking"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -376,7 +376,7 @@ func TestBookingRefusals(t *testing.T) {
 	// Too fast keeps the token and the time chosen.
 	_, tok := e.form(t, "/a/booking?service=7")
 	w := e.post("/a/booking", goodBooking(tok, at(20, 10, 0)))
-	if m := tokenRe.FindStringSubmatch(w.Body.String()); w.Code != 422 || m == nil || m[1] != tok || !strings.Contains(w.Body.String(), `required checked> 10:00`) {
+	if m := tokenRe.FindStringSubmatch(w.Body.String()); w.Code != 422 || m == nil || m[1] != tok || !strings.Contains(w.Body.String(), `value="`+unix(at(20, 10, 0))+`" required checked>`) {
 		t.Fatalf("too fast: %d %s", w.Code, w.Body.String())
 	}
 }

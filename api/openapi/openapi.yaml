@@ -10253,6 +10253,116 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/brand:
+    get:
+      operationId: getBrand
+      tags:
+      - Account
+      summary: How the business's public pages look
+      description: The theme, colour, logo and cover photo every public page of the business uses (storefront, its forms and status pages, hosted forms).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandSetting'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putBrand
+      tags:
+      - Account
+      summary: Change how the business's public pages look
+      description: >-
+        The whole look: a theme, a colour (any #rrggbb; pages keep text readable on it), and a logo and a cover photo uploaded with
+        POST /v1/storefront/media, named by id (empty takes one away). Pages show it within 30 seconds. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                theme:
+                  type: string
+                  enum: [clean, bold, editorial]
+                color:
+                  type: string
+                  example: '#0b6e4f'
+                logo:
+                  type: string
+                  description: A storefront media id.
+                cover:
+                  type: string
+                  description: A storefront media id.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandSetting'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/brand/preview:
+    post:
+      operationId: previewBrand
+      tags:
+      - Account
+      summary: Preview a look before saving it
+      description: >-
+        The addresses of the public pages (storefront, order form, booking, hosted form) drawn in this look with sample content and
+        the business's name, for the app to frame. They work for an hour. 409 when the public host is not set up.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                theme:
+                  type: string
+                  enum: [clean, bold, editorial]
+                color:
+                  type: string
+                logo:
+                  type: string
+                cover:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pages]
+                properties:
+                  pages:
+                    type: object
+                    additionalProperties:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/signup:
     get:
       operationId: signupOptions
@@ -14354,6 +14464,47 @@ components:
         chosen:
           type: boolean
           description: Whether someone set it; otherwise it is the plan's default.
+    BrandSetting:
+      type: object
+      required: [theme, color, palette, themes]
+      properties:
+        theme:
+          type: string
+          enum: [clean, bold, editorial]
+        color:
+          type: string
+          description: '#rrggbb'
+        logo:
+          type: string
+        logo_urls:
+          type: object
+          additionalProperties:
+            type: string
+          description: The logo's URLs by width.
+        cover:
+          type: string
+        cover_urls:
+          type: object
+          additionalProperties:
+            type: string
+        palette:
+          type: object
+          description: The colours pages are drawn with, made from color so every pair reads at 4.5:1.
+          properties:
+            brand:
+              type: string
+            on_brand:
+              type: string
+            text:
+              type: string
+            soft:
+              type: string
+            tint:
+              type: string
+        themes:
+          type: array
+          items:
+            type: string
     SignupOptions:
       type: object
       required:

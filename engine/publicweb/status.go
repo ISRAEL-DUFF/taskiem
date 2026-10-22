@@ -20,7 +20,6 @@ import (
 type statusData struct {
 	pageData
 	Business  string
-	Accent    string
 	Reference string
 	Headline  string
 	Error     string
@@ -95,7 +94,7 @@ func (s *Server) statusOf(w http.ResponseWriter, r *http.Request, site Site, ref
 // statusHead is a status or change page's frame: the business's name and
 // colour, and the way home.
 func (s *Server) statusHead(ctx context.Context, site Site, ref string, embed bool) (statusData, StorefrontPage) {
-	d := statusData{pageData: pageData{Lang: "en"}, Business: "the business", Accent: "green", Reference: ref, NewTab: embed, Home: "/", Honeypot: formguard.HoneypotField}
+	d := statusData{pageData: pageData{Lang: "en"}, Business: "the business", Reference: ref, NewTab: embed, Home: "/", Honeypot: formguard.HoneypotField}
 	if embed {
 		d.Home = ""
 	}
@@ -106,9 +105,7 @@ func (s *Server) statusHead(ctx context.Context, site Site, ref string, embed bo
 		if c.Language != "" {
 			d.Lang = c.Language
 		}
-		if _, ok := storefront.Accents[c.Accent]; ok {
-			d.Accent = c.Accent
-		}
+		d.Look = s.lookFor(ctx, site.Tenant, c.Name)
 	}
 	return d, p
 }

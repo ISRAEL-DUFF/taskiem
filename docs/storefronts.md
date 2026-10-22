@@ -10,14 +10,28 @@ It is built and off by default: pages are served only by the [public host](publi
 | --- | --- |
 | Business card | Name, tagline, about, logo, area and address, a link to directions (never an embedded map), a **Call** button, a **Chat on WhatsApp** button, opening hours with "Open now" or "Closed now" in Lagos time |
 | Catalogue | Items from one of the organisation's [data tables](data-tables.md), grouped by a category column: name, price in naira, description, photo, and "Unavailable" when its available column says so |
-| Template | **Classic**, a list that suits a menu or a price list; **bold**, a photo grid that suits a shop |
-| Accent | One of eight colours, each readable as text on white and as a button |
+| Look | The business's [look](#look): one of three themes, its colour, logo and cover photo. The same look draws its forms, status pages and hosted forms |
 
 Pages are rendered on the server and work without JavaScript. They send no cookies and allow no inline code. Each carries a short safety line. Shared links show the name, tagline and logo (Open Graph), so a link sent on WhatsApp shows a card.
 
+## Look
+
+How every public page of the business looks: the storefront, its order, booking, question and call-back forms, the status pages customers come back to, [hosted forms](forms.md), and the pages around them (closed, not found, report). It is set on **Storefront > Look** and belongs to the business, not to one page ([decision 0042](decisions/0042-public-page-themes.md)).
+
+| Choice | What it is |
+| --- | --- |
+| Theme | **Clean**: light cards, a cover photo with the logo over it, soft corners. **Bold**: the colour fills the top of every page, with big type, a photo grid and dark summary panels. **Editorial**: black and white with serif headings, fine rules and square corners. Each theme lays every page out its own way |
+| Colour | Any colour. Text on it is white, or near-black on a light colour; the colour as text is darkened until it reads at 4.5:1 |
+| Logo | Square works best. Without one, the business's initials are shown |
+| Cover photo | Shown across the top of the storefront (Clean and Editorial; behind the colour in Bold) |
+
+The tab previews the real pages (storefront, order form, booking, form) in the look being chosen, with sample products and times, before it is saved. Saved, pages show it within 30 seconds.
+
+A storefront that existed before themes kept its look: its classic layout became Clean, its bold layout Bold, its colour and logo the business's.
+
 ## Editing and publishing
 
-1. **Draft.** The owner edits the card, picks a template and accent, and chooses a **slug**: 3 to 30 letters, digits and hyphens, the page's address `<slug>.<preview domain>`.
+1. **Draft.** The owner edits the card and chooses a **slug**: 3 to 30 letters, digits and hyphens, the page's address `<slug>.<preview domain>`.
    - Reserved words and protected names (banks, payment providers, agencies, Taskiem, and look-alikes of them) are refused ([public host](public-host.md#building-blocks-for-the-next-milestones)).
    - Saving a draft changes nothing anyone sees.
 2. **Catalogue.** **Make my catalogue** (and **Make my services** for bookings; `POST /v1/storefront/catalogue/make`) makes the table and its mapping as chat does, and the owner then adds items in the editor with a name and a price in naira, and a photo, removing them there too: nobody opens the Tables page. A business that brings its own table picks it under **Use a table you already have** and maps its columns:
@@ -297,7 +311,9 @@ Customers' texts are in the business's language (its default chat language, Sett
 | `GET /v1/storefront`, `PUT /v1/storefront` | The storefront and its draft |
 | `POST /v1/storefront/publish`, `/close`, `/reopen` | Publish the draft; close and reopen |
 | `GET /v1/storefront/catalogue`, `POST /v1/storefront/catalogue/refresh` | The catalogue copy, and refreshing it |
-| `POST /v1/storefront/media` | Store a logo or photo (the image as the body) |
+| `POST /v1/storefront/media` | Store a logo, cover or photo (the image as the body) |
+| `GET /v1/settings/brand`, `PUT /v1/settings/brand` | The business's [look](#look): `theme`, `color`, `logo` and `cover` (media ids) |
+| `POST /v1/settings/brand/preview` | The addresses of the public pages drawn in a look not yet saved, for an hour |
 | `POST /v1/storefront/catalogue/rows/{row}/photo` | Store a photo and set it on a row |
 | `GET /v1/storefront/qr` | The address as a QR code |
 | `GET /v1/storefront/domains`, `POST /v1/storefront/domains` | The business's [own domains](#your-own-domain), and adding one |

@@ -198,6 +198,7 @@ func newFormHost(t *testing.T) *hostEnv {
 		Origins:         func(context.Context, uuid.UUID) ([]string, error) { return []string{"https://ada.example"}, nil },
 		FormSubmissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
 	e.s.now = func() time.Time { return *e.now }
+	testTheme(e.s)
 	e.h = e.s.Handler()
 	return e
 }
@@ -388,7 +389,7 @@ func TestHostedFormWidgets(t *testing.T) {
 		`>Your name <span class="req"`, `placeholder="Ada"`, "As on your ID",
 		`<textarea id=`, `maxlength="500"`,
 		`type="number" min="18" max="120" step="1" name="a.age"`,
-		`<span class="ff-unit">₦</span><input id=`, `type="text" inputmode="decimal" name="a.price_kobo"`,
+		`<span class="unit">₦</span><input id=`, `type="text" inputmode="decimal" name="a.price_kobo"`,
 		`type="email" name="a.email"`, `type="tel" name="a.phone"`, `type="url" name="a.site"`,
 		`type="date" name="a.day"`, `type="time" name="a.at"`, `type="datetime-local" name="a.when"`,
 		`type="radio" name="a.colour" value="red" required`, `<select id=`, `<option value="Kaduna">Kaduna</option>`,
@@ -498,7 +499,7 @@ func TestHostedFormValidation(t *testing.T) {
 		{url.Values{"do": {"next"}, "a.full_name": {"Bola"}, "a.phone": {"08031234567"}, "a.plan": {"my card 4111 1111 1111 1111"}}, "Please do not put card numbers"},
 	} {
 		w := e.next("/f/loan00000001", body, c.v)
-		must(t, w, 422, c.want, `class="ff has-error"`)
+		must(t, w, 422, c.want, `field has-error"`)
 	}
 	body = must(t, e.next("/f/loan00000001", body, pageOne()), 200)
 	must(t, e.next("/f/loan00000001", body, url.Values{"do": {"next"}, "a.amount_naira": {"5000"}, "a.purpose": {"rent"}, "a.agree": {"true"}}), 422, "Amount must be at least ₦10000.")

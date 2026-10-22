@@ -1,9 +1,10 @@
-import { DEFAULT_ACCENTS, formatPrice, openNow, type Form, type Item } from "../lib/storefront";
+import { formatPrice, openNow, type Form, type Item } from "../lib/storefront";
 
 /** The page as customers will see it, drawn from the editor's unsaved
  * form: a rough likeness for while you type, not the published page. */
-export function StorefrontPreview({ form, accents, logoURL, items }: { form: Form; accents: Record<string, string>; logoURL?: string; items: Item[] }) {
-  const accent = accents[form.accent] ?? DEFAULT_ACCENTS[form.accent] ?? "#0b6e4f";
+export function StorefrontPreview({ form, color, logoURL, items }: { form: Form; color?: string; logoURL?: string; items: Item[] }) {
+  // The business's colour (its look, on the Look tab).
+  const accent = color ?? "#0b6e4f";
   const t = form.text;
   const now = openNow(form.hours);
   const shown = items.filter((i) => i.available).slice(0, 4);

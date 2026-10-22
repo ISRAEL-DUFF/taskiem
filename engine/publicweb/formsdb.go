@@ -56,6 +56,7 @@ type FormRequest struct {
 	Verify      bool
 	Status      string // pending, answered, cancelled or expired
 	Business    string
+	Tenant      uuid.UUID
 	PublicView  []byte // sealed forms.RequestView
 	ExpiresAt   time.Time
 }
@@ -200,13 +201,14 @@ func (d dbForms) Request(ctx context.Context, tokenHash []byte) (FormRequest, bo
 		Verify      bool            `json:"verify"`
 		Status      string          `json:"status"`
 		Business    string          `json:"business"`
+		Tenant      uuid.UUID       `json:"tenant_id"`
 		PublicView  *string         `json:"public_view"`
 		ExpiresAt   time.Time       `json:"expires_at"`
 	}
 	if err := json.Unmarshal(raw, &x); err != nil {
 		return FormRequest{}, false, err
 	}
-	r := FormRequest{ID: x.ID, Title: x.Title, Verify: x.Verify, Status: x.Status, Business: x.Business, ExpiresAt: x.ExpiresAt}
+	r := FormRequest{ID: x.ID, Title: x.Title, Verify: x.Verify, Status: x.Status, Business: x.Business, Tenant: x.Tenant, ExpiresAt: x.ExpiresAt}
 	if x.Description != nil {
 		r.Description = *x.Description
 	}

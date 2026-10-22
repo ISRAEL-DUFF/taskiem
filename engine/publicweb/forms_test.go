@@ -400,7 +400,7 @@ func TestStatusPage(t *testing.T) {
 		refresh bool
 	}{
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200, PaymentURL: "https://checkout.paystack.test/abc"},
-			[]string{`<a class="btn btn-primary btn-big" href="https://checkout.paystack.test/abc" rel="noopener noreferrer">Pay ₦4,502</a>`, "Your order is held for 30 minutes"}, false},
+			[]string{`href="https://checkout.paystack.test/abc" rel="noopener noreferrer">Pay ₦4,502</a>`, "Your order is held for 30 minutes"}, false},
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200}, []string{"preparing your payment"}, true},
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200, PaymentURL: "javascript:alert(1)"}, []string{"preparing your payment"}, true},
 		{OrderState{Status: "received", Kind: "order", TotalKobo: 450200}, []string{"Order received", "Ada&#39;s &lt;Kitchen&gt; will confirm by SMS", "₦4,502"}, false},
@@ -516,8 +516,8 @@ func TestFormsNotOffered(t *testing.T) {
 func TestStorefrontOffersForms(t *testing.T) {
 	e := formServer(t, orderPage())
 	body := get(e.h, "GET", sfHost, "/").Body.String()
-	for _, want := range []string{`<a class="btn btn-primary" href="/a/order">Order now</a>`, `<a class="btn" href="/a/enquiry">Ask a question</a>`,
-		`href="/a/callback"`, `href="/a/order?item=2"`, `<a class="btn" href="https://wa.me/`} {
+	for _, want := range []string{`href="/a/order">Order now</a>`, `href="/a/enquiry">Ask a question</a>`,
+		`href="/a/callback"`, `href="/a/order?item=2"`, `href="https://wa.me/`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("no %q", want)
 		}
@@ -579,10 +579,10 @@ func TestFormStock(t *testing.T) {
 	p.Items[1].Stock, p.Items[2].Stock = &one, &none // dishes 2 and 3
 	e := formServer(t, p)
 	body, _ := e.form(t, "/a/order")
-	if !strings.Contains(body, `name="q.2" value="0" min="0" max="1"`) || !strings.Contains(body, `<span>Dish number 3</span> <span class="sf-badge">Sold out</span>`) {
+	if !strings.Contains(body, `name="q.2" value="0" min="0" max="1"`) || !strings.Contains(body, `<span>Dish number 3</span> <span class="badge">Sold out</span>`) {
 		t.Fatalf("the form does not show the stock:\n%s", body)
 	}
-	if page := get(e.h, "GET", sfHost, "/").Body.String(); !strings.Contains(page, `<span class="sf-badge">Sold out</span>`) {
+	if page := get(e.h, "GET", sfHost, "/").Body.String(); !strings.Contains(page, `<span class="badge">Sold out</span>`) {
 		t.Fatalf("the page does not show sold out:\n%s", page)
 	}
 	for _, c := range []struct {

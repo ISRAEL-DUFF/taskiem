@@ -1,0 +1,23 @@
+{{template "fhead" .}}{{template "fbody" .}}
+<h1>Report this page</h1>
+{{template "fmain" .}}
+{{if .Done}}
+<p class="notice" role="status">Thank you. Taskiem will look at {{.Business}}'s page. If it is a scam, do not pay or share any codes.</p>
+{{else}}
+<p>Tell Taskiem what is wrong with {{.Business}}'s page. A person reads every report.</p>
+{{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
+<form method="post" action="/report" class="form">
+<fieldset class="options"><legend>What is wrong?</legend>
+{{range .Reasons}}<label class="check option"><input type="radio" name="reason" value="{{.Value}}" required> {{.Label}}</label>
+{{end}}</fieldset>
+<div class="boxes">
+<div class="box"><label for="message">More about it · optional</label>
+<textarea id="message" name="message" maxlength="500" rows="4"></textarea></div>
+<div class="box"><label for="contact">Your phone or email, if Taskiem may contact you · optional</label>
+<input id="contact" name="contact" maxlength="200" autocomplete="off"></div>
+</div>
+<div class="hp" aria-hidden="true"><label for="website">Leave this empty</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+<button type="submit" class="btn btn-brand btn-block">Send the report</button>
+</form>
+{{end}}
+{{template "ffoot" .}}

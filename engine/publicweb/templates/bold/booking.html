@@ -1,0 +1,54 @@
+{{template "fhead" .}}{{template "fbody" .}}
+<h1>{{.Label}}</h1>
+{{with .Service}}<div class="hero-card">
+<div><strong>{{.Name}}</strong><span>{{.Length}} · {{.Price}}</span></div>
+{{with $.Others}}<a href="{{.}}">Choose another</a>{{end}}
+</div>
+{{with $.Current}}<p class="lede">Booked for {{.}}</p>{{end}}{{end}}
+{{template "fmain" .}}
+{{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
+{{with .Service}}
+{{if $.Days}}<h2>Pick a day</h2>
+<nav class="days-pick" aria-label="Days">{{range $.Days}}<a class="{{if .Current}}is-current{{end}}" href="{{.Href}}"{{if .Current}} aria-current="date"{{end}}>{{.Label}}</a>
+{{end}}</nav>{{end}}
+{{with $.NoTimes}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{if $.Slots}}
+<form method="post" action="{{$.Action}}" class="form">
+{{template "guard" $}}
+<input type="hidden" name="service" value="{{.ID}}">
+<fieldset class="slots">
+<legend>Times on {{$.Day}}</legend>
+<div class="slot-grid">
+{{range $i, $s := $.Slots}}<span class="slot"><input id="slot{{$i}}" type="radio" name="start" value="{{.Value}}" required{{if .Checked}} checked{{end}}><label for="slot{{$i}}"> {{.Label}}</label></span>
+{{end}}</div>
+</fieldset>
+{{if not $.Move}}
+<h2>Your details</h2>
+<div class="boxes">
+<div class="box"><label for="f-name">Your name</label>
+<input id="f-name" type="text" name="name" value="{{$.Name}}" maxlength="80" autocomplete="name" required></div>
+<div class="box"><label for="f-phone">Phone number</label>
+<input id="f-phone" type="tel" name="phone" value="{{$.Phone}}" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0803 123 4567" required></div>
+<div class="box"><label for="f-email">Email · optional</label>
+<input id="f-email" type="email" name="email" value="{{$.Email}}" maxlength="254" autocomplete="email"></div>
+</div>
+<div class="dark sum">
+<p class="sum-what">{{.Name}}</p>
+{{with $.Pay}}<p class="hint">{{.}}</p>{{end}}
+<button class="btn btn-brand btn-block" type="submit">Book</button>
+<p class="hint">Your details go to {{$.Business}} only, to {{$.Purpose}} and to contact you about it. Taskiem runs this page for them.</p>
+</div>
+{{else}}
+<button class="btn btn-brand btn-block" type="submit">Move to this time</button>
+{{end}}
+</form>
+{{end}}
+{{else}}
+{{with .Services}}<p>Choose a service.</p>
+<div class="grid">
+{{range .}}<a class="tile tile-link" href="{{.Href}}"><span class="tile-img tile-icon">{{template "i-clock"}}</span><strong>{{.Name}}</strong><span class="tile-sub">{{.Length}} · {{.Price}}</span></a>
+{{end}}</div>
+{{else}}<p class="notice" role="status">{{$.NoTimes}}</p>{{end}}
+{{end}}
+{{with .Back}}<p><a href="{{.}}">Keep my booking as it is</a></p>{{end}}
+{{template "ffoot" .}}
