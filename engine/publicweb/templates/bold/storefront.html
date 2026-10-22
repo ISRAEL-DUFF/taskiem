@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}{{template "og" .}}</head>
+<body class="sf{{if .Ordering}} has-sticky{{end}}">
+<header class="hero hero-shop">
+  {{with .Brand.Cover}}<img class="hero-cover" src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="100vw" alt="">{{end}}
+  <div class="hero-top">
+    {{with .Brand.Logo}}<img class="logo" src="{{.}}" alt="" width="64" height="64">{{else}}<span class="logo" aria-hidden="true">{{$.Brand.Initials}}</span>{{end}}
+    {{if .OpenKnown}}<span class="pill-open">{{if .OpenNow}}<span class="dot is-open"></span>Open now{{else}}<span class="dot is-closed"></span>Closed now{{end}}</span>{{end}}
+  </div>
+  <h1>{{.M.Card.Name}}</h1>
+  {{with .M.Card.Tagline}}<p class="lede">{{.}}</p>{{end}}
+  {{if or .Verified .M.Card.Area}}<p class="facts">{{if .Verified}}{{template "i-check"}}Verified business{{end}}{{if and .Verified .M.Card.Area}} · {{end}}{{.M.Card.Area}}</p>{{end}}
+  <div class="hero-actions">
+    {{range .Forms}}{{if or (eq .Kind "order") (and (eq .Kind "booking") (not $.Ordering))}}<a class="btn btn-light" href="/a/{{.Kind}}">{{.Label}}</a>{{end}}{{end}}
+    {{with .M.WhatsLink}}<a class="round{{if not $.Forms}} round-wide{{end}}" href="{{.}}" rel="noopener" aria-label="Chat on WhatsApp">{{template "i-whatsapp"}}{{if not $.Forms}}<span>Chat on WhatsApp</span>{{end}}</a>{{end}}
+    {{with .Phone}}<a class="round" href="tel:{{.}}" aria-label="Call">{{template "i-call"}}</a>{{end}}
+    {{with .M.MapLink}}<a class="round" href="{{.}}" rel="noopener" aria-label="Directions">{{template "i-map"}}</a>{{end}}
+  </div>
+  {{if .Forms}}<nav class="more" aria-label="Order and contact forms">{{range .Forms}}{{if not (or (eq .Kind "order") (and (eq .Kind "booking") (not $.Ordering)))}}<a href="/a/{{.Kind}}">{{.Label}}</a>{{end}}{{end}}</nav>{{end}}
+</header>
+<main class="page">
+  {{if .Closed}}<p class="notice" role="status">{{.Closed}}</p>{{end}}
+  {{if gt (len .Sections) 1}}<nav class="tabs" aria-label="Sections">
+    {{range $i, $s := .Sections}}{{if .Title}}<a href="#s{{$i}}">{{.Title}}</a>{{end}}
+    {{end}}
+  </nav>{{end}}
+  {{if .Services}}
+  <section aria-labelledby="services-h">
+    <h2 id="services-h">Services</h2>
+    <div class="grid">
+      {{range .Services}}
+      <article class="tile">
+        <div class="tile-img tile-icon">{{template "i-clock"}}</div>
+        <h3>{{.Name}}</h3>
+        <p class="tile-sub">{{.Length}} · {{.Price}}</p>
+        <a class="btn btn-brand btn-small" href="{{.Href}}" aria-label="Book {{.Name}}">Book</a>
+      </article>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+  {{if .HasItems}}
+  {{range $i, $s := .Sections}}
+  <section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Catalogue{{end}}">
+    {{if .Title}}<h2>{{.Title}}</h2>{{end}}
+    <div class="grid">
+      {{range .Items}}
+      <article class="tile{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
+        <div class="tile-img">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 40rem) 13rem, 45vw" alt="{{.Name}}" loading="lazy" decoding="async">{{end}}
+        {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{end}}</div>
+        <h3>{{.Name}}</h3>
+        {{with .Description}}<p class="tile-sub">{{.}}</p>{{end}}
+        <p class="tile-row"><span class="price">{{.Price}}</span>{{if and $.Ordering .Orderable}}<a class="add" href="/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}</p>
+      </article>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+  {{end}}
+  {{if or .Hours .M.Card.Address .M.Card.About}}
+  <section class="dark">
+    {{with .M.Card.About}}<h2>About</h2><p>{{.}}</p>{{end}}
+    {{if .Hours}}<h2>Opening hours</h2>
+    <ul class="days">
+      {{range .Hours}}<li{{if .Today}} class="is-today"{{end}}><span>{{.Day}}{{if .Today}} · today{{end}}</span><strong>{{.Spans}}</strong></li>
+      {{end}}
+    </ul>
+    {{with .M.Card.Hours.Note}}<p>{{.}}</p>{{end}}{{end}}
+    {{with .M.Card.Address}}<h2>Where to find us</h2><p>{{.}}</p>{{with $.M.MapLink}}<p><a href="{{.}}" rel="noopener">Get directions</a></p>{{end}}{{end}}
+  </section>
+  {{end}}
+</main>
+<footer class="foot">
+<p>Powered by Taskiem · <a href="/report">Report this page</a></p>
+<p class="safety">Taskiem never asks for card details, PINs or OTPs. {{template "safety"}}</p>
+</footer>
+{{if .Ordering}}<a class="sticky" href="/a/order"><span>Ready to order?</span><span class="sticky-go">Order now{{template "i-next"}}</span></a>{{end}}
+</body>
+</html>

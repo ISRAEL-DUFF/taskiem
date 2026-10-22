@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/brand"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -49,14 +50,20 @@ func storefrontServer(t *testing.T, p StorefrontPage, ok bool) (*Server, *fakeHo
 	return s, f
 }
 
+// withBrand gives every business on s the same look.
+func withBrand(s *Server, b brand.Brand) {
+	s.Brands = func(context.Context, uuid.UUID) (brand.Brand, bool, error) { return b, true, nil }
+}
+
 func TestStorefrontPage(t *testing.T) {
-	for _, tmpl := range []string{"classic", "bold"} {
-		s, _ := storefrontServer(t, samplePage(tmpl, 4), true)
+	for _, tmpl := range brand.Themes {
+		s, _ := storefrontServer(t, samplePage("classic", 4), true)
+		withBrand(s, brand.Brand{Theme: tmpl, Color: "#c2410c"})
 		w := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/")
 		body := w.Body.String()
 		for _, want := range []string{
 			"<title>Ada&#39;s &lt;Kitchen&gt;</title>", // escaped
-			`class="sf sf-` + tmpl + ` accent-orange"`,
+			`/_static/theme-` + tmpl + `.`, `href="/_brand/1/c2410c.css"`,
 			"Open now", "₦1,500", "Dish number 2", "<h2>Soups</h2>", "Unavailable",
 			`href="https://wa.me/2348031234567"`, `href="tel:&#43;2348031234567"`, "Directions",
 			`property="og:image" content="https://ref.xb.test/l/800.jpg"`,
@@ -78,7 +85,7 @@ func TestStorefrontClosedAndDraft(t *testing.T) {
 	p.Status, p.ClosedMessage = "closed", "Back on Monday"
 	s, _ := storefrontServer(t, p, true)
 	body := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/").Body.String()
-	if !strings.Contains(body, "Back on Monday") || strings.Contains(body, "Dish number 1") || !strings.Contains(body, "Chat on WhatsApp") {
+	if !strings.Contains(body, "Back on Monday") || strings.Contains(body, "Dish number 1") || !strings.Contains(body, "https://wa.me/") {
 		t.Fatal("a closed storefront shows its message and card, not its catalogue")
 	}
 	s, _ = storefrontServer(t, StorefrontPage{}, false)

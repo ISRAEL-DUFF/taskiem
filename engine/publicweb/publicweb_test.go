@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/engine/brand"
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 )
@@ -39,7 +41,17 @@ func (f *fakeHosts) lookup(_ context.Context, host string) (Site, bool, error) {
 func newServer(f *fakeHosts) (*Server, http.Handler) {
 	// No view limit to speak of: TestViewLimit tests it.
 	s := &Server{Lookup: f.lookup, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
+	testTheme(s)
 	return s, s.Handler()
+}
+
+// testTheme draws every page in the theme TASKIEM_TEST_THEME names, so
+// the whole suite runs against each theme's templates (CI runs it once
+// per theme); unset, pages are in the default theme.
+func testTheme(s *Server) {
+	if t := os.Getenv("TASKIEM_TEST_THEME"); t != "" {
+		withBrand(s, brand.Brand{Theme: t})
+	}
 }
 
 func get(h http.Handler, method, host, path string, hdr ...string) *httptest.ResponseRecorder {
@@ -165,7 +177,7 @@ func TestETagAndStatic(t *testing.T) {
 		t.Fatalf("revalidation: %d", w.Code)
 	}
 
-	css := regexp.MustCompile(`href="(/_static/site\.[0-9a-f]{10}\.css)"`).FindStringSubmatch(w.Body.String())
+	css := regexp.MustCompile(`href="(/_static/theme-clean\.[0-9a-f]{10}\.css)"`).FindStringSubmatch(w.Body.String())
 	if css == nil {
 		t.Fatalf("no hashed stylesheet link in %q", w.Body.String())
 	}
@@ -174,7 +186,17 @@ func TestETagAndStatic(t *testing.T) {
 		!strings.Contains(sw.Header().Get("Cache-Control"), "immutable") {
 		t.Fatalf("static: %d %v", sw.Code, sw.Header())
 	}
-	if w := get(h, "GET", "any.host.test", "/_static/site.css"); w.Code != 404 {
+	// A colour's stylesheet is made from its name.
+	if bw := get(h, "GET", "any.host.test", "/_brand/1/0b6e4f.css"); bw.Code != 200 || !strings.Contains(bw.Body.String(), "--brand:#0b6e4f") ||
+		!strings.Contains(bw.Header().Get("Cache-Control"), "immutable") {
+		t.Fatalf("brand stylesheet: %d %q", bw.Code, bw.Body.String())
+	}
+	for _, bad := range []string{"/_brand/1/0B6E4F.css", "/_brand/1/red.css", "/_brand/1/0b6e4f;}.css", "/_brand/2/0b6e4f.css"} {
+		if bw := get(h, "GET", "any.host.test", bad); bw.Code != 404 {
+			t.Errorf("%s: %d", bad, bw.Code)
+		}
+	}
+	if w := get(h, "GET", "any.host.test", "/_static/theme-clean.css"); w.Code != 404 {
 		t.Fatal("unhashed static names must not be served")
 	}
 	if w := get(h, "GET", "any.host.test", "/_static/../publicweb.go"); w.Code != 404 {
@@ -210,7 +232,7 @@ func TestViewLimit(t *testing.T) {
 	}
 	// Static files are not counted.
 	w := get(h, "GET", "ada.shops.test", "/")
-	css := regexp.MustCompile(`/_static/site\.[0-9a-f]{10}\.css`)
+	css := regexp.MustCompile(`/_static/theme-clean\.[0-9a-f]{10}\.css`)
 	if w.Code != 429 || css.FindString(w.Body.String()) == "" {
 		t.Fatalf("limited page: %d", w.Code)
 	}

@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/brand"
 )
 
 // Page budgets (docs/spec/storefronts.md 8.4): a public page must be usable
@@ -12,9 +14,9 @@ import (
 // loads are kept small. These are the ceilings; pages should sit well
 // under them.
 const (
-	maxPageHTML  = 60 << 10 // per page, before images
-	maxStylesTot = 15 << 10 // every stylesheet together
-	maxScriptTot = 10 << 10 // every script together
+	maxPageHTML   = 60 << 10 // per page, before images
+	maxStylesPage = 15 << 10 // the stylesheets a page loads: its theme's and its colour's
+	maxScriptTot  = 10 << 10 // every script together
 )
 
 func TestPageBudget(t *testing.T) {
@@ -34,17 +36,25 @@ func TestPageBudget(t *testing.T) {
 			t.Errorf("%s: page is %d bytes, budget %d", path, n, maxPageHTML)
 		}
 	}
-	var css, js int
+	var js int
 	for name, a := range assets {
-		switch {
-		case strings.HasSuffix(name, ".css"):
-			css += len(a.body)
-		case strings.HasSuffix(name, ".js"):
+		if strings.HasSuffix(name, ".js") {
 			js += len(a.body)
 		}
 	}
-	if css > maxStylesTot || js > maxScriptTot {
-		t.Errorf("static files: css %d bytes (budget %d), js %d bytes (budget %d)", css, maxStylesTot, js, maxScriptTot)
+	if js > maxScriptTot {
+		t.Errorf("static files: js %d bytes (budget %d)", js, maxScriptTot)
+	}
+	// A page loads one theme's stylesheet, and its colour's.
+	colour := len(brand.PaletteOf("#0b6e4f").CSS())
+	for _, theme := range brand.Themes {
+		a, ok := assets[strings.TrimPrefix(assetNames["theme-"+theme+".css"], staticPrefix)]
+		if !ok {
+			t.Fatalf("%s: no stylesheet", theme)
+		}
+		if n := len(a.body) + colour; n > maxStylesPage {
+			t.Errorf("%s: stylesheets %d bytes, budget %d", theme, n, maxStylesPage)
+		}
 	}
 }
 

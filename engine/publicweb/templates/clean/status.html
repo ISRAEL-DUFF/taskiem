@@ -1,0 +1,19 @@
+{{template "fhead" .}}{{if .Refresh}}<meta http-equiv="refresh" content="3">
+{{end}}{{template "fbody" .}}
+<h1>{{.Headline}}</h1>
+{{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
+<div class="panel receipt">
+<p class="ref">Reference <strong>{{.Reference}}</strong></p>
+{{range .Lines}}<p>{{.}}</p>
+{{end}}</div>
+{{with .PayURL}}<p><a class="btn btn-primary btn-block btn-big" href="{{.}}"{{if $.NewTab}} target="_blank"{{end}} rel="noopener noreferrer">{{$.PayLabel}}</a></p>
+<p class="hint center">{{template "i-lock"}} Never share your card PIN or OTP.</p>{{end}}
+{{range .Buttons}}<form method="post" action="{{.Action}}" class="change">
+<input type="hidden" name="token" value="{{$.Token}}">
+<div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="{{$.Honeypot}}" value="" autocomplete="off" tabindex="-1"></label></div>
+{{with .Do}}<input type="hidden" name="do" value="{{.}}">{{end}}
+<button class="btn btn-block{{if .Primary}} btn-primary{{end}}" type="submit">{{.Label}}</button>
+</form>
+{{end}}
+{{if .Links}}<nav class="links">{{range .Links}}<a class="btn btn-block" href="{{.Href}}">{{.Label}}</a> {{end}}</nav>{{end}}
+{{template "ffoot" .}}

@@ -85,9 +85,11 @@ type hform struct {
 	reqView  forms.RequestView
 
 	title, description, business string
-	schema, types                map[string]any
-	pages                        []wd.FormPage
-	fields                       map[string]*field
+	// tenant is the business's, for its look.
+	tenant        uuid.UUID
+	schema, types map[string]any
+	pages         []wd.FormPage
+	fields        map[string]*field
 	// verify is the channel a code goes to (sms or email), empty for none;
 	// fixed is true when the address is known (a bound link, a request).
 	verify string
@@ -134,7 +136,6 @@ type heldFile struct {
 type hformData struct {
 	pageData
 	Business    string
-	Accent      string
 	Description string
 	Action      string
 	CodeAction  string
@@ -165,7 +166,6 @@ type hformData struct {
 type hdoneData struct {
 	pageData
 	Business  string
-	Accent    string
 	Reference string
 	Headline  string
 	Message   any // template.HTML from formMessage, or a string
@@ -198,7 +198,7 @@ func (s *Server) routeForms(w http.ResponseWriter, r *http.Request) {
 	key, sub, _ := strings.Cut(rest, "/")
 	if !s.formsReady() && head != "" {
 		s.renderPrivate(w, r, http.StatusServiceUnavailable, "formclosed.html", closedData{pageData: pageData{Title: "Not open yet", Lang: "en"},
-			Business: "Taskiem", Accent: "green", Message: "Forms are not open yet. Please try again later."})
+			Business: "Taskiem", Message: "Forms are not open yet. Please try again later."})
 		return
 	}
 	switch {
@@ -252,11 +252,11 @@ func (s *Server) tryLater(w http.ResponseWriter, r *http.Request, what string, e
 	s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 }
 
-func (s *Server) formNotice(w http.ResponseWriter, r *http.Request, status int, title, business, msg string) {
+func (s *Server) formNotice(w http.ResponseWriter, r *http.Request, status int, title string, tenant uuid.UUID, business, msg string) {
 	if business == "" {
 		business = "Taskiem"
 	}
-	s.renderPrivate(w, r, status, "formclosed.html", closedData{pageData: pageData{Title: title, Lang: "en"}, Business: business, Accent: "green", Message: msg})
+	s.renderPrivate(w, r, status, "formclosed.html", closedData{pageData: pageData{Title: title, Lang: "en", Look: s.lookFor(r.Context(), tenant, business)}, Business: business, Message: msg})
 }
 
 func allowed(w http.ResponseWriter, r *http.Request, methods ...string) bool {
@@ -286,14 +286,14 @@ func (s *Server) serveFormTrigger(w http.ResponseWriter, r *http.Request, id, su
 	case "members":
 		// Served by the app, under its session; never framed.
 		msg := pub.Trigger.Title + " is for members of " + pub.Business + ". It opens in the Taskiem app, where you sign in."
-		d := appData{closedData: closedData{pageData: pageData{Title: pub.Trigger.Title, Lang: "en"}, Business: pub.Business, Accent: "green", Message: msg}}
+		d := appData{closedData: closedData{pageData: pageData{Title: pub.Trigger.Title, Lang: "en", Look: s.lookFor(r.Context(), pub.Tenant, pub.Business)}, Business: pub.Business, Message: msg}}
 		if s.AppURL != "" {
 			d.App = strings.TrimRight(s.AppURL, "/") + "/forms/" + pub.PublicID
 		}
 		s.renderPrivate(w, r, http.StatusOK, "formapp.html", d)
 		return
 	case "link":
-		s.formNotice(w, r, http.StatusForbidden, pub.Trigger.Title, pub.Business, "This form opens from the link you were sent. Please use that link.")
+		s.formNotice(w, r, http.StatusForbidden, pub.Trigger.Title, pub.Tenant, pub.Business, "This form opens from the link you were sent. Please use that link.")
 		return
 	}
 	hf := s.triggerForm(pub, "/f/"+id, "f:"+id)
@@ -323,7 +323,7 @@ func (s *Server) serveFormTrigger(w http.ResponseWriter, r *http.Request, id, su
 		if r.Method == http.MethodPost {
 			status = http.StatusConflict
 		}
-		s.formNotice(w, r, status, "Closed", pub.Business, msg)
+		s.formNotice(w, r, status, "Closed", pub.Tenant, pub.Business, msg)
 		return
 	}
 	s.serveHosted(w, r, hf, sub, s.prefillFromQuery(hf, r.URL.Query()))
@@ -332,7 +332,7 @@ func (s *Server) serveFormTrigger(w http.ResponseWriter, r *http.Request, id, su
 // triggerForm is a live form's hform.
 func (s *Server) triggerForm(pub PublicForm, base, guardID string) *hform {
 	t := pub.Trigger
-	hf := &hform{pub: pub, title: t.Title, description: t.Description, business: pub.Business, schema: pub.Schema, types: pub.Types,
+	hf := &hform{pub: pub, tenant: pub.Tenant, title: t.Title, description: t.Description, business: pub.Business, schema: pub.Schema, types: pub.Types,
 		pages: wd.FormPages(t.Pages, pub.Schema), fields: fields(pub.Schema), guardID: guardID, base: base, scope: pub.Endpoint,
 		report: "f:" + pub.PublicID, done: "/f/" + pub.PublicID, keys: s.FormKeys}
 	switch t.Verify {
@@ -381,11 +381,11 @@ func (s *Server) serveFormLink(w http.ResponseWriter, r *http.Request, token, su
 		return
 	}
 	if !ok {
-		s.formNotice(w, r, http.StatusNotFound, "Link not found", "", "This link is not valid. Please check you have the whole link.")
+		s.formNotice(w, r, http.StatusNotFound, "Link not found", uuid.Nil, "", "This link is not valid. Please check you have the whole link.")
 		return
 	}
 	if !link.Usable {
-		s.formNotice(w, r, http.StatusGone, "Link used", "", "This link has been used already, or it has expired. Please ask for a new one.")
+		s.formNotice(w, r, http.StatusGone, "Link used", uuid.Nil, "", "This link has been used already, or it has expired. Please ask for a new one.")
 		return
 	}
 	pub, ok, err := s.publicForm(r.Context(), link.PublicID)
@@ -394,7 +394,7 @@ func (s *Server) serveFormLink(w http.ResponseWriter, r *http.Request, token, su
 		return
 	}
 	if !ok {
-		s.formNotice(w, r, http.StatusNotFound, "Form not found", "", "This form is no longer available.")
+		s.formNotice(w, r, http.StatusNotFound, "Form not found", uuid.Nil, "", "This form is no longer available.")
 		return
 	}
 	if !pub.Open {
@@ -402,7 +402,7 @@ func (s *Server) serveFormLink(w http.ResponseWriter, r *http.Request, token, su
 		if pub.ClosedMessage != "" {
 			msg += " " + pub.ClosedMessage
 		}
-		s.formNotice(w, r, http.StatusOK, "Closed", pub.Business, msg)
+		s.formNotice(w, r, http.StatusOK, "Closed", pub.Tenant, pub.Business, msg)
 		return
 	}
 	hf := s.triggerForm(pub, "/r/"+token, "f:"+pub.PublicID+"/l:"+link.ID.String())
@@ -441,22 +441,22 @@ func (s *Server) serveFormRequest(w http.ResponseWriter, r *http.Request, token,
 		return
 	}
 	if !ok {
-		s.formNotice(w, r, http.StatusNotFound, "Link not found", "", "This link is not valid. Please check you have the whole link.")
+		s.formNotice(w, r, http.StatusNotFound, "Link not found", uuid.Nil, "", "This link is not valid. Please check you have the whole link.")
 		return
 	}
 	switch req.Status {
 	case "pending":
 	case "answered":
-		s.formNotice(w, r, http.StatusOK, "Already answered", req.Business, "Thank you. This has been answered already.")
+		s.formNotice(w, r, http.StatusOK, "Already answered", req.Tenant, req.Business, "Thank you. This has been answered already.")
 		return
 	case "cancelled":
-		s.formNotice(w, r, http.StatusGone, "No longer needed", req.Business, "This request is no longer needed. You do not need to do anything.")
+		s.formNotice(w, r, http.StatusGone, "No longer needed", req.Tenant, req.Business, "This request is no longer needed. You do not need to do anything.")
 		return
 	default:
-		s.formNotice(w, r, http.StatusGone, "Expired", req.Business, "This request has expired. If you still need to answer it, please contact "+req.Business+".")
+		s.formNotice(w, r, http.StatusGone, "Expired", req.Tenant, req.Business, "This request has expired. If you still need to answer it, please contact "+req.Business+".")
 		return
 	}
-	hf := &hform{req: &req, title: req.Title, description: req.Description, business: req.Business, schema: req.Schema,
+	hf := &hform{req: &req, tenant: req.Tenant, title: req.Title, description: req.Description, business: req.Business, schema: req.Schema,
 		pages: wd.FormPages(nil, req.Schema), fields: fields(req.Schema), guardID: "q:" + req.ID.String(), base: "/q/" + token,
 		scope: req.ID, report: "q:" + req.ID.String(), keys: s.FormKeys}
 	if len(req.PublicView) > 0 {
@@ -779,7 +779,7 @@ func (s *Server) showHosted(w http.ResponseWriter, r *http.Request, status int, 
 		s.page(w, r, http.StatusInternalServerError, "unavailable", pageData{Title: "Try again shortly"})
 		return
 	}
-	d := hformData{pageData: pageData{Title: hf.title, Lang: "en"}, Business: hf.business, Accent: "green", Description: hf.description,
+	d := hformData{pageData: pageData{Title: hf.title, Lang: "en", Look: s.lookFor(r.Context(), hf.tenant, hf.business)}, Business: hf.business, Description: hf.description,
 		Action: hf.base, CodeAction: hf.base + "/code", Token: token, State: base64.RawURLEncoding.EncodeToString(sealed), Honeypot: formguard.HoneypotField,
 		Error: errMsg, Notice: notice, Channel: hf.verify, Hint: hf.hint, Fixed: hf.fixed, Embed: hf.embed, Origins: strings.Join(hf.origins, " "),
 		Report: hf.report, Multipart: hf.hasFiles(), Purpose: strings.TrimRight(strings.TrimSpace(hf.description), ".")}
@@ -1207,13 +1207,13 @@ func (s *Server) formSubmit(w http.ResponseWriter, r *http.Request, hf *hform, s
 	ref, ok, err := s.recordForm(r.Context(), fw, sub, files)
 	switch {
 	case errors.Is(err, ErrOnceSent):
-		s.formNotice(w, r, http.StatusConflict, "Already sent", hf.business, "You have already sent this form. Thank you.")
+		s.formNotice(w, r, http.StatusConflict, "Already sent", hf.tenant, hf.business, "You have already sent this form. Thank you.")
 		return
 	case errors.Is(err, ErrLinkUsed):
-		s.formNotice(w, r, http.StatusConflict, "Link used", hf.business, "This link has been used already. Please ask for a new one.")
+		s.formNotice(w, r, http.StatusConflict, "Link used", hf.tenant, hf.business, "This link has been used already. Please ask for a new one.")
 		return
 	case errors.Is(err, ErrAnswered):
-		s.formNotice(w, r, http.StatusConflict, "Already answered", hf.business, "Thank you. This has been answered already.")
+		s.formNotice(w, r, http.StatusConflict, "Already answered", hf.tenant, hf.business, "Thank you. This has been answered already.")
 		return
 	case err != nil:
 		if !errors.Is(err, context.Canceled) {
@@ -1222,7 +1222,7 @@ func (s *Server) formSubmit(w http.ResponseWriter, r *http.Request, hf *hform, s
 		s.showHosted(w, r, http.StatusServiceUnavailable, hf, st, token, "Something went wrong on our side. Please send again.", "")
 		return
 	case !ok:
-		s.formNotice(w, r, http.StatusConflict, "Closed", hf.business, hf.title+" is not taking answers right now.")
+		s.formNotice(w, r, http.StatusConflict, "Closed", hf.tenant, hf.business, hf.title+" is not taking answers right now.")
 		return
 	}
 	var updates []updateLink
@@ -1390,7 +1390,7 @@ func (hf *hform) validate(st *hstate, answers map[string]any) string {
 
 // formAfter shows what follows a submission (forms 6.6).
 func (s *Server) formAfter(w http.ResponseWriter, r *http.Request, hf *hform, ref, key string, updates []updateLink) {
-	d := hdoneData{pageData: pageData{Title: "Thank you", Lang: "en"}, Business: hf.business, Accent: "green", Reference: ref,
+	d := hdoneData{pageData: pageData{Title: "Thank you", Lang: "en", Look: s.lookFor(r.Context(), hf.tenant, hf.business)}, Business: hf.business, Reference: ref,
 		Headline: "Thank you", Embed: hf.embed, Origins: strings.Join(hf.origins, " "), Updates: updates}
 	statusURL := "/s/" + url.PathEscape(ref) + "?k=" + url.QueryEscape(key)
 	if hf.req != nil {
@@ -1467,7 +1467,7 @@ func (s *Server) serveFormDone(w http.ResponseWriter, r *http.Request, id, ref s
 	} else if strings.Contains(pub.Trigger.After.Message, "](") {
 		origins, _ = s.embedOrigins(r.Context(), pub.Tenant)
 	}
-	d := hdoneData{pageData: pageData{Title: "Thank you", Lang: "en"}, Business: pub.Business, Accent: "green", Reference: ref,
+	d := hdoneData{pageData: pageData{Title: "Thank you", Lang: "en", Look: s.lookFor(r.Context(), pub.Tenant, pub.Business)}, Business: pub.Business, Reference: ref,
 		Headline: "Thank you", Embed: embed, Origins: strings.Join(origins, " ")}
 	statusURL := "/s/" + url.PathEscape(ref) + "?k=" + url.QueryEscape(key)
 	switch {
@@ -1503,7 +1503,7 @@ func (s *Server) serveFormStatus(w http.ResponseWriter, r *http.Request, ref str
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}
-	d := hdoneData{pageData: pageData{Title: "Your form", Lang: "en"}, Business: "Taskiem", Accent: "green", Reference: ref, Headline: "Your form"}
+	d := hdoneData{pageData: pageData{Title: "Your form", Lang: "en"}, Business: "Taskiem", Reference: ref, Headline: "Your form"}
 	switch st.Status {
 	case "refused":
 		d.Lines = []string{"Your answers could not be accepted. Please contact the organisation that gave you the form."}

@@ -1,0 +1,56 @@
+{{template "fhead" .}}{{if .Items}}<script src="{{asset "order.js"}}" defer></script>
+{{end}}{{template "fbody" .}}
+<h1>{{.Label}}</h1>
+{{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
+<form method="post" action="{{.Action}}" class="form"{{if .Items}} data-order{{end}}>
+{{template "guard" .}}
+{{if .Items}}
+<fieldset class="panel basket">
+<legend>Your order</legend>
+{{range .Items}}
+<div class="line{{if not .Orderable}} is-unavailable{{end}}">
+{{if .Orderable}}<label for="q-{{.N}}"><span class="line-name">{{.Name}}</span> <span class="line-price">{{.Price}}</span></label>
+<input id="q-{{.N}}" class="qty" type="number" name="q.{{.ID}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.PriceKobo}}">
+{{else}}<span>{{.Name}}</span> <span class="badge">{{if .SoldOut}}Sold out{{else}}Unavailable{{end}}</span>{{end}}
+</div>
+{{end}}
+<p class="total" data-total aria-live="polite"></p>
+</fieldset>
+{{end}}
+{{if eq .Kind "order"}}
+{{if and .Pickup .Delivery}}
+<fieldset class="choices">
+<legend>How do you want it?</legend>
+<div class="choice"><input id="ff-pickup" type="radio" name="fulfilment" value="pickup" required{{if eq .Fulfilment "pickup"}} checked{{end}}><label for="ff-pickup"><strong>Pickup</strong><span>From the business</span></label></div>
+<div class="choice"><input id="ff-delivery" type="radio" name="fulfilment" value="delivery"{{if eq .Fulfilment "delivery"}} checked{{end}}><label for="ff-delivery"><strong>Delivery</strong><span>{{with .DeliveryNote}}{{.}}{{else}}To your address{{end}}</span></label></div>
+</fieldset>
+{{else if .Delivery}}<p class="hint">Delivery only.{{with .DeliveryNote}} {{.}}{{end}}</p>
+{{else if .Pickup}}<p class="hint">Pickup only.</p>
+{{end}}
+{{end}}
+<h2>Your details</h2>
+<div class="panel fields">
+<div class="field"><label for="f-name">Your name</label>
+<input id="f-name" type="text" name="name" value="{{.Name}}" maxlength="80" autocomplete="name" required></div>
+<div class="field"><label for="f-phone">Phone number</label>
+<input id="f-phone" type="tel" name="phone" value="{{.Phone}}" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0803 123 4567" required></div>
+<div class="field"><label for="f-email">Email <span class="hint">(optional)</span></label>
+<input id="f-email" type="email" name="email" value="{{.Email}}" maxlength="254" autocomplete="email"></div>
+{{if eq .Kind "order"}}
+{{if .Delivery}}<div class="field"><label for="f-address">Delivery address{{if .Pickup}} <span class="hint">(for delivery)</span>{{end}}</label>
+<textarea id="f-address" name="address" rows="2" maxlength="200" autocomplete="street-address"{{if not .Pickup}} required{{end}}>{{.Address}}</textarea></div>
+{{end}}
+<div class="field"><label for="f-message">Message <span class="hint">(optional)</span></label>
+<textarea id="f-message" name="message" rows="2" maxlength="500">{{.Message}}</textarea></div>
+{{else if eq .Kind "enquiry"}}
+<div class="field"><label for="f-message">Your question</label>
+<textarea id="f-message" name="message" rows="4" maxlength="1000" required>{{.Message}}</textarea></div>
+{{else if eq .Kind "callback"}}
+<div class="field"><label for="f-best">Best time to call <span class="hint">(optional)</span></label>
+<input id="f-best" type="text" name="best_time" value="{{.BestTime}}" maxlength="60" placeholder="Weekdays after 5pm"></div>
+{{end}}
+</div>
+<p class="hint privacy">Your details go to {{.Business}} only, to {{.Purpose}} and to contact you about it. Taskiem runs this page for them.</p>
+<button class="btn btn-primary btn-block" type="submit">{{if eq .Kind "order"}}Send order{{else}}Send{{end}}</button>
+</form>
+{{template "ffoot" .}}

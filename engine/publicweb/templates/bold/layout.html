@@ -1,0 +1,51 @@
+{{/* Bold: the business's colour fills the top of every page, heavy type,
+pills. A page writes its own heading into the coloured block, then
+"fmain" closes the block and opens the page. */}}
+{{define "fhead"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<meta name="robots" content="noindex">
+<title>{{.Title}} · {{.Business}}</title>
+{{end}}
+
+{{define "mark"}}{{with .Brand.Logo}}<img class="mark" src="{{.}}" alt="" width="40" height="40">{{else}}<span class="mark" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}
+
+{{define "fbody"}}</head>
+<body>
+<header class="hero">
+<div class="bar">
+{{with .Home}}<a class="round" href="{{.}}" aria-label="Back to {{$.Business}}">{{template "i-back"}}</a>{{end}}
+{{template "mark" .}}
+{{with .Home}}<a class="sf-back" href="{{.}}">{{$.Business}}</a>{{else}}<span class="bar-name">{{.Business}}</span>{{end}}
+</div>
+{{end}}
+
+{{define "fmain"}}</header>
+<main class="page">
+{{end}}
+
+{{define "ffoot"}}</main>
+<footer class="foot">
+<p class="safety">{{template "safety"}}</p>
+<p>Powered by Taskiem</p>
+</footer>
+</body>
+</html>
+{{end}}
+
+{{define "head"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<title>{{.Title}}</title>
+</head>
+<body>
+<header class="hero hero-plain">
+{{end}}
+
+{{define "foot"}}</main>
+<footer class="foot">
+<p class="safety">{{template "safety"}}</p>
+</footer>
+</body>
+</html>
+{{end}}

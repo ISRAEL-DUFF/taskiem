@@ -89,7 +89,6 @@ type updateLink struct {
 type reachData struct {
 	pageData
 	Business string
-	Accent   string
 	Links    []updateLink
 	Home     string
 }
@@ -199,7 +198,7 @@ func (s *Server) serveReach(w http.ResponseWriter, r *http.Request, id, app stri
 		return
 	}
 	if app == "" {
-		d := reachData{pageData: pageData{Title: "Get updates", Lang: "en"}, Business: business, Accent: "green"}
+		d := reachData{pageData: pageData{Title: "Get updates", Lang: "en", Look: s.lookFor(r.Context(), tenant, business)}, Business: business}
 		if wa != "" {
 			d.Links = append(d.Links, updateLink{App: reach.WhatsApp, Label: "Get updates on WhatsApp", URL: "/u/" + id + "/whatsapp"})
 		}
@@ -216,7 +215,7 @@ func (s *Server) serveReach(w http.ResponseWriter, r *http.Request, id, app stri
 	}
 	if !s.formLimiter().Allow(s.ipKey(r)) {
 		w.Header().Set("Retry-After", "60")
-		s.formNotice(w, r, http.StatusTooManyRequests, "Please wait", business, "Too many links were asked for from this connection. Please wait a few minutes.")
+		s.formNotice(w, r, http.StatusTooManyRequests, "Please wait", tenant, business, "Too many links were asked for from this connection. Please wait a few minutes.")
 		return
 	}
 	code, hash, err := reach.NewCode()

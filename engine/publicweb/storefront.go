@@ -109,7 +109,6 @@ type storefrontData struct {
 	OpenNow     bool
 	Hours       []hoursRow
 	Phone       string
-	Accent      string
 	Description string
 	Image       string
 	// URL is the page's public address (og:url and canonical).
@@ -159,6 +158,10 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 		return
 	}
 	d := storefrontView(p, s.now())
+	d.Look = s.lookFor(r.Context(), site.Tenant, p.Model.Card.Name)
+	if d.Look.LogoLarge != "" {
+		d.Image = d.Look.LogoLarge
+	}
 	d.URL = s.address(r, site, p)
 	if !s.formsOpen() {
 		d.Forms, d.Ordering = nil, false
@@ -214,10 +217,7 @@ func (s *Server) address(r *http.Request, site Site, p StorefrontPage) string {
 
 func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 	c := p.Model.Card
-	d := storefrontData{pageData: pageData{Title: c.Name, Lang: c.Language}, M: p.Model, Accent: c.Accent}
-	if _, ok := storefront.Accents[d.Accent]; !ok {
-		d.Accent = "green"
-	}
+	d := storefrontData{pageData: pageData{Title: c.Name, Lang: c.Language}, M: p.Model}
 	if p.Status == "closed" {
 		d.Closed = p.ClosedMessage
 	}

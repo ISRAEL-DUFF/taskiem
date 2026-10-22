@@ -303,6 +303,12 @@ func AddMedia(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, img media.Image,
 	return m, err
 }
 
+// MediaImage is a media record's URLs, refusing rejected or unknown ids:
+// a business's logo and cover photo (brand.Brand) are these images too.
+func MediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Image, error) {
+	return mediaImage(ctx, tx, tenant, id)
+}
+
 // mediaImage is a media record's URLs, refusing rejected or unknown ids.
 func mediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Image, error) {
 	mid, err := uuid.Parse(id)

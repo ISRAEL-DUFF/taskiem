@@ -160,7 +160,7 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// Own domains (S6): a storefront's primary domain, where its other hosts redirect.
 		"taskiem_public_storefront_domain(uuid)": true,
 		// Email triggers (N10): the mail role checks a recipient and leaves a sealed message.
-		"taskiem_mail_recipient(text)": true, "taskiem_mail_receive(uuid,uuid,bytea,bytea,bytea)": true,
+		"taskiem_mail_recipient(text)": true, "taskiem_mail_receive(uuid,uuid,bytea,bytea,bytea)": true, "taskiem_public_brand(uuid)": true,
 		// Updates for people outside a business (N11): a thank-you page's or standing page's link codes, where they point.
 		"taskiem_reach_code_put(bytea,uuid,text,bytea)": true, "taskiem_reach_targets(uuid)": true, "taskiem_reach_page(text)": true}
 	for _, f := range definers {

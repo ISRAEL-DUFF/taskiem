@@ -59,7 +59,6 @@ var reportReasons = []struct{ Value, Label string }{
 type reportData struct {
 	pageData
 	Business string
-	Accent   string
 	Home     string
 	Reasons  []struct{ Value, Label string }
 	Done     bool
@@ -106,7 +105,7 @@ func (s *Server) serveReport(w http.ResponseWriter, r *http.Request, site Site) 
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}
-	d := reportData{pageData: pageData{Title: "Report this page", Lang: "en"}, Business: p.Model.Card.Name, Accent: p.Model.Card.Accent, Home: "/",
+	d := reportData{pageData: pageData{Title: "Report this page", Lang: "en", Look: s.lookFor(r.Context(), site.Tenant, p.Model.Card.Name)}, Business: p.Model.Card.Name, Home: "/",
 		Reasons: reportReasons}
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:

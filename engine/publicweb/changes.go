@@ -246,7 +246,7 @@ func (s *Server) serveMove(w http.ResponseWriter, r *http.Request, site Site, p 
 	}
 	prefix := prefixOf(back)
 	action := statusLink(prefix, ref, key, "move")
-	d := bookingData{pageData: pageData{Title: "Move your booking", Lang: sd.Lang}, Business: sd.Business, Accent: sd.Accent, Label: "Move your booking",
+	d := bookingData{pageData: pageData{Title: "Move your booking", Lang: sd.Lang, Look: sd.Look}, Business: sd.Business, Label: "Move your booking",
 		Action: action, Home: sd.Home, Back: back, Honeypot: formguard.HoneypotField, Move: true, form: changeForm(site.ID, ref, "move"),
 		Service: &serviceView{ID: it.ID, Name: it.Name, Length: length(it.DurationMinutes), Price: servicePrice(it)}, Current: storefront.When(b.Start)}
 	a := sp.Availability.Effective(p.Model.Card.Hours)

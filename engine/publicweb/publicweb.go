@@ -122,6 +122,9 @@ type Server struct {
 	Storefronts Storefronts
 	// Reports records "Report this page" (report.go); nil takes none.
 	Reports Reports
+	// Brands read how a business's pages look (look.go); nil draws every
+	// page in the default look.
+	Brands Brands
 	// PreviewDomain is where storefronts serve as <slug>.<domain> (the
 	// first public domain): a storefront's /qr.png is that address. Without
 	// one, the address the page was asked for.
@@ -176,6 +179,7 @@ type Server struct {
 	origins       *lru.Cache[uuid.UUID, []string]
 	pages         *lru.Cache[uuid.UUID, pageEntry]
 	servicesCache *lru.Cache[uuid.UUID, servicesEntry]
+	brands        *lru.Cache[uuid.UUID, brandEntry]
 	now           func() time.Time
 	guard         *formguard.Guard
 }
@@ -194,6 +198,9 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.servicesCache == nil {
 		s.servicesCache = lru.New[uuid.UUID, servicesEntry](2000, HostTTL)
+	}
+	if s.brands == nil {
+		s.brands = lru.New[uuid.UUID, brandEntry](HostCacheSize, HostTTL)
 	}
 	if s.now == nil {
 		s.now = time.Now
@@ -282,6 +289,10 @@ func (c *cookieless) Write(b []byte) (int, error) {
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, staticPrefix) {
 		serveStatic(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, brandPrefix) {
+		serveBrandCSS(w, r)
 		return
 	}
 	// Static files are immutable and cheap, so only pages are counted.
