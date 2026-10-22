@@ -273,14 +273,14 @@ actions:
 		t.Fatal(err)
 	}
 	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_bulk","version":1,"name":"bulk","trigger":{"type":"manual"},
-	  "steps":[{"id":"pay","type":"connector","connector":"bulk@1","action":"send","input":{"transfers":[{"account_name":"Chiamaka Obi","amount":5000},{"account_name":"Tunde Bello","amount":7000}],"notify":["ops@payrolla.ng"]}}]}`)
+	  "steps":[{"id":"pay","type":"connector","connector":"bulk@1","action":"send","input":{"transfers":[{"account_name":"Chiamaka Obi","amount":5000},{"account_name":"Tunde Bello","amount":7000}],"notify":["ops@wagely.ng"]}}]}`)
 	ref := e.Start(t, wf, map[string]any{})
 	e.Drain(t)
 	if st := e.Status(t, ref); st != "completed" {
 		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
 	}
 	for _, ev := range events(t, e, ref) {
-		for _, name := range []string{"Chiamaka", "Tunde", "ops@payrolla"} {
+		for _, name := range []string{"Chiamaka", "Tunde", "ops@wagely"} {
 			if strings.Contains(string(ev.Payload), name) {
 				t.Errorf("plaintext %q in stored %s(%s): %s", name, ev.Type, ev.StepID, ev.Payload)
 			}

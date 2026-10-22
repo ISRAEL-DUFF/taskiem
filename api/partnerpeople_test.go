@@ -59,7 +59,7 @@ func acceptLink(t *testing.T, w *world, token string, want int) (*client, *webau
 // reach the sub-tenant's invitations.
 func TestPartnerInvitesIntoSubTenant(t *testing.T) {
 	w, mail := onboardingWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Company 1042", nil)
 	other := p.sub(t, "Company 7", nil)
 	rival := w.partner(t, "Rival", "owner@rival.test")
@@ -71,7 +71,7 @@ func TestPartnerInvitesIntoSubTenant(t *testing.T) {
 		t.Fatalf("invite: %v", inv)
 	}
 	emails := sentTo(t, w, mail, before, "ada@company.test")
-	if len(emails) != 1 || !strings.Contains(emails[0], "Company 1042") || !strings.Contains(emails[0], "through Payrolla") {
+	if len(emails) != 1 || !strings.Contains(emails[0], "Company 1042") || !strings.Contains(emails[0], "through Wagely") {
 		t.Fatalf("emails: %v", emails)
 	}
 	m := invitationLink.FindStringSubmatch(emails[0])
@@ -193,7 +193,7 @@ func TestPartnerInvitesIntoSubTenant(t *testing.T) {
 // challenge does not pass.
 func TestInvitationLinkGuards(t *testing.T) {
 	w, mail := onboardingWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Company", nil)
 	before := len(mail.all())
 	p.key.must(201, "POST", "/v1/partner/sub-tenants/"+sub+"/invitations", map[string]any{"email": "a@company.test", "roles": []string{"viewer"}})

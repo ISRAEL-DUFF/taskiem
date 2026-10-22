@@ -64,8 +64,8 @@ func setCapabilities(t *testing.T, w *world, id uuid.UUID, caps ...string) {
 }
 
 const (
-	siteApp   = "https://app.payrolla.test"
-	siteAdmin = "https://admin.payrolla.test"
+	siteApp   = "https://app.wagely.test"
+	siteAdmin = "https://admin.wagely.test"
 )
 
 // The bundle is public and cacheable; the frame page alone may be framed,
@@ -78,9 +78,9 @@ func TestEmbedBundleAndFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.srv.EmbedDir = dir
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	app, _ := p.app(t, map[string]any{"name": "web", "allowed_origins": []string{siteApp, siteAdmin}})
-	other, _ := p.app(t, map[string]any{"name": "other", "allowed_origins": []string{"https://other.payrolla.test"}})
+	other, _ := p.app(t, map[string]any{"name": "other", "allowed_origins": []string{"https://other.wagely.test"}})
 	headless, _ := p.app(t, map[string]any{"name": "server", "headless": true})
 
 	resp, body := raw(t, "GET", w.base+"/embed/v1/taskiem.js", "", "", nil)
@@ -114,7 +114,7 @@ func TestEmbedBundleAndFrame(t *testing.T) {
 		t.Errorf("runs view: %s", body)
 	}
 	resp, _ = raw(t, "GET", w.base+"/embed/"+other+"/frame", "", "", nil)
-	if csp := resp.Header.Get("Content-Security-Policy"); !strings.HasSuffix(csp, "frame-ancestors https://other.payrolla.test") {
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.HasSuffix(csp, "frame-ancestors https://other.wagely.test") {
 		t.Errorf("other app's frame: %s", csp)
 	}
 	resp, _ = raw(t, "GET", w.base+"/embed/"+headless+"/frame", "", "", nil)
@@ -122,7 +122,7 @@ func TestEmbedBundleAndFrame(t *testing.T) {
 		t.Errorf("headless app's frame: %s", csp)
 	}
 	// Unknown, malformed and disabled apps: not found, not frameable.
-	p.key.must(200, "PUT", "/v1/partner/embed-apps/"+other, map[string]any{"name": "other", "allowed_origins": []string{"https://other.payrolla.test"}, "status": "disabled"})
+	p.key.must(200, "PUT", "/v1/partner/embed-apps/"+other, map[string]any{"name": "other", "allowed_origins": []string{"https://other.wagely.test"}, "status": "disabled"})
 	for _, path := range []string{"/embed/" + uuid.NewString() + "/frame", "/embed/nope/frame", "/embed/" + other + "/frame", "/embed/frame"} {
 		resp, _ := raw(t, "GET", w.base+path, "", "", nil)
 		if resp.StatusCode != 404 || !strings.Contains(resp.Header.Get("Content-Security-Policy"), "frame-ancestors 'none'") || resp.Header.Get("X-Frame-Options") != "DENY" {
@@ -143,7 +143,7 @@ func TestEmbedBundleAndFrame(t *testing.T) {
 // would the page's own.
 func TestEmbedFrameOrigin(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
 	app, _ := p.app(t, map[string]any{"name": "web", "allowed_origins": []string{siteApp, siteAdmin}})
 	tok := p.key.must(201, "POST", "/v1/partner/embed-apps/"+app+"/tokens", map[string]any{"end_user_id": "u1", "sub_tenant": sub,
@@ -181,25 +181,25 @@ func TestCustomDomains(t *testing.T) {
 	w := ssoWorld(t) // a fake DNS for TXT records
 	w.srv.EmbedDir = t.TempDir()
 	_ = os.WriteFile(filepath.Join(w.srv.EmbedDir, "taskiem.js"), []byte("//"), 0o600)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
 	app, _ := p.app(t, map[string]any{"name": "web", "allowed_origins": []string{siteApp}})
 	otherApp, _ := p.app(t, map[string]any{"name": "other", "allowed_origins": []string{siteApp}})
-	const host = "automations.payrolla.test"
+	const host = "automations.wagely.test"
 	domains := "/v1/partner/embed-apps/" + app + "/domains"
 
 	// The plan must include custom domains.
 	p.key.must(403, "POST", domains, map[string]any{"domain": host})
 	setCapabilities(t, w, p.id, "custom_domains")
-	for _, bad := range []string{"https://" + host, host + ":8443", "*.payrolla.test", "payrolla", "10.0.0.1", host + "/x", "app.taskiem.test", "x.app.taskiem.test"} {
+	for _, bad := range []string{"https://" + host, host + ":8443", "*.wagely.test", "wagely", "10.0.0.1", host + "/x", "app.taskiem.test", "x.app.taskiem.test"} {
 		p.key.must(400, "POST", domains, map[string]any{"domain": bad})
 	}
-	dom := p.key.must(201, "POST", domains, map[string]any{"domain": "Automations.Payrolla.test"})
+	dom := p.key.must(201, "POST", domains, map[string]any{"domain": "Automations.Wagely.test"})
 	if dom["domain"] != host || dom["record"] != "_taskiem-verify."+host || !strings.HasPrefix(dom["txt_value"].(string), "taskiem-verify=") {
 		t.Fatalf("claim: %v", dom)
 	}
 	p.key.must(409, "POST", domains, map[string]any{"domain": host})
-	p.key.must(404, "POST", "/v1/partner/embed-apps/"+uuid.NewString()+"/domains", map[string]any{"domain": "x.payrolla.test"})
+	p.key.must(404, "POST", "/v1/partner/embed-apps/"+uuid.NewString()+"/domains", map[string]any{"domain": "x.wagely.test"})
 
 	onHost := func(path string, hdr map[string]string, token string) (*rawResp, string) {
 		return raw(t, "GET", w.base+path, host, token, hdr)
@@ -315,7 +315,7 @@ func (m *capturedMail) Send(_ context.Context, _ string, _ []string, msg []byte)
 // and messages sent on the sub-tenant's behalf.
 func TestWhiteLabel(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
 	body := map[string]any{"name": "web", "allowed_origins": []string{siteApp}, "white_label": true}
 	p.key.must(403, "POST", "/v1/partner/embed-apps", body)
@@ -346,7 +346,7 @@ func TestWhiteLabel(t *testing.T) {
 	if err := a.SendTest(ctx, subID, uuid.New(), "email", []byte(`{"to":["ops@customer.test"]}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.SendTest(ctx, p.id, uuid.New(), "email", []byte(`{"to":["ops@payrolla.test"]}`)); err != nil {
+	if err := a.SendTest(ctx, p.id, uuid.New(), "email", []byte(`{"to":["ops@wagely.test"]}`)); err != nil {
 		t.Fatal(err)
 	}
 	if len(mail.msgs) != 2 || strings.Contains(mail.msgs[0], "Taskiem") || !strings.Contains(mail.msgs[0], "Subject: Test alert") ||
@@ -373,7 +373,7 @@ func TestConnectorBridge(t *testing.T) {
 	ledger := newLedger(t, &mu, &auths)
 	w := newWorld(t)
 	w.env.Connectors.BaseURLs = map[string]string{"x_example_ledger": ledger}
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	a, b := p.sub(t, "Customer A", nil), p.sub(t, "Customer B", nil)
 	perms := []string{"workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"}
 	appBody := map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{"x_example_ledger"}, "end_user_permissions": perms}

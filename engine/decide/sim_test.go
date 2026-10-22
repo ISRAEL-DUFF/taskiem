@@ -34,7 +34,7 @@ func newSim(t *testing.T, wdJSON string, trigger any) *sim {
 	s.append(history.RunStarted, "", 0, history.RunStartedPayload{
 		Run:     history.RunInfo{ID: "run-1", TenantID: "t-1", WorkflowID: "wf", Version: 1, Environment: "prod", StartedAt: history.FormatTime(s.now)},
 		Trigger: trigger,
-		Env:     map[string]any{"api": "https://api.example", "payrolla_api_url": "https://payrolla.example"},
+		Env:     map[string]any{"api": "https://api.example"},
 	}, history.OriginIngest)
 	s.decide()
 	return s

@@ -17,18 +17,18 @@
     "valid_after_corrections_rate": 1,
     "test_pass_rate": 1,
     "valid_first_try_and_tests_pass_rate": 1,
-    "requirements_rate": 0.1102,
-    "property_pass_rate": 0.6942,
-    "strict_rate": 0.1102,
+    "requirements_rate": 0.1144,
+    "property_pass_rate": 0.6957,
+    "strict_rate": 0.1144,
     "policy_violations": 0,
     "attempts_with_policy_violations": 0,
     "policy_violation_rate": 0,
-    "connector_recall": 0.5277,
+    "connector_recall": 0.5319,
     "step_recall": 0.7143,
-    "trigger_accuracy": 0.5,
+    "trigger_accuracy": 0.5042,
     "template_starts": 126,
     "usage": {
-      "input_tokens": 6956907,
+      "input_tokens": 6960839,
       "output_tokens": 22491,
       "cache_creation_tokens": 0,
       "cache_read_tokens": 0
@@ -82,8 +82,8 @@
     "approval": {
       "cases": 42,
       "valid_first_try_and_tests_pass_rate": 1,
-      "requirements_rate": 0.119,
-      "strict_rate": 0.119,
+      "requirements_rate": 0.1429,
+      "strict_rate": 0.1429,
       "policy_violations": 0
     },
     "approvals": {
@@ -208,8 +208,8 @@
     "dogfood": {
       "cases": 4,
       "valid_first_try_and_tests_pass_rate": 1,
-      "requirements_rate": 0,
-      "strict_rate": 0,
+      "requirements_rate": 0.25,
+      "strict_rate": 0.25,
       "policy_violations": 0
     },
     "education": {
@@ -425,8 +425,8 @@
     "payments": {
       "cases": 20,
       "valid_first_try_and_tests_pass_rate": 1,
-      "requirements_rate": 0.2,
-      "strict_rate": 0.2,
+      "requirements_rate": 0.25,
+      "strict_rate": 0.25,
       "policy_violations": 0
     },
     "payouts": {
@@ -686,8 +686,8 @@
     "hard": {
       "cases": 87,
       "valid_first_try_and_tests_pass_rate": 1,
-      "requirements_rate": 0.0115,
-      "strict_rate": 0.0115,
+      "requirements_rate": 0.023,
+      "strict_rate": 0.023,
       "policy_violations": 0
     },
     "medium": {
@@ -784,9 +784,9 @@
       "policy_violations": 0
     },
     "webhook_auth": {
-      "cases": 41,
+      "cases": 40,
       "valid_first_try_and_tests_pass_rate": 0,
-      "requirements_rate": 0.3902,
+      "requirements_rate": 0.4,
       "strict_rate": 0,
       "policy_violations": 0
     }
@@ -1097,7 +1097,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39753,
+        "input_tokens": 39939,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1377,7 +1377,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30614,
+        "input_tokens": 30800,
         "output_tokens": 151,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3739,7 +3739,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39764,
+        "input_tokens": 39950,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3821,7 +3821,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33420,
+        "input_tokens": 33606,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4317,7 +4317,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34571,
+        "input_tokens": 34757,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5373,7 +5373,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31697,
+        "input_tokens": 31883,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5863,7 +5863,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29764,
+        "input_tokens": 29950,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5944,7 +5944,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38620,
+        "input_tokens": 38806,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6233,7 +6233,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31134,
+        "input_tokens": 31320,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6271,7 +6271,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31172,
+        "input_tokens": 31358,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6309,7 +6309,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31146,
+        "input_tokens": 31332,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6345,7 +6345,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31161,
+        "input_tokens": 31347,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6849,7 +6849,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38253,
+        "input_tokens": 38439,
         "output_tokens": 252,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7573,7 +7573,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37841,
+        "input_tokens": 38027,
         "output_tokens": 237,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7722,7 +7722,7 @@
       "template": "payroll-reminder",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22367,
+        "input_tokens": 22553,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7877,7 +7877,7 @@
       }
     },
     {
-      "id": "payrolla-salary",
+      "id": "run-payroll-dogfood",
       "rep": 0,
       "tags": [
         "dogfood",
@@ -7892,28 +7892,22 @@
       "policy_violations": 0,
       "rounds": 1,
       "gate": true,
-      "connector_recall": 0,
+      "connector_recall": 1,
       "step_recall": 1,
-      "trigger_ok": false,
+      "trigger_ok": true,
       "properties": {
         "approval_before_payment": true,
         "bounded_concurrency": true,
         "idempotency": true,
         "no_inline_secrets": true,
-        "reads_before_paying": true,
-        "webhook_auth": false
+        "reads_before_paying": true
       },
-      "requirements": false,
-      "strict": false,
-      "missing": [
-        "iswallet@1",
-        "trigger webhook",
-        "webhook_auth: the trigger is not a webhook"
-      ],
+      "requirements": true,
+      "strict": true,
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37359,
+        "input_tokens": 37385,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8366,7 +8360,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39715,
+        "input_tokens": 39901,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8406,7 +8400,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32409,
+        "input_tokens": 32595,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9021,7 +9015,7 @@
       "template": "payroll-reminder",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31125,
+        "input_tokens": 31311,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9060,7 +9054,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32327,
+        "input_tokens": 32513,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9587,7 +9581,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32510,
+        "input_tokens": 32696,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9727,7 +9721,7 @@
       "template": "leave-request",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33050,
+        "input_tokens": 33236,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0

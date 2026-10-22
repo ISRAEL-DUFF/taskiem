@@ -79,7 +79,7 @@ describe("celToFunction", () => {
 
   // Every expression in the repository's workflows either round-trips
   // exactly or is kept as CEL.
-  it("round-trips every expression in flows/", () => {
+  it("round-trips every expression in flows/ and Run payroll", () => {
     const files: string[] = [];
     const walk = (d: string) => {
       for (const f of readdirSync(d)) {
@@ -89,6 +89,8 @@ describe("celToFunction", () => {
       }
     };
     walk(join(import.meta.dirname, "../../flows"));
+    // Run payroll, filled in as a business would have it (the repair evals' fixture).
+    walk(join(import.meta.dirname, "../../evals/repair"));
     let printed = 0;
     let kept = 0;
     const visit = (v: unknown) => {

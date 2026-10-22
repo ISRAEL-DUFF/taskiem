@@ -15,7 +15,7 @@ import (
 func TestEndUserFourEyesPublish(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
 	other := p.sub(t, "Other", nil)
 	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{},

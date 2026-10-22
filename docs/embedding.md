@@ -98,14 +98,14 @@ An embed app is one place the partner embeds Taskiem: a web app, an admin consol
 POST /v1/partner/embed-apps
 {
   "name": "payroll web",
-  "allowed_origins": ["https://app.payrolla.com"],
+  "allowed_origins": ["https://app.wagely.example"],
   "branding": {"colours": {"primary": "#0a7d5a", "background": "#ffffff"}, "font_family": "Inter, sans-serif",
-               "logo_url": "https://cdn.payrolla.com/logo.svg", "radius": "8px", "mode": "auto"},
+               "logo_url": "https://cdn.wagely.example/logo.svg", "radius": "8px", "mode": "auto"},
   "allowed_connectors": ["paystack", "termii", "http"],
   "allowed_templates": ["payroll-reminder"],
   "end_user_permissions": ["workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"],
   "headless": false,
-  "webhook_url": "https://api.payrolla.com/taskiem/webhooks",
+  "webhook_url": "https://api.wagely.example/taskiem/webhooks",
   "webhook_events": ["run.completed", "run.failed", "workflow.published", "usage.threshold", "domain.unverified"]
 }
 → 201 {"id": "...", "webhook_secret": "whsec_...", "app": {...}}
@@ -132,7 +132,7 @@ When one of your users opens the embedded builder, your **server** asks for a to
 ```http
 POST /v1/partner/embed-apps/{app}/tokens
 {"end_user_id": "user-8812", "sub_tenant": "0190f0c3-...", "permissions": ["workflow.read", "workflow.edit", "run.read", "run.start"],
- "ttl": 900, "origin": "https://app.payrolla.com"}
+ "ttl": 900, "origin": "https://app.wagely.example"}
 → 201 {"token": "tsk_eut_...", "expires_at": "...", "end_user": {"id": "...", "external_id": "user-8812"}, ...}
 ```
 
@@ -198,7 +198,7 @@ Taskiem posts events about your sub-tenants to each active app with a `webhook_u
 | `domain.unverified` | One of the app's [custom domains](#10-custom-domains) failed re-verification long enough and stopped serving; sent to that app whether or not it lists the event | `domain`, `app_id`, `failures`, `failing_since`, `reason` |
 
 ```http
-POST https://api.payrolla.com/taskiem/webhooks
+POST https://api.wagely.example/taskiem/webhooks
 Content-Type: application/json
 Taskiem-Signature: t=1791334800,v1=5f1c...
 Taskiem-Event: run.completed
@@ -310,14 +310,14 @@ The app's `branding` tokens (validated when you register the app, and again by t
 
 ## 10. Custom domains
 
-Serve the builder from your own host name, for example `automations.payrolla.com`. It needs the `custom_domains` capability on your plan (an operator sets it: `taskiem tenants partner <id> --capabilities custom_domains,white_label`).
+Serve the builder from your own host name, for example `automations.wagely.example`. It needs the `custom_domains` capability on your plan (an operator sets it: `taskiem tenants partner <id> --capabilities custom_domains,white_label`).
 
 1. Claim the domain for an app; the answer is the DNS record that proves you control it:
 
    ```http
    POST /v1/partner/embed-apps/{app}/domains
-   {"domain": "automations.payrolla.com"}
-   → 201 {"domain": "automations.payrolla.com", "record": "_taskiem-verify.automations.payrolla.com", "txt_value": "taskiem-verify=…"}
+   {"domain": "automations.wagely.example"}
+   → 201 {"domain": "automations.wagely.example", "record": "_taskiem-verify.automations.wagely.example", "txt_value": "taskiem-verify=…"}
    ```
 
 2. Add the TXT record, and point the host at Taskiem (a CNAME to the address your Taskiem operator gives you). Ask the operator to add the host to the ingress (below) so it gets a certificate.
@@ -325,8 +325,8 @@ Serve the builder from your own host name, for example `automations.payrolla.com
 
 Once verified, and while your plan keeps the capability and the app is active:
 
-- `https://automations.payrolla.com/embed/v1/taskiem.js` is the bundle, `…/embed/frame` the app's frame page (its app implied by the host), and `…/v1/embed/{app}/…` the app's embed API. Nothing else is served on that host: the console, sign-in and the rest of the API answer 404 there, so your domain never shows Taskiem's own pages.
-- `https://automations.payrolla.com` is one of the app's origins (CORS answers it).
+- `https://automations.wagely.example/embed/v1/taskiem.js` is the bundle, `…/embed/frame` the app's frame page (its app implied by the host), and `…/v1/embed/{app}/…` the app's embed API. Nothing else is served on that host: the console, sign-in and the rest of the API answer 404 there, so your domain never shows Taskiem's own pages.
+- `https://automations.wagely.example` is one of the app's origins (CORS answers it).
 
 A domain is claimed per partner; any number of partners may claim one, but only one can verify it, and the platform's own host and its subdomains cannot be claimed. An app may have up to 10 domains.
 
@@ -340,7 +340,7 @@ ingress:
   embedAnnotations:
     cert-manager.io/cluster-issuer: letsencrypt   # cert-manager issues one certificate per host (HTTP-01 works once the CNAME is in place)
   embedHosts:
-    - host: automations.payrolla.com              # TLS secret: automations-payrolla-com-tls unless secretName is set
+    - host: automations.wagely.example              # TLS secret: automations-wagely-example-tls unless secretName is set
 ```
 
 This adds an Ingress, `<release>-embed`, sending only `/embed/` and `/v1/embed/` on those hosts to the API. Without cert-manager, put a certificate in each `secretName` (or one wildcard certificate, if your partners' hosts share a parent domain you control). The API maps a host to its app only after verification, so an unverified host on the ingress serves nothing of an app. Set `TASKIEM_PUBLIC_URL`: the platform's own host is never treated as a custom domain.
@@ -365,8 +365,8 @@ Your sub-tenants' end users can use your own product from their automations, alr
 
    ```http
    POST /v1/partner/sub-tenants/{sub}/connections
-   {"environment": "prod", "connector": "x_payrolla@1", "name": "main", "credentials": {"api_key": "pk_live_customer_1042"}}
-   → 201 {"id": "…", "environment": "prod", "connector": "x_payrolla", "name": "main", "provisioned_by": "partner:<you>/key:<id>"}
+   {"environment": "prod", "connector": "x_wagely@1", "name": "main", "credentials": {"api_key": "pk_live_customer_1042"}}
+   → 201 {"id": "…", "environment": "prod", "connector": "x_wagely", "name": "main", "provisioned_by": "partner:<you>/key:<id>"}
    ```
 
    The credentials are written into that sub-tenant's vault, encrypted under its own key, in a transaction entered through `taskiem_partner_enter`: the access is in both audit chains (`partner.connection.create`), and the sub-tenant's chain also records `connection.create`. The connector must be available to the sub-tenant (the catalogue's or one you share) and allowed by at least one of your active apps.
@@ -380,7 +380,7 @@ Your sub-tenants' end users can use your own product from their automations, alr
 
 Credentials are write-only everywhere: no route returns them, to you, to the sub-tenant or to its end users (who have no connection routes at all). A run decrypts them only inside the sub-tenant that holds them, so one customer's credentials can never run in another's workflows. End users name the connection in a step (`"connection": "main"`) or, with one connection per connector and environment, leave it out.
 
-**One provider account for all your customers.** If a provider gives you one client for every customer (iswallet: Payrolla's client holds every company's wallets), the key you provision into each sub-tenant reaches the other customers' accounts too. Provision it with the connector's allow-list (iswallet: `"shared_client": "true"` and that customer's `wallet_ids`, refused without them), so the connector refuses any other account before a request is sent ([iswallet](integrations/iswallet.md#one-client-shared-by-many-customers), [decision 0031](decisions/0031-shared-provider-clients.md)).
+**One provider account for all your customers.** If a provider gives you one client for every customer (iswallet: a payroll partner's one client holds every customer company's wallets), the key you provision into each sub-tenant reaches the other customers' accounts too. Provision it with the connector's allow-list (iswallet: `"shared_client": "true"` and that customer's `wallet_ids`, refused without them), so the connector refuses any other account before a request is sent ([iswallet](integrations/iswallet.md#one-client-shared-by-many-customers), [decision 0031](decisions/0031-shared-provider-clients.md)).
 
 ## 13. Routing provider events to sub-tenants
 
@@ -443,19 +443,19 @@ Build a workflow once in your own tenant and install it into each sub-tenant: th
    {
      "package": "0190f0d1-…", "version": 3,
      "environments": ["dev", "prod"],
-     "variables": {"dev":  {"payrolla_api_url": "https://sandbox-api.payrolla.com"},
-                   "prod": {"payrolla_api_url": "https://api.payrolla.com"}},
+     "variables": {"dev":  {"wagely_api_url": "https://sandbox-api.wagely.example"},
+                   "prod": {"wagely_api_url": "https://api.wagely.example"}},
      "roles": [{"name": "payroll_approver", "description": "Releases payrolls", "permissions": ["approval.decide", "run.read", "workflow.read"]}]
    }
    → 201 {
      "workflow_id": "…", "package": "0190f0d1-…", "package_version": 3, "version": 1, "state": "published",
      "environments": ["dev", "prod"],
-     "endpoints": [{"environment": "prod", "type": "webhook", "url": "/hooks/<sub>/payrolla/payroll-approved?env=prod",
-                    "auth": "hmac", "secret_name": "webhook_wf_payrollaSalaryDisbursement", "deployed_version": 1}, …],
+     "endpoints": [{"environment": "prod", "type": "webhook", "url": "/hooks/<sub>/wagely/payroll-approved?env=prod",
+                    "auth": "hmac", "secret_name": "webhook_wf_wagelyPayroll", "deployed_version": 1}, …],
      "roles_created": ["payroll_approver"], "roles_kept": [],
      "variables_missing": [],
-     "secrets": [{"environment": "prod", "name": "payrolla_api_token", "set": false},
-                 {"environment": "prod", "name": "webhook_wf_payrollaSalaryDisbursement", "set": false}, …],
+     "secrets": [{"environment": "prod", "name": "wagely_api_token", "set": false},
+                 {"environment": "prod", "name": "webhook_wf_wagelyPayroll", "set": false}, …],
      "problems": []
    }
    ```
@@ -475,7 +475,7 @@ Build a workflow once in your own tenant and install it into each sub-tenant: th
 
 **Secrets stay with the sub-tenant's people.** You set configuration, never secrets. The sub-tenant's people:
 
-- set the secrets the workflow reads (`payrolla_api_token`) on their Secrets page;
+- set the secrets the workflow reads (`wagely_api_token`) on their Secrets page;
 - make the webhook's **signing secret** on the workflow's Endpoints page ("New signing secret", `POST /v1/workflows/{wf}/signing-secret`), which shows it once, and give it to whoever sends to the webhook (your product, through its own screens);
 - add the hosts an `http` step calls to their egress allow-list (Secrets & settings > Egress). An `http` step reaches only those hosts, so no variable you set can send their secrets anywhere they have not allowed.
 
@@ -509,6 +509,6 @@ The threat model's boundary B11 covers this ([threat model](security/threat-mode
 
 | Milestone | Status |
 | --- | --- |
-| C4: first embedded deployment (Payrolla) | Onboarding API built ([people](#14-people-in-a-sub-tenant), [packages](#15-workflow-packages)); the deployment itself needs people ([needs people](needs-people.md#phase-3), EM1) |
+| C4: first embedded deployment | Onboarding API built ([people](#14-people-in-a-sub-tenant), [packages](#15-workflow-packages)); the deployment itself needs people ([needs people](needs-people.md#phase-3), EM1) |
 
 Known gaps: an invited person with no account needs email to set one up (`delivery: none` otherwise); the partner cannot remove a member (the sub-tenant's admins do) or delete an installed workflow; a package is one workflow (no bundles of several, nor of connectors and policies); installing does not add hosts to the sub-tenant's egress allow-list, which its own people do; end users cannot hold `approval.decide` (decisions are recorded against platform users), and their publishes under four-eyes wait for a platform person; deleting a sub-tenant is an operator task; white-label WhatsApp needs partner templates approved by Meta (EM3); connector bridge credentials are fields the partner provisions (api keys, basic), not an OAuth flow the end user goes through.

@@ -51,7 +51,7 @@ var internal = []struct{ pattern, why string }{
 	{"security/*", "the threat model, self-review and pen-test scope"},
 	{"decisions/*", "architecture decision records for the team"},
 	{"integrations/iswallet-answers-*", "correspondence with a partner"},
-	{"integrations/payrolla", "a guide addressed to one partner"},
+	{"integrations/archive/*", "superseded partner guides, kept for the record"},
 	{"integrations/xenibase-storage-api", "a copy of a partner's API reference, for the team"},
 	{"media", "storage for storefronts and forms is built but idle until Phase 5 ships; publish it with storefronts"},
 	{"embed-sites", "embedding storefronts and forms is built but off until Phase 5 ships; publish it with storefronts"},

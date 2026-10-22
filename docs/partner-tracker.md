@@ -14,20 +14,24 @@ Keys, tokens and signing secrets never travel in email, chat, tickets or these p
 
 ## Payrolla
 
-Payrolla's side is built and tested against a stub of our webhook. Its reply of October 2026 agreed one Taskiem sub-tenant per customer company; we built onboarding by API, the shared-client guard, reversal notices and report totals ([guide](integrations/payrolla.md), decisions 0030 and 0031).
+**Changed by [decision 0044](decisions/0044-rails-and-products.md).** Payrolla already pays its customers' staff itself, through iswallet, and has webhooks and embeddable screens, so Taskiem connects to it as a product instead of paying for it: the webhook Taskiem received, the disbursement report and the reversal notice are all withdrawn, before Payrolla builds the notice endpoint (R0-1). The old guide is [archived](integrations/archive/payrolla.md). Payroll for a business without a payroll product is Taskiem's [Run payroll](templates.md) template. What is needed from Payrolla now is its own API, events and embed, for the Payrolla connector (R5) and its screens inside Taskiem (R6).
 
 | Id | Needed from Payrolla | When | Status |
 | --- | --- | --- | --- |
 | N1 | Pilot company's payroll: headcount, total net value, how many paid to bank accounts, run dates; and Payrolla's largest payroll across customers. iswallet needs these for the wallet tier and rate limit | Now | [x] 14 October: Payrolla is in beta with no production customer yet. The sandbox pilot (Chuks Electronics) pays 2 people, both to bank accounts, ₦3,000 net in all; that is also Payrolla's largest payroll. Run dates not fixed. A new TIER_1 wallet (₦50,000 per payout and per day) and 100 requests a minute cover it, so no tier or rate-limit raise is needed until a real customer is onboarded |
 | N2 | Peter Chuks's full email; approvers so far: Peter Chuks (eazidefi@gmail.com), John Chuks (eazidefi+approver@gmail.com) | Now | [x] 14 October |
-| N3 | Each onboarded company's iswallet wallets it pays from (at least its funding wallet), for its connection's `wallet_ids`; for sandbox, the test company's wallets | Now | [ ] |
-| N4 | Who at Payrolla receives Taskiem's partner API key | Now | [ ] |
-| N5 | Build `POST {payrolla_api_url}/payrolls/{payroll_id}/reversal-notice` to the payload in the guide | Now | [ ] |
-| N6 | Pilot company's production `funding_wallet_id` (R6), start date, on-call contact for payroll days (T2) | Before production | [ ] The sandbox pilot company is Chuks Electronics; the first production customer is not chosen yet |
-| N7 | Confirm 35 days of watching for reversals is enough (settable per company, 1–60) | Confirm | [ ] |
+| N3 | Each onboarded company's iswallet wallets it pays from (at least its funding wallet), for its connection's `wallet_ids`; for sandbox, the test company's wallets | Now | [x] Withdrawn (decision 0044): Taskiem no longer pays from Payrolla's wallets |
+| N4 | Who at Payrolla receives Taskiem's partner API key | Now | [x] Withdrawn: no partner API key is needed to connect a product |
+| N5 | Build `POST {payrolla_api_url}/payrolls/{payroll_id}/reversal-notice` to the payload in the guide | Now | [x] Withdrawn: tell Payrolla not to build it (R0-1) |
+| N6 | Pilot company's production `funding_wallet_id` (R6), start date, on-call contact for payroll days (T2) | Before production | [x] Withdrawn (decision 0044) |
+| N7 | Confirm 35 days of watching for reversals is enough (settable per company, 1–60) | Confirm | [x] Withdrawn: Payrolla watches its own payouts |
 | E1 | Embedding the builder: after the payroll pilot | Later | Deferred by Payrolla |
+| P1 | Payrolla's API (R0-2): how Taskiem connects (API key or OAuth), the sandbox, rate limits, and reading payrolls, payslips and approvals | Now | [ ] Asked |
+| P2 | Payrolla's webhooks (R0-2, R0-4): the events (payroll approved, paid, payment failed or returned), their signature, and whether they are set per company or once for all | Now | [ ] Asked |
+| P3 | Payrolla's embeddable screens (R0-3): their URLs, how a Payrolla user is signed in inside a frame, `frame-ancestors` allowing Taskiem's origins, and postMessage events | Now | [ ] Asked |
+| P4 | A Payrolla sandbox account for Taskiem's tests | Now | [ ] |
 
-Known from Payrolla's reply: report base URL `https://synledger.name.ng/payrolla/api/v1/integrations/taskiem` (sandbox; the reply said `/payroller`, but staging serves Payrolla under `/payrolla`, checked 15 October: `/payrolla/health` answers ok and the integration path answers 401 without a token) and `https://ispend.name.ng/payroller/api/v1/integrations/taskiem` (production, as the reply gave it; confirm whether it moved to `/payrolla` too), one bearer token per company issued in Payrolla and entered by the company's account holder; re-sends use `{run_id}-r2`, `-r3`; payrolls are sent once locked.
+For the record, from Payrolla's reply about the withdrawn integration: report base URL `https://synledger.name.ng/payrolla/api/v1/integrations/taskiem` (sandbox; the reply said `/payroller`, but staging serves Payrolla under `/payrolla`, checked 15 October: `/payrolla/health` answers ok and the integration path answers 401 without a token) and `https://ispend.name.ng/payroller/api/v1/integrations/taskiem` (production, as the reply gave it; confirm whether it moved to `/payrolla` too), one bearer token per company issued in Payrolla and entered by the company's account holder; re-sends use `{run_id}-r2`, `-r3`; payrolls are sent once locked.
 
 ## iswallet (and iSpend)
 
@@ -81,10 +85,10 @@ Xenibase (formerly PGDock). Phase 1 is built from its published contracts ([plan
 
 | Item | For | Blocked by |
 | --- | --- | --- |
-| A Taskiem staging deployment with a public URL | Everyone: webhook URLs for Payrolla, iswallet subscriptions, Xenibase testing | Infrastructure ([needs people](needs-people.md) D5, P4-C1) |
-| Payrolla's partner tenant and partner API key | Payrolla onboarding (N4) | Staging |
-| Webhook URLs per product and environment | iswallet W3, P3; Payrolla per company | Staging, then production |
+| A Taskiem staging deployment with a public URL | Everyone: webhook URLs for iswallet subscriptions, Payrolla's events, Xenibase testing | Infrastructure ([needs people](needs-people.md) D5, P4-C1) |
+| Payrolla's sandbox account and API key, entered on Taskiem's Connections page | The Payrolla connector (P1, P4) | Payrolla's sandbox |
+| Webhook URLs per product and environment | iswallet W3, P3; Payrolla's events (P2) | Staging, then production |
 | Fixed egress IPs | Xenibase (if they allow-list); iswallet for forensics only | Cloud provider and NAT (P4-C1, P4-C5) |
-| Telling iswallet Payrolla's figures: beta only, 2 people and ₦3,000, so no tier or limit raise yet | iswallet H3, P1 | Nothing: N1 answered; send with the next iswallet message |
+| Telling iswallet that Taskiem no longer pays for Payrolla, and Run payroll's expected figures | iswallet H3, P1 | Nothing; send with the next iswallet message |
 | A sending domain for invitation emails | Company people joining their sub-tenants | P4-O1 |
 | Running the sandbox tests with each partner | Payrolla T1, iswallet W4, Xenibase S1 | Staging and the sandbox items above |

@@ -1,6 +1,6 @@
 # Rails and products: specification and build plan
 
-Status: **R1, R2, R3 and R9 built**, R4 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
+Status: **R1, R2, R3, R8 and R9 built**, R4 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
 
 Taskiem connects to two kinds of service. **Rails** move money (Paystack, iswallet, Moniepoint and the rest) and Taskiem builds products on them as workflows. **Products** (Payrolla, and later accounting, HR and POS back offices) already run a whole process, and Taskiem connects to them, embeds their interface, and works around them. This document specifies both halves, and the retirement of the Payrolla integration that mixed them up.
 
@@ -86,7 +86,7 @@ Engine machinery the templates rely on, all of which exists:
 
 ### 3.2 The Payrolla integration as built
 
-`flows/dogfood/payrolla-salary-disbursement.flow.ts` / `.wd.json` (id `wf_payrollaSalaryDisbursement`), documented for Payrolla's engineers in [integrations/payrolla.md](../integrations/payrolla.md):
+`flows/dogfood/payrolla-salary-disbursement.flow.ts` / `.wd.json` (id `wf_payrollaSalaryDisbursement`), documented for Payrolla's engineers in [integrations/archive/payrolla.md](../integrations/archive/payrolla.md):
 
 1. A **webhook** at `/hooks/<tenant>/payrolla/payroll-approved?env=`, signed with `X-Taskiem-Signature` (decision 0012), deduplicated on `payroll_id`. Payload: `payroll_id`, `period`, `funding_wallet_id`, `total_kobo`, and up to 5,000 employees, each with `employee_id`, `net_pay_kobo`, and either an iswallet `wallet_id` or bank details.
 2. `summarise`, then `check_balance` (iswallet `get_balance` on the funding wallet).
@@ -413,7 +413,7 @@ Manifests gain `kind: rail | product | tool` (default `tool`), used by the catal
 | Views | `payroll` (a payroll's page), `run_payroll` (Payrolla's own flow), `employees`; see §6.3 |
 | PII | Employee names, phones, account numbers, salaries marked `pii` so they are sealed in runs |
 
-Docs: `docs/integrations/payrolla.md` is rewritten as the connector's page (Connection, Actions, Webhooks, Views, Templates, To confirm with Payrolla), published under Connectors like the others. The old partner guide moves to `docs/integrations/archive/payrolla-partner-guide.md`, kept internal, marked superseded by decision 0044.
+Docs: `docs/integrations/archive/payrolla.md` is rewritten as the connector's page (Connection, Actions, Webhooks, Views, Templates, To confirm with Payrolla), published under Connectors like the others. The old partner guide moves to `docs/integrations/archive/payrolla-partner-guide.md`, kept internal, marked superseded by decision 0044.
 
 ### 6.3 App views: a product's interface inside Taskiem
 
@@ -478,7 +478,7 @@ Everything below was found by searching the repository for Payrolla and reading 
 | `e2e/triggers_test.go` `TestPayrollaDisbursementEndToEnd` | Replaced by `TestRunPayrollEndToEnd` (real stack, fake rails); the generic webhook checks it made (signature, dedup, forged webhook 401) move to a generic webhook test |
 | `evals/builder/seed.jsonl` "payrolla-salary", `evals/builder/baseline.json` | Replaced by a "run payroll on my rail" case; baseline regenerated; `tools/aieval/main_test.go`'s count of dogfood cases updated |
 | `evals/repair/failures.jsonl` (4 cases pointing at the flow) | Re-pointed at `run-payroll` |
-| `docs/integrations/payrolla.md` | Moved to `integrations/archive/`, superseded; replaced by the connector page (§6.2) |
+| `docs/integrations/archive/payrolla.md` | Moved to `integrations/archive/`, superseded; replaced by the connector page (§6.2) |
 | `docs/contracts/wd-test-v1.md` example | Uses the run-payroll test file |
 | `tools/docsite/pages.go`, `main_test.go` | The archive page stays internal; the new connector page is public |
 
@@ -580,7 +580,7 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 
 ### R5: The Payrolla connector (M; needs R0-2, R0-4)
 
-**Build:** `connectors/payrolla` (manifest, Go code, fixtures from Payrolla's sandbox), triggers and actions as confirmed in R0, verification, routing per R0-4, `kind: product`, `docs/integrations/payrolla.md` rewritten as the connector page, the old guide archived, SDK regenerated, conntest suite.
+**Build:** `connectors/payrolla` (manifest, Go code, fixtures from Payrolla's sandbox), triggers and actions as confirmed in R0, verification, routing per R0-4, `kind: product`, `docs/integrations/archive/payrolla.md` rewritten as the connector page, the old guide archived, SDK regenerated, conntest suite.
 
 **Done when:** a business connects Payrolla from Connections, a sandbox payroll's events start a test workflow, the reads return sealed personal fields, and the connector passes conformance.
 
@@ -601,6 +601,23 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 **Build:** every row of §7, in one pull request: removals, re-pointed evals and tests, doc rewrites, tracker updates.
 
 **Done when:** a repository search finds "payrolla" only in the connector, its templates, its docs, the archive, decisions, and neutral partner fixtures; all suites pass; no coverage from the old tests is lost (each old case maps to a new one, listed in the pull request).
+
+**Built** (R8): the old flow, its tests and the decide and e2e tests on it are removed; every old case maps to a new one (below). The repair evals run on Run payroll (`evals/repair/run-payroll.wd.json`), the builder's dogfood case is "run payroll on my rail", and both baselines are regenerated. The guide is archived (`docs/integrations/archive/payrolla.md`, internal on the docs site); the partner tracker and needs-people withdraw Payrolla's old items and add R0's; the embedding guide and tests use a neutral partner ("Wagely"). Kept by design: the iswallet answers (correspondence), the phase status pages and strategy notes (history), and Payrolla as an iswallet user.
+
+| Old test | Now |
+| --- | --- |
+| Dogfood case: pays a wallet and a bank employee, reports | `run-payroll` test "pays everyone once…"; `TestRunPayrollEndToEnd` |
+| Reversal after the report becomes a notice, pays no one | "a reversal after payment is recorded…"; `e2e.TestCapabilityPayoutsOnIswalletEndToEnd` |
+| A reversal for an outflow the run does not watch sends nothing | `e2e.TestCapabilityPayoutsOnIswalletEndToEnd` (a stray reversal wakes nothing) |
+| A notice Payrolla refuses ends that watch only | Withdrawn with the notice; a failed record or message never fails the payroll (`on_error` on each) |
+| Totals by outcome; only confirmed bank payouts watched | "only confirmed bank payments are watched…"; summary totals in "pays everyone once…" |
+| A refused payment does not stop the others | "a refused payment does not stop the others…"; the e2e test's refused payout |
+| A lost response is retried under the same key | "a lost answer is retried…"; the e2e test (iswallet's replay); runtime `TestCapabilityRetryKeepsTheKey` |
+| A bank payout never confirmed counts as failed | "a bank payment never confirmed is reported as not confirmed" |
+| A rejected payroll pays no one, reported | "a rejected payroll pays nobody and is recorded" |
+| An approval nobody answers expires, reported | "an approval nobody answers expires…" |
+| decide `TestPayrollaDogfoodEndToEnd`, `TestPayrollaRejectedPayrollIsReported` | The template's workflow tests (the same orchestrator) and `TestRunPayrollEndToEnd` |
+| e2e `TestPayrollaDisbursementEndToEnd` (HMAC webhook, dedup, approval by another, forged event 401, lost response, refusal, reversal, sealing, replay) | `e2e.TestCapabilityPayoutsOnIswalletEndToEnd`, every one of those checks |
 
 ### R9: The catalogue lists Taskiem's own connectors (S; independent)
 

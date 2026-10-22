@@ -135,7 +135,7 @@ func withParam(m map[string]any, k string, v any) map[string]any {
 func TestEmbedTemplates(t *testing.T) {
 	w := newWorld(t)
 	registerSME(t, w.env.Registry)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
 	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "x", "allowed_connectors": []string{}, "allowed_templates": []string{"salary-reminder"}})
 	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{"notify", "gmail"},
