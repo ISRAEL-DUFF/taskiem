@@ -2654,6 +2654,11 @@ export interface CapabilityAwaitInput {
   /** The payout to follow: the payment step's output.payout_id */
   payout_id: Val<string>;
 }
+/** await_payment: input */
+export interface CapabilityAwaitPaymentInput {
+  /** The payment page to wait on: the collect_link step's output.payment_id */
+  payment_id: Val<string>;
+}
 /** Capability steps (collect): each runs on whichever rail its connection is. */
 export const collect = {
   /** Make a payment page for a customer */
@@ -2695,10 +2700,13 @@ export const waitFor = {
   settlement: (input: CapabilityAwaitInput, extra?: CapabilityExtra): StepSpec => capability("await_settlement", input, extra),
   /** Watch for the payout coming back */
   reversal: (input: CapabilityAwaitInput, extra?: CapabilityExtra): StepSpec => capability("await_reversal", input, extra),
+  /** Wait for the customer to pay */
+  payment: (input: CapabilityAwaitPaymentInput, extra?: CapabilityExtra): StepSpec => capability("await_payment", input, extra),
 };
 
 /** The helper each capability has, for code generation. */
 export const CAPABILITY_HELPERS: Record<string, string> = {
+  await_payment: "waitFor.payment",
   await_reversal: "waitFor.reversal",
   await_settlement: "waitFor.settlement",
   balance: "rail.balance",

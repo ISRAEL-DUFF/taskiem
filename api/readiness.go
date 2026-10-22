@@ -236,6 +236,11 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 				return nil, err
 			}
 		}
+		if d.Trigger.Type == "capability_event" {
+			if err := eventNeeds(ctx, tx, l, env, d.Trigger.Config, reg, add); err != nil {
+				return nil, err
+			}
+		}
 		for n, steps := range vars {
 			var ok bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM variables WHERE environment = $1 AND name = $2)`, env, n).Scan(&ok); err != nil {
@@ -631,6 +636,57 @@ func capabilityNeeds(ctx context.Context, tx pgx.Tx, l lang.Tag, env string, ste
 	return nil
 }
 
+// eventNeeds finds what a capability_event trigger needs in env: for each
+// of its events, a connection (the one it names, or any) whose rail sends
+// it. An event no connection sends is a need; it blocks when none of the
+// trigger's events can arrive.
+func eventNeeds(ctx context.Context, tx pgx.Tx, l lang.Tag, env string, cfg map[string]any, reg connector.Lookup,
+	add func(k readyKey, n readyNeed, st *wd.Step)) error {
+	named, _ := cfg["connection"].(string)
+	rows, err := tx.Query(ctx, `SELECT DISTINCT split_part(connector, '@', 1) FROM connections
+		WHERE environment = $1 AND status = 'active' AND ($2 = '' OR name = $2)`, env, named)
+	if err != nil {
+		return err
+	}
+	have, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+	var evs, missing []string
+	if list, ok := cfg["events"].([]any); ok {
+		for _, v := range list {
+			if s, ok := v.(string); ok {
+				evs = append(evs, s)
+			}
+		}
+	}
+	for _, ev := range evs {
+		if !slices.ContainsFunc(railsSending(reg, ev), func(id string) bool { return slices.Contains(have, id) }) {
+			missing = append(missing, ev)
+		}
+	}
+	for _, ev := range missing {
+		svc := "a payments account that tells Taskiem when " + strings.ToLower(capability.EventTitle(ev)[:1]) + capability.EventTitle(ev)[1:]
+		add(readyKey{"connection", named, "capability:" + ev, env},
+			readyNeed{Service: svc, Problem: "missing", Blocking: len(missing) == len(evs), Message: tr(l, "ready.connection_missing", "service", svc),
+				Capability: ev, Rails: railsSending(reg, ev)}, nil)
+	}
+	return nil
+}
+
+// railsSending are the connector ids of the rails that send the
+// normalised event.
+func railsSending(reg connector.Lookup, ev string) []string {
+	var out []string
+	for _, c := range reg.List() {
+		if _, ok := c.Manifest.Events[ev]; ok && c.Manifest.KindOf() == "rail" && !slices.Contains(out, c.Manifest.ID) {
+			out = append(out, c.Manifest.ID)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // railService names, for a person, the service a capability needs.
 func railService(uses string) string {
 	if spec, ok := capability.Get(uses); ok {
@@ -645,10 +701,7 @@ func railsFor(reg connector.Lookup, uses string) []string {
 	for _, c := range reg.List() {
 		_, ok := c.Manifest.Capabilities[uses]
 		if wd.IsWait(uses) {
-			ok = false
-			for _, m := range c.Manifest.Capabilities {
-				ok = ok || m.SettlesBy != nil
-			}
+			ok = expansion.CanWait(c.Manifest, uses)
 		}
 		if ok && c.Manifest.KindOf() == "rail" && !slices.Contains(out, c.Manifest.ID) {
 			out = append(out, c.Manifest.ID)

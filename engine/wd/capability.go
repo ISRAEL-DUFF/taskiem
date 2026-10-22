@@ -11,14 +11,25 @@ import (
 
 // Waits are the capability steps that follow a payment rather than make
 // one: they need no capability of their own, only the rail's settles_by
-// (connector/v1 rule 16) and its payout events.
-var Waits = []string{"await_settlement", "await_reversal"}
+// (connector/v1 rule 16) and its payout events, or for await_payment its
+// payment.received event.
+var Waits = []string{"await_settlement", "await_reversal", "await_payment"}
+
+// WaitInput is the one input a wait takes: the payment_id a collect_link
+// answered for await_payment, else the payout_id a payment answered.
+func WaitInput(uses string) string {
+	if uses == "await_payment" {
+		return "payment_id"
+	}
+	return "payout_id"
+}
 
 // MaxCapabilityStepID bounds a capability step's id, so the ids expansion
 // gives a composite's earlier steps (<id>__<name>) stay valid step ids.
 const MaxCapabilityStepID = 40
 
-// IsWait reports whether uses is await_settlement or await_reversal.
+// IsWait reports whether uses is a wait: await_settlement, await_reversal
+// or await_payment.
 func IsWait(uses string) bool { return slices.Contains(Waits, uses) }
 
 // checkCapabilities enforces the capability step rules of the wd-v1
@@ -46,13 +57,14 @@ func checkCapabilities(d *Definition) []Problem {
 			add(s, "a capability step's id may not contain __ (expansion uses it)")
 		}
 		if IsWait(s.Uses) {
+			want := WaitInput(s.Uses)
 			for k := range s.Input {
-				if k != "payout_id" {
-					add(s, "%s takes only payout_id, not %s", s.Uses, k)
+				if k != want {
+					add(s, "%s takes only %s, not %s", s.Uses, want, k)
 				}
 			}
-			if _, ok := s.Input["payout_id"]; !ok {
-				add(s, "%s needs payout_id: the payment to follow", s.Uses)
+			if _, ok := s.Input[want]; !ok {
+				add(s, "%s needs %s: the payment to follow", s.Uses, want)
 			}
 			if s.Timeout == "" {
 				add(s, "%s needs a timeout: how long to wait", s.Uses)

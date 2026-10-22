@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/israel-duff/taskiem/engine/capability"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -36,7 +37,10 @@ func (s *Server) listCapabilities(w http.ResponseWriter, r *http.Request) {
 			}
 			ok := false
 			for n, m := range c.Manifest.Capabilities {
-				ok = ok || n == name || (wd.IsWait(name) && m.SettlesBy != nil && m.SettlesBy.Trigger != "")
+				ok = ok || n == name || (wd.IsWait(name) && name != "await_payment" && m.SettlesBy != nil && m.SettlesBy.Trigger != "")
+			}
+			if name == "await_payment" {
+				ok = expansion.CanWait(c.Manifest, name)
 			}
 			if ok {
 				out = append(out, c.Ref())
@@ -51,8 +55,11 @@ func (s *Server) listCapabilities(w http.ResponseWriter, r *http.Request) {
 		out = append(out, capabilityInfo{Name: n, Title: spec.Title, Description: spec.Description, Input: spec.Input, Output: spec.Output, Rails: railsOf(n)})
 	}
 	for _, n := range wd.Waits {
-		out = append(out, capabilityInfo{Name: n, Title: capability.WaitTitle(n), Rails: railsOf(n),
-			Input: json.RawMessage(`{"type":"object","required":["payout_id"],"properties":{"payout_id":{"type":"string","description":"The payment step's payout_id"}}}`)})
+		in := json.RawMessage(`{"type":"object","required":["payout_id"],"properties":{"payout_id":{"type":"string","description":"The payment step's payout_id"}}}`)
+		if n == "await_payment" {
+			in = json.RawMessage(`{"type":"object","required":["payment_id"],"properties":{"payment_id":{"type":"string","description":"The collect_link step's payment_id"}}}`)
+		}
+		out = append(out, capabilityInfo{Name: n, Title: capability.WaitTitle(n), Rails: railsOf(n), Input: in})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"capabilities": out})
 }

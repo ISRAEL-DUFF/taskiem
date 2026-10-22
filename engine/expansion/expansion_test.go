@@ -230,3 +230,39 @@ func TestWaitFromAListAndBlankInputs(t *testing.T) {
 		t.Error("a blank source is given")
 	}
 }
+
+// linkOrder makes a payment page for an order and waits for the customer
+// to pay it.
+const linkOrder = `{"schema":"wd/v1","id":"wf_link","version":1,"name":"Link","trigger":{"type":"manual"},"steps":[
+  {"id":"link","type":"capability","uses":"collect_link","input":{"amount_kobo":"=trigger.body.kobo","customer":{"email":"=trigger.body.email"},"description":"Order"},
+   "effect":{"idempotency_seed":"=trigger.body.order"}},
+  {"id":"paid","type":"capability","uses":"await_payment","needs":["link"],"timeout":"48h","input":{"payment_id":"=steps.link.output.payment_id"}}]}`
+
+func TestAwaitPaymentOnEachRail(t *testing.T) {
+	for _, rail := range []struct{ id, ref string }{{"paystack", "paystack@1"}, {"moniepoint", "moniepoint@1"}} {
+		d, choices, err := expand(t, linkOrder, expansion.Connection{Name: "rail", Connector: rail.id})
+		if err != nil {
+			t.Fatalf("%s: %v", rail.id, err)
+		}
+		if race := d.Step("paid__wait"); race == nil || race.Type != "parallel" || len(race.Needs) != 1 {
+			t.Fatalf("%s: no race: %+v", rail.id, race)
+		}
+		if sig := d.Step("paid__paid"); sig == nil || sig.Signal.Event != rail.ref+":payment.received" || sig.Signal.Correlation != "=steps.link.output.payment_id" {
+			t.Fatalf("%s: paid signal %+v", rail.id, sig)
+		}
+		if look := d.Step("paid__lookup"); look == nil || look.Connector != rail.ref || look.Capability.Uses != "get_payment" {
+			t.Fatalf("%s: lookup %+v", rail.id, look)
+		}
+		b, _ := json.Marshal(d.Step("paid").Transform.Output)
+		if !strings.Contains(string(b), "unpaid") {
+			t.Errorf("%s: outcome %s", rail.id, b)
+		}
+		if len(choices) != 2 || choices[1].Uses != "await_payment" || choices[1].Connector != rail.ref {
+			t.Errorf("%s: choices %+v", rail.id, choices)
+		}
+	}
+	// A rail that makes no payment pages cannot.
+	if _, _, err := expand(t, linkOrder, expansion.Connection{Name: "rail", Connector: "iswallet"}); err == nil {
+		t.Error("iswallet made a payment page")
+	}
+}

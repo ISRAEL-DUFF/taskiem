@@ -118,9 +118,12 @@ func (x *expander) steps(list []any) ([]any, error) {
 		}
 		var exp []any
 		var err error
-		if wd.IsWait(st["uses"].(string)) {
+		switch uses := st["uses"].(string); {
+		case uses == "await_payment":
+			exp, err = x.awaitPayment(st)
+		case wd.IsWait(uses):
 			exp, err = x.wait(st)
-		} else {
+		default:
 			exp, err = x.capability(st)
 		}
 		if err != nil {
@@ -454,6 +457,100 @@ func (x *expander) wait(st map[string]any) ([]any, error) {
 	return []any{race, result}, nil
 }
 
+// awaitPayment expands await_payment: the rail's payment.received for the
+// payment page a collect_link made, raced against a deadline, then a
+// get_payment lookup in case the event never came. The step's own id is a
+// transform that says how it ended: paid, failed or unpaid.
+func (x *expander) awaitPayment(st map[string]any) ([]any, error) {
+	id := st["id"].(string)
+	in, _ := st["input"].(map[string]any)
+	payment := in["payment_id"]
+	var r Rail
+	var err error
+	if link := x.collectFor(payment); link != nil {
+		r, err = x.rail(link.ID)
+	} else if _, named := st["connection"]; named || !readsStep(payment) {
+		r, err = x.rail(id) // a payment page made elsewhere: the step's own connection
+	} else {
+		return nil, &Refusal{Step: id, Message: "payment_id must read the output of a collect_link step (=steps.<id>.output.payment_id)"}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := r.Manifest.Events["payment.received"]; !ok {
+		return nil, &Refusal{Step: id, Message: fmt.Sprintf("%s does not say when a customer pays", r.Name)}
+	}
+	if !slices.ContainsFunc(x.choices, func(c Choice) bool { return c.Step == id }) {
+		x.choices = append(x.choices, Choice{Step: id, Uses: "await_payment", Connection: r.Connection, Connector: r.Ref})
+	}
+	corr := asExpr(payment)
+	timeout, _ := st["timeout"].(string)
+	waitID, deadline, lookup := id+"__wait", id+"__deadline", id+"__lookup"
+	deadlineSteps := []any{map[string]any{"id": deadline, "type": "wait", "name": "Deadline", "config": map[string]any{"duration": timeout}}}
+	if cm, ok := r.Manifest.Capabilities["get_payment"]; ok && len(cm.Plan()) == 1 {
+		ps := cm.Plan()[0]
+		look := map[string]any{"payment_id": corr}
+		deadlineSteps = append(deadlineSteps, map[string]any{
+			"id": lookup, "type": "connector", "connector": r.Ref, "action": ps.Action, "connection": r.Connection,
+			"name": "Look the payment up (" + r.Name + ")", "needs": []any{deadline}, "input": look,
+			"capability": map[string]any{"uses": "get_payment", "input": dropAbsent(ps.Input, look), "output": cm.Output},
+			"retry":      map[string]any{"max": int64(5), "backoff": "exponential", "initial": "1m"},
+			"on_error": map[string]any{"steps": []any{map[string]any{"id": lookup + "_failed", "type": "transform",
+				"config": map[string]any{"output": map[string]any{"status": "pending"}}}}},
+		})
+	}
+	branches := []any{
+		map[string]any{"name": "paid", "steps": []any{map[string]any{
+			"id": id + "__paid", "type": "signal", "name": capability.EventTitle("payment.received") + " (" + r.Name + ")",
+			"config": map[string]any{"event": capability.SignalName(r.Ref, "payment.received"), "correlation": corr, "timeout": timeout},
+		}}},
+		map[string]any{"name": "deadline", "steps": deadlineSteps},
+	}
+	race := map[string]any{"id": waitID, "type": "parallel", "name": capability.WaitTitle("await_payment") + " (" + r.Name + ")",
+		"config": map[string]any{"branches": branches, "join": "any"}}
+	for _, k := range []string{"needs", "when", "on_error"} {
+		if v, ok := st[k]; ok {
+			race[k] = v
+		}
+	}
+	name, _ := st["name"].(string)
+	if name == "" {
+		name = capability.WaitTitle("await_payment")
+	}
+	w := "steps." + waitID + ".output"
+	field := func(f string) string { return w + ".?paid.?" + id + "__paid.?fields.?" + f }
+	look := func(f string) string { return w + ".?deadline.?" + lookup + ".?" + f }
+	lstatus := look("status") + ".orValue('pending')"
+	out := "={'status': " + w + ".?paid.hasValue() ? 'paid' : " + lstatus + " == 'paid' ? 'paid' : " + lstatus + " == 'failed' ? 'failed' : 'unpaid', " +
+		"?'amount_kobo': " + field("amount_kobo") + ".or(" + look("amount_kobo") + "), " +
+		"?'paid_at': " + field("paid_at") + ".or(" + look("paid_at") + ")}"
+	result := map[string]any{"id": id, "type": "transform", "name": name, "needs": []any{waitID}, "config": map[string]any{"output": out}}
+	return []any{race, result}, nil
+}
+
+// collectFor is the collect_link step a payment_id reads, if it reads
+// exactly one.
+func (x *expander) collectFor(payment any) *wd.Step {
+	src, ok := payment.(string)
+	if !ok || !expr.IsExpr(src) {
+		return nil
+	}
+	refs, err := wdEngine.References(src)
+	if err != nil {
+		return nil
+	}
+	var found *wd.Step
+	for sid := range refs.Steps {
+		if s := x.def.Step(sid); s != nil && s.Type == "capability" && s.Uses == "collect_link" {
+			if found != nil {
+				return nil
+			}
+			found = s
+		}
+	}
+	return found
+}
+
 // lookup is the get_payout step asked at the deadline. A lookup that fails
 // leaves the payout unconfirmed rather than failing the wait.
 func (x *expander) lookup(id, after, payStep string, r Rail, corr string) (map[string]any, error) {
@@ -555,6 +652,9 @@ func describe(spec *capability.Spec, name string) string {
 }
 
 func titleOf(uses string) string {
+	if uses == "await_payment" {
+		return "wait for a customer's payment"
+	}
 	if wd.IsWait(uses) {
 		return "follow a payout to its end"
 	}

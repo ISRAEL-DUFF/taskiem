@@ -54,6 +54,8 @@ export function triggerWords(t: Trigger | null | undefined): string {
       return "Another app tells it";
     case "connector_event":
       return `${service(c.connector)} tells it something happened`;
+    case "capability_event":
+      return "Your payments account tells it about a payment";
     case "polling":
       return `It checks ${service(c.connector)} regularly`;
     case "database_change":
@@ -109,6 +111,7 @@ export function startedByWords(startedBy: string | null, triggerType: string | u
       return "an email";
     case "webhook":
     case "connector_event":
+    case "capability_event":
     case "polling":
       return "another app";
     case "subflow":

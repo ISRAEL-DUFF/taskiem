@@ -170,10 +170,14 @@ func EventTitle(name string) string {
 	return name
 }
 
-// WaitTitle names await_settlement and await_reversal for people.
+// WaitTitle names await_settlement, await_reversal and await_payment for
+// people.
 func WaitTitle(uses string) string {
-	if uses == "await_reversal" {
+	switch uses {
+	case "await_reversal":
 		return "Watch for the payout coming back"
+	case "await_payment":
+		return "Wait for the customer to pay"
 	}
 	return "Wait for the payout to settle"
 }
