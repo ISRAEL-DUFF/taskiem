@@ -30,6 +30,10 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | `pos-daily-summary` | Every evening, add up today's POS sales per terminal and per kind from the table and tell the owner | Xenibase, Tell me |
 | `pos-sale-alert` | Tell the owner at once about a POS sale at or above an amount, or a payment that was declined or reversed | Moniepoint POS terminals, Tell me |
 | `pos-cashup` | At closing, compare a terminal's day with the sales book, tell the owner the difference and keep the check in the `pos_cashups` table | Xenibase, Tell me |
+| `pos-opay-sales-record` | Every payment OPay reports on the business account (terminals included) becomes a row in `pos_sales`, with the fee and the amount settled | OPay Business, Xenibase |
+| `pos-opay-nightly-sync` | Late every night, ask OPay for each terminal's successful payments of the day and add any a notification missed | OPay Business, Xenibase |
+| `pos-opay-backfill` | On demand: a terminal's successful OPay payments between two days (up to a week) into `pos_sales` | OPay Business, Xenibase, Tell me |
+| `pos-opay-settlement-check` | Every evening, what OPay took today, the fees, what was settled, and the account balance, to the owner | Xenibase, OPay Business, Tell me |
 | `xenibase-new-row-whatsapp` | When a row is inserted into a Xenibase table, send the number in it an approved WhatsApp template (Taskiem creates and removes the Xenibase webhook itself) | Xenibase, WhatsApp |
 
 
@@ -39,7 +43,7 @@ Every template that moves money does so after an approval step and with an idemp
 
 ## Tables a template makes
 
-A template that keeps records in a [data table](data-tables.md) declares the tables it works on, with their columns (`tables` in the template file). When the template is used, Taskiem makes any that the business does not have yet, after the draft is saved: a table that exists already is left exactly as it is, and one that cannot be made (no data tables on the platform, the person lacks `table.edit`, the limit is reached) is reported with the reason, never a reason to lose the draft. A declared table's name may be the marker of a parameter with the table picker (`{{table}}`), so the person can point the template at a table of their own; the Templates page says which tables a template keeps its records in, and the API answers what became of each (`tables: [{name, status: created | exists | skipped | failed, error?}]`). The `pos-*` templates declare `pos_sales`, `pos_terminals` and `pos_cashups` this way; `debtor-reminder-table` and `bank-alert-email` still expect their table to exist.
+A template that keeps records in a [data table](data-tables.md) declares the tables it works on, with their columns (`tables` in the template file). When the template is used, Taskiem makes any that the business does not have yet, after the draft is saved: a table that exists already is left exactly as it is, and one that cannot be made (no data tables on the platform, the person lacks `table.edit`, the limit is reached) is reported with the reason, never a reason to lose the draft. A declared table's name may be the marker of a parameter with the table picker (`{{table}}`), so the person can point the template at a table of their own; the Templates page says which tables a template keeps its records in, and the API answers what became of each (`tables: [{name, status: created | exists | skipped | failed, error?}]`). The `pos-*` and `pos-opay-*` templates declare `pos_sales`, `pos_terminals` and `pos_cashups` this way; `debtor-reminder-table` and `bank-alert-email` still expect their table to exist.
 
 ## Parameters
 

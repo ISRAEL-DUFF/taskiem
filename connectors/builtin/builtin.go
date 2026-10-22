@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/mysql"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/connectors/opay"
+	"github.com/israel-duff/taskiem/connectors/opaybusiness"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/prembly"
@@ -49,6 +50,7 @@ type Options struct {
 	AfricasTalkingURL, TelegramURL, WhatsAppURL   string
 	SlackURL, GmailURL, GooglesheetsURL           string
 	OpayURL, RemitaURL                            string
+	OpayBusinessURL                               string
 	MonoURL, PremblyURL, YouverifyURL             string
 	MpesaURL, MTNMoMoURL                          string
 	// XenibaseURL is the platform's Xenibase, for connections that name no
@@ -91,6 +93,7 @@ func Register(r *connector.Registry, o Options) error {
 		gmail.New(gmail.Options{BaseURL: o.GmailURL, TokenURL: o.GoogleTokenURL}),
 		googlesheets.New(googlesheets.Options{BaseURL: o.GooglesheetsURL, TokenURL: o.GoogleTokenURL}),
 		opay.New(opay.Options{BaseURL: o.OpayURL}),
+		opaybusiness.New(opaybusiness.Options{BaseURL: o.OpayBusinessURL}),
 		remita.New(remita.Options{BaseURL: o.RemitaURL}),
 		mono.New(mono.Options{BaseURL: o.MonoURL}),
 		prembly.New(prembly.Options{BaseURL: o.PremblyURL}),

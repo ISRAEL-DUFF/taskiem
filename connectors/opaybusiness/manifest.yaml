@@ -1,0 +1,255 @@
+# OPay Business (offline payments): every transaction on a business's OPay
+# account as OPay's general payment webhook reports it (POS terminals,
+# transfers to the terminals' accounts, wallets), the balance, any
+# transaction's details, a terminal's successful transactions by day, and
+# payment requests pushed to a terminal. A different product from OPay
+# Checkout (the opay connector), which is online card and transfer payments.
+# Built from OPay's public offline-payments documentation at
+# documentation.opayweb.com (API Basics, Authentication, POS Integration
+# (API), General Payment Webhook, Query Balance, Query Order Details, TN
+# Integration API), read 22 October 2026, and OPay's own public Odoo
+# integration for the webhook envelope's signature
+# (docs/integrations/opay_business.md).
+manifest: connector/v1
+id: opay_business
+version: 1.0.0
+name: OPay Business (terminals)
+description: Every transaction on your OPay business account as it happens, including your POS terminals; the balance; a terminal's day; payment requests sent to a terminal.
+category: payments
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - key: head_merchant_id
+      label: Business ID
+      secret: false
+      help: The number OPay gave your business.
+      where: "OPay Business dashboard → Integration → Developer Tools"
+    - key: client_auth_key
+      label: Client auth key
+      secret: true
+      help: The 32-character key OPay gave your business; it names your business on every call and on every notification OPay sends.
+      where: "OPay Business dashboard → Integration → Developer Tools"
+    - key: opay_public_key
+      label: OPay's public key
+      secret: false
+      multiline: true
+      help: OPay's own key, which proves that notifications and answers really came from OPay. Paste the whole block, from BEGIN to END.
+      where: "OPay Business dashboard → Integration → Developer Tools"
+    - key: merchant_private_key
+      label: Your business's private key
+      secret: true
+      multiline: true
+      generate: rsa_key_pair
+      help: Taskiem can make this key for you. Its public half goes to OPay (Developer Tools → merchant public key); the private half stays here and is never shown again.
+      where: "Let Taskiem generate it, then paste the public key it shows you into the OPay Business dashboard → Integration → Developer Tools"
+    - key: merchant_id
+      label: Branch ID
+      secret: false
+      required: false
+      help: Only if OPay set your shop up as a branch under a head business; otherwise leave it empty and the business ID is used.
+      where: "OPay Business dashboard → Integration → Developer Tools"
+    - key: sub_scene
+      label: Sub-scene for payment requests
+      secret: false
+      required: false
+      help: A word OPay assigns when it enables payment requests to your terminals (subSceneEnum). Only needed to send a payment request to a terminal.
+      where: "Ask your OPay representative"
+  test: { action: get_balance }
+base_url: https://payapi.opayweb.com
+egress_hosts: [payapi.opayweb.com]
+actions:
+  get_balance:
+    title: Get the account balance
+    description: The available balance of the business, or of the branch when the connection names one. Also the connection test.
+    class: read
+    input:
+      type: object
+      properties:
+        merchant_id: { type: string, description: A branch to ask about; defaults to the connection's }
+    output:
+      type: object
+      properties:
+        merchant_id:        { type: string }
+        merchant_name:      { type: string }
+        available_balance:  { type: integer, description: Kobo }
+        currency:           { type: string }
+        account_number:     { type: string, description: The OPay account the balance belongs to }
+        queried_at:         { type: string, description: "Nigerian time, yyyy-MM-dd HH:mm:ss, as OPay gives it" }
+    pii:
+      - { field: output.account_number, category: account_number }
+  get_transaction:
+    title: Get a transaction
+    description: Any transaction on the account by OPay's order number (orderNo), as the general payment webhook reports it. Run it before acting on a notification.
+    class: read
+    input:
+      type: object
+      required: [order_no]
+      properties:
+        order_no:    { type: string, description: OPay's order number }
+        merchant_id: { type: string, description: The branch the transaction belongs to; defaults to the connection's }
+    output: { $ref: '#/actions/get_payment_request/output' }
+    pii:
+      - { field: output.sender_name, category: name }
+      - { field: output.sender_account, category: account_number }
+      - { field: output.recipient_name, category: name }
+      - { field: output.recipient_account, category: account_number }
+  get_terminal:
+    title: Get a terminal's account
+    description: The dedicated OPay account (TN) bound to a POS terminal, by the terminal's serial number, with its status and the name it carries.
+    class: read
+    input:
+      type: object
+      required: [terminal_serial]
+      properties:
+        terminal_serial: { type: string }
+        merchant_id:     { type: string, description: Defaults to the connection's }
+    output:
+      type: object
+      properties:
+        terminal_serial: { type: string }
+        tn:              { type: string, description: The terminal's dedicated account number }
+        status:          { type: string, description: "ACTIVE, or UNBOUND when OPay reports none" }
+        recipient_name:  { type: string }
+        bank:            { type: string }
+        bound_at:        { type: string }
+        updated_at:      { type: string }
+    pii:
+      - { field: output.recipient_name, category: name }
+      - { field: output.tn, category: account_number }
+  list_terminal_transactions:
+    title: List a terminal's successful transactions
+    description: >-
+      The successful inbound transactions of one POS terminal between two
+      days (Nigerian dates, at most seven days apart, both inclusive), as
+      OPay's TN transaction records. Without tn, the terminal's account is
+      looked up first. Pages of up to 100; with all, every page up to 1,000
+      records is returned in one call. Used to start a record from the
+      past days and to check that no notification was missed.
+    class: read
+    input:
+      type: object
+      required: [terminal_serial, from, to]
+      properties:
+        terminal_serial: { type: string }
+        from:            { type: string, description: "The first day, YYYY-MM-DD (Nigerian time)" }
+        to:              { type: string, description: "The last day, YYYY-MM-DD; at most six days after from" }
+        tn:              { type: string, description: The terminal's dedicated account number; looked up when empty }
+        pay_no:          { type: string, description: Only this OPay payment number }
+        page:            { type: integer, minimum: 1, default: 1 }
+        page_size:       { type: integer, minimum: 1, maximum: 100, default: 100 }
+        all:             { type: boolean, description: Fetch every page (up to 1,000 records) }
+        merchant_id:     { type: string, description: Defaults to the connection's }
+    output:
+      type: object
+      properties:
+        terminal_serial: { type: string }
+        tn:              { type: string }
+        total:           { type: integer, description: Records OPay has for the range }
+        page:            { type: integer }
+        next_page:       { type: integer, description: The next page to ask for; absent on the last }
+        records:
+          type: array
+          items: { $ref: '#/actions/get_payment_request/output' }
+    pii:
+      - { field: output.tn, category: account_number }
+      - { field: output.records.*.sender_name, category: name }
+      - { field: output.records.*.sender_account, category: account_number }
+      - { field: output.records.*.recipient_name, category: name }
+      - { field: output.records.*.recipient_account, category: account_number }
+  request_payment:
+    title: Ask a terminal to take a payment
+    description: >-
+      Creates a payment order for one of the business's terminals, which
+      then takes the card or transfer for that amount. The outcome arrives
+      as a payment notification (the general payment webhook) or from
+      get_payment_request. A repeat under the same out_order_no is refused
+      by OPay (code 00005) and reported as the order already made. Needs
+      the connection's sub_scene.
+    class: idempotent_write
+    idempotency:
+      field: out_order_no
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk"
+      limits: { max_length: 64, charset: "a-z0-9" }
+    compensate: null
+    input:
+      type: object
+      required: [terminal_serial, amount]
+      properties:
+        terminal_serial: { type: string }
+        amount:          { type: integer, minimum: 1, description: Kobo }
+        expires_in:      { type: integer, minimum: 30, maximum: 3600, default: 300, description: Seconds the terminal keeps asking for the payment }
+        remark:          { type: string, maxLength: 200 }
+        merchant_id:     { type: string, description: Defaults to the connection's }
+        out_order_no:    { type: string }
+    output: { $ref: '#/actions/get_payment_request/output' }
+  get_payment_request:
+    title: Get a payment request
+    description: A payment order made with request_payment, by out_order_no or OPay's order_no, with the terminal's answer (status SUCCESS, FAIL, CLOSE, CANCEL, PENDING or INITIAL).
+    class: read
+    input:
+      type: object
+      properties:
+        out_order_no: { type: string }
+        order_no:     { type: string }
+        merchant_id:  { type: string, description: Defaults to the connection's }
+    output:
+      type: object
+      properties:
+        order_no:               { type: string, description: OPay's order number }
+        out_order_no:           { type: string }
+        pay_no:                 { type: string, description: OPay's payment serial }
+        head_merchant_id:       { type: string }
+        merchant_id:            { type: string }
+        status:                 { type: string, description: "SUCCESS, FAIL, CLOSE, CANCEL, PENDING, INITIAL" }
+        error_message:          { type: string }
+        amount:                 { type: integer, description: Kobo }
+        fee:                    { type: integer, description: Kobo }
+        fee_pattern:            { type: string }
+        settlement_amount:      { type: integer, description: Kobo }
+        settlement_fee:         { type: integer, description: Kobo }
+        settlement_fee_pattern: { type: string }
+        currency:               { type: string }
+        pay_method:             { type: string, description: "BankCard, BalancePayment, …" }
+        transaction_type:       { type: string }
+        transaction_name:       { type: string }
+        pay_type:               { type: string, description: "POS for a terminal" }
+        terminal_serial:        { type: string }
+        tn:                     { type: string }
+        remark:                 { type: string }
+        sender_name:            { type: string }
+        sender_bank:            { type: string }
+        sender_account:         { type: string, description: Masked by OPay }
+        recipient_name:         { type: string }
+        recipient_bank:         { type: string }
+        recipient_account:      { type: string }
+        transaction_time:       { type: string, description: RFC 3339 }
+        completed_time:         { type: string, description: RFC 3339 }
+        additional_information: { type: string, description: "OPay's extra JSON text (rrn, pnr)" }
+    pii:
+      - { field: output.sender_name, category: name }
+      - { field: output.sender_account, category: account_number }
+      - { field: output.recipient_name, category: name }
+      - { field: output.recipient_account, category: account_number }
+triggers:
+  # OPay posts every payment on the business's account to the one webhook
+  # URL a Super Admin adds under Integration → Developer Tools → "POS &
+  # Others" (API Basics: "real-time payment notifications for all types of
+  # transactions"). The body is OPay's envelope: clientAuthKey, version,
+  # bodyFormat, timestamp, paramContent (the notification, RSA-encrypted
+  # with the business's public key) and sign (SHA256withRSA by OPay over
+  # paramContent + timestamp). The connector's verifier checks the
+  # signature with OPay's public key and the five-minute timestamp; its
+  # enricher then checks the client auth key and decrypts the notification
+  # with the business's private key, so a run sees the plain fields
+  # (status, orderNo, payNo, amount, fee, sn, …). The X-Opay-Tranid header
+  # names the transaction, so retries are dropped; the encrypted body
+  # cannot carry a correlation.
+  payment:
+    type: webhook
+    verify: { scheme: connector, secret_field: opay_public_key }
+    events: [payment]
+    event_type: '="payment"'
+    dedup: '="x-opay-tranid" in headers ? string(headers["x-opay-tranid"]) : ""'
