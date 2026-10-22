@@ -58,7 +58,8 @@ test("an owner picks the look of their public pages", async ({ page }) => {
   expect(vs, describe("/storefront/look", vs)).toEqual([]);
 
   await page.getByRole("button", { name: "Save the look" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
+  await expect(page.getByText("Saved. Your pages show the new look within a minute.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save the look" })).toBeDisabled();
 
   // It comes back as saved, and the storefront page says so.
   await page.reload();
