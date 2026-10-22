@@ -1,0 +1,12 @@
+{
+  "capability": "pay_bank",
+  "input": {
+    "amount_kobo": 550000,
+    "bank_code": "044",
+    "account_number": "0690000040",
+    "account_name": "Ada Obi",
+    "narration": "Sept salary",
+    "source": "x"
+  },
+  "error": "fatal"
+}

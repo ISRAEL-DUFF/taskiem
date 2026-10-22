@@ -1,0 +1,17 @@
+{
+  "trigger": "outflow_event",
+  "body": {
+    "id": "evt_confirmed",
+    "event_type": "wallet.outflow.confirmed",
+    "wallet_id": "6f1e",
+    "data": {
+      "outflow_id": "8d3f",
+      "amount": 4500000
+    }
+  },
+  "event": "payout.settled",
+  "expect": {
+    "payout_id": "8d3f",
+    "amount_kobo": 4500000
+  }
+}

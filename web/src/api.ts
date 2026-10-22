@@ -332,6 +332,8 @@ export interface ConnectorInfo {
   kind?: "rail" | "product" | "tool";
   category?: string;
   description?: string;
+  /** A rail's capabilities (schemas/capabilities-v1.json), sorted. */
+  capabilities?: string[];
   auth: {
     type: string;
     fields: AuthField[] | null;

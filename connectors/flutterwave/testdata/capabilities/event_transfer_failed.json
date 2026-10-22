@@ -1,0 +1,19 @@
+{
+  "trigger": "event",
+  "body": {
+    "event": "transfer.completed",
+    "event.type": "Transfer",
+    "data": {
+      "id": 26251,
+      "status": "FAILED",
+      "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "amount": 5500,
+      "complete_message": "DISBURSE FAILED: Insufficient funds"
+    }
+  },
+  "event": "payout.failed",
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "reason": "DISBURSE FAILED: Insufficient funds"
+  }
+}

@@ -37,6 +37,10 @@ type Manifest struct {
 	Egress      []string               `json:"egress_hosts"`
 	Actions     map[string]ActionSpec  `json:"actions"`
 	Triggers    map[string]TriggerSpec `json:"triggers"`
+	// Capabilities and Events say what a rail can do in Taskiem's words
+	// (rule 16, engine/capability).
+	Capabilities map[string]CapabilityMap `json:"capabilities,omitempty"`
+	Events       map[string]EventMap      `json:"events,omitempty"`
 }
 
 type Auth struct {
@@ -390,6 +394,7 @@ func (m *Manifest) check() []string {
 			add("/triggers/%s/route/field: %q is secret; routing keys are stored in the clear", name, rt.Field)
 		}
 	}
+	m.checkCapabilities(add)
 	if m.Auth.Test != nil {
 		if a, ok := m.Actions[m.Auth.Test.Action]; !ok {
 			add("/auth/test: unknown action %q", m.Auth.Test.Action)

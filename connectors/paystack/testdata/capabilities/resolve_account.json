@@ -1,0 +1,16 @@
+{
+  "capability": "resolve_account",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "bank_code": "058",
+    "account_number": "0123456789"
+  },
+  "exchanges": [
+    "resolve_account"
+  ],
+  "expect": {
+    "account_name": "BOLA ADE"
+  }
+}

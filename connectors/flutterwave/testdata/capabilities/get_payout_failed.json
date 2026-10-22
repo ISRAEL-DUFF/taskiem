@@ -1,0 +1,16 @@
+{
+  "capability": "get_payout",
+  "credentials": {
+    "secret_key": "FLWSECK_TEST-abc"
+  },
+  "input": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "by_reference_failed"
+  ],
+  "expect": {
+    "status": "failed",
+    "reason": "DISBURSE FAILED: You can only spend NGN 1000000.00 at once"
+  }
+}

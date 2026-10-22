@@ -1,0 +1,12 @@
+{
+  "capability": "pay_bank",
+  "input": {
+    "amount_kobo": 100000,
+    "bank_code": "058",
+    "account_number": "0123456789",
+    "account_name": "Bola Ade",
+    "narration": "Salary Oct 2026",
+    "source": "w1"
+  },
+  "error": "fatal"
+}

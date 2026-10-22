@@ -1,0 +1,16 @@
+{
+  "capability": "get_payout",
+  "credentials": {
+    "api_key": "anc_test_key",
+    "account_id": "166012843397415-anc_acc"
+  },
+  "input": {
+    "payout_id": "16942554375340-anc_trsf"
+  },
+  "exchanges": [
+    "verify_transfer_reversed"
+  ],
+  "expect": {
+    "status": "reversed"
+  }
+}

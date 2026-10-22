@@ -1,0 +1,13 @@
+{
+  "capability": "balance",
+  "credentials": {
+    "secret_key": "FLWSECK_TEST-abc"
+  },
+  "exchanges": [
+    "balance"
+  ],
+  "expect": {
+    "available_kobo": 236784000,
+    "currency": "NGN"
+  }
+}

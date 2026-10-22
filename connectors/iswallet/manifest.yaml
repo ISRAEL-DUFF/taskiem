@@ -194,3 +194,66 @@ triggers:
     # Fires once per side, each with its own wallet_id: each side reaches
     # the sub-tenant that holds that wallet.
     route: { key: =body.wallet_id, field: wallet_ids }
+# What iswallet can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
+# Money moves from a named wallet: account and source are required here.
+capabilities:
+  balance:
+    action: get_balance
+    input: { wallet_id: "=input.account" }
+    output:
+      available_kobo: "=sum(output.balances.filter(b, b.currency == input.currency).map(b, b.available))"
+      currency: "=input.currency"
+    requires: [account]
+  resolve_account:
+    action: name_enquiry
+    input: { bank_code: "=input.bank_code", account_number: "=input.account_number" }
+    output: { account_name: "=output.account_name" }
+  pay_bank:
+    action: payout
+    input:
+      wallet_id: "=input.source"
+      amount: "=input.amount_kobo"
+      bank_code: "=input.bank_code"
+      account_number: "=input.account_number"
+      account_name: "=input.account_name"
+      narration: "=input.narration"
+    output:
+      payout_id: "=output.outflow_id"
+      status: "=output.status == 'confirmed' ? 'settled' : output.status in ['failed', 'reversed'] ? 'failed' : 'pending'"
+      fee_kobo: "=output.?fee"
+    requires: [source]
+    fixed: { currency: NGN }
+    settles_by: { trigger: outflow_event, lookup: get_payout }
+  pay_wallet:
+    # Final when it returns, with no fee.
+    action: transfer
+    input:
+      from_wallet_id: "=input.source"
+      to_wallet_id: "=input.wallet_id"
+      amount: "=input.amount_kobo"
+      currency: "=input.currency"
+      narration: "=input.narration"
+    output: { payout_id: "=output.transfer_id", status: settled, fee_kobo: 0 }
+    requires: [source]
+  get_payout:
+    action: get_payout
+    input: { outflow_id: "=input.payout_id" }
+    output:
+      # unresolved and resolved are iswallet's operations at work on it: pending until it says confirmed or failed.
+      status: "=output.status == 'confirmed' ? 'settled' : output.status == 'reversed' ? 'reversed' : output.status == 'failed' ? 'failed' : 'pending'"
+      reason: "=output.status in ['unresolved', 'resolved'] ? optional.of(output.status) : optional.none()"
+      settled_at: "=output.?confirmed_at"
+      fee_kobo: "=output.?fee"
+events:
+  payout.settled:
+    trigger: outflow_event
+    when: "=body.event_type == 'wallet.outflow.confirmed'"
+    fields: { payout_id: "=body.data.outflow_id", amount_kobo: "=body.data.?amount" }
+  payout.failed:
+    trigger: outflow_event
+    when: "=body.event_type == 'wallet.outflow.failed'"
+    fields: { payout_id: "=body.data.outflow_id", reason: "=body.data.?reason" }
+  payout.reversed:
+    trigger: outflow_event
+    when: "=body.event_type == 'wallet.outflow.reversed'"
+    fields: { payout_id: "=body.data.outflow_id", reason: "=body.data.?reason" }

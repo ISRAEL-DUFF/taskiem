@@ -1,0 +1,57 @@
+{
+  "capability": "collect_link",
+  "credentials": {
+    "api_key": "MK_TEST_TASKIEM01",
+    "secret_key": "TSKSECRET0000000000000000000001",
+    "contract_code": "8389328412",
+    "wallet_account_number": "8016472829"
+  },
+  "input": {
+    "amount_kobo": 150050,
+    "customer": {
+      "name": "Ada Obi",
+      "email": "ada@example.com"
+    },
+    "description": "Order 17",
+    "return_url": "https://shop.example.com/done"
+  },
+  "keys": {
+    "init_transaction": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "login",
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/merchant/transactions/init-transaction",
+        "headers": {
+          "Authorization": "Bearer tok-1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "requestSuccessful": true,
+          "responseMessage": "success",
+          "responseCode": "0",
+          "responseBody": {
+            "transactionReference": "MNFY|20261006200044|000090",
+            "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+            "merchantName": "Acme Limited",
+            "apiKey": "MK_TEST_TASKIEM01",
+            "enabledPaymentMethod": [
+              "ACCOUNT_TRANSFER",
+              "CARD"
+            ],
+            "checkoutUrl": "https://sandbox.sdk.monnify.com/checkout/MNFY|20261006200044|000090"
+          }
+        }
+      },
+      "name": "init"
+    }
+  ],
+  "expect": {
+    "payment_url": "https://sandbox.sdk.monnify.com/checkout/MNFY|20261006200044|000090",
+    "payment_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+}

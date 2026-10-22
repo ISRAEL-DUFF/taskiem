@@ -122,9 +122,183 @@
       "additionalProperties": {
         "$ref": "#/$defs/trigger"
       }
+    },
+    "capabilities": {
+      "description": "What this rail can do, in Taskiem's words (schemas/capabilities-v1.json): each entry maps one capability to this connector's own actions (rule 16). Rails only.",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/capability"
+      }
+    },
+    "events": {
+      "description": "The normalised payment events this rail's triggers produce (payout.settled, payment.received...), each from one trigger (rule 16).",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z_]+\\.[a-z_]+$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/capabilityEvent"
+      }
     }
   },
   "$defs": {
+    "mapping": {
+      "description": "Field names to values: a string starting with = is an expression, anything else is taken as it is.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "action"
+          ],
+          "not": {
+            "required": [
+              "steps"
+            ]
+          }
+        },
+        {
+          "required": [
+            "steps"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "action"
+                ]
+              },
+              {
+                "required": [
+                  "input"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/name"
+        },
+        "input": {
+          "description": "The action's input, from the capability's (roots: input).",
+          "$ref": "#/$defs/mapping"
+        },
+        "steps": {
+          "description": "Several actions for one capability, in order (Paystack: create_recipient, then transfer). A step's input may read earlier steps' outputs (steps.<id>.output).",
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "action",
+              "input"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/name"
+              },
+              "action": {
+                "$ref": "#/$defs/name"
+              },
+              "input": {
+                "$ref": "#/$defs/mapping"
+              }
+            }
+          }
+        },
+        "output": {
+          "description": "The capability's output, from the action's (roots: input, output: the last action's, steps).",
+          "$ref": "#/$defs/mapping"
+        },
+        "requires": {
+          "description": "Optional capability inputs this rail cannot do without (iswallet pays from a named wallet: source).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unsupported": {
+          "description": "Optional capability inputs this rail cannot honour; a step that gives one is refused rather than ignored (Paystack refunds in full: amount_kobo).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignores": {
+          "description": "Capability inputs this rail does not need; dropped when given (a checkout that asks no phone number: customer.phone).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fixed": {
+          "description": "Capability inputs this rail takes with one value only (currency: NGN); a step that gives another is refused.",
+          "type": "object"
+        },
+        "unsafe": {
+          "description": "The action is an unsafe_write and the capability allows one: an unknown outcome parks for a person.",
+          "type": "boolean"
+        },
+        "settles_by": {
+          "description": "How a pending payout is followed to its end: the trigger whose payout events report it, and the capability that looks it up.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lookup"
+          ],
+          "properties": {
+            "trigger": {
+              "$ref": "#/$defs/name"
+            },
+            "lookup": {
+              "$ref": "#/$defs/name"
+            }
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "capabilityEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trigger",
+        "when",
+        "fields"
+      ],
+      "properties": {
+        "trigger": {
+          "$ref": "#/$defs/name"
+        },
+        "when": {
+          "description": "Which of the trigger's deliveries are this event (roots: body, headers, query, item).",
+          "$ref": "#/$defs/expr"
+        },
+        "fields": {
+          "$ref": "#/$defs/mapping"
+        }
+      }
+    },
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{0,62}$"

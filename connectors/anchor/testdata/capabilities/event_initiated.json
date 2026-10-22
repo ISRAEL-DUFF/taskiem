@@ -1,0 +1,16 @@
+{
+  "trigger": "transfer_event",
+  "body": {
+    "data": {
+      "id": "e-nip.transfer.initiated",
+      "type": "nip.transfer.initiated",
+      "relationships": {
+        "transfer": {
+          "data": {
+            "id": "16942554375340-anc_trsf"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "capability": "collect_link",
+  "input": {
+    "amount_kobo": 20000,
+    "customer": {
+      "name": "Bola Ade"
+    },
+    "description": "Order 17"
+  },
+  "error": "fatal"
+}

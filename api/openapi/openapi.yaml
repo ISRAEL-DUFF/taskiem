@@ -18123,6 +18123,11 @@ components:
         oauth_linkable:
           type: boolean
           description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform.
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: A rail's capabilities (schemas/capabilities-v1.json, connector/v1 rule 16), sorted; absent for other connectors.
         actions:
           type: object
           additionalProperties:

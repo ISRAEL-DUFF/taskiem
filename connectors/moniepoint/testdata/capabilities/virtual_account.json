@@ -1,0 +1,68 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "api_key": "MK_TEST_TASKIEM01",
+    "secret_key": "TSKSECRET0000000000000000000001",
+    "contract_code": "8389328412",
+    "wallet_account_number": "8016472829"
+  },
+  "input": {
+    "customer": {
+      "name": "Ada Obi",
+      "email": "ada@example.com",
+      "bvn": "21212121212"
+    }
+  },
+  "keys": {
+    "create_reserved_account": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "login",
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/bank-transfer/reserved-accounts",
+        "headers": {
+          "Authorization": "Bearer tok-1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "requestSuccessful": true,
+          "responseMessage": "success",
+          "responseCode": "0",
+          "responseBody": {
+            "contractCode": "8389328412",
+            "accountReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+            "accountName": "Acme / Ada Obi",
+            "currencyCode": "NGN",
+            "customerEmail": "ada@example.com",
+            "customerName": "Ada Obi",
+            "accounts": [
+              {
+                "bankCode": "50515",
+                "bankName": "Moniepoint Microfinance Bank",
+                "accountNumber": "6254727989",
+                "accountName": "Acme / Ada Obi"
+              }
+            ],
+            "collectionChannel": "RESERVED_ACCOUNT",
+            "reservationReference": "NWA7DMJ0W2UDK1KN5SLF",
+            "reservedAccountType": "GENERAL",
+            "status": "ACTIVE",
+            "createdOn": "2026-10-06 12:04:39.034",
+            "restrictPaymentSource": false
+          }
+        }
+      },
+      "name": "reserve"
+    }
+  ],
+  "expect": {
+    "account_number": "6254727989",
+    "bank_name": "Moniepoint Microfinance Bank",
+    "account_name": "Acme / Ada Obi",
+    "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+}

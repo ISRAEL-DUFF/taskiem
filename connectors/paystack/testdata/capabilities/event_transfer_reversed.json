@@ -1,0 +1,15 @@
+{
+  "trigger": "transfer_event",
+  "body": {
+    "event": "transfer.reversed",
+    "data": {
+      "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "amount": 100000,
+      "status": "reversed"
+    }
+  },
+  "event": "payout.reversed",
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+}

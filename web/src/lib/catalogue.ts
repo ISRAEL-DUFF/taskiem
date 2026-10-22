@@ -142,6 +142,31 @@ interface Listed {
   kind?: Kind;
   category?: string;
   description?: string;
+  capabilities?: string[];
+}
+
+/** What a rail's capabilities (schemas/capabilities-v1.json) let a
+ * business do, in the order the catalogue says them. */
+const CAPABILITY_WORDS: [string, string][] = [
+  ["pay_bank", "pay bank accounts"],
+  ["pay_wallet", "pay wallets"],
+  ["pay_mobile_money", "pay mobile money"],
+  ["pay_many", "pay a list in one batch"],
+  ["collect_link", "take payments by link"],
+  ["collect_push", "take payments by phone prompt"],
+  ["virtual_account", "give customers account numbers"],
+  ["refund", "refund payments"],
+  ["balance", "check the balance"],
+  ["resolve_account", "check account names"],
+];
+
+/** "Can pay bank accounts, …": what a rail can do, or "" for none. The
+ * lookups (get_payout, get_payment, list_banks) go without saying. */
+export function capabilityLine(capabilities: string[] | undefined): string {
+  const words = CAPABILITY_WORDS.filter(([c]) => capabilities?.includes(c)).map(([, w]) => w);
+  if (words.length === 0) return "";
+  const last = words.pop();
+  return `Can ${words.length > 0 ? `${words.join(", ")} and ${last}` : last}.`;
 }
 
 /** Taskiem's own connectors (not an organisation's own `x_` ones nor
@@ -152,7 +177,7 @@ export function builtInByKind<T extends Listed>(connectors: T[], search: string)
   const out: Record<Kind, T[]> = { rail: [], product: [], tool: [] };
   for (const c of connectors) {
     if (c.id.startsWith("x_") || c.id.startsWith("p_")) continue;
-    const text = `${c.name} ${c.id} ${c.description ?? ""} ${(c.category ?? "").replaceAll("_", " ")}`.toLowerCase();
+    const text = `${c.name} ${c.id} ${c.description ?? ""} ${(c.category ?? "").replaceAll("_", " ")} ${capabilityLine(c.capabilities)}`.toLowerCase();
     if (q && !text.includes(q)) continue;
     out[c.kind ?? "tool"].push(c);
   }

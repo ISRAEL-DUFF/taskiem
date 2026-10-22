@@ -1,0 +1,20 @@
+{
+  "trigger": "event",
+  "body": {
+    "eventType": "SUCCESSFUL_TRANSACTION",
+    "eventData": {
+      "product": {
+        "reference": "acct-ref-1",
+        "type": "RESERVED_ACCOUNT"
+      },
+      "transactionReference": "MNFY|04|1",
+      "paymentReference": "MNFY|04|1",
+      "amountPaid": 3000
+    }
+  },
+  "event": "virtual_account.credited",
+  "expect": {
+    "reference": "acct-ref-1",
+    "amount_kobo": 300000
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "capability": "list_banks",
+  "credentials": {
+    "secret_key": "FLWSECK_TEST-abc"
+  },
+  "exchanges": [
+    "banks"
+  ],
+  "expect": {
+    "banks": [
+      {
+        "code": "044",
+        "name": "Access Bank"
+      }
+    ]
+  }
+}

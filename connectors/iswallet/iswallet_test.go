@@ -340,3 +340,7 @@ func TestEventsRouteByWallet(t *testing.T) {
 		t.Errorf("route keys %v", k)
 	}
 }
+
+func TestCapabilities(t *testing.T) {
+	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+}

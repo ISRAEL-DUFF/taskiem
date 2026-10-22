@@ -1,0 +1,17 @@
+{
+  "capability": "refund",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "payment_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "refund_created"
+  ],
+  "expect": {
+    "refund_id": "3018284",
+    "status": "pending",
+    "amount_kobo": 300000
+  }
+}

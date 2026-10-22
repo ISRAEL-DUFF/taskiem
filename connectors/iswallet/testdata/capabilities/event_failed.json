@@ -1,0 +1,18 @@
+{
+  "trigger": "outflow_event",
+  "body": {
+    "id": "evt_failed",
+    "event_type": "wallet.outflow.failed",
+    "wallet_id": "6f1e",
+    "data": {
+      "outflow_id": "8d3f",
+      "amount": 4500000,
+      "reason": "Beneficiary account closed"
+    }
+  },
+  "event": "payout.failed",
+  "expect": {
+    "payout_id": "8d3f",
+    "reason": "Beneficiary account closed"
+  }
+}

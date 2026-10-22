@@ -1,0 +1,16 @@
+{
+  "capability": "balance",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "account": "6f1e"
+  },
+  "exchanges": [
+    "balance"
+  ],
+  "expect": {
+    "available_kobo": 499000000,
+    "currency": "NGN"
+  }
+}

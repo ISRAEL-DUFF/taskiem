@@ -1,0 +1,18 @@
+{
+  "trigger": "event",
+  "body": {
+    "eventType": "SUCCESSFUL_DISBURSEMENT",
+    "eventData": {
+      "amount": 2000.5,
+      "transactionReference": "MFDS|1",
+      "fee": 10.75,
+      "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "status": "SUCCESS"
+    }
+  },
+  "event": "payout.settled",
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "amount_kobo": 200050
+  }
+}

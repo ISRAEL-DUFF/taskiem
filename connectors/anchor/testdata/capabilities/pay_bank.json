@@ -1,0 +1,25 @@
+{
+  "capability": "pay_bank",
+  "credentials": {
+    "api_key": "anc_test_key",
+    "account_id": "166012843397415-anc_acc"
+  },
+  "input": {
+    "amount_kobo": 4500000,
+    "bank_code": "000014",
+    "account_number": "0690000031",
+    "account_name": "Ada Obi",
+    "narration": "Sept salary"
+  },
+  "keys": {
+    "transfer": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "counterparty",
+    "transfer_pending"
+  ],
+  "expect": {
+    "payout_id": "16942554375340-anc_trsf",
+    "status": "pending"
+  }
+}

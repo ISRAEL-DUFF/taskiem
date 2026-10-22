@@ -1,0 +1,18 @@
+{
+  "trigger": "transfer_event",
+  "body": {
+    "id": "e-nip.transfer.reversed",
+    "type": "nip.transfer.reversed",
+    "relationships": {
+      "transfer": {
+        "data": {
+          "id": "16942554375340-anc_trsf"
+        }
+      }
+    }
+  },
+  "event": "payout.reversed",
+  "expect": {
+    "payout_id": "16942554375340-anc_trsf"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "capability": "list_banks",
+  "credentials": {
+    "api_key": "anc_test_key",
+    "account_id": "166012843397415-anc_acc"
+  },
+  "exchanges": [
+    "banks"
+  ],
+  "expect": {
+    "banks": [
+      {
+        "code": "000014",
+        "name": "ACCESS BANK"
+      }
+    ]
+  }
+}

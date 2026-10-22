@@ -1,0 +1,13 @@
+{
+  "capability": "balance",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "exchanges": [
+    "balance"
+  ],
+  "expect": {
+    "available_kobo": 5000000,
+    "currency": "NGN"
+  }
+}

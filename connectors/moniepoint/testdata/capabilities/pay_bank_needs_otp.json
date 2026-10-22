@@ -1,0 +1,56 @@
+{
+  "capability": "pay_bank",
+  "credentials": {
+    "api_key": "MK_TEST_TASKIEM01",
+    "secret_key": "TSKSECRET0000000000000000000001",
+    "contract_code": "8389328412",
+    "wallet_account_number": "8016472829"
+  },
+  "input": {
+    "amount_kobo": 200000,
+    "bank_code": "057",
+    "account_number": "2085096393",
+    "account_name": "Ada Obi",
+    "narration": "Sept salary"
+  },
+  "keys": {
+    "transfer": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "login",
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/disbursements/single",
+        "headers": {
+          "Authorization": "Bearer tok-1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "requestSuccessful": true,
+          "responseMessage": "success",
+          "responseCode": "0",
+          "responseBody": {
+            "amount": 2000,
+            "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+            "status": "PENDING_AUTHORIZATION",
+            "dateCreated": "2026-10-06T09:13:38.140+0000",
+            "totalFee": 10.75,
+            "destinationAccountName": "ADA NGOZI OBI",
+            "destinationBankName": "Zenith bank",
+            "destinationAccountNumber": "2085096393",
+            "destinationBankCode": "057"
+          }
+        }
+      },
+      "name": "transfer_needs_otp"
+    }
+  ],
+  "expect": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "status": "pending",
+    "reason": "needs_otp"
+  }
+}

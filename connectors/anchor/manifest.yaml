@@ -165,3 +165,66 @@ triggers:
     event_type: '=has(body.data) ? body.data.type : body.type'
     dedup: '=has(body.data) ? body.data.id : body.id'
     correlation: '=has(body.data) ? body.data.relationships.account.data.id : body.relationships.account.data.id'
+# What Anchor can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
+capabilities:
+  balance:
+    action: get_balance
+    input: { account_id: "=input.?account" }
+    output: { available_kobo: "=output.available_balance", currency: NGN }
+    fixed: { currency: NGN }
+  resolve_account:
+    action: verify_account
+    input: { account_number: "=input.account_number", bank_code: "=input.bank_code" }
+    output: { account_name: "=output.account_name" }
+  list_banks:
+    action: list_banks
+    input: {}
+    output: { banks: "=output.banks.map(b, {'code': b.nip_code, 'name': b.name})" }
+  pay_bank:
+    # Anchor refuses to pay when the bank's name for the account is not account_name.
+    action: transfer
+    input:
+      amount: "=input.amount_kobo"
+      account_number: "=input.account_number"
+      bank_code: "=input.bank_code"
+      account_name: "=input.account_name"
+      reason: "=input.narration"
+      account_id: "=input.?source"
+    output:
+      payout_id: "=output.transfer_id"
+      status: "=output.status == 'COMPLETED' ? 'settled' : output.status in ['FAILED', 'REVERSED'] ? 'failed' : 'pending'"
+      reason: "=output.?failure_reason"
+    fixed: { currency: NGN }
+    settles_by: { trigger: transfer_event, lookup: get_payout }
+  pay_wallet:
+    action: book_transfer
+    input:
+      amount: "=input.amount_kobo"
+      destination_account_id: "=input.wallet_id"
+      reason: "=input.narration"
+      account_id: "=input.?source"
+    output:
+      payout_id: "=output.transfer_id"
+      status: "=output.status == 'COMPLETED' ? 'settled' : output.status in ['FAILED', 'REVERSED'] ? 'failed' : 'pending'"
+      reason: "=output.?failure_reason"
+    fixed: { currency: NGN }
+    settles_by: { trigger: transfer_event, lookup: get_payout }
+  get_payout:
+    action: get_transfer
+    input: { transfer_id: "=input.payout_id" }
+    output:
+      status: "=output.status == 'COMPLETED' ? 'settled' : output.status == 'REVERSED' ? 'reversed' : output.status == 'FAILED' ? 'failed' : 'pending'"
+      reason: "=output.?failure_reason"
+events:
+  payout.settled:
+    trigger: transfer_event
+    when: "=(has(body.data) ? body.data.type : body.type) in ['nip.transfer.successful', 'book.transfer.successful']"
+    fields: { payout_id: "=has(body.data) ? body.data.relationships.transfer.data.id : body.relationships.transfer.data.id" }
+  payout.failed:
+    trigger: transfer_event
+    when: "=(has(body.data) ? body.data.type : body.type) in ['nip.transfer.failed', 'book.transfer.failed']"
+    fields: { payout_id: "=has(body.data) ? body.data.relationships.transfer.data.id : body.relationships.transfer.data.id" }
+  payout.reversed:
+    trigger: transfer_event
+    when: "=(has(body.data) ? body.data.type : body.type) == 'nip.transfer.reversed'"
+    fields: { payout_id: "=has(body.data) ? body.data.relationships.transfer.data.id : body.relationships.transfer.data.id" }

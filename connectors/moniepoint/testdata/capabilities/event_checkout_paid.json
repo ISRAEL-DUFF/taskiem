@@ -1,0 +1,22 @@
+{
+  "trigger": "event",
+  "body": {
+    "eventType": "SUCCESSFUL_TRANSACTION",
+    "eventData": {
+      "product": {
+        "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+        "type": "API_NOTIFICATION"
+      },
+      "transactionReference": "MNFY|20261006200044|000090",
+      "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "amountPaid": "1500.50",
+      "currency": "NGN"
+    }
+  },
+  "event": "payment.received",
+  "expect": {
+    "payment_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "amount_kobo": 150050,
+    "currency": "NGN"
+  }
+}

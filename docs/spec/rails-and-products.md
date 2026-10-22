@@ -1,6 +1,6 @@
 # Rails and products: specification and build plan
 
-Status: **planned** · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
+Status: **R1 and R9 built**, R2 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
 
 Taskiem connects to two kinds of service. **Rails** move money (Paystack, iswallet, Moniepoint and the rest) and Taskiem builds products on them as workflows. **Products** (Payrolla, and later accounting, HR and POS back offices) already run a whole process, and Taskiem connects to them, embeds their interface, and works around them. This document specifies both halves, and the retirement of the Payrolla integration that mixed them up.
 
@@ -131,70 +131,81 @@ Each capability has one input and one output shape, defined by Taskiem in `schem
 
 | Capability | Input | Output | Class required of the rail's action |
 | --- | --- | --- | --- |
-| `balance` | `account` (optional: a wallet or sub-account id) | `available_kobo`, `currency` | read |
+| `balance` | `account` (optional: a wallet or sub-account id), `currency` (default NGN) | `available_kobo`, `currency` | read |
 | `resolve_account` | `bank_code`, `account_number` | `account_name` | read |
 | `list_banks` | — | `banks[] {code, name}` | read |
-| `pay_bank` | `amount_kobo`, `currency`, `bank_code`, `account_number`, `account_name`, `narration`, `source` (optional) | `payout_id`, `status` (`settled` \| `pending` \| `failed`), `fee_kobo` | idempotent or reconcilable |
-| `pay_wallet` | `amount_kobo`, `wallet_id`, `narration`, `source` (optional) | `payout_id`, `status`, `fee_kobo` | idempotent or reconcilable |
-| `pay_mobile_money` | `amount_kobo`, `currency`, `msisdn`, `narration` | `payout_id`, `status` | idempotent or reconcilable |
-| `get_payout` | `payout_id` | `status` (`settled` \| `pending` \| `failed` \| `reversed`), `settled_at`, `reason` | read |
-| `pay_many` | `items[]` (as `pay_bank`), `batch_reference` | `batch_id`, `items[] {status, payout_id}` | idempotent; **native only** (§4.7) |
-| `collect_link` | `amount_kobo`, `currency`, `customer {name, email, phone}`, `reference`, `return_url`, `expires_in` | `payment_url`, `payment_id` | idempotent or reconcilable |
-| `collect_push` | `amount_kobo`, `msisdn` or terminal, `reference` | `payment_id`, `status` | idempotent or reconcilable |
-| `get_payment` | `payment_id` or `reference` | `status` (`paid` \| `pending` \| `failed` \| `refunded`), `amount_kobo`, `paid_at` | read |
-| `virtual_account` | `customer {name, email, phone, bvn?}`, `reference` | `account_number`, `bank_name`, `account_name` | idempotent preferred; unsafe allowed and declared |
-| `refund` | `payment_id`, `amount_kobo` (optional: partial) | `refund_id`, `status` | idempotent or reconcilable |
+| `pay_bank` | `amount_kobo`, `currency` (default NGN), `bank_code`, `account_number`, `account_name`, `narration` (up to 100 characters), `source` (optional) | `payout_id`, `status` (`settled` \| `pending` \| `failed`), `fee_kobo`, `reason` | idempotent or reconcilable |
+| `pay_wallet` | `amount_kobo`, `currency` (default NGN), `wallet_id`, `narration`, `source` (optional) | `payout_id`, `status`, `fee_kobo`, `reason` | idempotent or reconcilable |
+| `pay_mobile_money` | `amount_kobo`, `currency`, `msisdn`, `narration` | `payout_id`, `status`, `fee_kobo`, `reason` | idempotent or reconcilable |
+| `get_payout` | `payout_id` | `status` (`settled` \| `pending` \| `failed` \| `reversed`), `settled_at`, `fee_kobo`, `reason` | read |
+| `pay_many` | `items[]` (as `pay_bank`), `currency`, `narration`, `source` | `batch_id`, `items[] {status, payout_id}` | idempotent; **native only** (§4.7) |
+| `collect_link` | `amount_kobo`, `currency` (default NGN), `customer {name, email, phone, bvn}`, `description`, `return_url` | `payment_url`, `payment_id` | idempotent or reconcilable |
+| `collect_push` | `amount_kobo`, `currency`, `msisdn`, `description` | `payment_id`, `status` | idempotent or reconcilable |
+| `get_payment` | `payment_id` (as `collect_link` answered it, or as a payment event carried it) | `status` (`paid` \| `pending` \| `failed` \| `refunded`), `amount_kobo`, `currency`, `paid_at` | read |
+| `virtual_account` | `customer {name, email, phone, bvn}` | `account_number`, `bank_name`, `account_name`, `reference` (what `virtual_account.credited` carries) | idempotent preferred; unsafe allowed and declared |
+| `refund` | `payment_id`, `amount_kobo` (optional: partial), `reason` | `refund_id`, `status` (`refunded` \| `pending` \| `failed`), `amount_kobo` | idempotent or reconcilable |
 
 Events, normalised the same way (§4.5): `payout.settled`, `payout.failed`, `payout.reversed`, `payment.received`, `virtual_account.credited`.
+
+No capability takes a reference: the reference a rail needs is the idempotency key Taskiem derives for the step (one for each step of a composite), which is what makes a retry or a resend the same payment.
 
 The set is deliberately small. A capability is added when a second template needs it on a second rail; a rail-specific action stays available to templates that want it by name.
 
 ### 4.2 Declaring capabilities in a rail's manifest
 
-A new optional `capabilities` block in `connector/v1` (schema `schemas/connector-v1.schema.json`, contract `docs/contracts/connector-v1.md`, new rule 16). Each entry names the rail action and maps the capability's input to it and the action's output back, with the same expression language steps use:
+A new optional `capabilities` block in `connector/v1` (schema `schemas/connector-v1.schema.json`, contract [rule 16](../contracts/connector-v1.md)). Each entry names the rail action and maps the capability's input to it and the action's output back, with the same expression language steps use. A string starting with `=` is an expression, anything else a value as it is; an expression that comes out null (`=input.?source` when no source was given) leaves the field out. As built for iswallet:
 
 ```yaml
 # connectors/iswallet/manifest.yaml
 capabilities:
   balance:
     action: get_balance
-    input:  { wallet_id: "=input.account" }
-    output: { available_kobo: "=output.balances.filter(b, b.currency == 'NGN')[0].available_kobo", currency: "'NGN'" }
+    input: { wallet_id: "=input.account" }
+    output:
+      available_kobo: "=sum(output.balances.filter(b, b.currency == input.currency).map(b, b.available))"
+      currency: "=input.currency"
+    requires: [account]
   pay_bank:
     action: payout
     input:
       wallet_id: "=input.source"
-      amount_kobo: "=input.amount_kobo"
+      amount: "=input.amount_kobo"
       bank_code: "=input.bank_code"
       account_number: "=input.account_number"
       account_name: "=input.account_name"
       narration: "=input.narration"
-    output: { payout_id: "=output.outflow_id", status: "'pending'", fee_kobo: "=output.fee_kobo" }
-    settles_by: { event: outflow_event, correlation: payout_id, lookup: get_payout }
+    output:
+      payout_id: "=output.outflow_id"
+      status: "=output.status == 'confirmed' ? 'settled' : output.status in ['failed', 'reversed'] ? 'failed' : 'pending'"
+      fee_kobo: "=output.?fee"
+    requires: [source]
+    fixed: { currency: NGN }
+    settles_by: { trigger: outflow_event, lookup: get_payout }
   pay_wallet:
     action: transfer
-    input: { from_wallet_id: "=input.source", to_wallet_id: "=input.wallet_id", amount_kobo: "=input.amount_kobo", narration: "=input.narration" }
-    output: { payout_id: "=output.transfer_id", status: "'settled'", fee_kobo: "0" }
-  get_payout:
-    action: get_payout
-    input: { outflow_id: "=input.payout_id" }
-    output: { status: "=output.status == 'confirmed' ? 'settled' : output.status" }
+    input: { from_wallet_id: "=input.source", to_wallet_id: "=input.wallet_id", amount: "=input.amount_kobo", currency: "=input.currency", narration: "=input.narration" }
+    output: { payout_id: "=output.transfer_id", status: settled, fee_kobo: 0 }
+    requires: [source]
 events:
-  payout.settled:  { trigger: outflow_event, when: "=event.type == 'wallet.outflow.confirmed'", payout_id: "=event.data.outflow_id" }
-  payout.failed:   { trigger: outflow_event, when: "=event.type == 'wallet.outflow.failed'",    payout_id: "=event.data.outflow_id" }
-  payout.reversed: { trigger: outflow_event, when: "=event.type == 'wallet.outflow.reversed'",  payout_id: "=event.data.outflow_id" }
+  payout.settled:
+    trigger: outflow_event
+    when: "=body.event_type == 'wallet.outflow.confirmed'"
+    fields: { payout_id: "=body.data.outflow_id", amount_kobo: "=body.data.?amount" }
 ```
 
-(Field names in the example are illustrative; the real ones are read from each manifest when the block is written.)
+Besides the mapping, an entry says how the rail meets the capability's optional inputs: `requires` (it cannot do without them: iswallet pays from a named wallet), `unsupported` (it cannot honour them, so a step that gives one is refused rather than quietly ignored: Paystack refunds in full), `fixed` (one value only: `currency: NGN`) and `ignores` (not needed; dropped: Paystack's checkout asks no phone number). `settles_by` says how a pending payout ends: the trigger whose payout events report it, and the `get_payout` lookup. `notes` is free text for reviewers.
 
-**Composite capabilities.** Some rails need two calls for one capability: Paystack pays a bank account by creating a transfer recipient and then a transfer. A mapping may list `steps:` instead of one `action:`, each with its own input; expansion (§4.4) produces both steps, each with its own idempotency seed derived from the capability step's, so both remain exactly-once.
+**Composite capabilities.** Some rails need two calls for one capability: Paystack pays a bank account by creating a transfer recipient and then a transfer. A mapping may list `steps:` (`id`, `action`, `input`) instead of one `action:`; a step's input reads earlier steps as `steps.<id>.output`, and the output mapping reads `output` (the last step's) and `steps`. Expansion (§4.4) produces both steps, each with its own idempotency seed derived from the capability step's, so both remain exactly-once.
 
-**Validation** (`engine/connector`, at registration and in `taskiem validate`):
+**Validation** (`engine/connector`, at registration and in `taskiem validate`; every rule in [rule 16](../contracts/connector-v1.md)):
 
-- the action exists, and its class meets the capability's requirement (§4.1);
-- every required capability input is used and every output field is produced (checked against the action's schemas);
-- `settles_by.event` names a trigger of the same manifest, and `lookup` names a read action;
-- the capability's `x-pii` fields map to fields the action also marks `pii`.
+- the action exists, and its class meets the capability's requirement (§4.1); `unsafe_write` only with `unsafe: true`;
+- every required action input is mapped, no mapped key is unknown to the action, and none is its idempotency field;
+- every required capability output is produced and nothing else is; every expression compiles;
+- every capability input is used or listed under `ignores`, `unsupported` or `fixed`; an optional one a required action input needs is listed under `requires`;
+- personal (`x-pii`) inputs reach only action inputs marked `pii`, and personal outputs come only from action outputs marked `pii`;
+- a payment that may be pending declares `settles_by`, whose `trigger` produces `payout.settled` and `payout.failed` and whose `lookup` is the rail's `get_payout`;
+- events name a trigger, and give every required field.
 
 A rail that cannot meet a capability simply does not declare it.
 
@@ -506,6 +517,15 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 - `engine/conntest`: a capability conformance suite: each declared capability is replayed against the rail's fixtures and its output checked against the capability schema; normalised events produced from recorded webhooks.
 
 **Done when:** every listed rail declares its capabilities and passes the conformance suite; a manifest that maps a capability to a wrong-class action, or misses an output field, fails validation with a clear message; `go generate ./sdk` produces the capability types.
+
+**Built** (first pull request): the capability set, rule 16 and its validation, the conformance suite (`conntest.RunCapabilities`, cases in `connectors/<rail>/testdata/capabilities/`), the SDK's capability types (`Capability<Name>Input`, `Capability<Name>Output`, `CAPABILITY_RAILS`), and the blocks for Paystack, iswallet, Moniepoint, Flutterwave and Anchor as §4.7 lists them, with these differences found on the way:
+
+- iswallet does not declare `list_banks`: its bank list's fields are not documented, so the mapping cannot be checked.
+- Paystack's OTP case is mapped (`failed`, reason `otp_enabled`), but the connection check's warning is not built: Paystack has no endpoint that says whether OTP is on.
+- Moniepoint's two-factor transfers answer `pending` with reason `needs_otp`; Flutterwave's transfers waiting for approval in its dashboard answer `pending` with reason `needs_approval`.
+- A payout Paystack does not know is a `not_found` error from `get_payout`, not a status.
+
+**Left for a second pull request:** Lenco, Remita, Interswitch, MTN MoMo and OPay.
 
 ### R2: Capability steps and expansion (L)
 

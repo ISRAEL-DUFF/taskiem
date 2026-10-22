@@ -1,0 +1,24 @@
+{
+  "capability": "collect_link",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "amount_kobo": 20000,
+    "customer": {
+      "name": "Bola Ade",
+      "email": "bola@example.com"
+    },
+    "description": "Order 17"
+  },
+  "keys": {
+    "initialize_transaction": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "initialize_transaction"
+  ],
+  "expect": {
+    "payment_url": "https://checkout.paystack.com/0peioxfhpn",
+    "payment_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+}

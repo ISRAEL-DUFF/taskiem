@@ -1,0 +1,17 @@
+{
+  "capability": "get_payout",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "payout_id": "8d3f"
+  },
+  "exchanges": [
+    "get_payout_confirmed"
+  ],
+  "expect": {
+    "status": "settled",
+    "settled_at": "2026-10-05T09:15:40Z",
+    "fee_kobo": 5350
+  }
+}

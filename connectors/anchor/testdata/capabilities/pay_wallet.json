@@ -1,0 +1,22 @@
+{
+  "capability": "pay_wallet",
+  "credentials": {
+    "api_key": "anc_test_key",
+    "account_id": "166012843397415-anc_acc"
+  },
+  "input": {
+    "amount_kobo": 100000,
+    "wallet_id": "17000000000000-anc_acc",
+    "narration": "Float top-up"
+  },
+  "keys": {
+    "book_transfer": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "book_transfer"
+  ],
+  "expect": {
+    "payout_id": "17000000000001-anc_trsf",
+    "status": "settled"
+  }
+}

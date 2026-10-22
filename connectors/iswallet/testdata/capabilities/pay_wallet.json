@@ -1,0 +1,23 @@
+{
+  "capability": "pay_wallet",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "amount_kobo": 4500000,
+    "wallet_id": "9c2a",
+    "narration": "Sept salary emp-417",
+    "source": "6f1e"
+  },
+  "keys": {
+    "transfer": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "transfer_completed"
+  ],
+  "expect": {
+    "payout_id": "tr_1",
+    "status": "settled",
+    "fee_kobo": 0
+  }
+}

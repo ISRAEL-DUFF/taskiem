@@ -1,0 +1,17 @@
+{
+  "capability": "get_payment",
+  "credentials": {
+    "secret_key": "FLWSECK_TEST-abc"
+  },
+  "input": {
+    "payment_id": "order-17"
+  },
+  "exchanges": [
+    "verify_by_ref"
+  ],
+  "expect": {
+    "status": "paid",
+    "amount_kobo": 150050,
+    "currency": "NGN"
+  }
+}

@@ -630,6 +630,8 @@ type connectorInfo struct {
 	Auth        connector.Auth             `json:"auth"`
 	Actions     map[string]connectorAction `json:"actions"`
 	Triggers    []string                   `json:"triggers"`
+	// Capabilities are a rail's (rule 16), sorted; absent for the others.
+	Capabilities []string `json:"capabilities,omitempty"`
 	// OAuthLinkable says whether a connector that declares auth.oauth2
 	// can be connected by OAuth on this platform (a client is registered
 	// and the provider's server known); absent for the others.
@@ -662,6 +664,10 @@ func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {
 			info.Triggers = append(info.Triggers, name)
 		}
 		slices.Sort(info.Triggers)
+		for name := range m.Capabilities {
+			info.Capabilities = append(info.Capabilities, name)
+		}
+		slices.Sort(info.Capabilities)
 		out = append(out, info)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connectors": nonNil(out)})
