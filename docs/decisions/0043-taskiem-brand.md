@@ -13,7 +13,8 @@ The mark has to work small first: the most-seen version is a round WhatsApp prof
 1. **The mark is a "t" whose foot hands on to a dot**: work passed along, done without the owner chasing it. Lime on a pine rounded square, the dot white. At 16 to 24 px the dot is dropped and the strokes thickened.
 2. **The wordmark is "taskiem"**, lower case, Plus Jakarta Sans ExtraBold (the website's typeface), outlined so it needs no font. The name is said "task-YEM".
 3. **Pine `#0d3b2e` and lime `#c8f169`**, with white and mist `#f1f4ef`. Pine is dark enough that it reads as nothing like WhatsApp's green; lime is used only on pine.
-4. **Applied** to the web app (accent and primary colours, the tab and home-screen icons, the sign-in page, the agent and operator consoles), the website and the docs site, and the profile picture and link image in `docs/brand/`.
+4. **Applied** to the web app (accent and primary colours, the tab and home-screen icons, the mark in the sidebar and top bar, the sign-in page, the agent and operator consoles), the website mockup and the docs site, and the profile picture and link image in `docs/brand/relay/`.
+5. **The other two directions are kept** (`docs/brand/seal/`, `docs/brand/signal/`, drawn by the same `make.py`), and the web app shows either with `?brand=seal` or `?brand=signal`, for this browser only, so they can be compared on the real product before the brand is final.
 
 ## Alternatives considered
 

@@ -10,15 +10,22 @@
   --muted: #62665f;
   --border: #ecece8;
   --border-strong: #deded8;
-  /* Taskiem's colours (decision 0043): pine, and lime on dark. */
-  --accent: #0d3b2e;
-  --accent-hover: #164a3b;
+  /* Taskiem's colours (decision 0043): relay's pine, and lime on dark.
+     Seal and signal, kept to experiment with, set the same --brand-*
+     below (data-brand, brand.ts). */
+  --brand: #0d3b2e;
+  --brand-hover: #164a3b;
+  --brand-dark: #c8f169;
+  --brand-dark-hover: #d6f58a;
+  --brand-dark-text: #0d3b2e;
+  --accent: var(--brand);
+  --accent-hover: var(--brand-hover);
   --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
   --accent-text: #ffffff;
   /* Buttons that do the page's main thing: near-black in the console, the
      partner's colour in the embedded builder (embed.css). */
-  --primary: #0d3b2e;
-  --primary-hover: #164a3b;
+  --primary: var(--brand);
+  --primary-hover: var(--brand-hover);
   --primary-text: #ffffff;
   --danger: #c4321f;
   --warn: #b45309;
@@ -41,17 +48,23 @@
 }
 :root[data-theme="dark"] {
   --bg: #0d0e0c; --panel: #151614; --panel-2: #1a1b19; --text: #ededea; --muted: #9a9d95;
-  --border: #262724; --border-strong: #34362f; --accent: #c8f169; --accent-hover: #d6f58a; --accent-text: #0d3b2e;
+  --border: #262724; --border-strong: #34362f; --accent: var(--brand-dark); --accent-hover: var(--brand-dark-hover); --accent-text: var(--brand-dark-text);
   --primary: #ededea; --primary-hover: #ffffff; --primary-text: #0e0f0c;
   --danger: #f97066; --warn: #fdb022; --ok: #47cd89; --info: #84adff; --code-bg: #1c1d1a;
   --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
   --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
+:root[data-brand="seal"] {
+  --brand: #1f2a6b; --brand-hover: #2a3784; --brand-dark: #ff8a65; --brand-dark-hover: #ffa486; --brand-dark-text: #1a0d08;
+}
+:root[data-brand="signal"] {
+  --brand: #121212; --brand-hover: #2b2b2b; --brand-dark: #ffb21e; --brand-dark-hover: #ffc552; --brand-dark-text: #121212;
+}
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
     --bg: #0d0e0c; --panel: #151614; --panel-2: #1a1b19; --text: #ededea; --muted: #9a9d95;
-    --border: #262724; --border-strong: #34362f; --accent: #c8f169; --accent-hover: #d6f58a; --accent-text: #0d3b2e;
+    --border: #262724; --border-strong: #34362f; --accent: var(--brand-dark); --accent-hover: var(--brand-dark-hover); --accent-text: var(--brand-dark-text);
     --primary: #ededea; --primary-hover: #ffffff; --primary-text: #0e0f0c;
     --danger: #f97066; --warn: #fdb022; --ok: #47cd89; --info: #84adff; --code-bg: #1c1d1a;
     --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
@@ -272,8 +285,10 @@ body:has(.login) { background: var(--bg); min-height: 100vh; }
 .login { max-width: 400px; margin: 12vh auto; padding: 32px 32px 28px; border-radius: 16px; box-shadow: var(--shadow-lg); border-color: var(--border); }
 .login::before {
   content: ""; display: block; width: 40px; height: 40px; margin-bottom: 20px;
-  background: url("/brand/taskiem-mark.svg") center / contain no-repeat;
+  background: url("/brand/relay/mark.svg") center / contain no-repeat;
 }
+:root[data-brand="seal"] .login::before { background-image: url("/brand/seal/mark.svg"); }
+:root[data-brand="signal"] .login::before { background-image: url("/brand/signal/mark.svg"); }
 .login h1 { font-size: 22px; margin-bottom: 22px; }
 .login button.primary, .login button[type="submit"] { min-height: 40px; width: 100%; }
 .login p a { display: inline-block; padding: 4px 0; }

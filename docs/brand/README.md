@@ -2,25 +2,39 @@
 
 Taskiem's look ([decision 0043](../decisions/0043-taskiem-brand.md)): a "t" whose foot hands the work on to a dot, in pine and lime.
 
-## The mark and the wordmark
+## Three brands, one in use
+
+Three directions were drawn; relay is Taskiem's brand, and the other two are kept, with their files and colours, so they can be tried again:
+
+| Folder | Direction |
+| --- | --- |
+| `relay/` | **The brand.** A lime "t" on pine whose foot hands the work on to a white dot; "taskiem" in pine |
+| `seal/` | A vermilion round stamp with a tilted T; "Taskiem" in ink blue |
+| `signal/` | A white "t" and a saffron square on ink; "taskiem" with a saffron square for the i's dot |
+
+To see the web app in another one, add `?brand=seal` (or `signal`, or `relay` to go back) to any address. The browser remembers it; nothing changes for anyone else. The colours are in `web/src/styles.css` (`--brand`, under `data-brand`), the switch in `web/src/brand.ts`.
+
+## The files
+
+Each folder holds the same files:
 
 | File | Use |
 | --- | --- |
-| `taskiem-mark.svg` | The mark: a lime "t" on pine, handing on to a white dot. App icons, the sign-in page, anywhere the name is not beside it |
-| `taskiem-mark-small.svg` | The mark for 16 to 24 px (browser tabs): thicker strokes, no dot |
-| `taskiem-mark-reversed.svg` | On pine: a pine "t" on lime |
-| `taskiem-mark-mono.svg` | One colour, for print in black |
-| `taskiem-avatar.svg`, `taskiem-whatsapp-profile.png` | Square, for a round crop: the WhatsApp and Telegram profile pictures |
-| `taskiem-wordmark.svg` | "taskiem", lower case, in pine. Beside the mark, the gap is half the mark's width |
-| `taskiem-wordmark-reversed.svg` | White, on pine |
-| `taskiem-wordmark-mono.svg` | Black, for print |
-| `taskiem-og.png` | The picture a shared link shows (1200 × 630) |
+| `mark.svg` | The mark: app icons, the sign-in page, the app's sidebar, anywhere the name is not beside it |
+| `mark-small.svg` | The mark for 16 to 24 px (browser tabs): simplified and thicker |
+| `mark-reversed.svg` | On the brand's dark colour |
+| `mark-mono.svg` | One colour, for print in black |
+| `avatar.svg`, `whatsapp-profile.png` | Square, for a round crop: the WhatsApp and Telegram profile pictures |
+| `wordmark.svg` | The name. Beside the mark, the gap is half the mark's width |
+| `wordmark-reversed.svg` | White, on the brand's dark colour |
+| `wordmark-mono.svg` | Black, for print |
+| `og.png` | The picture a shared link shows (1200 × 630) |
 
-The wordmark's letters are outlines of Plus Jakarta Sans ExtraBold (SIL Open Font License), so it looks the same everywhere without the font. `make.py` draws every SVG from the font; rerun it rather than editing them by hand. The PNGs are the SVGs rendered at size.
+The wordmarks' letters are outlines of Plus Jakarta Sans ExtraBold (SIL Open Font License), so they look the same everywhere without the font. `make.py` draws every SVG from the font, all three brands at once; change it and rerun it rather than editing the files by hand. The PNGs are the SVGs rendered at size.
 
-The web app serves its copies from `web/public/brand/` (the tab icon, the phone home-screen icon, the mark).
+The web app serves its copies from `web/public/brand/<brand>/` (the tab icon, the phone home-screen icon, the mark, the wordmark).
 
-## Colours
+## Relay's colours
 
 | Name | Hex | Use |
 | --- | --- | --- |
