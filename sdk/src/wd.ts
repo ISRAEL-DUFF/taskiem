@@ -45,6 +45,15 @@ export interface ConnectorStep extends StepBase {
   compensate?: { action: string; input?: Values };
 }
 
+/** A capability done by whichever rail the connection is (docs/contracts/wd-v1.md, capability steps). */
+export interface CapabilityStep extends StepBase {
+  type: "capability";
+  uses: string;
+  connection?: string;
+  input?: Values;
+  effect?: { idempotency_seed?: Expression };
+}
+
 export interface CodeStep extends StepBase {
   type: "code";
   input?: Values;
@@ -170,7 +179,7 @@ export interface AiStep extends StepBase {
 }
 
 export type Step =
-  | ConnectorStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
+  | ConnectorStep | CapabilityStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
   | WaitStep | SignalStep | ApprovalStep | FormStep | SubflowStep | TransformStep | AiStep;
 
 export type StepType = Step["type"];

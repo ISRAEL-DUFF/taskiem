@@ -57,6 +57,7 @@ type forkPlan struct {
 	env        map[string]any
 	failedStep string
 	lastSeq    int64
+	expansion  []byte // the failed run's, kept
 	replays    []replayRow
 }
 
@@ -89,7 +90,7 @@ func (s *Store) planFork(ctx context.Context, tx pgx.Tx, tenant, parent uuid.UUI
 	if run.status != "failed" {
 		return nil, &NotResumableError{Reason: fmt.Sprintf("run %s is %s; only failed runs are resumed", parent, run.status)}
 	}
-	fp := &forkPlan{parent: parent}
+	fp := &forkPlan{parent: parent, expansion: run.expansion}
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(idempotency_seed, id::text) FROM runs WHERE id = $1`, parent).Scan(&fp.seed); err != nil {
 		return nil, err
 	}

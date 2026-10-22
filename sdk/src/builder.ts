@@ -126,6 +126,17 @@ export function connector(ref: `${string}@${number}`, action: string, input?: ob
   return { type: "connector", connector: ref, action, ...(input === undefined ? {} : { input }), ...extra };
 }
 
+export interface CapabilityExtra {
+  /** The connection to use; by default the only one whose rail can do it. */
+  connection?: string;
+  effect?: { idempotency_seed?: Expr };
+}
+
+/** A capability step: pay_bank, await_settlement…, done by the connection's rail. */
+export function capability(uses: string, input?: object, extra?: CapabilityExtra): StepSpec {
+  return { type: "capability", uses, ...(input === undefined ? {} : { input }), ...extra };
+}
+
 export interface HttpConfig {
   method: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
   url: Val<string>;
@@ -314,7 +325,7 @@ export function workflow(options: WorkflowOptions): Workflow {
 
 // Key order of a built step, so the JSON committed next to the code is
 // stable and reads in the order an author thinks.
-const STEP_KEYS = ["id", "name", "description", "type", "needs", "when", "connector", "action", "connection", "input", "effect", "compensate", "config", "retry", "timeout", "on_error"];
+const STEP_KEYS = ["id", "name", "description", "type", "needs", "when", "connector", "action", "uses", "connection", "input", "effect", "compensate", "config", "retry", "timeout", "on_error"];
 
 function buildStep(id: string, spec: StepSpec, opts: StepOptions, path: string): Step {
   const raw: Record<string, unknown> = { id, ...spec };

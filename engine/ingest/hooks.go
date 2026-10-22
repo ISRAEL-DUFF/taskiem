@@ -504,6 +504,10 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 		h.suspended(w, r, tenant)
 		return
 	}
+	if ce := (*runtime.CapabilityError)(nil); errors.As(err, &ce) {
+		replyErr(w, http.StatusConflict, ce.Error())
+		return
+	}
 	if err != nil {
 		h.unavailable(w, r, err)
 		return

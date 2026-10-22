@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 	"github.com/israel-duff/taskiem/schemas"
 )
@@ -155,6 +156,28 @@ func EventNames() []string {
 // PayoutEvents are the events that settle a payout.
 var PayoutEvents = []string{"payout.settled", "payout.failed", "payout.reversed"}
 
+// SignalName is the signal a rail's normalised event is delivered to runs
+// as (engine/ingest), correlated on the event's Correlation field:
+// paystack@1:payout.settled. Trigger names have no dot, so it never meets
+// a trigger's own signal (paystack@1:transfer_event).
+func SignalName(ref, event string) string { return ref + ":" + event }
+
+// EventTitle is a normalised event's title, or its name.
+func EventTitle(name string) string {
+	if e, ok := events[name]; ok {
+		return e.Title
+	}
+	return name
+}
+
+// WaitTitle names await_settlement and await_reversal for people.
+func WaitTitle(uses string) string {
+	if uses == "await_reversal" {
+		return "Watch for the payout coming back"
+	}
+	return "Wait for the payout to settle"
+}
+
 // Allows reports whether an action of class c may stand for the capability.
 func (s *Spec) Allows(c effects.Class) bool { return slices.Contains(s.Classes, c) }
 
@@ -269,6 +292,36 @@ func (s *Spec) WithDefaults(input map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// MappingEngine evaluates a rail's capability mappings (connector/v1 rule
+// 16): expressions over input, output and steps.
+var MappingEngine = expr.MustNewWithRoots("input", "output", "steps")
+
+// ResolveMapping evaluates a capability mapping (an expanded step's input
+// or output mapping, wd-v1 capability steps) over input, output and steps;
+// fields that come out null are left out.
+func ResolveMapping(mp map[string]any, input, output any, steps map[string]any) (map[string]any, error) {
+	if steps == nil {
+		steps = map[string]any{}
+	}
+	act := map[string]any{"input": input, "output": output, "steps": steps}
+	out := make(map[string]any, len(mp))
+	keys := make([]string, 0, len(mp))
+	for k := range mp {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v, err := MappingEngine.Resolve(mp[k], act, false)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", k, err)
+		}
+		if v != nil {
+			out[k] = v
+		}
+	}
+	return out, nil
 }
 
 // String names the capability for messages.

@@ -113,6 +113,9 @@ func (s *Store) connectorPIIPaths(ctx context.Context, tenant uuid.UUID, p histo
 		}
 		out = append(out, pii.Path{Segments: append([]string{"input"}, connector.InputPIIPath(f.Field)...), Category: piiCategory(f.Category)})
 	}
+	if p.Capability != nil {
+		out = append(out, capabilityInputPaths(p.Capability.Uses)...)
+	}
 	return out, nil
 }
 

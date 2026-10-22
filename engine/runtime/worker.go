@@ -557,10 +557,11 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		var version int
 		var runSeed string // a fork's inherited seed (fork.go)
 		var dbNow time.Time
-		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp() FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow); err != nil {
+		var digest []byte
+		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp(), expansion FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow, &digest); err != nil {
 			return err
 		}
-		def, err := w.Store.definition(ctx, tx, wfID, version)
+		def, err := w.Store.runDefinition(ctx, tx, wfID, version, digest)
 		if err != nil {
 			return err
 		}
@@ -899,6 +900,8 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 				return err
 			}
 		}
+		proj := result.Type == history.StepCompleted && projected(p)
+		*result = project(p, *result)
 		var payload any = result.Payload
 		if w.Store.PII != nil {
 			// Personal data in what the provider returned is sealed before it
@@ -910,7 +913,10 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 			}
 			redactText(v, p.taint)
 			var paths []pii.Path
-			if result.Type == history.StepCompleted {
+			switch {
+			case result.Type == history.StepCompleted && proj:
+				paths = capabilityOutputPaths(p)
+			case result.Type == history.StepCompleted:
 				paths = outputPIIPaths(p.conn, p.action) // what the manifest declares personal
 			}
 			if v, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, paths, p.taint); err != nil {

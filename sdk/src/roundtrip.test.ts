@@ -102,6 +102,21 @@ describe("round trip edge cases", () => {
     expect(sdk.generate(base([{ id: "p", type: "connector", connector: "paystack@1", action: "transfer", input: {} }]), opts)).toContain("paystack.transfer({})");
   });
 
+  it("writes capability steps with their helpers, and back", () => {
+    const def = base([
+      { id: "pay", type: "capability", uses: "pay_bank", connection: "rail",
+        input: { amount_kobo: 500000, bank_code: "058", account_number: "0123456789", account_name: "Bola Ade", narration: "Salary" },
+        effect: { idempotency_seed: "=run.id" } },
+      { id: "settle", type: "capability", uses: "await_settlement", needs: ["pay"], timeout: "72h", input: { payout_id: "=steps.pay.output.payout_id" } },
+      { id: "other", type: "capability", uses: "pay_moon", input: { a: 1 } },
+    ]);
+    const code = sdk.generate(def, opts);
+    expect(code).toContain("pay.bank({");
+    expect(code).toContain("waitFor.settlement({");
+    expect(code).toContain(`capability("pay_moon"`);
+    expect(evaluate(code)).toEqual(def);
+  });
+
   it("types numbers in code by value, so bundling cannot change them", () => {
     // What esbuild prints for 100000 and 2.0.
     expect(sdk.compileFunction("({ trigger }) => trigger.body.amount > 1e5")).toBe("trigger.body.amount > 100000");

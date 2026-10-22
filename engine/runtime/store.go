@@ -22,6 +22,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/decide"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -148,6 +149,21 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 				req.Env = map[string]any{}
 			}
 		}
+		// Capability steps run as the rails the environment's connections
+		// are, pinned now so the run never changes rail; a fork keeps the
+		// failed run's.
+		var digest []byte
+		switch {
+		case fork != nil && len(fork.expansion) > 0:
+			digest = fork.expansion
+			if def, err = s.runDefinition(ctx, tx, req.WorkflowID, req.Version, digest); err != nil {
+				return err
+			}
+		case fork == nil && expansion.Has(def):
+			if digest, def, _, err = s.Expand(ctx, tx, req.TenantID, req.WorkflowID, req.Version, req.Environment); err != nil {
+				return err
+			}
+		}
 		if req.DedupKey != "" {
 			tag, err := tx.Exec(ctx, `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
 				req.TenantID, req.TriggerID, req.DedupKey, ref.ID)
@@ -182,8 +198,8 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 			}
 		}
 		var startedAt time.Time
-		if err := tx.QueryRow(ctx, `INSERT INTO runs (id, tenant_id, workflow_id, version, environment, started_at, started_by) VALUES ($1, $2, $3, $4, $5, now(), NULLIF($6, '')) RETURNING started_at`,
-			ref.ID, req.TenantID, req.WorkflowID, req.Version, req.Environment, req.StartedBy).Scan(&startedAt); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO runs (id, tenant_id, workflow_id, version, environment, started_at, started_by, expansion) VALUES ($1, $2, $3, $4, $5, now(), NULLIF($6, ''), $7) RETURNING started_at`,
+			ref.ID, req.TenantID, req.WorkflowID, req.Version, req.Environment, req.StartedBy, digest).Scan(&startedAt); err != nil {
 			return err
 		}
 		if fork != nil {
@@ -345,13 +361,14 @@ type runRow struct {
 	version    int
 	status     string
 	env        string
-	forked     bool // continues a failed run (fork.go)
+	forked     bool   // continues a failed run (fork.go)
+	expansion  []byte // the expansion it runs, for a version with capability steps
 }
 
 func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 	r := runRow{ref: RunRef{ID: id}}
-	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment, parent_run_id IS NOT NULL FROM runs WHERE id = $1 FOR UPDATE`, id).
-		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env, &r.forked)
+	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment, parent_run_id IS NOT NULL, expansion FROM runs WHERE id = $1 FOR UPDATE`, id).
+		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env, &r.forked, &r.expansion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, fmt.Errorf("run %s: %w", id, ErrNotFound)
 	}
@@ -411,7 +428,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 	if err != nil {
 		return err
 	}
-	def, err := s.definition(ctx, tx, run.workflowID, run.version)
+	def, err := s.runDefinition(ctx, tx, run.workflowID, run.version, run.expansion)
 	if err != nil {
 		return err
 	}
@@ -999,7 +1016,7 @@ func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string) error {
 		if _, err := appendEvent(ctx, tx, ref.ID, history.RunCancelled, "", 0, map[string]any{"by": by}, history.OriginAPI); err != nil {
 			return err
 		}
-		def, err := s.definition(ctx, tx, run.workflowID, run.version)
+		def, err := s.runDefinition(ctx, tx, run.workflowID, run.version, run.expansion)
 		if err != nil {
 			return err
 		}

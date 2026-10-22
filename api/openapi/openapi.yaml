@@ -4219,6 +4219,58 @@ paths:
                 $ref: '#/components/schemas/ConnectorList'
         default:
           $ref: '#/components/responses/Error'
+  /v1/capabilities:
+    get:
+      operationId: listCapabilities
+      tags:
+      - Connectors
+      summary: List capabilities
+      description: 'What rails can do in Taskiem''s words (schemas/capabilities-v1.json), with await_settlement and await_reversal, and the rails the tenant can use for each: what a capability step may use.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: Capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - capabilities
+                properties:
+                  capabilities:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - name
+                      - title
+                      - input
+                      - rails
+                      properties:
+                        name:
+                          type: string
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        input:
+                          type: object
+                          description: The capability's input schema.
+                        output:
+                          type: object
+                          description: The capability's output schema, the same on every rail.
+                        rails:
+                          type: array
+                          items:
+                            type: string
+                          description: Connectors (id@major) the tenant can use that can do it.
+                      additionalProperties: false
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
   /v1/dashboard:
     get:
       operationId: dashboard

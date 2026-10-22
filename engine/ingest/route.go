@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -94,6 +95,11 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		}
 		out["signalled"], out["duplicate"] = len(woke), !fresh
 	}
+	if n, ok := h.deliverNormalised(ctx, w, r, t, ev); !ok {
+		return nil, false
+	} else if n > 0 {
+		out["normalised"] = n
+	}
 	runs := []uuid.UUID{}
 	for _, s := range t.subs {
 		if (len(s.events) > 0 || ev.test) && !slices.Contains(s.events, ev.event) {
@@ -127,6 +133,14 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		if errors.Is(err, runtime.ErrTenantSuspended) {
 			h.suspended(w, r, t.tenant)
 			return nil, false
+		}
+		if ce := (*runtime.CapabilityError)(nil); errors.As(err, &ce) {
+			// A capability step this environment's connections cannot
+			// run: a retry would not help, so the provider is not asked
+			// for one.
+			h.Logger.Warn("event not started: capability", "tenant", t.tenant, "workflow", s.workflow, "env", ev.env, "err", ce.Error())
+			out["refused"] = append(asList(out["refused"]), ce.Error())
+			continue
 		}
 		if err != nil {
 			h.unavailable(w, r, err)
@@ -240,4 +254,39 @@ func (h *Handler) routeEvent(ctx context.Context, w http.ResponseWriter, r *http
 		n++
 	}
 	return n, true
+}
+
+// deliverNormalised delivers the rail's normalised event for a delivery
+// (connector/v1 rule 16), if it is one, to runs waiting on it: an
+// await_settlement waits on paystack@1:payout.settled correlated on the
+// payout_id, whichever rail it is. It reports the runs it woke.
+func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, r *http.Request, t target, ev eventItem) (int, bool) {
+	if ev.conn == nil || len(ev.conn.Manifest.Events) == 0 || ev.test {
+		return 0, true
+	}
+	act := map[string]any{"body": ev.body, "headers": map[string]any{}, "query": map[string]any{}, "item": ev.item}
+	name, fields, err := ev.conn.Manifest.EventOf(ev.name, act)
+	if err != nil {
+		return 0, true // none, or a delivery its mapping cannot read: the trigger's own signal went out
+	}
+	spec, ok := capability.GetEvent(name)
+	if !ok {
+		return 0, true
+	}
+	corr := fmt.Sprint(fields[spec.Correlation])
+	if fields[spec.Correlation] == nil || corr == "" {
+		return 0, true
+	}
+	woke, _, err := h.Store.DeliverSignalOnce(ctx, t.tenant, ev.env, capability.SignalName(ev.ref, name), corr, ev.dedup+":"+name,
+		map[string]any{"event": name, "fields": fields})
+	if err != nil {
+		h.unavailable(w, r, err)
+		return 0, false
+	}
+	return len(woke), true
+}
+
+func asList(v any) []string {
+	l, _ := v.([]string)
+	return l
 }

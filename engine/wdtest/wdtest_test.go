@@ -157,3 +157,25 @@ func TestForms(t *testing.T) {
 		t.Errorf("trigger body: %v", r.Failures)
 	}
 }
+
+// A capability step is mocked by its id, as the rail's step would answer
+// once mapped: the capability's output.
+func TestCapabilityStepsAreMocked(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_c","version":1,"name":"c","trigger":{"type":"manual"},"steps":[
+	  {"id":"pay","type":"capability","uses":"pay_bank","input":{"amount_kobo":"=trigger.kobo","bank_code":"058","account_number":"0123456789","account_name":"Bola Ade","narration":"Salary"}},
+	  {"id":"settle","type":"capability","uses":"await_settlement","needs":["pay"],"timeout":"72h","when":"=steps.pay.output.status == 'pending'","input":{"payout_id":"=steps.pay.output.payout_id"}},
+	  {"id":"done","type":"transform","needs":["settle"],"config":{"output":"=steps.settle.output.status"}}]}`
+	def, err := wd.Load([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := wdtest.RunCase(def, registry(t), nil, wdtest.Case{Name: "settles", Trigger: map[string]any{"kobo": 500000},
+		Mocks: map[string]wdtest.Mocks{
+			"pay":    {{Output: map[string]any{"payout_id": "p1", "status": "pending"}}},
+			"settle": {{Output: map[string]any{"status": "settled"}}},
+		},
+		Expect: wdtest.Expect{Status: "completed", Outputs: map[string]any{"done": "settled"}}})
+	if !r.Passed() {
+		t.Errorf("%v\n%v", r.Failures, r.Trace)
+	}
+}

@@ -70,6 +70,13 @@ func check(doc []byte, reg connector.Lookup) []Problem {
 				case st.Compensate != nil && !hasAction(c, st.Compensate.Action):
 					out = append(out, pr(path+"/compensate", fmt.Sprintf("connector %q has no action %q", st.Connector, st.Compensate.Action)))
 				}
+				if st.Capability != nil {
+					out = append(out, pr(path+"/capability", "set when a capability step is expanded; write a capability step instead"))
+				}
+			case "capability":
+				if !wd.IsWait(st.Uses) && !anyRail(reg, st.Uses) {
+					out = append(out, pr(path, fmt.Sprintf("no rail Taskiem connects to can %s yet", st.Uses)))
+				}
 			case "code":
 				if st.Code != nil {
 					if _, err := sandbox.Compile(st.Code.Source, st.Code.Language); err != nil {
@@ -92,4 +99,14 @@ func check(doc []byte, reg connector.Lookup) []Problem {
 func hasAction(c *connector.Connector, action string) bool {
 	_, ok := c.Manifest.Actions[action]
 	return ok
+}
+
+// anyRail reports whether a rail the platform has declares the capability.
+func anyRail(reg connector.Lookup, uses string) bool {
+	for _, c := range reg.List() {
+		if _, ok := c.Manifest.Capabilities[uses]; ok && c.Manifest.KindOf() == "rail" {
+			return true
+		}
+	}
+	return false
 }
