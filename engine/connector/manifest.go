@@ -28,6 +28,8 @@ type Manifest struct {
 	Version  string `json:"version"`
 	Name     string `json:"name"`
 	Category string `json:"category"`
+	// Kind is rail, product or tool (decision 0044); empty is tool.
+	Kind string `json:"kind,omitempty"`
 	// Description is the manifest's own summary, shown to builders.
 	Description string                 `json:"description"`
 	Auth        Auth                   `json:"auth"`
@@ -280,6 +282,14 @@ func Parse(src []byte) (*Manifest, []string) {
 		return nil, probs
 	}
 	return &m, nil
+}
+
+// KindOf is the manifest's kind: rail, product or tool.
+func (m *Manifest) KindOf() string {
+	if m.Kind == "" {
+		return "tool"
+	}
+	return m.Kind
 }
 
 func (m *Manifest) check() []string {

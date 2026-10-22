@@ -14,6 +14,7 @@ version: 1.0.0
 name: OPay
 description: Cashier and bank-transfer collections, payment status, cancellation, refunds and payment callbacks on OPay merchant accounts (Nigeria).
 category: payments
+kind: rail
 regions: [NG]
 auth:
   type: api_key

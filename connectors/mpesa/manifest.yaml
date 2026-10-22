@@ -11,6 +11,7 @@ version: 1.0.0
 name: M-Pesa (Daraja)
 description: Safaricom M-Pesa through Daraja — STK push and query, C2B notifications, B2C payments, transaction status, account balance and reversals, with results as callbacks.
 category: payments
+kind: rail
 regions: [KE]
 auth:
   type: api_key

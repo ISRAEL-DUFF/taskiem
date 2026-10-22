@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffLines, newestPerMajor, writeLines, type CatalogueVersion } from "./catalogue";
+import { builtInByKind, diffLines, newestPerMajor, writeLines, type CatalogueVersion } from "./catalogue";
 
 const v = (version: string): CatalogueVersion => ({
   id: "p_acme_ledger",
@@ -41,5 +41,27 @@ describe("catalogue", () => {
     });
     expect(lines).toEqual(["New host: files.example.net", "New action that changes things: refund", "New action: get_statement", "No longer reaches: old.example.com"]);
     expect(diffLines({ from: "1.0.0", to: "1.0.1", needs_consent: false })).toEqual(["No change to hosts, actions or classes"]);
+  });
+});
+
+describe("builtInByKind", () => {
+  const cs = [
+    { id: "paystack", name: "Paystack", kind: "rail" as const, category: "payments", description: "Payments and transfers" },
+    { id: "iswallet", name: "iswallet", kind: "rail" as const, category: "payments", description: "Wallet-to-wallet transfers" },
+    { id: "googlesheets", name: "Google Sheets", kind: "tool" as const, category: "productivity" },
+    { id: "notify", name: "Tell me", category: "messaging" },
+    { id: "x_mine", name: "My own", kind: "tool" as const },
+    { id: "p_e2e_ledger", name: "Example ledger", kind: "tool" as const },
+  ];
+  it("groups Taskiem's own connectors by kind, by name, leaving out an organisation's own and installed ones", () => {
+    const g = builtInByKind(cs, "");
+    expect(g.rail.map((c) => c.id)).toEqual(["iswallet", "paystack"]);
+    expect(g.tool.map((c) => c.id)).toEqual(["googlesheets", "notify"]);
+    expect(g.product).toEqual([]);
+  });
+  it("finds by name, id, description or category", () => {
+    expect(builtInByKind(cs, "ISWALLET").rail.map((c) => c.id)).toEqual(["iswallet"]);
+    expect(builtInByKind(cs, "transfers").rail).toHaveLength(2);
+    expect(builtInByKind(cs, "productivity").tool.map((c) => c.id)).toEqual(["googlesheets"]);
   });
 });

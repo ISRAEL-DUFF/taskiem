@@ -8,6 +8,7 @@ version: 1.0.0
 name: Flutterwave
 description: Bank payouts, balances, name enquiry, fee quotes and payment verification on Flutterwave (API v3).
 category: payments
+kind: rail
 regions: [NG, GH, KE, ZA, UG, TZ, RW]
 auth:
   type: api_key

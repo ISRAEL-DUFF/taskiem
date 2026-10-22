@@ -151,7 +151,7 @@ The set is deliberately small. A capability is added when a second template need
 
 ### 4.2 Declaring capabilities in a rail's manifest
 
-A new optional `capabilities` block in `connector/v1` (schema `schemas/connector-v1.schema.json`, contract `docs/contracts/connector-v1.md`, new rule 15). Each entry names the rail action and maps the capability's input to it and the action's output back, with the same expression language steps use:
+A new optional `capabilities` block in `connector/v1` (schema `schemas/connector-v1.schema.json`, contract `docs/contracts/connector-v1.md`, new rule 16). Each entry names the rail action and maps the capability's input to it and the action's output back, with the same expression language steps use:
 
 ```yaml
 # connectors/iswallet/manifest.yaml
@@ -406,7 +406,7 @@ Docs: `docs/integrations/payrolla.md` is rewritten as the connector's page (Conn
 
 ### 6.3 App views: a product's interface inside Taskiem
 
-**Manifest** (new optional `views` block, schema and rule 16):
+**Manifest** (new optional `views` block, schema and rule 17):
 
 ```yaml
 views:
@@ -500,7 +500,7 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 **Build:**
 
 - `schemas/capabilities-v1.json`: the capability set of §4.1, inputs and outputs, `x-pii`, the normalised events.
-- `connector/v1`: the `capabilities` and `events` blocks (§4.2), composite `steps`, `settles_by`; schema, contract rule 15, validation in `engine/connector`, `taskiem validate`.
+- `connector/v1`: the `capabilities` and `events` blocks (§4.2), composite `steps`, `settles_by`; schema, contract rule 16, validation in `engine/connector`, `taskiem validate`.
 - Capability blocks for Paystack, iswallet, Moniepoint, Flutterwave and Anchor (R0-5), then Lenco, Remita, Interswitch, MTN MoMo, OPay as §4.7 says.
 - The connector gaps of §4.7 that these need (Paystack OTP warning).
 - `engine/conntest`: a capability conformance suite: each declared capability is replayed against the rail's fixtures and its output checked against the capability schema; normalised events produced from recorded webhooks.
@@ -549,7 +549,7 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 
 ### R6: App views (L; needs R0-3)
 
-**Build:** the `views` manifest block and rule 16; the per-tenant `frame-src` (§6.3); the view panel on the connection page, "Open in …" on run pages and the approval inbox, the `view` step or action field; postMessage handling (declared origins and events only, able to complete a waiting step); the new-tab fallback; chat links; Payrolla's views.
+**Build:** the `views` manifest block and rule 17; the per-tenant `frame-src` (§6.3); the view panel on the connection page, "Open in …" on run pages and the approval inbox, the `view` step or action field; postMessage handling (declared origins and events only, able to complete a waiting step); the new-tab fallback; chat links; Payrolla's views.
 
 **Done when:** a business opens a payroll in Payrolla inside Taskiem; no origin outside a connected product's views can be framed (test); a forged postMessage from another origin or for an undeclared event is ignored (test); a product that forbids framing opens in a new tab.
 

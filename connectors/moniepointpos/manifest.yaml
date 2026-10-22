@@ -13,6 +13,7 @@ version: 1.0.0
 name: Moniepoint POS terminals
 description: Every transaction on your Moniepoint POS terminals as it happens (card purchases, transfers to the terminal, withdrawals, bill payments), and payment requests sent to a terminal.
 category: payments
+kind: rail
 regions: [NG]
 auth:
   type: api_key

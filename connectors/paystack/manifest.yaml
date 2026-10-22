@@ -5,6 +5,7 @@ id: paystack
 version: 1.0.0
 name: Paystack
 category: payments
+kind: rail
 regions: [NG, GH, KE, ZA, CI]
 auth:
   type: api_key

@@ -328,6 +328,10 @@ export interface ConnectorInfo {
   id: string;
   version: string;
   name: string;
+  /** rail: moves money; product: runs a whole process itself; tool: anything else (decision 0044). */
+  kind?: "rail" | "product" | "tool";
+  category?: string;
+  description?: string;
   auth: {
     type: string;
     fields: AuthField[] | null;

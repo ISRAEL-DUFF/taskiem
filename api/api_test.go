@@ -344,8 +344,19 @@ func TestAdminAndErasure(t *testing.T) {
 	owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "fakepay@1", "name": "main", "credentials": map[string]string{}})
 	owner.must(409, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "fakepay@1", "name": "main", "credentials": map[string]string{}})
 	owner.must(400, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "nope@1", "credentials": map[string]string{}})
-	if n := len(owner.must(200, "GET", "/v1/connectors", nil)["connectors"].([]any)); n == 0 {
+	listed := owner.must(200, "GET", "/v1/connectors", nil)["connectors"].([]any)
+	if len(listed) == 0 {
 		t.Error("no connectors listed")
+	}
+	// Each says what kind it is, for the catalogue (decision 0044).
+	for _, x := range listed {
+		c := x.(map[string]any)
+		if k := c["kind"]; k != "rail" && k != "product" && k != "tool" {
+			t.Errorf("%v: kind %v", c["ref"], k)
+		}
+		if c["id"] == "paystack" && c["kind"] != "rail" {
+			t.Errorf("paystack is a %v", c["kind"])
+		}
 	}
 
 	wf := publishFlow(t, owner, loanFlow)

@@ -14,6 +14,7 @@ version: 1.0.0
 name: Moniepoint (Monnify)
 description: Bank transfers, wallet balance, name enquiry, reserved (virtual) accounts, checkout and payment status on Monnify, Moniepoint's payment gateway.
 category: payments
+kind: rail
 regions: [NG]
 auth:
   type: api_key

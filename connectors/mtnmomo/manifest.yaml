@@ -11,6 +11,7 @@ version: 1.0.0
 name: MTN MoMo
 description: MTN Mobile Money Open API — request to pay, transfers (disbursement and remittance) with status, balance, account holder checks and callbacks, per country.
 category: payments
+kind: rail
 regions: [UG, GH, CI, ZM, CM, BJ, CG, SZ, GN, ZA, LR, SS, NG, RW]
 auth:
   type: api_key

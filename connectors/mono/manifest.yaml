@@ -9,6 +9,7 @@ version: 1.0.0
 name: Mono
 description: Bank account linking, account data (balance, transactions, statements, identity, income, creditworthiness), DirectPay and Direct Debit mandates.
 category: open_banking
+kind: rail
 regions: [NG]
 auth:
   type: api_key

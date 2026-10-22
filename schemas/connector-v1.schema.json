@@ -34,6 +34,10 @@
       "type": "string",
       "maxLength": 2000
     },
+    "kind": {
+      "description": "rail: moves money, and Taskiem builds products on it; product: runs a whole process itself, and Taskiem connects to it and works around it; tool: anything else. Default tool (decision 0044).",
+      "enum": ["rail", "product", "tool"]
+    },
     "category": {
       "enum": [
         "payments",

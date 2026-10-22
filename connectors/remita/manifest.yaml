@@ -11,6 +11,7 @@ version: 1.0.0
 name: Remita
 description: Remita invoices (RRR) and their status, payment notifications, and Funds Transfer single and bulk payments with status, bank list and name enquiry.
 category: payments
+kind: rail
 regions: [NG]
 auth:
   type: api_key

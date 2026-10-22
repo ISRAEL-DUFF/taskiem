@@ -16,6 +16,7 @@ version: 1.0.0
 name: OPay Business (terminals)
 description: Every transaction on your OPay business account as it happens, including your POS terminals; the balance; a terminal's day; payment requests sent to a terminal.
 category: payments
+kind: rail
 regions: [NG]
 auth:
   type: api_key
