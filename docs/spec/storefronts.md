@@ -204,7 +204,7 @@ Making an action installs a ready-made workflow from a template (the template li
    - with pay after acceptance, create a payment link (Paystack `transaction.initialize`, or Moniepoint/OPay equivalents) and send it. The order becomes `paid` on the provider's webhook (a connector event trigger the template wires).
 3. **On Decline or timeout:** message the customer, and set the order `declined`. A paid order is refunded ([6.4](#64-submissions-and-orders)).
 
-With pay when ordering, the workflow starts with the payment: it waits for the provider's confirmation (a signal step, as the Payrolla workflow waits for a payout's outcome) before the owner is asked.
+With pay when ordering, the workflow starts with the payment: it waits for the provider's confirmation (a signal step, as Run payroll waits for a payout's outcome) before the owner is asked.
 
 **Messages to customers** go by **SMS** (Termii, the business's registered sender ID where it has one, else the platform's), and also by **email** when the customer gave an address (through the platform's mail sender, from a no-reply address with the business's name and its reply-to). WhatsApp messages to customers are a later phase. In every case the customer can reach the business through the **chat on WhatsApp** button.
 

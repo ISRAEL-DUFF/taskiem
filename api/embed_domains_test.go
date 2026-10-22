@@ -24,7 +24,7 @@ func TestCustomDomainRecheck(t *testing.T) {
 	w := ssoWorld(t)
 	w.srv.EmbedDir = t.TempDir()
 	_ = os.WriteFile(filepath.Join(w.srv.EmbedDir, "taskiem.js"), []byte("//"), 0o600)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	setCapabilities(t, w, p.id, "custom_domains")
 	var mu sync.Mutex
 	var events []map[string]any
@@ -41,7 +41,7 @@ func TestCustomDomainRecheck(t *testing.T) {
 	// The app subscribes to nothing in particular: domain.unverified is
 	// sent to the domain's app all the same.
 	app, _ := p.app(t, map[string]any{"name": "web", "allowed_origins": []string{siteApp}, "webhook_url": hook.URL, "webhook_events": []string{"run.failed"}})
-	const host = "automations.payrolla.test"
+	const host = "automations.wagely.test"
 	domains := "/v1/partner/embed-apps/" + app + "/domains"
 	dom := p.key.must(201, "POST", domains, map[string]any{"domain": host})
 	record := "_taskiem-verify." + host

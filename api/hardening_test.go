@@ -242,8 +242,8 @@ func TestKeyOperationsNeedStepUp(t *testing.T) {
 func TestEmbedPreflightIsPaced(t *testing.T) {
 	w := newWorld(t)
 	w.srv.TrustProxy = true
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
-	const site = "https://app.payrolla.test"
+	p := w.partner(t, "Wagely", "owner@wagely.test")
+	const site = "https://app.wagely.test"
 	app, _ := p.app(t, map[string]any{"name": "web", "allowed_origins": []string{site}})
 	preflight := func(ip string) int {
 		req, _ := http.NewRequest(http.MethodOptions, w.base+"/v1/embed/"+app+"/workflows/"+uuid.NewString(), nil)

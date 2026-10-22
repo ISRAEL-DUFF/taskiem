@@ -27,10 +27,10 @@ async function call<T>(method: string, path: string, token: string, body?: unkno
 }
 
 const page = (appID: string) => `<!doctype html>
-<html><head><meta charset="utf-8"><title>Payrolla</title>
+<html><head><meta charset="utf-8"><title>Wagely</title>
 <script src="${taskiem}/embed/v1/taskiem.js"></script>
 </head><body>
-<h1>Payrolla</h1>
+<h1>Wagely</h1>
 <taskiem-builder id="builder" app="${appID}"></taskiem-builder>
 <iframe id="frame" title="Runs" src="${taskiem}/embed/${appID}/frame?view=runs" style="width:100%;height:640px;border:0"></iframe>
 <script>

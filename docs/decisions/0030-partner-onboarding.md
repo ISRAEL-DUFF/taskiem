@@ -2,7 +2,7 @@
 
 Date: 2026-10-14 · Status: Accepted
 
-Spec 13.1, 13.4. Builds on [0015](0015-embedding-tenancy.md) (sub-tenants, `taskiem_partner_enter`). The partner guide is [embedding.md](../embedding.md#14-people-in-a-sub-tenant); the Payrolla onboarding calls are in [the Payrolla guide](../integrations/payrolla.md#one-sub-tenant-per-company).
+Spec 13.1, 13.4. Builds on [0015](0015-embedding-tenancy.md) (sub-tenants, `taskiem_partner_enter`). The partner guide is [embedding.md](../embedding.md#14-people-in-a-sub-tenant); the Payrolla onboarding calls are in [the Payrolla guide](../integrations/archive/payrolla.md#one-sub-tenant-per-company).
 
 ## Context
 

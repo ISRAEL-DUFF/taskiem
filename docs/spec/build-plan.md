@@ -41,7 +41,7 @@ Phase 0 sets up the legal, technical, and process ground so that everything buil
 - **Schema v0.** Migrations for tenants, users, memberships, workflows, workflow versions, runs, run events (partitioned by run start), tasks (with `lease_epoch`), timers, trigger receipts, subject keys, audit log, and audit chain heads, with RLS enabled from day one and the `taskiem_dispatch` claim functions (spec 5.3) as the only cross-tenant path.
 - **Specs frozen for Phase 1.** `wd/v1` JSON Schema draft, `connector/v1` manifest schema draft, the action-class contract, and the idempotency key derivation and encoding contract (spec 4.4).
 - **Engine spike.** A throwaway prototype of `decide()` plus the `SKIP LOCKED` queue and dispatch functions, load-tested and profiled to validate the Postgres-as-queue choice before building on it.
-- **Dogfood selection.** Pick 3 real workflows from holdco products (for example, a Payrolla salary disbursement, an iSpend wallet top-up reconciliation, an ops alert) as the Phase 1 acceptance tests.
+- **Dogfood selection.** Pick 3 real workflows from holdco products (for example, a Payrolla salary disbursement, an iSpend wallet top-up reconciliation, an ops alert) as the Phase 1 acceptance tests. (The Payrolla salary disbursement was retired by [decision 0044](../decisions/0044-rails-and-products.md): its acceptance test is now [Run payroll](../templates.md)'s, `TestRunPayrollEndToEnd` and `e2e.TestCapabilityPayoutsOnIswalletEndToEnd`.)
 
 ### Exit gate G0
 

@@ -1,4 +1,7 @@
-# Payrolla integration guide
+# Payrolla integration guide (superseded)
+
+> **Superseded, kept for the record.** [Decision 0044](../../decisions/0044-rails-and-products.md) withdrew this guide: Payrolla pays its customers' staff itself, so Taskiem connects to Payrolla as a product (its webhooks, its API and its embeddable views) rather than paying for it. Nothing below is to be built. Payroll for a business without a payroll product is the [Run payroll](../../templates.md) template; the Payrolla connector is planned in [rails and products](../../spec/rails-and-products.md#62-payrolla1).
+
 
 **For:** Payrolla engineering  
 **From:** Taskiem  
@@ -366,7 +369,7 @@ Each Payrolla customer company is its own Taskiem tenant (a sub-tenant of Payrol
 
 ## One sub-tenant per company
 
-Each Payrolla customer company gets its own space in Taskiem, a **sub-tenant**: its own people, approvers, webhook URL and signing secret, report token and payrolls, kept apart from every other company and from Payrolla's own staff. Payrolla sets one up by API when the company turns Taskiem on; nobody at Taskiem has to do anything. The calls use Payrolla's partner API key from Payrolla's servers ([partner guide](../embedding.md#14-people-in-a-sub-tenant)).
+Each Payrolla customer company gets its own space in Taskiem, a **sub-tenant**: its own people, approvers, webhook URL and signing secret, report token and payrolls, kept apart from every other company and from Payrolla's own staff. Payrolla sets one up by API when the company turns Taskiem on; nobody at Taskiem has to do anything. The calls use Payrolla's partner API key from Payrolla's servers ([partner guide](../../embedding.md#14-people-in-a-sub-tenant)).
 
 **Once, in Payrolla's own Taskiem tenant:** keep the payroll workflow there and share it: `PUT /v1/partner/workflows/{wf}/share`.
 
@@ -387,7 +390,7 @@ Each Payrolla customer company gets its own space in Taskiem, a **sub-tenant**: 
 
 **Payroll size.** A sub-tenant accepts webhook bodies up to 1 MiB by default, and a 5,000-employee payroll is close to that. Ask Taskiem's operators to raise Payrolla's limit, then raise each company's with `PUT /v1/partner/sub-tenants/{id}/limits` (`{"max_payload_bytes": 2097152}`).
 
-**One Taskiem sub-tenant per company.** Payrolla's one iswallet key reaches every company's wallets, so each company's iswallet connection is provisioned with `"shared_client": "true"` and that company's own `wallet_ids`: Taskiem then refuses any payment from another company's wallet before it reaches iswallet. Payrolla's iswallet webhook subscription points at Payrolla's own tenant, and Taskiem delivers each event to the company whose connection lists its wallet. See [iswallet: one client shared by many customers](iswallet.md#one-client-shared-by-many-customers).
+**One Taskiem sub-tenant per company.** Payrolla's one iswallet key reaches every company's wallets, so each company's iswallet connection is provisioned with `"shared_client": "true"` and that company's own `wallet_ids`: Taskiem then refuses any payment from another company's wallet before it reaches iswallet. Payrolla's iswallet webhook subscription points at Payrolla's own tenant, and Taskiem delivers each event to the company whose connection lists its wallet. See [iswallet: one client shared by many customers](../iswallet.md#one-client-shared-by-many-customers).
 
 ## 4. Testing in the sandbox
 

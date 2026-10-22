@@ -21,7 +21,7 @@ func TestSharedClientConnections(t *testing.T) {
 	if err := w.env.Registry.Register(iswallet.New(iswallet.Options{})); err != nil {
 		t.Fatal(err)
 	}
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	acme := p.sub(t, "Acme", nil)
 	perms := []string{"workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"}
 	p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{"iswallet"}, "end_user_permissions": perms})
@@ -31,12 +31,12 @@ func TestSharedClientConnections(t *testing.T) {
 	}
 
 	// A shared client's key without wallets is refused, before anything is stored.
-	out := p.key.must(400, "POST", conns, conn(map[string]string{"api_key": "isw_payrolla", "shared_client": "true"}))
+	out := p.key.must(400, "POST", conns, conn(map[string]string{"api_key": "isw_wagely", "shared_client": "true"}))
 	if !strings.Contains(toJSON(out), "WALLET_ALLOW_LIST_MISSING") {
 		t.Errorf("refusal: %v", out)
 	}
-	p.key.must(400, "POST", conns, conn(map[string]string{"api_key": "isw_payrolla", "shared_client": "yes", "wallet_ids": "w_acme"}))
-	created := p.key.must(201, "POST", conns, conn(map[string]string{"api_key": "isw_payrolla", "shared_client": "true", "wallet_ids": "w_acme, w_acme_payroll"}))
+	p.key.must(400, "POST", conns, conn(map[string]string{"api_key": "isw_wagely", "shared_client": "yes", "wallet_ids": "w_acme"}))
+	created := p.key.must(201, "POST", conns, conn(map[string]string{"api_key": "isw_wagely", "shared_client": "true", "wallet_ids": "w_acme, w_acme_payroll"}))
 	id := created["id"].(string)
 
 	ctx := context.Background()
@@ -95,8 +95,8 @@ func TestSharedClientConnections(t *testing.T) {
 	}
 
 	// The tenant's own connections take the same checks.
-	p.owner.must(400, "POST", "/v1/connections", conn(map[string]string{"api_key": "isw_payrolla", "shared_client": "true"}))
-	p.owner.must(201, "POST", "/v1/connections", conn(map[string]string{"api_key": "isw_payrolla", "webhook_secret": "whsec", "wallet_ids": "w_funding"}))
+	p.owner.must(400, "POST", "/v1/connections", conn(map[string]string{"api_key": "isw_wagely", "shared_client": "true"}))
+	p.owner.must(201, "POST", "/v1/connections", conn(map[string]string{"api_key": "isw_wagely", "webhook_secret": "whsec", "wallet_ids": "w_funding"}))
 	var n int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM connection_route_keys WHERE tenant_id = $1 AND route_key = 'w_funding'`, pid).Scan(&n); err != nil || n != 1 {
 		t.Errorf("own wallets indexed: %d %v", n, err)

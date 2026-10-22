@@ -110,7 +110,7 @@ func auditCount(t *testing.T, w *world, tenant, action string) int {
 // users; the partner API reaches them, and every access is in both chains.
 func TestSubTenantIsolation(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	a, b := p.sub(t, "Customer A", nil), p.sub(t, "Customer B", nil)
 	if n := len(p.key.must(200, "GET", "/v1/partner/sub-tenants", nil)["sub_tenants"].([]any)); n != 2 {
 		t.Fatalf("partner lists %d sub-tenants", n)
@@ -175,11 +175,11 @@ func TestSubTenantIsolation(t *testing.T) {
 // permission subsets, and forged or altered tokens.
 func TestEndUserTokens(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
-	const site, site2 = "https://app.payrolla.test", "https://admin.payrolla.test"
+	const site, site2 = "https://app.wagely.test", "https://admin.wagely.test"
 	app, _ := p.app(t, map[string]any{"name": "web", "allowed_origins": []string{site, site2 + "/"}, "allowed_connectors": []string{"fakepay"},
-		"branding": map[string]any{"colours": map[string]string{"primary": "#0a7"}, "font_family": "Inter, sans-serif", "logo_url": "https://cdn.payrolla.test/logo.svg"}})
+		"branding": map[string]any{"colours": map[string]string{"primary": "#0a7"}, "font_family": "Inter, sans-serif", "logo_url": "https://cdn.wagely.test/logo.svg"}})
 	other, _ := p.app(t, map[string]any{"name": "other", "headless": true, "allowed_connectors": []string{}})
 
 	// Minting: ttl bounds, permissions within the app's, the ceiling.
@@ -202,8 +202,8 @@ func TestEndUserTokens(t *testing.T) {
 	mint(400, base(map[string]any{"origin": "https://evil.test"}))
 	mint(400, base(map[string]any{"end_user_id": "<script>"}))
 	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "headless": true, "end_user_permissions": []string{"member.manage"}})
-	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "allowed_origins": []string{"https://*.payrolla.test"}})
-	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "allowed_origins": []string{"http://payrolla.test"}})
+	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "allowed_origins": []string{"https://*.wagely.test"}})
+	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "allowed_origins": []string{"http://wagely.test"}})
 	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "allowed_origins": []string{site}, "branding": map[string]any{"logo_url": "javascript:alert(1)"}})
 	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "allowed_origins": []string{site}, "branding": map[string]any{"colours": map[string]string{"primary": "red;}"}}})
 	p.key.must(400, "POST", "/v1/partner/embed-apps", map[string]any{"name": "bad", "allowed_origins": []string{site}, "allowed_connectors": []string{"nope"}})
@@ -283,8 +283,8 @@ func flip(c byte) string {
 // CORS answers only an app's allowed origins, and only on the embed API.
 func TestEmbedCORS(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
-	const site = "https://app.payrolla.test"
+	p := w.partner(t, "Wagely", "owner@wagely.test")
+	const site = "https://app.wagely.test"
 	app, _ := p.app(t, map[string]any{"name": "web", "allowed_origins": []string{site}})
 	preflight := func(path, origin string) (int, http.Header) {
 		req, _ := http.NewRequest(http.MethodOptions, w.base+path, nil)
@@ -330,7 +330,7 @@ func TestEmbedCORS(t *testing.T) {
 // an end-user token, within the app's connectors and templates.
 func TestHeadlessFlow(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
 	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{}, "allowed_templates": []string{"payroll-reminder"},
 		"end_user_permissions": []string{"workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start", "run.cancel"}})
@@ -423,7 +423,7 @@ func TestHeadlessFlow(t *testing.T) {
 // wide caps hold across its sub-tenants.
 func TestSubTenantLimits(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	ctx := context.Background()
 	if err := w.env.Store.SetLimits(ctx, p.id, map[string]any{"max_workflows": 5, "runs_per_day": 100, "worker_concurrency": 4}, "test"); err != nil {
 		t.Fatal(err)
@@ -486,7 +486,7 @@ func TestSubTenantLimits(t *testing.T) {
 // Suspending a sub-tenant stops its tokens and sessions at once.
 func TestSubTenantSuspension(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
 	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{}})
 	u := p.endUser(t, w, app, sub, "u", "", "workflow.read")
@@ -498,7 +498,7 @@ func TestSubTenantSuspension(t *testing.T) {
 		q    string
 		args []any
 	}{
-		{`INSERT INTO users (id, email) VALUES ($1, 'support@payrolla.test')`, []any{user}},
+		{`INSERT INTO users (id, email) VALUES ($1, 'support@wagely.test')`, []any{user}},
 		{`INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'viewer')`, []any{sub, user}},
 		{`INSERT INTO sessions (token_hash, user_id, tenant_id, expires_at, auth_method) VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now() + interval '1 hour', 'password')`, []any{tok, user, sub}},
 	} {
@@ -528,7 +528,7 @@ func TestSubTenantSuspension(t *testing.T) {
 // like alert webhooks, retried until delivered, and logged.
 func TestPartnerWebhooks(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", map[string]any{"runs_per_day": 1})
 	var mu sync.Mutex
 	var got []*http.Request

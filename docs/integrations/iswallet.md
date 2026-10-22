@@ -1,6 +1,6 @@
 # iswallet integration
 
-iswallet is iSpend's wallet platform and the payment provider for Payrolla and iSpend. The connector is `connectors/iswallet` (`iswallet@1`). It follows iswallet engineering's answers of 5 October 2026, kept verbatim in [iswallet-answers-2026-10-05.md](iswallet-answers-2026-10-05.md); section numbers below refer to that document. Their answers to Xenibase of 12 and 13 October 2026 ([iswallet-answers-2026-10-12-pgdock.md](iswallet-answers-2026-10-12-pgdock.md), cited as "Xenibase item N") describe the same API and brought a lookup by our key, the rate-limit headers and event details, all used below.
+iswallet is iSpend's wallet platform and a payment provider for the group's products (iSpend; Payrolla pays its customers' staff through it itself, and Taskiem connects to Payrolla as a product, [decision 0044](../decisions/0044-rails-and-products.md)). Through its capabilities (`pay_bank`, `pay_wallet`, `balance`, `resolve_account`, `get_payout`) it is one of the rails templates such as [Run payroll](../templates.md) run on. The connector is `connectors/iswallet` (`iswallet@1`). It follows iswallet engineering's answers of 5 October 2026, kept verbatim in [iswallet-answers-2026-10-05.md](iswallet-answers-2026-10-05.md); section numbers below refer to that document. Their answers to Xenibase of 12 and 13 October 2026 ([iswallet-answers-2026-10-12-pgdock.md](iswallet-answers-2026-10-12-pgdock.md), cited as "Xenibase item N") describe the same API and brought a lookup by our key, the rate-limit headers and event details, all used below.
 
 ## Actions
 
@@ -26,20 +26,20 @@ The idempotency key travels in the `Idempotency-Key` header (`tsk_` + 32 charact
 
 ## One client shared by many customers
 
-iswallet keys are client-scoped: a key reaches every wallet of its client (§A2). When one client serves several customers, as Payrolla's client serves every company on Payrolla, the key in one company's connection could move another company's money. Taskiem guards this in the connector ([decision 0031](../decisions/0031-shared-provider-clients.md)):
+iswallet keys are client-scoped: a key reaches every wallet of its client (§A2). When one client serves several customers, as a partner's one client may serve every company it works for, the key in one company's connection could move another company's money. Taskiem guards this in the connector ([decision 0031](../decisions/0031-shared-provider-clients.md)):
 
 - **The allow-list.** With `wallet_ids` set, `transfer` (`from_wallet_id`), `payout` (`wallet_id`) and `get_balance` (`wallet_id`) naming any other wallet fail the step as fatal with `WALLET_NOT_ALLOWED`, before any request is sent; `get_payout` withholds a payout debited from another wallet (also `WALLET_NOT_ALLOWED`). A transfer's destination is not limited, so a company can pay its employees' wallets. A compensating transfer back from an employee's wallet is refused unless that wallet is listed too; list it, or settle such a reversal by hand.
 - **Shared clients must list wallets.** `shared_client: true` with no `wallet_ids` is refused when the connection is saved or its credentials replaced (`WALLET_ALLOW_LIST_MISSING`), and, if one is stored anyway, every wallet call refuses with the same code. **A shared client's key is always provisioned with both fields.**
-- **Payrolla** provisions each company's sub-tenant connection through the partner API with its own key, `shared_client: "true"` and that company's wallets:
+- **The partner** provisions each company's sub-tenant connection through the partner API with its own key, `shared_client: "true"` and that company's wallets:
 
   ```http
   POST /v1/partner/sub-tenants/{sub}/connections
   {"environment": "prod", "connector": "iswallet@1", "name": "main",
-   "credentials": {"api_key": "<payrolla client key>", "shared_client": "true", "wallet_ids": "6f1e…,7a02…"}}
+   "credentials": {"api_key": "<partner client key>", "shared_client": "true", "wallet_ids": "6f1e…,7a02…"}}
   ```
 
   When a company opens or closes a wallet, replace the connection's credentials with the new list.
-- **Events.** iswallet subscriptions are per client (§E5), so every company's events reach one subscription. Point it at the **partner's own** tenant: an iswallet connection there holds `webhook_secret` (and, optionally, `wallet_ids` listing Payrolla's own wallets, such as the funding wallet). Each verified event is delivered there and then into every Payrolla sub-tenant whose connection lists the envelope's `wallet_id`, as if it had arrived at that sub-tenant's own URL: the same dedup, the same `outflow_id` correlation, the sub-tenant's own subscribed workflows. Events for a wallet no sub-tenant (and no Payrolla connection) lists are recorded, alerted (`event_unrouted`) and listed by `GET /v1/partner/event-routes?status=unrouted` ([embedding](../embedding.md#13-routing-provider-events-to-sub-tenants)).
+- **Events.** iswallet subscriptions are per client (§E5), so every company's events reach one subscription. Point it at the **partner's own** tenant: an iswallet connection there holds `webhook_secret` (and, optionally, `wallet_ids` listing the partner's own wallets, such as a funding wallet). Each verified event is delivered there and then into every one of the partner's sub-tenants whose connection lists the envelope's `wallet_id`, as if it had arrived at that sub-tenant's own URL: the same dedup, the same `outflow_id` correlation, the sub-tenant's own subscribed workflows. Events for a wallet no sub-tenant (and no connection of the partner's) lists are recorded, alerted (`event_unrouted`) and listed by `GET /v1/partner/event-routes?status=unrouted` ([embedding](../embedding.md#13-routing-provider-events-to-sub-tenants)).
 - `wallet.transfer.completed` fires once per side with each side's `wallet_id`, so a transfer between two companies reaches both, each its own side. The two share a `txn_id`, so the dedup key includes the wallet (Xenibase item 22).
 
 Wallet-scoped keys and per-wallet subscriptions at iswallet would add a second layer; they have been asked for (P4-W1 in [needs people](../needs-people.md#phase-4)) and the guard does not depend on them.
@@ -60,37 +60,37 @@ Repeats are dropped by movement, as iswallet advises (Xenibase items 22 and 24):
 
 iswallet's replay cache lasts 24 hours, after which a repeated key returns a 500 even though nothing moves (§0.2). Since 12 October iswallet also answers `GET /v1/requests/{idempotency_key}` (Xenibase item 25): the request recorded under our key, with its kind, `resource_id`, status and whether that status is final, or `404 IDEMPOTENCY_KEY_NOT_FOUND`, which iswallet guarantees means nothing was posted (the key is written in the same transaction as the first ledger entry). So:
 
-- **Within 24 hours of a key's first use**, a lost response or a 500 is an unknown outcome: Taskiem resends the same key and iswallet replays the original answer. Pinned by `e2e.TestPayrollaDisbursementEndToEnd`, which loses a transfer's response after the money moved.
+- **Within 24 hours of a key's first use**, a lost response or a 500 is an unknown outcome: Taskiem resends the same key and iswallet replays the original answer. Pinned by `e2e.TestCapabilityPayoutsOnIswalletEndToEnd`, which loses a payout's response after the money moved.
 - **After 23 hours** the connector looks the key up before sending anything. A recorded payout is answered from the record (its `outflow_id` and status; the bank's outcome follows as for any payout); a recorded transfer likewise, or, if not yet final, the step waits and asks again. A key iswallet has no record of is sent again, safely. A key recorded for a different kind of request parks the step for an operator. Workflows also cap write retries at 6 hours.
 - **`IDEMPOTENCY_KEY_REUSED`** parks the step too: the key was used before, so the payment may have happened.
 - A write whose retries run out after any unknown outcome **parks rather than fails**, because "failed" would invite someone to pay again (engine-wide since this integration).
 - `RATE_LIMITED`, `CUSTODY_UNAVAILABLE`, `SUBACCOUNT_SYNCING`, `LIQUIDITY_EXHAUSTED` and 503 are retried; on a 429 the next attempt waits until `X-RateLimit-Reset` (iswallet sends no `Retry-After`, Xenibase item 27); limits, insufficient funds, `OUTFLOW_REJECTED` and other 4xx fail the step with iswallet's code and request id.
-- A payout iswallet marks `unresolved` sends no event; the waiting step times out (72 hours in the Payrolla flow) and the run fails for an operator. `reversed` can arrive days after `confirmed`; the ops alert workflow listens for it, and the Payrolla flow keeps watching each confirmed payout's `outflow_id` after its report and sends Payrolla a reversal notice ([guide](payrolla.md#reversal-notices)).
+- A payout iswallet marks `unresolved` sends no event; the wait times out (72 hours in Run payroll's `await_settlement`), and the payment is reported as not confirmed. `reversed` can arrive days after `confirmed`; the ops alert workflow listens for it, and Run payroll's `await_reversal` watches each confirmed payout for 35 days and records a reversal.
 
 ## Workflows using it
 
-- `flows/dogfood/payrolla-salary-disbursement.wd.json`: transfers and payouts, waiting on `outflow_event` for confirmation and, after the report, for reversals.
+- `templates/library/run-payroll.json` on iswallet: bank payouts by capability, waiting on `outflow_event`'s normalised payout events for confirmation and then for reversals.
 - `flows/dogfood/ops-payout-failure-alert.wd.json`: `outflow_event` (failed, reversed).
 - `flows/dogfood/ispend-credit-exceptions.wd.json`: `credit_event` (rejected, reversed).
 
 ## Limits to plan for (§0.3, §A3)
 
-- A new wallet is TIER_1: ₦50,000 per transaction **and per day** for bank payouts. Upgrade the Payrolla funding wallet's KYC tier before the pilot. Wallet-to-wallet transfers are bound by the per-transaction limit only.
-- 100 requests a minute per API key, with no bulk endpoint: about 600 employees an hour for Payrolla, everything included. iswallet will raise the limit per client on request. Taskiem does not yet pace calls to a connector's rate limit; 429s wait for the window to reopen, and a resent idempotent request is answered from the replay cache without counting against the limit.
+- A new wallet is TIER_1: ₦50,000 per transaction **and per day** for bank payouts. Upgrade a funding wallet's KYC tier before paying a payroll from it. Wallet-to-wallet transfers are bound by the per-transaction limit only.
+- 100 requests a minute per API key, with no bulk endpoint: about 600 people an hour for a payroll, everything included. iswallet will raise the limit per client on request. Taskiem does not yet pace calls to a connector's rate limit; 429s wait for the window to reopen, and a resent idempotent request is answered from the replay cache without counting against the limit.
 
 ## Waiting on iswallet (their §H)
 
 1. ~~Lookup by idempotency key~~: shipped 12 October and used above.
 2. A typed duplicate error instead of the 500: now iswallet's top item.
-3. `Retry-After` on 429 (on their list; `X-RateLimit-Reset` is used meanwhile), and a higher rate limit for Payrolla.
+3. `Retry-After` on 429 (on their list; `X-RateLimit-Reset` is used meanwhile), and a higher rate limit for large payrolls.
 4. Bulk payouts with per-item outcomes.
-5. Structured metadata on transfers (today Payrolla's ids go in the narration).
+5. Structured metadata on transfers (today a payroll's ids go in the narration).
 6. A parked-credit signal for client keys (for an iSpend alert).
 
 ## Waiting on us
 
-Client names for the two API keys (`payrolla`, `ispend`), Payrolla's largest payroll (during its beta, 2 people and ₦3,000, which a TIER_1 wallet covers), sandbox provisioning parameters (employee wallets, funding; iswallet provisions a sandbox client in one call), Taskiem's webhook URLs per product, and our egress IPs (iswallet has no IP allow-list today; it wants them for incident forensics).
+Client names for the API keys (`ispend`, and one per product that pays through iswallet), the largest payroll expected (Payrolla's beta was 2 people and ₦3,000, which a TIER_1 wallet covers), sandbox provisioning parameters (employee wallets, funding; iswallet provisions a sandbox client in one call), Taskiem's webhook URLs per product, and our egress IPs (iswallet has no IP allow-list today; it wants them for incident forensics).
 
 ## Sandbox (Xenibase item 32)
 
-Sandbox-only simulators drive the real paths, so their webhooks match production's: `POST /v1/sandbox/simulate/deposit` (a bank transfer into a virtual account), `/simulate/outflow` (a payout ending confirmed, failed or reversed) and `/simulate/reversal` (a credit clawed back). Failed debits are the real refusals: overdraw for `INSUFFICIENT_FUNDS`, freeze the wallet for `WALLET_INACTIVE`, exceed the tier for the limit codes. A delayed webhook and an ambiguous timeout cannot be simulated at iswallet; Taskiem's suites exercise a lost response (`e2e.TestPayrollaDisbursementEndToEnd`) and the lookup after the replay window (`connectors/iswallet` tests). The sandbox is not reset and `owner_ref` is globally unique, so use a prefix per environment.
+Sandbox-only simulators drive the real paths, so their webhooks match production's: `POST /v1/sandbox/simulate/deposit` (a bank transfer into a virtual account), `/simulate/outflow` (a payout ending confirmed, failed or reversed) and `/simulate/reversal` (a credit clawed back). Failed debits are the real refusals: overdraw for `INSUFFICIENT_FUNDS`, freeze the wallet for `WALLET_INACTIVE`, exceed the tier for the limit codes. A delayed webhook and an ambiguous timeout cannot be simulated at iswallet; Taskiem's suites exercise a lost response (`e2e.TestCapabilityPayoutsOnIswalletEndToEnd`) and the lookup after the replay window (`connectors/iswallet` tests). The sandbox is not reset and `owner_ref` is globally unique, so use a prefix per environment.

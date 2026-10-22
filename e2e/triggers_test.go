@@ -3,7 +3,6 @@ package e2e
 import (
 	"bytes"
 	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"hash"
@@ -16,15 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
-	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/ingest"
-	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
-	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // stack is the API and the edge on one test server, over the harness engine.
@@ -119,216 +113,6 @@ func mac(h func() hash.Hash, key string, body []byte) string {
 	m := hmac.New(h, []byte(key))
 	m.Write(body)
 	return hex.EncodeToString(m.Sum(nil))
-}
-
-func TestPayrollaDisbursementEndToEnd(t *testing.T) {
-	isw := newFakeIswallet()
-	isw.balances["w_company"] = 900_000_000
-	isw.limit = 40_000_000 // ₦400,000 per transaction: Dayo's ₦450,000 is refused
-	// Ada's transfer reaches iswallet and moves money, but its response is
-	// lost as a 500: the retry must be answered from the replay cache.
-	iswallet := httptest.NewServer(isw)
-	defer iswallet.Close()
-	var mu sync.Mutex
-	var reports, notices []map[string]any
-	payrolla := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var in map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&in)
-		mu.Lock()
-		got := map[string]any{"path": r.URL.Path, "auth": r.Header.Get("Authorization"), "key": r.Header.Get("Idempotency-Key"), "body": in}
-		if strings.HasSuffix(r.URL.Path, "/reversal-notice") {
-			notices = append(notices, got)
-		} else {
-			reports = append(reports, got)
-		}
-		mu.Unlock()
-		_, _ = w.Write([]byte(`{"ok":true}`))
-	}))
-	defer payrolla.Close()
-
-	s := newStack(t, builtin.Options{IswalletURL: iswallet.URL})
-	anon := ""
-	tenant := s.must(t, 201, anon, "POST", "/v1/signup", map[string]any{"tenant": "Payrolla", "email": "ops@payrolla.test", "password": "correct horse battery"})["tenant_id"].(string)
-	owner := s.login(t, "ops@payrolla.test")
-	s.must(t, 201, owner, "POST", "/v1/members", map[string]any{"email": "cfo@payrolla.test", "password": "correct horse battery", "roles": []string{"approver", "payroll_approver"}})
-	cfo := s.login(t, "cfo@payrolla.test")
-	s.must(t, 201, owner, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "iswallet@1", "name": "payrolla",
-		"credentials": map[string]string{"api_key": "isw_payrolla_key", "webhook_secret": "whsec_payrolla"}})
-	s.must(t, 204, owner, "PUT", "/v1/secrets/prod/webhook_wf_payrollaSalaryDisbursement", map[string]any{"value": "payrolla-hook-key"})
-	s.must(t, 204, owner, "PUT", "/v1/variables/prod/payrolla_api_url", map[string]any{"value": payrolla.URL})
-	s.must(t, 204, owner, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "127.0.0.1"})
-	s.secret(t, owner, "payrolla_api_token", "pr_token")
-
-	_, hook := s.publishFile(t, owner, "payrolla-salary-disbursement.wd.json")
-	if !strings.HasPrefix(hook, "/hooks/"+tenant+"/payrolla/payroll-approved") {
-		t.Fatalf("webhook url %q", hook)
-	}
-
-	payroll := []byte(`{"payroll_id":"PR-2026-09","period":"September 2026","funding_wallet_id":"w_company","total_kobo":135000000,"employees":[
-	  {"employee_id":"E1","net_pay_kobo":30000000,"wallet_id":"w_ada"},
-	  {"employee_id":"E2","net_pay_kobo":35000000,"bank_code":"044","account_number":"0690000031","account_name":"Bola Ade"},
-	  {"employee_id":"E3","net_pay_kobo":25000000,"wallet_id":"w_chi"},
-	  {"employee_id":"E4","net_pay_kobo":45000000,"wallet_id":"w_dayo"}]}`)
-	sig := "sha256=" + mac(sha256.New, "payrolla-hook-key", payroll)
-	first := s.must(t, 202, anon, "POST", hook, payroll, "X-Taskiem-Signature", sig)
-	again := s.must(t, 202, anon, "POST", hook, payroll, "X-Taskiem-Signature", sig)
-	if again["run_id"] != first["run_id"] || again["duplicate"] != true {
-		t.Fatalf("Payrolla retry started another run: %v %v", first, again)
-	}
-	run := first["run_id"].(string)
-	ref := runtime.RunRef{ID: uuid.MustParse(run), TenantID: uuid.MustParse(tenant)}
-
-	// Balance check, then the approval waits; nothing moves before approval.
-	s.Drain(t)
-	if len(isw.moves) != 0 {
-		t.Fatal("money moved before approval")
-	}
-	inbox := s.must(t, 200, cfo, "GET", "/v1/approvals", nil)["approvals"].([]any)
-	if len(inbox) != 1 || !strings.Contains(toJSON(inbox), `"total_kobo":135000000`) || !strings.Contains(toJSON(inbox), `"available_kobo":900000000`) || !strings.Contains(toJSON(inbox), `"paid_to_bank":1`) {
-		t.Fatalf("approver inbox: %s", toJSON(inbox))
-	}
-	s.must(t, 403, owner, "POST", "/v1/approvals/"+run+"/approve", map[string]any{"decision": "approved"}) // wrote the workflow
-	isw.mu.Lock()
-	isw.failNextTransferTo("w_ada")
-	isw.mu.Unlock()
-	s.must(t, 200, cfo, "POST", "/v1/approvals/"+run+"/approve", map[string]any{"decision": "approved"})
-
-	// Two wallet transfers settle at once; Bola's bank payout waits for iswallet.
-	rt.WaitFor(t, 15*time.Second, "transfers and payout", func() bool {
-		s.Drain(t)
-		isw.mu.Lock()
-		defer isw.mu.Unlock()
-		return len(isw.moves) == 3
-	})
-	if st := s.Status(t, ref); st != "running" {
-		t.Fatalf("after transfers: %s", st)
-	}
-	o := isw.outflowFor("Bola Ade")
-	if o == nil {
-		t.Fatal("no payout for Bola")
-	}
-	body, hdr := isw.event(o, "wallet.outflow.confirmed", "whsec_payrolla")
-	out := s.must(t, 202, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", body, hdr...)
-	if out["signalled"] != float64(1) {
-		t.Fatalf("settlement: %v", out)
-	}
-	// A forged delivery is refused.
-	forged, fh := isw.event(o, "wallet.outflow.confirmed", "not_the_secret")
-	if st, _ := s.call(t, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", forged, fh...); st != 401 {
-		t.Errorf("forged webhook: %d", st)
-	}
-	dump := func(st string) {
-		t.Helper()
-		h, _ := s.Store.RunHistory(ctx, ref)
-		var b strings.Builder
-		for _, ev := range h {
-			b.WriteString(ev.Type + "(" + ev.StepID + ") " + string(ev.Payload) + "\n")
-		}
-		t.Fatalf("status %s:\n%s", st, b.String())
-	}
-	// Ada's transfer retries with the same key and is answered from the replay cache.
-	rt.WaitFor(t, 30*time.Second, "payroll report", func() bool {
-		s.Drain(t)
-		mu.Lock()
-		defer mu.Unlock()
-		return len(reports) > 0 || s.Status(t, ref) != "running"
-	})
-	// After the report the run stays open, watching Bola's confirmed payout
-	// for a reversal.
-	if st := s.Status(t, ref); st != "running" {
-		dump(st)
-	}
-	if !strings.Contains(toJSON(s.must(t, 200, owner, "GET", "/v1/runs/"+run, nil)), "watching_for_reversals") {
-		t.Error("the run does not say it is watching for reversals")
-	}
-	isw.mu.Lock()
-	if o["narration"] != "Salary September 2026 PR-2026-09 E2" {
-		t.Errorf("payout narration %q", o["narration"])
-	}
-	for k, n := range isw.moves {
-		if n != 1 {
-			t.Errorf("key %s moved money %d times", k, n)
-		}
-	}
-	if len(isw.moves) != 3 || isw.balances["w_ada"] != 30000000 || isw.balances["w_chi"] != 25000000 || isw.balances["w_company"] != 900000000-90000000-5350 {
-		t.Errorf("moves %v, balances %v", isw.moves, isw.balances)
-	}
-	isw.mu.Unlock()
-	mu.Lock()
-	if len(reports) != 1 || reports[0]["path"] != "/payrolls/PR-2026-09/disbursement-report" || reports[0]["auth"] != "Bearer pr_token" {
-		t.Fatalf("reports: %v", reports)
-	}
-	// Dayo's refused transfer did not stop the others, and the report says so.
-	rb := reports[0]["body"].(map[string]any)
-	if os.Getenv("TASKIEM_DUMP_REPORT") != "" {
-		raw, _ := json.MarshalIndent(map[string]any{"headers": map[string]any{"Authorization": reports[0]["auth"], "Idempotency-Key": reports[0]["key"]}, "body": rb}, "", "  ")
-		t.Logf("report:\n%s", raw)
-	}
-	if rb["paid"] != float64(3) || rb["failed"] != float64(1) || !strings.Contains(toJSON(rb["results"]), `"employee_id":"E4"`) || !strings.Contains(toJSON(rb["results"]), "EXCEEDS_SINGLE_TXN_LIMIT") {
-		t.Errorf("report body: %s", toJSON(rb))
-	}
-	if got := toJSON(rb["totals"]); got != `{"bank_fees_kobo":5350,"failed_at_bank":0,"paid_kobo":90000000,"paid_to_bank":1,"paid_to_wallet":2,"refused":1,"unconfirmed":0}` {
-		t.Errorf("report totals: %s", got)
-	}
-	reportKey := reports[0]["key"]
-	mu.Unlock()
-
-	// A reversal of a payout this run did not make wakes nothing; Bola's
-	// reversal becomes a notice to Payrolla, and the run ends.
-	stray := map[string]any{"outflow_id": "out_999", "operation_id": "out_999", "wallet_id": "w_company", "amount": int64(100000), "fee": 5350,
-		"currency": "NGN", "idempotency_key": "tsk_other", "provider_reference": "tsk_other"}
-	body, hdr = isw.event(stray, "wallet.outflow.reversed", "whsec_payrolla")
-	if out := s.must(t, 202, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", body, hdr...); out["signalled"] != float64(0) {
-		t.Fatalf("unknown reversal: %v", out)
-	}
-	s.Drain(t)
-	if st := s.Status(t, ref); st != "running" {
-		dump(st)
-	}
-	body, hdr = isw.event(o, "wallet.outflow.reversed", "whsec_payrolla")
-	if out := s.must(t, 202, anon, "POST", "/hooks/"+tenant+"/connectors/iswallet@1/outflow_event?connection=payrolla", body, hdr...); out["signalled"] != float64(1) {
-		t.Fatalf("reversal: %v", out)
-	}
-	rt.WaitFor(t, 30*time.Second, "reversal notice", func() bool { s.Drain(t); return s.Status(t, ref) != "running" })
-	if st := s.Status(t, ref); st != "completed" {
-		dump(st)
-	}
-	mu.Lock()
-	if len(reports) != 1 || len(notices) != 1 {
-		t.Fatalf("reports %v, notices %v", reports, notices)
-	}
-	n := notices[0]
-	if os.Getenv("TASKIEM_DUMP_REPORT") != "" {
-		raw, _ := json.MarshalIndent(map[string]any{"headers": map[string]any{"Authorization": n["auth"], "Idempotency-Key": n["key"]}, "body": n["body"]}, "", "  ")
-		t.Logf("reversal notice:\n%s", raw)
-	}
-	nb := n["body"].(map[string]any)
-	if n["path"] != "/payrolls/PR-2026-09/reversal-notice" || n["auth"] != "Bearer pr_token" || n["key"] == "" || n["key"] == reportKey ||
-		nb["payroll_id"] != "PR-2026-09" || nb["employee_id"] != "E2" || nb["outflow_id"] != o["outflow_id"] || nb["amount_kobo"] != float64(35000000) ||
-		nb["fee_kobo"] != float64(5350) || nb["reversed_at"] != "2026-10-09T08:30:00Z" || nb["iswallet"].(map[string]any)["total_reversed"] != float64(35005350) {
-		t.Errorf("notice: %s", toJSON(n))
-	}
-	mu.Unlock()
-	isw.mu.Lock()
-	if len(isw.moves) != 3 {
-		t.Errorf("the watch moved money: %v", isw.moves)
-	}
-	isw.mu.Unlock()
-
-	// Personal data stays sealed at rest; replay holds over the opened history.
-	sealed := s.must(t, 200, owner, "GET", "/v1/runs/"+run, nil)
-	if strings.Contains(toJSON(sealed), "0690000031") {
-		t.Error("account number stored in plaintext")
-	}
-	opened, err := s.Store.OpenedHistory(ctx, ref)
-	if err != nil {
-		t.Fatal(err)
-	}
-	doc, _ := os.ReadFile("../flows/dogfood/payrolla-salary-disbursement.wd.json")
-	def, _ := wd.Load(doc)
-	if err := decide.Verify(def, opened); err != nil {
-		t.Errorf("replay: %v", err)
-	}
 }
 
 func TestOpsPayoutFailureAlertEndToEnd(t *testing.T) {

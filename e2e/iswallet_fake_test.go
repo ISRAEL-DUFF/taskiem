@@ -28,7 +28,7 @@ type fakeIswallet struct {
 	fail500    map[string]bool           // keys whose first response is lost as a 500 after the money moved
 	nextID     int
 	requests   int
-	failWallet string // the next transfer to this wallet loses its response
+	failPayout bool // the next bank payout loses its response
 }
 
 func newFakeIswallet() *fakeIswallet {
@@ -41,7 +41,7 @@ func (f *fakeIswallet) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 	f.requests++
 	w.Header().Set("Content-Type", "application/json")
-	if r.Header.Get("Authorization") != "Bearer isw_payrolla_key" {
+	if r.Header.Get("Authorization") != "Bearer isw_test_key" {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":{"code":"INVALID_API_KEY","message":"bad key","request_id":"req_x"}}`))
 		return
@@ -79,15 +79,15 @@ func (f *fakeIswallet) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var out map[string]any
 		if r.URL.Path == "/v1/transfers" {
 			from, to := in["from_wallet_id"].(string), in["to_wallet_id"].(string)
-			if to == f.failWallet {
-				f.failWallet, f.fail500[key] = "", true
-			}
 			f.balances[from] -= amount
 			f.balances[to] += amount
 			status, out = 200, map[string]any{"transfer_id": fmt.Sprintf("tr_%d", f.nextID), "txn_id": fmt.Sprintf("txn_%d", f.nextID),
 				"from_wallet_id": from, "to_wallet_id": to, "amount": amount, "currency": "NGN", "status": "completed", "completed_at": time.Now().UTC().Format(time.RFC3339)}
 		} else {
 			wallet := in["wallet_id"].(string)
+			if f.failPayout {
+				f.failPayout, f.fail500[key] = false, true
+			}
 			f.balances[wallet] -= amount + 5350
 			id := fmt.Sprintf("out_%d", f.nextID)
 			out = map[string]any{"outflow_id": id, "operation_id": id, "wallet_id": wallet, "amount": amount, "currency": "NGN", "status": "pending",
@@ -151,10 +151,6 @@ func (f *fakeIswallet) event(o map[string]any, eventType, secret string) (body [
 	_, _ = io.WriteString(mac, ts+"."+string(body))
 	return body, []string{"X-iSpend-Signature", "sha256=" + hex.EncodeToString(mac.Sum(nil)), "X-iSpend-Timestamp", ts}
 }
-
-// failNextTransferTo makes the next transfer to wallet lose its response as
-// a 500 after the money has moved. Call with f.mu held.
-func (f *fakeIswallet) failNextTransferTo(wallet string) { f.failWallet = wallet }
 
 // creditEvent builds a signed credit webhook delivery.
 func creditEvent(id, eventType, wallet string, data map[string]any, secret string) (body []byte, headers []string) {

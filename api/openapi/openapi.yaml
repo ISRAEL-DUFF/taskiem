@@ -22809,7 +22809,7 @@ components:
         variables:
           type: object
           description: 'Values of the variables the workflow reads (`env.<name>`), per environment, e.g. `{"prod":
-            {"payrolla_api_url": "https://api.payrolla.com"}}`. Not secrets.'
+            {"partner_api_url": "https://api.partner.example"}}`. Not secrets.'
           additionalProperties:
             type: object
             additionalProperties: true

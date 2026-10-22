@@ -12,11 +12,11 @@ import (
 )
 
 const payrollPackage = `{"schema":"wd/v1","id":"wf_payroll","version":1,"name":"payroll",
-  "trigger":{"type":"webhook","config":{"path":"/payrolla/payroll-approved","auth":"hmac"}},
+  "trigger":{"type":"webhook","config":{"path":"/wagely/payroll-approved","auth":"hmac"}},
   "steps":[
     {"id":"approve","type":"approval","config":{"role":"payroll_approver","timeout":"24h","subject":{"payroll":"=trigger.body.payroll_id"}}},
-    {"id":"report","type":"http","needs":["approve"],"config":{"method":"POST","url":"=env.payrolla_api_url + '/reports'",
-      "headers":{"Authorization":"='Bearer ' + secrets.payrolla_api_token"},"body":{"status":"=steps.approve.output.decision"},"class":"idempotent_write","idempotency_header":"Idempotency-Key"}}]}`
+    {"id":"report","type":"http","needs":["approve"],"config":{"method":"POST","url":"=env.wagely_api_url + '/reports'",
+      "headers":{"Authorization":"='Bearer ' + secrets.wagely_api_token"},"body":{"status":"=steps.approve.output.decision"},"class":"idempotent_write","idempotency_header":"Idempotency-Key"}}]}`
 
 // secretProbe hands a secret to a connector, so a run shows whose secret
 // it read.
@@ -43,12 +43,12 @@ func sharePackage(t *testing.T, p *partner, doc string) string {
 func TestWorkflowPackages(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Company 1042", nil)
 	other := p.sub(t, "Company 7", nil)
 	rival := w.partner(t, "Rival", "owner@rival.test")
 	rivalSub := rival.sub(t, "Rival customer", nil)
-	p.owner.must(204, "PUT", "/v1/secrets/prod/payrolla_api_token", map[string]any{"value": "PARTNER-OWN-TOKEN"})
+	p.owner.must(204, "PUT", "/v1/secrets/prod/wagely_api_token", map[string]any{"value": "PARTNER-OWN-TOKEN"})
 
 	pkg := sharePackage(t, p, payrollPackage)
 	p.key.must(404, "PUT", "/v1/partner/workflows/"+uuid.NewString()+"/share", nil)
@@ -61,7 +61,7 @@ func TestWorkflowPackages(t *testing.T) {
 	}
 
 	install := map[string]any{"package": pkg, "environments": []string{"dev", "prod"},
-		"variables": map[string]any{"prod": map[string]any{"payrolla_api_url": "https://api.payrolla.example"}},
+		"variables": map[string]any{"prod": map[string]any{"wagely_api_url": "https://api.wagely.example"}},
 		"roles":     []map[string]any{{"name": "payroll_approver", "permissions": []string{"approval.decide", "run.read", "workflow.read"}}}}
 	// Not the rival's package, nor its sub-tenant; not a variable the workflow does not read.
 	rival.key.must(400, "POST", "/v1/partner/sub-tenants/"+rivalSub+"/workflows", install)
@@ -80,15 +80,15 @@ func TestWorkflowPackages(t *testing.T) {
 		t.Fatalf("endpoints: %v", eps)
 	}
 	prod := eps[1].(map[string]any)
-	if prod["environment"] != "prod" || prod["url"] != "/hooks/"+sub+"/payrolla/payroll-approved?env=prod" || prod["auth"] != "hmac" ||
+	if prod["environment"] != "prod" || prod["url"] != "/hooks/"+sub+"/wagely/payroll-approved?env=prod" || prod["auth"] != "hmac" ||
 		prod["secret_name"] != "webhook_wf_payroll" || prod["deployed_version"] != float64(1) {
 		t.Errorf("prod endpoint: %v", prod)
 	}
-	if toJSON(got["variables_missing"]) != `[{"environment":"dev","name":"payrolla_api_url"}]` {
+	if toJSON(got["variables_missing"]) != `[{"environment":"dev","name":"wagely_api_url"}]` {
 		t.Errorf("variables missing: %v", got["variables_missing"])
 	}
 	secrets := toJSON(got["secrets"])
-	if !strings.Contains(secrets, `{"environment":"prod","name":"payrolla_api_token","set":false}`) || !strings.Contains(secrets, `{"environment":"prod","name":"webhook_wf_payroll","set":false}`) {
+	if !strings.Contains(secrets, `{"environment":"prod","name":"wagely_api_token","set":false}`) || !strings.Contains(secrets, `{"environment":"prod","name":"webhook_wf_payroll","set":false}`) {
 		t.Errorf("secrets: %s", secrets)
 	}
 	if strings.Contains(toJSON(got), "PARTNER-OWN-TOKEN") {
@@ -101,7 +101,7 @@ func TestWorkflowPackages(t *testing.T) {
 		t.Fatalf("installed into %s (%v)", owner, err)
 	}
 	var vars, roles int
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT count(*) FROM variables WHERE tenant_id = $1 AND name = 'payrolla_api_url'), (SELECT count(*) FROM roles WHERE tenant_id = $1)`,
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT count(*) FROM variables WHERE tenant_id = $1 AND name = 'wagely_api_url'), (SELECT count(*) FROM roles WHERE tenant_id = $1)`,
 		uuid.MustParse(other)).Scan(&vars, &roles); err != nil || vars != 0 || roles != 0 {
 		t.Errorf("the other sub-tenant got %d variables, %d roles (%v)", vars, roles, err)
 	}
@@ -141,7 +141,7 @@ func TestWorkflowPackages(t *testing.T) {
 
 	// The sub-tenant's own people make the signing secret on the Endpoints page.
 	adaID := uuid.Must(uuid.NewV7())
-	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) SELECT $1, 'ada@company.test', 'Ada', password_hash FROM users WHERE email = 'owner@payrolla.test'`, adaID); err != nil {
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) SELECT $1, 'ada@company.test', 'Ada', password_hash FROM users WHERE email = 'owner@wagely.test'`, adaID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'admin')`, uuid.MustParse(sub), adaID); err != nil {
@@ -180,7 +180,7 @@ func TestWorkflowPackages(t *testing.T) {
 // the partner's own key cannot approve.
 func TestPackageFourEyes(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Company", nil)
 	if _, err := w.env.DB.Admin.Exec(context.Background(), `INSERT INTO governance_settings (tenant_id, four_eyes_publish, updated_by) VALUES ($1, true, 'operator')`, sub); err != nil {
 		t.Fatal(err)
@@ -206,7 +206,7 @@ func TestInstalledWorkflowCannotReadPartnerSecrets(t *testing.T) {
 	w := newWorld(t)
 	w.env.VaultSecrets = true
 	ctx := context.Background()
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Company", nil)
 	p.owner.must(204, "PUT", "/v1/secrets/prod/partner_only", map[string]any{"value": "PARTNER-SECRET-VALUE"})
 	pkg := sharePackage(t, p, secretProbe)
@@ -241,7 +241,7 @@ func TestInstalledWorkflowCannotReadPartnerSecrets(t *testing.T) {
 // operator raises (a 5,000-employee payroll is close to 1 MB).
 func TestSubTenantPayloadLimit(t *testing.T) {
 	w := newWorld(t)
-	p := w.partner(t, "Payrolla", "owner@payrolla.test")
+	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Company", nil)
 	p.key.must(400, "PUT", "/v1/partner/sub-tenants/"+sub+"/limits", map[string]any{"max_payload_bytes": 2 << 20})
 	if err := w.env.Store.SetLimits(context.Background(), p.id, map[string]any{"max_payload_bytes": 4 << 20}, "test"); err != nil {

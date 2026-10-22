@@ -1,7 +1,6 @@
 package decide
 
 import (
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -306,118 +305,6 @@ func TestBackoffIsDeterministicAndBounded(t *testing.T) {
 	}
 	if backoff(r, 1, "run-a", "pay") == backoff(r, 1, "run-b", "pay") && backoff(r, 2, "run-a", "pay") == backoff(r, 2, "run-b", "pay") {
 		t.Error("jitter does not vary between runs")
-	}
-}
-
-func TestPayrollaDogfoodEndToEnd(t *testing.T) {
-	doc, err := os.ReadFile("../../flows/dogfood/payrolla-salary-disbursement.wd.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := newSim(t, string(doc), map[string]any{"body": map[string]any{
-		"payroll_id": "PR-10", "period": "Oct 2026", "funding_wallet_id": "w_company", "total_kobo": 300000,
-		"employees": []any{
-			map[string]any{"employee_id": "e1", "net_pay_kobo": 100000, "wallet_id": "w_e1"},
-			map[string]any{"employee_id": "e2", "net_pay_kobo": 200000, "bank_code": "044", "account_number": "0690000031", "account_name": "Ada Obi"},
-			map[string]any{"employee_id": "e3", "net_pay_kobo": 900000, "wallet_id": "w_e3"},
-		},
-	}})
-	if !s.has(history.StepCompleted, "summarise") {
-		t.Fatalf("summarise: %s", s.types())
-	}
-	if in := s.payload(history.StepScheduled, "check_balance")["input"].(map[string]any); in["wallet_id"] != "w_company" {
-		t.Fatalf("balance input %v", in)
-	}
-	s.complete("check_balance", map[string]any{"balances": []any{map[string]any{"currency": "NGN", "available": 9000000, "total": 9100000}}})
-	subj := s.payload(history.ApprovalRequested, "approve")["subject"].(map[string]any)
-	if subj["available_kobo"] != int64(9000000) || subj["employees"] != int64(3) || subj["paid_to_bank"] != int64(1) {
-		t.Fatalf("approval subject %v", subj)
-	}
-	s.external(history.ApprovalDecided, "approve", 0, history.ApprovalDecidedPayload{Decision: "approved", DecidedBy: "checker"}, history.OriginAPI)
-
-	// e1 has a wallet: an instant transfer. e2 does not: a bank payout.
-	w := s.payload(history.StepScheduled, "pay_all[0].to_wallet")
-	if w["seed"] != "PR-10:e1" || w["input"].(map[string]any)["to_wallet_id"] != "w_e1" {
-		t.Fatalf("transfer payload %v", w)
-	}
-	if !s.has(history.StepSkipped, "pay_all[0].to_bank") || !s.has(history.StepSkipped, "pay_all[1].to_wallet") {
-		t.Fatalf("each employee takes one rail: %s", s.types())
-	}
-	b := s.payload(history.StepScheduled, "pay_all[1].to_bank")
-	if b["seed"] != "PR-10:e2" || b["input"].(map[string]any)["bank_code"] != "044" {
-		t.Fatalf("payout payload %v", b)
-	}
-	s.complete("pay_all[0].to_wallet", map[string]any{"status": "completed", "txn_id": "txn_1"})
-	// iswallet refuses e3's transfer; the payroll carries on.
-	s.external(history.StepFailed, "pay_all[2].to_wallet", 1, history.FailedPayload{Error: history.Error{Kind: "fatal", Message: "iswallet 422 EXCEEDS_SINGLE_TXN_LIMIT", Next: "fail"}}, history.OriginWorker)
-	if !s.has(history.StepCompleted, "pay_all[2].wallet_failed") {
-		t.Fatalf("refused payment not recorded: %s", s.types())
-	}
-	if !s.has(history.StepSkipped, "pay_all[0].settle") {
-		t.Errorf("a wallet transfer has nothing to wait for: %s", s.types())
-	}
-	s.complete("pay_all[1].to_bank", map[string]any{"status": "pending", "outflow_id": "out_2"})
-	if c := s.payload(history.StepScheduled, "pay_all[1].settle")["correlation"]; c != "out_2" {
-		t.Errorf("settle correlation %v", c)
-	}
-	s.external(history.SignalReceived, "pay_all[1].settle", 0, history.SignalPayload{Event: "iswallet@1:outflow_event", Payload: map[string]any{"event": "wallet.outflow.confirmed"}}, history.OriginSignal)
-	if s.has(history.StepFailed, "report") {
-		t.Fatalf("report failed: %v", s.payload(history.StepFailed, "report"))
-	}
-	rp := s.payload(history.StepScheduled, "report")
-	if in := rp["input"].(map[string]any); in["headers"].(map[string]any)["Authorization"] != "='Bearer ' + secrets.payrolla_api_token" ||
-		in["url"] != "https://payrolla.example/payrolls/PR-10/disbursement-report" || len(in["body"].(map[string]any)["results"].([]any)) != 3 {
-		t.Errorf("report input %v", in)
-	}
-	body := rp["input"].(map[string]any)["body"].(map[string]any)
-	if body["paid"] != int64(2) || body["failed"] != int64(1) || body["status"] != "completed" || !s.has(history.StepSkipped, "report_rejected") {
-		t.Errorf("report counts %v", body)
-	}
-	failure := body["results"].([]any)[2].(map[string]any)["wallet_failed"].(map[string]any)
-	if failure["employee_id"] != "e3" || !strings.Contains(failure["error"].(map[string]any)["message"].(string), "EXCEEDS_SINGLE_TXN_LIMIT") {
-		t.Errorf("failure record %v", failure)
-	}
-	s.complete("report", map[string]any{"status": 200})
-	// After the report the run watches e2's confirmed payout for a reversal
-	// until 35 days after the payroll arrived, then ends.
-	if c := s.payload(history.StepScheduled, "watch[0].watch_lane[0].reversal_event")["correlation"]; c != "out_2" {
-		t.Fatalf("reversal watch correlation %v: %s", c, s.types())
-	}
-	if at := s.payload(history.StepScheduled, "watch[0].watch_lane[0].watch_ends")["fire_at"]; at != "2026-11-09T09:00:00Z" {
-		t.Errorf("watch ends at %v", at)
-	}
-	if s.last().Type == history.RunCompleted {
-		t.Fatal("run ended before the watch")
-	}
-	s.advance(35 * 24 * time.Hour)
-	s.fire("watch[0].watch_lane[0].watch_ends", "wait")
-	if s.last().Type != history.RunCompleted || !s.has(history.StepCancelled, "watch[0].watch_lane[0].reversal_event") {
-		t.Errorf("payroll run should complete after the watch: %s", s.types())
-	}
-}
-
-func TestPayrollaRejectedPayrollIsReported(t *testing.T) {
-	doc, err := os.ReadFile("../../flows/dogfood/payrolla-salary-disbursement.wd.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := newSim(t, string(doc), map[string]any{"body": map[string]any{
-		"payroll_id": "PR-11", "period": "Oct 2026", "funding_wallet_id": "w_company", "total_kobo": 100000,
-		"employees": []any{map[string]any{"employee_id": "e1", "net_pay_kobo": 100000, "wallet_id": "w_e1"}},
-	}})
-	s.complete("check_balance", map[string]any{"balances": []any{map[string]any{"currency": "NGN", "available": 9000000}}})
-	s.advance(25 * time.Hour)
-	s.fire("approve", "approval_timeout")
-	if !s.has(history.StepSkipped, "pay_all") || !s.has(history.StepSkipped, "report") {
-		t.Fatalf("nothing should be paid: %s", s.types())
-	}
-	body := s.payload(history.StepScheduled, "report_rejected")["input"].(map[string]any)["body"].(map[string]any)
-	if body["status"] != "rejected" || body["reason"] != "approval_timed_out" || body["paid"] != int64(0) {
-		t.Fatalf("rejection report %v", body)
-	}
-	s.complete("report_rejected", map[string]any{"status": 200})
-	if s.last().Type != history.RunCompleted {
-		t.Errorf("run should complete: %s", s.types())
 	}
 }
 

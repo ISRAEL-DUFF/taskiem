@@ -1,5 +1,5 @@
 # iswallet (iSpend's wallet platform): the wallet and payment provider for
-# Payrolla and iSpend. Built from iswallet engineering's answers of
+# iSpend and the businesses it serves. Built from iswallet engineering's answers of
 # 5 and 12 October 2026 (docs/integrations/iswallet.md).
 manifest: connector/v1
 id: iswallet

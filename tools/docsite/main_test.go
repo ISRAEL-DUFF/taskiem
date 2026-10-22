@@ -173,7 +173,7 @@ func TestBuild(t *testing.T) {
 				t.Errorf("%s: no %s", cfg.Base, docs+f)
 			}
 		}
-		for _, f := range []string{"needs-people.html", "phase-4-status.html", "decisions/0022-self-serve-onboarding.html", "spec/architecture.html", "integrations/payrolla.html"} {
+		for _, f := range []string{"needs-people.html", "phase-4-status.html", "decisions/0022-self-serve-onboarding.html", "spec/architecture.html", "integrations/archive/payrolla.html"} {
 			if _, ok := files[docs+f]; ok {
 				t.Errorf("%s: internal page %s published", cfg.Base, f)
 			}

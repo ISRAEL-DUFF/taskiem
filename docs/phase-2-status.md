@@ -152,6 +152,6 @@ Kept pending while Phase 2 is built. Phase 1's milestones 4 and 5 and gate G1 st
 
 1. Deploy Taskiem with a public URL and enter production iswallet credentials (Connections and Secrets pages).
 2. Generate webhook URLs and signing secrets; register them with iswallet and Payrolla.
-3. Payrolla implements the [integration guide](integrations/payrolla.md).
+3. Payrolla implements the [integration guide](integrations/archive/payrolla.md).
 4. iSpend builds `POST /internal/wallet-credit-exceptions`, honouring `Idempotency-Key`.
 5. Load and failover test on the target hardware; internal security review.

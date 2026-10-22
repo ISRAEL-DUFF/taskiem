@@ -11,26 +11,26 @@ Tests run the real orchestrator (`engine/decide`) over an in-memory history on a
 ```json
 {
   "schema": "wd-test/v1",
-  "workflow": "../payrolla-salary-disbursement.wd.json",
-  "env": { "payrolla_api_url": "https://payrolla.test/api" },
+  "workflow": "../supplier-payouts.wd.json",
+  "env": { "ops_phone": "+2348000000000" },
   "cases": [
     {
       "name": "a refused payment does not stop the others",
-      "trigger": { "body": { "payroll_id": "pr_1", "...": "..." } },
+      "trigger": { "body": { "batch_id": "B-1", "...": "..." } },
       "env": {},
       "mocks": {
-        "check_balance": { "output": { "balances": [ { "currency": "NGN", "available": 90000000 } ] } },
-        "pay_all[0].to_wallet": { "error": { "kind": "fatal", "message": "destination wallet is frozen" } },
-        "to_wallet": { "output": { "status": "completed", "amount": "=input.amount" } }
+        "balance": { "output": { "available_kobo": 90000000, "currency": "NGN" } },
+        "pay_all[0].pay": { "error": { "kind": "fatal", "message": "destination account is frozen" } },
+        "pay": { "output": { "payout_id": "po_1", "status": "pending", "amount": "=input.amount_kobo" } }
       },
-      "signals": { "settle": { "payload": { "event": "wallet.outflow.confirmed", "body": {} } } },
+      "signals": { "confirmed": { "payload": { "event": "payout.settled", "fields": { "payout_id": "po_1" } } } },
       "approvals": { "approve": { "decision": "approved", "by": "checker" } },
       "expect": {
         "status": "completed",
-        "steps": { "pay_all[0].wallet_failed": "completed" },
+        "steps": { "pay_all[0].pay_failed": "completed" },
         "outputs": { "summary": { "paid": 1, "failed": 1 } },
         "inputs": { "report": { "body": { "paid": 1 } } },
-        "calls": { "to_wallet": 2 }
+        "calls": { "pay": 2 }
       }
     }
   ]
@@ -39,10 +39,10 @@ Tests run the real orchestrator (`engine/decide`) over an in-memory history on a
 
 | Field | Meaning |
 | --- | --- |
-| `workflow` | The `*.wd.json` under test, relative to the test file |
+| `workflow` | The `*.wd.json` under test, relative to the test file. A template's own tests (`templates/tests/<id>.test.json`) name the `template` and its `params` instead ([templates](../templates.md)) |
 | `env` | Tenant variables (`env.*`) for every case; a case's `env` adds to and overrides them |
 | `trigger` | The run's `trigger`. For webhook workflows, `trigger.body` is checked against the workflow's inputs schema first; for a `form` trigger `trigger.body` is the answers, checked the same way, and `trigger.form` (`submission_id`, `respondent`, ...) may be given as the form host would send it |
-| `mocks` | Outcomes of task steps (`connector`, `http`, `code`), keyed by step id or instance id (`pay_all[2].to_bank`, `compensate:pay`); an instance key wins. A mock is `{"output": ...}` or `{"error": {"kind", "message"}}`; a list answers successive attempts and its last entry repeats. Output values may be expressions over `input`, the step's resolved input |
+| `mocks` | Outcomes of task steps (`connector`, `capability`, `http`, `code`), keyed by step id or instance id (`pay_all[2].pay`, `compensate:pay`); an instance key wins. A mock is `{"output": ...}` or `{"error": {"kind", "message"}}`; a list answers successive attempts and its last entry repeats. Output values may be expressions over `input`, the step's resolved input |
 | `signals` | `{"payload": ...}` delivers the signal (the step's output); `{"timeout": true}` lets its timeout fire |
 | `approvals` | `{"decision": "approved" \| "rejected", "by": "..."}`, or `{"timeout": true}` |
 | `forms` | Answers to `form` steps (an addition for [forms](../spec/forms.md)), keyed like `signals`: `{"answers": {...}}` submits them, checked against the step's `schema` (a mismatch fails the case); the step's output is the answers plus `respondent`, which is `respondent` when the mock gives one and otherwise who the step asked (`{"kind": "link", "phone"}` or `"email"`, or `{"kind": "member", "member_id": "test-member"}` for a role). `{"timeout": true}` lets the step's timeout (7 days by default) fire: with `on_timeout: continue` its output is `{"timed_out": true}` |
