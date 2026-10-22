@@ -12,15 +12,13 @@ import { StorefrontDomains } from "./StorefrontDomains";
 import { StorefrontEmbedSites } from "./StorefrontEmbedSites";
 import { StorefrontPreview } from "./StorefrontPreview";
 import type { Table } from "../lib/tables";
+import { THEMES, type Brand } from "../lib/brand";
 import {
   DAYS,
-  DEFAULT_ACCENTS,
   DEFAULT_SPAN,
-  DEFAULT_TEMPLATES,
   LIMITS,
   MAPPING,
   MAX_OPENINGS,
-  TEMPLATE_HELP,
   catalogueTables,
   columnsFor,
   formFrom,
@@ -85,8 +83,6 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
   const [form, setForm] = useState<Form>(() => formFrom(initial));
   // A new storefront's address follows its name until the owner types one.
   const [slugTouched, setSlugTouched] = useState(initial !== null);
-  // The logo's URL, known only for a logo uploaded on this visit.
-  const [logoURL, setLogoURL] = useState<string>();
   const [closing, setClosing] = useState(false);
   const [notice, setNotice] = useState("");
   const [catalogueTick, setCatalogueTick] = useState(0);
@@ -97,12 +93,11 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
     () => (saved?.catalogue_table ? get<Catalogue>("/v1/storefront/catalogue").catch(() => null) : Promise.resolve(null)),
     [saved?.catalogue_table, catalogueTick],
   );
+  const look = useLoad(() => get<Brand>("/v1/settings/brand").catch(() => undefined), []);
   const reloadTrust = () => setTrustTick((n) => n + 1);
   const act = useAction();
   const base = formFrom(saved);
   const dirty = saved === null || !sameRequest(form, base);
-  const templates = saved?.templates ?? DEFAULT_TEMPLATES;
-  const accents = saved?.accents ?? DEFAULT_ACCENTS;
   const published = !!saved && saved.published_version > 0;
   // Served to customers: not waiting for Taskiem's check, nor suspended.
   const live = published && (saved.status === "published" || saved.status === "closed");
@@ -304,40 +299,22 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
 
       <section className="card" aria-labelledby="sf-look">
         <h2 id="sf-look">Look</h2>
-        <fieldset className="sf-choices">
-          <legend>Template</legend>
-          <div className="sf-templates">
-            {templates.map((t) => (
-              <label key={t} className={`sf-template${form.template === t ? " selected" : ""}`}>
-                <input type="radio" name="sf-template" value={t} checked={form.template === t} onChange={() => setForm((f) => ({ ...f, template: t }))} />
-                <span>
-                  <strong>{TEMPLATE_HELP[t]?.title ?? t}</strong>
-                  <span className="hint">{TEMPLATE_HELP[t]?.help ?? ""}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset className="sf-choices">
-          <legend>Accent colour</legend>
-          <div className="sf-swatches">
-            {Object.entries(accents).map(([name, hex]) => (
-              <label key={name} className={`sf-swatch${form.accent === name ? " selected" : ""}`}>
-                <input type="radio" name="sf-accent" value={name} checked={form.accent === name} onChange={() => setForm((f) => ({ ...f, accent: name }))} />
-                <span className="sf-dot" style={{ background: hex }} aria-hidden="true" />
-                <span className="capitalize">{name}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <LogoField
-          logo={form.text.logo}
-          url={logoURL ?? (form.text.logo === saved?.draft.logo ? thumb(saved?.logo_urls) : undefined)}
-          onChange={(id, url) => {
-            setText("logo", id);
-            setLogoURL(url);
-          }}
-        />
+        <div className="sf-look-summary">
+          {look.data && (
+            <>
+              {thumb(look.data.logo_urls) ? (
+                <img src={thumb(look.data.logo_urls)} alt="Your logo" width={48} height={48} />
+              ) : (
+                <span className="sf-look-dot" style={{ background: look.data.color }} aria-hidden="true" />
+              )}
+              <span>
+                <strong>{THEMES.find((t) => t.id === look.data?.theme)?.title ?? "Clean"}</strong> theme, in <span className="mono">{look.data.color}</span>
+              </span>
+            </>
+          )}
+          <Link to="/storefront/look">Change the look</Link>
+        </div>
+        <p className="hint">Your theme, colour, logo and cover photo are used by your storefront, its order and booking pages and your forms.</p>
       </section>
 
       <section className="card" aria-labelledby="sf-hours">
@@ -380,7 +357,7 @@ function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null
         </details>
       </section>
         </div>
-        <StorefrontPreview form={form} accents={accents} logoURL={logoURL} items={previewItems.data?.items ?? []} />
+        <StorefrontPreview form={form} color={look.data?.color} logoURL={thumb(look.data?.logo_urls)} items={previewItems.data?.items ?? []} />
       </div>
 
       {saved && <TrustPanel trust={trust.data} error={trust.error} onChanged={reloadTrust} />}
@@ -423,44 +400,6 @@ function TextInput({ label, hint, value, max, multiline, onChange }: { label: st
         <input value={value} onChange={(e) => onChange(e.target.value)} aria-invalid={over} />
       )}
     </Field>
-  );
-}
-
-function LogoField({ logo, url, onChange }: { logo: string; url?: string; onChange: (id: string, url?: string) => void }) {
-  const act = useAction();
-  const input = useRef<HTMLInputElement>(null);
-  return (
-    <div className="sf-logo">
-      <Field label="Logo or photo" hint="JPEG, PNG or WebP, up to 5 MB. Location and other details in the photo are removed.">
-        <input
-          ref={input}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          disabled={act.busy}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            void act.run(async () => {
-              const bad = imageProblem(file);
-              if (bad) throw new Error(bad);
-              const m = await tidy(uploadFile<Media>("/v1/storefront/media", file));
-              onChange(m.id, thumb(m.urls));
-            }, "Uploaded");
-          }}
-        />
-      </Field>
-      {act.busy && <p className="hint" role="status">Uploading…</p>}
-      <ErrorBox error={act.error} />
-      {logo && (
-        <div className="sf-logo-preview">
-          {url ? <img src={url} alt="Your logo" width={96} height={96} /> : <span className="hint">A logo is set.</span>}
-          <button type="button" onClick={() => onChange("", undefined)}>
-            Remove logo
-          </button>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -875,6 +814,7 @@ export function StorefrontTabs() {
       <NavLink to="/storefront" end>
         Page
       </NavLink>
+      <NavLink to="/storefront/look">Look</NavLink>
       <NavLink to="/storefront/orders">Orders</NavLink>
       <NavLink to="/storefront/bookings">Bookings</NavLink>
     </nav>

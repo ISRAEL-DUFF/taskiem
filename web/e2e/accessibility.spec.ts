@@ -25,6 +25,7 @@ const PAGES = [
   "/settings/keys",
   "/settings/billing",
   "/storefront",
+  "/storefront/look",
   "/storefront/orders",
   "/storefront/bookings",
 ];

@@ -2,7 +2,7 @@
 
 Taskiem is for Nigerian small businesses and the people who run their offices: traders, shop owners, salon owners, finance and HR staff. Most are not technical. Deploying staging (October 2026) showed, and an audit of the code confirmed, that an owner still meets steps that assume a developer: API keys, JSON, expressions, ids typed by hand, names that must match, messages in developer terms, and one bug that stops a one-person business from accepting its own orders.
 
-This plan removes them. It is a workstream of its own, **N0 to N12**, one pull request per milestone, and it runs **before the Phase 5 pilot** (S8's six weeks with traders and field agents): the pilot should test the product owners will actually meet.
+This plan removes them. It is a workstream of its own, **N0 to N13**, one pull request per milestone, and it runs **before the Phase 5 pilot** (S8's six weeks with traders and field agents): the pilot should test the product owners will actually meet.
 
 ## The rule
 
@@ -330,6 +330,25 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 - A test that lists every `useAction` call without a success message or `success: false`.
 - No owner-facing text from Appendix C in the toasts and notifications.
 
+### N13: Public pages that look like the business (L)
+
+**Problem.** The storefront, its order and booking pages, status pages and hosted forms all ran on one 116-line stylesheet: system font, one column, grey dividers, a 96px logo on the storefront only, 8 named colours, and hosted forms always green. Owners said customers would not trust such pages to represent a business. Details in [decision 0042](../decisions/0042-public-page-themes.md).
+
+**Build:**
+
+- **Three themes, each with its own markup for every page:** Clean, Bold and Editorial, drawn from mockups first (`engine/publicweb/templates/<theme>/`, 14 pages each, embeds included). The data each page shows, the form contract (field names, token, spam trap, errors, payment) and `order.js` are shared; only the drawing differs.
+- **The business's look** (`tenants.brand`, migration 00195): theme, any colour, logo, cover photo, used by every public page, hosted forms included. Existing storefronts keep theirs (classic is Clean). `GET/PUT /v1/settings/brand`.
+- **Any colour, always readable:** `brand.PaletteOf` makes text-on-colour and colour-as-text that read at 4.5:1, served as `/_brand/1/<rrggbb>.css` so the CSP stays strict.
+- **Storefront > Look** in the web app: theme cards, a colour picker with suggestions, logo and cover upload, and the real pages previewed in a phone frame as the owner chooses (`POST /v1/settings/brand/preview`, sealed for the public host, an hour).
+- **Order forms get −/+ buttons** and the total in each theme's own place; the number boxes still work without JavaScript.
+
+**Done when:**
+
+- Every public page renders in all three themes, the whole public host suite passes in each (CI), and a theme lacking a page fails a test.
+- A page loads one theme stylesheet and its colour's, under 15 KB together; page HTML stays under 60 KB.
+- An owner changes theme, colour, logo and cover from the Look tab without help, sees the result before saving, and the pages show it within 30 seconds.
+- Hosted forms, status pages and the report page carry the business's look, not Taskiem's green.
+
 ## Order and timing
 
 | Order | Milestone | Size | Why here |
@@ -346,6 +365,7 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 | 10 | N10 An email starts a workflow | L | Asked for after N1 to N9 were planned; needs N0-8, the mail domain and port 25 on the VMs, and reuses forms' file storage and N4's channel. M if an inbound-mail service is used instead of the `mail` role |
 | 11 | N11 Reaching people not on Taskiem | L | Asked for after N10, from a leave-request workflow that asked staff for their chat ID; needs N0-9, reuses N4's step and outbox, the forms' verification and the chat channels. WhatsApp's half waits on the Business account and the `taskiem_update` template's approval, and falls back to SMS until then |
 | 12 | N12 Telling people what happened | M | Asked for after N11: the app gives almost no feedback, and a failed run tells nobody without an alert rule. Toasts are small (one component and `useAction`); notifications reuse alerts, the approval targets and the chat outbox |
+| 13 | N13 Public pages that look like the business | L | Asked for after N10 was deployed: the public pages were too plain to represent a business. Three themes with their own markup over shared data and contract; the preview reuses the form host's sealing key |
 
 About 14 to 18 weeks for one engineer, or 8 to 10 for two working in parallel (N2 and N8 split well). The Phase 5 pilot starts after N1 to N7 and the gate's observed sessions; N8 and N9 can finish during the pilot.
 

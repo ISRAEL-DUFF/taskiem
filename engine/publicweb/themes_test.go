@@ -53,7 +53,7 @@ func TestThemeFromBrand(t *testing.T) {
 			t.Errorf("%+v: want %s and %s", c.b, c.css, c.link)
 		}
 	}
-	// A logo and a cover photo show; without a logo, the initials do.
+	// A logo and a cover photo show; without a logo, Clean shows the initials.
 	s, _ := storefrontServer(t, samplePage("classic", 1), true)
 	withBrand(s, brand.Brand{Logo: "m1", LogoURLs: map[string]string{"320": "https://img.test/l320.jpg", "800": "https://img.test/l800.jpg"},
 		Cover: "m2", CoverURLs: map[string]string{"800": "https://img.test/c800.jpg", "2000": "https://img.test/c2000.jpg"}})
@@ -63,7 +63,9 @@ func TestThemeFromBrand(t *testing.T) {
 			t.Errorf("no %s", want)
 		}
 	}
+	// (Editorial sets the name as a masthead instead.)
 	s, _ = storefrontServer(t, samplePage("classic", 1), true)
+	withBrand(s, brand.Brand{Theme: "clean"})
 	if body := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/").Body.String(); !strings.Contains(body, `aria-hidden="true">AK</span>`) {
 		t.Error("no initials for a business without a logo")
 	}

@@ -139,6 +139,6 @@ func serveBrandCSS(w http.ResponseWriter, r *http.Request) {
 	h.Set("Cache-Control", "public, max-age=31536000, immutable")
 	h.Set("Cross-Origin-Resource-Policy", "same-origin")
 	if r.Method == http.MethodGet {
-		_, _ = w.Write([]byte(brand.PaletteOf("#" + strings.TrimSuffix(name, ".css")).CSS()))
+		_, _ = w.Write([]byte(brand.PaletteOf("#" + strings.TrimSuffix(name, ".css")).CSS())) //nolint:gosec // six hex digits (brandFile), re-made as colours, sent as text/css with nosniff
 	}
 }

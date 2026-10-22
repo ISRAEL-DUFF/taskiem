@@ -136,7 +136,7 @@ func (s *Server) previewBrand(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		pages[page] = "https://" + s.Forms.FormHost + path
+		pages[page] = s.formOrigin() + path
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"pages": pages})
 }

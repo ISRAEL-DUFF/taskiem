@@ -154,7 +154,7 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 		return
 	}
 	if !ok {
-		s.page(w, r, http.StatusOK, "setup", pageData{Title: "Coming soon"})
+		s.page(w, r, http.StatusOK, "setup", pageData{Title: "Coming soon", Look: s.lookFor(r.Context(), site.Tenant, "")})
 		return
 	}
 	d := storefrontView(p, s.now())

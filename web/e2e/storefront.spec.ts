@@ -18,8 +18,6 @@ test("an owner drafts a storefront", async ({ page }) => {
   await expect(page.getByLabel("Page address")).toHaveValue("mama-put-kitchen");
   await page.getByLabel("Tagline").fill("Hot jollof and swallow");
   await page.getByLabel("Phone").fill("0803 123 4567");
-  await page.getByRole("radio", { name: /Bold/ }).check();
-  await page.getByRole("radio", { name: "blue" }).check();
 
   // Hours: Monday open, Tuesday copies it.
   await page.getByRole("checkbox", { name: "Monday open" }).check();
@@ -39,7 +37,35 @@ test("an owner drafts a storefront", async ({ page }) => {
   await page.reload();
   await expect(page.getByLabel("Business name")).toHaveValue("Mama Put Kitchen");
   await expect(page.getByLabel("Tuesday opens")).toHaveValue("08:00");
+});
+
+test("an owner picks the look of their public pages", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("owner@e2e.test");
+  await page.getByLabel("Password").fill("correct horse battery");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("link", { name: "Storefront" }).click();
+  await page.getByRole("link", { name: "Look", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Theme" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /Clean/ })).toBeChecked();
+
+  await page.getByRole("radio", { name: /Bold/ }).check();
+  await page.getByRole("button", { name: "#1d4ed8" }).click();
+  await expect(page.getByLabel("Colour code")).toHaveValue("#1d4ed8");
+  await expect(page.getByText("You have changes that are not saved.")).toBeVisible();
+
+  const vs = await axe(page);
+  expect(vs, describe("/storefront/look", vs)).toEqual([]);
+
+  await page.getByRole("button", { name: "Save the look" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
+
+  // It comes back as saved, and the storefront page says so.
+  await page.reload();
   await expect(page.getByRole("radio", { name: /Bold/ })).toBeChecked();
+  await expect(page.getByLabel("Colour code")).toHaveValue("#1d4ed8");
+  await page.getByRole("link", { name: "Page", exact: true }).click();
+  await expect(page.getByText("theme, in #1d4ed8")).toBeVisible();
 });
 
 test("an owner sets up the question form and finds the orders", async ({ page }) => {

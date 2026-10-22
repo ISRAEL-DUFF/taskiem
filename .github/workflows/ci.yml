@@ -43,6 +43,13 @@ jobs:
           echo "TASKIEM_TEST_OPENBAO_ADDR=http://127.0.0.1:8200" >> "$GITHUB_ENV"
       - name: Unit and database tests
         run: go test -count=1 ./...
+      # Each theme draws every public page with its own templates (decision
+      # 0042): the public host's suite runs again in the other two.
+      - name: Public pages in every theme
+        run: |
+          for theme in bold editorial; do
+            TASKIEM_TEST_THEME=$theme go test -count=1 ./engine/publicweb/
+          done
       - name: Validate contracts and dogfood workflows
         run: go run ./cmd/taskiem validate flows/*/*.wd.json connectors/*/manifest.yaml
       # Every docs link and anchor resolves, and the website, docs site and

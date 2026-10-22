@@ -32,6 +32,14 @@ GRANT taskiem_public TO taskiem_public_login;
    - Businesses' own domains get certificates on demand, after asking `/tls/ask`. With Caddy, use `on_demand_tls { ask http://<public host>:9090/tls/ask }`. The [VM kit](vm.md#public-pages-storefronts-and-forms) does this for you.
    - Set `TASKIEM_TRUST_PROXY=true` behind it, so limits apply to visitors' addresses.
 
+## Themes
+
+Every page is drawn from the business's theme's own templates (`engine/publicweb/templates/clean/`, `bold/`, `editorial/`; [decision 0042](decisions/0042-public-page-themes.md)). What is the same in all of them, the head's tags, a form's hidden fields and the icons, is in `templates/shared/`. A page loads its theme's stylesheet and its colour's, `/_brand/1/<rrggbb>.css`: custom properties made from the colour's name alone, so it is the same for every business and cached for good.
+
+`/_preview/<page>?p=` draws a page in a look not yet saved, with sample content, for the web app's **Look** tab: the api role seals the look with the key both roles hold (`TASKIEM_PUBLIC_KEY`), it works for an hour, and only the app (`TASKIEM_PUBLIC_URL`) may frame it.
+
+The test suite runs once per theme in CI (`TASKIEM_TEST_THEME=bold go test ./engine/publicweb/`). `TASKIEM_PREVIEW_DIR=<folder> go test -run TestWritePreview ./engine/publicweb/` writes the main pages in every theme to a folder to look at (`python3 -m http.server` in it).
+
 ## Hosts
 
 `public_hosts` maps a host name to the site it serves. A host serves only once verified. A suspended host, or one whose organisation is suspended, answers 410 "This page is unavailable". Suspension takes effect on every replica within 30 seconds, with no signal between them.

@@ -10,6 +10,15 @@ import (
 // CSP is the Content-Security-Policy sent with every response.
 const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
+// AppCSP is CSP that may also frame frames, origins like
+// https://forms.example.com: the public host's previews of a look (N13).
+func AppCSP(frames []string) string {
+	if len(frames) == 0 {
+		return CSP
+	}
+	return CSP + "; frame-src 'self' " + strings.Join(frames, " ")
+}
+
 // Set writes the security headers to h.
 func Set(h http.Header) {
 	h.Set("X-Content-Type-Options", "nosniff")
