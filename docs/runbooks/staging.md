@@ -151,7 +151,7 @@ sudo nano /opt/taskiem/taskiem.env
 
 | Add | For | Without it |
 | --- | --- | --- |
-| `TASKIEM_XENIBASE_URL=`, `TASKIEM_XENIBASE_TOKEN=`, `TASKIEM_XENIBASE_ORG=` | Data tables, so storefront catalogues, services and photos | Storefronts work, but without a catalogue or photos |
+| `TASKIEM_XENIBASE_URL=` (the bare server, `https://host`), `TASKIEM_XENIBASE_TOKEN=`, `TASKIEM_XENIBASE_ORG=` (the organisation's **ID**, not its name: `curl -H "Authorization: Bearer $TOKEN" $URL/api/v1/me` shows it) | Data tables, so storefront catalogues, services and photos | Storefronts work, but without a catalogue or photos |
 | `ANTHROPIC_API_KEY=` | The moderation model, and AI building | Moderation uses the word list and price check only |
 | `TASKIEM_SMS_TERMII_API_KEY=`, `TASKIEM_SMS_TERMII_SENDER_ID=` | SMS to customers: order texts, form codes | Customers who gave an email still get it |
 | `TASKIEM_PUBLIC_ADDRESSES=<the VPS's IPv4>` | The A record shown to a business connecting its own domain | The editor suggests an ALIAS record |
