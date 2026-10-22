@@ -10316,6 +10316,53 @@ paths:
                 $ref: '#/components/schemas/BrandSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/brand/preview:
+    post:
+      operationId: previewBrand
+      tags:
+      - Account
+      summary: Preview a look before saving it
+      description: >-
+        The addresses of the public pages (storefront, order form, booking, hosted form) drawn in this look with sample content and
+        the business's name, for the app to frame. They work for an hour. 409 when the public host is not set up.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                theme:
+                  type: string
+                  enum: [clean, bold, editorial]
+                color:
+                  type: string
+                logo:
+                  type: string
+                cover:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pages]
+                properties:
+                  pages:
+                    type: object
+                    additionalProperties:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/signup:
     get:
       operationId: signupOptions

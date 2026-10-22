@@ -1,10 +1,13 @@
 package api_test
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 )
 
@@ -35,6 +38,23 @@ func TestBrandSettings(t *testing.T) {
 	}
 	if _, ok, err := read(t.Context(), uuid.New()); ok || err != nil {
 		t.Fatalf("an unknown business: %v %v", ok, err)
+	}
+
+	// A preview of a look not yet saved: the public host's pages, sealed
+	// for it.
+	owner.must(409, "POST", "/v1/settings/brand/preview", map[string]any{"theme": "editorial"})
+	keys, _ := forms.NewKeys(bytes.Repeat([]byte{7}, 32))
+	w.srv.Forms = &forms.Service{Pool: w.env.DB.App, Keys: keys, FormHost: "forms.taskiem.test"}
+	pages := owner.must(200, "POST", "/v1/settings/brand/preview", map[string]any{"theme": "editorial", "color": "#1f3a5f"})["pages"].(map[string]any)
+	for _, page := range publicweb.PreviewPages {
+		u, _ := pages[page].(string)
+		if !strings.HasPrefix(u, "https://forms.taskiem.test/_preview/"+page+"?p=") {
+			t.Errorf("%s: %q", page, u)
+		}
+	}
+	owner.must(400, "POST", "/v1/settings/brand/preview", map[string]any{"theme": "neon"})
+	if got := owner.must(200, "GET", "/v1/settings/brand", nil); got["theme"] != "bold" {
+		t.Errorf("a preview changed the brand: %v", got)
 	}
 
 	// Members who may not manage the storefront cannot change it.

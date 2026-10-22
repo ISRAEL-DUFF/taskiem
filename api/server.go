@@ -454,6 +454,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
 			r.Get("/settings/brand", s.getBrand) // how public pages look (brand.go)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/brand", s.putBrand)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/settings/brand/preview", s.previewBrand)
 			r.With(s.need(PermWorkflowRead)).Get("/paystack/banks", s.listBanks) // pickers (lookups.go)
 			r.With(s.need(PermRunStart)).Post("/paystack/resolve", s.resolveAccount)
 			r.With(s.need(PermRunStart)).Post("/paystack/recipients", s.createRecipient)

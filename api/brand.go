@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/brand"
+	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -60,43 +62,108 @@ func (s *Server) getBrand(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, viewBrand(b))
 }
 
-// putBrand answers PUT /v1/settings/brand with {"theme", "color", "logo",
-// "cover"}: the whole look; an empty logo or cover takes it away. Pages
-// show it within the public host's cache (30 seconds).
-func (s *Server) putBrand(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Theme string `json:"theme"`
-		Color string `json:"color"`
-		Logo  string `json:"logo"`
-		Cover string `json:"cover"`
+// brandRequest is a look as the web app sends it.
+type brandRequest struct {
+	Theme string `json:"theme"`
+	Color string `json:"color"`
+	Logo  string `json:"logo"`
+	Cover string `json:"cover"`
+}
+
+// resolve checks a look and copies its images' URLs in.
+func (req brandRequest) resolve(r *http.Request, tx pgx.Tx, tenant uuid.UUID) (brand.Brand, error) {
+	b := brand.Brand{Theme: req.Theme, Color: req.Color, Logo: req.Logo, Cover: req.Cover}
+	if err := b.Check(); err != nil {
+		return b, fmt.Errorf("%w: %s", errBadRequest, plainError(err))
 	}
+	for _, img := range []struct {
+		id   string
+		urls *map[string]string
+		what string
+	}{{b.Logo, &b.LogoURLs, "logo"}, {b.Cover, &b.CoverURLs, "cover photo"}} {
+		if img.id == "" {
+			continue
+		}
+		urls, err := storefront.MediaImage(r.Context(), tx, tenant, img.id)
+		if errors.Is(err, storefront.ErrInvalid) {
+			return b, fmt.Errorf("%w: the %s: %s", errBadRequest, img.what, plainError(err))
+		}
+		if err != nil {
+			return b, err
+		}
+		*img.urls = urls
+	}
+	return b, nil
+}
+
+// previewBrand answers POST /v1/settings/brand/preview: the addresses of
+// the public pages drawn in a look not yet saved, with sample content and
+// the business's name, for the brand screen to frame. They work for an
+// hour (publicweb.PreviewTTL).
+func (s *Server) previewBrand(w http.ResponseWriter, r *http.Request) {
+	var req brandRequest
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	b := brand.Brand{Theme: req.Theme, Color: req.Color, Logo: req.Logo, Cover: req.Cover}
-	if err := b.Check(); err != nil {
-		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, plainError(err)))
+	if s.Forms == nil || s.Forms.FormHost == "" {
+		s.fail(w, r, fmt.Errorf("%w: previews need the public host (TASKIEM_PUBLIC_DOMAINS)", errConflict))
 		return
 	}
 	p := principalFrom(r.Context())
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		for _, img := range []struct {
-			id   string
-			urls *map[string]string
-			what string
-		}{{b.Logo, &b.LogoURLs, "logo"}, {b.Cover, &b.CoverURLs, "cover photo"}} {
-			if img.id == "" {
-				continue
-			}
-			urls, err := storefront.MediaImage(r.Context(), tx, p.TenantID, img.id)
-			if errors.Is(err, storefront.ErrInvalid) {
-				return fmt.Errorf("%w: the %s: %s", errBadRequest, img.what, plainError(err))
-			}
-			if err != nil {
-				return err
-			}
-			*img.urls = urls
+	var b brand.Brand
+	var name string
+	if err := s.tx(r, func(tx pgx.Tx) (err error) {
+		if b, err = req.resolve(r, tx, p.TenantID); err != nil {
+			return err
+		}
+		return tx.QueryRow(r.Context(), `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&name)
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	pv := publicweb.Preview{Theme: b.Theme, Color: b.Color, Name: name, Expires: time.Now().Add(publicweb.PreviewTTL)}
+	if b.Logo != "" {
+		pv.Logo, pv.LogoLarge = firstURL(b.LogoURLs, "320", "800"), firstURL(b.LogoURLs, "800", "2000")
+	}
+	if b.Cover != "" {
+		pv.Cover, pv.CoverLarge = firstURL(b.CoverURLs, "800", "2000"), firstURL(b.CoverURLs, "2000", "800")
+	}
+	pages := map[string]string{}
+	for _, page := range publicweb.PreviewPages {
+		path, err := publicweb.PreviewPath(s.Forms.Keys, pv, page)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		pages[page] = "https://" + s.Forms.FormHost + path
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"pages": pages})
+}
+
+func firstURL(urls map[string]string, keys ...string) string {
+	for _, k := range keys {
+		if u := urls[k]; u != "" {
+			return u
+		}
+	}
+	return ""
+}
+
+// putBrand answers PUT /v1/settings/brand with {"theme", "color", "logo",
+// "cover"}: the whole look; an empty logo or cover takes it away. Pages
+// show it within the public host's cache (30 seconds).
+func (s *Server) putBrand(w http.ResponseWriter, r *http.Request) {
+	var req brandRequest
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	var b brand.Brand
+	if err := s.tx(r, func(tx pgx.Tx) (err error) {
+		if b, err = req.resolve(r, tx, p.TenantID); err != nil {
+			return err
 		}
 		raw, err := json.Marshal(b)
 		if err != nil {

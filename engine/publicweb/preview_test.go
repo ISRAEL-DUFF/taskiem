@@ -7,11 +7,11 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/brand"
-	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // TestWritePreview draws the main pages in every theme into the folder
@@ -77,34 +77,43 @@ func TestWritePreview(t *testing.T) {
 	write("index.html", []byte(index.String()))
 }
 
-// previewShop is a storefront with a catalogue in sections, as a real one
-// would look.
+// previewShop is the sample shop with every form, as a real one would
+// look.
 func previewShop() StorefrontPage {
-	p := samplePage("classic", 0)
-	p.Model.Card.Name = "Adunni Bakes"
-	p.Model.Card.Tagline = "Celebration cakes, small chops and pastries, baked fresh every morning."
-	p.Model.Card.Area = "Lekki Phase 1, Lagos"
-	p.Model.Card.Address = "14 Admiralty Way, Lekki Phase 1, Lagos"
+	p := SampleShop("Adunni Bakes")
 	p.Model.Actions = allForms()
-	items := []struct {
-		name, desc, cat string
-		kobo            int64
-		sold            bool
-	}{
-		{"Party pack, 50 pieces", "Puff-puff, samosa, spring rolls, chicken and gizdodo.", "Small chops", 2500000, false},
-		{"Puff-puff, 20 pieces", "Soft, golden, dusted with sugar.", "Small chops", 350000, false},
-		{"Samosa and spring rolls, 12", "Six of each, with sweet chilli dip.", "Small chops", 600000, false},
-		{"Red velvet, 8 inch", "Cream cheese frosting. Order a day ahead.", "Cakes", 3800000, false},
-		{"Chocolate fudge, 8 inch", "Back on Saturday.", "Cakes", 3500000, true},
-		{"Meat pie, box of 6", "Minced beef, potato and carrot.", "Pastries", 480000, false},
-	}
-	none := int64(0)
-	for i, it := range items {
-		x := storefront.Item{ID: string(rune('1' + i)), Name: it.name, Description: it.desc, Category: it.cat, PriceKobo: kobo(it.kobo), Available: true}
-		if it.sold {
-			x.Stock = &none
-		}
-		p.Items = append(p.Items, x)
-	}
 	return p
+}
+
+func TestPreviewPage(t *testing.T) {
+	e := newFormHost(t)
+	for _, page := range PreviewPages {
+		path, err := PreviewPath(*e.s.FormKeys, Preview{Theme: "bold", Color: "#123456", Name: "Glow <Studio>", Logo: "https://img.test/l.jpg",
+			Expires: e.now.Add(PreviewTTL)}, page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := e.get(path)
+		body := w.Body.String()
+		if w.Code != 200 || !strings.Contains(body, "theme-bold.") || !strings.Contains(body, "/_brand/1/123456.css") || !strings.Contains(body, "Glow &lt;Studio&gt;") {
+			t.Fatalf("%s: %d\n%s", page, w.Code, body)
+		}
+		if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "frame-ancestors https://app.taskiem.test") || w.Header().Get("Cache-Control") != "no-store" {
+			t.Errorf("%s: headers %v", page, w.Header())
+		}
+		if page == "storefront" && !strings.Contains(body, `src="https://img.test/l.jpg"`) {
+			t.Error("the preview has no logo")
+		}
+	}
+	// A preview is made by the api role only, and does not last.
+	for _, path := range []string{"/_preview/storefront?p=" + "eyJ0aGVtZSI6ImJvbGQifQ", "/_preview/storefront", "/_preview/admin?p=x"} {
+		if w := e.get(path); w.Code != 404 {
+			t.Errorf("%s: %d", path, w.Code)
+		}
+	}
+	old, _ := PreviewPath(*e.s.FormKeys, Preview{Theme: "bold", Name: "Old", Expires: e.now.Add(PreviewTTL)}, "storefront")
+	e.tick(PreviewTTL + time.Minute)
+	if w := e.get(old); w.Code != 404 {
+		t.Errorf("an expired preview: %d", w.Code)
+	}
 }

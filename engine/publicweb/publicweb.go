@@ -295,10 +295,15 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		serveBrandCSS(w, r)
 		return
 	}
+
 	// Static files are immutable and cheap, so only pages are counted.
 	if !s.Views.Allow(s.ClientIP(r)) {
 		w.Header().Set("Retry-After", "60")
 		s.page(w, r, http.StatusTooManyRequests, "unavailable", pageData{Title: "Too many requests"})
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, previewPrefix) {
+		s.servePreview(w, r)
 		return
 	}
 	host := hostOf(r)
