@@ -273,8 +273,8 @@ func (f *Fake) advance(op *Operation) {
 }
 
 // serveCreateToken is POST /api/v1/tokens: a token made by a token never
-// exceeds the caller's scopes, projects or expiry, and lasts at most a
-// year.
+// exceeds the caller's scopes or projects, never outlives it (refused, as
+// Xenibase refuses it), and lasts at most a year.
 func (f *Fake) serveCreateToken(w http.ResponseWriter, r *http.Request, tok Token) {
 	var req struct {
 		Name          string   `json:"name"`
@@ -334,8 +334,10 @@ func (f *Fake) serveCreateToken(w http.ResponseWriter, r *http.Request, tok Toke
 		days = 90
 	}
 	expires := f.Now().Add(time.Duration(days) * 24 * time.Hour)
-	if expires.After(tok.ExpiresAt) {
-		expires = tok.ExpiresAt
+	if !tok.ExpiresAt.IsZero() && expires.After(tok.ExpiresAt) {
+		// As Xenibase answers it.
+		refuse(w, http.StatusForbidden, "insufficient_scope", "a token can't create a token that outlives it")
+		return
 	}
 	raw := make([]byte, 20)
 	_, _ = rand.Read(raw)

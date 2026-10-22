@@ -27,3 +27,4 @@ connector.wasm
 # VM deployment secrets (deploy/vm/*.example are the templates)
 deploy/vm/.env
 deploy/vm/*.env
+.DS_Store

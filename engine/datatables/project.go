@@ -253,7 +253,14 @@ func (s *Service) provision(ctx context.Context, c *client, tenant uuid.UUID, p 
 	if svc.URL == "" {
 		return fail(fmt.Errorf("%w: the project has no data API URL (the Xenibase server has no API domain)", ErrProjectFailed))
 	}
-	tok, err := c.createToken(ctx, s.Platform.Org, TokenName, p.ProjectID, []string{"read", "write", "admin"}, 365)
+	days, err := c.tokenDays(ctx, s.now())
+	if err != nil {
+		return fail(err)
+	}
+	if days < 365 {
+		s.log().Warn("data tables: the platform's Xenibase token expires in less than a year; the project's token lasts as long", "days", days)
+	}
+	tok, err := c.createToken(ctx, s.Platform.Org, TokenName, p.ProjectID, []string{"read", "write", "admin"}, days)
 	if err != nil {
 		return fail(err)
 	}

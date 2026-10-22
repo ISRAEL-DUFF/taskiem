@@ -107,9 +107,10 @@ func TestFirstTableProvisionsProject(t *testing.T) {
 		t.Errorf("token expires in %s, want a year", exp)
 	}
 	// The calls, in order: the search by name, the create, two polls,
-	// the services (off), enable, two polls, the token.
+	// the services (off), enable, two polls, how long the platform's token
+	// has left, the token.
 	want := []string{"GET /api/v1/projects", "POST /api/v1/projects", "GET /api/v1/operations/", "GET /api/v1/operations/",
-		"GET /api/v1/projects/" + p.ProjectID + "/services", "POST /api/v1/projects/" + p.ProjectID + "/services", "GET /api/v1/operations/", "GET /api/v1/operations/", "POST /api/v1/tokens"}
+		"GET /api/v1/projects/" + p.ProjectID + "/services", "POST /api/v1/projects/" + p.ProjectID + "/services", "GET /api/v1/operations/", "GET /api/v1/operations/", "GET /api/v1/me", "POST /api/v1/tokens"}
 	if len(w.pg.Requests) != len(want) {
 		t.Fatalf("requests %v", w.pg.Requests)
 	}
@@ -490,5 +491,25 @@ func TestCheckRow(t *testing.T) {
 		if datatables.CheckName("column", name) == nil {
 			t.Errorf("%q accepted", name)
 		}
+	}
+}
+
+// Xenibase refuses a token that outlives the one making it: with a platform
+// token that has less than a year left, the project's token lasts as long,
+// and renewing it, which would gain nothing, asks for the platform's to be
+// replaced instead.
+func TestProjectTokenNeverOutlivesThePlatforms(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	w.pg.AddToken(xenibasetest.Token{Secret: platformToken, ID: "tok-platform", Name: "taskiem-platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: w.now.Add(40*24*time.Hour + time.Hour)})
+	p, err := w.svc.EnsureProject(ctx, w.Tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp := p.TokenExpiresAt.Sub(w.now); exp < 39*24*time.Hour || exp > 41*24*time.Hour {
+		t.Fatalf("token expires in %s, want the platform's 40 days", exp)
+	}
+	if err := w.svc.Renew(ctx, w.Tenant); err == nil || !strings.Contains(err.Error(), "TASKIEM_XENIBASE_TOKEN") {
+		t.Fatalf("renewing: %v", err)
 	}
 }
