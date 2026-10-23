@@ -1092,6 +1092,10 @@
       "text": "{amount} enter for {when} through {channel}.\n\nNa for {number} be dis, {due} wey the customer owe? {reasons}.",
       "reviewed": false
     },
+    "wa.match.ask_order": {
+      "text": "{amount} enter for {when} through {channel}.\n\nNa for shop order {number} be dis, {due} to pay? {reasons}.",
+      "reviewed": false
+    },
     "wa.match.channel.cash": {
       "text": "cash",
       "reviewed": false
@@ -1102,6 +1106,10 @@
     },
     "wa.match.denied": {
       "text": "You no fit match payment for {org}.",
+      "reviewed": false
+    },
+    "wa.match.matched_order": {
+      "text": "E don match order {number}. Dem don pay am now.",
       "reviewed": false
     },
     "wa.match.matched_paid": {

@@ -43,9 +43,19 @@ import {
   rejectedLine,
   scoreWords,
   suggestionPath,
+  howMatchedOrder,
+  isOrder,
+  matchChoices,
+  matchRequest,
+  orderPaymentRows,
+  orderPaymentUndoPath,
+  pickerWords,
+  targetLabel,
+  targetPath,
   type CustomerInvoice,
   type InvoiceForm,
   type InvoicePayment,
+  type MoneyOpenOrder,
   type MoneySuggestion,
 } from "./invoices";
 
@@ -450,5 +460,80 @@ describe("payments left to match by hand", () => {
     expect(unmatchedPayments([u])).toEqual([{ ...u, candidates: [] }]);
     expect(unmatchedPayments(null)).toEqual([]);
     expect(UNMATCHED_PATH).toBe("/v1/money/unmatched");
+  });
+});
+
+describe("matching money to storefront orders", () => {
+  const order = (id: string, extra: Partial<MoneySuggestion> = {}): MoneySuggestion => ({
+    id,
+    entry_id: "e1",
+    target_kind: "order",
+    target: `order:AK-${id}`,
+    invoice_id: null,
+    order_id: `ord-${id}`,
+    number: `AK-${id}`,
+    due_kobo: 300000,
+    customer: "B•••",
+    score: 90,
+    reasons: ["the reference mentions AK-" + id],
+    status: "open",
+    amount_kobo: 300000,
+    channel: "paystack/main",
+    reference: "TRF",
+    received_at: "2026-10-22T10:00:00Z",
+    kind: "account_credit",
+    ...extra,
+  });
+  const inv = { id: "i1", number: "INV-0001", status: "sent", due_kobo: 250000, customer: { name: "A•••" } } as unknown as CustomerInvoice;
+  const open: MoneyOpenOrder[] = [
+    { target_kind: "order", target: "order:AK-1", number: "AK-1", due_kobo: 300000, customer: "B•••", placed_at: "2026-10-22T09:00:00Z" },
+    { target_kind: "order", target: "order:AK-2", number: "AK-2", due_kobo: 120000, customer: "C•••", placed_at: "2026-10-22T09:00:00Z" },
+  ];
+
+  it("names an order and links to it", () => {
+    const o = order("1");
+    expect(isOrder(o)).toBe(true);
+    expect(targetLabel(o)).toBe("Order AK-1");
+    expect(targetPath(o)).toBe("/storefront/orders/AK-1");
+    const i = { target_kind: "invoice" as const, number: "INV-0001" };
+    expect(isOrder(i)).toBe(false);
+    expect(targetLabel(i)).toBe("INV-0001");
+    expect(targetPath(i)).toBe("/invoices/INV-0001");
+    // A suggestion with no kind is an invoice's.
+    expect(targetLabel({ number: "INV-0002" })).toBe("INV-0002");
+  });
+
+  it("offers invoices and orders by hand, leaving out what is suggested", () => {
+    const c = matchChoices([inv], open, [order("1")]);
+    expect(c.map((x) => x.value)).toEqual(["i1", "order:AK-2"]);
+    expect(c[1]).toEqual({ value: "order:AK-2", kind: "order", number: "AK-2", label: `Order AK-2 · ${naira(120000)} to pay · C•••` });
+    expect(matchChoices([inv], null, [])).toHaveLength(1);
+    expect(matchRequest("order:AK-2")).toEqual({ order: "AK-2" });
+    expect(matchRequest("i1")).toEqual({ invoice: "i1" });
+  });
+
+  it("words the picker for invoices only until there are orders", () => {
+    expect(pickerWords(false).summary).toBe("Match to another invoice…");
+    expect(pickerWords(false).label).toBe("Invoice");
+    expect(pickerWords(true).summary).toBe("Match to another invoice or order…");
+    expect(pickerWords(true).submit).toBe("Match to this one");
+  });
+
+  it("says what happened to an order", () => {
+    expect(matchedLine(300000, "AK-1", "order")).toMatch(/matched to order AK-1\. If that is wrong, undo it on the order\.$/);
+    expect(rejectedLine("AK-1", "order")).toBe("Order AK-1 will not be suggested for this payment again.");
+    expect(orderPaymentUndoPath("p/1")).toBe("/v1/money/order-payments/p%2F1/undo");
+  });
+
+  it("lists an order's matches with their undoings folded in", () => {
+    const p = { id: "p1", entry_id: "e1", amount_kobo: 300000, how: "suggested", by: "user:ada", reasons: [], undoable: true, created_at: "2026-10-22T10:00:00Z" };
+    const rows = orderPaymentRows([{ ...p, undone_by: "p2", undoable: false }, { ...p, id: "p2", undoes: "p1", how: "manual" }, { ...p, id: "p3", how: "exact" }]);
+    expect(rows.map((r) => [r.payment.id, r.undone])).toEqual([
+      ["p1", true],
+      ["p3", false],
+    ]);
+    expect(howMatchedOrder("exact")).toBe("Paid through the order's checkout page");
+    expect(howMatchedOrder("suggested", "user:ada")).toBe("Suggested, confirmed by user:ada");
+    expect(orderPaymentRows(undefined)).toEqual([]);
   });
 });

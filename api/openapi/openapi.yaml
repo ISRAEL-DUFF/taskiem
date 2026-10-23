@@ -1369,12 +1369,17 @@ paths:
       tags:
       - Invoices
       summary: Suggested matches waiting for a person
-      description: "Money received that may be for an open invoice, with each suggestion's score and reasons, newest payment first (docs/matching.md)."
+      description: "Money received that may be for an open invoice or storefront order, with each suggestion's score and reasons, newest payment first (docs/matching.md). Customers' names are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited."
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.read
+      parameters:
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
       responses:
         '200':
           description: The open suggestions
@@ -1388,6 +1393,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/MoneySuggestion'
+                  revealed:
+                    type: boolean
         default:
           $ref: '#/components/responses/Error'
   /v1/money/unmatched:
@@ -1396,12 +1403,17 @@ paths:
       tags:
       - Invoices
       summary: Money received that matching left for a person
-      description: "Payments with no open suggestion that count towards no invoice, newest first, to match by hand (docs/matching.md)."
+      description: "Payments with no open suggestion that count towards no invoice or order, newest first, to match by hand, and the storefront orders they can be matched to (docs/matching.md). Customers' names are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited."
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.read
+      parameters:
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
       responses:
         '200':
           description: The payments
@@ -1415,6 +1427,13 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/UnmatchedMoney'
+                  orders:
+                    type: array
+                    description: Storefront orders not yet paid, cancelled, expired or decided against, newest first
+                    items:
+                      $ref: '#/components/schemas/MoneyOpenOrder'
+                  revealed:
+                    type: boolean
         default:
           $ref: '#/components/responses/Error'
   /v1/money/suggestions/{id}/confirm:
@@ -1422,8 +1441,8 @@ paths:
       operationId: confirmMoneySuggestion
       tags:
       - Invoices
-      summary: Match a payment to the invoice suggested
-      description: "The payment counts towards the invoice; the payment's other suggestions close. Undo it as any payment of the invoice."
+      summary: Match a payment to the invoice or order suggested
+      description: "The payment counts towards the invoice or storefront order; the payment's other suggestions close. Undo it as any payment of the invoice, or with /v1/money/order-payments/{id}/undo."
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -1438,11 +1457,13 @@ paths:
           format: uuid
       responses:
         '200':
-          description: The invoice
+          description: The invoice, or the order
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerInvoice'
+                anyOf:
+                - $ref: '#/components/schemas/CustomerInvoice'
+                - $ref: '#/components/schemas/MatchedOrder'
         default:
           $ref: '#/components/responses/Error'
   /v1/money/suggestions/{id}/reject:
@@ -1484,8 +1505,8 @@ paths:
       operationId: matchMoneyEntry
       tags:
       - Invoices
-      summary: Match a payment to an invoice by hand
-      description: "For money in that no suggestion fits. {id} is the money log entry. One payment counts towards one invoice at a time."
+      summary: Match a payment to an invoice or order by hand
+      description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both. One payment counts towards one invoice or order at a time; an order takes one payment of at least what is due."
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -1504,18 +1525,53 @@ paths:
           application/json:
             schema:
               type: object
-              required: [invoice]
+              oneOf:
+              - required: [invoice]
+              - required: [order]
               properties:
                 invoice:
                   type: string
                   description: The invoice's id or number
+                order:
+                  type: string
+                  description: The storefront order's reference, like AK-7QX4KD
       responses:
         '200':
-          description: The invoice
+          description: The invoice, or the order
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerInvoice'
+                anyOf:
+                - $ref: '#/components/schemas/CustomerInvoice'
+                - $ref: '#/components/schemas/MatchedOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/order-payments/{id}/undo:
+    post:
+      operationId: undoMoneyOrderPayment
+      tags:
+      - Invoices
+      summary: Undo a payment matched to a storefront order
+      description: "The payment stays, and a row naming it takes it out; the money goes back to be matched. When that payment paid the order, the order goes back to unpaid. Refused (409) when the order went on: its workflow was started or told it was paid, it was paid through its checkout page, or it has been decided since (docs/matching.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchedOrder'
         default:
           $ref: '#/components/responses/Error'
   /v1/money/leaks:
@@ -2066,6 +2122,11 @@ paths:
                 properties:
                   order:
                     $ref: '#/components/schemas/StorefrontOrder'
+                  payments:
+                    type: array
+                    description: Money matched to the order, and undoings of it (docs/matching.md)
+                    items:
+                      $ref: '#/components/schemas/StorefrontOrderPayment'
                   revealed:
                     type: boolean
         default:
@@ -17246,7 +17307,7 @@ components:
           type: boolean
     MoneySuggestion:
       type: object
-      required: [id, entry_id, invoice_id, number, score, reasons, status, amount_kobo, channel, reference, received_at, kind]
+      required: [id, entry_id, target_kind, target, invoice_id, number, due_kobo, score, reasons, status, amount_kobo, channel, reference, received_at, kind]
       properties:
         id:
           type: string
@@ -17254,11 +17315,29 @@ components:
         entry_id:
           type: string
           format: uuid
+        target_kind:
+          type: string
+          enum: [invoice, order]
+        target:
+          type: string
+          description: "What the payment may be for, as money_matches names it: invoice:INV-0104 or order:AK-7QX4KD"
         invoice_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        order_id:
           type: string
           format: uuid
         number:
           type: string
+          description: The invoice's number, or the order's reference
+        due_kobo:
+          type: integer
+          description: What is due on the invoice, or paid online for the order (its deposit, or its total)
+        customer:
+          type: string
+          description: The customer's name, masked unless revealed
         score:
           type: integer
           minimum: 0
@@ -17283,6 +17362,85 @@ components:
           format: date-time
         kind:
           type: string
+    MoneyOpenOrder:
+      type: object
+      required: [target_kind, target, number, due_kobo, customer, placed_at]
+      properties:
+        target_kind:
+          type: string
+          enum: [order]
+        target:
+          type: string
+        number:
+          type: string
+          description: The order's reference
+        due_kobo:
+          type: integer
+        customer:
+          type: string
+          description: The customer's name, masked unless revealed
+        placed_at:
+          type: string
+          format: date-time
+    MatchedOrder:
+      type: object
+      required: [target, reference, status, paid_at, due_kobo, total_kobo, customer, payments]
+      properties:
+        target:
+          type: string
+        reference:
+          type: string
+        status:
+          type: string
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        due_kobo:
+          type: integer
+        total_kobo:
+          type: integer
+        customer:
+          type: string
+          description: The customer's name, masked
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorefrontOrderPayment'
+    StorefrontOrderPayment:
+      type: object
+      required: [id, entry_id, amount_kobo, how, by, reasons, undoable, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        entry_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        how:
+          type: string
+          enum: [exact, suggested, suggested_auto, manual]
+        by:
+          type: string
+        reasons:
+          type: array
+          items:
+            type: string
+        undoes:
+          type: string
+          format: uuid
+        undone_by:
+          type: string
+          format: uuid
+        undoable:
+          type: boolean
+          description: False once the order went on to be fulfilled
+        created_at:
+          type: string
+          format: date-time
     UnmatchedMoney:
       type: object
       required: [entry_id, amount_kobo, channel, reference, received_at, kind]

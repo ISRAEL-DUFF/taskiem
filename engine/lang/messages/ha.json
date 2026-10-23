@@ -1092,6 +1092,10 @@
       "text": "{amount} ya shigo a {when} ta {channel}.\n\nShin na {number} ne, {due} da abokin ciniki ke bi? {reasons}.",
       "reviewed": false
     },
+    "wa.match.ask_order": {
+      "text": "{amount} ya shigo a {when} ta {channel}.\n\nShin na odar shago {number} ne, {due} da za a biya? {reasons}.",
+      "reviewed": false
+    },
     "wa.match.channel.cash": {
       "text": "kuɗi a hannu",
       "reviewed": false
@@ -1102,6 +1106,10 @@
     },
     "wa.match.denied": {
       "text": "Ba za ku iya haɗa kuɗi a {org} ba.",
+      "reviewed": false
+    },
+    "wa.match.matched_order": {
+      "text": "An haɗa da odar {number}. An biya ta yanzu.",
       "reviewed": false
     },
     "wa.match.matched_paid": {

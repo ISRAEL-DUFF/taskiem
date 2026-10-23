@@ -126,13 +126,19 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	ref := chi.URLParam(r, "reference")
 	var o storefront.Order
+	var pays []storefront.OrderPayment
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		o, err = s.Orders.GetOrder(r.Context(), tx, principalFrom(r.Context()).TenantID, ref)
 		if errors.Is(err, storefront.ErrNoOrder) {
 			return pgx.ErrNoRows
 		}
-		if err != nil || !reveal {
+		if err != nil {
+			return err
+		}
+		// The money matched to it (docs/matching.md), undone with
+		// /v1/money/order-payments/{id}/undo.
+		if pays, err = storefront.PaymentsOf(r.Context(), tx, principalFrom(r.Context()).TenantID, o.ID); err != nil || !reveal {
 			return err
 		}
 		return auditTx(r, tx, "pii.reveal", "storefront_order:"+ref, nil)
@@ -144,7 +150,7 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	if !reveal {
 		maskCustomer(&o.Customer)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": o, "revealed": reveal})
+	writeJSON(w, http.StatusOK, map[string]any{"order": o, "payments": pays, "revealed": reveal})
 }
 
 // maskCustomer leaves enough to recognise a customer: a name's first

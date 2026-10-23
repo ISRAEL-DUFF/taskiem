@@ -1,15 +1,16 @@
 // Package matching matches the money a business receives to its invoices
-// (decision 0045 point 6; docs/spec/invoices-and-money-log.md 8, T5;
-// docs/matching.md).
+// and storefront orders (decision 0045 point 6; docs/spec/
+// invoices-and-money-log.md 8, T5; docs/matching.md).
 //
 // Every money-in entry of the money log is looked at once. A payment into
-// an account number or link Taskiem gave for an invoice is matched
-// exactly, with no one asked. Any other gets up to three suggestions
-// among the business's open invoices, each with its reasons; a person
-// confirms or rejects one, or, when the business has turned automatic
-// matching on, a strong and clear suggestion is matched on its own. A
-// match is a payment of the invoice (customer_invoice_payments): undone,
-// never changed.
+// an account number or link Taskiem gave for an invoice, or through a
+// storefront order's checkout page, is matched exactly, with no one asked.
+// Any other gets up to three suggestions among the business's open
+// invoices and orders, each with its reasons; a person confirms or rejects
+// one, or, when the business has turned automatic matching on, a strong
+// and clear suggestion is matched on its own. A match is a payment of the
+// invoice (customer_invoice_payments) or of the order
+// (storefront_order_payments): undone, never changed.
 package matching
 
 import (
@@ -29,6 +30,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // Thresholds of the score (0 to 100).
@@ -47,9 +49,11 @@ const (
 // Matcher looks at new money-in entries and matches or suggests.
 type Matcher struct {
 	Invoices *invoicing.Invoices
-	PII      pii.Cipher
-	Logger   *slog.Logger
-	Now      func() time.Time
+	// Orders are the storefront's orders; nil: orders are not matched.
+	Orders *storefront.Orders
+	PII    pii.Cipher
+	Logger *slog.Logger
+	Now    func() time.Time
 	// Suggested, when set, is told of a payment that got suggestions and
 	// was not matched on its own, with its new suggestions (ids set), best
 	// first: chat asks the business's people (api). It is not told of
@@ -192,11 +196,26 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 	case !errors.Is(err, pgx.ErrNoRows):
 		return err
 	}
+	// Exact: the reference is a storefront order's checkout page.
+	if m.Orders != nil {
+		var order string
+		err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			order, err = storefront.ForCheckout(ctx, tx, tenant, e.Channel, e.Reference)
+			return err
+		})
+		switch {
+		case err == nil:
+			return m.exactOrder(ctx, tenant, e, order)
+		case !errors.Is(err, storefront.ErrNoOrder):
+			return err
+		}
+	}
 	if e.AmountKobo <= 0 {
 		return m.mark(ctx, tenant, e.ID, "unmatched")
 	}
 
-	// Suggested: the business's open invoices, scored.
+	// Suggested: the business's open invoices and orders, scored.
 	var found []Suggestion
 	var auto bool
 	err = db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -223,6 +242,18 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 				found = append(found, s)
 			}
 		}
+		if m.Orders == nil {
+			return nil
+		}
+		orders, err := m.Orders.Matchables(ctx, tx, tenant, 500)
+		if err != nil {
+			return err
+		}
+		for _, x := range orders {
+			if s, ok := ScoreOrder(e.AmountKobo, e.Payer, e.Reference, e.When, x); ok {
+				found = append(found, s)
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -242,8 +273,9 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 		for i, s := range found {
 			reasons, _ := json.Marshal(s.Reasons)
 			id := uuid.New()
-			tag, err := tx.Exec(ctx, `INSERT INTO money_suggestions (id, tenant_id, entry_id, invoice_id, score, reasons) VALUES ($1, $2, $3, $4, $5, $6)
-				ON CONFLICT (entry_id, invoice_id) DO NOTHING`, id, tenant, e.ID, s.InvoiceID, s.Score, reasons)
+			// A suggestion made before (and rejected) is not made again.
+			tag, err := tx.Exec(ctx, `INSERT INTO money_suggestions (id, tenant_id, entry_id, invoice_id, order_id, score, reasons) VALUES ($1, $2, $3, $4, $5, $6, $7)
+				ON CONFLICT DO NOTHING`, id, tenant, e.ID, s.InvoiceID, s.OrderID, s.Score, reasons)
 			if err != nil {
 				return err
 			}
@@ -286,38 +318,80 @@ func (m *Matcher) mark(ctx context.Context, tenant, entryID uuid.UUID, state str
 	})
 }
 
-// Suggestion is an open invoice a payment may be for, and why.
+// Kinds of what a payment counts towards.
+const (
+	TargetInvoice = "invoice"
+	TargetOrder   = "order"
+)
+
+// Suggestion is an open invoice or order a payment may be for, and why.
 type Suggestion struct {
-	ID        uuid.UUID `json:"id,omitempty"`
-	EntryID   uuid.UUID `json:"entry_id,omitempty"`
-	InvoiceID uuid.UUID `json:"invoice_id"`
-	Number    string    `json:"number"`
-	Score     int       `json:"score"`
-	Reasons   []string  `json:"reasons"`
-	Status    string    `json:"status,omitempty"`
+	ID      uuid.UUID `json:"id,omitempty"`
+	EntryID uuid.UUID `json:"entry_id,omitempty"`
+	// TargetKind is invoice or order; Target names it as money_matches
+	// does: invoice:INV-0104, order:AK-7QX4KD.
+	TargetKind string     `json:"target_kind"`
+	Target     string     `json:"target"`
+	InvoiceID  *uuid.UUID `json:"invoice_id"`
+	OrderID    *uuid.UUID `json:"order_id,omitempty"`
+	// Number is the invoice's number or the order's reference.
+	Number  string   `json:"number"`
+	Score   int      `json:"score"`
+	Reasons []string `json:"reasons"`
+	Status  string   `json:"status,omitempty"`
+}
+
+// candidate is an open invoice or order as scoring sees it.
+type candidate struct {
+	invoice, order *uuid.UUID
+	number         string
+	due            int64
+	part           bool
+	customer       string
+	since          *time.Time // when it was sent (invoice) or placed (order)
+	verb           string     // sent or placed
 }
 
 // Score rates an open invoice for a payment of amount from payer with
 // reference, received at when; ok is false below Suggest, for a payment
 // before the invoice was sent, or for an invoice with nothing due.
 func Score(amount int64, payer, reference string, when time.Time, x invoicing.Invoice) (Suggestion, bool) {
-	s := Suggestion{InvoiceID: x.ID, Number: x.Number}
-	if x.DueKobo <= 0 || x.SentAt == nil || when.Before(x.SentAt.Add(-time.Hour)) {
+	id := x.ID
+	return score(amount, payer, reference, when, candidate{invoice: &id, number: x.Number, due: x.DueKobo, part: x.AllowPartPayments,
+		customer: x.Customer.Name, since: x.SentAt, verb: "sent"})
+}
+
+// ScoreOrder rates an open storefront order as Score does an invoice:
+// what is due is what is paid online (the deposit, or the total), the
+// customer is the order's, and the days count from when it was placed.
+// An order takes no part payments.
+func ScoreOrder(amount int64, payer, reference string, when time.Time, x storefront.Order) (Suggestion, bool) {
+	id, placed := x.ID, x.CreatedAt
+	return score(amount, payer, reference, when, candidate{order: &id, number: x.Reference, due: x.Payable(), customer: x.Customer.Name, since: &placed, verb: "placed"})
+}
+
+func score(amount int64, payer, reference string, when time.Time, x candidate) (Suggestion, bool) {
+	s := Suggestion{InvoiceID: x.invoice, OrderID: x.order, Number: x.number, TargetKind: TargetInvoice}
+	if x.order != nil {
+		s.TargetKind = TargetOrder
+	}
+	s.Target = s.TargetKind + ":" + x.number
+	if x.due <= 0 || x.since == nil || when.Before(x.since.Add(-time.Hour)) {
 		return s, false
 	}
 	switch {
-	case amount == x.DueKobo:
+	case amount == x.due:
 		s.Score += 50
-		s.Reasons = append(s.Reasons, "same amount as what is due on "+x.Number+" ("+invoicing.Naira(amount)+")")
-	case x.AllowPartPayments && amount < x.DueKobo:
+		s.Reasons = append(s.Reasons, "same amount as what is due on "+x.number+" ("+invoicing.Naira(amount)+")")
+	case x.part && amount < x.due:
 		s.Score += 15
-		s.Reasons = append(s.Reasons, "part of what is due on "+x.Number+", which takes part payments")
+		s.Reasons = append(s.Reasons, "part of what is due on "+x.number+", which takes part payments")
 	}
-	if mentions(reference, x.Number) {
+	if mentions(reference, x.number) {
 		s.Score += 40
-		s.Reasons = append(s.Reasons, "the reference mentions "+x.Number)
+		s.Reasons = append(s.Reasons, "the reference mentions "+x.number)
 	}
-	switch n := nameMatch(payer, x.Customer.Name); n {
+	switch n := nameMatch(payer, x.customer); n {
 	case 2:
 		s.Score += 35
 		s.Reasons = append(s.Reasons, "the payer's name matches the customer's")
@@ -328,20 +402,20 @@ func Score(amount int64, payer, reference string, when time.Time, x invoicing.In
 	if s.Score == 0 {
 		return s, false
 	}
-	days := int(when.Sub(*x.SentAt).Hours() / 24)
+	days := int(when.Sub(*x.since).Hours() / 24)
 	switch {
 	case days <= 0:
 		s.Score += 15
-		s.Reasons = append(s.Reasons, "the day "+x.Number+" was sent")
+		s.Reasons = append(s.Reasons, "the day "+x.number+" was "+x.verb)
 	case days <= 3:
 		s.Score += 15
-		s.Reasons = append(s.Reasons, fmt.Sprintf("%s after %s was sent", plural(days, "day"), x.Number))
+		s.Reasons = append(s.Reasons, fmt.Sprintf("%s after %s was %s", plural(days, "day"), x.number, x.verb))
 	case days <= 14:
 		s.Score += 10
-		s.Reasons = append(s.Reasons, fmt.Sprintf("%s after %s was sent", plural(days, "day"), x.Number))
+		s.Reasons = append(s.Reasons, fmt.Sprintf("%s after %s was %s", plural(days, "day"), x.number, x.verb))
 	case days <= 60:
 		s.Score += 5
-		s.Reasons = append(s.Reasons, fmt.Sprintf("%s after %s was sent", plural(days, "day"), x.Number))
+		s.Reasons = append(s.Reasons, fmt.Sprintf("%s after %s was %s", plural(days, "day"), x.number, x.verb))
 	}
 	s.Score = min(s.Score, 100)
 	return s, s.Score >= Suggest
@@ -402,168 +476,4 @@ func nameMatch(payer, customer string) int {
 		return 1
 	}
 	return 0
-}
-
-// Confirm makes a suggestion a match: the payment counts towards its
-// invoice, the entry's other suggestions close, and a run waiting on the
-// invoice is told when it becomes paid. auto records it as matched
-// without asking.
-func (m *Matcher) Confirm(ctx context.Context, tenant, suggestion uuid.UUID, by string, auto bool) (invoicing.Invoice, error) {
-	var x invoicing.Invoice
-	var became bool
-	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var invoice, entryID uuid.UUID
-		var status, channel, reference string
-		var amount *int64
-		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT s.invoice_id, s.entry_id, s.status, s.reasons, e.amount_kobo, e.channel, e.reference
-			FROM money_suggestions s JOIN money_entries e ON e.id = s.entry_id WHERE s.tenant_id = $1 AND s.id = $2 FOR UPDATE OF s`, tenant, suggestion).
-			Scan(&invoice, &entryID, &status, &raw, &amount, &channel, &reference)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return invoicing.ErrNotFound
-		}
-		if err != nil {
-			return err
-		}
-		if status != "open" {
-			return fmt.Errorf("%w: this suggestion was %s", invoicing.ErrState, status)
-		}
-		var reasons []string
-		_ = json.Unmarshal(raw, &reasons)
-		how := "suggested"
-		if auto {
-			how = "suggested_auto"
-		}
-		if amount == nil || *amount <= 0 {
-			return fmt.Errorf("%w: the payment has no amount", invoicing.ErrState)
-		}
-		x, became, err = m.Invoices.RecordPayment(ctx, tx, tenant, invoice.String(), invoicing.PaymentIn{AmountKobo: *amount, PaymentID: reference,
-			EntryID: &entryID, Connection: channel, How: how, By: by, Reasons: reasons})
-		if err != nil {
-			return err
-		}
-		var pay uuid.UUID
-		if err := tx.QueryRow(ctx, `SELECT id FROM customer_invoice_payments WHERE tenant_id = $1 AND entry_id = $2 AND invoice_id = $3 AND undoes IS NULL
-			ORDER BY created_at DESC LIMIT 1`, tenant, entryID, invoice).Scan(&pay); err != nil {
-			return err
-		}
-		now := m.now()
-		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'confirmed', decided_by = $3, decided_at = $4, payment_id = $5 WHERE tenant_id = $1 AND id = $2`,
-			tenant, suggestion, by, now, pay); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'closed', decided_at = $3 WHERE tenant_id = $1 AND entry_id = $2 AND status = 'open'`,
-			tenant, entryID, now); err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, considered_at) VALUES ($1, $2, 'matched', $3)
-			ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = $3`, entryID, tenant, now)
-		return err
-	})
-	if err != nil || !became {
-		return x, err
-	}
-	return x, m.Invoices.Paid(ctx, tenant, x)
-}
-
-// Reject turns a suggestion down: it is not offered again.
-func (m *Matcher) Reject(ctx context.Context, tenant, suggestion uuid.UUID, by string) error {
-	return db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var entryID uuid.UUID
-		var status string
-		err := tx.QueryRow(ctx, `SELECT entry_id, status FROM money_suggestions WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, suggestion).Scan(&entryID, &status)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return invoicing.ErrNotFound
-		}
-		if err != nil {
-			return err
-		}
-		if status != "open" {
-			return fmt.Errorf("%w: this suggestion was %s", invoicing.ErrState, status)
-		}
-		now := m.now()
-		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'rejected', decided_by = $3, decided_at = $4 WHERE tenant_id = $1 AND id = $2`,
-			tenant, suggestion, by, now); err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `UPDATE money_match_state SET state = 'unmatched', considered_at = $3 WHERE tenant_id = $1 AND entry_id = $2
-			AND NOT EXISTS (SELECT 1 FROM money_suggestions s WHERE s.entry_id = $2 AND s.status = 'open')`, tenant, entryID, now)
-		return err
-	})
-}
-
-// Open lists the suggestions waiting for a person, newest payment first,
-// with the payment's details.
-func Open(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]Waiting, error) {
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	rows, err := tx.Query(ctx, `SELECT s.id, s.entry_id, s.invoice_id, i.number, s.score, s.reasons, e.amount_kobo, e.channel, e.reference,
-			COALESCE(e.occurred_at, e.recorded_at), e.kind
-		FROM money_suggestions s JOIN money_entries e ON e.id = s.entry_id JOIN customer_invoices i ON i.id = s.invoice_id
-		WHERE s.tenant_id = $1 AND s.status = 'open' ORDER BY e.recorded_at DESC, s.score DESC LIMIT $2`, tenant, limit)
-	if err != nil {
-		return nil, err
-	}
-	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Waiting, error) {
-		var w Waiting
-		var raw []byte
-		err := r.Scan(&w.ID, &w.EntryID, &w.InvoiceID, &w.Number, &w.Score, &raw, &w.AmountKobo, &w.Channel, &w.Reference, &w.When, &w.Kind)
-		_ = json.Unmarshal(raw, &w.Reasons)
-		w.Status = "open"
-		return w, err
-	})
-	if out == nil {
-		out = []Waiting{}
-	}
-	return out, err
-}
-
-// Waiting is an open suggestion with the payment it is for.
-type Waiting struct {
-	Suggestion
-	AmountKobo *int64    `json:"amount_kobo"`
-	Channel    string    `json:"channel"`
-	Reference  string    `json:"reference"`
-	When       time.Time `json:"received_at"`
-	Kind       string    `json:"kind"`
-}
-
-// Match counts a money-in entry towards an invoice a person chose (how
-// manual), closing the entry's open suggestions.
-func (m *Matcher) Match(ctx context.Context, tenant, entryID uuid.UUID, invoice, by string) (invoicing.Invoice, error) {
-	var x invoicing.Invoice
-	var became bool
-	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var direction, status, channel, reference string
-		var amount *int64
-		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, entryID).
-			Scan(&direction, &status, &amount, &channel, &reference)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("%w: no such payment", invoicing.ErrNotFound)
-		}
-		if err != nil {
-			return err
-		}
-		if direction != "in" || status != "settled" || amount == nil || *amount <= 0 {
-			return fmt.Errorf("%w: only money received and settled can be matched to an invoice", invoicing.ErrState)
-		}
-		x, became, err = m.Invoices.RecordPayment(ctx, tx, tenant, invoice, invoicing.PaymentIn{AmountKobo: *amount, PaymentID: reference, EntryID: &entryID,
-			Connection: channel, How: "manual", By: by, Reasons: []string{"matched by hand"}})
-		if err != nil {
-			return err
-		}
-		now := m.now()
-		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'closed', decided_at = $3 WHERE tenant_id = $1 AND entry_id = $2 AND status = 'open'`,
-			tenant, entryID, now); err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, considered_at) VALUES ($1, $2, 'matched', $3)
-			ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = $3`, entryID, tenant, now)
-		return err
-	})
-	if err != nil || !became {
-		return x, err
-	}
-	return x, m.Invoices.Paid(ctx, tenant, x)
 }

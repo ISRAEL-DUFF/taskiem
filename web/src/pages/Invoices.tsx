@@ -16,9 +16,17 @@ import {
   entryMatchPath,
   groupSuggestions,
   kindWords,
+  isOrder,
+  matchChoices,
+  matchRequest,
   matchedLine,
   openInvoices,
+  pickerWords,
   rejectedLine,
+  targetLabel,
+  targetPath,
+  type MatchChoice,
+  type MoneyOpenOrder,
   scoreWords,
   suggestionPath,
   dateLabel,
@@ -98,12 +106,12 @@ export function InvoiceTabs({ waiting }: { waiting?: number }) {
 
 // --- matching money to invoices ---
 
-/** Invoices > To match (GET /v1/money/suggestions): money received that may be for an invoice, one card per payment. */
+/** Invoices > To match (GET /v1/money/suggestions): money received that may be for an invoice or a storefront order, one card per payment. */
 export function InvoiceMatch() {
   const { can } = useAuth();
   const manage = invoiceAccess(can).manage;
   const list = useLoad(() => get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH), []);
-  const left = useLoad(() => get<{ payments: UnmatchedMoney[] | null }>(UNMATCHED_PATH), []);
+  const left = useLoad(() => get<{ payments: UnmatchedMoney[] | null; orders?: MoneyOpenOrder[] | null }>(UNMATCHED_PATH), []);
   useLiveRefresh(list.reload);
   useLiveRefresh(left.reload);
   // The invoices a payment can be matched to by hand.
@@ -121,7 +129,7 @@ export function InvoiceMatch() {
     <>
       <PageHeader
         title="To match"
-        description="Money that came in without the reference Taskiem gave, and the invoices it may be for. Match it, or say it is not that one."
+        description="Money that came in without the reference Taskiem gave, and the invoices or storefront orders it may be for. Match it, or say it is not that one."
       />
       <InvoiceTabs waiting={waiting?.length ?? 0} />
       <div role="status" data-testid="match-status">
@@ -133,15 +141,15 @@ export function InvoiceMatch() {
         <EmptyState icon="invoices">Nothing to match. Payments into the accounts Taskiem gave are matched to their invoice as they come in.</EmptyState>
       )}
       {waiting?.map((p) => (
-        <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} onDone={done} />
+        <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} orders={left.data?.orders} onDone={done} />
       ))}
       <ErrorBox error={left.error} />
       {unmatched.length > 0 && (
         <>
           <h2>No invoice suggested</h2>
-          <p className="hint">Money that came in with nothing to suggest, or whose suggestions were all turned down. Match it by hand if you know the invoice.</p>
+          <p className="hint">Money that came in with nothing to suggest, or whose suggestions were all turned down. Match it by hand if you know the invoice or order.</p>
           {unmatched.map((p) => (
-            <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} onDone={done} />
+            <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} orders={left.data?.orders} onDone={done} />
           ))}
         </>
       )}
@@ -150,16 +158,30 @@ export function InvoiceMatch() {
   );
 }
 
-function WaitingCard({ payment: p, manage, open, onDone }: { payment: WaitingPayment; manage: boolean; open: CustomerInvoice[]; onDone: (line: string) => void }) {
+function WaitingCard({
+  payment: p,
+  manage,
+  open,
+  orders,
+  onDone,
+}: {
+  payment: WaitingPayment;
+  manage: boolean;
+  open: CustomerInvoice[];
+  orders?: MoneyOpenOrder[] | null;
+  onDone: (line: string) => void;
+}) {
   const act = useAction();
   const [other, setOther] = useState("");
   const [otherTried, setOtherTried] = useState(false);
   const title = `match-${p.entry_id}`;
-  const choices = open.filter((x) => !p.candidates.some((c) => c.invoice_id === x.id));
+  const choices: MatchChoice[] = matchChoices(open, orders, p.candidates);
+  const words = pickerWords((orders ?? []).length > 0);
   const decide = (c: MoneySuggestion, action: "confirm" | "reject") =>
     void act.run(async () => {
       await plainly(post(suggestionPath(c.id, action)));
-      onDone(action === "confirm" ? matchedLine(p.amount_kobo, c.number) : rejectedLine(c.number));
+      const kind = isOrder(c) ? "order" : "invoice";
+      onDone(action === "confirm" ? matchedLine(p.amount_kobo, c.number, kind) : rejectedLine(c.number, kind));
     }, false);
   return (
     <section className="card match-card" aria-labelledby={`${title} ${title}-when ${title}-ref`} data-testid="waiting-payment">
@@ -181,13 +203,19 @@ function WaitingCard({ payment: p, manage, open, onDone }: { payment: WaitingPay
           return (
             <li key={c.id} data-testid="candidate">
               <div className="match-head">
-                <Link to={`/invoices/${encodeURIComponent(c.number)}`}>{c.number}</Link>{" "}
+                <Link to={targetPath(c)}>{targetLabel(c)}</Link>{" "}
                 <span className={`badge sf-status ${w.tone}`} title={`Score ${c.score} of 100`}>
                   {w.label}
                 </span>
+                {isOrder(c) && (
+                  <span className="hint">
+                    {" "}
+                    {naira(c.due_kobo ?? 0)} to pay{c.customer ? ` · ${c.customer}` : ""}
+                  </span>
+                )}
               </div>
               {(c.reasons ?? []).length > 0 && (
-                <ul className="match-reasons" aria-label={`Why ${c.number}`}>
+                <ul className="match-reasons" aria-label={`Why ${targetLabel(c)}`}>
                   {(c.reasons ?? []).map((r) => (
                     <li key={r}>{r}</li>
                   ))}
@@ -195,10 +223,10 @@ function WaitingCard({ payment: p, manage, open, onDone }: { payment: WaitingPay
               )}
               {manage && (
                 <div className="toolbar">
-                  <button type="button" className="primary" disabled={act.busy} onClick={() => decide(c, "confirm")} aria-label={`Match to ${c.number}`}>
+                  <button type="button" className="primary" disabled={act.busy} onClick={() => decide(c, "confirm")} aria-label={`Match to ${targetLabel(c)}`}>
                     Match
                   </button>
-                  <button type="button" disabled={act.busy} onClick={() => decide(c, "reject")} aria-label={`Not this one: ${c.number}`}>
+                  <button type="button" disabled={act.busy} onClick={() => decide(c, "reject")} aria-label={`Not this one: ${targetLabel(c)}`}>
                     Not this one
                   </button>
                 </div>
@@ -209,9 +237,9 @@ function WaitingCard({ payment: p, manage, open, onDone }: { payment: WaitingPay
       </ul>
       {manage && (
         <details className="match-other">
-          <summary>Match to another invoice…</summary>
+          <summary>{words.summary}</summary>
           {choices.length === 0 ? (
-            <p className="hint">No other invoice is waiting for payment.</p>
+            <p className="hint">{words.none}</p>
           ) : (
             <form
               noValidate
@@ -219,31 +247,31 @@ function WaitingCard({ payment: p, manage, open, onDone }: { payment: WaitingPay
                 e.preventDefault();
                 setOtherTried(true);
                 if (!other) return;
-                const number = choices.find((x) => x.id === other)?.number ?? other;
+                const chosen = choices.find((x) => x.value === other);
                 void act.run(async () => {
-                  await plainly(post(entryMatchPath(p.entry_id), { invoice: other }));
-                  onDone(matchedLine(p.amount_kobo, number));
+                  await plainly(post(entryMatchPath(p.entry_id), matchRequest(other)));
+                  onDone(matchedLine(p.amount_kobo, chosen?.number ?? other, chosen?.kind));
                 }, false);
               }}
             >
               <div className="row match-other-row">
-                <Field label="Invoice" hint="Invoices sent and not yet fully paid.">
+                <Field label={words.label} hint={words.hint}>
                   <select value={other} onChange={(e) => setOther(e.target.value)}>
-                    <option value="">Choose an invoice</option>
+                    <option value="">{words.empty}</option>
                     {choices.map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.number} · {naira(x.due_kobo)} due · {x.customer.name}
+                      <option key={x.value} value={x.value}>
+                        {x.label}
                       </option>
                     ))}
                   </select>
                 </Field>
                 <button type="submit" disabled={act.busy}>
-                  Match to this invoice
+                  {words.submit}
                 </button>
               </div>
               {otherTried && !other && (
                 <div className="error" role="alert">
-                  Choose the invoice this payment is for.
+                  {words.missing}
                 </div>
               )}
             </form>

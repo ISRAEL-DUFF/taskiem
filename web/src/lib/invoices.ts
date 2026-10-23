@@ -456,12 +456,21 @@ export const FEE_CHOICES: { value: FeePaidBy; label: string; help: string }[] = 
 
 // --- matching money to invoices (T5) ---
 
-/** One open suggestion: money received that may be for an invoice (MoneySuggestion). */
+/** One open suggestion: money received that may be for an invoice or a storefront order (MoneySuggestion). */
 export interface MoneySuggestion {
   id: string;
   entry_id: string;
-  invoice_id: string;
+  /** invoice or order; target names it as money_matches does ("order:AK-7QX4KD"). */
+  target_kind?: "invoice" | "order";
+  target?: string;
+  invoice_id: string | null;
+  order_id?: string;
+  /** The invoice's number, or the order's reference. */
   number: string;
+  /** What is due on the invoice, or paid online for the order. */
+  due_kobo?: number;
+  /** The customer's name, masked. */
+  customer?: string;
   score: number;
   reasons: string[] | null;
   status: string;
@@ -563,11 +572,105 @@ export function openInvoices(list: CustomerInvoice[] | null | undefined): Custom
 }
 
 /** What the To match view says after a match. */
-export function matchedLine(amountKobo: number | null, number: string): string {
+export function matchedLine(amountKobo: number | null, number: string, kind: "invoice" | "order" = "invoice"): string {
+  if (kind === "order") return `${amountWords(amountKobo)} matched to order ${number}. If that is wrong, undo it on the order.`;
   return `${amountWords(amountKobo)} matched to ${number}. If that is wrong, undo it on the invoice.`;
 }
 
 /** What the To match view says after "Not this one". */
-export function rejectedLine(number: string): string {
-  return `${number} will not be suggested for this payment again.`;
+export function rejectedLine(number: string, kind: "invoice" | "order" = "invoice"): string {
+  return `${kind === "order" ? `Order ${number}` : number} will not be suggested for this payment again.`;
+}
+
+/** A storefront order money can be matched to by hand (MoneyOpenOrder, in GET /v1/money/unmatched). */
+export interface MoneyOpenOrder {
+  target_kind: "order";
+  target: string;
+  number: string;
+  due_kobo: number;
+  customer: string;
+  placed_at: string;
+}
+
+/** Whether a suggestion is for a storefront order. */
+export const isOrder = (c: Pick<MoneySuggestion, "target_kind">) => c.target_kind === "order";
+
+/** A suggestion's invoice or order as the To match view names it: "INV-0104", "Order AK-7QX4KD". */
+export const targetLabel = (c: Pick<MoneySuggestion, "target_kind" | "number">) => (isOrder(c) ? `Order ${c.number}` : c.number);
+
+/** Where a suggestion's invoice or order is shown in the app. */
+export const targetPath = (c: Pick<MoneySuggestion, "target_kind" | "number">) =>
+  isOrder(c) ? `/storefront/orders/${encodeURIComponent(c.number)}` : `/invoices/${encodeURIComponent(c.number)}`;
+
+/** One choice of the "match by hand" picker: an invoice (value its id) or an order (value "order:<reference>"). */
+export interface MatchChoice {
+  value: string;
+  kind: "invoice" | "order";
+  number: string;
+  label: string;
+}
+
+/** The invoices and orders a payment can be matched to by hand, those already suggested for it left out. */
+export function matchChoices(invoices: CustomerInvoice[], orders: MoneyOpenOrder[] | null | undefined, candidates: MoneySuggestion[]): MatchChoice[] {
+  const out: MatchChoice[] = invoices
+    .filter((x) => !candidates.some((c) => !isOrder(c) && c.invoice_id === x.id))
+    .map((x) => ({ value: x.id, kind: "invoice", number: x.number, label: `${x.number} · ${naira(x.due_kobo)} due · ${x.customer.name}` }));
+  for (const o of orders ?? []) {
+    if (candidates.some((c) => isOrder(c) && c.number === o.number)) continue;
+    const who = o.customer ? ` · ${o.customer}` : "";
+    out.push({ value: `order:${o.number}`, kind: "order", number: o.number, label: `Order ${o.number} · ${naira(o.due_kobo)} to pay${who}` });
+  }
+  return out;
+}
+
+/** The POST /v1/money/entries/{id}/match body for a picker choice. */
+export function matchRequest(value: string): { invoice: string } | { order: string } {
+  return value.startsWith("order:") ? { order: value.slice("order:".length) } : { invoice: value };
+}
+
+/** The picker's words: about invoices only while the business has no order waiting for money. */
+export function pickerWords(orders: boolean) {
+  return orders
+    ? {
+        summary: "Match to another invoice or order…",
+        label: "Invoice or order",
+        hint: "Invoices sent and not yet fully paid, and storefront orders waiting for their payment.",
+        empty: "Choose an invoice or order",
+        submit: "Match to this one",
+        none: "No other invoice or order is waiting for payment.",
+        missing: "Choose the invoice or order this payment is for.",
+      }
+    : {
+        summary: "Match to another invoice…",
+        label: "Invoice",
+        hint: "Invoices sent and not yet fully paid.",
+        empty: "Choose an invoice",
+        submit: "Match to this invoice",
+        none: "No other invoice is waiting for payment.",
+        missing: "Choose the invoice this payment is for.",
+      };
+}
+
+/** A payment matched to a storefront order (StorefrontOrderPayment, in GET /v1/storefront/orders/{reference}). */
+export interface OrderPayment {
+  id: string;
+  entry_id: string;
+  amount_kobo: number;
+  how: string;
+  by: string;
+  reasons: string[] | null;
+  undoes?: string;
+  undone_by?: string;
+  undoable: boolean;
+  created_at: string;
+}
+
+export const orderPaymentUndoPath = (id: string) => `/v1/money/order-payments/${encodeURIComponent(id)}/undo`;
+
+/** How money was matched to an order, in words. */
+export const howMatchedOrder = (how: string, by = "") => (how === "exact" ? "Paid through the order's checkout page" : howMatched(how, by));
+
+/** The money matched to an order, as the order lists it: each match, not its undoings, and whether it was undone. */
+export function orderPaymentRows(list: OrderPayment[] | null | undefined): { payment: OrderPayment; undone: boolean }[] {
+  return (list ?? []).filter((p) => !p.undoes).map((p) => ({ payment: p, undone: !!p.undone_by }));
 }
