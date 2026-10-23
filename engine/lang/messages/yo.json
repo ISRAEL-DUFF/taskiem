@@ -940,6 +940,10 @@
       "text": "• *language* àti orúkọ èdè kan: ìdáhùn ní {languages}",
       "reviewed": false
     },
+    "wa.help.money": {
+      "text": "• *spent* pẹ̀lú iye owó àti ohun tí ẹ ná an sí (*spent 12,000 on diesel at Total*), tàbí *cash in* tàbí *cash out* àti iye owó (*cash in 20,000 till*): yóò kọ ọ́ sínú àkọsílẹ̀ owó yín",
+      "reviewed": false
+    },
     "wa.help.run": {
       "text": "• *run* àti orúkọ iṣẹ́ kan: láti bẹ̀rẹ̀ rẹ̀ (ẹ ó kọ́kọ́ fìdí rẹ̀ múlẹ̀)",
       "reviewed": false
@@ -1082,6 +1086,50 @@
     },
     "wa.match.rejected_next": {
       "text": "Ó dáa, kì í ṣe é. A kò ní dá a lábàá mọ́.",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "Ṣé kí n kọ {amount} owó tí ó wọlé: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "Ṣé kí n kọ {amount} owó tí ó jáde: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense": {
+      "text": "Ṣé kí n kọ pé ẹ ná {amount} sí {what} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "Ṣé kí n kọ pé ẹ ná {amount} sí {what} ní {vendor} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Ẹ fèsì *yes* kí n kọ ọ́ tàbí *no* kí n fi sílẹ̀.",
+      "reviewed": false
+    },
+    "wa.money.denied": {
+      "text": "Ẹ kò lè kọ owó sílẹ̀ ní {org}.",
+      "reviewed": false
+    },
+    "wa.money.how": {
+      "text": "Ẹ sọ iye owó àti ohun tí ó jẹ́ fún, báyìí: *spent 12,000 on diesel at Total*, tàbí *cash in 20,000 till*",
+      "reviewed": false
+    },
+    "wa.money.not_recorded": {
+      "text": "Mi ò kọ ọ́.",
+      "reviewed": false
+    },
+    "wa.money.recorded_in": {
+      "text": "Mo ti kọ ọ́. {amount} wọlé, {category}.",
+      "reviewed": false
+    },
+    "wa.money.recorded_out": {
+      "text": "Mo ti kọ ọ́. {amount} jáde, {category}.",
+      "reviewed": false
+    },
+    "wa.money.refused": {
+      "text": "Mi ò lè kọ ìyẹn: {reason}",
       "reviewed": false
     },
     "wa.no_org": {

@@ -11,6 +11,8 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | `debtor-reminder-whatsapp` | The same by an approved WhatsApp template | Google Sheets, WhatsApp |
 | `debtor-reminder-table` | Every week, text each customer in the debtors [data table](data-tables.md) who still has a balance; no spreadsheet | Xenibase (the `data_tables` connection), Tell me |
 | `invoice-follow-up` | After an invoice, wait a few days, check with Paystack, remind the customer if unpaid | Paystack, Tell me |
+| `chase-overdue-invoices` | Every morning, remind each customer whose [invoice](invoices.md) is overdue by SMS and email with its link, every few days up to a number of reminders, then tell the owner once. Each reminder goes once however often the workflow runs (its `effect.idempotency_seed` names the invoice and the reminder) | Invoices, Tell me |
+| `invoice-paid-receipt` | Every hour, thank each customer whose invoice was paid in full in the last three hours, once, with the link to the invoice (now showing it paid), and tell the owner once | Invoices, Tell me |
 | `transfer-received-notify` | Tell the owner about each payment received (a payment page paid, or a transfer into a customer's account number) and log it in a sheet | Any rail that sends payment events (Paystack, Moniepoint, Flutterwave), Tell me, Google Sheets |
 | `daily-sales-summary` | Every evening, add up today's sales from the sales sheet and tell the owner | Google Sheets, Tell me |
 | `sales-ledger-sheet` | Record every Paystack payment in a ledger sheet | Paystack, Google Sheets |

@@ -1174,6 +1174,11 @@
       "reviewed": true,
       "context": "Help line, when languages beyond English are on"
     },
+    "wa.help.money": {
+      "text": "• *spent* with an amount and what it was for (*spent 12,000 on diesel at Total*), or *cash in* or *cash out* and an amount (*cash in 20,000 till*): records it in your money log",
+      "reviewed": true,
+      "context": "Help line, with invoice.manage; keep the command words and the examples in English"
+    },
     "wa.help.run": {
       "text": "• *run* and a workflow's name: start it (you confirm first)",
       "reviewed": true,
@@ -1353,6 +1358,61 @@
       "text": "Turned down. It will not be suggested again.",
       "reviewed": true,
       "context": "No was pressed; the next possible invoice follows in the same message"
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "Record {amount} cash in: {what}?",
+      "reviewed": true,
+      "context": "cash coming in, shown before it is recorded"
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "Record {amount} cash out: {what}?",
+      "reviewed": true,
+      "context": "cash going out, shown before it is recorded"
+    },
+    "wa.money.confirm_expense": {
+      "text": "Record {amount} spent on {what} ({category})?",
+      "reviewed": true,
+      "context": "an expense shown before it is recorded; {category} is an English word such as fuel"
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "Record {amount} spent on {what} at {vendor} ({category})?",
+      "reviewed": true,
+      "context": "an expense with where it was spent, shown before it is recorded; {category} is an English word such as fuel"
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Reply *yes* to record it or *no* to leave it.",
+      "reviewed": true,
+      "context": "while cash or an expense waits for yes or no"
+    },
+    "wa.money.denied": {
+      "text": "You cannot record money in {org}.",
+      "reviewed": true,
+      "context": "spent or cash in/out without invoice.manage"
+    },
+    "wa.money.how": {
+      "text": "Say how much and what for, like this: *spent 12,000 on diesel at Total*, or *cash in 20,000 till*",
+      "reviewed": true,
+      "context": "a spent or cash command that could not be read; keep the examples in English"
+    },
+    "wa.money.not_recorded": {
+      "text": "Not recorded.",
+      "reviewed": true,
+      "context": "the person said no"
+    },
+    "wa.money.recorded_in": {
+      "text": "Recorded. {amount} in, {category}.",
+      "reviewed": true,
+      "context": "cash in was recorded; {category} is cash"
+    },
+    "wa.money.recorded_out": {
+      "text": "Recorded. {amount} out, {category}.",
+      "reviewed": true,
+      "context": "cash out or an expense was recorded; {category} is an English word such as fuel or cash"
+    },
+    "wa.money.refused": {
+      "text": "I could not record that: {reason}",
+      "reviewed": true,
+      "context": "the entry was refused; {reason} says why, in English"
     },
     "wa.no_org": {
       "text": "Your Taskiem account has no active organisation.",

@@ -940,6 +940,10 @@
       "text": "• *language* da sunan harshe: amsoshi da {languages}",
       "reviewed": false
     },
+    "wa.help.money": {
+      "text": "• *spent* tare da adadin kuɗi da abin da aka kashe a kai (*spent 12,000 on diesel at Total*), ko *cash in* ko *cash out* da adadi (*cash in 20,000 till*): zan rubuta shi a littafin kuɗinku",
+      "reviewed": false
+    },
     "wa.help.run": {
       "text": "• *run* da sunan aiki: fara shi (za ka tabbatar da farko)",
       "reviewed": false
@@ -1082,6 +1086,50 @@
     },
     "wa.match.rejected_next": {
       "text": "To, ba shi ba ne. Ba za a sake ba da shawararsa ba.",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "In rubuta {amount} kuɗin da suka shigo: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "In rubuta {amount} kuɗin da suka fita: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense": {
+      "text": "In rubuta cewa an kashe {amount} a kan {what} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "In rubuta cewa an kashe {amount} a kan {what} a {vendor} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Ku amsa *yes* in rubuta ko *no* in bar shi.",
+      "reviewed": false
+    },
+    "wa.money.denied": {
+      "text": "Ba za ku iya rubuta kuɗi a {org} ba.",
+      "reviewed": false
+    },
+    "wa.money.how": {
+      "text": "Ku faɗi adadi da abin da aka kashe a kai, kamar haka: *spent 12,000 on diesel at Total*, ko *cash in 20,000 till*",
+      "reviewed": false
+    },
+    "wa.money.not_recorded": {
+      "text": "Ban rubuta ba.",
+      "reviewed": false
+    },
+    "wa.money.recorded_in": {
+      "text": "An rubuta. {amount} ya shigo, {category}.",
+      "reviewed": false
+    },
+    "wa.money.recorded_out": {
+      "text": "An rubuta. {amount} ya fita, {category}.",
+      "reviewed": false
+    },
+    "wa.money.refused": {
+      "text": "Ban iya rubuta wannan ba: {reason}",
       "reviewed": false
     },
     "wa.no_org": {
