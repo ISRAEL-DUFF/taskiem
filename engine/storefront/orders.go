@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
@@ -77,6 +78,10 @@ type Orders struct {
 	// Cancel cancels a run (runtime.Store.CancelRun), when a booking is
 	// moved or cancelled.
 	Cancel func(ctx context.Context, ref runtime.RunRef, by string) error
+	// MoneyLog, when set, records a payment the payment check finds, as
+	// the provider's event would, and the order's payment counts that
+	// entry (matched.go): one entry and one match whichever is heard first.
+	MoneyLog *moneylog.Log
 	// PreviewDomain is where storefronts are served (<slug>.<domain>).
 	PreviewDomain string
 	Logger        *slog.Logger
@@ -675,8 +680,11 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	var errs []error
 	for _, d := range list {
 		paid := false
+		var amount int64
 		if d.ref != "" && o.Payments != nil {
-			status, amount, err := o.Payments.Verify(ctx, tenant, d.connection, d.ref)
+			var status string
+			var err error
+			status, amount, err = o.Payments.Verify(ctx, tenant, d.connection, d.ref)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -685,7 +693,7 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 		}
 		switch {
 		case paid:
-			if err := o.markPaid(ctx, tenant, d); err != nil {
+			if err := o.markPaid(ctx, tenant, d, amount); err != nil {
 				errs = append(errs, err)
 			}
 		case d.expires != nil && o.now().After(*d.expires):
@@ -727,35 +735,38 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	return errors.Join(errs...)
 }
 
-// markPaid records a payment. An order paid at once starts its run; one
-// paid after the owner accepted it wakes the run waiting for it.
-func (o *Orders) markPaid(ctx context.Context, tenant uuid.UUID, d due) error {
-	var accepted bool
+// markPaid records a payment the provider confirmed, along the path
+// matching takes too (CountPayment, matched.go): the money log entry for
+// it, counted towards the order, and the order moved to paid, once,
+// whichever of this check and the provider's event is first. An order
+// paid at once starts its run; one paid after the owner accepted it wakes
+// the run waiting for it.
+func (o *Orders) markPaid(ctx context.Context, tenant uuid.UUID, d due, amount int64) error {
+	var c Counted
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `UPDATE storefront_orders SET status = CASE WHEN decided_at IS NULL THEN 'received' ELSE 'paid' END,
-			paid_at = now(), expires_at = NULL, updated_at = now() WHERE tenant_id = $1 AND id = $2 AND status = 'awaiting_payment'
-			RETURNING decided_at IS NOT NULL`, tenant, d.id).Scan(&accepted); err != nil {
-			return err
+		in := PaymentIn{AmountKobo: amount, How: "exact", By: "system:" + checkoutChannel(d.connection), Reasons: []string{"paid through the order's checkout page"}}
+		if o.MoneyLog != nil {
+			id, _, err := o.MoneyLog.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: checkoutChannel(d.connection),
+				Reference: d.ref, Event: "payment.received", AmountKobo: &amount, Source: "lookup"})
+			if err != nil {
+				return err
+			}
+			in.EntryID = &id
 		}
-		if _, err := tx.Exec(ctx, `UPDATE storefront_holds SET expires_at = NULL WHERE reference = $1`, d.reference); err != nil {
-			return err
-		}
-		return audit(ctx, tx, tenant, "storefront.order_paid", d.reference, map[string]any{"total_kobo": d.total})
+		var err error
+		c, err = o.CountPayment(ctx, tx, tenant, d.reference, in)
+		return err
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil // already moved on
+	if errors.Is(err, ErrDecision) {
+		// Paid by other money meanwhile, or moved on: the payment waits in
+		// the money log for a person.
+		o.log().Warn("storefront: a checkout payment was not counted", "reference", d.reference, "err", err)
+		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if accepted && d.kind == "booking" {
-		return nil // its run carries on to the appointment
-	}
-	if accepted {
-		_, _, err = o.Signal(ctx, tenant, "prod", PaymentSignal, d.reference, "paid:"+d.reference, map[string]any{"reference": d.reference, "status": "paid"})
-		return err
-	}
-	return o.startRun(ctx, tenant, d.reference)
+	return o.Paid(ctx, tenant, c)
 }
 
 // --- what workflows do (the storefront platform connector) ---

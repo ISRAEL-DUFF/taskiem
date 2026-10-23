@@ -24,8 +24,52 @@ import {
   type Order,
 } from "../lib/orders";
 import { timeSpan, whenLabel } from "../lib/bookings";
+import { howMatchedOrder, orderPaymentRows, orderPaymentUndoPath, type OrderPayment } from "../lib/invoices";
 import { StorefrontTabs } from "./Storefront";
 import { BookingActions } from "./StorefrontBookings";
+
+/** The money matched to an order (docs/matching.md), each with how; a wrong match is undone here while the order has not gone on. */
+function OrderMoney({ payments, manage, onUndone }: { payments?: OrderPayment[] | null; manage: boolean; onUndone: () => void }) {
+  const act = useAction();
+  const rows = orderPaymentRows(payments);
+  if (rows.length === 0) return null;
+  return (
+    <section className="card" aria-labelledby="order-money">
+      <h2 id="order-money">Money matched</h2>
+      <ul className="match-candidates">
+        {rows.map(({ payment: p, undone }) => (
+          <li key={p.id} data-testid="order-payment">
+            <div className="match-head">
+              <span className="sf-price">{formatPrice(p.amount_kobo)}</span> <span data-testid="how-matched">{howMatchedOrder(p.how, p.by)}</span>{" "}
+              <span className="hint">{fmtTime(p.created_at)}</span>
+              {undone && <span className="badge sf-status muted"> Undone</span>}
+            </div>
+            {(p.reasons ?? []).length > 0 && (
+              <ul className="match-reasons" aria-label="Why it was matched">
+                {(p.reasons ?? []).map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            )}
+            {manage && !undone && p.undoable && (
+              <button
+                type="button"
+                disabled={act.busy}
+                onClick={() =>
+                  confirm("Undo this match? The order goes back to unpaid, and the money waits to be matched again.") &&
+                  void act.run(async () => (await post(orderPaymentUndoPath(p.id)), onUndone()), "Match undone")
+                }
+              >
+                Undo the match
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <ErrorBox error={act.error} />
+    </section>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const s = orderStatus(status);
@@ -179,7 +223,10 @@ export function StorefrontOrder() {
   const [changed, setChanged] = useState("");
   const reveal = useAction();
   const refund = useAction();
-  const { data, error, reload } = useLoad(() => get<{ order: Order; revealed: boolean }>(`/v1/storefront/orders/${encodeURIComponent(reference)}`), [reference]);
+  const { data, error, reload } = useLoad(
+    () => get<{ order: Order; payments?: OrderPayment[] | null; revealed: boolean }>(`/v1/storefront/orders/${encodeURIComponent(reference)}`),
+    [reference],
+  );
   useLiveRefresh(reload);
   const o = data?.order;
   return (
@@ -323,6 +370,7 @@ export function StorefrontOrder() {
               </>
             )}
           </section>
+          <OrderMoney payments={data?.payments} manage={can("invoice.manage")} onUndone={reload} />
           <section className="card" aria-labelledby="order-customer">
             <h2 id="order-customer">Customer</h2>
             <CustomerDetails c={revealed?.customer ?? o.customer} />

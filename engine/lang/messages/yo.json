@@ -1092,6 +1092,10 @@
       "text": "{amount} wọlé ní {when} nípasẹ̀ {channel}.\n\nṢé fún {number} ni, {due} tí oníbàárà jẹ? {reasons}.",
       "reviewed": false
     },
+    "wa.match.ask_order": {
+      "text": "{amount} wọlé ní {when} nípasẹ̀ {channel}.\n\nṢé fún àṣẹ ọjà {number} ni, {due} láti san? {reasons}.",
+      "reviewed": false
+    },
     "wa.match.channel.cash": {
       "text": "owó ní ọwọ́",
       "reviewed": false
@@ -1102,6 +1106,10 @@
     },
     "wa.match.denied": {
       "text": "Ẹ kò lè so owó pọ̀ nínú {org}.",
+      "reviewed": false
+    },
+    "wa.match.matched_order": {
+      "text": "Mo ti so ó pọ̀ mọ́ àṣẹ {number}. Wọ́n ti san án báyìí.",
       "reviewed": false
     },
     "wa.match.matched_paid": {

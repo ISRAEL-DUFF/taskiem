@@ -25,6 +25,9 @@ func storefrontOrders(cfg config, e *engine, log *slog.Logger) (*storefront.Orde
 	stock := &storefront.XenibaseStock{Pool: o.Pool, Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}
 	o.Stock, o.Live = stock, stock
 	o.Cancel = e.store.CancelRun
+	// A checkout payment the payment check finds is recorded in the money
+	// log and matched to its order, as the provider's event would be.
+	o.MoneyLog = e.moneyLog()
 	if len(cfg.Public.Domains) > 0 {
 		o.PreviewDomain = cfg.Public.Domains[0]
 	}

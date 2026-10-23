@@ -120,7 +120,7 @@ Saving a form re-publishes a published page, so its buttons match.
    - records the order with a reference such as `AK-7QX4KD`;
    - deletes the inbox row.
 3. **Paid when ordering:** a Paystack checkout page is made at once. The customer's status page takes them to it, and Paystack sends them back.
-   - Taskiem asks Paystack about waiting payments every 30 seconds, so no webhook needs setting up in the organisation's Paystack account.
+   - Taskiem asks Paystack about waiting payments every 30 seconds, so no webhook needs setting up in the organisation's Paystack account. When the account does send its events, the payment is also in the [money log](money-log.md), and whichever Taskiem hears first marks the order paid: once ([payments and matching](#payments-and-matching)).
    - Once paid, the workflow starts. An order not paid within 30 minutes expires and starts nothing.
 4. **The workflow runs.** The default order workflow:
    - **Asks the owner to accept or decline**, in WhatsApp, Telegram or Approvals, showing the items, the total and how it is collected. No answer within a day declines it.
@@ -167,6 +167,21 @@ The run's `trigger.body` holds:
 - `received`, `awaiting_payment`, `paid`, `accepted`;
 - `price_changed`: waiting for the customer to confirm new prices ([the price check](#the-price-check));
 - `declined`, `refund_due`, `refunded`, `expired`, `cancelled`, `completed`, and `no_show` for a booking.
+
+### Payments and matching
+
+An order's payment is [matched](matching.md) to it as an invoice's is, and listed on the order page under **Money matched**, with how it was matched.
+
+- **Through its checkout page:** matched exactly, with no one asked. The payment check and the Paystack event (in the money log) take one path: the money log entry, its match `order:AK-7QX4KD`, and the order moved to paid are written together, under the money's lock and the order's, so whichever comes first wins and the other finds it done. The order's paid flow (the workflow started, or the waiting workflow told it is paid, and the status page) happens once.
+- **Any other money** (a bank transfer naming the order, a POS sale, a statement line) is suggested for orders waiting for money, beside open invoices, under **Invoices > To match**: an order waiting for its checkout payment (`awaiting_payment`), or one taken with **no online payment** that is not yet paid, cancelled, expired or decided against. An order paid after acceptance is not suggested until its payment link is made (its workflow sends the link and waits for that payment). Confirmed, matched by hand or matched automatically, the money must be at least what is paid online (the deposit, or the total); the order is then paid exactly as by its checkout page. An order taken with no online payment keeps its status (`received`, or `accepted` becomes `paid`); its workflow is already running and waits for nothing.
+
+**Undoing a match** takes the money out of the order and puts it back to be matched. It is refused when the order went on with the payment:
+- the payment completed the order's checkout (it was `awaiting_payment`), so its workflow was started or told it was paid;
+- the order has been decided since (accepted, completed, declined, refund due).
+
+Then cancel or [refund](#refunds) the order instead. Otherwise the order goes back to unpaid: `received`, or `accepted` again. Money matched to an order that was already paid by its own check is undone without changing the order.
+
+Money that reached a paid order by bank transfer has no Paystack payment to refund: an order declined after it is left refund due, to be refunded by the business itself.
 
 ### Refunds
 
@@ -319,7 +334,7 @@ Customers' texts are in the business's language (its default chat language, Sett
 | `GET /v1/storefront/domains`, `POST /v1/storefront/domains` | The business's [own domains](#your-own-domain), and adding one |
 | `POST /v1/storefront/domains/{id}/verify`, `/primary`, `DELETE /v1/storefront/domains/{id}` | Checking a domain's TXT record, making it the primary, removing it |
 | `GET /v1/storefront/actions`, `PUT /v1/storefront/actions/{kind}` | The forms and their settings |
-| `GET /v1/storefront/orders`, `GET /v1/storefront/orders/{reference}` | Orders, questions, call-backs and bookings; `?reveal=true` with `pii.reveal` |
+| `GET /v1/storefront/orders`, `GET /v1/storefront/orders/{reference}` | Orders, questions, call-backs and bookings; `?reveal=true` with `pii.reveal`. One order comes with the money matched to it (`payments`; undone with `POST /v1/money/order-payments/{id}/undo`, [matching](matching.md)) |
 | `PUT /v1/storefront/bookings` | The services table, its mapping and when bookings are taken |
 | `GET /v1/storefront/services` | The services copy and the availability in effect |
 | `GET /v1/storefront/bookings?from=&to=` | The bookings holding their time (Lagos dates; today and the next 30 days by default) |
