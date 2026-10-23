@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/leaks"
 	"github.com/israel-duff/taskiem/engine/sender"
 )
 
@@ -55,6 +56,7 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	r.With(read).Get("/invoice-settings", s.getInvoiceSettings)
 	r.With(manage, s.tenantWide).Put("/invoice-settings", s.putInvoiceSettings)
 	s.matchingRoutes(r)
+	s.moneyRoutes(r)
 }
 
 func invoiceErr(err error) error {
@@ -330,12 +332,15 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 
 // runInvoicePayments issues the accounts and links invoice pages and
 // chat ask for (every second), looks their payments up (every 30
-// seconds) and matches the money that came in (every 10 seconds).
+// seconds), matches the money that came in (every 10 seconds) and looks
+// for leaks (every 15 minutes).
 func (s *Server) runInvoicePayments(ctx context.Context) {
-	drain, check, match := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(10*time.Second)
+	drain, check, match, leak := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(10*time.Second), time.NewTicker(15*time.Minute)
 	defer drain.Stop()
 	defer check.Stop()
 	defer match.Stop()
+	defer leak.Stop()
+	detector := &leaks.Detector{Pool: s.Invoices.Pool, Logger: s.Logger}
 	for {
 		select {
 		case <-ctx.Done():
@@ -351,6 +356,10 @@ func (s *Server) runInvoicePayments(ctx context.Context) {
 		case <-match.C:
 			if err := s.matcher().Tick(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("invoices: matching", "err", err)
+			}
+		case <-leak.C:
+			if err := detector.Tick(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: leaks", "err", err)
 			}
 		}
 	}

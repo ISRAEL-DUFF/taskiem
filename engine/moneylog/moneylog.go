@@ -49,12 +49,32 @@ type Entry struct {
 	PayerAccount string     `json:"payer_account,omitempty"`
 	Source       string     `json:"source"` // event, lookup, upload, entered
 	Note         string     `json:"note,omitempty"`
+	// What a person typed or a statement said (T6): the line's
+	// description, and an expense's vendor and category; EnteredBy is who
+	// entered or uploaded it.
+	Description string `json:"description,omitempty"`
+	Vendor      string `json:"vendor,omitempty"`
+	Category    string `json:"category,omitempty"`
+	EnteredBy   string `json:"entered_by,omitempty"`
 	Corrects     *uuid.UUID `json:"corrects,omitempty"`
 }
 
 // Key is what makes an entry one movement (and status): where, what and
 // the rail's reference.
 func (e Entry) Key() string {
+	if e.Kind == "statement" {
+		// A line is the same line when its channel, date, amount and
+		// reference are (spec 7.4).
+		day := ""
+		if e.OccurredAt != nil {
+			day = e.OccurredAt.Format("2006-01-02")
+		}
+		var amount int64
+		if e.AmountKobo != nil {
+			amount = *e.AmountKobo
+		}
+		return fmt.Sprintf("%s|statement|%s|%s%d|%s", e.Channel, day, e.Direction, amount, e.Reference)
+	}
 	what := e.Event
 	if what == "" {
 		what = e.Kind + "." + e.Status
@@ -134,7 +154,7 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 			return uuid.Nil, false, err
 		}
 	}
-	if e.Corrects == nil && e.Event != "" {
+	if e.Corrects == nil && e.Event != "" && (e.Source == "event" || e.Source == "lookup") {
 		// A later status of a movement names the first entry for it.
 		var first uuid.UUID
 		err := tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3 AND kind = $4
@@ -147,11 +167,13 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 	}
 	id = uuid.New()
 	tag, err := tx.Exec(ctx, `INSERT INTO money_entries (id, tenant_id, entry_key, occurred_at, recorded_at, direction, kind, amount_kobo, fee_kobo, currency,
-		status, channel, reference, event, payer, source, note, corrects)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''), $15, $16, NULLIF($17, ''), $18)
+		status, channel, reference, event, payer, source, note, corrects, description, vendor, category, entered_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''), $15, $16, NULLIF($17, ''), $18,
+		NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''), NULLIF($22, ''))
 		ON CONFLICT (tenant_id, entry_key) DO NOTHING`,
 		id, tenant, key, e.OccurredAt, l.now(), e.Direction, e.Kind, e.AmountKobo, e.FeeKobo, e.Currency,
-		e.Status, e.Channel, e.Reference, e.Event, payer, e.Source, e.Note, e.Corrects)
+		e.Status, e.Channel, e.Reference, e.Event, payer, e.Source, e.Note, e.Corrects,
+		clip(e.Description, 300), clip(e.Vendor, 120), clip(e.Category, 60), e.EnteredBy)
 	if err != nil {
 		return uuid.Nil, false, err
 	}

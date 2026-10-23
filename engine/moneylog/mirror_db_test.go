@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,4 +164,56 @@ func projectOf(t *testing.T, s *datatables.Service, tenant uuid.UUID) string {
 		t.Fatal(err)
 	}
 	return st.ProjectID
+}
+
+// A statement is added once however often it is uploaded, its columns are
+// remembered for the channel, and cash entered is once per key.
+func TestStatementsAndEntries(t *testing.T) {
+	e := rt.New(t)
+	log := &moneylog.Log{Pool: e.DB.App, PII: e.Vault}
+	cols := moneylog.StatementFormat{Date: "Trans Date", Description: "Narration", Amount: "Amount", Reference: "Ref"}
+	csv := "Trans Date,Narration,Amount,Ref\n20/10/2026,TRF FROM ADA,25000,FT1\n20/10/2026,TRF FROM ADA,25000,FT2\n21/10/2026,Charges,-50,\n"
+	for i, want := range []moneylog.Imported{{Added: 3}, {Skipped: 3}} {
+		lines, err := moneylog.ParseStatement(strings.NewReader(csv), cols)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := log.ImportStatement(ctx, e.Tenant, "gtbank/current", "user:ada", cols, lines)
+		if err != nil || got != want {
+			t.Fatalf("upload %d: %v %+v", i+1, err, got)
+		}
+	}
+	if _, err := log.ImportStatement(ctx, e.Tenant, "Not A Channel!", "user:ada", cols, nil); !errors.Is(err, moneylog.ErrInvalid) {
+		t.Errorf("bad channel: %v", err)
+	}
+	var kept moneylog.StatementFormat
+	var n int
+	var dirs string
+	if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
+		var err error
+		if kept, err = moneylog.StatementColumns(ctx, tx, e.Tenant, "gtbank/current"); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT count(*), string_agg(direction, ',' ORDER BY reference) FROM money_entries WHERE kind = 'statement' AND entered_by = 'user:ada'`).Scan(&n, &dirs)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if kept != cols || n != 3 || dirs != "out,in,in" {
+		t.Errorf("kept %+v, %d lines %q", kept, n, dirs)
+	}
+
+	in := moneylog.Entered{Kind: "expense", AmountKobo: 1200000, Description: "Diesel", Vendor: "Total", Category: "Fuel", Key: "chat:1"}
+	a, fresh, err := log.Enter(ctx, e.Tenant, "user:ada", in)
+	if err != nil || !fresh {
+		t.Fatal(err)
+	}
+	if b, again, err := log.Enter(ctx, e.Tenant, "user:ada", in); err != nil || again || b != a {
+		t.Errorf("retry: %v %v", err, again)
+	}
+	for _, bad := range []moneylog.Entered{{Kind: "gift", AmountKobo: 1, Description: "x"}, {Kind: "cash", Direction: "sideways", AmountKobo: 1, Description: "x"},
+		{Kind: "expense", AmountKobo: 0, Description: "x"}, {Kind: "expense", AmountKobo: 1}} {
+		if _, _, err := log.Enter(ctx, e.Tenant, "user:ada", bad); !errors.Is(err, moneylog.ErrInvalid) {
+			t.Errorf("%+v: %v", bad, err)
+		}
+	}
 }

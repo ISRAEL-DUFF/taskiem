@@ -1518,6 +1518,339 @@ paths:
                 $ref: '#/components/schemas/CustomerInvoice'
         default:
           $ref: '#/components/responses/Error'
+  /v1/money/leaks:
+    get:
+      operationId: listMoneyLeaks
+      tags:
+      - Invoices
+      summary: Leaks Taskiem found
+      description: "Money the business may be losing, newest first, with the open total and the amount recovered (docs/leaks.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [open, closed, all]
+      responses:
+        '200':
+          description: The leaks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [leaks, totals]
+                properties:
+                  leaks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneyLeak'
+                  totals:
+                    type: object
+                    required: [open, open_kobo, recovered_kobo]
+                    properties:
+                      open:
+                        type: integer
+                      open_kobo:
+                        type: integer
+                      recovered_kobo:
+                        type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/leaks/{id}/assign:
+    post:
+      operationId: assignMoneyLeak
+      tags:
+      - Invoices
+      summary: Give a leak to a member
+      description: "member null gives it to no one."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                member:
+                  type:
+                  - string
+                  - 'null'
+                  format: uuid
+      responses:
+        '200':
+          description: The leak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyLeak'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/leaks/{id}/close:
+    post:
+      operationId: closeMoneyLeak
+      tags:
+      - Invoices
+      summary: Close a leak
+      description: "As recovered (with the amount got back), written_off or not_a_leak."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [recovered, written_off, not_a_leak]
+                recovered_kobo:
+                  type: integer
+                  minimum: 1
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The leak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyLeak'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/fee-rates:
+    get:
+      operationId: listMoneyFeeRates
+      tags:
+      - Invoices
+      summary: Fees agreed with each connection
+      description: "A fee above these is a leak."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The rates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fee_rates]
+                properties:
+                  fee_rates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneyFeeRate'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putMoneyFeeRate
+      tags:
+      - Invoices
+      summary: Set the fee agreed with a connection
+      description: "Percent in basis points of the amount, plus a flat fee, up to a cap."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyFeeRate'
+      responses:
+        '200':
+          description: The rate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyFeeRate'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/statement-format:
+    get:
+      operationId: getMoneyStatementFormat
+      tags:
+      - Invoices
+      summary: A channel's statement columns
+      description: "The columns last matched to the common format for the channel's statements, or the common format's own."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: channel
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The columns
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channel, columns]
+                properties:
+                  channel:
+                    type: string
+                  columns:
+                    $ref: '#/components/schemas/MoneyStatementFormat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/statements:
+    post:
+      operationId: uploadMoneyStatement
+      tags:
+      - Invoices
+      summary: Upload a bank statement
+      description: "A CSV in the common format (date, description, amount, and optionally reference and balance), or with its columns matched to it. A file with any line Taskiem cannot read adds nothing and answers 422 with the lines and why. Lines already in the log are skipped."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, csv]
+              properties:
+                channel:
+                  type: string
+                  description: The account the statement is for, such as gtbank/current
+                csv:
+                  type: string
+                columns:
+                  $ref: '#/components/schemas/MoneyStatementFormat'
+      responses:
+        '200':
+          description: What was added
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channel, added, skipped, columns]
+                properties:
+                  channel:
+                    type: string
+                  added:
+                    type: integer
+                  skipped:
+                    type: integer
+                  columns:
+                    $ref: '#/components/schemas/MoneyStatementFormat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/entries:
+    post:
+      operationId: enterMoney
+      tags:
+      - Invoices
+      summary: Enter cash or an expense
+      description: "Once per Idempotency-Key. An expense is money out; cash goes in or out."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, amount_kobo, description]
+              properties:
+                kind:
+                  type: string
+                  enum: [cash, expense]
+                direction:
+                  type: string
+                  enum: [in, out]
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                occurred_at:
+                  type: string
+                  description: A date (2026-10-23) or a time (RFC 3339); now when left out
+                description:
+                  type: string
+                  maxLength: 300
+                vendor:
+                  type: string
+                  maxLength: 120
+                category:
+                  type: string
+                  maxLength: 60
+                channel:
+                  type: string
+                  description: cash (the default) or an account such as gtbank/current
+      responses:
+        '201':
+          description: The entry
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry_id, created]
+                properties:
+                  entry_id:
+                    type: string
+                    format: uuid
+                  created:
+                    type: boolean
+        '200':
+          description: The same entry, from an earlier request with this Idempotency-Key
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry_id, created]
+                properties:
+                  entry_id:
+                    type: string
+                    format: uuid
+                  created:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoice-settings:
     get:
       operationId: getInvoiceSettings
@@ -16878,6 +17211,77 @@ components:
           type: string
           format: date-time
         kind:
+          type: string
+    MoneyLeak:
+      type: object
+      required: [id, kind, amount_kobo, detail, status, opened_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [unmatched, overdue, duplicate, overpaid, void_paid, fee]
+        entry_id:
+          type: string
+          format: uuid
+        invoice_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        detail:
+          type: string
+        status:
+          type: string
+          enum: [open, recovered, written_off, not_a_leak, resolved]
+        assigned_to:
+          type: string
+          format: uuid
+        recovered_kobo:
+          type: integer
+        note:
+          type: string
+        opened_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+        closed_by:
+          type: string
+    MoneyFeeRate:
+      type: object
+      required: [channel, percent_bp, flat_kobo]
+      properties:
+        channel:
+          type: string
+        percent_bp:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        flat_kobo:
+          type: integer
+          minimum: 0
+        cap_kobo:
+          type: integer
+          minimum: 0
+    MoneyStatementFormat:
+      type: object
+      properties:
+        date:
+          type: string
+        description:
+          type: string
+        amount:
+          type: string
+        in:
+          type: string
+        out:
+          type: string
+        reference:
+          type: string
+        balance:
           type: string
     InvoiceSettings:
       type: object
