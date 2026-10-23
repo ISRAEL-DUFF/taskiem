@@ -130,6 +130,9 @@ const EVENT_WORDS: Record<string, string> = {
   "payout.reversed": "transfers reversed",
   "virtual_account.credited": "money into account numbers",
   "pos.sale": "POS sales",
+  "refund.pending": "refunds started",
+  "refund.processed": "refunds paid out",
+  "refund.failed": "refunds that failed",
 };
 
 /** The normalised events an address carries, in words: "payments

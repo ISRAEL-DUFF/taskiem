@@ -217,6 +217,8 @@ func (d describer) trigger(t wd.Trigger) string {
 			"action", d.actionTitle(str("connector"), str("action")))
 	case "storefront":
 		return d.t("wd.trigger.storefront", "form", str("action"))
+	case "invoice":
+		return d.t("wd.trigger.invoice_paid") // paid is its only event
 	case "form":
 		switch str("access") {
 		case "members":

@@ -138,6 +138,19 @@ func TestMirrorCopiesEachEntryOnce(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// A storefront order's match is copied as order:<reference>.
+	for _, q := range []string{
+		`INSERT INTO storefronts (id, tenant_id, slug, draft, created_by) VALUES (gen_random_uuid(), $1, 'mirror-shop', '{}', 'user:ada')`,
+		`INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, total_kobo, payment, paid_at)
+			SELECT gen_random_uuid(), $1, s.id, 'order', 'AK-MIRROR1', '\x00', 'received', '{}', 'x', 250000, 'none', now() FROM storefronts s WHERE s.tenant_id = $1`,
+		`INSERT INTO storefront_order_payments (id, tenant_id, order_id, entry_id, amount_kobo, how, by)
+			SELECT gen_random_uuid(), $1, o.id, (SELECT id FROM money_entries WHERE tenant_id = $1 AND reference = 'VA-1' LIMIT 1), 250000, 'manual', 'user:ada'
+			FROM storefront_orders o WHERE o.reference = 'AK-MIRROR1'`,
+	} {
+		if _, err := e.DB.Admin.Exec(ctx, q, e.Tenant); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for range 2 {
 		if err := m.Tick(ctx); err != nil {
 			t.Fatal(err)
@@ -147,7 +160,8 @@ func TestMirrorCopiesEachEntryOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if list, _ := got["rows"].([]any); len(list) != 2 || list[0].(map[string]any)["target"] != "invoice:"+bill.Number {
+	list, _ = got["rows"].([]any)
+	if len(list) != 3 || list[0].(map[string]any)["target"] != "invoice:"+bill.Number || list[2].(map[string]any)["target"] != "order:AK-MIRROR1" {
 		t.Fatalf("money_matches rows: %v", list)
 	}
 

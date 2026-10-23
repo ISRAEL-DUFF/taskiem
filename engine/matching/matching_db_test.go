@@ -133,9 +133,13 @@ func TestSuggestConfirmUndo(t *testing.T) {
 		t.Fatalf("matched without asking: %+v", y)
 	}
 
-	y, err := w.m.Confirm(ctx, w.env.Tenant, open[0].ID, "user:ada", false)
-	if err != nil || y.Status != "paid" || y.Payments[0].How != "suggested" {
-		t.Fatalf("confirmed %v %+v", err, y)
+	res, err := w.m.Confirm(ctx, w.env.Tenant, open[0].ID, "user:ada", false)
+	if err != nil || res.Invoice == nil || res.Target() != "invoice:"+x.Number {
+		t.Fatalf("confirmed %v %+v", err, res)
+	}
+	y := *res.Invoice
+	if y.Status != "paid" || y.Payments[0].How != "suggested" {
+		t.Fatalf("confirmed %+v", y)
 	}
 	// The same money cannot count towards a second invoice.
 	if _, err := w.m.Match(ctx, w.env.Tenant, open[0].EntryID, other.Number, "user:ada"); err == nil {
@@ -155,9 +159,12 @@ func TestSuggestConfirmUndo(t *testing.T) {
 	}
 	// Now matched by hand to the right invoice... which is the other one
 	// in this story only if a person says so.
-	z, err := w.m.Match(ctx, w.env.Tenant, open[0].EntryID, x.Number, "user:ada")
-	if err != nil || z.Status != "paid" || z.Payments[len(z.Payments)-1].How != "manual" {
-		t.Fatalf("manual %v %+v", err, z)
+	res, err = w.m.Match(ctx, w.env.Tenant, open[0].EntryID, x.Number, "user:ada")
+	if err != nil || res.Invoice == nil {
+		t.Fatalf("manual %v %+v", err, res)
+	}
+	if z := *res.Invoice; z.Status != "paid" || z.Payments[len(z.Payments)-1].How != "manual" {
+		t.Fatalf("manual %+v", z)
 	}
 }
 

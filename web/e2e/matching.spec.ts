@@ -180,3 +180,98 @@ test("automatic matching is a setting, saved with the others", async ({ page }) 
   await expect(page.locator(".toast").filter({ hasText: "Settings saved" }).last()).toBeVisible();
   expect(await (await page.request.get("/v1/invoice-settings")).json()).toEqual({ ...before, auto_match: false });
 });
+
+/** A storefront order of ₦25,000 taken without online payment, waiting for its money (the business's storefront made if it has none).
+ * Its customer is sealed under a key the database does not hold, so it reads as erased: who it is from is not what is tested. */
+function storefrontOrder(tenant: string): string {
+  const reference = `AK-E2E${randomUUID().slice(0, 4).toUpperCase()}`;
+  sql(
+    `INSERT INTO storefronts (id, tenant_id, slug, draft, created_by) VALUES (gen_random_uuid(), '${tenant}', 'e2e-matching', '{}', 'user:e2e') ON CONFLICT DO NOTHING;
+     INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, total_kobo, payment)
+       SELECT gen_random_uuid(), '${tenant}', s.id, 'order', '${reference}', '\\x00', 'received', '{"subject": "e2e-none", "ct": "AAAA"}', 'e2e-none', 2500000, 'none'
+       FROM storefronts s WHERE s.tenant_id = '${tenant}';`,
+  );
+  return reference;
+}
+
+/** Money in for an order, with the matcher's suggestion for it, or nothing suggested (left for a person). */
+function seedOrderPayment(tenant: string, reference: string, order?: string): void {
+  const entry = randomUUID();
+  const reasons = JSON.stringify(order ? [`the reference mentions ${order}`, "same amount as what is due"] : []);
+  sql(
+    `INSERT INTO money_entries (id, tenant_id, entry_key, occurred_at, direction, kind, amount_kobo, status, channel, reference, source, mirrored_at)
+       VALUES ('${entry}', '${tenant}', 'paystack/main|e2e|${reference}', now(), 'in', 'account_credit', 2500000, 'settled', 'paystack/main', '${reference}', 'event', now());
+     INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ('${entry}', '${tenant}', '${order ? "suggested" : "unmatched"}');` +
+      (order
+        ? `INSERT INTO money_suggestions (id, tenant_id, entry_id, order_id, score, reasons)
+             SELECT gen_random_uuid(), '${tenant}', '${entry}', o.id, 90, '${reasons}'::jsonb FROM storefront_orders o WHERE o.reference = '${order}';`
+        : ""),
+  );
+}
+
+test("money is matched to storefront orders from To match, and undone on the order", async ({ page }) => {
+  test.setTimeout(120_000);
+  // A business of its own: the E2E business's storefront belongs to storefront.spec.ts, which expects it without orders.
+  const name = `Ada Shop ${Date.now()}`;
+  await page.goto("/login");
+  await page.getByRole("link", { name: "Create an account" }).click();
+  await page.getByLabel("Business or organisation name").fill(name);
+  await page.getByLabel("Your name").fill("Ada Obi");
+  await page.getByLabel("Email").fill(`shop-${Date.now()}@stores.test`);
+  await page.getByLabel("Password").fill("correct horse battery");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
+  const tenant = sql(`SELECT id FROM tenants WHERE name = '${name}'`);
+  const [suggested, byHand] = [storefrontOrder(tenant), storefrontOrder(tenant)];
+  seedOrderPayment(tenant, `TRF ${suggested}`, suggested);
+  seedOrderPayment(tenant, "E2E-ORDER-LEFT");
+
+  await page.goto("/invoices/match");
+  const cards = page.getByTestId("waiting-payment");
+  const first = cards.filter({ hasText: `TRF ${suggested}` });
+  const candidate = first.getByTestId("candidate");
+  await expect(candidate).toHaveCount(1);
+  await expect(candidate.getByRole("link", { name: `Order ${suggested}` })).toHaveAttribute("href", `/storefront/orders/${suggested}`);
+  await expect(candidate).toContainText("₦25,000 to pay");
+  await expect(candidate.getByRole("list", { name: `Why Order ${suggested}` })).toContainText(`the reference mentions ${suggested}`);
+  // The order waiting for money can be chosen by hand for the money left over.
+  const left = cards.filter({ hasText: "E2E-ORDER-LEFT" });
+  await left.getByText("Match to another invoice or order…").click();
+  await expect(left.getByLabel("Invoice or order").locator(`option[value="order:${byHand}"]`)).toHaveText(`Order ${byHand} · ₦25,000 to pay`);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    const vs = await axe(page);
+    expect(vs, describe(`/invoices/match with orders (${scheme})`, vs)).toEqual([]);
+  }
+
+  // Match the suggestion: the order is paid.
+  await first.getByRole("button", { name: `Match to Order ${suggested}` }).click();
+  await expect(page.getByTestId("match-status")).toContainText(`₦25,000 matched to order ${suggested}. If that is wrong, undo it on the order.`);
+  await expect(first).toHaveCount(0);
+
+  // By hand, to the other order.
+  await left.getByLabel("Invoice or order").selectOption(`order:${byHand}`);
+  await left.getByRole("button", { name: "Match to this one" }).click();
+  await expect(page.getByTestId("match-status")).toContainText(`matched to order ${byHand}`);
+  await expect(left).toHaveCount(0);
+
+  // The order lists the money matched, and the match is undone there.
+  await page.goto(`/storefront/orders/${suggested}`);
+  const pay = page.getByTestId("order-payment");
+  await expect(pay.getByTestId("how-matched")).toHaveText(/^Suggested, confirmed by .+/);
+  await expect(pay.getByRole("list", { name: "Why it was matched" })).toContainText(`the reference mentions ${suggested}`);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    const vs = await axe(page);
+    expect(vs, describe(`/storefront/orders/${suggested} (${scheme})`, vs)).toEqual([]);
+  }
+  page.once("dialog", (d) => void d.accept());
+  await pay.getByRole("button", { name: "Undo the match" }).click();
+  await expect(pay).toContainText("Undone");
+  await expect(pay.getByRole("button", { name: "Undo the match" })).toHaveCount(0);
+  expect(sql(`SELECT paid_at IS NULL FROM storefront_orders WHERE reference = '${suggested}'`)).toBe("t");
+
+  // The money is back to be matched.
+  await page.goto("/invoices/match");
+  await expect(cards.filter({ hasText: `TRF ${suggested}` })).toHaveCount(1);
+});

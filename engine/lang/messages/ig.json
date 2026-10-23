@@ -1092,6 +1092,10 @@
       "text": "{amount} batara na {when} site na {channel}.\n\nỌ bụ maka {number}, {due} onye ahịa ji? {reasons}.",
       "reviewed": false
     },
+    "wa.match.ask_order": {
+      "text": "{amount} batara na {when} site na {channel}.\n\nỌ bụ maka ọda ụlọ ahịa {number}, {due} a ga-akwụ? {reasons}.",
+      "reviewed": false
+    },
     "wa.match.channel.cash": {
       "text": "ego n'aka",
       "reviewed": false
@@ -1102,6 +1106,10 @@
     },
     "wa.match.denied": {
       "text": "Ị nweghị ike ijikọta ego na {org}.",
+      "reviewed": false
+    },
+    "wa.match.matched_order": {
+      "text": "Ejikọtala ya na ọda {number}. A kwụọla ya ugbu a.",
       "reviewed": false
     },
     "wa.match.matched_paid": {
@@ -2274,6 +2282,10 @@
     },
     "wd.trigger.form_members": {
       "text": "Mgbe mmadụ dejupụtara fọm “{title}” (naanị ndị otu)",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_paid": {
+      "text": "Mgbe akwụchara otu n'ime invoice gị",
       "reviewed": false
     },
     "wd.trigger.manual": {

@@ -355,6 +355,9 @@ func TestCheckRejectsUnavailableTriggers(t *testing.T) {
 		`{"type":"connector_event","config":{"connector":"paystack@1","trigger":"transfer_event","events":["charge.success"]}}`: false,
 		`{"type":"polling","config":{}}`:                                                                                        false,
 		`{"type":"schedule","config":{"cron":"0 9 * * 1-5"}}`:                                                                   true,
+		`{"type":"invoice","config":{"event":"paid"}}`:                                                                          true,
+		`{"type":"invoice","config":{"event":"overdue"}}`:                                                                       false,
+		`{"type":"invoice"}`: false,
 	} {
 		def, err := wd.Load([]byte(`{"schema":"wd/v1","id":"wf_x","version":1,"name":"x","trigger":` + doc + `,"steps":[{"id":"a","type":"transform","config":{"output":1}}]}`))
 		if err != nil {

@@ -72,6 +72,14 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 		trig["email"] = map[string]any{"address": "sample@in.taskiem.app", "received_at": "2026-01-01T09:00:00Z",
 			"auth": map[string]any{"spf": "pass", "dkim": []any{"example.com"}, "dmarc": "", "aligned": true}}
 	}
+	if def.Trigger.Type == "invoice" {
+		// An invoice paid in full, as engine/invoicing.PaidTrigger gives it.
+		trig["event"] = "paid"
+		trig["body"] = map[string]any{"event": "paid", "id": "00000000-0000-7000-8000-000000000000", "number": "INV-0001", "status": "paid",
+			"amount_kobo": 2500000, "amount": "₦25,000", "paid_kobo": 2500000, "currency": "NGN",
+			"customer": map[string]any{"name": "A customer", "phone": "+2348030000000", "email": "customer@example.com"},
+			"paid_at":  "2026-01-01T09:00:00Z", "link": "https://forms.example/i/sample"}
+	}
 	if def.Trigger.Type == "form" {
 		// What a submission carries beside the answers (forms 8.2).
 		trig["form"] = map[string]any{"submission_id": "00000000-0000-7000-8000-000000000000", "reference": "F-SAMPLE23", "submitted_at": "2026-01-01T09:00:00Z",

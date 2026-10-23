@@ -32,7 +32,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(section.getByText("Payments you receive")).toBeVisible();
     await expect(section.getByText(/\/connectors\/paystack@1\/charge_event\?connection=moneylog_e2e&env=prod$/)).toBeVisible();
     await expect(section.getByRole("button", { name: "Copy the Payments you receive address for Paystack (moneylog_e2e)" })).toBeVisible();
-    await expect(section.getByText("Carries payments received and payments returned.").first()).toBeVisible();
+    await expect(section.getByText(/^Carries payments received, payments returned, refunds that failed, refunds started and refunds paid out\./).first()).toBeVisible();
     await expect(section.getByText(/Taskiem also checks every 5 minutes/).first()).toBeVisible();
     await expect(section.getByText(/Live Webhook URL/)).toBeVisible();
     await expect(page.getByText("sk_test_e2e_never_shown")).toHaveCount(0);

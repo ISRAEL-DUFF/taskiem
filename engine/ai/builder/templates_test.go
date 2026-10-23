@@ -162,7 +162,7 @@ func TestNoEvalRequestInPrompts(t *testing.T) {
 
 // The builder knows invoices and the money log: the instructions say
 // invoices are invoices@1's and paid only by payments (waited for with
-// invoice.paid), and that the money log is read, never written; a goal
+// invoice.paid, or started on by the invoice trigger), and that the money log is read, never written; a goal
 // about invoices however worded carries invoices@1's schema and starts
 // from the invoice templates.
 func TestInvoiceKnowledge(t *testing.T) {
@@ -179,7 +179,7 @@ func TestInvoiceKnowledge(t *testing.T) {
 		}
 		req := f.Requests()[0]
 		sys := req.System[0].Text
-		for _, want := range []string{"use invoices@1", `"event": "invoice.paid"`, "Never keep customers' invoices in a data table with a status or paid column",
+		for _, want := range []string{"use invoices@1", `"event": "invoice.paid"`, `uses the "invoice" trigger ({"event": "paid"})`, "Never keep customers' invoices in a data table with a status or paid column",
 			"never make a payment link or account number for an invoice yourself", "money_matches has one row per match", "never insert_rows"} {
 			if !strings.Contains(sys, want) {
 				t.Errorf("the instructions do not say %q", want)

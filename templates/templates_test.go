@@ -421,6 +421,33 @@ func TestMatchInvoices(t *testing.T) {
 			}
 		}
 	}
+
+	// The receipt starts on the invoice being paid, once per invoice: no
+	// schedule, no window of recent invoices to miss one from, and its
+	// parameters are what they were, so a workflow made from the hourly
+	// version is still filled in the same way.
+	rc, ok := lib.Get("invoice-paid-receipt")
+	if !ok {
+		t.Fatal("no invoice-paid-receipt")
+	}
+	var def struct {
+		Trigger struct {
+			Type   string         `json:"type"`
+			Config map[string]any `json:"config"`
+		} `json:"trigger"`
+	}
+	if err := json.Unmarshal(rc.Definition, &def); err != nil {
+		t.Fatal(err)
+	}
+	if def.Trigger.Type != "invoice" || def.Trigger.Config["event"] != "paid" {
+		t.Errorf("invoice-paid-receipt starts on %+v", def.Trigger)
+	}
+	if strings.Contains(string(rc.Definition), "paid_within_hours") || strings.Contains(string(rc.Definition), "foreach") {
+		t.Error("invoice-paid-receipt still looks through recently paid invoices")
+	}
+	if len(rc.Params) != 1 || rc.Params[0].Name != "tell_me" || rc.Params[0].Type != "boolean" {
+		t.Errorf("invoice-paid-receipt params changed: %+v", rc.Params)
+	}
 }
 
 // A keyword stays distinctive however many other templates mention the

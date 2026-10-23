@@ -209,30 +209,44 @@ func (s *Server) sendMatchItem(ctx context.Context, it whatsapp.OutboxItem) erro
 // with its buttons signed for user; false when none is open.
 func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Tag, entryID uuid.UUID) (string, []whatsapp.Button, bool, error) {
 	var (
-		id, invoice   uuid.UUID
-		raw           []byte
-		amount        *int64
-		when          time.Time
-		channel, kind string
-		open          int
-		x             invoicing.Invoice
-		found         bool
-		reasons       []string
+		id             uuid.UUID
+		invoice, order *uuid.UUID
+		raw            []byte
+		amount         *int64
+		when           time.Time
+		channel, kind  string
+		open           int
+		number, ask    string
+		due            int64
+		found          bool
+		reasons        []string
 	)
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT s.id, s.invoice_id, s.reasons, e.amount_kobo, COALESCE(e.occurred_at, e.recorded_at), e.channel, e.kind,
+		err := tx.QueryRow(ctx, `SELECT s.id, s.invoice_id, s.order_id, s.reasons, e.amount_kobo, COALESCE(e.occurred_at, e.recorded_at), e.channel, e.kind,
 				(SELECT count(*) FROM money_suggestions o WHERE o.tenant_id = s.tenant_id AND o.entry_id = s.entry_id AND o.status = 'open')
 			FROM money_suggestions s JOIN money_entries e ON e.id = s.entry_id
 			WHERE s.tenant_id = $1 AND s.entry_id = $2 AND s.status = 'open' ORDER BY s.score DESC, s.created_at, s.id LIMIT 1`, tenant, entryID).
-			Scan(&id, &invoice, &raw, &amount, &when, &channel, &kind, &open)
+			Scan(&id, &invoice, &order, &raw, &amount, &when, &channel, &kind, &open)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		if x, err = s.Invoices.Get(ctx, tx, tenant, invoice.String()); err != nil {
-			return err
+		if order != nil {
+			// A storefront order: its reference and what is paid online.
+			ask = "wa.match.ask_order"
+			if err := tx.QueryRow(ctx, `SELECT reference, COALESCE(deposit_kobo, total_kobo) FROM storefront_orders WHERE tenant_id = $1 AND id = $2`,
+				tenant, *order).Scan(&number, &due); err != nil {
+				return err
+			}
+		} else {
+			ask = "wa.match.ask"
+			x, err := s.Invoices.Get(ctx, tx, tenant, invoice.String())
+			if err != nil {
+				return err
+			}
+			number, due = x.Number, x.DueKobo
 		}
 		found = true
 		return nil
@@ -245,8 +259,8 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 	if amount != nil {
 		got = *amount
 	}
-	text := tr(l, "wa.match.ask", "amount", invoicing.Naira(got), "when", when.In(lagos()).Format("2 Jan 15:04"), "channel", matchChannelWords(l, channel, kind),
-		"number", x.Number, "due", invoicing.Naira(x.DueKobo), "reasons", whatsapp.SafeText(sentence(reasons)))
+	text := tr(l, ask, "amount", invoicing.Naira(got), "when", when.In(lagos()).Format("2 Jan 15:04"), "channel", matchChannelWords(l, channel, kind),
+		"number", number, "due", invoicing.Naira(due), "reasons", whatsapp.SafeText(sentence(reasons)))
 	if open > 1 {
 		text += "\n" + tr(l, "wa.match.more")
 	}
@@ -320,7 +334,8 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 	var status, number string
 	read := func() error {
 		return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT s.status, s.entry_id, i.number FROM money_suggestions s JOIN customer_invoices i ON i.id = s.invoice_id
+			return tx.QueryRow(ctx, `SELECT s.status, s.entry_id, COALESCE(i.number, o.reference) FROM money_suggestions s
+				LEFT JOIN customer_invoices i ON i.id = s.invoice_id LEFT JOIN storefront_orders o ON o.id = s.order_id
 				WHERE s.tenant_id = $1 AND s.id = $2`, tenant.ID, b.Suggestion).Scan(&status, &entryID, &number)
 		})
 	}
@@ -342,13 +357,18 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 		case "rejected":
 			return say(c.t("wa.match.already_rejected"))
 		}
-		// Closed: the payment was matched to another invoice.
+		// Closed: the payment was matched to another invoice or order.
 		var other string
 		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT i.number FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
-				WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
-				  AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)
-				ORDER BY p.created_at DESC LIMIT 1`, tenant.ID, entryID).Scan(&other)
+			return tx.QueryRow(ctx, `SELECT number FROM (
+					SELECT i.number, p.created_at FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
+					WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
+					  AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)
+					UNION ALL
+					SELECT o.reference, p.created_at FROM storefront_order_payments p JOIN storefront_orders o ON o.id = p.order_id
+					WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
+					  AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)) m
+				ORDER BY created_at DESC LIMIT 1`, tenant.ID, entryID).Scan(&other)
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return say(c.t("wa.match.already_decided"))
@@ -378,10 +398,13 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 		case err != nil:
 			return err
 		}
-		if x.Status == "paid" || x.DueKobo <= 0 {
-			return say(c.t("wa.match.matched_paid", "number", x.Number))
+		if x.Order != nil {
+			return say(c.t("wa.match.matched_order", "number", x.Order.Reference))
 		}
-		return say(c.t("wa.match.matched_part", "number", x.Number, "due", invoicing.Naira(x.DueKobo)))
+		if x.Invoice.Status == "paid" || x.Invoice.DueKobo <= 0 {
+			return say(c.t("wa.match.matched_paid", "number", x.Invoice.Number))
+		}
+		return say(c.t("wa.match.matched_part", "number", x.Invoice.Number, "due", invoicing.Naira(x.Invoice.DueKobo)))
 	}
 	err = m.Reject(ctx, tenant.ID, b.Suggestion, p.Actor())
 	switch {

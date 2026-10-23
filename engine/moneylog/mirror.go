@@ -166,28 +166,36 @@ func (m *Mirror) Matches(ctx context.Context, tenant uuid.UUID) error {
 		m.mu.Unlock()
 	}
 	type match struct {
-		id   uuid.UUID
-		row  map[string]any
-		when time.Time
+		id    uuid.UUID
+		row   map[string]any
+		when  time.Time
+		table string
 	}
 	var list []match
 	err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT p.id, p.entry_id, i.number, p.amount_kobo, p.how, p.by, p.reasons, p.undoes, p.created_at
-			FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
-			WHERE p.tenant_id = $1 AND p.mirrored_at IS NULL ORDER BY p.created_at, p.id LIMIT 200`, tenant)
+		// Invoices' matches and storefront orders' (order:<reference>).
+		rows, err := tx.Query(ctx, `SELECT * FROM (
+				SELECT p.id, p.entry_id, 'invoice:' || i.number AS target, p.amount_kobo, p.how, p.by, p.reasons, p.undoes, p.created_at, 'customer_invoice_payments' AS tbl
+				FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
+				WHERE p.tenant_id = $1 AND p.mirrored_at IS NULL
+				UNION ALL
+				SELECT p.id, p.entry_id, 'order:' || o.reference, p.amount_kobo, p.how, p.by, p.reasons, p.undoes, p.created_at, 'storefront_order_payments'
+				FROM storefront_order_payments p JOIN storefront_orders o ON o.id = p.order_id
+				WHERE p.tenant_id = $1 AND p.mirrored_at IS NULL) m
+			ORDER BY created_at, id LIMIT 200`, tenant)
 		if err != nil {
 			return err
 		}
 		list, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (match, error) {
 			var x match
 			var entry, undoes *uuid.UUID
-			var number, how, by string
+			var target, how, by string
 			var amount int64
 			var reasons []string
-			if err := r.Scan(&x.id, &entry, &number, &amount, &how, &by, &reasons, &undoes, &x.when); err != nil {
+			if err := r.Scan(&x.id, &entry, &target, &amount, &how, &by, &reasons, &undoes, &x.when, &x.table); err != nil {
 				return x, err
 			}
-			x.row = map[string]any{"match_id": x.id.String(), "target": "invoice:" + number, "amount_kobo": amount, "how": how, "by": by,
+			x.row = map[string]any{"match_id": x.id.String(), "target": target, "amount_kobo": amount, "how": how, "by": by,
 				"matched_at": x.when.UTC().Format(time.RFC3339Nano)}
 			if entry != nil {
 				x.row["entry_id"] = entry.String()
@@ -217,7 +225,11 @@ func (m *Mirror) Matches(ctx context.Context, tenant uuid.UUID) error {
 			}
 		}
 		if err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE customer_invoice_payments SET mirrored_at = now() WHERE tenant_id = $1 AND id = $2 AND mirrored_at IS NULL`, tenant, x.id)
+			q := `UPDATE customer_invoice_payments SET mirrored_at = now() WHERE tenant_id = $1 AND id = $2 AND mirrored_at IS NULL`
+			if x.table == "storefront_order_payments" {
+				q = `UPDATE storefront_order_payments SET mirrored_at = now() WHERE tenant_id = $1 AND id = $2 AND mirrored_at IS NULL`
+			}
+			_, err := tx.Exec(ctx, q, tenant, x.id)
 			return err
 		}); err != nil {
 			return err
