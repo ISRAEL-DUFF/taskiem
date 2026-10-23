@@ -241,6 +241,21 @@ tr.highlight td { background: color-mix(in srgb, var(--accent) 7%, var(--panel))
 .tabs button, .tabs a { min-height: 30px; border: none; box-shadow: none; background: none; padding: 0 12px; border-radius: 7px; color: var(--muted); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; text-decoration: none; }
 .tabs button:hover:not(:disabled), .tabs a:hover { background: none; color: var(--text); text-decoration: none; }
 .tabs button.active, .tabs a.active { background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border), var(--shadow); }
+.tabs .tab-count { margin-left: 6px; font-size: 12px; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--warn) 55%, var(--text)); background: color-mix(in srgb, var(--warn) 13%, var(--panel)); border-radius: 999px; padding: 0 7px; }
+
+/* Invoices > To match: one card per payment, its candidate invoices with their reasons. */
+.match-card h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.match-card h3 { font-size: 14px; margin: 16px 0 8px; }
+.match-candidates { list-style: none; margin: 0; padding: 0; }
+.match-candidates > li { border-top: 1px solid var(--border); padding: 12px 0 4px; }
+.match-head { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.match-reasons { margin: 6px 0 10px; padding-left: 20px; color: var(--text); }
+.match-reasons li { margin: 2px 0; }
+td .match-reasons { font-size: 13px; margin-bottom: 0; }
+.match-other { margin-top: 8px; }
+.match-other > summary { color: var(--accent); font-size: 14px; line-height: 18px; padding: 3px 0; }
+.match-other form { margin-top: 10px; }
+.match-other-row { align-items: flex-end; }
 
 .editor { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 0; height: 600px; min-height: 520px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
 .canvas { background: var(--panel-2); background-image: radial-gradient(color-mix(in srgb, var(--border-strong) 80%, transparent) 1px, transparent 1px); background-size: 20px 20px; overflow: hidden; position: relative; }

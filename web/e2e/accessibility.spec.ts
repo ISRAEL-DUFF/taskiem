@@ -28,6 +28,9 @@ const PAGES = [
   "/storefront/look",
   "/storefront/orders",
   "/storefront/bookings",
+  "/invoices",
+  "/invoices/match",
+  "/invoices/settings",
 ];
 
 async function signIn(page: Page) {
