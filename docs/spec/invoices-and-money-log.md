@@ -378,7 +378,7 @@ The record, numbering, statuses, `invoices@1`, the Invoices pages (list, new, de
 
 - **Payments live in Taskiem's database**, in `customer_invoice_payments`, inserted and never changed (an undo is a row naming the payment). The database computes an invoice's status, `paid_kobo` and `paid_at` from them; no role may write those columns. The money log's `money_matches` (T2, T5) will mirror these rows for the owner rather than be the source of an invoice's status, so the invariant holds in one database.
 - **Overdue is a status of its own**, computed from the due date (Lagos time) whenever the invoice is touched and by the hourly check; a part-paid invoice past its date shows overdue, with what was paid.
-- **Sending is by SMS and email only.** WhatsApp and Telegram delivery with the Pay by transfer button comes with T4, with the amendment to 0039.
+- **Sending was by SMS and email only**: T4 added WhatsApp and Telegram with the Pay by transfer button.
 - **The page showed no payment options**: T4 added them.
 - **Chat understands the English command words** (`invoice`, `bill`); its replies are in all five catalogues (four as unreviewed drafts). The other languages' command words come with T8.
 - **The template's keywords avoid the word "invoice"** for now, so the offline builder still picks the follow-up template for "chase an unpaid invoice"; T8 settles the builder and its evals.
@@ -390,12 +390,14 @@ The invoice page, the inbox request and issuing, the countdown and new numbers, 
 
 **Done when:** a customer pays an invoice by transfer from the page and from WhatsApp on each T1 rail in sandbox; a transfer after expiry still pays the invoice; a sixth request in an hour shows the current account.
 
-**Built** (T4, in part): migration 00198 (`customer_invoice_accounts`, one row per account or link with the payment id derived before the rail is asked; `customer_invoice_requests`, the page's and chat's queue; `taskiem_public_invoice_request` and `taskiem_public_invoice_payment` for the public role); `engine/invoicing` `Issue`, `Drain` (every second) and `CheckPayments` (every 30 seconds, `get_payment` on each account still waiting, counted exactly and once, then `invoice.paid`), over `RegistryRails` (the tenant's prod connection, its vault credentials and the egress guard); the page's **Pay by bank transfer**, **Get a new account number**, **Pay by card** and part-payment amount, refreshing itself without script ([invoices](../invoices.md#paying-from-the-page)). Differences from §6:
+**Built** (T4): migration 00198 (`customer_invoice_accounts`, one row per account or link with the payment id derived before the rail is asked; `customer_invoice_requests`, the page's and chat's queue; `taskiem_public_invoice_request` and `taskiem_public_invoice_payment` for the public role); `engine/invoicing` `Issue`, `Drain` (every second) and `CheckPayments` (every 30 seconds, `get_payment` on each account still waiting, counted exactly and once, then `invoice.paid`), over `RegistryRails` (the tenant's prod connection, its vault credentials and the egress guard); the page's **Pay by bank transfer**, **Get a new account number**, **Pay by card** and part-payment amount, refreshing itself without script ([invoices](../invoices.md#paying-from-the-page)). Differences from §6:
 
 - **Payments are found by polling `get_payment`**, not by events: OPay maps no event yet and webhooks need setting up per business. Events can be added in T5 without changing what is counted.
 - **The business pays the fee** whatever the setting says: no T1 rail documents its dynamic-account fee in a form Taskiem can show as a line. The setting is stored for when they do.
 - **Paystack needs an email**: a customer without one is sent as `invoices+<number>@<page host>`.
 - **The limits are checked twice**: by the public function when the page asks, and by `Issue` (which also refuses part amounts the invoice does not take).
+- **Chat** (migration 00199, `api/invoice_chat.go`, `engine/invoicing/chat.go`): `send` also queues the invoice on WhatsApp or Telegram when the customer's phone opted in to the business there (0039's reach book; the same per-person limit as SMS), with **Pay by transfer** and **Open invoice**. A button carries a signed code naming the action, business, invoice and contact, and works only from that contact, for an invoice sent to their phone, while they have not sent STOP; the answer gives the account with **New account number**. Everything else an outsider types still gets STOP and START only.
+- **No WhatsApp template yet**: outside the 24-hour window the WhatsApp message is not sent and SMS and email carry the invoice, as the risk row in §14 says.
 - **Not yet verified in sandbox** on each T1 rail; the docs page stays internal until it is.
 
 ### T5: matching (M; needs T2, T3)
