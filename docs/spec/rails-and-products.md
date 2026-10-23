@@ -140,12 +140,13 @@ Each capability has one input and one output shape, defined by Taskiem in `schem
 | `get_payout` | `payout_id` | `status` (`settled` \| `pending` \| `failed` \| `reversed`), `settled_at`, `fee_kobo`, `reason` | read |
 | `pay_many` | `items[]` (as `pay_bank`), `currency`, `narration`, `source` | `batch_id`, `items[] {status, payout_id}` | idempotent; **native only** (§4.7) |
 | `collect_link` | `amount_kobo`, `currency` (default NGN), `customer {name, email, phone, bvn}`, `description`, `return_url` | `payment_url`, `payment_id` | idempotent or reconcilable |
+| `collect_transfer` | `amount_kobo`, `currency` (default NGN), `customer`, `description`, `expires_minutes` | `payment_id`, `account_number`, `bank_name`, `account_name`, `amount_kobo`, `expires_at` | idempotent or reconcilable; unsafe allowed and declared. Added by T1 of [invoices and the money log](invoices-and-money-log.md#4-one-time-accounts-collect_transfer), with the mapping's `transfer` facts |
 | `collect_push` | `amount_kobo`, `currency`, `msisdn`, `description` | `payment_id`, `status` | idempotent or reconcilable |
 | `get_payment` | `payment_id` (as `collect_link` answered it, or as a payment event carried it) | `status` (`paid` \| `pending` \| `failed` \| `refunded`), `amount_kobo`, `currency`, `paid_at` | read |
 | `virtual_account` | `customer {name, email, phone, bvn}` | `account_number`, `bank_name`, `account_name`, `reference` (what `virtual_account.credited` carries) | idempotent preferred; unsafe allowed and declared |
 | `refund` | `payment_id`, `amount_kobo` (optional: partial), `reason` | `refund_id`, `status` (`refunded` \| `pending` \| `failed`), `amount_kobo` | idempotent or reconcilable |
 
-Events, normalised the same way (§4.5): `payout.settled`, `payout.failed`, `payout.reversed`, `payment.received`, `virtual_account.credited`.
+Events, normalised the same way (§4.5): `payout.settled`, `payout.failed`, `payout.reversed`, `payment.received`, `payment.returned` (added by T1), `virtual_account.credited`.
 
 No capability takes a reference: the reference a rail needs is the idempotency key Taskiem derives for the step (one for each step of a composite), which is what makes a retry or a resend the same payment.
 

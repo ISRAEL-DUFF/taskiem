@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/brand"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 )
 
 // TestWritePreview draws the main pages in every theme into the folder
@@ -63,6 +64,13 @@ func TestWritePreview(t *testing.T) {
 		pages["hosted-form"] = h.get("/f/loan00000001").Body.String()
 		pages["hosted-widgets"] = h.get("/f/widgets00001").Body.String()
 		pages["notfound"] = get(e.h, "GET", "nobody.shops.test", "/").Body.String()
+
+		due := time.Date(2099, 1, 31, 0, 0, 0, 0, time.UTC)
+		inv := invoiceServer(fakeInvoice(InvoicePage{Tenant: uuid.New(), Business: "Ada Kitchen", Number: "INV-0007", Status: "part_paid", DueOn: &due,
+			Note: "Thank you for your custom.\nCollect from the shop.", TotalKobo: 1000000, PaidKobo: 250000,
+			Lines: []invoicing.Line{{Description: "Jollof rice, party pack", Quantity: 3, UnitKobo: 250000}, {Description: "Delivery", Quantity: 1, UnitKobo: 250000}}}), nil)
+		withBrand(inv, b)
+		pages["invoice"] = get(inv.Handler(), "GET", formHost, "/i/"+invoiceToken).Body.String()
 
 		index.WriteString("<h2>" + theme + "</h2><ul>")
 		for name, body := range pages {

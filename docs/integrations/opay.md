@@ -23,7 +23,7 @@ Both keys are on the OPay merchant dashboard under API Keys & Webhooks.
 | Action | Endpoint | Class | Notes |
 | --- | --- | --- | --- |
 | `create_cashier_payment` | `POST /api/v1/international/cashier/create` | idempotent write | Returns `cashier_url` for the payer. Public-key auth |
-| `create_bank_transfer_payment` | `POST /api/v1/international/payment/create` (`payMethod: BankTransfer`) | idempotent write | Returns the `account_number`/`bank_name` to pay into and `expires_at` |
+| `create_bank_transfer_payment` | `POST /api/v1/international/payment/create` (`payMethod: BankTransfer`) | idempotent write | Returns the `account_number`/`bank_name` to pay into and `expires_at` (also as `expires_at_rfc3339`). The `collect_transfer` capability, asking for at most OPay's documented default of 30 minutes |
 | `get_payment` | `POST /api/v1/international/cashier/status` | read | By `reference` or `order_no` |
 | `close_payment` | `POST /api/v1/international/payment/close` | unsafe write | Cancels an unpaid payment; an unknown outcome parks |
 | `refund_payment` | `POST /api/v1/international/payment/refund/create` | idempotent write | `refund_way` Original (default) or BankAccount |
@@ -55,6 +55,10 @@ OPay posts status changes to the payment's `callbackUrl`, or to the webhook URL 
 5. The unit of the callback's `amount` and `fee` ("in NGN" in the field table; the API uses kobo everywhere else). The connector does not read callback amounts; `get_payment` reports kobo.
 6. Whether `refunded` in callbacks is a boolean (as in the example) or a string (as in the table). `verify_callback` accepts both.
 7. OPay's callback source IPs, if the deployment should also filter by IP.
+
+## Capabilities
+
+OPay is a rail with two capabilities: `collect_transfer` (`create_bank_transfer_payment`) and `get_payment`. Its payment callback is not mapped to `payment.received` yet, because a payment event must carry the amount exactly and the callback's unit is unconfirmed (question 5 above); until OPay confirms it, a payment into a one-time account is confirmed with `get_payment`, so `await_payment` does not run on OPay. What OPay does with a transfer after expiry or of a wrong amount is not documented ([invoices and the money log §4.3](../spec/invoices-and-money-log.md#43-what-the-rails-do-t0-23-october-2026)).
 
 ## Engine change that would help
 

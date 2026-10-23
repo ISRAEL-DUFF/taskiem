@@ -133,3 +133,18 @@ legend + * { clear: both; }
 .step { width: 40px; height: 40px; border: 0; background: none; color: var(--fg); font: inherit; font-size: 1.15rem; cursor: pointer; }
 .stepper .qty::-webkit-inner-spin-button, .stepper .qty::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 @media (min-width: 40rem) { .cover { height: 320px; } .masthead h1 { font-size: 3.2rem; } }
+
+/* An invoice's page */
+.inv { margin-top: 1.5rem; border-top: 1px solid var(--fg); }
+.inv-row { display: flex; justify-content: space-between; gap: .75rem; padding: .875rem 0; border-bottom: 1px solid var(--rule); }
+.inv-what { display: flex; flex-direction: column; }
+.inv-sums { display: grid; grid-template-columns: 1fr auto; gap: .375rem 1rem; margin: 0; }
+.inv-sums dd { margin: 0; text-align: right; }
+.inv-sums .inv-due { font: 1.6rem/1.2 var(--serif); }
+.inv-note { white-space: pre-line; }
+.inv-pay { margin: 1.5rem 0; }
+.inv-pay h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
+.inv-acct { border: 2px solid var(--brand); border-radius: .5rem; padding: 1rem; margin: 0 0 1rem; }
+.inv-acct p { margin: .25rem 0; }
+.inv-acct-no { font-size: 1.75rem; font-weight: 800; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.inv-pay .btn + .btn { margin-top: .5rem; }

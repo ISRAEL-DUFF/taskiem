@@ -33,6 +33,8 @@ import { Storefront } from "./pages/Storefront";
 import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
+import { invoiceAccess } from "./lib/invoices";
+import { InvoiceEdit, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
 import { get } from "./api";
@@ -193,6 +195,7 @@ function SignedIn() {
     ["/home", "Home", "home", true],
     ["/workflows", "Workflows", "workflows", can("workflow.read")],
     ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
+    ["/invoices", "Invoices", "invoices", invoiceAccess(can).see],
     ["/storefront", "Storefront", "storefront", can("storefront.manage")],
     ["/forms", "Forms", "forms", can("workflow.read")],
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
@@ -300,6 +303,11 @@ function SignedIn() {
           <Route path="/storefront/orders" element={<StorefrontOrders />} />
           <Route path="/storefront/orders/:reference" element={<StorefrontOrder />} />
           <Route path="/storefront/bookings" element={<StorefrontBookings />} />
+          <Route path="/invoices" element={<Invoices />} />
+          <Route path="/invoices/new" element={<InvoiceNew />} />
+          <Route path="/invoices/settings" element={<InvoiceSettingsPage />} />
+          <Route path="/invoices/:id" element={<InvoicePage />} />
+          <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
           <Route path="/forms" element={<Forms />} />
           <Route path="/forms/requests" element={<FormRequests />} />
           <Route path="/forms/requests/:id" element={<FormRequestPage />} />

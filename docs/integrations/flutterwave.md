@@ -21,6 +21,7 @@ The connector is `connectors/flutterwave` (`flutterwave@1`), built on Flutterwav
 | `get_transfer` | `GET /transfers/{id}` | read | |
 | `get_transfer_by_reference` | `GET /transfers?reference=` | read | |
 | `verify_payment` | `GET /transactions/{id}/verify`, `/transactions/verify_by_reference` | read | Confirm a collection before giving value |
+| `create_dynamic_account` | `POST /virtual-account-numbers` (`is_permanent: false`) | unsafe write | An account number for one payment, until `expires_at` (1 minute to about two months; an hour when no time is asked). Amounts are sent in naira. Less than the amount is returned to the payer; more is kept up to the amount and the excess returned. The payment arrives as `charge.completed` with `tx_ref`, the step's key. Flutterwave cannot look the account up by `tx_ref`, so an unknown outcome parks. The `collect_transfer` capability |
 
 **Amounts.** Taskiem amounts are minor units; Flutterwave v3 uses major units (naira). Its payout `amount` is an integer, so payouts must be whole naira: the connector refuses an amount that is not a multiple of 100 kobo rather than round someone's pay. Fees, which Flutterwave quotes to fractions of a kobo (₦26.875), round up.
 

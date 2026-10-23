@@ -1,0 +1,148 @@
+# The invoices platform connector (docs/invoices.md, decision 0045): what
+# workflows do with the business's invoices to its customers. It acts on
+# Taskiem's own records, for the run's tenant only, and needs no
+# connection. No action marks an invoice paid: only a payment counted
+# towards it does, and a run waits for that with the invoice.paid signal.
+manifest: connector/v1
+id: invoices
+version: 1.0.0
+name: Invoices
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  create:
+    title: Create an invoice
+    description: A draft invoice with the business's next number. Give the amount (one line) or the items. Send it with send.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [customer]
+      properties:
+        customer:
+          type: object
+          required: [name]
+          properties:
+            name:  { type: string }
+            phone: { type: string }
+            email: { type: string }
+        amount_kobo: { type: integer, minimum: 100, description: A single line for this amount; or give lines }
+        description: { type: string, description: The single line's description (default "Amount due") }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [description, quantity, unit_kobo]
+            properties:
+              description: { type: string }
+              quantity:    { type: integer, minimum: 1 }
+              unit_kobo:   { type: integer, minimum: 1 }
+        due_on:              { type: string, description: YYYY-MM-DD }
+        note:                { type: string }
+        connection:          { type: string, description: The payments connection; the business's default when left out }
+        fee_paid_by:         { type: string, enum: [business, customer] }
+        allow_part_payments: { type: boolean }
+    output:
+      type: object
+      properties:
+        number:     { type: string }
+        status:     { type: string }
+        total_kobo: { type: integer }
+        total:      { type: string }
+    pii:
+      - { field: customer.name, category: name }
+      - { field: customer.phone, category: phone }
+      - { field: customer.email, category: email }
+  send:
+    title: Send an invoice
+    description: Sends the invoice to its customer by SMS and email with its page's link, and marks it sent. Sending again resends the same link.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [number]
+      properties:
+        number: { type: string }
+    output:
+      type: object
+      properties:
+        number: { type: string }
+        status: { type: string }
+        queued: { type: array, items: { type: string } }
+  get:
+    title: Read an invoice
+    class: read
+    input:
+      type: object
+      required: [number]
+      properties:
+        number: { type: string }
+    output:
+      type: object
+      properties:
+        number:     { type: string }
+        status:     { type: string, enum: [draft, sent, part_paid, paid, overdue, void] }
+        total_kobo: { type: integer }
+        paid_kobo:  { type: integer }
+        due_kobo:   { type: integer }
+        total:      { type: string }
+        due:        { type: string }
+        due_on:     { type: string }
+        customer_name: { type: string }
+    pii:
+      - { field: output.customer_name, category: name }
+  void:
+    title: Void an invoice
+    description: Cancels an invoice that is not paid, with the reason. A void invoice takes no new payment.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [number, reason]
+      properties:
+        number: { type: string }
+        reason: { type: string }
+    output:
+      type: object
+      properties:
+        number: { type: string }
+        status: { type: string }
+  notify_customer:
+    title: Message the invoice's customer
+    description: An SMS, and an email when there is one, to the invoice's customer. {link} becomes the invoice's page link, {number} its number and {due} what is still due.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [number, text]
+      properties:
+        number:  { type: string }
+        text:    { type: string }
+        subject: { type: string, description: The email's subject }
+    output:
+      type: object
+      properties:
+        number: { type: string }
+        queued: { type: array, items: { type: string } }

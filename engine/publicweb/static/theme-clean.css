@@ -140,3 +140,16 @@ fieldset { min-width: 0; }
 .step { width: 40px; height: 40px; border: 0; background: none; color: var(--brand-text); font: inherit; font-size: 1.25rem; font-weight: 700; cursor: pointer; }
 .stepper .qty::-webkit-inner-spin-button, .stepper .qty::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 @media (min-width: 40rem) { .page { padding-top: 2rem; } .cover { height: 220px; } }
+
+/* An invoice's page */
+.inv-what { display: flex; flex-direction: column; font-weight: 600; }
+.inv-sums { display: grid; grid-template-columns: 1fr auto; gap: .375rem 1rem; margin: .75rem 0 0; }
+.inv-sums dd { margin: 0; text-align: right; font-weight: 600; }
+.inv-sums .inv-due { font-size: 1.15rem; font-weight: 700; }
+.inv-note { white-space: pre-line; }
+.inv-pay { margin: 1.5rem 0; }
+.inv-pay h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
+.inv-acct { border: 2px solid var(--brand); border-radius: .5rem; padding: 1rem; margin: 0 0 1rem; }
+.inv-acct p { margin: .25rem 0; }
+.inv-acct-no { font-size: 1.75rem; font-weight: 800; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.inv-pay .btn + .btn { margin-top: .5rem; }

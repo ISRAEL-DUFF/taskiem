@@ -84,8 +84,20 @@
       "text": "Kún un",
       "reviewed": false
     },
+    "button.new_account": {
+      "text": "Nọ́mbà àkáǹtì tuntun",
+      "reviewed": false
+    },
     "button.no": {
       "text": "Rárá",
+      "reviewed": false
+    },
+    "button.open_invoice": {
+      "text": "Ṣí invoice",
+      "reviewed": false
+    },
+    "button.pay_transfer": {
+      "text": "San nípa transfer",
       "reviewed": false
     },
     "button.reject": {
@@ -182,6 +194,46 @@
     },
     "customer.order_ready": {
       "text": "{name}: àṣẹ yín {reference} ti ṣetán.",
+      "reviewed": false
+    },
+    "invoice.chat.account": {
+      "text": "Ẹ san {amount} fún invoice {number} nípa bank transfer sí:\nNọ́mbà àkáǹtì: {account}\nBáńkì: {bank}\nOrúkọ àkáǹtì: {name}\nÓ wà títí di {until}. Ẹ lò ó fún ìsanwó yìí nìkan.",
+      "reviewed": false
+    },
+    "invoice.chat.account_open": {
+      "text": "Ẹ san {amount} fún invoice {number} nípa bank transfer sí:\nNọ́mbà àkáǹtì: {account}\nBáńkì: {bank}\nOrúkọ àkáǹtì: {name}",
+      "reviewed": false
+    },
+    "invoice.chat.button_invalid": {
+      "text": "Bọ́tìnnì yìí kò ṣiṣẹ́ mọ́.",
+      "reviewed": false
+    },
+    "invoice.chat.closed": {
+      "text": "Kò ṣeé ṣe láti san invoice {number} mọ́. Ẹ béèrè lọ́wọ́ {business} bí ẹ bá rò pé àṣìṣe ni.",
+      "reviewed": false
+    },
+    "invoice.chat.failed": {
+      "text": "A kò lè rí nọ́mbà àkáǹtì fún invoice {number} báyìí. Ẹ gbìyànjú láìpẹ́, tàbí ẹ sanwó ní ojú-ìwé invoice náà:",
+      "reviewed": false
+    },
+    "invoice.chat.limit": {
+      "text": "Wọ́n ti fún invoice {number} ní nọ́mbà àkáǹtì púpọ̀ jù láàárín wákàtí kan. Ẹ lo èyí tó kẹ́yìn, tàbí ẹ gbìyànjú lẹ́yìn náà ní ojú-ìwé invoice náà:",
+      "reviewed": false
+    },
+    "invoice.chat.link": {
+      "text": "Invoice {number}: {link}",
+      "reviewed": false
+    },
+    "invoice.chat.paid": {
+      "text": "Wọ́n ti san invoice {number} tán. Ẹ ṣé o!",
+      "reviewed": false
+    },
+    "invoice.chat.sent": {
+      "text": "Invoice {number} láti ọ̀dọ̀ {business}: {amount} ni ẹ ó san. Tẹ San nípa transfer fún nọ́mbà àkáǹtì tí ẹ ó sanwó sí, tàbí Ṣí invoice láti rí i.",
+      "reviewed": false
+    },
+    "invoice.chat.wait": {
+      "text": "Nọ́mbà àkáǹtì yín fún invoice {number} ń bọ̀. Bí kò bá dé láàárín ìṣẹ́jú kan, ẹ tẹ Nọ́mbà àkáǹtì tuntun.",
       "reviewed": false
     },
     "lang.current": {
@@ -872,6 +924,10 @@
       "text": "Ẹ lè fi ránṣẹ́:",
       "reviewed": false
     },
+    "wa.help.invoice": {
+      "text": "• *invoice* pẹ̀lú orúkọ, iye owó àti ohun tí ó jẹ́ fún (*invoice Ada 25,000 for 5 bags of rice*): yóò fi ìwé owó ránṣẹ́ sí oníbàárà yín",
+      "reviewed": false
+    },
     "wa.help.language": {
       "text": "• *language* àti orúkọ èdè kan: ìdáhùn ní {languages}",
       "reviewed": false
@@ -906,6 +962,50 @@
     },
     "wa.help.voice": {
       "text": "• ohùn tí ẹ gbà sílẹ̀: màá gbìyànjú láti kọ ọ́ sílẹ̀ (àdánwò)",
+      "reviewed": false
+    },
+    "wa.invoice.amount_due": {
+      "text": "Owó tí ó yẹ kí wọ́n san",
+      "reviewed": false
+    },
+    "wa.invoice.confirm": {
+      "text": "Ṣé kí n fi ìwé owó {amount} ránṣẹ́ sí {name} ({to}): {for}?",
+      "reviewed": false
+    },
+    "wa.invoice.confirm_reminder": {
+      "text": "Ẹ dáhùn *yes* kí n fi ìwé owó náà ránṣẹ́ tàbí *no* kí a fi sílẹ̀.",
+      "reviewed": false
+    },
+    "wa.invoice.contact": {
+      "text": "Kí ni nọ́mbà fóònù tàbí ímeèlì {name}? Ibẹ̀ ni ìwé owó yóò lọ.",
+      "reviewed": false
+    },
+    "wa.invoice.contact_again": {
+      "text": "Ìyẹn kì í ṣe nọ́mbà fóònù tàbí ímeèlì. Kí ni nọ́mbà fóònù tàbí ímeèlì {name}?",
+      "reviewed": false
+    },
+    "wa.invoice.denied": {
+      "text": "Ẹ kò lè ṣe ìwé owó nínú {org}.",
+      "reviewed": false
+    },
+    "wa.invoice.how": {
+      "text": "Ẹ sọ ẹni tí, iye owó àti ohun tí ó jẹ́ fún, báyìí: *invoice Ada 25,000 for 5 bags of rice*",
+      "reviewed": false
+    },
+    "wa.invoice.not_sent": {
+      "text": "Kò lọ. Kò sí ohun tí a fi pamọ́.",
+      "reviewed": false
+    },
+    "wa.invoice.refused": {
+      "text": "Mi ò lè ṣe ìwé owó yẹn: {reason}",
+      "reviewed": false
+    },
+    "wa.invoice.saved_not_sent": {
+      "text": "A ti fi {number} pamọ́ ṣùgbọ́n kò lè lọ: a kò tíì ṣètò ìfiránṣẹ́ sí àwọn oníbàárà. Ẹ fi ránṣẹ́ láti Invoices nínú web app.",
+      "reviewed": false
+    },
+    "wa.invoice.sent": {
+      "text": "Mo ti fi {number} ránṣẹ́ sí {name} fún {amount}. Ẹ lè rí i lábẹ́ Invoices nínú web app.",
       "reviewed": false
     },
     "wa.link_at": {

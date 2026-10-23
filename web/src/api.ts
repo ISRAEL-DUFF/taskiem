@@ -159,6 +159,11 @@ export const put = <T>(path: string, body?: unknown) => api<T>("PUT", path, body
 export const patch = <T>(path: string, body?: unknown) => api<T>("PATCH", path, body ?? {});
 export const del = <T>(path: string, body?: unknown) => api<T>("DELETE", path, body);
 
+/** A POST with an Idempotency-Key header: retried with the same key, the
+ * server makes or sends nothing more (invoices: creating and sending). */
+export const postOnce = <T>(path: string, key: string, body?: unknown) =>
+  request<T>("POST", path, JSON.stringify(body ?? {}), { "Content-Type": "application/json", "Idempotency-Key": key });
+
 // --- response shapes ---
 
 /** Where a connector's live output departed from its declared schema. */

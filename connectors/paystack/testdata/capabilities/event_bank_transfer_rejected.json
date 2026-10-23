@@ -1,0 +1,17 @@
+{
+  "trigger": "charge_event",
+  "body": {
+    "event": "bank.transfer.rejected",
+    "data": {
+      "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "amount": 2000000,
+      "currency": "NGN"
+    }
+  },
+  "event": "payment.returned",
+  "expect": {
+    "payment_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "amount_kobo": 2000000,
+    "reason": "other"
+  }
+}

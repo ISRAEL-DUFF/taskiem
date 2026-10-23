@@ -217,6 +217,8 @@ type chatData struct {
 	// Shop is the storefront being set up, or a change to it being
 	// confirmed (whatsapp_storefront.go).
 	Shop *chatShop `json:"shop,omitempty"`
+	// Invoice is an invoice being made (whatsapp_invoices.go).
+	Invoice *chatInvoice `json:"invoice,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -246,6 +248,12 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 	// message its link filled in, with the code.
 	if m := reachCodeRe.FindStringSubmatch(in.Text); m != nil && in.Type == "text" {
 		return s.reachStart(ctx, wa, reach.WhatsApp, number, m[1])
+	}
+	// An invoice's buttons, which its customer may use (invoice_chat.go).
+	if in.Reply != "" {
+		if done, err := s.invoicePress(ctx, wa, reach.WhatsApp, number, in.Reply); done || err != nil {
+			return err
+		}
 	}
 	// An owner agreeing to a field agent, or ending their sessions (agents.go).
 	if done, err := s.waAgentMessage(ctx, wa, number, in); done || err != nil {
@@ -469,6 +477,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Shop != nil && c.state != stateIdle {
 		return s.waShopReply(ctx, c, text, cmd)
 	}
+	if c.data.Invoice != nil && c.state != stateIdle {
+		return s.waInvoiceReply(ctx, c, text, cmd)
+	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
 	case stateCollecting:
@@ -514,6 +525,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 		if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
+		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
 		// A way into the web app for someone with no password (N6).
@@ -631,6 +645,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermStorefrontManage) && s.Orders != nil {
 		lines = append(lines, c.t("wa.help.bookings"))
+	}
+	if c.p.Can(PermInvoiceManage) && s.Invoices != nil {
+		lines = append(lines, c.t("wa.help.invoice"))
 	}
 	if len(c.tenants) > 1 {
 		lines = append(lines, c.t("wa.help.switch"))

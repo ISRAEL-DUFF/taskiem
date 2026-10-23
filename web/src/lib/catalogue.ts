@@ -154,6 +154,7 @@ const CAPABILITY_WORDS: [string, string][] = [
   ["pay_many", "pay a list in one batch"],
   ["collect_link", "take payments by link"],
   ["collect_push", "take payments by phone prompt"],
+  ["collect_transfer", "take payments by bank transfer"],
   ["virtual_account", "give customers account numbers"],
   ["refund", "refund payments"],
   ["balance", "check the balance"],

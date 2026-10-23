@@ -7,7 +7,7 @@ import (
 )
 
 func TestSet(t *testing.T) {
-	want := []string{"balance", "collect_link", "collect_push", "get_payment", "get_payout", "list_banks", "pay_bank", "pay_many", "pay_mobile_money", "pay_wallet", "refund", "resolve_account", "virtual_account"}
+	want := []string{"balance", "collect_link", "collect_push", "collect_transfer", "get_payment", "get_payout", "list_banks", "pay_bank", "pay_many", "pay_mobile_money", "pay_wallet", "refund", "resolve_account", "virtual_account"}
 	if got := Names(); len(got) != len(want) {
 		t.Fatalf("capabilities %v, want %v", got, want)
 	}

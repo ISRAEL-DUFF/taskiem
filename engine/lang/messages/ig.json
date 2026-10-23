@@ -84,8 +84,20 @@
       "text": "Dejupụta",
       "reviewed": false
     },
+    "button.new_account": {
+      "text": "Nọmba akaụntụ ọhụrụ",
+      "reviewed": false
+    },
     "button.no": {
       "text": "Mba",
+      "reviewed": false
+    },
+    "button.open_invoice": {
+      "text": "Mepee invoice",
+      "reviewed": false
+    },
+    "button.pay_transfer": {
+      "text": "Kwụọ na transfer",
       "reviewed": false
     },
     "button.reject": {
@@ -182,6 +194,46 @@
     },
     "customer.order_ready": {
       "text": "{name}: iwu gị {reference} adịla njikere.",
+      "reviewed": false
+    },
+    "invoice.chat.account": {
+      "text": "Kwụọ {amount} maka invoice {number} site na bank transfer gaa na:\nNọmba akaụntụ: {account}\nBank: {bank}\nAha akaụntụ: {name}\nỌ ga-arụ ọrụ ruo {until}. Jiri ya maka ịkwụ ụgwọ a naanị.",
+      "reviewed": false
+    },
+    "invoice.chat.account_open": {
+      "text": "Kwụọ {amount} maka invoice {number} site na bank transfer gaa na:\nNọmba akaụntụ: {account}\nBank: {bank}\nAha akaụntụ: {name}",
+      "reviewed": false
+    },
+    "invoice.chat.button_invalid": {
+      "text": "Bọtịnụ a anaghị arụ ọrụ ọzọ.",
+      "reviewed": false
+    },
+    "invoice.chat.closed": {
+      "text": "Enweghị ike ịkwụ invoice {number} ọzọ. Jụọ {business} ma ọ bụrụ na ị chere na nke a ezighi ezi.",
+      "reviewed": false
+    },
+    "invoice.chat.failed": {
+      "text": "Enweghị ike ịnweta nọmba akaụntụ maka invoice {number} ugbu a. Nwaa ọzọ n'oge na-adịghị anya, ma ọ bụ kwụọ ụgwọ na ibe invoice ahụ:",
+      "reviewed": false
+    },
+    "invoice.chat.limit": {
+      "text": "Enyela ọtụtụ nọmba akaụntụ maka invoice {number} n'ime otu awa. Jiri nke ikpeazụ, ma ọ bụ nwaa ọzọ ma emechaa na ibe invoice ahụ:",
+      "reviewed": false
+    },
+    "invoice.chat.link": {
+      "text": "Invoice {number}: {link}",
+      "reviewed": false
+    },
+    "invoice.chat.paid": {
+      "text": "Akwụchaala invoice {number}. Daalụ!",
+      "reviewed": false
+    },
+    "invoice.chat.sent": {
+      "text": "Invoice {number} sitere n'aka {business}: {amount} ka a ga-akwụ. Pịa Kwụọ na transfer maka nọmba akaụntụ ị ga-akwụ ego na ya, ma ọ bụ Mepee invoice ka ị hụ ya.",
+      "reviewed": false
+    },
+    "invoice.chat.wait": {
+      "text": "Nọmba akaụntụ gị maka invoice {number} na-abịa. Ọ bụrụ na ọ bịaghị n'ime otu nkeji, pịa Nọmba akaụntụ ọhụrụ.",
       "reviewed": false
     },
     "lang.current": {
@@ -872,6 +924,10 @@
       "text": "Ị nwere ike iziga:",
       "reviewed": false
     },
+    "wa.help.invoice": {
+      "text": "• *invoice* ya na aha, ego na ihe ọ bụ maka ya (*invoice Ada 25,000 for 5 bags of rice*): ọ ga-eziga onye ahịa gị akwụkwọ ụgwọ",
+      "reviewed": false
+    },
     "wa.help.language": {
       "text": "• *language* na aha asụsụ: azịza n'asụsụ {languages}",
       "reviewed": false
@@ -906,6 +962,50 @@
     },
     "wa.help.voice": {
       "text": "• ozi olu: aga m anwa ide ya (nnwale)",
+      "reviewed": false
+    },
+    "wa.invoice.amount_due": {
+      "text": "Ego a na-akwụ",
+      "reviewed": false
+    },
+    "wa.invoice.confirm": {
+      "text": "Ka m ziga {name} ({to}) akwụkwọ ụgwọ nke {amount}: {for}?",
+      "reviewed": false
+    },
+    "wa.invoice.confirm_reminder": {
+      "text": "Zaa *yes* ka m ziga akwụkwọ ụgwọ ahụ ma ọ bụ *no* ka anyị hapụ ya.",
+      "reviewed": false
+    },
+    "wa.invoice.contact": {
+      "text": "Gịnị bụ nọmba ekwentị ma ọ bụ email {name}? Ọ bụ ebe ahụ ka akwụkwọ ụgwọ ga-aga.",
+      "reviewed": false
+    },
+    "wa.invoice.contact_again": {
+      "text": "Nke ahụ abụghị nọmba ekwentị ma ọ bụ email. Gịnị bụ nọmba ekwentị ma ọ bụ email {name}?",
+      "reviewed": false
+    },
+    "wa.invoice.denied": {
+      "text": "Ị nweghị ike ime akwụkwọ ụgwọ na {org}.",
+      "reviewed": false
+    },
+    "wa.invoice.how": {
+      "text": "Kwuo onye, ole na ihe ọ bụ maka ya, dị ka nke a: *invoice Ada 25,000 for 5 bags of rice*",
+      "reviewed": false
+    },
+    "wa.invoice.not_sent": {
+      "text": "Ezighị ya. Ọ dịghị ihe echekwara.",
+      "reviewed": false
+    },
+    "wa.invoice.refused": {
+      "text": "Enweghị m ike ime akwụkwọ ụgwọ ahụ: {reason}",
+      "reviewed": false
+    },
+    "wa.invoice.saved_not_sent": {
+      "text": "Echekwala {number} mana enweghị ike iziga ya: edoziteghị ozi nye ndị ahịa. Ziga ya site na Invoices na web app.",
+      "reviewed": false
+    },
+    "wa.invoice.sent": {
+      "text": "Ezigala m {number} nye {name} maka {amount}. Ị nwere ike ịhụ ya n'okpuru Invoices na web app.",
       "reviewed": false
     },
     "wa.link_at": {

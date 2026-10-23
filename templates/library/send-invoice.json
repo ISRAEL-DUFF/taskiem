@@ -1,0 +1,183 @@
+{
+  "id": "send-invoice",
+  "title": "Send an invoice and hear when it is paid",
+  "summary": "Make an invoice for a customer, send it by SMS and email with its page, and tell you when it is paid, or if it is still unpaid when you choose.",
+  "description": "Start it with the customer, the amount and what it is for (by hand, from a form or another system). It makes an invoice with your next number, sends it to the customer by SMS and email with a link to its page, and waits. When the invoice is paid in full, you are told. If it is not paid within the days you choose, you are told that too, with what is still due. The invoice is marked paid only by the payments counted towards it, never by the workflow. You can also send an invoice from chat: invoice Ada 25,000 for 5 bags of rice.",
+  "category": "payments",
+  "tags": [
+    "payments",
+    "customers"
+  ],
+  "keywords": [
+    "bill a customer",
+    "bill someone",
+    "billing"
+  ],
+  "connectors": [
+    "invoices@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "wait_days",
+      "type": "integer",
+      "title": "Days to wait for payment",
+      "description": "How long to wait before telling you the invoice is still unpaid.",
+      "required": false,
+      "default": 14,
+      "example": 14,
+      "minimum": 1,
+      "maximum": 90
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_sendInvoice",
+    "version": 1,
+    "name": "Send an invoice",
+    "description": "Makes and sends an invoice, then tells the owner when it is paid or still unpaid.",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "name",
+          "amount_naira",
+          "for"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "title": "Customer's name",
+            "x-pii": "name"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Customer's phone",
+            "x-pii": "phone",
+            "description": "For SMS; give this or the email, or both."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 200,
+            "title": "Customer's email",
+            "x-pii": "email"
+          },
+          "amount_naira": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000000000,
+            "title": "Amount (naira)"
+          },
+          "for": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "title": "What it is for"
+          },
+          "due_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Due date",
+            "description": "Optional."
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "invoice",
+        "type": "connector",
+        "name": "Make the invoice",
+        "connector": "invoices@1",
+        "action": "create",
+        "input": {
+          "customer": {
+            "name": "=trigger.body.name",
+            "phone": "=has(trigger.body.phone) ? trigger.body.phone : ''",
+            "email": "=has(trigger.body.email) ? trigger.body.email : ''"
+          },
+          "amount_kobo": "=int(math.round(double(trigger.body.amount_naira) * 100.0))",
+          "description": "=trigger.body['for']",
+          "due_on": "=has(trigger.body.due_on) ? trigger.body.due_on : ''"
+        }
+      },
+      {
+        "id": "send",
+        "type": "connector",
+        "name": "Send it to the customer",
+        "connector": "invoices@1",
+        "action": "send",
+        "needs": [
+          "invoice"
+        ],
+        "input": {
+          "number": "=steps.invoice.output.number"
+        }
+      },
+      {
+        "id": "paid",
+        "type": "signal",
+        "name": "Wait for it to be paid",
+        "needs": [
+          "send"
+        ],
+        "config": {
+          "event": "invoice.paid",
+          "correlation": "=steps.invoice.output.number",
+          "timeout": "{{wait_days}}d"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "check",
+              "type": "connector",
+              "name": "See what is still due",
+              "connector": "invoices@1",
+              "action": "get",
+              "input": {
+                "number": "=steps.invoice.output.number"
+              }
+            },
+            {
+              "id": "tell_unpaid",
+              "type": "connector",
+              "name": "Tell you it is still unpaid",
+              "connector": "notify@1",
+              "action": "tell",
+              "needs": [
+                "check"
+              ],
+              "when": "=steps.check.output.status != 'paid' && steps.check.output.status != 'void'",
+              "input": {
+                "title": "Invoice not paid yet",
+                "message": "='Invoice ' + steps.invoice.output.number + ' is not paid yet: ' + steps.check.output.due + ' still due.'"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_paid",
+        "type": "connector",
+        "name": "Tell you it is paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "paid"
+        ],
+        "input": {
+          "title": "Invoice paid",
+          "message": "='Invoice ' + steps.invoice.output.number + ' (' + steps.invoice.output.total + ') is paid in full.'"
+        }
+      }
+    ]
+  }
+}

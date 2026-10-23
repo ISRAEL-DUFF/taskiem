@@ -326,3 +326,7 @@ func TestCallbackTrigger(t *testing.T) {
 		t.Errorf("trigger %+v", spec)
 	}
 }
+
+func TestCapabilities(t *testing.T) {
+	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+}

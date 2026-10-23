@@ -182,6 +182,40 @@ actions:
     pii:
       - { field: tx_ref, category: other }
       - { field: output.customer_email, category: email }
+  create_dynamic_account:
+    title: Open an account number for one payment
+    description: >-
+      A dynamic virtual account (is_permanent false) for one amount, taking
+      payments until expires_at (1 minute to about two months; an hour when
+      no time is given). Flutterwave returns a transfer of less than the
+      amount, and keeps the amount of a larger one and returns the excess.
+      The payment arrives as charge.completed with tx_ref. Flutterwave
+      cannot look the account up by tx_ref, so a lost answer parks the step.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [amount, email]
+      properties:
+        amount:          { type: integer, minimum: 100, description: Kobo; sent to Flutterwave in naira }
+        email:           { type: string }
+        expires_minutes: { type: integer, minimum: 1 }
+        narration:       { type: string, description: The name payers see when they check the account }
+    output:
+      type: object
+      properties:
+        tx_ref:         { type: string, description: The step's key; payment events carry it }
+        account_number: { type: string }
+        bank_name:      { type: string }
+        amount:         { type: integer, description: Kobo }
+        expires_at:     { type: string, description: RFC 3339, counted from when the request was sent }
+        expiry_date:    { type: string, description: As Flutterwave gave it, without a time zone }
+        order_ref:      { type: string }
+        flw_ref:        { type: string }
+        note:           { type: string }
+    pii:
+      - { field: email, category: email }
+      - { field: output.account_number, category: account_number }
 triggers:
   # One webhook URL per Flutterwave account receives every event.
   event:
@@ -233,6 +267,27 @@ capabilities:
       status: "=output.status == 'SUCCESSFUL' ? 'settled' : output.status == 'FAILED' ? 'failed' : 'pending'"
       reason: "=output.status == 'FAILED' ? output.?complete_message : has(output.requires_approval) && output.requires_approval ? optional.of('needs_approval') : optional.none()"
       fee_kobo: "=output.?fee"
+  collect_transfer:
+    action: create_dynamic_account
+    input:
+      amount: =input.amount_kobo
+      email: =input.customer.email
+      expires_minutes: =input.?expires_minutes
+    output:
+      payment_id: =output.tx_ref
+      account_number: =output.account_number
+      bank_name: =output.bank_name
+      amount_kobo: =output.amount
+      expires_at: =output.expires_at
+    requires: [customer.email]
+    ignores: [customer.name, customer.phone, customer.bvn, description]
+    fixed: { currency: NGN }
+    unsafe: true
+    transfer: { on_late: unknown, on_wrong_amount: excess_returned, min_minutes: 1, max_minutes: 87840, default_minutes: 60 }
+    notes: >-
+      Flutterwave's documentation gives the default lifetime as both 60 seconds and an hour;
+      Taskiem always sends one (an hour when none is asked). The amount is sent in naira, as
+      Flutterwave's examples show. What happens to a transfer after expiry is not documented.
   get_payment:
     action: verify_payment
     input: { tx_ref: "=input.payment_id" }

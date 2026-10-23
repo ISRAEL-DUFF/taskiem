@@ -2,10 +2,13 @@ package flutterwave
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/israel-duff/taskiem/connectors/internal/fixture"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -123,5 +126,45 @@ func TestWebhookSecretHash(t *testing.T) {
 }
 
 func TestCapabilities(t *testing.T) {
-	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+	now := time.Date(2026, 10, 23, 18, 0, 0, 0, time.UTC)
+	fixture.Capabilities(t, func(base string) *connector.Connector {
+		return New(Options{BaseURL: base, Now: func() time.Time { return now }})
+	})
+}
+
+func TestDynamicAccountAmountsAndLifetime(t *testing.T) {
+	for _, c := range []struct {
+		kobo    int
+		minutes any
+		amount  string
+		expires float64
+	}{
+		{2500050, 30, "25000.50", 1800},
+		{2500000, nil, "25000", 3600},       // an hour when none is asked
+		{2500000, 200000, "25000", 5270400}, // kept within Flutterwave's range
+	} {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			d := json.NewDecoder(r.Body)
+			d.UseNumber()
+			_ = d.Decode(&got)
+			_, _ = w.Write([]byte(`{"status":"success","data":{"account_number":"7824822527","bank_name":"WEMA BANK"}}`))
+		}))
+		in := map[string]any{"amount": c.kobo, "email": "ada@example.com"}
+		if c.minutes != nil {
+			in["expires_minutes"] = c.minutes
+		}
+		_, err := New(Options{BaseURL: srv.URL}).Actions["create_dynamic_account"].Execute(context.Background(), connector.Request{
+			Input: in, IdempotencyKey: ref, Credentials: map[string]string{"secret_key": "k"}, HTTP: srv.Client()})
+		srv.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got["amount"].(json.Number).String() != c.amount || got["tx_ref"] != ref || got["is_permanent"] != false {
+			t.Errorf("%d kobo: sent %v", c.kobo, got)
+		}
+		if e, _ := got["expires"].(json.Number).Float64(); e != c.expires {
+			t.Errorf("%v minutes: expires %v, want %v", c.minutes, e, c.expires)
+		}
+	}
 }

@@ -294,8 +294,8 @@ func capabilities(reg connector.Lookup) string {
 	}
 	b.WriteString("- await_settlement (" + capability.WaitTitle("await_settlement") + "): payout_id* and a step timeout -> status (settled, failed or unconfirmed), settled_at, reason; any rail above that pays.\n")
 	b.WriteString("- await_reversal (" + capability.WaitTitle("await_reversal") + "): payout_id* and a step timeout -> status (reversed or none), reason.\n")
-	b.WriteString("- await_payment (" + capability.WaitTitle("await_payment") + "): payment_id* (a collect_link's) and a step timeout -> status (paid, failed or unpaid), amount_kobo, paid_at; any rail above with collect_link and payment events.\n")
-	b.WriteString("- await_payment (" + capability.WaitTitle("await_payment") + "): payment_id* (a collect_link's) and a step timeout -> status (paid, failed or unpaid), amount_kobo, paid_at; any rail above with collect_link.\n")
+	b.WriteString("- await_payment (" + capability.WaitTitle("await_payment") + "): payment_id* (a collect_link's or collect_transfer's) and a step timeout -> status (paid, failed or unpaid), amount_kobo, paid_at; any rail above with collect_link or collect_transfer and payment events.\n")
+	b.WriteString("- await_payment (" + capability.WaitTitle("await_payment") + "): payment_id* (a collect_link's or collect_transfer's) and a step timeout -> status (paid, failed or unpaid), amount_kobo, paid_at; any rail above with collect_link or collect_transfer.\n")
 	return b.String()
 }
 

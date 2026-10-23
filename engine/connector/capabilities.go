@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,7 +40,46 @@ type CapabilityMap struct {
 	// allows one.
 	Unsafe    bool       `json:"unsafe,omitempty"`
 	SettlesBy *SettlesBy `json:"settles_by,omitempty"`
-	Notes     string     `json:"notes,omitempty"`
+	// Transfer is what the rail does with a one-time account
+	// (collect_transfer only, which needs it): the page and chat tell the
+	// customer what happens to a late or wrong-amount transfer.
+	Transfer *TransferFacts `json:"transfer,omitempty"`
+	Notes    string         `json:"notes,omitempty"`
+}
+
+// TransferFacts are a rail's documented behaviour for one-time accounts.
+type TransferFacts struct {
+	// OnLate is what happens to a transfer after expires_at: returned to
+	// the sender, credited, or unknown (not documented).
+	OnLate string `json:"on_late"`
+	// OnWrongAmount: returned, credited (any amount is taken),
+	// excess_returned (less is returned, more is taken and the excess
+	// returned), or unknown.
+	OnWrongAmount string `json:"on_wrong_amount"`
+	// The lifetimes the rail allows, in minutes, and its default.
+	MinMinutes     int `json:"min_minutes"`
+	MaxMinutes     int `json:"max_minutes"`
+	DefaultMinutes int `json:"default_minutes,omitempty"`
+}
+
+// checkTransfer checks a collect_transfer mapping's facts.
+func checkTransfer(p string, t *TransferFacts, add func(string, ...any)) {
+	if t == nil {
+		add("%s/transfer: collect_transfer must say what the rail does with late and wrong-amount transfers, and the lifetimes it allows", p)
+		return
+	}
+	if !slices.Contains([]string{"returned", "credited", "unknown"}, t.OnLate) {
+		add("%s/transfer/on_late: %q is not returned, credited or unknown", p, t.OnLate)
+	}
+	if !slices.Contains([]string{"returned", "credited", "excess_returned", "unknown"}, t.OnWrongAmount) {
+		add("%s/transfer/on_wrong_amount: %q is not returned, credited, excess_returned or unknown", p, t.OnWrongAmount)
+	}
+	if t.MinMinutes < 1 || t.MaxMinutes < t.MinMinutes {
+		add("%s/transfer: min_minutes must be at least 1 and max_minutes at least min_minutes", p)
+	}
+	if t.DefaultMinutes != 0 && (t.DefaultMinutes < t.MinMinutes || t.DefaultMinutes > t.MaxMinutes) {
+		add("%s/transfer/default_minutes: %d is outside %d to %d", p, t.DefaultMinutes, t.MinMinutes, t.MaxMinutes)
+	}
 }
 
 // CapabilityStep is one action of a composite capability.
@@ -128,6 +168,11 @@ func (m *Manifest) checkCapability(name string, c CapabilityMap, add func(string
 	if !ok {
 		add("%s: not a Taskiem capability (one of %s)", p, strings.Join(capability.Names(), ", "))
 		return
+	}
+	if name == "collect_transfer" {
+		checkTransfer(p, c.Transfer, add)
+	} else if c.Transfer != nil {
+		add("%s/transfer: only collect_transfer says how transfers are handled", p)
 	}
 	capFields := capability.Fields(spec.Input)
 	field := func(n string) (capability.Field, bool) {
@@ -569,4 +614,88 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// DefaultKeySpec is the key an action that declares no idempotency field
+// is given (the worker's default): "tsk_" and 32 base32 characters.
+var DefaultKeySpec = effects.Spec{Encoding: effects.Base32Lower, Length: 32, Prefix: "tsk_"}
+
+// CapabilityKey is the idempotency key the step of capability name with
+// id step (the action name for a single action) is called with, from key
+// material: the action's own key spec, or DefaultKeySpec.
+func (m *Manifest) CapabilityKey(name, step string, in effects.KeyInput) (string, error) {
+	for _, st := range m.Capabilities[name].Plan() {
+		id := st.ID
+		if id == "" {
+			id = st.Action
+		}
+		if id != step {
+			continue
+		}
+		if spec := m.Actions[st.Action]; spec.Idempotency != nil {
+			return spec.Idempotency.Key(in)
+		}
+		return DefaultKeySpec.Key(in)
+	}
+	return "", fmt.Errorf("%s has no step %q", name, step)
+}
+
+// CallCapability does a capability with c outside a workflow run (the
+// invoice page's accounts, for example), as expansion would: the input
+// checked and defaulted, each action called with its mapped input and its
+// own key (keyOf, by step id: the action name for a single action), and
+// the last output mapped back. base carries the credentials and the HTTP
+// client.
+func CallCapability(ctx context.Context, c *Connector, name string, input map[string]any, base Request, keyOf func(step string) (string, error)) (map[string]any, error) {
+	m := c.Manifest
+	cm, ok := m.Capabilities[name]
+	if !ok {
+		return nil, fmt.Errorf("%s cannot %s: %w", m.Name, name, effects.ErrFatal)
+	}
+	in, err := m.CapabilityInput(name, input)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", err, effects.ErrFatal)
+	}
+	steps := map[string]any{}
+	var last map[string]any
+	for i, st := range cm.Plan() {
+		act := c.Actions[st.Action]
+		if act == nil {
+			return nil, fmt.Errorf("no handler for %s: %w", st.Action, effects.ErrFatal)
+		}
+		ain, err := m.CapabilityStepInput(name, i, in, steps)
+		if err != nil {
+			return nil, fmt.Errorf("%s input: %w: %w", st.Action, err, effects.ErrFatal)
+		}
+		id := st.ID
+		if id == "" {
+			id = st.Action
+		}
+		req := base
+		req.Input = ain
+		if spec := m.Actions[st.Action]; spec.Class.IsWrite() {
+			key, err := keyOf(id)
+			if err != nil {
+				return nil, err
+			}
+			req.IdempotencyKey = key
+			if spec.Idempotency != nil {
+				ain[spec.Idempotency.Field] = key
+			}
+		}
+		r, err := act.Execute(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		o, ok := r.Output.(map[string]any)
+		if !ok {
+			raw, _ := json.Marshal(r.Output)
+			if err := json.Unmarshal(raw, &o); err != nil || o == nil {
+				return nil, fmt.Errorf("%s output is not an object: %w", st.Action, effects.ErrUnknownOutcome)
+			}
+		}
+		steps[id] = map[string]any{"output": o}
+		last = o
+	}
+	return m.CapabilityOutput(name, in, last, steps)
 }

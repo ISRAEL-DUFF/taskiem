@@ -84,8 +84,20 @@
       "text": "Fill am",
       "reviewed": false
     },
+    "button.new_account": {
+      "text": "New account number",
+      "reviewed": false
+    },
     "button.no": {
       "text": "No",
+      "reviewed": false
+    },
+    "button.open_invoice": {
+      "text": "Open invoice",
+      "reviewed": false
+    },
+    "button.pay_transfer": {
+      "text": "Pay with transfer",
       "reviewed": false
     },
     "button.reject": {
@@ -182,6 +194,46 @@
     },
     "customer.order_ready": {
       "text": "{name}: your order {reference} don ready.",
+      "reviewed": false
+    },
+    "invoice.chat.account": {
+      "text": "Pay {amount} for invoice {number} with bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nE go work reach {until}. Use am for dis payment only.",
+      "reviewed": false
+    },
+    "invoice.chat.account_open": {
+      "text": "Pay {amount} for invoice {number} with bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}",
+      "reviewed": false
+    },
+    "invoice.chat.button_invalid": {
+      "text": "Dis button no dey work again.",
+      "reviewed": false
+    },
+    "invoice.chat.closed": {
+      "text": "You no fit pay invoice {number} again. Ask {business} if you think say e no correct.",
+      "reviewed": false
+    },
+    "invoice.chat.failed": {
+      "text": "We no fit get account number for invoice {number} now. Try again small time, or pay for the invoice page:",
+      "reviewed": false
+    },
+    "invoice.chat.limit": {
+      "text": "Dem don give too many account number for invoice {number} for the last one hour. Use the last one, or try again later for the invoice page:",
+      "reviewed": false
+    },
+    "invoice.chat.link": {
+      "text": "Invoice {number}: {link}",
+      "reviewed": false
+    },
+    "invoice.chat.paid": {
+      "text": "Invoice {number} don pay finish. Thank you!",
+      "reviewed": false
+    },
+    "invoice.chat.sent": {
+      "text": "Invoice {number} from {business}: {amount} to pay. Tap Pay with transfer make you get account number to pay enter, or Open invoice make you see am.",
+      "reviewed": false
+    },
+    "invoice.chat.wait": {
+      "text": "Your account number for invoice {number} dey come. If e no come for one minute, tap New account number.",
       "reviewed": false
     },
     "lang.current": {
@@ -872,6 +924,10 @@
       "text": "You fit send:",
       "reviewed": false
     },
+    "wa.help.invoice": {
+      "text": "• *invoice* wit name, amount and wetin e be for (*invoice Ada 25,000 for 5 bags of rice*): e go send invoice give your customer",
+      "reviewed": false
+    },
     "wa.help.language": {
       "text": "• *language* and the language name: make I reply you for {languages}",
       "reviewed": false
@@ -906,6 +962,50 @@
     },
     "wa.help.voice": {
       "text": "• voice note: I go try write wetin you talk (beta)",
+      "reviewed": false
+    },
+    "wa.invoice.amount_due": {
+      "text": "Money wey you owe",
+      "reviewed": false
+    },
+    "wa.invoice.confirm": {
+      "text": "Make I send {name} ({to}) invoice of {amount}: {for}?",
+      "reviewed": false
+    },
+    "wa.invoice.confirm_reminder": {
+      "text": "Reply *yes* make I send the invoice or *no* make we leave am.",
+      "reviewed": false
+    },
+    "wa.invoice.contact": {
+      "text": "Wetin be {name} phone number or email? Na there the invoice go go.",
+      "reviewed": false
+    },
+    "wa.invoice.contact_again": {
+      "text": "That one no be phone number or email. Wetin be {name} phone number or email?",
+      "reviewed": false
+    },
+    "wa.invoice.denied": {
+      "text": "You no fit make invoice for {org}.",
+      "reviewed": false
+    },
+    "wa.invoice.how": {
+      "text": "Talk who, how much and wetin e be for, like this: *invoice Ada 25,000 for 5 bags of rice*",
+      "reviewed": false
+    },
+    "wa.invoice.not_sent": {
+      "text": "I no send am. Nothing dey saved.",
+      "reviewed": false
+    },
+    "wa.invoice.refused": {
+      "text": "I no fit make that invoice: {reason}",
+      "reviewed": false
+    },
+    "wa.invoice.saved_not_sent": {
+      "text": "{number} don save but I no fit send am: messages to customers never set. Send am from Invoices for the web app.",
+      "reviewed": false
+    },
+    "wa.invoice.sent": {
+      "text": "I don send {number} give {name} for {amount}. You fit see am for Invoices for the web app.",
       "reviewed": false
     },
     "wa.link_at": {

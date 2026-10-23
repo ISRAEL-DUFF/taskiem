@@ -1,0 +1,354 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { postOnce } from "../api";
+import {
+  INVOICE_FILTERS,
+  INVOICE_STATUS,
+  dateLabel,
+  draftRequest,
+  emptyItem,
+  formFromInvoice,
+  formTotal,
+  howMatched,
+  invoiceAccess,
+  invoiceActions,
+  invoiceCustomerLine,
+  invoicePath,
+  invoiceProblem,
+  invoiceStatus,
+  invoicesPath,
+  itemTotal,
+  koboInput,
+  naira,
+  newInvoiceForm,
+  newRequestKey,
+  newestFirst,
+  numberPreview,
+  paymentRows,
+  plainMessage,
+  sentLines,
+  settingsForm,
+  settingsProblem,
+  settingsRequest,
+  toKobo,
+  voidProblem,
+  type CustomerInvoice,
+  type InvoiceForm,
+  type InvoicePayment,
+} from "./invoices";
+
+const can =
+  (...perms: string[]) =>
+  (p: string) =>
+    perms.includes(p);
+
+const invoice: CustomerInvoice = {
+  id: "0b6c1c1e-0000-4000-8000-000000000001",
+  number: "INV-0007",
+  status: "draft",
+  customer: { name: "Ada Obi", phone: "08031234567", email: "ada@example.ng" },
+  lines: [{ description: "Catering", quantity: 1, unit_kobo: 2500050 }],
+  total_kobo: 2500050,
+  paid_kobo: 0,
+  due_kobo: 2500050,
+  currency: "NGN",
+  due_on: "2026-11-01",
+  note: "Thank you",
+  connection: "main",
+  fee_paid_by: "business",
+  allow_part_payments: false,
+  sent_at: null,
+  paid_at: null,
+  voided_at: null,
+  created_by: "user:1",
+  created_at: "2026-10-20T12:00:00Z",
+};
+
+describe("money", () => {
+  it("shows kobo as naira", () => {
+    expect(naira(2500000)).toBe("₦25,000");
+    expect(naira(2500050)).toBe("₦25,000.50");
+    expect(naira(5)).toBe("₦0.05");
+    expect(naira(0)).toBe("₦0");
+    expect(naira(123456789)).toBe("₦1,234,567.89");
+  });
+
+  it("reads typed naira as kobo", () => {
+    expect(toKobo("25,000")).toBe(2500000);
+    expect(toKobo("₦25,000.50")).toBe(2500050);
+    expect(toKobo("0.1")).toBe(10);
+    expect(toKobo("19.99")).toBe(1999);
+    expect(toKobo("")).toBeUndefined();
+    expect(toKobo("lots")).toBeNaN();
+    expect(toKobo("1.234")).toBeNaN();
+  });
+
+  it("puts kobo back in the form for typing", () => {
+    expect(koboInput(2500050)).toBe("25000.50");
+    expect(koboInput(2500000)).toBe("25000");
+    expect(koboInput(5)).toBe("0.05");
+  });
+});
+
+describe("statuses and the list", () => {
+  it("words every status for people", () => {
+    expect(Object.values(INVOICE_STATUS).map((s) => s.label)).toEqual(["Draft", "Sent", "Part-paid", "Paid", "Overdue", "Void"]);
+    expect(invoiceStatus("paid")).toEqual({ label: "Paid", tone: "ok" });
+    expect(invoiceStatus("overdue").tone).toBe("danger");
+    expect(invoiceStatus("on_hold")).toEqual({ label: "on hold", tone: "muted" });
+  });
+
+  it("filters by status", () => {
+    expect(INVOICE_FILTERS.map((f) => f.label)).toEqual(["All", "Draft", "Sent", "Part-paid", "Paid", "Overdue", "Void"]);
+    expect(invoicesPath("")).toBe("/v1/invoices");
+    expect(invoicesPath("part_paid")).toBe("/v1/invoices?status=part_paid");
+    expect(invoicesPath("void")).toBe("/v1/invoices?status=void");
+    // Something the server does not know is all of them, not a refusal.
+    expect(invoicesPath("nonsense")).toBe("/v1/invoices");
+  });
+
+  it("puts the newest first", () => {
+    const list = newestFirst([
+      { n: 1, created_at: "2026-10-01T00:00:00Z" },
+      { n: 3, created_at: "2026-10-03T00:00:00Z" },
+      { n: 2, created_at: "2026-10-02T00:00:00Z" },
+    ]);
+    expect(list.map((x) => x.n)).toEqual([3, 2, 1]);
+  });
+
+  it("shows the masked customer and dates in words", () => {
+    expect(invoiceCustomerLine({ name: "A•••", phone: "•••4567" })).toBe("A••• · •••4567");
+    expect(invoiceCustomerLine({ name: "A•••", email: "a•••@example.ng" })).toBe("A••• · a•••@example.ng");
+    expect(dateLabel("2026-11-01")).toBe("1 Nov 2026");
+    expect(dateLabel(undefined)).toBe("");
+  });
+
+  it("finds an invoice by id or number", () => {
+    expect(invoicePath("INV/2026-1")).toBe("/v1/invoices/INV%2F2026-1");
+    expect(invoicePath(invoice.id, "/send")).toBe(`/v1/invoices/${invoice.id}/send`);
+  });
+});
+
+describe("who may see and do what", () => {
+  it("shows invoices with invoice.read, New invoice with invoice.manage", () => {
+    expect(invoiceAccess(can("invoice.read"))).toEqual({ see: true, manage: false, reveal: false });
+    expect(invoiceAccess(can("invoice.read", "invoice.manage", "pii.reveal"))).toEqual({ see: true, manage: true, reveal: true });
+    expect(invoiceAccess(can()).see).toBe(false);
+  });
+
+  it("offers Edit and Send on a draft", () => {
+    const a = invoiceActions("draft", can("invoice.read", "invoice.manage"));
+    expect(a).toMatchObject({ edit: true, send: true, sendAgain: false, void: true, undo: true, reveal: false });
+  });
+
+  it("offers Send again once sent, part-paid or overdue", () => {
+    for (const s of ["sent", "part_paid", "overdue"]) {
+      expect(invoiceActions(s, can("invoice.manage"))).toMatchObject({ edit: false, send: false, sendAgain: true, void: true });
+    }
+  });
+
+  it("never voids a paid or void invoice", () => {
+    for (const s of ["paid", "void"]) {
+      expect(invoiceActions(s, can("invoice.manage"))).toMatchObject({ edit: false, send: false, sendAgain: false, void: false });
+    }
+  });
+
+  it("offers nothing that changes an invoice to someone who only reads", () => {
+    for (const s of Object.keys(INVOICE_STATUS)) {
+      const a = invoiceActions(s, can("invoice.read"));
+      expect([a.edit, a.send, a.sendAgain, a.void, a.undo]).toEqual([false, false, false, false, false]);
+    }
+    expect(invoiceActions("sent", can("invoice.read", "pii.reveal")).reveal).toBe(true);
+  });
+});
+
+describe("the form", () => {
+  const filled = (patch: Partial<InvoiceForm> = {}): InvoiceForm => ({ ...newInvoiceForm(), name: "Ada Obi", phone: "08031234567", amount: "25,000.50", ...patch });
+
+  it("starts from the business's settings", () => {
+    expect(newInvoiceForm({ fee_paid_by: "customer", allow_part_payments: true })).toMatchObject({ feePaidBy: "customer", partPayments: true, mode: "amount" });
+    expect(newInvoiceForm(null)).toMatchObject({ feePaidBy: "business", partPayments: false });
+  });
+
+  it("sends a single amount with its description", () => {
+    const f = filled({ description: " Catering ", dueOn: "2026-11-01", note: " Thanks " });
+    expect(invoiceProblem(f)).toBeNull();
+    expect(formTotal(f)).toBe(2500050);
+    expect(draftRequest(f)).toEqual({
+      customer: { name: "Ada Obi", phone: "08031234567" },
+      amount_kobo: 2500050,
+      description: "Catering",
+      due_on: "2026-11-01",
+      note: "Thanks",
+      fee_paid_by: "business",
+      allow_part_payments: false,
+    });
+  });
+
+  it("sends a list of items, with line totals and the total", () => {
+    const f = filled({
+      mode: "items",
+      email: "ada@example.ng",
+      phone: "",
+      connection: " flutterwave ",
+      feePaidBy: "customer",
+      partPayments: true,
+      items: [
+        { description: "Jollof rice", quantity: "3", price: "1,500" },
+        { description: "Chapman", quantity: "2", price: "750.50" },
+      ],
+    });
+    expect(itemTotal(f.items[0] ?? emptyItem())).toBe(450000);
+    expect(itemTotal(f.items[1] ?? emptyItem())).toBe(150100);
+    expect(formTotal(f)).toBe(600100);
+    expect(naira(formTotal(f))).toBe("₦6,001");
+    expect(invoiceProblem(f)).toBeNull();
+    expect(draftRequest(f)).toEqual({
+      customer: { name: "Ada Obi", email: "ada@example.ng" },
+      lines: [
+        { description: "Jollof rice", quantity: 3, unit_kobo: 150000 },
+        { description: "Chapman", quantity: 2, unit_kobo: 75050 },
+      ],
+      connection: "flutterwave",
+      fee_paid_by: "customer",
+      allow_part_payments: true,
+    });
+  });
+
+  it("counts an item only once it has a quantity and price", () => {
+    expect(itemTotal({ description: "x", quantity: "", price: "100" })).toBe(0);
+    expect(itemTotal({ description: "x", quantity: "2", price: "abc" })).toBe(0);
+    expect(itemTotal({ description: "x", quantity: "1.5", price: "100" })).toBe(0);
+    expect(formTotal(filled({ amount: "" }))).toBe(0);
+  });
+
+  it("says plainly what is missing or wrong", () => {
+    expect(invoiceProblem(filled({ name: " " }))).toBe("Give the customer's name.");
+    expect(invoiceProblem(filled({ phone: "", email: "" }))).toMatch(/phone number or email/);
+    expect(invoiceProblem(filled({ email: "ada@" }))).toMatch(/email does not look right/);
+    expect(invoiceProblem(filled({ amount: "" }))).toBe("Give the amount.");
+    expect(invoiceProblem(filled({ amount: "0" }))).toMatch(/number of naira/);
+    expect(invoiceProblem(filled({ amount: "ten" }))).toMatch(/number of naira/);
+    expect(invoiceProblem(filled({ note: "x".repeat(501) }))).toMatch(/500 characters/);
+    const items = (i: { description: string; quantity: string; price: string }[]) => filled({ mode: "items", items: i });
+    expect(invoiceProblem(items([]))).toBe("Add at least one item.");
+    expect(invoiceProblem(items([{ description: "", quantity: "1", price: "5" }]))).toBe("The item needs a description.");
+    expect(invoiceProblem(items([{ description: "a", quantity: "1", price: "5" }, { description: "b", quantity: "0", price: "5" }]))).toBe(
+      "Item 2's quantity is a whole number, 1 or more.",
+    );
+    expect(invoiceProblem(items([{ description: "a", quantity: "1", price: "" }]))).toMatch(/price is a number of naira/);
+    expect(invoiceProblem(items(Array.from({ length: 51 }, () => ({ description: "a", quantity: "1", price: "5" }))))).toMatch(/at most 50 items/);
+  });
+
+  it("words the server's refusal as a sentence", () => {
+    expect(plainMessage("the customer needs a phone or an email")).toBe("The customer needs a phone or an email.");
+    expect(plainMessage("Already sent.")).toBe("Already sent.");
+    expect(plainMessage("")).toBe("");
+  });
+
+  it("opens a draft of one line as a single amount, and of several as items", () => {
+    expect(formFromInvoice(invoice)).toMatchObject({ mode: "amount", amount: "25000.50", description: "Catering", dueOn: "2026-11-01", note: "Thank you" });
+    const many = formFromInvoice({ ...invoice, lines: [{ description: "Rice", quantity: 3, unit_kobo: 150000 }, { description: "Tea", quantity: 1, unit_kobo: 20000 }] });
+    expect(many.mode).toBe("items");
+    expect(many.items).toEqual([
+      { description: "Rice", quantity: "3", price: "1500" },
+      { description: "Tea", quantity: "1", price: "200" },
+    ]);
+    expect(formTotal(many)).toBe(470000);
+    // Round trip: the same draft goes back.
+    expect(draftRequest(many).lines).toEqual([
+      { description: "Rice", quantity: 3, unit_kobo: 150000 },
+      { description: "Tea", quantity: 1, unit_kobo: 20000 },
+    ]);
+  });
+
+  it("makes a fresh key for each form and each send", () => {
+    const a = newRequestKey();
+    expect(a).toMatch(/^web:/);
+    expect(newRequestKey()).not.toBe(a);
+  });
+});
+
+describe("sending, voiding and undoing", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends with an Idempotency-Key", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ invoice, link: "https://pay.taskiem.page/i/abc", queued: ["sms", "email"] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    const r = await postOnce<{ link: string }>(invoicePath(invoice.id, "/send"), "web:k1");
+    expect(r.link).toBe("https://pay.taskiem.page/i/abc");
+    const [path, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe(`/v1/invoices/${invoice.id}/send`);
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("web:k1");
+    expect(init.body).toBe("{}");
+  });
+
+  it("creates a draft with the form's key and shows a refusal as it comes", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ error: "the customer needs a phone or an email" }), { status: 400 }));
+    vi.stubGlobal("fetch", fetch);
+    const body = draftRequest({ ...newInvoiceForm(), name: "Ada", phone: "0803", amount: "100" });
+    await expect(postOnce("/v1/invoices", "web:form", body)).rejects.toMatchObject({ status: 400, message: "the customer needs a phone or an email" });
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("web:form");
+    expect(JSON.parse(init.body as string)).toMatchObject({ customer: { name: "Ada", phone: "0803" }, amount_kobo: 10000 });
+  });
+
+  it("says which channels were used", () => {
+    expect(sentLines({ queued: ["sms", "email"] })).toEqual(["Sent by SMS and email."]);
+    expect(sentLines({ queued: ["email"], sms_over_allowance: true })).toEqual(["Sent by email.", "SMS not sent: plan allowance used."]);
+    expect(sentLines({ queued: ["sms"] })).toEqual(["Sent by SMS."]);
+    expect(sentLines({ queued: null })[0]).toMatch(/^Nothing was sent/);
+  });
+
+  it("needs a reason to void", () => {
+    expect(voidProblem("  ")).toMatch(/Say why/);
+    expect(voidProblem("Wrong amount")).toBeNull();
+    expect(voidProblem("x".repeat(501))).toMatch(/500 characters/);
+  });
+
+  it("lists payments, an undone one with its undoing", () => {
+    const p = (id: string, extra: Partial<InvoicePayment> = {}): InvoicePayment => ({
+      id,
+      amount_kobo: 1000000,
+      payment_id: `ref-${id}`,
+      how: "exact",
+      by: "taskiem",
+      reasons: [],
+      created_at: "2026-10-21T10:00:00Z",
+      ...extra,
+    });
+    const rows = paymentRows([p("a", { undone_by: "u" }), p("b"), p("u", { undoes: "a", amount_kobo: -1000000, by: "user:ada", created_at: "2026-10-22T10:00:00Z" })]);
+    expect(rows.map((r) => r.payment.id)).toEqual(["a", "b"]);
+    expect(rows[0]?.undoneBy?.by).toBe("user:ada");
+    expect(rows[1]?.undoneBy).toBeUndefined();
+    expect(paymentRows(null)).toEqual([]);
+    expect(howMatched("exact")).toBe("Exactly, by its reference");
+    expect(howMatched("manual")).toBe("By a person");
+  });
+});
+
+describe("settings", () => {
+  const saved = { prefix: "INV-", next_number: 7, connection: "main", fee_paid_by: "business" as const, allow_part_payments: false };
+
+  it("round-trips the settings", () => {
+    const f = settingsForm(saved);
+    expect(settingsProblem(f, saved)).toBeNull();
+    expect(settingsRequest({ ...f, nextNumber: "10", connection: " ", partPayments: true })).toEqual({ ...saved, next_number: 10, allow_part_payments: true });
+    expect(numberPreview("INV-", 7)).toBe("INV-0007");
+    expect(numberPreview("A/", 12345)).toBe("A/12345");
+  });
+
+  it("only moves the next number forward", () => {
+    const f = settingsForm(saved);
+    expect(settingsProblem({ ...f, nextNumber: "6" }, saved)).toMatch(/only move forward.*7 or more/);
+    expect(settingsProblem({ ...f, nextNumber: "7" }, saved)).toBeNull();
+    expect(settingsProblem({ ...f, nextNumber: "1.5" }, saved)).toMatch(/whole number/);
+  });
+
+  it("holds the prefix to what the server takes", () => {
+    const f = settingsForm(saved);
+    expect(settingsProblem({ ...f, prefix: "ABCDEFGHIJKLM" }, saved)).toMatch(/12 characters/);
+    expect(settingsProblem({ ...f, prefix: "IN V" }, saved)).toMatch(/letters, digits/);
+    expect(settingsProblem({ ...f, prefix: "INV/2026_" }, saved)).toBeNull();
+  });
+});

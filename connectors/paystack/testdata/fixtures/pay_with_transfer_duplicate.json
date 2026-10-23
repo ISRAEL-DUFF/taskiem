@@ -1,0 +1,1 @@
+{"request": {"method": "POST", "path": "/charge"}, "response": {"status": 400, "body": {"status": false, "message": "Duplicate Transaction Reference"}}}

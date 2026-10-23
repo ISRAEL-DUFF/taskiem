@@ -1,0 +1,30 @@
+{
+  "capability": "collect_transfer",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "amount_kobo": 2500000,
+    "customer": {
+      "name": "Ada Obi",
+      "email": "ada@example.com"
+    },
+    "description": "INV-0104",
+    "expires_minutes": 30
+  },
+  "keys": {
+    "pay_with_transfer": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    "pay_with_transfer_duplicate",
+    "check_pending_charge"
+  ],
+  "expect": {
+    "payment_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "account_number": "1231084927",
+    "bank_name": "Test Bank",
+    "account_name": "PAYSTACK CHECKOUT",
+    "amount_kobo": 2500000,
+    "expires_at": "2026-10-23T18:30:00.000Z"
+  }
+}

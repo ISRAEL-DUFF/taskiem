@@ -1,6 +1,6 @@
 # Partner tracker: what is still needed
 
-Last updated 23 October 2026, after Payrolla's integration pack. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
+Last updated 23 October 2026, after Payrolla's integration pack; staging is up at https://staging.ispend.name.ng, so partner sandbox work can start. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
 
 The request pages sent to partners:
 
@@ -44,23 +44,23 @@ The connector is built on iswallet's answers of 5 October ([iswallet](integratio
 
 | Id | Needed from iswallet | When | Status |
 | --- | --- | --- | --- |
-| W1 | Sandbox clients `payrolla` and `ispend` provisioned (Payrolla: ₦10m funded company wallet and 10 employee wallets; iSpend: a funded wallet with a virtual account) | Now | [ ] They provision in one call (`POST /v1/admin/clients/{client}/sandbox/provision`); we have to ask. iSpend's virtual account needs a director's BVN on a business wallet |
-| W2 | Sandbox client keys, delivered securely | Now | [ ] |
-| W3 | Sandbox webhook subscriptions for our URLs (one per product), signing secrets delivered securely | Now, once our staging is up | [ ] |
+| W1 | Sandbox clients provisioned: `taskiem` (Taskiem's own tests of the iswallet rail, e.g. Run payroll: a wallet funded with ₦1m and 5 recipient wallets) and `ispend` (a funded wallet with a virtual account, for the credit-exceptions workflow). The `payrolla` client is withdrawn (decision 0044) | Now | [ ] They provision in one call (`POST /v1/admin/clients/{client}/sandbox/provision`); asked on the 23 October page. iSpend's virtual account needs a director's BVN on a business wallet |
+| W2 | Sandbox client keys, delivered securely: the holder types each into Taskiem staging's Connections page | Now | [ ] |
+| W3 | Sandbox webhook subscriptions for our URLs (one per product), signing secrets delivered securely | Now | [~] Not needed from iswallet: subscriptions are self-service (`POST /v1/webhooks/subscriptions`), so whoever holds the sandbox key creates one pointed at the URL on the workflow's Endpoints tab and enters the secret on Taskiem's Connections page |
 | W4 | How to force each sandbox outcome: payout confirmed, failed, reversed after confirmation, unresolved; credit rejected and reversed | Now | [~] Simulators for deposit, payout confirmed/failed/reversed and credit clawback; failed debits are real refusals. Still open: payout `unresolved`, credit `rejected` |
 | H1 | Lookup by our idempotency key | Before production | [x] Shipped 12 October (`GET /v1/requests/{key}`); used by the connector |
 | H2 | Typed duplicate error instead of the 500, and the replay window | Before production | [ ] Now their top item; no longer blocks us (the lookup comes first) |
 | H3 | `Retry-After` on 429; higher rate limit for `payrolla` | Before production | [~] No `Retry-After` yet (on their list); we use `X-RateLimit-Reset`. No limit raise needed during Payrolla's beta (N1); ask again with the first real customer's headcount |
 | H6 | Error catalogue per endpoint, with retryability | Before production | [~] Debit codes given to Xenibase match our handling; a full catalogue per endpoint still open |
 | H8 | `POST /v1/outflows` in the OpenAPI spec; multispend path fix | Before production | [ ] |
-| H4, H5, H7, H9 | Bulk payouts, structured transfer metadata, parked-credit signal, non-NGN limits | Later | [ ] |
+| H4, H5, H7, H9 | Bulk payouts, structured transfer metadata, parked-credit signal, non-NGN limits | Later | [ ] H9 (non-NGN limits) dropped from the 23 October page: nothing on Taskiem needs it yet |
 | P1 | KYC tier raised for the pilot company's wallet, limits confirmed by compliance | Before production | [ ] Not needed for the beta pilot (N1 fits TIER_1); needed for the first real customer |
-| P2, P3 | Production client keys; production webhook subscriptions and secrets | Before production | [ ] |
+| P2, P3 | Production client keys (`taskiem`, `ispend`); production webhook subscriptions | Before production | [ ] Keys asked. Subscriptions are self-service, so we create them (once W3 confirms a client key can) |
 | P4 | Allow-list our egress IPs, if they allow-list callers | Before production | [x] Not needed: no allow-list today. They want our IPs for incident forensics |
 | P5 | On-call contact for payout incidents | Before production | [ ] They will name a technical contact and escalation path |
-| M1, M2 | Wallet-scoped keys; per-wallet webhook subscriptions (nice to have; our guard does not depend on them) | Later | [ ] |
+| M1, M2 | Wallet-scoped keys (M1, still asked as later); per-wallet webhook subscriptions (M2, dropped: Taskiem routes by `wallet_id`) | Later | [ ] |
 | M3 | Confirm every outflow, credit and transfer event carries the `wallet_id` it concerns, and which side for transfers | Before production | [~] Credit and transfer confirmed (envelope `wallet_id`; one transfer event per side). Outflow events to confirm |
-| M4 | KYC tier per company wallet as each Payrolla company is onboarded: process and lead time | Before production | [ ] |
+| M4 | KYC tier per company wallet as each Payrolla company is onboarded | — | [x] Withdrawn (decision 0044); replaced by P1, the tier process for any business paying staff through iswallet |
 | Q1–Q4 | `wallet.credit.reversed`/`rejected` examples; when H1 and H2 ship; reversal timing after confirmation; maintenance windows | Answer | [~] H1 shipped, H2 next. The rest open |
 
 | Id | Needed from iSpend engineering | When | Status |
@@ -90,10 +90,10 @@ Xenibase (formerly PGDock). Phase 1 is built from its published contracts ([plan
 
 | Item | For | Blocked by |
 | --- | --- | --- |
-| A Taskiem staging deployment with a public URL | Everyone: webhook URLs for iswallet subscriptions, Payrolla's events, Xenibase testing | Infrastructure ([needs people](needs-people.md) D5, P4-C1) |
+| ~~A Taskiem staging deployment with a public URL~~ | Everyone | Done: https://staging.ispend.name.ng. Webhook URLs are `https://staging.ispend.name.ng/hooks/<tenant id>/connectors/<connector>@1/<trigger>?env=prod&connection=<name>`, shown exactly on each workflow's Endpoints tab |
 | The names of Taskiem people who need Payrolla's test company (P4), and our embedding origins (P5) | Payrolla's recordings and the pilot | Nothing; send with the next Payrolla message |
-| Webhook URLs per product and environment | iswallet W3, P3; Payrolla's events (P2) | Staging, then production |
+| Webhook URLs per product and environment | iswallet W3, P3; Payrolla's events (P2) | Staging: a tenant and a deployed workflow on staging for each, then its Endpoints tab. Production later |
 | Fixed egress IPs | Xenibase (if they allow-list); iswallet for forensics only | Cloud provider and NAT (P4-C1, P4-C5) |
 | Telling iswallet that Taskiem no longer pays for Payrolla, and Run payroll's expected figures | iswallet H3, P1 | Nothing; send with the next iswallet message |
 | A sending domain for invitation emails | Company people joining their sub-tenants | P4-O1 |
-| Running the sandbox tests with each partner | Payrolla T1, iswallet W4, Xenibase S1 | Staging and the sandbox items above |
+| Running the sandbox tests with each partner | iswallet W4, Payrolla P4, Xenibase S1 | The partners' sandbox items above |

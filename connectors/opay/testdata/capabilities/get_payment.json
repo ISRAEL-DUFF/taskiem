@@ -1,0 +1,19 @@
+{
+  "capability": "get_payment",
+  "credentials": {
+    "merchant_id": "256621051120756",
+    "public_key": "OPAYPUB_test",
+    "secret_key": "OPAYPRV_test_secret"
+  },
+  "input": {
+    "payment_id": "tskab12cd34ef56gh78ij90kl12mn34op5"
+  },
+  "exchanges": [
+    "status_bank_transfer"
+  ],
+  "expect": {
+    "status": "paid",
+    "amount_kobo": 2300,
+    "currency": "NGN"
+  }
+}

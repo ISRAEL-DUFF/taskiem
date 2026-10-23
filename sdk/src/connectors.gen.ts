@@ -221,6 +221,14 @@ export const email = {
 };
 
 // Flutterwave (flutterwave@1)
+export interface FlutterwaveCreateDynamicAccountInput {
+  /** Kobo; sent to Flutterwave in naira */
+  amount: Val<number>;
+  email: Val<string>;
+  expires_minutes?: Val<number>;
+  /** The name payers see when they check the account */
+  narration?: Val<string>;
+}
 export interface FlutterwaveGetBalanceInput {
   currency?: Val<string>;
 }
@@ -257,6 +265,8 @@ export interface FlutterwaveVerifyPaymentInput {
   tx_ref?: Val<string>;
 }
 export const flutterwave = {
+  /** Open an account number for one payment (unsafe_write) */
+  create_dynamic_account: (input: FlutterwaveCreateDynamicAccountInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "create_dynamic_account", input, extra),
   /** Get wallet balance (read) */
   get_balance: (input?: FlutterwaveGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "get_balance", input, extra),
   /** Get transfer (read) */
@@ -511,6 +521,51 @@ export const interswitch = {
   resolve_account: (input: InterswitchResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("interswitch@1", "resolve_account", input, extra),
   /** Pay out to a bank account (idempotent_write) */
   transfer: (input: InterswitchTransferInput, extra?: ConnectorExtra): StepSpec => connector("interswitch@1", "transfer", input, extra),
+};
+
+// Invoices (invoices@1)
+export interface InvoicesCreateInput {
+  allow_part_payments?: Val<boolean>;
+  /** A single line for this amount; or give lines */
+  amount_kobo?: Val<number>;
+  /** The payments connection; the business's default when left out */
+  connection?: Val<string>;
+  customer: Value;
+  /** The single line's description (default "Amount due") */
+  description?: Val<string>;
+  /** YYYY-MM-DD */
+  due_on?: Val<string>;
+  fee_paid_by?: Val<"business" | "customer">;
+  lines?: Value;
+  note?: Val<string>;
+}
+export interface InvoicesGetInput {
+  number: Val<string>;
+}
+export interface InvoicesNotifyCustomerInput {
+  number: Val<string>;
+  /** The email's subject */
+  subject?: Val<string>;
+  text: Val<string>;
+}
+export interface InvoicesSendInput {
+  number: Val<string>;
+}
+export interface InvoicesVoidInput {
+  number: Val<string>;
+  reason: Val<string>;
+}
+export const invoices = {
+  /** Create an invoice (idempotent_write) */
+  create: (input: InvoicesCreateInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "create", input, extra),
+  /** Read an invoice (read) */
+  get: (input: InvoicesGetInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "get", input, extra),
+  /** Message the invoice's customer (idempotent_write) */
+  notify_customer: (input: InvoicesNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "notify_customer", input, extra),
+  /** Send an invoice (idempotent_write) */
+  send: (input: InvoicesSendInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "send", input, extra),
+  /** Void an invoice (idempotent_write) */
+  void: (input: InvoicesVoidInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "void", input, extra),
 };
 
 // iswallet (iswallet@1)
@@ -1445,6 +1500,15 @@ export interface PaystackListTransfersInput {
   /** Since when */
   from: Val<string>;
 }
+export interface PaystackPayWithTransferInput {
+  /** Amount in kobo */
+  amount: Val<number>;
+  /** The customer's email; Paystack requires one */
+  email: Val<string>;
+  /** Kept between 15 and 480 */
+  expires_minutes?: Val<number>;
+  metadata?: Value;
+}
 export interface PaystackRefundStatusInput {
   reference: Val<string>;
 }
@@ -1487,6 +1551,8 @@ export const paystack = {
   list_transactions: (input: PaystackListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_transactions", input, extra),
   /** List transfers (read) */
   list_transfers: (input: PaystackListTransfersInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_transfers", input, extra),
+  /** Open an account number for one payment (idempotent_write) */
+  pay_with_transfer: (input: PaystackPayWithTransferInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "pay_with_transfer", input, extra),
   /** Check whether a payment was refunded (read) */
   refund_status: (input: PaystackRefundStatusInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "refund_status", input, extra),
   /** Refund a payment (reconcilable_write) */
@@ -2470,6 +2536,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "gmail@1": "gmail",
   "googlesheets@1": "googlesheets",
   "interswitch@1": "interswitch",
+  "invoices@1": "invoices",
   "iswallet@1": "iswallet",
   "lenco@1": "lenco",
   "moniepoint@1": "moniepoint",
@@ -2504,11 +2571,12 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
   "email@1": ["file_url"],
-  "flutterwave@1": ["get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "resolve_account", "transfer", "verify_payment"],
+  "flutterwave@1": ["create_dynamic_account", "get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "resolve_account", "transfer", "verify_payment"],
   "form@1": ["file_url", "respond"],
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
+  "invoices@1": ["create", "get", "notify_customer", "send", "void"],
   "iswallet@1": ["get_balance", "get_payout", "list_banks", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
@@ -2521,7 +2589,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "opay_business@1": ["get_balance", "get_payment_request", "get_terminal", "get_transaction", "list_terminal_transactions", "request_payment"],
   "payrolla@1": ["create_payslip_link", "get_approval_link", "get_company", "get_employee", "get_run", "get_run_lines", "list_employees", "list_events", "list_runs"],
-  "paystack@1": ["check_balance", "create_recipient", "initialize_transaction", "list_banks", "list_transactions", "list_transfers", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
+  "paystack@1": ["check_balance", "create_recipient", "initialize_transaction", "list_banks", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
@@ -2575,9 +2643,29 @@ export type CapabilityCollectPushOutput = {
   payment_id: string;
   status: "paid" | "pending" | "failed";
 };
+/** Give a customer a bank account number for one payment: input */
+export interface CapabilityCollectTransferInput {
+  /** What the customer must send */
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  customer: Value;
+  /** What the payment is for */
+  description: Val<string>;
+  /** How long the account should take payments; the rail keeps it within its own range (transfer.min_minutes to transfer.max_minutes) */
+  expires_minutes?: Val<number>;
+}
+/** Give a customer a bank account number for one payment: output */
+export type CapabilityCollectTransferOutput = {
+  account_name?: string;
+  account_number: string;
+  amount_kobo: number;
+  bank_name: string;
+  expires_at: string;
+  payment_id: string;
+};
 /** Look a payment up: input */
 export interface CapabilityGetPaymentInput {
-  /** As collect_link answered it, or the reference a payment event carried */
+  /** As collect_link or collect_transfer answered it, or the reference a payment event carried */
   payment_id: Val<string>;
 }
 /** Look a payment up: output */
@@ -2720,7 +2808,7 @@ export interface CapabilityAwaitInput {
 }
 /** await_payment: input */
 export interface CapabilityAwaitPaymentInput {
-  /** The payment page to wait on: the collect_link step's output.payment_id */
+  /** The payment to wait on: the collect_link or collect_transfer step's output.payment_id */
   payment_id: Val<string>;
 }
 /** Capability steps (collect): each runs on whichever rail its connection is. */
@@ -2729,6 +2817,8 @@ export const collect = {
   link: (input: CapabilityCollectLinkInput, extra?: CapabilityExtra): StepSpec => capability("collect_link", input, extra),
   /** Ask a customer to approve a payment on their phone or a terminal */
   push: (input: CapabilityCollectPushInput, extra?: CapabilityExtra): StepSpec => capability("collect_push", input, extra),
+  /** Give a customer a bank account number for one payment */
+  transfer: (input: CapabilityCollectTransferInput, extra?: CapabilityExtra): StepSpec => capability("collect_transfer", input, extra),
 };
 /** Capability steps (pay): each runs on whichever rail its connection is. */
 export const pay = {
@@ -2776,6 +2866,7 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
   balance: "rail.balance",
   collect_link: "collect.link",
   collect_push: "collect.push",
+  collect_transfer: "collect.transfer",
   get_payment: "rail.get_payment",
   get_payout: "rail.get_payout",
   list_banks: "rail.list_banks",
@@ -2793,7 +2884,8 @@ export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   balance: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   collect_link: ["moniepoint@1", "paystack@1"],
   collect_push: [],
-  get_payment: ["flutterwave@1", "moniepoint@1", "paystack@1"],
+  collect_transfer: ["flutterwave@1", "opay@1", "paystack@1"],
+  get_payment: ["flutterwave@1", "moniepoint@1", "opay@1", "paystack@1"],
   get_payout: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   list_banks: ["anchor@1", "flutterwave@1", "moniepoint@1", "paystack@1"],
   pay_bank: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],

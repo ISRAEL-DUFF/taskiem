@@ -172,6 +172,12 @@ type Server struct {
 	// FormSubmissions limits form submissions and code requests per
 	// client address; nil uses FormSubmissionsPerIP (50 an hour).
 	FormSubmissions *formguard.Limiter
+	// Invoices reads the invoices businesses send their customers, for
+	// their pages on the form host, /i/{token} (invoice.go); nil: none.
+	Invoices Invoices
+	// InvoicePay offers ways to pay on invoice pages (T4); nil: the pages
+	// only show the invoice.
+	InvoicePay InvoicePay
 
 	hosts         *lru.Cache[string, hostEntry]
 	formCache     *lru.Cache[string, formEntry]

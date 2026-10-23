@@ -1,0 +1,20 @@
+{{template "fhead" .}}{{with .Refresh}}<meta http-equiv="refresh" content="{{.}}">
+{{end}}{{template "fbody" .}}
+<h1>Invoice {{.Number}}</h1>
+<p class="lede">{{.Status}}{{with .DueOn}} · {{.}}{{end}}</p>
+{{template "fmain" .}}
+{{with .Message}}<p class="notice" role="status">{{.}}</p>{{end}}
+<div class="basket inv">
+{{range .Lines}}<div class="line"><div class="inv-what"><span>{{.Description}}</span> <span class="line-price">{{.Each}}</span></div><strong>{{.Amount}}</strong></div>
+{{end}}</div>
+<div class="dark">
+<dl class="inv-sums">
+<dt>Total</dt><dd>{{.Total}}</dd>
+{{with .Paid}}<dt>Paid</dt><dd>{{.}}</dd>
+{{end}}{{with .Due}}<dt>Still due</dt><dd class="inv-due">{{.}}</dd>
+{{end}}</dl>
+
+</div>
+{{with .Note}}<p class="notice inv-note">{{.}}</p>{{end}}
+{{if .Payable}}{{with .Pay}}{{template "invoicepay" .}}{{else}}<p class="hint center">Ask {{.Business}} how to pay.</p>{{end}}{{end}}
+{{template "ffoot" .}}

@@ -61,7 +61,7 @@ func (s *Server) listCapabilities(w http.ResponseWriter, r *http.Request) {
 	for _, n := range wd.Waits {
 		in := json.RawMessage(`{"type":"object","required":["payout_id"],"properties":{"payout_id":{"type":"string","description":"The payment step's payout_id"}}}`)
 		if n == "await_payment" {
-			in = json.RawMessage(`{"type":"object","required":["payment_id"],"properties":{"payment_id":{"type":"string","description":"The collect_link step's payment_id"}}}`)
+			in = json.RawMessage(`{"type":"object","required":["payment_id"],"properties":{"payment_id":{"type":"string","description":"The collect_link or collect_transfer step's payment_id"}}}`)
 		}
 		out = append(out, capabilityInfo{Name: n, Title: capability.WaitTitle(n), Rails: railsOf(n), Input: in})
 	}

@@ -43,6 +43,7 @@ import (
 //	GET/POST /r/{token}             a link form, through its one-time link
 //	GET/POST /q/{token}             a form step's request
 //	GET      /s/{reference}?k=      a submission's status link
+//	GET      /i/{token}             an invoice's page (invoice.go)
 //	POST     /report                reports a form
 //
 // Pages are rendered on the server and work without JavaScript. A
@@ -196,6 +197,11 @@ func (s *Server) routeForms(w http.ResponseWriter, r *http.Request) {
 	}
 	head, rest, _ := strings.Cut(strings.TrimPrefix(p, "/"), "/")
 	key, sub, _ := strings.Cut(rest, "/")
+	// An invoice's page needs none of the forms' keys.
+	if !embed && head == "i" {
+		s.serveInvoice(w, r, key, sub)
+		return
+	}
 	if !s.formsReady() && head != "" {
 		s.renderPrivate(w, r, http.StatusServiceUnavailable, "formclosed.html", closedData{pageData: pageData{Title: "Not open yet", Lang: "en"},
 			Business: "Taskiem", Message: "Forms are not open yet. Please try again later."})

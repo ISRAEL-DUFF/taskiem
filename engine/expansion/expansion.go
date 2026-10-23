@@ -469,7 +469,8 @@ func (x *expander) wait(st map[string]any) ([]any, error) {
 }
 
 // awaitPayment expands await_payment: the rail's payment.received for the
-// payment page a collect_link made, raced against a deadline, then a
+// payment page a collect_link made (or the one-time account a
+// collect_transfer opened), raced against a deadline, then a
 // get_payment lookup in case the event never came. The step's own id is a
 // transform that says how it ended: paid, failed or unpaid.
 func (x *expander) awaitPayment(st map[string]any) ([]any, error) {
@@ -483,7 +484,7 @@ func (x *expander) awaitPayment(st map[string]any) ([]any, error) {
 	} else if _, named := st["connection"]; named || !readsStep(payment) {
 		r, err = x.rail(id) // a payment page made elsewhere: the step's own connection
 	} else {
-		return nil, &Refusal{Step: id, Message: "payment_id must read the output of a collect_link step (=steps.<id>.output.payment_id)"}
+		return nil, &Refusal{Step: id, Message: "payment_id must read the output of a collect_link or collect_transfer step (=steps.<id>.output.payment_id)"}
 	}
 	if err != nil {
 		return nil, err
@@ -539,8 +540,8 @@ func (x *expander) awaitPayment(st map[string]any) ([]any, error) {
 	return []any{race, result}, nil
 }
 
-// collectFor is the collect_link step a payment_id reads, if it reads
-// exactly one.
+// collectFor is the collect_link or collect_transfer step a payment_id
+// reads, if it reads exactly one.
 func (x *expander) collectFor(payment any) *wd.Step {
 	src, ok := payment.(string)
 	if !ok || !expr.IsExpr(src) {
@@ -552,7 +553,7 @@ func (x *expander) collectFor(payment any) *wd.Step {
 	}
 	var found *wd.Step
 	for sid := range refs.Steps {
-		if s := x.def.Step(sid); s != nil && s.Type == "capability" && s.Uses == "collect_link" {
+		if s := x.def.Step(sid); s != nil && s.Type == "capability" && (s.Uses == "collect_link" || s.Uses == "collect_transfer") {
 			if found != nil {
 				return nil
 			}

@@ -189,3 +189,60 @@ func TestCapabilityMapping(t *testing.T) {
 		t.Fatalf("other delivery: %v", err)
 	}
 }
+
+// transferCapability adds a one-time account to the rail.
+const transferAction = `  account:
+    title: One-time account
+    class: idempotent_write
+    idempotency: { field: reference, encoding: base32_lower, length: 32, prefix: "tsk_" }
+    input:
+      type: object
+      required: [amount, email]
+      properties:
+        amount: { type: integer }
+        email: { type: string }
+        minutes: { type: integer }
+        reference: { type: string }
+    output: { type: object, properties: { reference: { type: string }, number: { type: string }, bank: { type: string }, amount: { type: integer }, until: { type: string } } }
+    pii:
+      - { field: email, category: email }
+      - { field: output.number, category: account_number }
+`
+
+const transferCapability = `  collect_transfer:
+    action: account
+    input: { amount: "=input.amount_kobo", email: "=input.customer.email", minutes: "=input.?expires_minutes" }
+    output: { payment_id: "=output.reference", account_number: "=output.number", bank_name: "=output.bank", amount_kobo: "=output.amount", expires_at: "=output.until" }
+    requires: [customer.email]
+    ignores: [customer.name, customer.phone, customer.bvn, description]
+    fixed: { currency: NGN }
+    transfer: { on_late: returned, on_wrong_amount: returned, min_minutes: 15, max_minutes: 480, default_minutes: 30 }
+`
+
+func TestCollectTransferFacts(t *testing.T) {
+	base := strings.Replace(railManifest, "triggers:\n", transferAction+"triggers:\n", 1) +
+		strings.Replace(goodCapabilities, "events:\n", transferCapability+"events:\n", 1)
+	m, probs := Parse([]byte(base))
+	if len(probs) > 0 {
+		t.Fatal(probs)
+	}
+	if f := m.Capabilities["collect_transfer"].Transfer; f == nil || f.OnLate != "returned" || f.MaxMinutes != 480 {
+		t.Fatalf("facts %+v", f)
+	}
+	for _, c := range []struct{ name, from, to, want string }{
+		{"missing", "    transfer: { on_late: returned, on_wrong_amount: returned, min_minutes: 15, max_minutes: 480, default_minutes: 30 }\n", "", `collect_transfer must say what the rail does with late and wrong-amount transfers`},
+		{"late", "on_late: returned", "on_late: kept", `on_late`},
+		{"wrong amount", "on_wrong_amount: returned", "on_wrong_amount: kept", `on_wrong_amount`},
+		{"range", "min_minutes: 15, max_minutes: 480", "min_minutes: 15, max_minutes: 10", `max_minutes at least min_minutes`},
+		{"default", "default_minutes: 30", "default_minutes: 600", `default_minutes: 600 is outside 15 to 480`},
+		{"elsewhere", "    fixed: { currency: NGN }\n  pay_bank:", "    fixed: { currency: NGN }\n    transfer: { on_late: returned, on_wrong_amount: returned, min_minutes: 1, max_minutes: 2 }\n  pay_bank:", `only collect_transfer says how transfers are handled`},
+	} {
+		if !strings.Contains(base, c.from) {
+			t.Fatalf("%s: %q is not in the manifest", c.name, c.from)
+		}
+		_, probs := Parse([]byte(strings.Replace(base, c.from, c.to, 1)))
+		if !strings.Contains(strings.Join(probs, "\n"), c.want) {
+			t.Errorf("%s: want %q among %q", c.name, c.want, probs)
+		}
+	}
+}

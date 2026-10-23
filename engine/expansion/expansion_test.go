@@ -287,3 +287,32 @@ func TestReversalWatchByLookup(t *testing.T) {
 		t.Errorf("outcome %s", b)
 	}
 }
+
+// transferInvoice opens a one-time account for an invoice and waits for
+// the customer to pay into it.
+const transferInvoice = `{"schema":"wd/v1","id":"wf_acct","version":1,"name":"Account","trigger":{"type":"manual"},"steps":[
+  {"id":"acct","type":"capability","uses":"collect_transfer","input":{"amount_kobo":"=trigger.body.kobo","customer":{"name":"=trigger.body.name","email":"=trigger.body.email"},"description":"INV-0104","expires_minutes":30},
+   "effect":{"idempotency_seed":"=trigger.body.invoice"}},
+  {"id":"paid","type":"capability","uses":"await_payment","needs":["acct"],"timeout":"1h","input":{"payment_id":"=steps.acct.output.payment_id"}}]}`
+
+func TestAwaitPaymentIntoAOneTimeAccount(t *testing.T) {
+	for _, rail := range []struct{ id, ref, action string }{
+		{"paystack", "paystack@1", "pay_with_transfer"},
+		{"flutterwave", "flutterwave@1", "create_dynamic_account"},
+	} {
+		d, _, err := expand(t, transferInvoice, expansion.Connection{Name: "rail", Connector: rail.id})
+		if err != nil {
+			t.Fatalf("%s: %v", rail.id, err)
+		}
+		if acct := d.Step("acct"); acct == nil || acct.Action != rail.action || acct.Capability.Uses != "collect_transfer" {
+			t.Fatalf("%s: account step %+v", rail.id, acct)
+		}
+		if sig := d.Step("paid__paid"); sig == nil || sig.Signal.Event != rail.ref+":payment.received" || sig.Signal.Correlation != "=steps.acct.output.payment_id" {
+			t.Fatalf("%s: paid signal %+v", rail.id, sig)
+		}
+	}
+	// OPay opens accounts but does not yet say when one is paid.
+	if _, _, err := expand(t, transferInvoice, expansion.Connection{Name: "rail", Connector: "opay"}); err == nil || !strings.Contains(err.Error(), "does not say when a customer pays") {
+		t.Errorf("opay: %v", err)
+	}
+}

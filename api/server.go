@@ -36,6 +36,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/reach"
@@ -97,6 +98,9 @@ type Server struct {
 	Moderator storefront.Moderator
 	// Orders are the storefront's orders (S3); nil: none are shown.
 	Orders *storefront.Orders
+	// Invoices are the business's invoices to its customers (decision
+	// 0045); nil: their routes answer that they are not available.
+	Invoices *invoicing.Invoices
 	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
 	Forms *forms.Service
 	// Email is inbound email's api side (N10); MailDomain is where
@@ -375,6 +379,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/image", s.storefrontImage)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/actions", s.listStorefrontActions)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{kind}", s.putStorefrontAction)
+			s.invoiceRoutes(r)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
