@@ -42,6 +42,11 @@ func TestParseStatement(t *testing.T) {
 	if !errors.As(err, &se) || len(se.Problems) != 2 || se.Problems[0].Row != 3 || !errors.Is(err, ErrStatement) {
 		t.Errorf("bad lines: %v %+v", err, se)
 	}
+	// The common format named in full (as an account with no saved
+	// columns has) still takes a file without the optional reference.
+	if lines, err := ParseStatement(strings.NewReader("date,description,amount\n2026-10-20,x,1\n"), CommonColumns); err != nil || len(lines) != 1 {
+		t.Errorf("common format in full: %v", err)
+	}
 	if _, err := ParseStatement(strings.NewReader(""), StatementFormat{}); !errors.Is(err, ErrStatement) {
 		t.Errorf("empty: %v", err)
 	}

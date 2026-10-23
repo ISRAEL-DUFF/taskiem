@@ -67,6 +67,11 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5 and T6 are built. T7 and T8 are
 - **Leaks are not sent in chat** and have no daily summary yet (T7).
 - **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`); a money permission of its own may be wanted.
 - **Agreed fees are set by hand** per connection; no rail's published rates are filled in.
+- **Web app (Money pages):**
+  - no list of accounts statements were uploaded for, so the account field suggests only those seen in fee rates and unmatched money;
+  - assigning a leak to someone else needs `member.manage` (the members list); others can assign to themselves or no one, and leaks show member ids, not names;
+  - fee rates can be changed but not removed (no delete);
+  - a leak's link to its invoice says "See the invoice", not its number.
 
 ## Later milestones (not started)
 

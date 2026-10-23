@@ -77,10 +77,12 @@ func (e *StatementError) Unwrap() error { return ErrStatement }
 // the common format's). A file with any line it cannot read is refused
 // whole, so a wrong match of columns adds nothing.
 func ParseStatement(r io.Reader, cols StatementFormat) ([]Line, error) {
-	common := cols.Date == "" && cols.Description == ""
-	if common {
+	if cols.Date == "" && cols.Description == "" {
 		cols = CommonColumns
 	}
+	// The common format's reference and balance are optional; columns a
+	// person matched are not.
+	common := cols == CommonColumns
 	cr := csv.NewReader(io.LimitReader(r, MaxStatementBytes+1))
 	cr.FieldsPerRecord = -1
 	cr.TrimLeadingSpace = true
