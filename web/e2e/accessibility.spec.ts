@@ -31,6 +31,10 @@ const PAGES = [
   "/invoices",
   "/invoices/match",
   "/invoices/settings",
+  "/money",
+  "/money/statements",
+  "/money/entries",
+  "/money/fees",
 ];
 
 async function signIn(page: Page) {
