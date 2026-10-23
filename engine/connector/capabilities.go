@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -613,4 +614,88 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// DefaultKeySpec is the key an action that declares no idempotency field
+// is given (the worker's default): "tsk_" and 32 base32 characters.
+var DefaultKeySpec = effects.Spec{Encoding: effects.Base32Lower, Length: 32, Prefix: "tsk_"}
+
+// CapabilityKey is the idempotency key the step of capability name with
+// id step (the action name for a single action) is called with, from key
+// material: the action's own key spec, or DefaultKeySpec.
+func (m *Manifest) CapabilityKey(name, step string, in effects.KeyInput) (string, error) {
+	for _, st := range m.Capabilities[name].Plan() {
+		id := st.ID
+		if id == "" {
+			id = st.Action
+		}
+		if id != step {
+			continue
+		}
+		if spec := m.Actions[st.Action]; spec.Idempotency != nil {
+			return spec.Idempotency.Key(in)
+		}
+		return DefaultKeySpec.Key(in)
+	}
+	return "", fmt.Errorf("%s has no step %q", name, step)
+}
+
+// CallCapability does a capability with c outside a workflow run (the
+// invoice page's accounts, for example), as expansion would: the input
+// checked and defaulted, each action called with its mapped input and its
+// own key (keyOf, by step id: the action name for a single action), and
+// the last output mapped back. base carries the credentials and the HTTP
+// client.
+func CallCapability(ctx context.Context, c *Connector, name string, input map[string]any, base Request, keyOf func(step string) (string, error)) (map[string]any, error) {
+	m := c.Manifest
+	cm, ok := m.Capabilities[name]
+	if !ok {
+		return nil, fmt.Errorf("%s cannot %s: %w", m.Name, name, effects.ErrFatal)
+	}
+	in, err := m.CapabilityInput(name, input)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", err, effects.ErrFatal)
+	}
+	steps := map[string]any{}
+	var last map[string]any
+	for i, st := range cm.Plan() {
+		act := c.Actions[st.Action]
+		if act == nil {
+			return nil, fmt.Errorf("no handler for %s: %w", st.Action, effects.ErrFatal)
+		}
+		ain, err := m.CapabilityStepInput(name, i, in, steps)
+		if err != nil {
+			return nil, fmt.Errorf("%s input: %w: %w", st.Action, err, effects.ErrFatal)
+		}
+		id := st.ID
+		if id == "" {
+			id = st.Action
+		}
+		req := base
+		req.Input = ain
+		if spec := m.Actions[st.Action]; spec.Class.IsWrite() {
+			key, err := keyOf(id)
+			if err != nil {
+				return nil, err
+			}
+			req.IdempotencyKey = key
+			if spec.Idempotency != nil {
+				ain[spec.Idempotency.Field] = key
+			}
+		}
+		r, err := act.Execute(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		o, ok := r.Output.(map[string]any)
+		if !ok {
+			raw, _ := json.Marshal(r.Output)
+			if err := json.Unmarshal(raw, &o); err != nil || o == nil {
+				return nil, fmt.Errorf("%s output is not an object: %w", st.Action, effects.ErrUnknownOutcome)
+			}
+		}
+		steps[id] = map[string]any{"output": o}
+		last = o
+	}
+	return m.CapabilityOutput(name, in, last, steps)
 }

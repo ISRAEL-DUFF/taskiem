@@ -627,6 +627,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	if h := formHost(cfg); h != "" {
 		e.invoices.PageBase = "https://" + h
 	}
+	// Paying them (T4): accounts and links from the business's own
+	// payments connection, its prod credentials.
+	e.invoices.Rails = &invoicing.RegistryRails{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log, Loopback: connectorLoopback(reg, log)}}
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
 	return e, nil
 }

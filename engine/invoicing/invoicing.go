@@ -147,8 +147,14 @@ type Invoices struct {
 	PageBase string
 	// Signal delivers a signal (runtime.Store.DeliverSignalOnce).
 	Signal func(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error)
-	Logger *slog.Logger
-	Now    func() time.Time
+	// Rails issues accounts and links and looks payments up (T4); nil:
+	// invoices take no payments on their page.
+	Rails Rails
+	// Answered is told of a request from chat once it is issued (or
+	// failed), to reply to the customer there.
+	Answered func(ctx context.Context, r Request, a Account, err error)
+	Logger   *slog.Logger
+	Now      func() time.Time
 }
 
 func (s *Invoices) now() time.Time {

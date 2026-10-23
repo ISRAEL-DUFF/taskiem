@@ -312,6 +312,7 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 		<-ctx.Done()
 		return nil
 	}
+	go s.runInvoicePayments(ctx)
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
 	for {
@@ -322,6 +323,29 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-tick.C:
+		}
+	}
+}
+
+// runInvoicePayments issues the accounts and links invoice pages and
+// chat ask for (every second) and looks their payments up (every 30
+// seconds).
+func (s *Server) runInvoicePayments(ctx context.Context) {
+	drain, check := time.NewTicker(time.Second), time.NewTicker(30*time.Second)
+	defer drain.Stop()
+	defer check.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-drain.C:
+			if err := s.Invoices.Drain(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: requests", "err", err)
+			}
+		case <-check.C:
+			if err := s.Invoices.CheckPayments(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: payments", "err", err)
+			}
 		}
 	}
 }
