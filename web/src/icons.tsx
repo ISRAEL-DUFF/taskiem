@@ -37,6 +37,7 @@ const paths: Record<string, string> = {
   lock: "M6 11h12v9H6zM8 11V8a4 4 0 018 0v3",
   clock: "M12 7v5l3 2M12 21a9 9 0 100-18 9 9 0 000 18z",
   bolt: "M13 3L5 14h6l-1 7 8-11h-6z",
+  invoices: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {
