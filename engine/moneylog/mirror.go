@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,8 +60,9 @@ type Mirror struct {
 	Rows   Rows
 	Logger *slog.Logger
 
-	mu   sync.Mutex
-	kept map[uuid.UUID]bool
+	mu          sync.Mutex
+	kept        map[uuid.UUID]bool
+	keptMatches map[uuid.UUID]bool
 }
 
 func (m *Mirror) log() *slog.Logger {
@@ -107,6 +109,118 @@ func (m *Mirror) Tick(ctx context.Context) error {
 		}
 		if err != nil && ctx.Err() == nil {
 			m.log().Warn("money log: copying to money_log", "tenant", t, "err", err)
+		}
+	}
+	// The matches (T5), after the entries they name.
+	rows, err = m.Log.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_money_unmirrored_payment_tenants()`)
+	if err != nil {
+		return err
+	}
+	if tenants, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID]); err != nil {
+		return err
+	}
+	for _, t := range tenants {
+		err := m.Matches(ctx, t)
+		if errors.Is(err, datatables.ErrUnavailable) {
+			continue
+		}
+		if err != nil && ctx.Err() == nil {
+			m.log().Warn("money log: copying to money_matches", "tenant", t, "err", err)
+		}
+	}
+	return nil
+}
+
+// MatchesTable is the kept data table matches are copied to (spec 8.3).
+const MatchesTable = "money_matches"
+
+// MatchColumns are money_matches' columns: one row per match and per
+// undoing of one, never changed.
+var MatchColumns = []datatables.Column{
+	{Name: "match_id", Title: "Match", Type: "text", Required: true},
+	{Name: "entry_id", Title: "Money log entry", Type: "text"},
+	{Name: "target", Title: "Matched to", Type: "text", Required: true},
+	{Name: "amount_kobo", Title: "Amount (kobo)", Type: "integer", Required: true},
+	{Name: "how", Title: "How", Type: "text", Required: true},
+	{Name: "by", Title: "By", Type: "text", Required: true},
+	{Name: "reasons", Title: "Why", Type: "text"},
+	{Name: "undoes", Title: "Undoes match", Type: "text"},
+	{Name: "matched_at", Title: "When", Type: "datetime", Required: true},
+}
+
+// Matches copies up to 200 of a tenant's waiting matches to
+// money_matches, each once, as entries are copied.
+func (m *Mirror) Matches(ctx context.Context, tenant uuid.UUID) error {
+	m.mu.Lock()
+	done := m.keptMatches[tenant]
+	m.mu.Unlock()
+	if !done {
+		if _, err := m.Tables.EnsureKept(ctx, tenant, MatchesTable, MatchesTable, MatchColumns); err != nil {
+			return fmt.Errorf("the money_matches table: %w", err)
+		}
+		m.mu.Lock()
+		if m.keptMatches == nil {
+			m.keptMatches = map[uuid.UUID]bool{}
+		}
+		m.keptMatches[tenant] = true
+		m.mu.Unlock()
+	}
+	type match struct {
+		id   uuid.UUID
+		row  map[string]any
+		when time.Time
+	}
+	var list []match
+	err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT p.id, p.entry_id, i.number, p.amount_kobo, p.how, p.by, p.reasons, p.undoes, p.created_at
+			FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
+			WHERE p.tenant_id = $1 AND p.mirrored_at IS NULL ORDER BY p.created_at, p.id LIMIT 200`, tenant)
+		if err != nil {
+			return err
+		}
+		list, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (match, error) {
+			var x match
+			var entry, undoes *uuid.UUID
+			var number, how, by string
+			var amount int64
+			var reasons []string
+			if err := r.Scan(&x.id, &entry, &number, &amount, &how, &by, &reasons, &undoes, &x.when); err != nil {
+				return x, err
+			}
+			x.row = map[string]any{"match_id": x.id.String(), "target": "invoice:" + number, "amount_kobo": amount, "how": how, "by": by,
+				"matched_at": x.when.UTC().Format(time.RFC3339Nano)}
+			if entry != nil {
+				x.row["entry_id"] = entry.String()
+			}
+			if undoes != nil {
+				x.row["undoes"] = undoes.String()
+			}
+			if len(reasons) > 0 {
+				x.row["reasons"] = strings.Join(reasons, "; ")
+			}
+			return x, nil
+		})
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	for _, x := range list {
+		found, err := m.Rows.Call(ctx, tenant, "read_rows", map[string]any{"table": MatchesTable, "limit": 1, "select": "match_id",
+			"filters": []any{map[string]any{"column": "match_id", "op": "eq", "value": x.id.String()}}}, "")
+		if err != nil {
+			return err
+		}
+		if rows, _ := found["rows"].([]any); len(rows) == 0 {
+			if _, err := m.Rows.Call(ctx, tenant, "insert_rows", map[string]any{"table": MatchesTable, "rows": []any{x.row}, "return": "minimal"}, rowKey(x.id)); err != nil {
+				return err
+			}
+		}
+		if err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE customer_invoice_payments SET mirrored_at = now() WHERE tenant_id = $1 AND id = $2 AND mirrored_at IS NULL`, tenant, x.id)
+			return err
+		}); err != nil {
+			return err
 		}
 	}
 	return nil

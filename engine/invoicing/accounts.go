@@ -415,23 +415,26 @@ func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Re
 	var x Invoice
 	var became bool
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var entry *uuid.UUID
+		if s.MoneyLog != nil {
+			// The same movement the rail's payment.received event is: one
+			// entry whichever is heard first, and the match names it.
+			amount := r.AmountKobo
+			id, _, err := s.MoneyLog.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: r.Connection,
+				Reference: r.PaymentID, Event: "payment.received", AmountKobo: &amount, Source: "lookup"})
+			if err != nil {
+				return err
+			}
+			entry = &id
+		}
 		var err error
-		x, became, err = s.RecordPayment(ctx, tx, tenant, invoice.String(), PaymentIn{AmountKobo: r.AmountKobo, PaymentID: r.PaymentID,
+		x, became, err = s.RecordPayment(ctx, tx, tenant, invoice.String(), PaymentIn{AmountKobo: r.AmountKobo, PaymentID: r.PaymentID, EntryID: entry,
 			Connection: r.Connection, How: "exact", By: "system:" + r.Connection, Reasons: []string{"paid into the account Taskiem gave for this invoice"}})
 		if err != nil {
 			return err
 		}
 		if r.Account != uuid.Nil {
-			if _, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account); err != nil {
-				return err
-			}
-		}
-		if s.MoneyLog != nil {
-			// The same movement the rail's payment.received event is: one
-			// entry whichever is heard first.
-			amount := r.AmountKobo
-			_, _, err = s.MoneyLog.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: r.Connection,
-				Reference: r.PaymentID, Event: "payment.received", AmountKobo: &amount, Source: "lookup", Note: "Invoice " + x.Number})
+			_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account)
 		}
 		return err
 	})
