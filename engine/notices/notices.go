@@ -40,6 +40,12 @@ const (
 	GroupFailures = "failures"
 	GroupSetup    = "setup"
 	GroupFinished = "finished"
+	// GroupMoney is the money summaries (docs/money-reports.md): chat is
+	// the daily summary, email the monthly email, each on its own. Only
+	// people who may read invoices have it; owners get both unless they
+	// turn them off, others neither unless they turn them on
+	// (MoneyDefault).
+	GroupMoney = "money"
 )
 
 // GroupOf is the settings group of a kind.
@@ -162,11 +168,20 @@ type Setting struct {
 }
 
 // Defaults: failures and setup problems reach owners on chat (else
-// email); finished runs only in the app.
+// email); finished runs only in the app. The money group's default depends
+// on the person (MoneyDefault).
 var Defaults = []Setting{{GroupFailures, true, true}, {GroupSetup, true, true}, {GroupFinished, false, false}}
 
-// SettingsTx are a person's settings, defaults filled in.
-func SettingsTx(ctx context.Context, tx pgx.Tx, user uuid.UUID) ([]Setting, error) {
+// MoneyDefault is the money group of a person who has not chosen: both
+// summaries for an owner, neither for anyone else.
+func MoneyDefault(owner bool) Setting {
+	return Setting{GroupMoney, owner, owner}
+}
+
+// SettingsTx are a person's settings in the tenant in scope, defaults
+// filled in; money adds the money group, for a person who may read
+// invoices.
+func SettingsTx(ctx context.Context, tx pgx.Tx, user uuid.UUID, money bool) ([]Setting, error) {
 	rows, err := tx.Query(ctx, `SELECT kind, chat, email FROM notification_settings WHERE user_id = $1`, user)
 	if err != nil {
 		return nil, err
@@ -192,16 +207,37 @@ func SettingsTx(ctx context.Context, tx pgx.Tx, user uuid.UUID) ([]Setting, erro
 			out = append(out, d)
 		}
 	}
+	if money {
+		s, ok := have[GroupMoney]
+		if !ok {
+			var owner bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1 AND role = 'owner')`, user).Scan(&owner); err != nil {
+				return nil, err
+			}
+			s = MoneyDefault(owner)
+		}
+		out = append(out, s)
+	}
 	return out, nil
 }
 
 // ErrUnknownGroup: a setting for a group that does not exist.
 var ErrUnknownGroup = errors.New("notices: unknown group")
 
-// SetTx saves a person's settings.
-func SetTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, settings []Setting) error {
+// ErrNoMoney: a money setting from a person who may not read invoices.
+var ErrNoMoney = errors.New("notices: the money summaries need invoice.read")
+
+// SetTx saves a person's settings; money says they may read invoices, and
+// so choose the money group.
+func SetTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, settings []Setting, money bool) error {
 	for _, s := range settings {
-		if s.Group != GroupFailures && s.Group != GroupSetup && s.Group != GroupFinished {
+		switch s.Group {
+		case GroupFailures, GroupSetup, GroupFinished:
+		case GroupMoney:
+			if !money {
+				return ErrNoMoney
+			}
+		default:
 			return ErrUnknownGroup
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO notification_settings (tenant_id, user_id, kind, chat, email) VALUES ($1, $2, $3, $4, $5)
@@ -215,7 +251,10 @@ func SetTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, settings []Se
 
 // Wants splits users by how they want a group beyond the app: chat (on
 // the chat they linked; email when they linked none, if they take email)
-// and email only.
+// and email only. For the money group, chat is the daily summary and
+// email the monthly email, each on its own, on by default for owners only;
+// whether a person may have it at all (invoice.read) is the caller's to
+// check.
 func Wants(ctx context.Context, tx pgx.Tx, users []uuid.UUID, group string) (chat, email []uuid.UUID, err error) {
 	if len(users) == 0 {
 		return nil, nil, nil
@@ -226,7 +265,11 @@ func Wants(ctx context.Context, tx pgx.Tx, users []uuid.UUID, group string) (cha
 			def = d
 		}
 	}
-	rows, err := tx.Query(ctx, `SELECT u, COALESCE(s.chat, $3), COALESCE(s.email, $4) FROM unnest($1::uuid[]) u
+	rows, err := tx.Query(ctx, `SELECT u,
+		  COALESCE(s.chat, CASE WHEN $2 = 'money' THEN o.owner ELSE $3 END),
+		  COALESCE(s.email, CASE WHEN $2 = 'money' THEN o.owner ELSE $4 END)
+		FROM unnest($1::uuid[]) u
+		CROSS JOIN LATERAL (SELECT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u AND m.role = 'owner') AS owner) o
 		LEFT JOIN notification_settings s ON s.user_id = u AND s.kind = $2`, users, group, def.Chat, def.Email)
 	if err != nil {
 		return nil, nil, err

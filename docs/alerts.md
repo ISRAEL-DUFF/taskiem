@@ -17,6 +17,8 @@ Repeats of one thing are one notification while it is unread, with a count ("Pay
 
 **Beyond the app.** Owners also hear of failures and setup problems on the WhatsApp or Telegram they linked, at most once per workflow and hour, else by email (`TASKIEM_SMTP_URL`). Each person chooses under **Notifications** (`GET`, `PUT /v1/me/notification-settings`): chat and email for failed runs, setup problems, and their own runs that finish (off by default). The app always shows everything.
 
+People who can read invoices (`invoice.read`) also have a **Money summaries** row (group `money`): **Daily money summary (chat)** is its chat choice and **Monthly money email** its email choice, on by default for owners and off for everyone else, who may turn them on. People without `invoice.read` do not see it, cannot set it (`403`) and never get the summaries ([money reports](money-reports.md#who-gets-them)). The choices are per business. More groups may be added; the web app shows a group it does not know with plain labels, and API clients should accept or skip one too.
+
 Rules stay for everything else: other channels (Slack, a webhook, a shared inbox), thresholds (a slow run, an approval waiting a day), and watching one workflow or environment.
 
 **API:** `GET /v1/notifications` (`?unread=true`, `?before=` to page), `GET /v1/notifications/count` (unread, and approvals waiting), `POST /v1/notifications/read` (`{"ids": [...]}` or `{"all": true}`). A person's own only: an API key has none.

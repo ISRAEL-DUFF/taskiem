@@ -2,20 +2,26 @@
 // (decision 0045; docs/spec/invoices-and-money-log.md 9.2, 9.3, T7;
 // docs/money-reports.md):
 //
-//   - every morning from 08:00 Lagos, yesterday's money to each owner on the
-//     chat they linked (WhatsApp before Telegram): money in, settled and
-//     pending, by channel, money out, invoices paid and leaks opened, with
-//     a link to the Money page. A day with no movement, no invoice paid and
-//     no leak opened sends nothing.
+//   - every morning from 08:00 Lagos, yesterday's money on the chat they
+//     linked (WhatsApp before Telegram): money in, settled and pending, by
+//     channel, money out, invoices paid and leaks opened, with a link to
+//     the Money page. A day with no movement, no invoice paid and no leak
+//     opened sends nothing.
 //   - on the 1st of the month from 09:00 Lagos (or on the 2nd or 3rd, when
-//     the scheduler was down), last month's summary to each owner by email,
-//     with a link to the Money page's exports. Only when email is set up.
+//     the scheduler was down), last month's summary by email, with a link
+//     to the Money page's exports. Only when email is set up.
+//
+// Who gets them is the money group of Settings > Notifications
+// (Recipients): active members who may read invoices, owners unless they
+// turned a summary off and others when they turned it on.
 //
 // Each summary is taken once per business, kind and period in
 // money_digests, in the transaction that queues it, so restarts and
-// several schedulers never send one twice. The chat message is an outbox
-// row (kind money_daily) naming the digest and the owner; the api role
-// renders and sends it (DailyText, DailyHead).
+// several schedulers never send one twice; its recipients are decided
+// then, so a person who turns the daily summary on later that day gets the
+// next one. The chat message is an outbox row (kind money_daily) naming
+// the digest and the person; the api role renders and sends it (DailyText,
+// DailyHead), and drops it when the person no longer Gets it.
 package moneydigest
 
 import (
@@ -23,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +43,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneyreport"
+	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -207,24 +215,57 @@ func take(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, kind string, period 
 	return id, err == nil && tag.RowsAffected() == 1, err
 }
 
-// IsOwner says whether user is an active owner of the tenant in scope.
-func IsOwner(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (bool, error) {
-	var ok bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships ms JOIN users u ON u.id = ms.user_id
-		WHERE ms.tenant_id = $1 AND ms.user_id = $2 AND ms.role = 'owner' AND u.status = 'active')`, tenant, user).Scan(&ok)
-	return ok, err
-}
+// Roles are the built-in roles and whether each may read invoices
+// (invoice.read): the api's role table, kept equal to it by a test there.
+// Any other role is a custom one, which may read invoices when its
+// permissions say so, or a business role, which may not.
+var Roles = map[string]bool{"owner": true, "admin": true, "builder": false, "operator": true, "approver": false, "auditor": true, "viewer": true}
 
-func owners(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]uuid.UUID, error) {
+// readers are the tenant's active members who may read invoices.
+func readers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]uuid.UUID, error) {
+	var builtin, read []string
+	for r, ok := range Roles {
+		builtin = append(builtin, r)
+		if ok {
+			read = append(read, r)
+		}
+	}
 	rows, err := tx.Query(ctx, `SELECT DISTINCT ms.user_id FROM memberships ms JOIN users u ON u.id = ms.user_id
-		WHERE ms.tenant_id = $1 AND ms.role = 'owner' AND u.status = 'active' ORDER BY ms.user_id`, tenant)
+		WHERE ms.tenant_id = $1 AND u.status = 'active'
+		  AND CASE WHEN ms.role = ANY ($2) THEN ms.role = ANY ($3)
+		      ELSE EXISTS (SELECT 1 FROM roles r WHERE r.tenant_id = ms.tenant_id AND r.name = ms.role AND 'invoice.read' = ANY (r.permissions)) END
+		ORDER BY ms.user_id`, tenant, builtin, read)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }
 
-// daily queues yesterday's summary to each owner with a linked chat.
+// Recipients are who get a business's summary of kind (Daily or Monthly)
+// now: its active members who may read invoices and want it (Settings >
+// Notifications, the money group: chat is the daily summary, email the
+// monthly email; owners by default, others when they turned it on).
+func Recipients(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, kind string) ([]uuid.UUID, error) {
+	us, err := readers(ctx, tx, tenant)
+	if err != nil || len(us) == 0 {
+		return nil, err
+	}
+	daily, monthly, err := notices.Wants(ctx, tx, us, notices.GroupMoney)
+	if kind == Daily {
+		return daily, err
+	}
+	return monthly, err
+}
+
+// Gets says whether user still gets the business's summary of kind: what
+// the outbox asks before sending one queued earlier, since the person may
+// have turned it off, or lost invoice.read, since.
+func Gets(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, kind string) (bool, error) {
+	us, err := Recipients(ctx, tx, tenant, kind)
+	return slices.Contains(us, user), err
+}
+
+// daily queues yesterday's summary to each recipient with a linked chat.
 func (d *Digester) daily(ctx context.Context, tenant uuid.UUID, day time.Time) (bool, error) {
 	sent := false
 	err := db.InTenantTx(ctx, d.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -243,11 +284,11 @@ func (d *Digester) daily(ctx context.Context, tenant uuid.UUID, day time.Time) (
 			_, _, err = take(ctx, tx, tenant, Daily, day, "quiet")
 			return err
 		}
-		us, err := owners(ctx, tx, tenant)
+		us, err := Recipients(ctx, tx, tenant, Daily)
 		if err != nil {
 			return err
 		}
-		// Each owner once, on the first channel they linked: WhatsApp
+		// Each person once, on the first channel they linked: WhatsApp
 		// before Telegram.
 		type to struct {
 			user    uuid.UUID
@@ -310,7 +351,7 @@ func (d *Digester) runs(channel string) bool {
 	return false
 }
 
-// monthly emails last month's summary to each owner with an email.
+// monthly emails last month's summary to each recipient with an email.
 func (d *Digester) monthly(ctx context.Context, tenant uuid.UUID, month time.Time) (bool, error) {
 	var to []string
 	var subject, body string
@@ -331,8 +372,11 @@ func (d *Digester) monthly(ctx context.Context, tenant uuid.UUID, month time.Tim
 			_, _, err = take(ctx, tx, tenant, Monthly, month, "quiet")
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT DISTINCT u.email FROM memberships ms JOIN users u ON u.id = ms.user_id
-			WHERE ms.tenant_id = $1 AND ms.role = 'owner' AND u.status = 'active' AND COALESCE(u.email, '') <> '' ORDER BY u.email`, tenant)
+		us, err := Recipients(ctx, tx, tenant, Monthly)
+		if err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT DISTINCT email FROM users WHERE id = ANY ($1) AND COALESCE(email, '') <> '' ORDER BY email`, us)
 		if err != nil {
 			return err
 		}
@@ -355,7 +399,7 @@ func (d *Digester) monthly(ctx context.Context, tenant uuid.UUID, month time.Tim
 	if err != nil || len(to) == 0 {
 		return false, err
 	}
-	// Sent after the transaction, one owner at a time. When none could be
+	// Sent after the transaction, one person at a time. When none could be
 	// sent, the digest is let go so a later look tries again.
 	ok := 0
 	var errs []error
@@ -373,10 +417,10 @@ func (d *Digester) monthly(ctx context.Context, tenant uuid.UUID, month time.Tim
 		}); err != nil {
 			errs = append(errs, err)
 		}
-		return false, fmt.Errorf("emailing the owners: %w", errors.Join(errs...))
+		return false, fmt.Errorf("emailing the summary: %w", errors.Join(errs...))
 	}
 	if len(errs) > 0 {
-		d.log().Warn("money digests: emailing an owner", "tenant", tenant, "err", errors.Join(errs...))
+		d.log().Warn("money digests: emailing a person", "tenant", tenant, "err", errors.Join(errs...))
 	}
 	return true, nil
 }
