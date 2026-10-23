@@ -25,7 +25,7 @@ On the VPS:
 curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/install.sh | sudo bash
 ```
 
-It asks for the host name, the owner's email, the organisation's name, the database URL, SMTP, a [Telegram](telegram.md) bot token if you want the chat channel (it generates the webhook secret and signing key itself), the release channel (staging or production), the upgrade window, where to send alerts, and the backup bucket. Then, without further questions, it:
+It asks for the host name, the owner's email, the organisation's name, the database URL, SMTP, a [Telegram](telegram.md) bot token if you want the chat channel (it generates the webhook secret and signing key itself), the iswallet and Payrolla API URLs (empty keeps each connector's default; **iswallet's default is its sandbox, so no real money moves until you give its production URL**, and setup warns on the production channel), the release channel (staging or production), the upgrade window, where to send alerts, and the backup bucket. Then, without further questions, it:
 
 1. installs Docker, cosign and the firewall rules (SSH, HTTP and HTTPS in; nothing else);
 2. picks the newest release on the channel and checks its signature: only images signed by this repository's CI are accepted;
@@ -39,7 +39,7 @@ It ends by writing a **recovery sheet** to `/root/taskiem-recovery-<date>.txt`: 
 
 Re-run `sudo taskiem-vps setup` any time to change an answer; it keeps every secret and skips what is done.
 
-**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, with `TASKIEM_VPS_NONINTERACTIVE=1`.
+**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_ISWALLET_URL`, `_PAYROLLA_URL`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, with `TASKIEM_VPS_NONINTERACTIVE=1`.
 
 ## Releases
 
