@@ -66,6 +66,7 @@ VALUES ('ada.shops.example.com', '<tenant id>', 'storefront', gen_random_uuid(),
 | `GET/POST /r/{token}`, `POST /r/{token}/code` | A `link` form through its one-time link. A link bound to a person asks for the code sent to them first |
 | `GET/POST /q/{token}`, `POST /q/{token}/code` | A form step's request: its questions, prefilled from the run; the code first when the step asks for one |
 | `GET /s/{reference}?k=` | A status link (`after.status: true`): the state in plain words and the workflow's latest message, nothing else |
+| `GET /i/{token}` | An [invoice's page](invoices.md#the-invoices-page), read-only, in the business's look: its lines, totals, status, due date and note, nothing about the customer. A malformed, unknown or draft's token answers the same 404 "This invoice was not found". Read with `taskiem_public_customer_invoice` (and `taskiem_public_brand` for the name); it does not need `TASKIEM_PUBLIC_KEY` |
 | `POST /report` | Reports a form. For now it is logged (`form host: a form was reported`) and answered 204; the operator console's queue comes later |
 
 How the pages behave:

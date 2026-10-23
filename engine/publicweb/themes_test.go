@@ -26,7 +26,7 @@ func TestEveryThemeHasEveryPage(t *testing.T) {
 	for _, theme := range brand.Themes {
 		got := names(theme)
 		for _, page := range []string{"storefront.html", "form.html", "booking.html", "hostedform.html", "formdone.html", "formclosed.html", "formapp.html",
-			"status.html", "report.html", "reach.html", "notfound.html", "setup.html", "unavailable.html", "embedsetup.html",
+			"status.html", "invoice.html", "report.html", "reach.html", "notfound.html", "setup.html", "unavailable.html", "embedsetup.html",
 			"fhead", "fbody", "ffoot", "head", "foot", "hfield", "meta", "og", "guard", "safety"} {
 			if !slices.Contains(got, page) {
 				t.Errorf("%s has no %s", theme, page)

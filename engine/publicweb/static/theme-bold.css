@@ -148,3 +148,11 @@ legend { padding: 0; font-size: 1.25rem; font-weight: 900; letter-spacing: -.01e
 .step:last-child { background: var(--brand); color: var(--on-brand); }
 .stepper .qty::-webkit-inner-spin-button, .stepper .qty::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 @media (min-width: 40rem) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* An invoice's page */
+.inv .line { justify-content: space-between; }
+.inv-what { flex: 1; display: flex; flex-direction: column; font-weight: 800; }
+.inv-sums { display: grid; grid-template-columns: 1fr auto; gap: .375rem 1rem; margin: 0; }
+.inv-sums dd { margin: 0; text-align: right; font-weight: 700; }
+.inv-sums .inv-due { font-size: 1.5rem; font-weight: 900; }
+.inv-note { white-space: pre-line; }

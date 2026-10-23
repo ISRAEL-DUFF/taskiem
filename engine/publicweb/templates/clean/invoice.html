@@ -1,0 +1,15 @@
+{{template "fhead" .}}{{template "fbody" .}}
+<h1>Invoice {{.Number}}</h1>
+<p class="facts"><span class="badge">{{.Status}}</span>{{with .DueOn}}<span>{{.}}</span>{{end}}</p>
+{{with .Message}}<p class="notice" role="status">{{.}}</p>{{end}}
+<div class="panel inv">
+{{range .Lines}}<div class="line"><div class="inv-what"><span>{{.Description}}</span> <span class="line-price">{{.Each}}</span></div><span>{{.Amount}}</span></div>
+{{end}}<dl class="inv-sums">
+<dt>Total</dt><dd>{{.Total}}</dd>
+{{with .Paid}}<dt>Paid</dt><dd>{{.}}</dd>
+{{end}}{{with .Due}}<dt>Still due</dt><dd class="inv-due">{{.}}</dd>
+{{end}}</dl>
+</div>
+{{with .Note}}<div class="panel"><p class="inv-note">{{.}}</p></div>{{end}}
+{{if .Payable}}<p class="hint center">Payment options will appear here soon.</p>{{end}}
+{{template "ffoot" .}}
