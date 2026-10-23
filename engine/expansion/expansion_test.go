@@ -266,3 +266,24 @@ func TestAwaitPaymentOnEachRail(t *testing.T) {
 		t.Error("iswallet made a payment page")
 	}
 }
+
+// Flutterwave sends no reversal event: its watch looks the payout up when
+// the watch ends.
+func TestReversalWatchByLookup(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_w","version":1,"name":"w","trigger":{"type":"manual"},"steps":[
+	  {"id":"back","type":"capability","uses":"await_reversal","connection":"rail","timeout":"35d","input":{"payout_id":"=trigger.body.payout"}}]}`
+	d, _, err := expand(t, doc, expansion.Connection{Name: "rail", Connector: "flutterwave"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if look := d.Step("back__lookup"); look == nil || look.Capability.Uses != "get_payout" || look.Connector != "flutterwave@1" {
+		t.Fatalf("lookup %+v", look)
+	}
+	if d.Step("back__reversed") != nil {
+		t.Error("a signal for an event Flutterwave never sends")
+	}
+	b, _ := json.Marshal(d.Step("back").Transform.Output)
+	if !strings.Contains(string(b), "back__lookup") {
+		t.Errorf("outcome %s", b)
+	}
+}

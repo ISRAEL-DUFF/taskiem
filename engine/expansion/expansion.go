@@ -426,11 +426,14 @@ func (x *expander) wait(st map[string]any) ([]any, error) {
 			"config": map[string]any{"event": capability.SignalName(r.Ref, ev), "correlation": corr, "timeout": timeout},
 		}}})
 	}
-	if len(branches) == 0 {
+	// A rail that sends no reversal event (Flutterwave) is watched by
+	// looking the payout up when the watch ends.
+	byLookup := len(branches) == 0 && uses == "await_reversal"
+	if len(branches) == 0 && !byLookup {
 		return nil, &Refusal{Step: id, Message: fmt.Sprintf("%s sends no %s event", r.Name, strings.Join(events, " or "))}
 	}
 	deadlineSteps := []any{map[string]any{"id": deadline, "type": "wait", "name": "Deadline", "config": map[string]any{"duration": timeout}}}
-	if uses == "await_settlement" {
+	if uses == "await_settlement" || byLookup {
 		look, err := x.lookup(lookup, deadline, id, r, corr)
 		if err != nil {
 			return nil, err
@@ -438,8 +441,16 @@ func (x *expander) wait(st map[string]any) ([]any, error) {
 		deadlineSteps = append(deadlineSteps, look)
 	}
 	branches = append(branches, map[string]any{"name": "deadline", "steps": deadlineSteps})
+	join := "any"
+	if byLookup {
+		// Nothing to race: the lookup alone says how the watch ended
+		// (a parallel needs two branches, so the other does nothing).
+		branches = append(branches, map[string]any{"name": "no_event", "steps": []any{map[string]any{
+			"id": id + "__no_event", "type": "transform", "name": r.Name + " sends no reversal event", "config": map[string]any{"output": map[string]any{}}}}})
+		join = "all"
+	}
 	race := map[string]any{"id": waitID, "type": "parallel", "name": capability.WaitTitle(uses) + " (" + r.Name + ")",
-		"config": map[string]any{"branches": branches, "join": "any"}}
+		"config": map[string]any{"branches": branches, "join": join}}
 	for _, k := range []string{"needs", "when"} {
 		if v, ok := st[k]; ok {
 			race[k] = v
@@ -577,10 +588,11 @@ func outcome(uses, race, id, lookup string) string {
 	field := func(branch, f string) string {
 		return race + ".?" + branch + ".?" + id + "__" + branch + ".?fields.?" + f
 	}
-	if uses == "await_reversal" {
-		return "={'status': " + won("reversed") + ".hasValue() ? 'reversed' : 'none', ?'reason': " + field("reversed", "reason") + "}"
-	}
 	look := func(f string) string { return race + ".?deadline.?" + lookup + ".?" + f }
+	if uses == "await_reversal" {
+		return "={'status': " + won("reversed") + ".hasValue() || " + look("status") + ".orValue('') == 'reversed' ? 'reversed' : 'none', " +
+			"?'reason': " + field("reversed", "reason") + ".or(" + look("reason") + ")}"
+	}
 	lstatus := look("status") + ".orValue('pending')"
 	return "={'status': " + won("settled") + ".hasValue() ? 'settled' : (" + won("failed") + ".hasValue() || " + won("reversed") + ".hasValue()) ? 'failed' : " +
 		lstatus + " == 'settled' ? 'settled' : " + lstatus + " in ['failed', 'reversed'] ? 'failed' : 'unconfirmed', " +

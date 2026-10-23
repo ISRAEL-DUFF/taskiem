@@ -1,0 +1,286 @@
+{
+  "schema": "wd-test/v1",
+  "template": "payment-link-per-order",
+  "params": {
+    "business_name": "Ada's Kitchen",
+    "pay_hours": 24
+  },
+  "cases": [
+    {
+      "name": "the customer gets a link, pays, is thanked and the order is recorded paid",
+      "trigger": {
+        "body": {
+          "order": "AD-1042",
+          "name": "Ngozi Okafor",
+          "email": "ngozi@example.com",
+          "phone": "+2348030000001",
+          "amount_naira": 12500
+        }
+      },
+      "mocks": {
+        "link": {
+          "output": {
+            "payment_url": "https://pay.example/AD-1042",
+            "payment_id": "ref_1042"
+          }
+        },
+        "send_link": {
+          "output": {
+            "ok": true
+          }
+        },
+        "thank": {
+          "output": {
+            "ok": true
+          }
+        },
+        "remind": {
+          "output": {
+            "ok": true
+          }
+        },
+        "thank_late": {
+          "output": {
+            "ok": true
+          }
+        },
+        "record_paid": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "record_late": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "record_unpaid": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_unpaid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "paid": {
+          "output": {
+            "status": "paid",
+            "amount_kobo": 1250000,
+            "paid_at": "2026-10-23T12:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "link": {
+            "amount_kobo": 1250000,
+            "customer": {
+              "name": "Ngozi Okafor",
+              "email": "ngozi@example.com"
+            },
+            "description": "Order AD-1042"
+          },
+          "send_link": {
+            "phone": "+2348030000001",
+            "message": "Ada's Kitchen: to pay for order AD-1042 (NGN 12500), use https://pay.example/AD-1042"
+          },
+          "paid": {
+            "payment_id": "ref_1042"
+          },
+          "record_paid": {
+            "table": "order_payments",
+            "row": {
+              "order_ref": "AD-1042",
+              "status": "paid",
+              "payment_id": "ref_1042",
+              "paid_at": "2026-10-23T12:00:00Z"
+            }
+          }
+        },
+        "steps": {
+          "thank": "completed",
+          "remind": "skipped",
+          "paid_late": "skipped",
+          "tell_unpaid": "skipped"
+        }
+      }
+    },
+    {
+      "name": "an unpaid order is reminded once, then paid",
+      "trigger": {
+        "body": {
+          "order": "AD-1042",
+          "name": "Ngozi Okafor",
+          "email": "ngozi@example.com",
+          "phone": "+2348030000001",
+          "amount_naira": 12500
+        }
+      },
+      "mocks": {
+        "link": {
+          "output": {
+            "payment_url": "https://pay.example/AD-1042",
+            "payment_id": "ref_1042"
+          }
+        },
+        "send_link": {
+          "output": {
+            "ok": true
+          }
+        },
+        "thank": {
+          "output": {
+            "ok": true
+          }
+        },
+        "remind": {
+          "output": {
+            "ok": true
+          }
+        },
+        "thank_late": {
+          "output": {
+            "ok": true
+          }
+        },
+        "record_paid": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "record_late": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "record_unpaid": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_unpaid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "paid": {
+          "output": {
+            "status": "unpaid"
+          }
+        },
+        "paid_late": {
+          "output": {
+            "status": "paid"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "thank": "skipped",
+          "remind": "completed",
+          "thank_late": "completed",
+          "record_late": "completed",
+          "record_unpaid": "skipped"
+        },
+        "calls": {
+          "remind": 1,
+          "send_link": 1
+        }
+      }
+    },
+    {
+      "name": "an order still unpaid after the reminder is recorded unpaid and the owner told",
+      "trigger": {
+        "body": {
+          "order": "AD-1042",
+          "name": "Ngozi Okafor",
+          "email": "ngozi@example.com",
+          "phone": "+2348030000001",
+          "amount_naira": 12500
+        }
+      },
+      "mocks": {
+        "link": {
+          "output": {
+            "payment_url": "https://pay.example/AD-1042",
+            "payment_id": "ref_1042"
+          }
+        },
+        "send_link": {
+          "output": {
+            "ok": true
+          }
+        },
+        "thank": {
+          "output": {
+            "ok": true
+          }
+        },
+        "remind": {
+          "output": {
+            "ok": true
+          }
+        },
+        "thank_late": {
+          "output": {
+            "ok": true
+          }
+        },
+        "record_paid": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "record_late": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "record_unpaid": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_unpaid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "paid": {
+          "output": {
+            "status": "unpaid"
+          }
+        },
+        "paid_late": {
+          "output": {
+            "status": "unpaid"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "record_unpaid": "completed",
+          "tell_unpaid": "completed",
+          "thank_late": "skipped"
+        },
+        "inputs": {
+          "record_unpaid": {
+            "row": {
+              "order_ref": "AD-1042",
+              "status": "unpaid"
+            }
+          },
+          "tell_unpaid": {
+            "to": "owner",
+            "message": "Order AD-1042 for Ngozi Okafor (NGN 12500) is still not paid after a reminder."
+          }
+        }
+      }
+    }
+  ]
+}

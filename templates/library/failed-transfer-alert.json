@@ -1,39 +1,141 @@
 {
   "id": "failed-transfer-alert",
   "title": "Alert when a transfer fails or is reversed",
-  "summary": "When a Paystack transfer fails or is reversed, tell the owner and email the accountant at once.",
-  "description": "Whenever Paystack reports that a transfer you sent failed or was reversed, tells the owner and emails the accountant the reference, amount and reason, at the same time, so someone can retry or contact the recipient. The owner hears on the WhatsApp or Telegram they linked to Taskiem (or by email); the accountant's email is the tenant variable accountant_email.",
+  "summary": "When a payment you sent fails or comes back, tell the owner and email the accountant at once.",
+  "description": "Whenever your payments account reports that a payment you sent failed, or came back after it had arrived, tells the owner and emails the accountant its reference and the reason, so someone can check the account details and pay again. Works with Paystack, Moniepoint, iswallet, Flutterwave or Anchor; the owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
   "category": "alerts",
-  "tags": ["alerts", "payments", "transfers", "failures", "paystack", "sms", "email"],
-  "keywords": ["failed", "fails", "failure", "reversed", "reversal", "transfer", "payout", "alert", "notify", "bounce"],
-  "connectors": ["paystack@1", "notify@1", "gmail@1"],
+  "tags": [
+    "alerts",
+    "payments",
+    "transfers",
+    "failures",
+    "email"
+  ],
+  "keywords": [
+    "failed",
+    "fails",
+    "failure",
+    "reversed",
+    "reversal",
+    "transfer",
+    "payout",
+    "alert",
+    "notify",
+    "bounce"
+  ],
+  "connectors": [
+    "notify@1",
+    "gmail@1",
+    "capability:payout.failed",
+    "capability:payout.reversed"
+  ],
   "variables": [
-    {"name": "accountant_email", "why": "The accountant's email address."}
+    {
+      "name": "accountant_email",
+      "why": "The accountant's email address."
+    }
   ],
   "params": [
-    {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack connection whose webhooks start this workflow.", "required": false, "default": "main", "example": "main"},
-    {"name": "gmail_connection", "type": "connection", "connector": "gmail", "title": "Gmail connection", "description": "The mailbox the email is sent from.", "required": false, "default": "main", "example": "main"}
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "payout.failed",
+        "payout.reversed"
+      ],
+      "title": "Payments account",
+      "description": "Whose failed payments to report; every connected payments account when left blank.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "gmail_connection",
+      "type": "connection",
+      "connector": "gmail",
+      "title": "Gmail connection",
+      "description": "The mailbox the email is sent from.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
   ],
   "definition": {
     "schema": "wd/v1",
     "id": "wf_failedTransferAlert",
     "version": 1,
     "name": "Alert when a transfer fails or is reversed",
-    "trigger": {"type": "connector_event", "config": {"connector": "paystack@1", "trigger": "transfer_event", "events": ["transfer.failed", "transfer.reversed"], "connection": "{{paystack_connection}}"}},
-    "inputs": {"schema": {"type": "object", "properties": {"event": {"type": "string"}, "data": {"type": "object", "properties": {
-      "reference": {"type": "string"}, "amount": {"type": "integer"}, "reason": {"type": "string"}}}}}},
+    "trigger": {
+      "type": "capability_event",
+      "config": {
+        "events": [
+          "payout.failed",
+          "payout.reversed"
+        ],
+        "connection": "{{rail_connection}}"
+      }
+    },
     "steps": [
-      {"id": "message", "type": "transform", "name": "Write the alert",
-       "config": {"output": {"text": "='Paystack transfer ' + trigger.body.data.reference + ' ' + (trigger.event == 'transfer.reversed' ? 'was REVERSED' : 'FAILED') + ': NGN ' + string(double(trigger.body.data.amount) / 100.0) + (has(trigger.body.data.reason) && trigger.body.data.reason != '' ? ' (' + trigger.body.data.reason + ')' : '')"}}},
-      {"id": "notify", "type": "parallel", "name": "Tell the owner and the accountant", "needs": ["message"], "config": {"branches": [
-        {"name": "owner_sms", "steps": [
-          {"id": "text_owner", "type": "connector", "name": "Tell the owner", "connector": "notify@1", "action": "tell",
-           "input": {"message": "=steps.message.output.text"}}]},
-        {"name": "accountant_email", "steps": [
-          {"id": "email_accountant", "type": "connector", "name": "Email the accountant", "connector": "gmail@1", "action": "send_message", "connection": "{{gmail_connection}}",
-           "input": {"to": ["=env.accountant_email"], "subject": "Transfer failed or reversed", "text": "=steps.message.output.text"}}]}
-      ]}}
+      {
+        "id": "message",
+        "type": "transform",
+        "name": "Write the alert",
+        "config": {
+          "output": {
+            "text": "='A payment you sent (' + trigger.fields.payout_id + ') ' + (trigger.event == 'payout.reversed' ? 'came back from the bank' : 'failed') + (has(trigger.fields.reason) && trigger.fields.reason != '' ? ': ' + trigger.fields.reason : '') + '.'"
+          }
+        }
+      },
+      {
+        "id": "notify",
+        "type": "parallel",
+        "name": "Tell the owner and the accountant",
+        "needs": [
+          "message"
+        ],
+        "config": {
+          "branches": [
+            {
+              "name": "owner_sms",
+              "steps": [
+                {
+                  "id": "text_owner",
+                  "type": "connector",
+                  "name": "Tell the owner",
+                  "connector": "notify@1",
+                  "action": "tell",
+                  "input": {
+                    "message": "=steps.message.output.text"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "accountant_email",
+              "steps": [
+                {
+                  "id": "email_accountant",
+                  "type": "connector",
+                  "name": "Email the accountant",
+                  "connector": "gmail@1",
+                  "action": "send_message",
+                  "connection": "{{gmail_connection}}",
+                  "input": {
+                    "to": [
+                      "=env.accountant_email"
+                    ],
+                    "subject": "=trigger.event == 'payout.reversed' ? 'A payment came back' : 'A payment failed'",
+                    "text": "=steps.message.output.text"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
     ],
-    "settings": {"timeout": "15m"}
+    "settings": {
+      "timeout": "15m"
+    }
   }
 }

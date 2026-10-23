@@ -1,43 +1,293 @@
 {
   "id": "supplier-payment-approval",
   "title": "Pay a supplier after approval",
-  "summary": "Enter a supplier invoice, get it approved, then pay it by Paystack transfer and tell the owner the result.",
-  "description": "Start it with the supplier's name, Paystack transfer recipient code, the amount in naira and the invoice number. Someone with the approver role approves or rejects it; only an approved invoice is paid, once (the invoice number is the payment's idempotency key, so a retry never pays twice). The owner is told the outcome; the owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
+  "summary": "Enter a supplier invoice, get it approved, then pay it to the supplier's bank account and tell the owner the result.",
+  "description": "Start it with the supplier, their bank account, the amount in naira and the invoice number. Taskiem finds the name on the account with your payments account, and someone with the approver role approves or rejects the payment, seeing that name. Only an approved invoice is paid, once (the invoice number is the payment's key, so a retry never pays twice), and Taskiem waits for the bank to confirm it. The owner is told the outcome. Works with Paystack, Moniepoint, iswallet, Flutterwave or Anchor.",
   "category": "suppliers",
-  "tags": ["suppliers", "payments", "approval", "invoices", "paystack", "sms"],
-  "keywords": ["supplier", "suppliers", "vendor", "invoice", "pay", "payment", "approve", "approval", "transfer", "bill"],
-  "connectors": ["paystack@1", "notify@1"],
+  "tags": [
+    "suppliers",
+    "payments",
+    "approval",
+    "invoices"
+  ],
+  "keywords": [
+    "supplier",
+    "suppliers",
+    "vendor",
+    "invoice",
+    "pay",
+    "payment",
+    "approve",
+    "approval",
+    "transfer",
+    "bill"
+  ],
+  "connectors": [
+    "notify@1",
+    "capability:pay_bank",
+    "capability:resolve_account"
+  ],
   "variables": [],
   "params": [
-    {"name": "approver_role", "type": "string", "title": "Who approves", "description": "The role that approves supplier payments.", "required": false, "default": "owner", "example": "owner", "pattern": "^[a-z][a-z0-9_]{0,39}$", "picker": "role"},
-    {"name": "max_amount", "type": "number", "title": "Largest payment (naira)", "description": "Invoices above this are refused when entered.", "required": false, "default": 5000000, "example": 5000000, "minimum": 1, "maximum": 1000000000},
-    {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The Paystack account suppliers are paid from.", "required": false, "default": "main", "example": "main"}
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role that approves supplier payments.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    },
+    {
+      "name": "max_amount",
+      "type": "number",
+      "title": "Largest payment (naira)",
+      "description": "Invoices above this are refused when entered.",
+      "required": false,
+      "default": 5000000,
+      "example": 5000000,
+      "minimum": 1,
+      "maximum": 1000000000
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "pay_bank",
+        "resolve_account"
+      ],
+      "title": "Pay from",
+      "description": "The payments account suppliers are paid from: any you connected that can pay bank accounts.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet to pay from",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one payments come out of. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    }
   ],
   "definition": {
     "schema": "wd/v1",
     "id": "wf_supplierPaymentApproval",
     "version": 1,
     "name": "Pay a supplier after approval",
-    "trigger": {"type": "manual"},
-    "inputs": {"schema": {"type": "object", "required": ["supplier", "recipient_code", "amount_naira", "invoice_number"], "additionalProperties": false, "properties": {
-      "supplier": {"type": "string", "minLength": 1, "maxLength": 100, "title": "Supplier"},
-      "recipient_code": {"type": "string", "minLength": 4, "maxLength": 60, "title": "Who to pay", "description": "The supplier's bank and account number; Taskiem shows the name on the account to confirm.", "format": "paystack-recipient"},
-      "amount_naira": {"type": "number", "minimum": 1, "maximum": "{{max_amount}}", "title": "Amount (naira)"},
-      "invoice_number": {"type": "string", "minLength": 1, "maxLength": 60, "title": "Invoice number"}}}},
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "supplier",
+          "bank_code",
+          "account_number",
+          "amount_naira",
+          "invoice_number"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "supplier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "title": "Supplier"
+          },
+          "bank_code": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 6,
+            "title": "Bank",
+            "description": "The supplier's bank, such as 058 for GTBank."
+          },
+          "account_number": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 10,
+            "title": "Account number"
+          },
+          "amount_naira": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": "{{max_amount}}",
+            "title": "Amount (naira)"
+          },
+          "invoice_number": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "title": "Invoice number"
+          }
+        }
+      }
+    },
     "steps": [
-      {"id": "approve_payment", "type": "approval", "name": "Get the payment approved",
-       "config": {"role": "{{approver_role}}", "count": 1, "timeout": "48h",
-         "subject": {"supplier": "=trigger.body.supplier", "amount_naira": "=trigger.body.amount_naira", "invoice": "=trigger.body.invoice_number"}}},
-      {"id": "pay_supplier", "type": "connector", "name": "Pay the supplier by Paystack transfer", "connector": "paystack@1", "action": "transfer", "connection": "{{paystack_connection}}", "needs": ["approve_payment"],
-       "when": "=steps.approve_payment.output.decision == 'approved'",
-       "input": {"amount": "=int(double(trigger.body.amount_naira) * 100.0)", "recipient": "=trigger.body.recipient_code", "reason": "='Invoice ' + trigger.body.invoice_number"},
-       "effect": {"idempotency_seed": "='supplier-invoice:' + trigger.body.invoice_number"}},
-      {"id": "text_paid", "type": "connector", "name": "Tell the owner that the supplier was paid", "connector": "notify@1", "action": "tell", "needs": ["pay_supplier"],
-       "input": {"message": "='Paystack transfer for invoice ' + trigger.body.invoice_number + ' to ' + trigger.body.supplier + ' (NGN ' + string(trigger.body.amount_naira) + '): ' + steps.pay_supplier.output.status"}},
-      {"id": "text_rejected", "type": "connector", "name": "Tell the owner that nothing was paid", "connector": "notify@1", "action": "tell", "needs": ["approve_payment"],
-       "when": "=steps.approve_payment.output.decision != 'approved'",
-       "input": {"message": "='Invoice ' + trigger.body.invoice_number + ' from ' + trigger.body.supplier + ' was not approved; nothing was paid.'"}}
+      {
+        "id": "check_name",
+        "type": "capability",
+        "uses": "resolve_account",
+        "name": "Find the name on the supplier's account",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number"
+        }
+      },
+      {
+        "id": "approve_payment",
+        "type": "approval",
+        "name": "Get the payment approved",
+        "needs": [
+          "check_name"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "48h",
+          "on_timeout": "reject",
+          "subject": {
+            "supplier": "=trigger.body.supplier",
+            "account_name": "=steps.check_name.output.account_name",
+            "amount_naira": "=trigger.body.amount_naira",
+            "invoice": "=trigger.body.invoice_number"
+          }
+        }
+      },
+      {
+        "id": "pay_supplier",
+        "type": "capability",
+        "uses": "pay_bank",
+        "name": "Pay the supplier",
+        "connection": "{{rail_connection}}",
+        "needs": [
+          "check_name",
+          "approve_payment"
+        ],
+        "when": "=steps.approve_payment.output.decision == 'approved'",
+        "input": {
+          "amount_kobo": "=int(math.round(double(trigger.body.amount_naira) * 100.0))",
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number",
+          "account_name": "=steps.check_name.output.account_name",
+          "narration": "='Invoice ' + trigger.body.invoice_number",
+          "source": "{{funding_account}}"
+        },
+        "effect": {
+          "idempotency_seed": "='supplier-invoice:' + trigger.body.invoice_number"
+        },
+        "retry": {
+          "max": 8,
+          "backoff": "exponential",
+          "initial": "5s",
+          "max_delay": "10m",
+          "max_duration": "6h"
+        }
+      },
+      {
+        "id": "settle",
+        "type": "capability",
+        "uses": "await_settlement",
+        "name": "Wait for the bank to confirm",
+        "needs": [
+          "pay_supplier"
+        ],
+        "timeout": "72h",
+        "when": "=steps.pay_supplier.output.status == 'pending'",
+        "input": {
+          "payout_id": "=steps.pay_supplier.output.payout_id"
+        }
+      },
+      {
+        "id": "text_paid",
+        "type": "connector",
+        "name": "Tell the owner how the payment went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "pay_supplier"
+        ],
+        "input": {
+          "message": "='Payment for invoice ' + trigger.body.invoice_number + ' to ' + trigger.body.supplier + ' (NGN ' + string(trigger.body.amount_naira) + '): ' + (steps.pay_supplier.output.status == 'settled' ? 'paid' : 'failed')"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "text_paid_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        },
+        "when": "=steps.pay_supplier.output.status != 'pending'"
+      },
+      {
+        "id": "text_settled",
+        "type": "connector",
+        "name": "Tell the owner how the payment went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settle"
+        ],
+        "input": {
+          "message": "='Payment for invoice ' + trigger.body.invoice_number + ' to ' + trigger.body.supplier + ' (NGN ' + string(trigger.body.amount_naira) + '): ' + (steps.settle.output.status == 'settled' ? 'paid' : steps.settle.output.status)"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "text_settled_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "text_rejected",
+        "type": "connector",
+        "name": "Tell the owner that nothing was paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "approve_payment"
+        ],
+        "input": {
+          "message": "='Invoice ' + trigger.body.invoice_number + ' from ' + trigger.body.supplier + ' was not approved; nothing was paid.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "text_rejected_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        },
+        "when": "=steps.approve_payment.output.decision != 'approved'"
+      }
     ],
-    "settings": {"timeout": "72h"}
+    "settings": {
+      "timeout": "7d"
+    }
   }
 }

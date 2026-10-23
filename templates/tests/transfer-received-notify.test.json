@@ -1,0 +1,81 @@
+{
+  "schema": "wd-test/v1",
+  "template": "transfer-received-notify",
+  "params": {
+    "spreadsheet_id": "1AbCdEfGhIjKlMnOpQrStUvWxYz0123"
+  },
+  "cases": [
+    {
+      "name": "a customer's payment page payment is told and logged",
+      "trigger": {
+        "event": "payment.received",
+        "fields": {
+          "payment_id": "ref_1042",
+          "amount_kobo": 1250000,
+          "paid_at": "2026-10-23T12:00:00Z"
+        }
+      },
+      "mocks": {
+        "text_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "add_row": {
+          "output": {
+            "updated_rows": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "text_owner": {
+            "message": "Received NGN 12500 from a customer (ref ref_1042)"
+          },
+          "add_row": {
+            "values": [
+              [
+                "2026-10-23T12:00:00Z",
+                "ref_1042",
+                "",
+                12500.0
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "a transfer into a customer's account number names the payer",
+      "trigger": {
+        "event": "virtual_account.credited",
+        "fields": {
+          "reference": "acct_ngozi",
+          "amount_kobo": 500000,
+          "payer_name": "NGOZI OKAFOR"
+        }
+      },
+      "mocks": {
+        "text_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "add_row": {
+          "output": {
+            "updated_rows": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "text_owner": {
+            "message": "Received NGN 5000 from NGOZI OKAFOR (ref acct_ngozi)"
+          }
+        }
+      }
+    }
+  ]
+}

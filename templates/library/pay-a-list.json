@@ -1,0 +1,498 @@
+{
+  "id": "pay-a-list",
+  "title": "Pay a list of people after approval",
+  "summary": "Pay everyone on a list (suppliers, refunds, prizes, commissions) once, after one approval, from whichever payments account you connected, and keep a record.",
+  "description": "Put the people to pay in a table with a batch name, then start the workflow with that batch. It checks each row has an amount and full bank details, shows the approver the total, the balance and any row it will not pay, and only after approval pays each person once, however often anything is retried. It waits for each bank payment to be confirmed, records how every payment went, and tells the owner. Works with Paystack, Moniepoint, iswallet, Flutterwave or Anchor.",
+  "category": "payments",
+  "tags": [
+    "payments",
+    "approval",
+    "data table"
+  ],
+  "keywords": [
+    "pay a list",
+    "batch",
+    "many people",
+    "commissions",
+    "prizes",
+    "bulk",
+    "list",
+    "payees"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1",
+    "capability:balance",
+    "capability:pay_bank"
+  ],
+  "params": [
+    {
+      "name": "list_table",
+      "type": "string",
+      "title": "List of people to pay",
+      "description": "The table with the people to pay, each row with its batch, amount (naira) and bank details.",
+      "required": false,
+      "default": "payees",
+      "example": "payees",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "pay_bank",
+        "balance"
+      ],
+      "title": "Pay from",
+      "description": "The payments account the money comes out of: any you connected that can pay bank accounts.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet to pay from",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one payments come out of. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    },
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role that approves before any money moves. Whoever set the workflow up cannot approve it themselves.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    },
+    {
+      "name": "approval_hours",
+      "type": "integer",
+      "title": "Hours to approve",
+      "description": "If nobody approves within this many hours, nothing is paid and the owner is told.",
+      "required": false,
+      "default": 24,
+      "example": 24,
+      "minimum": 1,
+      "maximum": 72
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{list_table}}",
+      "title": "People to pay",
+      "description": "Each row is one payment; rows with the same batch are paid together.",
+      "columns": [
+        {
+          "name": "batch",
+          "title": "Batch",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "amount_naira",
+          "title": "Amount (naira)",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "bank_code",
+          "title": "Bank code",
+          "type": "text"
+        },
+        {
+          "name": "account_number",
+          "title": "Account number",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "account_name",
+          "title": "Account name",
+          "type": "text",
+          "personal": true
+        }
+      ]
+    },
+    {
+      "name": "list_payments",
+      "title": "List payments",
+      "description": "One row per person per batch: how their payment went.",
+      "columns": [
+        {
+          "name": "batch",
+          "title": "Batch",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "amount_naira",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "payout_id",
+          "title": "Payment reference",
+          "type": "text"
+        },
+        {
+          "name": "reason",
+          "title": "Reason",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payAList",
+    "version": 1,
+    "name": "Pay a list",
+    "description": "Pays every row of a batch once, after approval, through the connected payments account.",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "batch"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "batch": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "title": "Batch",
+            "description": "The batch to pay, as written in the list. It is also the reference each person sees on their statement."
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "read_list",
+        "type": "connector",
+        "name": "Read the people to pay",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{list_table}}",
+          "filters": [
+            {
+              "column": "batch",
+              "op": "eq",
+              "value": "=trigger.body.batch"
+            }
+          ],
+          "order": [
+            {
+              "column": "name"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "check",
+        "type": "transform",
+        "name": "Check each row has an amount and bank details",
+        "needs": [
+          "read_list"
+        ],
+        "config": {
+          "output": {
+            "people": "=(has(steps.read_list.output.rows) ? steps.read_list.output.rows : []).filter(r, has(r.amount_naira) && r.amount_naira != null && double(r.amount_naira) >= 1.0 && has(r.bank_code) && r.bank_code != null && string(r.bank_code) != '' && has(r.account_number) && r.account_number != null && string(r.account_number) != '' && string(r.account_number).size() == 10 && has(r.account_name) && r.account_name != null && string(r.account_name) != '').map(r, {'id': has(r.id) ? string(r.id) : '', 'name': (has(r.name) && r.name != null && string(r.name) != '' ? string(r.name) : (has(r.account_name) && r.account_name != null ? string(r.account_name) : 'Row ' + (has(r.id) ? string(r.id) : ''))), 'kobo': int(math.round(double(r.amount_naira) * 100.0)), 'bank_code': string(r.bank_code), 'account_number': string(r.account_number), 'account_name': string(r.account_name)})",
+            "refused": "=(has(steps.read_list.output.rows) ? steps.read_list.output.rows : []).filter(r, !(has(r.amount_naira) && r.amount_naira != null && double(r.amount_naira) >= 1.0 && has(r.bank_code) && r.bank_code != null && string(r.bank_code) != '' && has(r.account_number) && r.account_number != null && string(r.account_number) != '' && string(r.account_number).size() == 10 && has(r.account_name) && r.account_name != null && string(r.account_name) != '')).map(r, {'name': (has(r.name) && r.name != null && string(r.name) != '' ? string(r.name) : (has(r.account_name) && r.account_name != null ? string(r.account_name) : 'Row ' + (has(r.id) ? string(r.id) : ''))), 'reason': (!(has(r.amount_naira) && r.amount_naira != null && double(r.amount_naira) >= 1.0) ? 'no amount to pay' : !(has(r.account_number) && r.account_number != null && string(r.account_number).size() == 10) ? 'the account number is not 10 digits' : 'the bank details are incomplete')})"
+          }
+        }
+      },
+      {
+        "id": "totals",
+        "type": "transform",
+        "name": "Add up the list",
+        "needs": [
+          "check"
+        ],
+        "config": {
+          "output": {
+            "total_kobo": "=sum(steps.check.output.people.map(p, p.kobo))"
+          }
+        }
+      },
+      {
+        "id": "balance",
+        "type": "capability",
+        "uses": "balance",
+        "name": "Check the balance",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "account": "{{funding_account}}"
+        }
+      },
+      {
+        "id": "approve",
+        "type": "approval",
+        "name": "Get the payments approved",
+        "needs": [
+          "check",
+          "totals",
+          "balance"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "{{approval_hours}}h",
+          "on_timeout": "reject",
+          "subject": {
+            "warning": "=steps.balance.output.available_kobo >= steps.totals.output.total_kobo ? '' : 'The balance is less than the total to pay'",
+            "batch": "=trigger.body.batch",
+            "people": "=size(steps.check.output.people)",
+            "total_naira": "=double(steps.totals.output.total_kobo) / 100.0",
+            "balance_naira": "=double(steps.balance.output.available_kobo) / 100.0",
+            "not_paid": "=steps.check.output.refused.map(r, r.name + ': ' + r.reason)"
+          }
+        }
+      },
+      {
+        "id": "pay_all",
+        "type": "foreach",
+        "name": "Pay each person",
+        "needs": [
+          "check",
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision == 'approved'",
+        "config": {
+          "items": "=steps.check.output.people",
+          "max_concurrency": 5,
+          "max_items": 5000,
+          "steps": [
+            {
+              "id": "person",
+              "type": "transform",
+              "name": "The person",
+              "config": {
+                "output": {
+                  "id": "=item.id",
+                  "name": "=item.name",
+                  "kobo": "=item.kobo"
+                }
+              }
+            },
+            {
+              "id": "pay",
+              "type": "capability",
+              "uses": "pay_bank",
+              "name": "Pay the person",
+              "connection": "{{rail_connection}}",
+              "input": {
+                "amount_kobo": "=item.kobo",
+                "bank_code": "=item.bank_code",
+                "account_number": "=item.account_number",
+                "account_name": "=item.account_name",
+                "narration": "=trigger.body.batch",
+                "source": "{{funding_account}}"
+              },
+              "effect": {
+                "idempotency_seed": "='list:' + trigger.body.batch + ':' + item.id"
+              },
+              "retry": {
+                "max": 8,
+                "backoff": "exponential",
+                "initial": "5s",
+                "max_delay": "10m",
+                "max_duration": "6h"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "pay_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "reason": "=steps.pay.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "settle",
+              "type": "capability",
+              "uses": "await_settlement",
+              "name": "Wait for the bank to confirm",
+              "needs": [
+                "pay"
+              ],
+              "timeout": "72h",
+              "when": "=steps.pay.output.status == 'pending'",
+              "input": {
+                "payout_id": "=steps.pay.output.payout_id"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "settle_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "reason": "the payment was not confirmed"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "lines",
+        "type": "transform",
+        "name": "Work out each person's outcome",
+        "needs": [
+          "pay_all"
+        ],
+        "config": {
+          "output": {
+            "rows": "=steps.pay_all.output.map(o, {'batch': trigger.body.batch, 'name': o.person.name, 'amount_naira': double(o.person.kobo) / 100.0, 'status': (has(o.pay_failed) ? 'failed' : o.pay.status == 'settled' ? 'paid' : o.pay.status == 'failed' ? 'failed' : has(o.settle) ? (o.settle.status == 'settled' ? 'paid' : o.settle.status) : 'unconfirmed'), 'payout_id': has(o.pay) && has(o.pay.payout_id) ? o.pay.payout_id : '', 'reason': (has(o.pay_failed) ? o.pay_failed.reason : has(o.pay.reason) ? o.pay.reason : has(o.settle) && has(o.settle.reason) ? o.settle.reason : has(o.settle_failed) ? 'the payment was not confirmed' : '')})"
+          }
+        }
+      },
+      {
+        "id": "summary",
+        "type": "transform",
+        "name": "Add up the payments",
+        "needs": [
+          "lines"
+        ],
+        "config": {
+          "output": {
+            "paid": "=size(steps.lines.output.rows.filter(l, l.status == 'paid'))",
+            "failed": "=size(steps.lines.output.rows.filter(l, l.status == 'failed'))",
+            "unconfirmed": "=size(steps.lines.output.rows.filter(l, l.status == 'unconfirmed'))",
+            "paid_naira": "=sum(steps.lines.output.rows.filter(l, l.status == 'paid').map(l, l.amount_naira))",
+            "not_paid": "=steps.lines.output.rows.filter(l, l.status != 'paid').map(l, l.name + ' (' + l.status + (l.reason != '' ? ': ' + l.reason : '') + ')')"
+          }
+        }
+      },
+      {
+        "id": "record",
+        "type": "connector",
+        "name": "Record each payment",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "lines"
+        ],
+        "when": "=size(steps.lines.output.rows) > 0",
+        "input": {
+          "table": "list_payments",
+          "rows": "=steps.lines.output.rows",
+          "return": "minimal"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.record.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell the owner how the payments went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "summary"
+        ],
+        "input": {
+          "to": "owner",
+          "title": "='Payments ' + trigger.body.batch",
+          "message": "='Payments ' + trigger.body.batch + ': ' + string(steps.summary.output.paid) + ' paid (NGN ' + string(steps.summary.output.paid_naira) + '), ' + string(steps.summary.output.failed) + ' failed, ' + string(steps.summary.output.unconfirmed) + ' not confirmed yet.' + (size(steps.summary.output.not_paid) > 0 ? ' Not paid: ' + steps.summary.output.not_paid.join(', ') + '.' : '')"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_owner_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_rejected",
+        "type": "connector",
+        "name": "Tell the owner nothing was paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision != 'approved'",
+        "input": {
+          "to": "owner",
+          "title": "='Payments ' + trigger.body.batch + ' not made'",
+          "message": "='Payments ' + trigger.body.batch + ' were ' + (has(steps.approve.output.reason) && steps.approve.output.reason == 'timeout' ? 'not approved in time' : 'rejected') + ', so nobody was paid.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_rejected_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "7d"
+    }
+  }
+}

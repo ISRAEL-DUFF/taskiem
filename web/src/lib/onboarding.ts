@@ -75,7 +75,7 @@ export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href:
 /** Templates suited to a first workflow, in this order when present: the
  * first needs nothing connected, none needs a developer; then the rest of
  * the library, with those that need a developer last. */
-export const STARTERS = ["daily-reminder", "payroll-reminder", "low-balance-alert", "stock-reorder-alert"];
+export const STARTERS = ["daily-reminder", "payroll-reminder", "payment-link-per-order", "pay-a-list", "low-balance-alert", "stock-reorder-alert"];
 
 export function starterTemplates(list: Template[]): Template[] {
   const rank = (t: Template) => {

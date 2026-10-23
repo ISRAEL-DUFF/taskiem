@@ -337,3 +337,21 @@ func TestWebsiteRefusesABadNumber(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// A template on rails names the rails that can run it, not every rail.
+func TestTemplateRails(t *testing.T) {
+	conns, err := loadConnectors(repoRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for uses, want := range map[string]string{
+		"pay_bank,balance,resolve_account":          "Paystack, Moniepoint (Monnify), iswallet, Flutterwave or Anchor",
+		"refund,get_payment":                        "Paystack",
+		"virtual_account":                           "Moniepoint (Monnify)",
+		"payment.received,virtual_account.credited": "Paystack, Moniepoint (Monnify) or Flutterwave",
+	} {
+		if got := railsFor(strings.Split(uses, ","), conns); got != want {
+			t.Errorf("%s: %q, want %q", uses, got, want)
+		}
+	}
+}

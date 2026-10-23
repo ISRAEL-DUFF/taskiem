@@ -35,4 +35,11 @@ describe("railsForAll", () => {
     expect(railsForAll(caps, ["refund"])).toEqual([]);
     expect(templateCapabilities(["xenibase@1", "capability:pay_bank", "capability:balance"])).toEqual(["pay_bank", "balance"]);
   });
+  it("counts a rail that sends any one of a trigger's payment events", () => {
+    const caps = [
+      { name: "payment.received", rails: ["paystack@1", "moniepoint@1", "flutterwave@1"], kind: "event" },
+      { name: "virtual_account.credited", rails: ["moniepoint@1"], kind: "event" },
+    ];
+    expect(railsForAll(caps, ["payment.received", "virtual_account.credited"])).toEqual(["paystack", "moniepoint", "flutterwave"]);
+  });
 });

@@ -16,7 +16,9 @@ import (
 
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/flowcode"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
@@ -112,6 +114,11 @@ func TestTemplatesInstantiateCheckDryRunAndRoundTrip(t *testing.T) {
 			walk(def.Steps)
 			if ref, ok := def.Trigger.Config["connector"].(string); ok {
 				used[ref] = true
+			}
+			if def.Trigger.Type == "capability_event" {
+				for _, ev := range def.Trigger.Config["events"].([]any) {
+					used[templates.CapabilityPrefix+ev.(string)] = true
+				}
 			}
 			for _, c := range tpl.Connectors {
 				if !used[c] {
@@ -333,6 +340,11 @@ func TestMatch(t *testing.T) {
 		"tell me when stock is running low on my inventory sheet":           "stock-reorder-alert",
 		"verify a new customer's BVN before onboarding them":                "kyc-bvn-check",
 		"pay staff salaries from the payroll sheet once the owner approves": "run-payroll",
+		"pay a list of commissions once I approve the batch":                "pay-a-list",
+		"send the customer a payment link for their order":                  "payment-link-per-order",
+		"give each customer their own account number to pay into":           "virtual-account-per-customer",
+		"refund a customer's payment after a supervisor approves":           "refund-with-approval",
+		"tell me when a payment I send fails or comes back":                 "failed-transfer-alert",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want {
@@ -466,10 +478,13 @@ func TestEveryDetailIsOwnerShaped(t *testing.T) {
 	}
 }
 
-// railCan reports whether a built-in rail declares the capability.
+// railCan reports whether a built-in rail declares the capability, or
+// sends the normalised event (capability:payout.failed).
 func railCan(reg connector.Lookup, uses string) bool {
 	for _, c := range reg.List() {
-		if _, ok := c.Manifest.Capabilities[uses]; ok {
+		_, can := c.Manifest.Capabilities[uses]
+		_, sends := c.Manifest.Events[uses]
+		if can || sends {
 			return true
 		}
 	}
@@ -535,5 +550,108 @@ func TestTemplateWorkflowTests(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// oneRail are the rail templates that run on one built-in rail for now
+// (decision 0044): no other rail declares what they need yet.
+var oneRail = map[string]string{
+	"virtual-account-per-customer": "only Moniepoint opens account numbers (Lenco's is unsafe, OPay's temporary)",
+	"refund-with-approval":         "only Paystack refunds (OPay's refund is not declared yet)",
+}
+
+// Every template on rails expands, as a run would, on each built-in rail
+// that can do what it does, and runs on at least two rails (spec
+// rails-and-products 10, R4); a template triggered by a payment event is
+// sent it by at least two.
+func TestTemplatesOnEveryCapableRail(t *testing.T) {
+	reg := registry(t)
+	for _, tpl := range templates.Default().Offered() {
+		var uses, events []string
+		for _, c := range tpl.Connectors {
+			if u, ok := strings.CutPrefix(c, templates.CapabilityPrefix); ok {
+				if _, ev := capability.GetEvent(u); ev {
+					events = append(events, u)
+				} else {
+					uses = append(uses, u)
+				}
+			}
+		}
+		if len(uses)+len(events) == 0 {
+			continue
+		}
+		t.Run(tpl.ID, func(t *testing.T) {
+			// A rail that holds several wallets (iswallet) is given the
+			// one to use; the others are not, as an owner would fill it.
+			instance := func(wallet bool) []byte {
+				vals := tpl.Examples()
+				if wallet {
+					vals["funding_account"] = "w_main"
+				}
+				doc, err := tpl.Instantiate(vals, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				return doc
+			}
+			doc := instance(false)
+			def, err := wd.Load(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var waits []string
+			def.Walk(func(st *wd.Step) {
+				if st.Type == "capability" && wd.IsWait(st.Uses) {
+					waits = append(waits, st.Uses)
+				}
+			})
+			var rails []string
+			for _, c := range reg.List() {
+				m := c.Manifest
+				if m.KindOf() != "rail" || contains(rails, m.ID) {
+					continue
+				}
+				can := true
+				for _, u := range uses {
+					_, ok := m.Capabilities[u]
+					can = can && ok
+				}
+				for _, w := range waits {
+					can = can && expansion.CanWait(m, w)
+				}
+				sends := len(events) == 0
+				for _, ev := range events {
+					_, ok := m.Events[ev]
+					sends = sends || ok
+				}
+				if !can || !sends {
+					continue
+				}
+				wallet := false
+				for _, u := range uses {
+					req := m.Capabilities[u].Requires
+					wallet = wallet || contains(req, "source") || contains(req, "account")
+				}
+				out, _, err := expansion.Expand(instance(wallet), expansion.ResolverFor([]expansion.Connection{{Name: "main", Connector: m.ID}}, reg))
+				if err != nil {
+					t.Errorf("%s: %v", m.ID, err)
+					continue
+				}
+				if _, err := wd.Load(out); err != nil {
+					t.Errorf("%s: the expansion does not load: %v", m.ID, err)
+					continue
+				}
+				rails = append(rails, m.ID)
+			}
+			if why, ok := oneRail[tpl.ID]; ok {
+				if len(rails) != 1 {
+					t.Errorf("runs on %v; oneRail says %s: update it", rails, why)
+				}
+				return
+			}
+			if len(rails) < 2 {
+				t.Errorf("runs on %v, want at least two rails", rails)
+			}
+		})
 	}
 }

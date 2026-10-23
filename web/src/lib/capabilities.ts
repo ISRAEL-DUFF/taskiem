@@ -19,13 +19,25 @@ export function capableConnections(list: ConnectionName[], rails: string[], conn
 /** Rails in the order a business most likely knows them (spec 4.6). */
 const RAIL_ORDER = ["paystack", "moniepoint", "iswallet", "flutterwave", "anchor"];
 
-/** The rail ids (connector ids) that can do every one of uses, best known first. */
-export function railsForAll(caps: { name: string; rails: string[] }[], uses: string[]): string[] {
+/**
+ * The rail ids (connector ids) that can do every one of uses, best known
+ * first. Payment events (kind "event": a capability_event trigger's) count
+ * when the rail sends any one of them.
+ */
+export function railsForAll(caps: { name: string; rails: string[]; kind?: string }[], uses: string[]): string[] {
   let ids: string[] | undefined;
+  let sending: string[] | undefined;
+  const railsOf = (c: { rails: string[] } | undefined) => (c?.rails ?? []).map((r) => r.split("@")[0] ?? r);
   for (const u of uses) {
-    const got = (caps.find((c) => c.name === u)?.rails ?? []).map((r) => r.split("@")[0] ?? r);
+    const c = caps.find((x) => x.name === u);
+    if (c?.kind === "event") {
+      sending = [...(sending ?? []), ...railsOf(c)];
+      continue;
+    }
+    const got = railsOf(c);
     ids = ids === undefined ? got : ids.filter((x) => got.includes(x));
   }
+  if (sending !== undefined) ids = ids === undefined ? sending : ids.filter((x) => sending.includes(x));
   const rank = (id: string) => (RAIL_ORDER.includes(id) ? RAIL_ORDER.indexOf(id) : RAIL_ORDER.length);
   return [...new Set(ids ?? [])].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }

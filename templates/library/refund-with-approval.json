@@ -1,0 +1,242 @@
+{
+  "id": "refund-with-approval",
+  "title": "Refund a customer after approval",
+  "summary": "Look a customer's payment up, get the refund approved, refund it once, and tell the owner how it went.",
+  "description": "Start it with the payment's reference, the customer and the reason. It checks with your payments account that the payment was made, asks the approver to agree, and only then refunds it, once however often anything is retried. A payment that was never made, or was refunded already, is not refunded. The owner is told the outcome. Works with Paystack.",
+  "category": "payments",
+  "tags": [
+    "payments",
+    "refunds",
+    "approval",
+    "customers"
+  ],
+  "keywords": [
+    "refund",
+    "reverse",
+    "return money",
+    "chargeback",
+    "customer",
+    "approve",
+    "approval",
+    "payment"
+  ],
+  "connectors": [
+    "notify@1",
+    "capability:get_payment",
+    "capability:refund"
+  ],
+  "params": [
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "refund",
+        "get_payment"
+      ],
+      "title": "Refund from",
+      "description": "The payments account the customer paid through.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role that approves before any money moves. Whoever set the workflow up cannot approve it themselves.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_refundWithApproval",
+    "version": 1,
+    "name": "Refund a customer after approval",
+    "description": "Refunds a payment once, after approval, through the connected payments account.",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "payment",
+          "customer",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "payment": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 100,
+            "title": "Payment reference",
+            "description": "As your payments account shows it on the payment."
+          },
+          "customer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "title": "Customer"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "title": "Why"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "look",
+        "type": "capability",
+        "uses": "get_payment",
+        "name": "Look the payment up",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "payment_id": "=trigger.body.payment"
+        }
+      },
+      {
+        "id": "approve",
+        "type": "approval",
+        "name": "Get the refund approved",
+        "needs": [
+          "look"
+        ],
+        "when": "=steps.look.output.status == 'paid'",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "48h",
+          "on_timeout": "reject",
+          "subject": {
+            "payment": "=trigger.body.payment",
+            "customer": "=trigger.body.customer",
+            "amount_naira": "=has(steps.look.output.amount_kobo) ? double(steps.look.output.amount_kobo) / 100.0 : 0.0",
+            "paid_at": "=has(steps.look.output.paid_at) ? steps.look.output.paid_at : ''",
+            "reason": "=trigger.body.reason"
+          }
+        }
+      },
+      {
+        "id": "refund",
+        "type": "capability",
+        "uses": "refund",
+        "name": "Refund the payment",
+        "connection": "{{rail_connection}}",
+        "needs": [
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision == 'approved'",
+        "input": {
+          "payment_id": "=trigger.body.payment",
+          "reason": "=trigger.body.reason"
+        },
+        "effect": {
+          "idempotency_seed": "='refund:' + trigger.body.payment"
+        },
+        "retry": {
+          "max": 5,
+          "backoff": "exponential",
+          "initial": "10s"
+        }
+      },
+      {
+        "id": "tell_done",
+        "type": "connector",
+        "name": "Tell the owner how the refund went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "refund"
+        ],
+        "input": {
+          "to": "owner",
+          "title": "='Refund for ' + trigger.body.customer",
+          "message": "='The refund of payment ' + trigger.body.payment + ' for ' + trigger.body.customer + ' is ' + steps.refund.output.status + '.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_done_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_rejected",
+        "type": "connector",
+        "name": "Tell the owner nothing was refunded",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision != 'approved'",
+        "input": {
+          "to": "owner",
+          "title": "='Refund for ' + trigger.body.customer + ' not made'",
+          "message": "='The refund of payment ' + trigger.body.payment + ' for ' + trigger.body.customer + ' was not approved, so nothing was refunded.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_rejected_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_not_paid",
+        "type": "connector",
+        "name": "Tell the owner the payment cannot be refunded",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "look"
+        ],
+        "when": "=steps.look.output.status != 'paid'",
+        "input": {
+          "to": "owner",
+          "title": "='Refund for ' + trigger.body.customer + ' not made'",
+          "message": "='Payment ' + trigger.body.payment + ' is ' + steps.look.output.status + ', not paid, so there is nothing to refund.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_not_paid_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "3d"
+    }
+  }
+}

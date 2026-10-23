@@ -1,0 +1,222 @@
+{
+  "id": "virtual-account-per-customer",
+  "title": "Give each customer their own account number",
+  "summary": "Open a bank account number for a customer to pay into, record it, and send it to them, so every transfer is known to be theirs.",
+  "description": "Start it with a customer's name and email. It opens an account number for them with your payments account, records it in a table, and sends it to them. Money they send to it arrives in your account with their name on it; the template \"Tell me when money comes in\" records each credit. A customer gets one account number, however often it is started. Works with Moniepoint.",
+  "category": "payments",
+  "tags": [
+    "payments",
+    "customers",
+    "collections",
+    "data table"
+  ],
+  "keywords": [
+    "virtual account",
+    "account number",
+    "own account",
+    "reserved account",
+    "dedicated account",
+    "pay into"
+  ],
+  "connectors": [
+    "notify@1",
+    "xenibase@1",
+    "capability:virtual_account"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Named in the message the customer gets.",
+      "required": true,
+      "example": "Ada's Kitchen",
+      "max_length": 60
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "virtual_account"
+      ],
+      "title": "Open with",
+      "description": "The payments account that opens customers' account numbers.",
+      "required": false,
+      "default": "",
+      "example": ""
+    }
+  ],
+  "tables": [
+    {
+      "name": "customer_accounts",
+      "title": "Customer account numbers",
+      "description": "One row per customer: the account number they pay into.",
+      "columns": [
+        {
+          "name": "customer",
+          "title": "Customer",
+          "type": "text",
+          "required": true,
+          "personal": true
+        },
+        {
+          "name": "email",
+          "title": "Email",
+          "type": "email"
+        },
+        {
+          "name": "account_number",
+          "title": "Account number",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "bank_name",
+          "title": "Bank",
+          "type": "text"
+        },
+        {
+          "name": "reference",
+          "title": "Account reference",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_virtualAccountPerCustomer",
+    "version": 1,
+    "name": "Give a customer their own account number",
+    "description": "Opens a customer's account number on the connected payments account and sends it to them.",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "name",
+          "email"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "title": "Customer's name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 200,
+            "title": "Customer's email"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Customer's phone",
+            "description": "For WhatsApp or SMS; the email is used when it is left out."
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "open",
+        "type": "capability",
+        "uses": "virtual_account",
+        "name": "Open the customer's account number",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "customer": {
+            "name": "=trigger.body.name",
+            "email": "=trigger.body.email"
+          }
+        },
+        "effect": {
+          "idempotency_seed": "='customer-account:' + trigger.body.email"
+        }
+      },
+      {
+        "id": "record",
+        "type": "connector",
+        "name": "Record the account number",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "open"
+        ],
+        "input": {
+          "table": "customer_accounts",
+          "return": "minimal",
+          "row": {
+            "customer": "=trigger.body.name",
+            "email": "=trigger.body.email",
+            "account_number": "=steps.open.output.account_number",
+            "bank_name": "=steps.open.output.bank_name",
+            "reference": "=steps.open.output.reference"
+          }
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.record.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_customer",
+        "type": "connector",
+        "name": "Send the customer their account number",
+        "connector": "notify@1",
+        "action": "message",
+        "needs": [
+          "settings",
+          "open"
+        ],
+        "input": {
+          "phone": "=has(trigger.body.phone) ? trigger.body.phone : ''",
+          "email": "=trigger.body.email",
+          "about": "your account number",
+          "message": "=steps.settings.output.business_name + ': pay us any time by bank transfer to ' + steps.open.output.account_number + ' (' + steps.open.output.bank_name + ', ' + steps.open.output.account_name + '). It is yours alone, so we know the money is from you.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_customer_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  }
+}
