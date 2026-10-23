@@ -38,7 +38,7 @@ Contents:
 | Auto-matching, suggestions, confirm, reject, undo | Matching (§8) | Platform |
 | Exceptions in naira | Checks on the log (§9.1) | Templates on the log |
 | Dashboard, settled versus pending, take-rate | A daily summary in chat and a Money page (§9.2) | Template, web |
-| Ledger, journal and VAT exports | Monthly exports (§9.3) | Template |
+| Ledger and journal exports (VAT later) | Monthly exports (§9.3) | Template |
 | Payables | Money-out rows from a form or chat (§7.4) | Template |
 | Roles, audit, tenant isolation, kobo amounts | Already platform guarantees | Built |
 | Working capital, analyst queue, BVN capture | Dropped (0045) | — |
@@ -114,6 +114,7 @@ A platform record like a storefront order, in Taskiem's database, listed and exp
 | `token` | For the invoice page; 24 random bytes, kept as a hash |
 | `accounts[]` | Every one-time account issued for it (§6) |
 | `connection` | The rail connection that takes its payments |
+| `fee_paid_by` | `business` or `customer`, from the business's invoice settings unless set on the invoice (§6.5) |
 
 ### 5.2 Statuses
 
@@ -168,6 +169,15 @@ When `send` reaches the customer on WhatsApp or Telegram ([0039](../decisions/00
 
 The key for an account is derived from the invoice and a counter (`invoice:<id>:acct:<n>`), where `n` advances only when the previous account has expired or been used. A double tap or a retried request therefore returns the same account.
 
+### 6.5 Who pays the rail's fee
+
+Configurable: a business sets it in its invoice settings, and may change it on one invoice.
+
+- **The business pays** (the default): the account is issued for the amount due, and the rail's fee is a `fee` row in the log, against the business.
+- **The customer pays**: the page and the chat message show the fee as its own line, and the account is issued for the amount due plus the fee, as the rail states it (T0 records how each rail charges: per account issued, per payment, flat or a percentage). The fee part of the payment is matched to the fee, not counted as an overpayment, and the invoice's total is unchanged.
+
+A rail whose fee cannot be known before the payment (a percentage of whatever arrives, for example) is offered only with the business paying.
+
 ## 7. The money log
 
 ### 7.1 Kept tables
@@ -207,7 +217,7 @@ Readers take the latest row per movement, as `pos_sales` readers do.
 
 ### 7.4 Rows people add
 
-- **Statement upload.** A form takes a bank or provider statement (CSV first; the formats of Nigeria's common banks from Tally's parsers); each line becomes a `statement` row, skipped when a row with the same channel, reference and amount exists.
+- **Statement upload.** A form takes a statement as a CSV in **one common format**: the columns date, description, amount (money in positive, out negative, in naira), and optionally reference and balance. A file with other column names can be uploaded once its columns are matched to these on the form, and the match is remembered per channel. Each line becomes a `statement` row, skipped when a row with the same channel, reference, date and amount exists. Formats specific to one bank can follow from Tally's parsers.
 - **Cash and expenses.** From a form or chat ("spent 12,000 on diesel"): `cash` or `expense` rows with a vendor and category, marked `entered` and attributed to the person.
 
 ## 8. Matching
@@ -222,11 +232,11 @@ A payment is matched without asking anyone when its reference is one Taskiem iss
 
 ### 8.2 Suggested
 
-Any other money in (a bank transfer with "PAYMENT" as its narration, a POS sale, a statement line) gets up to three suggestions among open invoices and orders, ranked by Tally's features (amount, payer name against customer name, days since the invoice), each with its reason ("same amount, payer 'ADA OBI' matches the customer, two days after INV-0104"). Above a threshold the owner can turn on automatic matching; below it a person confirms in the web app or with one tap in chat. A rejected suggestion is not offered again.
+Any other money in (a bank transfer with "PAYMENT" as its narration, a POS sale, a statement line) gets up to three suggestions among open invoices and orders, ranked by Tally's features (amount, payer name against customer name, days since the invoice), each with its reason ("same amount, payer 'ADA OBI' matches the customer, two days after INV-0104"). A business can turn on **automatic matching**: a suggestion scoring above the threshold (from Tally's scoring, tuned in T5) is then matched without asking, recorded as `how: suggested_auto` with its reasons, and can be undone like any match. It is off by default. Below the threshold, or with it off, a person confirms in the web app or with one tap in chat. A rejected suggestion is not offered again.
 
 ### 8.3 The matches table
 
-`money_matches`, a kept table: `match_id`, `entry_id`, `target` (`invoice:INV-0104`, `order:AK-7QX4KD`), `amount_kobo`, `how` (`exact`, `suggested`, `manual`), `by`, `reasons`, and `undoes` for an undo. An invoice's `paid_kobo` is the sum of its matches not undone.
+`money_matches`, a kept table: `match_id`, `entry_id`, `target` (`invoice:INV-0104`, `order:AK-7QX4KD`), `amount_kobo`, `how` (`exact`, `suggested`, `suggested_auto`, `manual`), `by`, `reasons`, and `undoes` for an undo. An invoice's `paid_kobo` is the sum of its matches not undone.
 
 ## 9. Leaks, summaries and exports
 
@@ -251,7 +261,7 @@ Each leak is shown in naira, can be assigned, and is closed as recovered (with t
 
 ### 9.3 Exports
 
-Monthly by email, and on demand from the Money page: the log, invoices, an accounting journal (Tally's format) and a VAT summary for VAT-registered businesses.
+Monthly by email, and on demand from the Money page: the log, invoices and an accounting journal (Tally's format). A VAT summary is not needed at launch and follows later.
 
 ## 10. What comes from Tally
 
@@ -261,7 +271,7 @@ Monthly by email, and on demand from the Money page: the log, invoices, an accou
 | The matching features and scoring | §8.2 |
 | Fee and take-rate calculations | §9.1, §9.2 |
 | Statement parsers | §7.4 |
-| Journal and VAT export formats | §9.3 |
+| Journal export format (and later VAT) | §9.3 |
 | Its invoice lifecycle and user stories | §5, and the acceptance cases of T3 to T6 |
 
 Tally's code is the team's own and may be copied in; it is adapted to Taskiem's conventions (kobo, sealed personal data, the egress guard), with its tests.
@@ -276,8 +286,10 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 | --- | --- | --- |
 | Accept decision 0045, including the amendment to 0039 | Founders | T4 |
 | For iswallet, Flutterwave, Paystack and OPay, the facts of §4.2 from their public documentation | Engineering | T1 |
-| Which bank statement formats to support first | Founders | T6 |
-| Whether VAT exports are needed at launch | Founders | T7 |
+| ~~Which bank statement formats to support first~~ | Founders | Decided 2026-10-23: one common CSV format, with the columns matched on upload (§7.4) |
+| ~~Whether VAT exports are needed at launch~~ | Founders | Decided 2026-10-23: not at launch (§9.3) |
+| ~~Who pays the rail's fee for an account~~ | Founders | Decided 2026-10-23: configurable per business and per invoice (§6.5) |
+| ~~Whether a business can turn on automatic matching~~ | Founders | Decided 2026-10-23: yes, off by default (§8.2) |
 
 ### T1: `collect_transfer` (M)
 
@@ -315,7 +327,7 @@ The first five leaks, their lifecycle and the amount recovered; statement upload
 
 ### T7: summaries and exports (M)
 
-The daily summary, the Money page, monthly exports (log, invoices, journal, VAT).
+The daily summary, the Money page, monthly exports (log, invoices, journal).
 
 ### T8: templates and AI (S)
 
@@ -358,9 +370,9 @@ About 12 to 16 weeks for one engineer; 8 to 10 for two, one on T1, T3, T4 and on
 | WhatsApp needs an approved template for an invoice with buttons outside the 24-hour window | A utility template submitted in T4; until approved, the message goes by SMS with the page link |
 | Kept tables in a business's own Xenibase project can be edited there | Said on the table's page; the guarantee is against edits through Taskiem (0045) |
 | Matching a permanent-account payment to the wrong invoice | Oldest first is the rule; an undo moves it, and the owner can match by hand |
-| Who bears the account fee: the business, or added to the invoice | Founders, T0 |
-| Whether a business can turn on automatic matching of suggestions, and at what threshold | Founders, before T5 |
+| A business passing the fee on when the rail's fee is a percentage of what arrives | Offered only with the business paying (§6.5) |
+| Automatic matching attaching a payment to the wrong invoice | Off by default; the threshold is tuned on Tally's data in T5; every automatic match shows its reasons and can be undone |
 
 ## 15. Out of scope
 
-Working capital and anything a lender needs, double-entry accounting, tax filing, an accounting system or ERP (exports only), holding customers' money, and multi-currency invoices beyond NGN at first.
+Working capital and anything a lender needs, double-entry accounting, tax filing, VAT exports at launch, an accounting system or ERP (exports only), holding customers' money, and multi-currency invoices beyond NGN at first.
