@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	emailconn "github.com/israel-duff/taskiem/connectors/email"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
+	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
@@ -47,6 +48,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/inmail"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
@@ -485,7 +487,10 @@ type engine struct {
 	// forms are hosted forms' api side (S7); nil without the public key.
 	forms *forms.Service
 	// email is inbound email's api side (N10); nil without the public key.
-	email    *inmail.Service
+	email *inmail.Service
+	// invoices are the business's invoices to its customers (decision
+	// 0045, T3).
+	invoices *invoicing.Invoices
 	cfg      config
 	log      *slog.Logger
 	pool     *pgxpool.Pool
@@ -539,7 +544,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	formOps := &formconn.Late{}
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
+	invoiceOps := &invconn.Late{}
 	copts := cfg.Connectors
+	copts.Invoices = invoiceOps
 	copts.Storefront = orders
 	copts.Forms = formOps
 	copts.Email = emailOps
@@ -615,6 +622,12 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		n.Messages, n.Reach = e.messages, e.reach
 	}
 	tell.Set(n)
+	// Invoices (decision 0045): their pages are on the form host.
+	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Logger: log.With("component", "invoices")}
+	if h := formHost(cfg); h != "" {
+		e.invoices.PageBase = "https://" + h
+	}
+	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
 	return e, nil
 }
 
@@ -858,13 +871,14 @@ func serve(ctx context.Context, args []string) error {
 			srv.ReachHost = e.forms.FormHost
 		}
 		srv.Email = e.email
+		srv.Invoices = e.invoices
 		srv.MailDomain = cfg.Mail.Domain
 		if e.email != nil {
 			tasks = append(tasks, func(ctx context.Context) error { e.email.Run(ctx, emailDrainInterval); return nil })
 		}
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms)
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices)
 		// SMS and email to people outside a tenant (messages.go).
 		if w := cfg.senderWorker(e, alerter.Mailer, log); w != nil {
 			tasks = append(tasks, w.Run)

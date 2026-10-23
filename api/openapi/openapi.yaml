@@ -109,6 +109,9 @@ tags:
 - name: Storefront
   description: The organisation's one-page public storefront, its catalogue and its photos.
   x-taskiem-guide: storefronts
+- name: Invoices
+  description: Invoices the business sends its customers, paid only by the payments counted towards them.
+  x-taskiem-guide: invoices
 - name: Field agents
   description: Agents who sign businesses up in person, the owner's consent, and support visits the owner invites.
   x-taskiem-guide: agents
@@ -1108,6 +1111,303 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StorefrontAction'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices:
+    get:
+      operationId: listInvoices
+      tags:
+      - Invoices
+      summary: The business's invoices to its customers
+      description: Newest first, the customers' details masked.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [draft, sent, part_paid, paid, overdue, void]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: The invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoices]
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createInvoice
+      tags:
+      - Invoices
+      summary: Create a draft invoice
+      description: With the business's next number. Give amount_kobo (one line) or lines. Send it with /send.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key answers the same invoice, or sends nothing more'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceDraft'
+      responses:
+        '201':
+          description: The draft, its customer masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices/{id}:
+    get:
+      operationId: getCustomerInvoice
+      tags:
+      - Invoices
+      summary: One invoice
+      description: With its payments. The customer's details are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The invoice's id or number
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoice, revealed]
+                properties:
+                  invoice:
+                    $ref: '#/components/schemas/CustomerInvoice'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: updateInvoice
+      tags:
+      - Invoices
+      summary: Change a draft
+      description: 'Only a draft can be changed (409 otherwise): void a sent invoice and send another.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The invoice's id or number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceDraft'
+      responses:
+        '200':
+          description: The draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/send:
+    post:
+      operationId: sendInvoice
+      tags:
+      - Invoices
+      summary: Send an invoice
+      description: By SMS and email with its page's link, and marks it sent. Sending again resends the same link. A void or paid invoice is not sent (409).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The invoice's id or number
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key answers the same invoice, or sends nothing more'
+      responses:
+        '200':
+          description: What was sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/void:
+    post:
+      operationId: voidInvoice
+      tags:
+      - Invoices
+      summary: Void an invoice
+      description: With the reason. A paid invoice cannot be voided (409). A void invoice takes no new payment.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The invoice's id or number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The void invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/payments/{payment}/undo:
+    post:
+      operationId: undoInvoicePayment
+      tags:
+      - Invoices
+      summary: Undo a payment counted towards an invoice
+      description: For a payment matched to the wrong invoice. Both the payment and its undoing stay in the invoice's history.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The invoice's id or number
+      - name: payment
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoice-settings:
+    get:
+      operationId: getInvoiceSettings
+      tags:
+      - Invoices
+      summary: The business's invoice settings
+      description: The number prefix and next number, and the defaults for new invoices.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putInvoiceSettings
+      tags:
+      - Invoices
+      summary: Change the invoice settings
+      description: The next number may only move forward.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceSettings'
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSettings'
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/orders:
@@ -16162,6 +16462,183 @@ components:
           type: integer
         line_kobo:
           type: integer
+    InvoiceCustomer:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        phone:
+          type: string
+        email:
+          type: string
+    InvoiceLine:
+      type: object
+      required: [description, quantity, unit_kobo]
+      properties:
+        description:
+          type: string
+          maxLength: 200
+        quantity:
+          type: integer
+          minimum: 1
+        unit_kobo:
+          type: integer
+          minimum: 1
+    InvoiceDraft:
+      type: object
+      required: [customer]
+      properties:
+        customer:
+          $ref: '#/components/schemas/InvoiceCustomer'
+        amount_kobo:
+          type: integer
+          description: One line for this amount; or give lines
+        description:
+          type: string
+          description: The single line's description (default "Amount due")
+        lines:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+        due_on:
+          type: string
+          format: date
+        note:
+          type: string
+          maxLength: 500
+        connection:
+          type: string
+          description: The payments connection; the business's default when left out
+        fee_paid_by:
+          type: string
+          enum: [business, customer]
+        allow_part_payments:
+          type: boolean
+    InvoicePayment:
+      type: object
+      required: [id, amount_kobo, payment_id, how, by, reasons, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        payment_id:
+          type: string
+        connection:
+          type: string
+        how:
+          type: string
+          enum: [exact, suggested, suggested_auto, manual]
+        by:
+          type: string
+        reasons:
+          type: array
+          items:
+            type: string
+        undoes:
+          type: string
+          format: uuid
+          description: Set on the row that undoes another
+        undone_by:
+          type: string
+          format: uuid
+          description: Set on a payment that was undone
+        created_at:
+          type: string
+          format: date-time
+    CustomerInvoice:
+      type: object
+      description: An invoice the business sends a customer. Status and paid_kobo come only from the payments counted towards it.
+      required: [id, number, status, customer, lines, total_kobo, paid_kobo, due_kobo, currency, connection, fee_paid_by, allow_part_payments, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        status:
+          type: string
+          enum: [draft, sent, part_paid, paid, overdue, void]
+        customer:
+          $ref: '#/components/schemas/InvoiceCustomer'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+        total_kobo:
+          type: integer
+        paid_kobo:
+          type: integer
+        due_kobo:
+          type: integer
+        currency:
+          type: string
+        due_on:
+          type: string
+          format: date
+        note:
+          type: string
+        connection:
+          type: string
+        fee_paid_by:
+          type: string
+          enum: [business, customer]
+        allow_part_payments:
+          type: boolean
+        sent_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        paid_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        voided_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        void_reason:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoicePayment'
+    InvoiceSent:
+      type: object
+      required: [invoice, queued]
+      properties:
+        invoice:
+          $ref: '#/components/schemas/CustomerInvoice'
+        link:
+          type: string
+          description: The invoice's page
+        queued:
+          type: array
+          items:
+            type: string
+            enum: [sms, email]
+        sms_over_allowance:
+          type: boolean
+    InvoiceSettings:
+      type: object
+      required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]
+      properties:
+        prefix:
+          type: string
+          maxLength: 12
+        next_number:
+          type: integer
+          minimum: 1
+        connection:
+          type: string
+        fee_paid_by:
+          type: string
+          enum: [business, customer]
+        allow_part_payments:
+          type: boolean
     StorefrontOrder:
       type: object
       required: [id, reference, kind, status, customer, basket, total_kobo, payment, created_at]

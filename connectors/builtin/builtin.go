@@ -13,6 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/gmail"
 	"github.com/israel-duff/taskiem/connectors/googlesheets"
 	"github.com/israel-duff/taskiem/connectors/interswitch"
+	"github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
@@ -68,6 +69,9 @@ type Options struct {
 	// Forms binds the forms platform connector (docs/forms.md); nil: its
 	// actions fail plainly.
 	Forms form.Ops
+	// Invoices binds the invoices platform connector (docs/invoices.md);
+	// nil: its actions fail plainly.
+	Invoices invoices.Ops
 	// Email binds the inbound email platform connector (docs/email.md);
 	// nil: its actions fail plainly.
 	Email email.Ops
@@ -111,6 +115,7 @@ func Register(r *connector.Registry, o Options) error {
 		s3.New(s3.Options{BaseURL: o.S3URL}),
 		sftp.New(),
 		storefront.New(o.Storefront),
+		invoices.New(o.Invoices),
 		form.New(o.Forms),
 		email.New(o.Email),
 		notify.New(o.Notify),

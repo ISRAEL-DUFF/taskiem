@@ -523,6 +523,51 @@ export const interswitch = {
   transfer: (input: InterswitchTransferInput, extra?: ConnectorExtra): StepSpec => connector("interswitch@1", "transfer", input, extra),
 };
 
+// Invoices (invoices@1)
+export interface InvoicesCreateInput {
+  allow_part_payments?: Val<boolean>;
+  /** A single line for this amount; or give lines */
+  amount_kobo?: Val<number>;
+  /** The payments connection; the business's default when left out */
+  connection?: Val<string>;
+  customer: Value;
+  /** The single line's description (default "Amount due") */
+  description?: Val<string>;
+  /** YYYY-MM-DD */
+  due_on?: Val<string>;
+  fee_paid_by?: Val<"business" | "customer">;
+  lines?: Value;
+  note?: Val<string>;
+}
+export interface InvoicesGetInput {
+  number: Val<string>;
+}
+export interface InvoicesNotifyCustomerInput {
+  number: Val<string>;
+  /** The email's subject */
+  subject?: Val<string>;
+  text: Val<string>;
+}
+export interface InvoicesSendInput {
+  number: Val<string>;
+}
+export interface InvoicesVoidInput {
+  number: Val<string>;
+  reason: Val<string>;
+}
+export const invoices = {
+  /** Create an invoice (idempotent_write) */
+  create: (input: InvoicesCreateInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "create", input, extra),
+  /** Read an invoice (read) */
+  get: (input: InvoicesGetInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "get", input, extra),
+  /** Message the invoice's customer (idempotent_write) */
+  notify_customer: (input: InvoicesNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "notify_customer", input, extra),
+  /** Send an invoice (idempotent_write) */
+  send: (input: InvoicesSendInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "send", input, extra),
+  /** Void an invoice (idempotent_write) */
+  void: (input: InvoicesVoidInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "void", input, extra),
+};
+
 // iswallet (iswallet@1)
 export interface IswalletGetBalanceInput {
   wallet_id: Val<string>;
@@ -2491,6 +2536,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "gmail@1": "gmail",
   "googlesheets@1": "googlesheets",
   "interswitch@1": "interswitch",
+  "invoices@1": "invoices",
   "iswallet@1": "iswallet",
   "lenco@1": "lenco",
   "moniepoint@1": "moniepoint",
@@ -2530,6 +2576,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
+  "invoices@1": ["create", "get", "notify_customer", "send", "void"],
   "iswallet@1": ["get_balance", "get_payout", "list_banks", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
