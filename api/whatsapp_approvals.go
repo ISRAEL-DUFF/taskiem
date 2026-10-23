@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/matching"
+	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -238,6 +239,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.sendInvoiceItem(ctx, it)
 		case matching.OutboxMatch:
 			sendErr = s.sendMatchItem(ctx, it)
+		case moneydigest.OutboxDaily:
+			sendErr = s.sendMoneyDailyItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}

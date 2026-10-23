@@ -329,6 +329,66 @@
       "reviewed": true,
       "context": "A language that is not on"
     },
+    "money.channel.cash": {
+      "text": "cash",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: money recorded as cash, as a channel name"
+    },
+    "money.channel.upload": {
+      "text": "bank statement",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: money from an uploaded bank statement, as a channel name"
+    },
+    "money.daily": {
+      "text": "Yesterday: {in}; {out} out; {invoices}; {leaks}.",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning. {in} is money.daily.in or money.daily.in_pending followed by the channels (— Paystack ₦20,000, cash ₦5,000); {out} is like ₦12,000; {invoices} and {leaks} are the money.daily.invoices and money.daily.leaks lines"
+    },
+    "money.daily.in": {
+      "text": "{amount} in",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: money that came in and settled, like ₦25,000"
+    },
+    "money.daily.in_pending": {
+      "text": "{amount} in ({pending} pending)",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: money that came in and settled, and money still on its way (pending)"
+    },
+    "money.daily.invoices": {
+      "text": "{n} invoices paid ({amount})",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: several invoices paid that day, and what was paid on them"
+    },
+    "money.daily.invoices_none": {
+      "text": "no invoice paid",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: no invoice paid that day"
+    },
+    "money.daily.invoices_one": {
+      "text": "1 invoice paid ({amount})",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: one invoice paid that day"
+    },
+    "money.daily.leaks": {
+      "text": "{n} leaks opened ({amount})",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: several leaks (money the business may be losing) found that day, and how much"
+    },
+    "money.daily.leaks_none": {
+      "text": "no leak opened",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: no leak found that day"
+    },
+    "money.daily.leaks_one": {
+      "text": "1 leak opened ({amount})",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: one leak (money the business may be losing) found that day"
+    },
+    "money.daily.link": {
+      "text": "Money page: {link}",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: the link to the Money page in the web app"
+    },
     "reach.about": {
       "text": "This chat sends you updates from {businesses}. Send STOP to stop the latest one.",
       "reviewed": true,

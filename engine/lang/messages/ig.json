@@ -264,6 +264,54 @@
       "text": "{name} adịghị ebe a. Asụsụ dị ebe a: {languages}.",
       "reviewed": false
     },
+    "money.channel.cash": {
+      "text": "ego nkịtị",
+      "reviewed": false
+    },
+    "money.channel.upload": {
+      "text": "statement ụlọ akụ",
+      "reviewed": false
+    },
+    "money.daily": {
+      "text": "Ụnyaahụ: {in}; {out} pụrụ; {invoices}; {leaks}.",
+      "reviewed": false
+    },
+    "money.daily.in": {
+      "text": "{amount} batara",
+      "reviewed": false
+    },
+    "money.daily.in_pending": {
+      "text": "{amount} batara ({pending} na-eche)",
+      "reviewed": false
+    },
+    "money.daily.invoices": {
+      "text": "akwụọla invoice {n} ({amount})",
+      "reviewed": false
+    },
+    "money.daily.invoices_none": {
+      "text": "akwụghị invoice ọ bụla",
+      "reviewed": false
+    },
+    "money.daily.invoices_one": {
+      "text": "akwụọla invoice 1 ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks": {
+      "text": "ọpụpụ ego ọhụrụ {n} ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks_none": {
+      "text": "enweghị ọpụpụ ego ọhụrụ",
+      "reviewed": false
+    },
+    "money.daily.leaks_one": {
+      "text": "ọpụpụ ego ọhụrụ 1 ({amount})",
+      "reviewed": false
+    },
+    "money.daily.link": {
+      "text": "Peeji ego: {link}",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Mkparịta ụka a na-ezitere gị ozi site na {businesses}. Zipu STOP iji kwụsị nke ikpeazụ.",
       "reviewed": false

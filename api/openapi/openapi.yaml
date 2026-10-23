@@ -23499,6 +23499,7 @@ components:
                 - message
                 - invoice
                 - match
+                - money_daily
               status:
                 type: string
                 enum:
