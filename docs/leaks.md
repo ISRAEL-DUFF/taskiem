@@ -27,7 +27,7 @@ People with `invoice.manage` can give a leak to a member, and close it as:
 
 A note can say why. A closed leak cannot be changed.
 
-A leak whose cause goes away before anyone closes it closes itself as **resolved**: the money is matched to an invoice, the overdue invoice is paid, the voided invoice's money is dealt with.
+A leak whose cause goes away before anyone closes it closes itself as **resolved**: the money is matched to an invoice, the overdue or overpaid invoice is put right. Money paid after an invoice was voided stays a leak until a person closes it (refunded and recovered, or not a leak).
 
 ## Agreed fees
 
