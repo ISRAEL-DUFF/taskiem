@@ -1729,7 +1729,12 @@
                         "payout.failed",
                         "payout.reversed",
                         "payment.received",
-                        "virtual_account.credited"
+                        "payment.returned",
+                        "refund.pending",
+                        "refund.processed",
+                        "refund.failed",
+                        "virtual_account.credited",
+                        "pos.sale"
                       ]
                     }
                   },

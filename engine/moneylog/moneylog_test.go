@@ -14,6 +14,9 @@ func TestFromEvent(t *testing.T) {
 		{"payout.settled", map[string]any{"payout_id": "T1"}, "out", "payout", "settled", "T1", "paystack/main|payout.settled|T1"},
 		{"payout.failed", map[string]any{"payout_id": "T1", "reason": "no such account"}, "out", "payout", "failed", "T1", "paystack/main|payout.failed|T1"},
 		{"pos.sale", map[string]any{"reference": "S1", "status": "declined", "amount_kobo": "150000"}, "in", "pos_sale", "failed", "S1", "paystack/main|pos.sale.failed|S1"},
+		{"refund.pending", map[string]any{"payment_id": "P1", "amount_kobo": int64(10000)}, "out", "refund", "pending", "P1", "paystack/main|refund.pending|P1"},
+		{"refund.processed", map[string]any{"payment_id": "P1", "refund_id": "R9", "amount_kobo": int64(10000)}, "out", "refund", "settled", "P1", "paystack/main|refund.processed|P1"},
+		{"refund.failed", map[string]any{"payment_id": "P1"}, "out", "refund", "failed", "P1", "paystack/main|refund.failed|P1"},
 	}
 	for _, c := range cases {
 		e, ok := FromEvent("paystack/main", c.event, c.fields)
@@ -30,6 +33,32 @@ func TestFromEvent(t *testing.T) {
 	}{{"payment.received", map[string]any{}}, {"something.else", map[string]any{"payment_id": "x"}}} {
 		if _, ok := FromEvent("x/main", bad.event, bad.fields); ok {
 			t.Errorf("%s logged", bad.event)
+		}
+	}
+}
+
+func TestFromEventRefundNote(t *testing.T) {
+	e, _ := FromEvent("paystack/main", "refund.processed", map[string]any{"payment_id": "P1", "refund_id": "R9"})
+	if e.Note != "Refund of payment P1, refund R9" {
+		t.Errorf("note %q", e.Note)
+	}
+	if e, _ := FromEvent("paystack/main", "refund.failed", map[string]any{"payment_id": "P1", "reason": "card closed"}); e.Note != "Refund of payment P1: card closed" {
+		t.Errorf("note %q", e.Note)
+	}
+}
+
+// A payout answered settled when made is keyed as its payout.settled
+// event; any other answer is not recorded.
+func TestFromPayout(t *testing.T) {
+	e, ok := FromPayout("paystack/main", map[string]any{"amount_kobo": int64(500000), "currency": "NGN"}, map[string]any{"payout_id": "T1", "status": "settled", "fee_kobo": int64(1075)})
+	ev, _ := FromEvent("paystack/main", "payout.settled", map[string]any{"payout_id": "T1"})
+	if !ok || e.Key() != ev.Key() || e.Source != "step" || e.Direction != "out" || e.Kind != "payout" || e.Status != "settled" ||
+		e.AmountKobo == nil || *e.AmountKobo != 500000 || e.FeeKobo == nil || *e.FeeKobo != 1075 || e.check() != nil {
+		t.Errorf("%v %+v", ok, e)
+	}
+	for _, out := range []map[string]any{{"payout_id": "T1", "status": "pending"}, {"payout_id": "T1", "status": "failed"}, {"status": "settled"}} {
+		if _, ok := FromPayout("paystack/main", nil, out); ok {
+			t.Errorf("%v recorded", out)
 		}
 	}
 }

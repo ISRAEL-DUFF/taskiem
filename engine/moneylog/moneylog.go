@@ -47,7 +47,7 @@ type Entry struct {
 	// PayerName and PayerAccount are personal data: sealed when written.
 	PayerName    string `json:"payer_name,omitempty"`
 	PayerAccount string `json:"payer_account,omitempty"`
-	Source       string `json:"source"` // event, lookup, upload, entered
+	Source       string `json:"source"` // event, lookup, step, upload, entered
 	Note         string `json:"note,omitempty"`
 	// What a person typed or a statement said (T6): the line's
 	// description, and an expense's vendor and category; EnteredBy is who
@@ -154,7 +154,7 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 			return uuid.Nil, false, err
 		}
 	}
-	if e.Corrects == nil && e.Event != "" && (e.Source == "event" || e.Source == "lookup") {
+	if e.Corrects == nil && e.Event != "" && (e.Source == "event" || e.Source == "lookup" || e.Source == "step") {
 		// A later status of a movement names the first entry for it.
 		var first uuid.UUID
 		err := tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3 AND kind = $4
@@ -208,6 +208,19 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 		e.Direction, e.Kind, e.Reference = "out", "payout", str(fields, "payout_id")
 		e.Status = strings.TrimPrefix(event, "payout.")
 		e.Note = clip(str(fields, "reason"), 300)
+	case "refund.pending", "refund.processed", "refund.failed":
+		// Money out of the business back to a customer: its own movement,
+		// known by the payment refunded (the rail's refund reference is
+		// not in every status's event), named in the note.
+		e.Direction, e.Kind, e.Reference = "out", "refund", str(fields, "payment_id")
+		e.Status = refundStatus[event]
+		e.Note = "Refund of payment " + clip(e.Reference, 200)
+		if id := str(fields, "refund_id"); id != "" {
+			e.Note = clip(e.Note+", refund "+id, 300)
+		}
+		if r := str(fields, "reason"); r != "" {
+			e.Note = clip(e.Note+": "+r, 300)
+		}
 	case "pos.sale":
 		e.Direction, e.Kind, e.Reference = "in", "pos_sale", str(fields, "reference")
 		e.Status = posStatus[str(fields, "status")]
@@ -236,6 +249,25 @@ var returned = map[string]string{
 	"late":         "Returned to the payer: paid after the account expired",
 	"wrong_amount": "Returned to the payer: not the amount asked",
 	"other":        "Returned to the payer",
+}
+
+var refundStatus = map[string]string{"refund.pending": "pending", "refund.processed": "settled", "refund.failed": "failed"}
+
+// FromPayout is the entry for a payout a payment step's answer says
+// settled when it was made (pay_bank answering status settled), on
+// channel: amount and currency from the step's input, the fee and the
+// rail's payout_id from its output. It is keyed as the rail's
+// payout.settled event for the payout would be, so that event, if it
+// comes, is the same entry. ok is false for any other answer: a pending
+// payout is recorded when its event comes, and a failed one moved no
+// money.
+func FromPayout(channel string, input, output map[string]any) (Entry, bool) {
+	if str(output, "status") != "settled" || str(output, "payout_id") == "" {
+		return Entry{}, false
+	}
+	return Entry{Direction: "out", Kind: "payout", Status: "settled", Channel: channel, Reference: str(output, "payout_id"),
+		Event: "payout.settled", Source: "step", Currency: str(input, "currency"),
+		AmountKobo: kobo(input, "amount_kobo"), FeeKobo: kobo(output, "fee_kobo")}, true
 }
 
 var posStatus = map[string]string{"approved": "settled", "declined": "failed", "reversed": "reversed", "pending": "pending"}

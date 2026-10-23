@@ -58,7 +58,7 @@ One line per movement, at its latest status; money in positive, money out negati
 | `reference` | The rail's reference |
 | `description` | What was typed or the statement said |
 | `vendor`, `category` | For expenses |
-| `source` | `event` (the rail told Taskiem), `lookup` (Taskiem asked), `upload` (a statement) or `entered` (typed in) |
+| `source` | `event` (the rail told Taskiem), `lookup` (Taskiem asked), `step` (a workflow's payout the rail answered as settled at once), `upload` (a statement) or `entered` (typed in) |
 | `invoice` | The invoice numbers it is matched to, if any |
 
 ### Invoices

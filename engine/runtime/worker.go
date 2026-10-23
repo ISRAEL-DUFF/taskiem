@@ -903,6 +903,9 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		}
 		proj := result.Type == history.StepCompleted && projected(p)
 		*result = project(p, *result)
+		if err := w.recordPayout(ctx, tx, p, *result); err != nil {
+			return err
+		}
 		var payload any = result.Payload
 		if w.Store.PII != nil {
 			// Personal data in what the provider returned is sealed before it

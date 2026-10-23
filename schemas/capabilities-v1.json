@@ -411,6 +411,52 @@
         }
       }
     },
+    "refund.pending": {
+      "title": "A refund to a customer was started",
+      "correlation": "payment_id",
+      "fields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payment_id"],
+        "properties": {
+          "payment_id": { "type": "string", "description": "The payment refunded, as the payment capability answered it (refund takes it)" },
+          "refund_id": { "type": "string", "description": "The rail's own reference for the refund, when its event carries one" },
+          "amount_kobo": { "type": "integer", "description": "What is refunded" },
+          "currency": { "type": "string" }
+        }
+      }
+    },
+    "refund.processed": {
+      "title": "A refund to a customer went out",
+      "correlation": "payment_id",
+      "fields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payment_id"],
+        "properties": {
+          "payment_id": { "type": "string", "description": "The payment refunded, as the payment capability answered it (refund takes it)" },
+          "refund_id": { "type": "string", "description": "The rail's own reference for the refund, when its event carries one" },
+          "amount_kobo": { "type": "integer", "description": "What is refunded" },
+          "currency": { "type": "string" }
+        }
+      }
+    },
+    "refund.failed": {
+      "title": "A refund failed; the money is back",
+      "correlation": "payment_id",
+      "fields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payment_id"],
+        "properties": {
+          "payment_id": { "type": "string", "description": "The payment refunded, as the payment capability answered it (refund takes it)" },
+          "refund_id": { "type": "string", "description": "The rail's own reference for the refund, when its event carries one" },
+          "amount_kobo": { "type": "integer", "description": "What was to be refunded" },
+          "currency": { "type": "string" },
+          "reason": { "type": "string", "description": "Why, in the rail's words" }
+        }
+      }
+    },
     "virtual_account.credited": {
       "title": "Money arrived in a customer's account number",
       "correlation": "reference",
