@@ -1,6 +1,6 @@
 # 0032 — Deployment target: one VM until a named trigger, then Kubernetes with the Helm chart
 
-Date: 2026-10-15 · Status: Proposed (provider and region pending P4-C1)
+Date: 2026-10-15 · Status: In effect for staging (https://staging.ispend.name.ng, running by 23 October 2026); production's provider and region pending P4-C1
 
 ## Context
 
