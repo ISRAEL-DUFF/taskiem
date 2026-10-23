@@ -20,7 +20,8 @@ import (
 // docs/invoices.md): what a business sent its customer, read-only. It
 // shows the business, the invoice's lines and totals, its status and its
 // note, and nothing personal: the customer's name, phone and email are
-// sealed and never reach the public role. Payment arrives with T4.
+// sealed and never reach the public role. The ways to pay it (T4) are in
+// invoicepay.go.
 
 // InvoicePage is what an invoice's page shows.
 type InvoicePage struct {
@@ -91,8 +92,11 @@ type invoiceData struct {
 	DueOn    string // "Due 31 Jan 2099", while something is due
 	Note     string
 	Message  string // paid or void
-	// Payable shows where the payment options will go.
+	// Payable: something is due; Pay is how to pay it, nil when the
+	// server offers no payments.
 	Payable bool
+	Pay     *payView
+	Refresh int
 }
 
 type invoiceLine struct {
@@ -104,15 +108,15 @@ type invoiceLine struct {
 // token exists.
 func (s *Server) serveInvoice(w http.ResponseWriter, r *http.Request, token, sub string) {
 	w.Header().Set("X-Robots-Tag", "noindex")
-	if sub != "" {
+	if s.Invoices == nil || !invoiceTokenRe.MatchString(token) || sub != "" && (sub != "pay" || s.InvoicePay == nil) {
 		s.invoiceNotFound(w, r)
+		return
+	}
+	if sub == "pay" {
+		s.servePay(w, r, token)
 		return
 	}
 	if !allowed(w, r, http.MethodGet, http.MethodHead) {
-		return
-	}
-	if s.Invoices == nil || !invoiceTokenRe.MatchString(token) {
-		s.invoiceNotFound(w, r)
 		return
 	}
 	p, ok, err := s.Invoices(r.Context(), invoicing.TokenHash(token))
@@ -151,6 +155,12 @@ func (s *Server) serveInvoice(w http.ResponseWriter, r *http.Request, token, sub
 			d.DueOn = "Due " + p.DueOn.Format("2 Jan 2006")
 		}
 		d.Payable = true
+		if s.InvoicePay != nil && p.TotalKobo > p.PaidKobo {
+			if d.Pay, d.Refresh, err = s.payOptions(r.Context(), token, p); err != nil {
+				s.tryLater(w, r, "invoice payment", err)
+				return
+			}
+		}
 	}
 	s.renderPrivate(w, r, http.StatusOK, "invoice.html", d)
 }

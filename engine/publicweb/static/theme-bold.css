@@ -156,3 +156,9 @@ legend { padding: 0; font-size: 1.25rem; font-weight: 900; letter-spacing: -.01e
 .inv-sums dd { margin: 0; text-align: right; font-weight: 700; }
 .inv-sums .inv-due { font-size: 1.5rem; font-weight: 900; }
 .inv-note { white-space: pre-line; }
+.inv-pay { margin: 1.5rem 0; }
+.inv-pay h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
+.inv-acct { border: 2px solid var(--brand); border-radius: .5rem; padding: 1rem; margin: 0 0 1rem; }
+.inv-acct p { margin: .25rem 0; }
+.inv-acct-no { font-size: 1.75rem; font-weight: 800; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.inv-pay .btn + .btn { margin-top: .5rem; }

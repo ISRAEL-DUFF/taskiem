@@ -111,16 +111,17 @@ $$;
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_public_invoice_payment(p_token_hash bytea)
 RETURNS TABLE (kind text, status text, amount_kobo bigint, account_number text, bank_name text, account_name text, payment_url text,
-               expires_at timestamptz, on_late text, on_wrong_amount text, waiting boolean, issued_last_hour int, issued int)
+               expires_at timestamptz, on_late text, on_wrong_amount text, waiting boolean, issued_last_hour int, issued int, part_payments boolean)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   WITH inv AS (
-    SELECT i.id FROM customer_invoices i JOIN tenants t ON t.id = i.tenant_id AND t.status = 'active'
+    SELECT i.id, i.allow_part_payments FROM customer_invoices i JOIN tenants t ON t.id = i.tenant_id AND t.status = 'active'
      WHERE i.page_token_hash = p_token_hash AND i.sent_at IS NOT NULL
   ), k(kind) AS (VALUES ('transfer'), ('link'))
   SELECT k.kind, a.status, a.amount_kobo, a.account_number, a.bank_name, a.account_name, a.payment_url, a.expires_at, a.on_late, a.on_wrong_amount,
          EXISTS (SELECT 1 FROM customer_invoice_requests r, inv WHERE r.invoice_id = inv.id AND r.kind = k.kind),
          (SELECT count(*)::int FROM customer_invoice_accounts c, inv WHERE c.invoice_id = inv.id AND c.kind = k.kind AND c.created_at > now() - interval '1 hour'),
-         (SELECT count(*)::int FROM customer_invoice_accounts c, inv WHERE c.invoice_id = inv.id AND c.kind = k.kind)
+         (SELECT count(*)::int FROM customer_invoice_accounts c, inv WHERE c.invoice_id = inv.id AND c.kind = k.kind),
+         inv.allow_part_payments
     FROM k CROSS JOIN inv
     LEFT JOIN LATERAL (SELECT * FROM customer_invoice_accounts a WHERE a.invoice_id = inv.id AND a.kind = k.kind ORDER BY a.seq DESC LIMIT 1) a ON true
 $$;

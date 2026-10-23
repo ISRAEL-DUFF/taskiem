@@ -175,6 +175,9 @@ type Server struct {
 	// Invoices reads the invoices businesses send their customers, for
 	// their pages on the form host, /i/{token} (invoice.go); nil: none.
 	Invoices Invoices
+	// InvoicePay offers ways to pay on invoice pages (T4); nil: the pages
+	// only show the invoice.
+	InvoicePay InvoicePay
 
 	hosts         *lru.Cache[string, hostEntry]
 	formCache     *lru.Cache[string, formEntry]

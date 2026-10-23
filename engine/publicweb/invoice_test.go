@@ -54,7 +54,7 @@ func TestInvoicePage(t *testing.T) {
 			t.Fatalf("%s: %d %s", theme, res.Code, body)
 		}
 		for _, want := range []string{"theme-" + theme + ".", "Ada Kitchen", "Invoice INV-0007", "Part-paid", "Jollof &lt;rice&gt;", "3 × ₦2,500", "₦7,500",
-			"₦2,500.50", "₦4,999.50", "Due 31 Jan 2099", "Thanks", "Payment options will appear here soon."} {
+			"₦2,500.50", "₦4,999.50", "Due 31 Jan 2099", "Thanks", "Ask Ada Kitchen how to pay."} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s: no %q in %s", theme, want, body)
 			}

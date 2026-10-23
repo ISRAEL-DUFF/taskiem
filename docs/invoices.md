@@ -38,7 +38,17 @@ The link in the SMS and email opens the invoice's page, `https://<form host>/i/<
 - each line (what, quantity × unit price, line total), the total, what was paid and what is still due;
 - the due date ("Due 31 Jan 2099") and the note.
 
-A paid invoice says "Paid in full. Thank you."; a void one says "This invoice was cancelled." (not the reason). Payment options will be shown there with T4; until then the page says they will appear soon.
+A paid invoice says "Paid in full. Thank you."; a void one says "This invoice was cancelled." (not the reason).
+
+### Paying from the page
+
+While something is due, the page has **Pay this invoice**:
+
+- **Pay by bank transfer** gets a one-time account number from the business's payments connection, for this invoice and the amount due. The page shows the account number, bank and account name, the amount, "Valid until 14:35 (Lagos time)" with the minutes left, and what the payments provider does with a transfer of a different amount or after that time. It updates itself every 30 seconds (no script), so it shows the payment when it arrives. Once the number expires, **Get a new account number** issues another. A transfer into an expired number that the provider still accepts is counted.
+- **Pay by card** gets a payment link from the same connection and offers **Continue to card payment**. A connection that cannot make links answers "Card payment is not available for this invoice just now."
+- When the invoice takes part payments, an **Amount to pay** box takes any amount from ₦1,000 (or the balance, when less) up to what is due; left empty, the whole balance.
+
+Asking again for the same amount while a number is still valid shows the same number. An invoice gets at most 5 account numbers an hour and 20 in all (the same again for card links); past that the page says to try later or contact the business. The page only queues the request: the public host holds no credentials, and Taskiem's API server asks the payments provider within a second or two, while the page shows "Getting your account number…".
 
 The page shows nothing about the customer: their name, phone and email stay sealed, and the public host cannot read them. A draft's page, an unknown link and a mistyped one all answer the same "This invoice was not found", so the page never tells whether a link exists. It is never cached (`Cache-Control: no-store`) or indexed (`X-Robots-Tag: noindex`).
 
@@ -46,7 +56,9 @@ The page shows nothing about the customer: their name, phone and email stay seal
 
 Each payment counted towards an invoice is listed on it: the amount, the payment's reference at the payments provider, how it was matched to the invoice (exactly, by the reference Taskiem gave it; suggested; or by a person) and who matched it. **Undo** takes a payment out of an invoice when it was matched to the wrong one.
 
-Payments are counted from your payments connection: by the account number or payment link Taskiem gives the customer for the invoice, and by matching other money that comes in. Both arrive in the milestones after this one ([build plan](spec/invoices-and-money-log.md), T4 and T5); until then an invoice shows no payments.
+Payments into an account number or payment link Taskiem gave for an invoice are counted automatically: every 30 seconds Taskiem asks the payments provider about each one still waiting (for up to 48 hours after an account number expires, and 7 days for a link), and counts a payment once, as matched exactly, by the system. When that makes the invoice paid, a run waiting on `invoice.paid` continues. Other money that comes in (a transfer to the business's usual account, cash) is matched in a later milestone ([build plan](spec/invoices-and-money-log.md), T5).
+
+The account numbers and links come from the prod connection named in **Payments connection** (`main` by default; write `paystack/main` when several providers have a connection called `main`). It needs a provider that can open one-time account numbers (Paystack with Pay with Transfer turned on, Flutterwave, OPay) or make payment links. For now the business pays the provider's fee: the "customer pays the fee" setting is kept but not yet applied, since the providers' fee rules are not yet confirmed.
 
 ## Settings
 

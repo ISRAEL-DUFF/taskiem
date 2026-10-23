@@ -1,4 +1,5 @@
-{{template "fhead" .}}{{template "fbody" .}}
+{{template "fhead" .}}{{with .Refresh}}<meta http-equiv="refresh" content="{{.}}">
+{{end}}{{template "fbody" .}}
 <h1>Invoice {{.Number}}</h1>
 <p class="lede">{{.Status}}{{with .DueOn}} · {{.}}{{end}}</p>
 {{template "fmain" .}}
@@ -12,7 +13,8 @@
 {{with .Paid}}<dt>Paid</dt><dd>{{.}}</dd>
 {{end}}{{with .Due}}<dt>Still due</dt><dd class="inv-due">{{.}}</dd>
 {{end}}</dl>
-{{if .Payable}}<p class="hint">Payment options will appear here soon.</p>{{end}}
+
 </div>
 {{with .Note}}<p class="notice inv-note">{{.}}</p>{{end}}
+{{if .Payable}}{{with .Pay}}{{template "invoicepay" .}}{{else}}<p class="hint center">Ask {{.Business}} how to pay.</p>{{end}}{{end}}
 {{template "ffoot" .}}
