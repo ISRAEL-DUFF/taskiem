@@ -30,10 +30,10 @@ Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](p
 
 | # | Item | Who | Code status | Unblocks |
 | --- | --- | --- | --- | --- |
-| R0-1 | [ ] Tell Payrolla the old integration is withdrawn, before it builds the reversal-notice endpoint, and why (decision 0044) | Founders | Old guide archived; Run payroll built | Nothing; urgent so no work is wasted |
-| R0-2 | [ ] Payrolla's API: auth, sandbox, webhook events and signature, approvals, payslips, rate limits ([partner tracker](partner-tracker.md) P1, P2) | Payrolla | Capability and product plan written ([rails and products](spec/rails-and-products.md)) | R5, the Payrolla connector |
-| R0-3 | [ ] Payrolla's embeddable screens: URLs, sign-in inside a frame, `frame-ancestors`, postMessage events (P3) | Payrolla | — | R6, app views |
-| R0-4 | [ ] Whether Payrolla's webhooks are set per company or once for all its companies | Payrolla with Taskiem | Partner routing built (decision 0031) | R5 |
+| R0-1 | [x] (Payrolla's reply of 23 October answers the change of plan) Tell Payrolla the old integration is withdrawn, before it builds the reversal-notice endpoint, and why (decision 0044) | Founders | Old guide archived; Run payroll built | Nothing; urgent so no work is wasted |
+| R0-2 | [x] (23 October, [reference](integrations/payrolla-reference/02-taskiem-integration-guide.md)) Payrolla's API: auth, sandbox, webhook events and signature, approvals, payslips, rate limits ([partner tracker](partner-tracker.md) P1, P2) | Payrolla | Capability and product plan written ([rails and products](spec/rails-and-products.md)) | R5, the Payrolla connector |
+| R0-3 | [x] (23 October, [embedding](integrations/payrolla-reference/api/embedding.md)) Payrolla's embeddable screens: URLs, sign-in inside a frame, `frame-ancestors`, postMessage events (P3) | Payrolla | — | R6, app views |
+| R0-4 | [x] (per company, made with each company's key) Whether Payrolla's webhooks are set per company or once for all its companies | Payrolla with Taskiem | Partner routing built (decision 0031) | R5 |
 
 ## Production infrastructure and security (gates G1 and G2)
 

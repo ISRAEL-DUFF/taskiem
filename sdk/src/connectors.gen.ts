@@ -1359,6 +1359,68 @@ export const opay_business = {
   request_payment: (input: OpayBusinessRequestPaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "request_payment", input, extra),
 };
 
+// Payrolla (payrolla@1)
+export interface PayrollaCreatePayslipLinkInput {
+  payslip_id: Val<string>;
+}
+export interface PayrollaGetApprovalLinkInput {
+  run_id: Val<string>;
+}
+export interface PayrollaGetCompanyInput {
+  [key: string]: Value;
+}
+export interface PayrollaGetEmployeeInput {
+  employee_id: Val<string>;
+}
+export interface PayrollaGetRunInput {
+  run_id: Val<string>;
+}
+export interface PayrollaGetRunLinesInput {
+  run_id: Val<string>;
+}
+export interface PayrollaListEmployeesInput {
+  cursor?: Val<string>;
+  limit?: Val<number>;
+  /** Comma-separated: ACTIVE, INACTIVE, TERMINATED */
+  status?: Val<string>;
+  updated_since?: Val<string>;
+}
+export interface PayrollaListEventsInput {
+  /** An event id; events after it. Empty starts 30 days back. */
+  after?: Val<string>;
+  limit?: Val<number>;
+  /** Comma-separated event types */
+  types?: Val<string>;
+}
+export interface PayrollaListRunsInput {
+  cursor?: Val<string>;
+  limit?: Val<number>;
+  /** Comma-separated statuses: DRAFT, COMPUTED, APPROVED, LOCKED, DISBURSING, COMPLETED, PARTIALLY_COMPLETED, CANCELLED, FAILED */
+  status?: Val<string>;
+  /** Only runs changed at or after this time (RFC 3339) */
+  updated_since?: Val<string>;
+}
+export const payrolla = {
+  /** Get a payslip link for an employee (unsafe_write) */
+  create_payslip_link: (input: PayrollaCreatePayslipLinkInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "create_payslip_link", input, extra),
+  /** Get a run's approval link (read) */
+  get_approval_link: (input: PayrollaGetApprovalLinkInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "get_approval_link", input, extra),
+  /** Check the connection (read) */
+  get_company: (input?: PayrollaGetCompanyInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "get_company", input, extra),
+  /** Get an employee (read) */
+  get_employee: (input: PayrollaGetEmployeeInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "get_employee", input, extra),
+  /** Get a payroll run (read) */
+  get_run: (input: PayrollaGetRunInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "get_run", input, extra),
+  /** Get each employee's pay in a run (read) */
+  get_run_lines: (input: PayrollaGetRunLinesInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "get_run_lines", input, extra),
+  /** Find employees (read) */
+  list_employees: (input?: PayrollaListEmployeesInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "list_employees", input, extra),
+  /** Replay events (read) */
+  list_events: (input?: PayrollaListEventsInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "list_events", input, extra),
+  /** Find payroll runs (read) */
+  list_runs: (input?: PayrollaListRunsInput, extra?: ConnectorExtra): StepSpec => connector("payrolla@1", "list_runs", input, extra),
+};
+
 // Paystack (paystack@1)
 export interface PaystackCheckBalanceInput {
   [key: string]: Value;
@@ -2440,6 +2502,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "notify@1": "notify",
   "opay@1": "opay",
   "opay_business@1": "opay_business",
+  "payrolla@1": "payrolla",
   "paystack@1": "paystack",
   "postgres@1": "postgres",
   "prembly@1": "prembly",
@@ -2478,6 +2541,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "notify@1": ["message", "tell", "text"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "opay_business@1": ["get_balance", "get_payment_request", "get_terminal", "get_transaction", "list_terminal_transactions", "request_payment"],
+  "payrolla@1": ["create_payslip_link", "get_approval_link", "get_company", "get_employee", "get_run", "get_run_lines", "list_employees", "list_events", "list_runs"],
   "paystack@1": ["check_balance", "create_recipient", "initialize_transaction", "list_banks", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],

@@ -1,0 +1,22 @@
+{
+ "action": "list_events",
+ "input": {
+  "after": "01J9Z0000000000000000000AA",
+  "types": "payout.failed"
+ },
+ "credentials": {
+  "api_key": "pyk_live_test_key"
+ },
+ "exchanges": [
+  "events"
+ ],
+ "expect": {
+  "output": {
+   "events": [
+    {
+     "type": "payout.failed"
+    }
+   ]
+  }
+ }
+}

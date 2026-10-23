@@ -1,0 +1,18 @@
+{
+ "action": "list_employees",
+ "input": {
+  "status": "ACTIVE",
+  "limit": 100
+ },
+ "credentials": {
+  "api_key": "pyk_live_test_key"
+ },
+ "exchanges": [
+  "employees"
+ ],
+ "expect": {
+  "output": {
+   "next_cursor": "c2"
+  }
+ }
+}

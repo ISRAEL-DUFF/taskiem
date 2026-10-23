@@ -1,0 +1,39 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/connect/events",
+  "query": {
+   "after": "01J9Z0000000000000000000AA",
+   "types": "payout.failed"
+  },
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": {
+    "events": [
+     {
+      "id": "01J9Z0000000000000000000AB",
+      "type": "payout.failed",
+      "api_version": "2026-11-01",
+      "created_at": "2026-10-28T10:01:12.345Z",
+      "company_id": "0b6e3f9a-8c21-4d57-a6e4-1f2b7c9d0e58",
+      "data": {
+       "run_id": "5d2a7a62-6f0e-4c1e-9a5b-2d1f0c3e8a71",
+       "payslip_id": "a81c4e2b-7d39-4b6f-8e15-c0d2f9a6b734",
+       "employee_id": "e3f0b9d4-2c7a-4f8e-b1d6-9a0c5e7f3b12",
+       "amount_kobo": 18500000,
+       "method": "BANK",
+       "reference": "NIP-000123",
+       "reason": "beneficiary account is dormant"
+      }
+     }
+    ],
+    "next_cursor": null
+   }
+  }
+ }
+}

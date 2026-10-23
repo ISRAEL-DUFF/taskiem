@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/connect/payslips/a81c4e2b-7d39-4b6f-8e15-c0d2f9a6b734/link",
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "data": {
+    "url": "https://payroller.surge.sh/p/7Hk2Qm9xLw",
+    "expires_at": "2026-11-04T10:00:00Z"
+   }
+  }
+ }
+}

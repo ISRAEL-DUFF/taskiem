@@ -1,0 +1,24 @@
+{
+ "action": "list_runs",
+ "input": {
+  "status": "COMPUTED,APPROVED",
+  "limit": 50
+ },
+ "credentials": {
+  "api_key": "pyk_live_test_key"
+ },
+ "exchanges": [
+  "runs"
+ ],
+ "expect": {
+  "output": {
+   "runs": [
+    {
+     "run_id": "5d2a7a62-6f0e-4c1e-9a5b-2d1f0c3e8a71",
+     "status": "COMPUTED"
+    }
+   ],
+   "next_cursor": ""
+  }
+ }
+}

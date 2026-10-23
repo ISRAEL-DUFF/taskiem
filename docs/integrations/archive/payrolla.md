@@ -1,6 +1,6 @@
 # Payrolla integration guide (superseded)
 
-> **Superseded, kept for the record.** [Decision 0044](../../decisions/0044-rails-and-products.md) withdrew this guide: Payrolla pays its customers' staff itself, so Taskiem connects to Payrolla as a product (its webhooks, its API and its embeddable views) rather than paying for it. Nothing below is to be built. Payroll for a business without a payroll product is the [Run payroll](../../templates.md) template; the Payrolla connector is planned in [rails and products](../../spec/rails-and-products.md#62-payrolla1).
+> **Superseded, kept for the record.** [Decision 0044](../../decisions/0044-rails-and-products.md) withdrew this guide: Payrolla pays its customers' staff itself, so Taskiem connects to Payrolla as a product (its webhooks, its API and its embeddable views) rather than paying for it. Nothing below is to be built. Payroll for a business without a payroll product is the [Run payroll](../../templates.md) template; the Payrolla connector is [`payrolla@1`](../payrolla.md).
 
 
 **For:** Payrolla engineering  
