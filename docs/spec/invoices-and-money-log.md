@@ -415,6 +415,14 @@ Exact matching, suggestions with reasons, confirm, reject and undo in the web ap
 
 **Done when:** a one-time account payment marks its invoice paid with no person involved; an unreferenced transfer gets a suggestion with its reason; an undo moves the invoice back and leaves both rows.
 
+**Built** (T5): migration 00202 (payments name their money log entry; `money_suggestions`; `money_match_state`; `auto_match` in the settings); `engine/matching` (exact matches from one-time accounts and links, scored suggestions with reasons, automatic matching, confirm, reject, match by hand); `/v1/money/suggestions` and `/v1/money/entries/{id}/match`; matches copied to the kept table `money_matches` ([matching](../matching.md)). Differences from §8:
+
+- **A match is a row of `customer_invoice_payments`**, as T3 built it, naming the entry it counts; `money_matches` is its copy, as `money_log` is of the entries. One entry counts towards one invoice at a time, checked under a lock on the entry.
+- **An undone payment may count again.** 00197's unique index made a payment count towards an invoice once ever, so an undone match could not be redone; it is replaced by a check under a lock.
+- **The score is Taskiem's own**, not Tally's: amount, a reference naming the invoice, the payer's name against the customer's, and days since sending, with fixed weights listed in [matching](../matching.md). Automatic matching needs 85 and a 15-point lead.
+- **Reasons never quote a name**, since they are stored and shown as they are.
+- **Not yet**: storefront orders (matched by their own payment check), and the permanent-account rule (no customer's permanent account is linked to invoices yet).
+
 ### T6: leaks, statements, cash and expenses (M; needs T5)
 
 The first five leaks, their lifecycle and the amount recovered; statement upload for the first formats; cash and expense entry; `chase-overdue-invoices` and `invoice-paid-receipt`.
