@@ -265,3 +265,24 @@ func TestNaira(t *testing.T) {
 		}
 	}
 }
+
+// A customer who has had many messages this hour still gets the invoice
+// sent: the throttled channel is left out, not the send refused.
+func TestSendPastTheRecipientLimit(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	cust := invoicing.Customer{Name: "Ada Obi", Phone: "+2348031234567"}
+	for i := range 7 {
+		x := w.create(invoicing.Draft{Customer: cust, AmountKobo: 100000})
+		sent, err := w.inv.Send(ctx, w.env.Tenant, x.Number, "user:ada", "k"+x.Number)
+		if err != nil {
+			t.Fatalf("send %d: %v", i+1, err)
+		}
+		if sent.Invoice.Status != "sent" {
+			t.Fatalf("send %d: %+v", i+1, sent.Invoice)
+		}
+		if i >= 5 && len(sent.Queued) != 0 {
+			t.Errorf("send %d queued %v past the limit", i+1, sent.Queued)
+		}
+	}
+}

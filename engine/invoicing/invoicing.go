@@ -718,6 +718,9 @@ func (s *Invoices) deliver(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x I
 		switch {
 		case errors.Is(err, sender.ErrAllowance):
 			over = true
+		case errors.Is(err, sender.ErrRecipientLimit):
+			// The customer has had many messages this hour: this one is
+			// left out, and the invoice is sent all the same.
 		case err != nil:
 			return nil, false, err
 		case queued:
@@ -727,10 +730,11 @@ func (s *Invoices) deliver(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x I
 	if x.Customer.Email != "" {
 		queued, err := s.Messages.Enqueue(ctx, tx, sender.Message{Tenant: tenant, Channel: sender.Email, Purpose: sender.PurposeLink,
 			To: x.Customer.Email, SenderName: business, Subject: subject, Text: text, Key: key + ":email"})
-		if err != nil {
+		switch {
+		case errors.Is(err, sender.ErrRecipientLimit):
+		case err != nil:
 			return nil, false, err
-		}
-		if queued {
+		case queued:
 			channels = append(channels, "email")
 		}
 	}

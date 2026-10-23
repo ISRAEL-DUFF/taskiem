@@ -12,7 +12,7 @@ Under **Invoices**, **New invoice** asks for:
 - **What it is for**: an amount with a short description, or a list of items, each with a quantity and a price.
 - **When it is due** (optional), and a note for the customer (optional).
 
-It is saved as a **draft** with the business's next number (`INV-0001` upwards). A draft can be changed. **Send** sends it to the customer by SMS and email, with the link to its page, and the invoice becomes **sent**. Sending again sends the same link.
+It is saved as a **draft** with the business's next number (`INV-0001` upwards). A draft can be changed. **Send** sends it to the customer by SMS and email, with the link to its page, and the invoice becomes **sent**. Sending again sends the same link. A customer who has had many messages in the last hour (five an hour, twenty a day, from any business) is not sent another: the invoice is sent all the same, its page works, and it says which messages went.
 
 A customer who asked the business for updates on WhatsApp or Telegram also gets it there, with buttons to pay ([below](#on-whatsapp-and-telegram)).
 
