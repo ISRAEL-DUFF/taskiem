@@ -1851,6 +1851,97 @@ paths:
                     type: boolean
         default:
           $ref: '#/components/responses/Error'
+  /v1/money/summary:
+    get:
+      operationId: getMoneySummary
+      tags:
+      - Invoices
+      summary: A period's money
+      description: "Money in and out, settled and pending, by channel, with fees and the effective fee rate, invoices paid and leaks; each movement counted once at its latest status (docs/money-reports.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The first day (Lagos time); today when left out
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The last day, included
+      - name: month
+        in: query
+        schema:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}$'
+        description: A whole month (2026-10), in place of from and to
+      responses:
+        '200':
+          description: The summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/exports/{kind}:
+    get:
+      operationId: exportMoney
+      tags:
+      - Invoices
+      summary: Export the money log, invoices or a journal
+      description: "A CSV of the period: log (one line per movement, its latest status), invoices (sent in the period; customers named only with reveal), or journal (double-entry postings, debits equal to credits). Audited."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [log, invoices, journal]
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The first day (Lagos time); today when left out
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The last day, included
+      - name: month
+        in: query
+        schema:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}$'
+        description: A whole month (2026-10), in place of from and to
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+        description: invoices only, with pii.reveal - the customers' names
+      responses:
+        '200':
+          description: The CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoice-settings:
     get:
       operationId: getInvoiceSettings
@@ -17283,6 +17374,65 @@ components:
           type: string
         balance:
           type: string
+    MoneySummary:
+      type: object
+      required: [from, to, in_settled_kobo, in_pending_kobo, out_settled_kobo, out_pending_kobo, fees_kobo, channels, invoices_paid, invoices_paid_kobo, leaks_opened, leaks_opened_kobo, leaks_open, leaks_open_kobo, recovered_kobo]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        in_settled_kobo:
+          type: integer
+        in_pending_kobo:
+          type: integer
+        out_settled_kobo:
+          type: integer
+        out_pending_kobo:
+          type: integer
+        fees_kobo:
+          type: integer
+        fee_rate_bp:
+          type: integer
+          description: Fees over the money in they were taken on, in basis points
+        channels:
+          type: array
+          items:
+            type: object
+            required: [channel, in_settled_kobo, in_pending_kobo, out_settled_kobo, out_pending_kobo, fees_kobo, movements]
+            properties:
+              channel:
+                type: string
+              in_settled_kobo:
+                type: integer
+              in_pending_kobo:
+                type: integer
+              out_settled_kobo:
+                type: integer
+              out_pending_kobo:
+                type: integer
+              fees_kobo:
+                type: integer
+              fee_rate_bp:
+                type: integer
+              movements:
+                type: integer
+        invoices_paid:
+          type: integer
+        invoices_paid_kobo:
+          type: integer
+        leaks_opened:
+          type: integer
+        leaks_opened_kobo:
+          type: integer
+        leaks_open:
+          type: integer
+        leaks_open_kobo:
+          type: integer
+        recovered_kobo:
+          type: integer
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]
