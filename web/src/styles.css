@@ -117,7 +117,7 @@ table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 img.brand-mark { background: none; }
 .nav .section { font-size: 12px; font-weight: 500; color: var(--nav-muted); padding: 16px 10px 6px; }
 .nav a, .nav .nav-toggle {
-  display: flex; align-items: center; gap: 10px; color: var(--nav-text); height: 32px; padding: 0 10px; border-radius: 7px;
+  display: flex; flex: none; align-items: center; gap: 10px; color: var(--nav-text); height: 32px; padding: 0 10px; border-radius: 7px;
   font-size: 13.5px; font-weight: 500; transition: background 0.12s, color 0.12s;
 }
 .nav a:hover, .nav .nav-toggle:hover { background: var(--nav-hover); color: var(--text); text-decoration: none; }
