@@ -1,6 +1,6 @@
 # Invoices and the money log: specification and build plan
 
-Status: **Accepted**, T0 in progress · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
+Status: **Accepted**; T0 partly done (§4.3) · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
 
 What a small business needed from Tally, built in Taskiem: invoices that settle themselves, an account number per invoice that the customer asks for when they are ready to pay, one record of every naira that moved, payments matched to what they pay for, and the leaks and summaries that come from that record. Lending is out of scope.
 
@@ -76,12 +76,15 @@ Contents:
 | | |
 | --- | --- |
 | Input | `amount_kobo`, `currency` (default NGN), `customer {name, email, phone}`, `description`, `expires_minutes` (wanted; the rail may shorten or lengthen it) |
-| Output | `account_number` (`x-pii`), `bank_name`, `account_name` (`x-pii`), `reference`, `amount_kobo`, `expires_at` (as the rail set it) |
+| Output | `payment_id`, `account_number` (`x-pii`), `bank_name`, `account_name` (`x-pii`), `amount_kobo` (what the customer must send), `expires_at` (as the rail set it) |
 | Class | idempotent or reconcilable; unsafe allowed only when declared, as for `virtual_account` |
-| Event | `virtual_account.credited`, carrying `reference`, the amount received and the payer as the rail reports them |
-| Lookup | `get_payment` by `reference`, for rails whose event can be missed |
+| Events | `payment.received` with that `payment_id`, as for `collect_link`; and a new `payment.returned` (`payment_id`, `amount_kobo`, `reason`: `late`, `wrong_amount`, `other`) for rails that send the money back and say so |
+| Lookup | `get_payment` by `payment_id`, for a missed event |
+| Facts | Each rail's mapping also declares `on_late` (`returned` or `credited`), `on_wrong_amount` (`returned`, `credited` or `excess_returned`) and its lifetime range, so the page and chat say the right thing (§6.3) |
 
 As with every capability, the rail's reference is derived from the step's idempotency key, so a retried request returns the same account instead of opening a second (§6.4).
+
+**Changed in T0:** the first draft reported payments as `virtual_account.credited`. Paystack reports a pay-by-transfer payment as an ordinary payment (`charge.success`), OPay as a payment callback and Flutterwave as `charge.completed`, all carrying our reference. So a one-time account is treated as what it is, one payment: it answers a `payment_id` and its money arrives as `payment.received`, like a payment link. A rail that reports it as an account credit (iswallet) maps that credit to `payment.received`.
 
 ### 4.2 First rails
 
@@ -95,6 +98,41 @@ iswallet, Flutterwave, Paystack and OPay first (OPay's temporary account is alre
 | Its fee per account issued or per payment, and any rate limit on issuing | The cap in §6.4 |
 | The event or webhook for a credit, and the field carrying our reference | Exact matching (§8.1) |
 | A lookup by reference | Recovering a missed event |
+
+### 4.3 What the rails do (T0, 23 October 2026)
+
+From each rail's public documentation, read 23 October 2026, and from our own connectors where they already cover the endpoint. "Not documented" means it must be asked or tested in sandbox before T1 maps it.
+
+| | Paystack | Flutterwave | OPay | iswallet |
+| --- | --- | --- | --- | --- |
+| Endpoint | `POST /charge` with `bank_transfer` ("Pay with Transfer"); Paystack support must turn it on for the business | `POST /v3/virtual-account-numbers` with `is_permanent: false` (a dynamic account); also `POST /v3/charges?type=bank_transfer` | `create_bank_transfer_payment` (already in `opay@1`) | `POST /v1/wallets/{id}/virtual-account`; the response has `amount_kobo`, `expires_at` and `is_permanent`, but the request fields for a temporary account are **not documented** |
+| Amount | Kobo | Naira in the examples, unit not stated | Kobo | Kobo |
+| Our reference | `reference` | `tx_ref` | `reference` (idempotent in our connector) | `client_reference` |
+| Lifetime | 15 minutes to 8 hours (`account_expires_at`); the support article says checkout accounts last 30 minutes | 60 seconds to about two months (`expires`, seconds); the default is given as 60 seconds on one page and 1 hour on another | `expire_minutes`, default 30; range not documented | Not documented |
+| Late transfer | **Returned**: the account becomes invalid and the money is refunded within about 24 hours (support article) | Not documented | Not documented | Not documented for temporary accounts; an inactive account **still credits** |
+| Wrong amount | **Returned** in full (`bank.transfer.rejected`); paying twice into one account is returned too | Dynamic account: **less is returned**; **more is accepted and the excess returned** | Not documented | Credited as sent (documented for permanent accounts) |
+| Fee | Not stated for Pay with Transfer; local payments 1.5% + ₦100 (₦100 waived under ₦2,500), capped at ₦2,000 | 2% for local methods (1.4% + 0.6%) plus VAT, no cap stated | Not documented | Deposits arrive net of the provider's fee (Flutterwave behind it: 1.4%, capped at ₦2,000) |
+| Event and lookup | `charge.success` (`data.reference`) and `bank.transfer.rejected`; `GET /charge/:reference` | `charge.completed` (`data.tx_ref`); `GET /v3/transactions/verify_by_reference` | Payment callback (`reference`); `get_payment` | `wallet.credit.posted` (`source_type: va_deposit`); the reference field to confirm |
+| Issue limits | Not documented | 429 per merchant, no numbers | Not documented | Not documented |
+
+Sources: Paystack's documentation mirror docs-v2.paystack.com (payment channels; charge API) and support.paystack.com (Pay with Transfer; transaction charges); developer.flutterwave.com (NGN virtual accounts; create a virtual account number; NGN bank transfer; verify by tx_ref; rate limits) and flutterwave.com/ng/pricing; OPay from our connector and [its guide](../integrations/opay.md) (documentation.opaycheckout.com, read 6 October 2026; the site did not load on 23 October); iswallet's OpenAPI (`/iwallet/openapi.json`) and its answers of [5 October](../integrations/iswallet-answers-2026-10-05.md) and [12 October](../integrations/iswallet-answers-2026-10-12-pgdock.md).
+
+**What this changes:**
+
+- **Late and wrong-amount transfers are usually sent back, not credited.** On Paystack, and for less on Flutterwave, the customer's bank gets the money back and the invoice stays unpaid. So the countdown matters to the customer, and the page must say plainly what happens after it ("Send exactly ₦25,000 before 14:35. A transfer after that, or of another amount, goes back to your bank").
+- **Paying part of an invoice by transfer needs an account for that part.** A rail that returns a wrong amount cannot take a part payment into an account issued for the whole. Whether a customer may choose to pay part, and get an account for that amount, is a business setting (§6.6).
+- **A returned payment is told.** Where the rail says so (`bank.transfer.rejected`), the customer and the owner are told the transfer went back, so nobody thinks the invoice was paid.
+- **The fee can be known in advance** on rails that take only the exact amount, so "the customer pays the fee" (§6.5) works there.
+- **Paystack's Pay with Transfer must be turned on by Paystack.** The connection's readiness says so until a first account has been issued.
+
+**Still to find out** (questions to the rails, or sandbox tests):
+
+| Rail | Question |
+| --- | --- |
+| iswallet | The request fields for a temporary account (amount, lifetime), its lifetime range, what happens to late and wrong-amount transfers, and which field of `wallet.credit.posted` carries our reference |
+| Flutterwave | Late transfers; whether `amount` is in naira; the v4 equivalents. The dynamic account is the first choice over the bank-transfer charge, because it documents wrong amounts and lifetimes |
+| OPay | Lifetime range, late and wrong-amount transfers, fees (when documentation.opaycheckout.com loads again, or from OPay) |
+| Paystack | The fee for Pay with Transfer specifically; any limit on accounts issued; whether API-created accounts follow the documented 15 minutes to 8 hours or the support article's 30 minutes |
 
 ## 5. Invoices
 
@@ -158,8 +196,8 @@ When `send` reaches the customer on WhatsApp or Telegram ([0039](../decisions/00
 
 ### 6.3 Cases
 
-1. **A transfer lands after expiry.** Wherever the rail still credits it, it carries the account's reference and is matched to the invoice like any other. The countdown is never used to refuse or ignore money.
-2. **The amount differs.** Less: the invoice is part-paid and the page and chat offer an account for the rest. More: paid, and the excess is flagged for the owner (refund or keep as credit).
+1. **A transfer lands after expiry.** On a rail that sends it back (Paystack), it never arrives; where the rail says so, the customer and owner are told (`payment.returned`). On a rail that credits it (iswallet, as far as is known), it carries the payment's reference and is matched to the invoice like any other. Taskiem never uses the countdown to refuse or ignore money that arrived.
+2. **The amount differs.** On rails that send a wrong amount back (Paystack; Flutterwave for less), nothing arrives and the customer is told when the rail says so. Flutterwave keeps the amount due from an overpayment and returns the excess itself. On rails that credit any amount: less makes the invoice part-paid and the page and chat offer an account for the rest; more marks it paid and flags the excess for the owner (refund or keep as credit).
 3. **The customer paid the old account after taking a new one.** Both accounts belong to the invoice; both payments count, and any excess is case 2.
 4. **The invoice is already paid or void.** No account is issued; the page and chat say so. Money that still arrives is matched (paid) or flagged (void).
 5. **Many requests.** At most five accounts per invoice an hour and twenty in all; the current valid account is shown again rather than a new one issued.
@@ -176,7 +214,11 @@ Configurable: a business sets it in its invoice settings, and may change it on o
 - **The business pays** (the default): the account is issued for the amount due, and the rail's fee is a `fee` row in the log, against the business.
 - **The customer pays**: the page and the chat message show the fee as its own line, and the account is issued for the amount due plus the fee, as the rail states it (T0 records how each rail charges: per account issued, per payment, flat or a percentage). The fee part of the payment is matched to the fee, not counted as an overpayment, and the invoice's total is unchanged.
 
-A rail whose fee cannot be known before the payment (a percentage of whatever arrives, for example) is offered only with the business paying.
+A rail whose fee cannot be known before the payment is offered only with the business paying. On rails that take only the exact amount (§4.3) the fee is known in advance from the rail's published rate; on rails that credit any amount net of a fee (iswallet) it is known only afterwards, so there the business pays.
+
+### 6.6 Paying part
+
+A business setting, off by default: **customers may pay part of an invoice.** With it on, the page and chat ask how much before issuing the account, and the account is for that amount (at least ₦1,000, or the balance if that is less). With it off, the account is always for the balance due.
 
 ## 7. The money log
 
@@ -285,7 +327,9 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 | Item | Owner | Blocks |
 | --- | --- | --- |
 | Accept decision 0045, including the amendment to 0039 | Founders | T4 |
-| For iswallet, Flutterwave, Paystack and OPay, the facts of §4.2 from their public documentation | Engineering | T1 |
+| For iswallet, Flutterwave, Paystack and OPay, the facts of §4.2 from their public documentation | Engineering | Done 23 October 2026 (§4.3), with questions left for each rail |
+| Ask iswallet, OPay, Flutterwave and Paystack the questions in §4.3 | Whoever holds each relationship | iswallet's mapping in T1; the help text of §6.3 |
+| Whether customers may pay part of an invoice by default | Founders | T4 (§6.6 proposes off) |
 | ~~Which bank statement formats to support first~~ | Founders | Decided 2026-10-23: one common CSV format, with the columns matched on upload (§7.4) |
 | ~~Whether VAT exports are needed at launch~~ | Founders | Decided 2026-10-23: not at launch (§9.3) |
 | ~~Who pays the rail's fee for an account~~ | Founders | Decided 2026-10-23: configurable per business and per invoice (§6.5) |
@@ -293,9 +337,14 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 
 ### T1: `collect_transfer` (M)
 
-The capability in `schemas/capabilities-v1.json`, its mapping for the first four rails, conformance cases from recorded fixtures, the SDK's types, and `GET /v1/capabilities` listing it.
+The capability and the `payment.returned` event in `schemas/capabilities-v1.json`, with the `on_late`, `on_wrong_amount` and lifetime facts in the mapping; the SDK's types; `GET /v1/capabilities` listing it. The rail actions it needs, from §4.3:
 
-**Done when:** each of the four rails passes conformance; a retried issue returns the same account; a credit to the account produces `virtual_account.credited` with its reference.
+- Paystack: a new action for `POST /charge` with `bank_transfer`, and `bank.transfer.rejected` mapped to `payment.returned`; readiness noting that Paystack must turn Pay with Transfer on.
+- Flutterwave: a new action for a dynamic account (`/v3/virtual-account-numbers`, `is_permanent: false`), its `charge.completed` already mapped to `payment.received`.
+- OPay: the connector's first capability block, mapping `create_bank_transfer_payment` and its payment callback.
+- iswallet: mapped once its answers to §4.3's questions arrive; until then it does not declare the capability.
+
+**Done when:** each mapped rail passes conformance on recorded fixtures; a retried issue returns the same account; a payment into it produces `payment.received` with its `payment_id`; a returned transfer on Paystack produces `payment.returned`.
 
 ### T2: kept tables and the money log (L)
 
