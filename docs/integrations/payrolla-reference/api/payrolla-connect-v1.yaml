@@ -1,0 +1,1185 @@
+openapi: 3.1.0
+info:
+  title: Payrolla Connect API
+  version: "2026-11-01"
+  summary: Read a company's payroll, receive its events, and embed Payrolla screens.
+  description: |
+    The Connect API is for software a Payrolla company has connected: an app the
+    company uses (such as Taskiem), or the company's own product. The company owner
+    issues a key in Payrolla → Settings → Connected apps and chooses its scopes.
+
+    **Nothing in this API moves money, approves payroll, or changes employees.**
+    Approval happens in Payrolla, or inside an embedded Payrolla screen, where the
+    approver confirms with their own factor. See `docs/api/embedding.md`.
+
+    ## Authentication
+    Send the key as a bearer token: `Authorization: Bearer pyk_live_…`. A key belongs
+    to exactly one company; every call reads or writes that company only. Never put a
+    key in a browser, a mobile app, an email, a chat or a ticket.
+
+    ## Responses
+    Every response is JSON in an envelope: `{"data": …}` on success, or
+    `{"error": {"code", "message", "details"}}` on failure. Branch on `error.code`;
+    messages may change.
+
+    | Status | Codes |
+    |---|---|
+    | 401 | `API_KEY_REQUIRED`, `API_KEY_INVALID` (unknown or revoked) |
+    | 403 | `SCOPE_REQUIRED`, and the route-specific codes listed per operation |
+    | 404 | `RUN_NOT_FOUND`, `PAYSLIP_NOT_FOUND`, `NOT_FOUND`, … |
+    | 429 | `RATE_LIMITED`, with `Retry-After` in seconds |
+
+    ## Rate limit
+    120 requests per minute per key.
+
+    ## Lists
+    Listings return `next_cursor`. Pass it back as `cursor` to get the next page; an
+    empty string means there are no more. Cursors are opaque.
+
+    ## Money and time
+    Amounts are integers in kobo (₦1 = 100 kobo). Dates are `YYYY-MM-DD`; times are
+    RFC 3339 in UTC.
+
+    ## Events
+    The `webhooks` section lists every event type and its body. Signing, retries and
+    replay are in `docs/api/webhooks.md`.
+servers:
+  # Replaced with this deployment's address when served from /connect/openapi.yaml.
+  - url: https://synledger.name.ng/payrolla/api/v1
+    description: This Payrolla deployment. Keys from one environment never work in another.
+security:
+  - companyKey: []
+tags:
+  - name: Company
+  - name: Payroll
+  - name: Employees
+  - name: Payslips
+  - name: Webhooks
+  - name: Events
+  - name: Embedding
+
+# x-payrolla-scope on each operation is the key scope it needs: a scope name,
+# "any" (any valid key) or "none" (public). The contract test checks it.
+paths:
+  /connect/openapi.yaml:
+    get:
+      tags: [Company]
+      operationId: getSpec
+      summary: This document
+      security: []
+      x-payrolla-scope: none
+      responses:
+        "200":
+          description: The OpenAPI document, as YAML.
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  /connect/company:
+    get:
+      tags: [Company]
+      operationId: getCompany
+      summary: The company and the key making the call
+      description: Any valid key may call this. Use it to check a key works and see its scopes.
+      x-payrolla-scope: any
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/CompanyView" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /connect/runs:
+    get:
+      tags: [Payroll]
+      operationId: listRuns
+      summary: List payroll runs
+      description: Newest first.
+      x-payrolla-scope: payroll:read
+      parameters:
+        - name: status
+          in: query
+          description: Comma-separated run statuses.
+          schema: { type: string, examples: ["COMPUTED,APPROVED"] }
+        - name: updated_since
+          in: query
+          description: Only runs changed at or after this time (RFC 3339).
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [runs, next_cursor]
+                    properties:
+                      runs:
+                        type: array
+                        items: { $ref: "#/components/schemas/RunSummary" }
+                      next_cursor: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: "`INVALID_STATUS`: an unknown status was named."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /connect/runs/{runID}:
+    get:
+      tags: [Payroll]
+      operationId: getRun
+      summary: One payroll run, with its timeline
+      x-payrolla-scope: payroll:read
+      parameters:
+        - $ref: "#/components/parameters/RunID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [run]
+                    properties:
+                      run: { $ref: "#/components/schemas/RunDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /connect/runs/{runID}/lines:
+    get:
+      tags: [Payroll]
+      operationId: getRunLines
+      summary: Each employee's net pay and payout status in a run
+      description: No bank details and no pay breakdown — only the net amount and how its payout went.
+      x-payrolla-scope: payroll:read
+      parameters:
+        - $ref: "#/components/parameters/RunID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [lines]
+                    properties:
+                      lines:
+                        type: array
+                        items: { $ref: "#/components/schemas/RunLine" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /connect/runs/{runID}/approval-link:
+    get:
+      tags: [Payroll]
+      operationId: getApprovalLink
+      summary: Where an approver reviews this run in Payrolla
+      description: |
+        There is no approve API. Send this link to the approver; it opens the run's
+        review in Payrolla after they sign in, and approval still needs their own
+        confirmation. The link carries no credential, so it is safe to put in a
+        message.
+      x-payrolla-scope: payroll:read
+      parameters:
+        - $ref: "#/components/parameters/RunID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/ApprovalLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /connect/employees:
+    get:
+      tags: [Employees]
+      operationId: listEmployees
+      summary: List employees (minimised)
+      x-payrolla-scope: employees:read
+      parameters:
+        - name: status
+          in: query
+          description: Comma-separated — ACTIVE, INACTIVE, TERMINATED.
+          schema: { type: string }
+        - name: updated_since
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [employees, next_cursor]
+                    properties:
+                      employees:
+                        type: array
+                        items: { $ref: "#/components/schemas/Employee" }
+                      next_cursor: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /connect/employees/{employeeID}:
+    get:
+      tags: [Employees]
+      operationId: getEmployee
+      summary: One employee (minimised)
+      x-payrolla-scope: employees:read
+      parameters:
+        - name: employeeID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [employee]
+                    properties:
+                      employee: { $ref: "#/components/schemas/Employee" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /connect/payslips/{payslipID}/link:
+    post:
+      tags: [Payslips]
+      operationId: createPayslipLink
+      summary: A link to send an employee to their payslip
+      description: |
+        The employee confirms the last four digits of their phone before the payslip
+        opens. Links last 7 days. Issuing one never cancels the link Payrolla itself
+        sent the employee. The company owner must first turn on "Let connected apps
+        send payslip links".
+      x-payrolla-scope: payslips:links
+      parameters:
+        - name: payslipID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Created. Treat the URL like a password until it reaches the employee.
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/PayslipLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`SCOPE_REQUIRED`, or `PAYSLIP_LINKS_DISABLED` until the owner allows it."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`PAYSLIP_NOT_FINAL`: the run is not locked yet."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "422":
+          description: "`NO_PHONE_FOR_VERIFICATION`: the employee has no phone to check against."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /connect/webhooks:
+    get:
+      tags: [Webhooks]
+      operationId: listWebhooks
+      summary: This key's webhook subscriptions
+      x-payrolla-scope: webhooks:manage
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [webhooks]
+                    properties:
+                      webhooks:
+                        type: array
+                        items: { $ref: "#/components/schemas/WebhookSubscription" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Webhooks]
+      operationId: createWebhook
+      summary: Subscribe a URL to events
+      description: |
+        Each event type needs the matching read scope: `employee.*` needs
+        `employees:read`, everything else needs `payroll:read`. `"*"` subscribes to
+        every type the key's scopes allow, including types added later. The signing
+        secret is returned once.
+      x-payrolla-scope: webhooks:manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, event_types]
+              properties:
+                url: { type: string, format: uri, description: Must be https. }
+                event_types:
+                  type: array
+                  minItems: 1
+                  items: { $ref: "#/components/schemas/EventTypeOrWildcard" }
+      responses:
+        "201":
+          description: Created
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [webhook, signing_secret]
+                    properties:
+                      webhook: { $ref: "#/components/schemas/WebhookSubscription" }
+                      signing_secret:
+                        type: string
+                        description: Shown once. Store it with the receiver.
+                      note: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: "`INVALID_WEBHOOK_URL`, `NO_EVENT_TYPES` or `INVALID_EVENT_TYPE`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /connect/webhooks/{webhookID}:
+    delete:
+      tags: [Webhooks]
+      operationId: deleteWebhook
+      summary: Remove a subscription
+      x-payrolla-scope: webhooks:manage
+      parameters:
+        - $ref: "#/components/parameters/WebhookID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      deleted: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /connect/webhooks/{webhookID}/test:
+    post:
+      tags: [Webhooks]
+      operationId: testWebhook
+      summary: Send a `ping` event to this subscription only
+      x-payrolla-scope: webhooks:manage
+      parameters:
+        - $ref: "#/components/parameters/WebhookID"
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      event_id: { type: string, format: uuid }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`WEBHOOK_DISABLED`: turn it back on first (the owner can, in Payrolla)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /connect/webhooks/{webhookID}/deliveries:
+    get:
+      tags: [Webhooks]
+      operationId: listDeliveries
+      summary: Recent deliveries to this subscription
+      x-payrolla-scope: webhooks:manage
+      parameters:
+        - $ref: "#/components/parameters/WebhookID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [deliveries]
+                    properties:
+                      deliveries:
+                        type: array
+                        items: { $ref: "#/components/schemas/WebhookDelivery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /connect/webhooks/{webhookID}/deliveries/{deliveryID}/resend:
+    post:
+      tags: [Webhooks]
+      operationId: resendDelivery
+      summary: Send a delivery again, with the identical body
+      x-payrolla-scope: webhooks:manage
+      parameters:
+        - $ref: "#/components/parameters/WebhookID"
+        - name: deliveryID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      queued: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /connect/events:
+    get:
+      tags: [Events]
+      operationId: replayEvents
+      summary: Replay events from the last 30 days
+      description: |
+        Oldest first. Each item is the exact envelope that was (or would have been)
+        delivered by webhook, so the same handler can process both. Only types the
+        key's scopes allow are returned. Use it to catch up after downtime, or poll
+        it instead of receiving webhooks.
+      x-payrolla-scope: any
+      parameters:
+        - name: after
+          in: query
+          description: An event id; returns events after it. Omit to start 30 days back.
+          schema: { type: string, format: uuid }
+        - name: types
+          in: query
+          description: Comma-separated event types.
+          schema: { type: string, examples: ["payout.failed,run.completed"] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [events]
+                    properties:
+                      events:
+                        type: array
+                        items: { $ref: "#/components/schemas/Event" }
+                      next_cursor:
+                        type: [string, "null"]
+                        format: uuid
+                        description: Pass as `after` for the next page; null at the end.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: "`INVALID_EVENT_TYPE`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /connect/embed/launch-token:
+    post:
+      tags: [Embedding]
+      operationId: createLaunchToken
+      summary: Mint a short-lived token that opens Payrolla inside your app
+      description: |
+        Call this from your backend each time you show the embed, and hand the
+        `session_token` to the SDK's `getSessionToken`. The owner must have set up
+        embedding for this key (allowed origins, modes and screens). See
+        `docs/api/embedding.md`.
+      x-payrolla-scope: embed:launch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LaunchRequest" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [session_token, expires_at, host_id]
+                    properties:
+                      session_token: { type: string, description: Single use. Pass it to the SDK. }
+                      expires_at: { type: string, format: date-time }
+                      host_id: { type: string, description: "Not secret. The SDK's `hostId`." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: |
+            `SCOPE_REQUIRED`, `EMBED_NOT_CONFIGURED`, `EMBED_MODE_NOT_ALLOWED`,
+            `EMBED_SCREEN_NOT_ALLOWED`, `EMBED_HOST_REVOKED`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "422":
+          description: "`INVALID_LAUNCH_CONTEXT`, `LAUNCH_USER_REQUIRED`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+# One entry per event type, named exactly as the type. The contract test checks
+# every event Payrolla emits against its entry here.
+webhooks:
+  ping:
+    post:
+      summary: Sent only when you ask for a test.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/PingEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  run.computed:
+    post:
+      summary: A run was calculated and is waiting for approval.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RunComputedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  run.approved:
+    post:
+      summary: An approver approved the run.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RunApprovedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  run.rejected:
+    post:
+      summary: An approver sent the run back.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RunRejectedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  run.locked:
+    post:
+      summary: The run was locked; its payslips are final.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RunEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  run.cancelled:
+    post:
+      summary: The run was cancelled.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RunEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  run.disbursement_started:
+    post:
+      summary: Payouts were sent to the payment provider.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RunDisbursementStartedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  run.completed:
+    post:
+      summary: Every payout in the run succeeded.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RunSettledEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  run.partially_completed:
+    post:
+      summary: The run finished with some payouts failed.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RunSettledEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  payout.succeeded:
+    post:
+      summary: One employee was paid.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/PayoutEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  payout.failed:
+    post:
+      summary: One employee's payout failed; `reason` says why.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/PayoutFailedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  payout.reversed:
+    post:
+      summary: |
+        A payout that had succeeded was returned by the bank; the employee is not
+        paid. `run.partially_completed` follows, even after `run.completed`. A payout
+        returned before it went through is sent as `payout.failed` instead.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/PayoutEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  employee.created:
+    post:
+      summary: An employee was added.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/EmployeeCreatedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  employee.updated:
+    post:
+      summary: A field you can see changed. Changes to fields you can't see send nothing.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/EmployeeChangedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  employee.terminated:
+    post:
+      summary: The employee was terminated.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/EmployeeChangedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+  payslip.issued:
+    post:
+      summary: A payslip was issued to the employee.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/PayslipIssuedEvent" } } } }
+      responses: { "200": { $ref: "#/components/responses/Received" } }
+
+components:
+  securitySchemes:
+    companyKey:
+      type: http
+      scheme: bearer
+      bearerFormat: pyk_live_…
+      description: A company API key issued by the company owner.
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      description: "`next_cursor` from the previous page."
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    RunID:
+      name: runID
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WebhookID:
+      name: webhookID
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: "`INVALID_ID`, `INVALID_CURSOR`, `INVALID_LIMIT`, `INVALID_UPDATED_SINCE`, `INVALID_BODY`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Unauthorized:
+      description: "`API_KEY_REQUIRED` or `API_KEY_INVALID`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Forbidden:
+      description: "`SCOPE_REQUIRED`: the key lacks this route's scope."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: Not found in this company.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Received:
+      description: |
+        Any 2xx acknowledges the event. 410 Gone switches the subscription off.
+        Anything else is retried; `Retry-After` is honoured.
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, examples: [SCOPE_REQUIRED] }
+            message: { type: string }
+            details: {}
+
+    Scope:
+      type: string
+      enum: [payroll:read, employees:read, payslips:links, webhooks:manage, embed:launch]
+
+    CompanyView:
+      type: object
+      required: [company, key]
+      properties:
+        company:
+          type: object
+          required: [id, name, pay_frequency]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            pay_frequency: { type: string, examples: [MONTHLY] }
+        key:
+          type: object
+          required: [id, name, kind, scopes]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            kind: { type: string, enum: [CONNECTED_APP, OWN_PRODUCT] }
+            scopes:
+              type: array
+              items: { $ref: "#/components/schemas/Scope" }
+
+    RunStatus:
+      type: string
+      enum: [DRAFT, COMPUTED, APPROVED, LOCKED, DISBURSING, COMPLETED, PARTIALLY_COMPLETED, CANCELLED, FAILED]
+
+    RunSummary:
+      type: object
+      additionalProperties: false
+      required: [run_id, period_start, period_end, pay_date, run_type, status, employee_count, total_gross_kobo, total_net_kobo]
+      properties:
+        run_id: { type: string, format: uuid }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        pay_date: { type: string, format: date }
+        run_type: { type: string, enum: [REGULAR, OFF_CYCLE] }
+        status: { $ref: "#/components/schemas/RunStatus" }
+        employee_count: { type: integer }
+        total_gross_kobo: { type: integer }
+        total_net_kobo: { type: integer }
+
+    RunDetail:
+      description: A run summary with its timeline.
+      type: object
+      required: [run_id, period_start, period_end, pay_date, run_type, status, employee_count, total_gross_kobo, total_net_kobo, created_at, updated_at]
+      properties:
+        run_id: { type: string, format: uuid }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        pay_date: { type: string, format: date }
+        run_type: { type: string, enum: [REGULAR, OFF_CYCLE] }
+        status: { $ref: "#/components/schemas/RunStatus" }
+        employee_count: { type: integer }
+        total_gross_kobo: { type: integer }
+        total_net_kobo: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        approved_at: { type: string, format: date-time }
+        locked_at: { type: string, format: date-time }
+        approval_url:
+          type: string
+          format: uri
+          description: Present while the run is waiting for approval.
+
+    RunLine:
+      type: object
+      additionalProperties: false
+      required: [payslip_id, employee_id, first_name, last_name, net_kobo, disbursement_status]
+      properties:
+        payslip_id: { type: string, format: uuid }
+        employee_id: { type: string, format: uuid }
+        first_name: { type: string }
+        last_name: { type: string }
+        net_kobo: { type: integer }
+        disbursement_status:
+          type: string
+          description: PENDING, AWAITING_FUNDS, SENT, CONFIRMED, FAILED, PERMANENTLY_FAILED or REVERSED.
+        reference: { type: string, description: The payment provider's reference. }
+        reason: { type: string, description: Why the payout failed. }
+
+    ApprovalLink:
+      type: object
+      required: [url, awaiting_approval, status]
+      properties:
+        url: { type: string, format: uri }
+        awaiting_approval: { type: boolean }
+        status: { $ref: "#/components/schemas/RunStatus" }
+
+    Employee:
+      description: |
+        The only employee shape that leaves Payrolla. It never includes account
+        numbers, BVN or NIN, tax or pension IDs, or pay.
+      type: object
+      additionalProperties: false
+      required: [id, first_name, last_name, email, phone, department, status, employment_type, start_date, pay_method]
+      properties:
+        id: { type: string, format: uuid }
+        first_name: { type: string }
+        last_name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        department: { type: string }
+        status: { type: string, enum: [ACTIVE, INACTIVE, TERMINATED] }
+        employment_type: { type: string, enum: [SALARIED, DAILY, COMMISSION] }
+        start_date: { type: string, format: date }
+        pay_method: { type: string, enum: [WALLET, BANK, NONE] }
+        external_ref: { type: string, description: The company's own id for this employee, if set. }
+
+    PayslipLink:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+
+    EventType:
+      type: string
+      enum:
+        - run.computed
+        - run.approved
+        - run.rejected
+        - run.locked
+        - run.cancelled
+        - run.disbursement_started
+        - run.completed
+        - run.partially_completed
+        - payout.succeeded
+        - payout.failed
+        - payout.reversed
+        - employee.created
+        - employee.updated
+        - employee.terminated
+        - payslip.issued
+
+    EventTypeOrWildcard:
+      oneOf:
+        - $ref: "#/components/schemas/EventType"
+        - { type: string, const: "*" }
+
+    WebhookSubscription:
+      type: object
+      required: [id, url, event_types, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        company_id: { type: string, format: uuid }
+        api_key_id: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        event_types:
+          type: array
+          items: { type: string }
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+          description: DISABLED after a 410, after 3 days of failures, or when the owner pauses it.
+        disabled_reason: { type: string }
+        failing_since: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    WebhookDelivery:
+      type: object
+      required: [id, event_id, subscription_id, event_type, status, attempt_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        event_id: { type: string, format: uuid }
+        subscription_id: { type: string, format: uuid }
+        event_type: { type: string }
+        status:
+          type: string
+          enum: [PENDING, DELIVERED, FAILED, DEAD]
+          description: FAILED will be retried; DEAD will not.
+        attempt_count: { type: integer }
+        next_attempt_at: { type: string, format: date-time }
+        last_status_code: { type: integer }
+        last_error: { type: string }
+        delivered_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    LaunchRequest:
+      type: object
+      required: [user]
+      properties:
+        scope:
+          type: string
+          enum: [FULL, LAUNCH_CONTEXT]
+          default: FULL
+          description: FULL opens the whole payroll app; LAUNCH_CONTEXT opens one screen.
+        context:
+          type: object
+          description: Required for LAUNCH_CONTEXT.
+          properties:
+            screen: { type: string, enum: [run-review, team, payslip, payout] }
+            run_id: { type: string, format: uuid }
+            employee_id: { type: string, format: uuid, description: Required for the payslip screen. }
+        ttl_seconds: { type: integer, minimum: 1, maximum: 600, default: 300 }
+        user:
+          type: object
+          description: |
+            The person signed in to your app. Matched to a Payrolla user by
+            `external_ref`, then by email. Whether an unknown person is added, and
+            with what role at most, is the owner's choice.
+          required: [external_ref, email, name]
+          properties:
+            external_ref: { type: string, description: Your stable id for this person. }
+            email: { type: string, format: email }
+            name: { type: string }
+            role:
+              type: string
+              enum: [VIEWER, APPROVER, ADMIN]
+              description: Used only when the person is added; never raises an existing user's role.
+
+    # ── Events ────────────────────────────────────────────────────────────────
+    # Every event is EventBase with a specific `type` and `data`. `data` objects
+    # are closed (additionalProperties: false): a new field is a new api_version.
+
+    EventBase:
+      type: object
+      required: [id, type, api_version, created_at, company_id, data]
+      properties:
+        id: { type: string, format: uuid, description: De-duplicate on this. }
+        type: { type: string }
+        api_version: { type: string, const: "2026-11-01" }
+        created_at: { type: string, format: date-time }
+        company_id: { type: string, format: uuid }
+        data: { type: object }
+
+    Event:
+      description: Any event. Switch on `type`.
+      oneOf:
+        - $ref: "#/components/schemas/PingEvent"
+        - $ref: "#/components/schemas/RunComputedEvent"
+        - $ref: "#/components/schemas/RunApprovedEvent"
+        - $ref: "#/components/schemas/RunRejectedEvent"
+        - $ref: "#/components/schemas/RunEvent"
+        - $ref: "#/components/schemas/RunDisbursementStartedEvent"
+        - $ref: "#/components/schemas/RunSettledEvent"
+        - $ref: "#/components/schemas/PayoutEvent"
+        - $ref: "#/components/schemas/PayoutFailedEvent"
+        - $ref: "#/components/schemas/EmployeeCreatedEvent"
+        - $ref: "#/components/schemas/EmployeeChangedEvent"
+        - $ref: "#/components/schemas/PayslipIssuedEvent"
+
+    PingEvent:
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { const: ping }
+        data:
+          type: object
+          additionalProperties: false
+          required: [message, subscription_id]
+          properties:
+            message: { type: string }
+            subscription_id: { type: string, format: uuid }
+
+    RunComputedEvent:
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { const: run.computed }
+        data:
+          type: object
+          additionalProperties: false
+          required: [run, approval_url]
+          properties:
+            run: { $ref: "#/components/schemas/RunSummary" }
+            approval_url: { type: string, format: uri }
+
+    RunApprovedEvent:
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { const: run.approved }
+        data:
+          type: object
+          additionalProperties: false
+          required: [run, approved_by]
+          properties:
+            run: { $ref: "#/components/schemas/RunSummary" }
+            approved_by: { type: string, description: The approver's name. }
+
+    RunRejectedEvent:
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { const: run.rejected }
+        data:
+          type: object
+          additionalProperties: false
+          required: [run, note, rejected_by]
+          properties:
+            run: { $ref: "#/components/schemas/RunSummary" }
+            note: { type: string }
+            rejected_by: { type: string }
+
+    RunEvent:
+      description: run.locked and run.cancelled.
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { enum: [run.locked, run.cancelled] }
+        data:
+          type: object
+          additionalProperties: false
+          required: [run]
+          properties:
+            run: { $ref: "#/components/schemas/RunSummary" }
+
+    RunDisbursementStartedEvent:
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { const: run.disbursement_started }
+        data:
+          type: object
+          additionalProperties: false
+          required: [run, wallet_count, bank_count]
+          properties:
+            run: { $ref: "#/components/schemas/RunSummary" }
+            wallet_count: { type: integer }
+            bank_count: { type: integer }
+
+    RunSettledEvent:
+      description: run.completed and run.partially_completed.
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { enum: [run.completed, run.partially_completed] }
+        data:
+          type: object
+          additionalProperties: false
+          required: [run, paid_count, failed_count]
+          properties:
+            run: { $ref: "#/components/schemas/RunSummary" }
+            paid_count: { type: integer }
+            failed_count: { type: integer }
+
+    PayoutEvent:
+      description: payout.succeeded and payout.reversed. No bank details.
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { enum: [payout.succeeded, payout.reversed] }
+        data:
+          type: object
+          additionalProperties: false
+          required: [run_id, payslip_id, employee_id, amount_kobo, method, reference]
+          properties:
+            run_id: { type: string, format: uuid }
+            payslip_id: { type: string, format: uuid }
+            employee_id: { type: string, format: uuid }
+            amount_kobo: { type: integer }
+            method: { type: string, enum: [WALLET, BANK] }
+            reference: { type: string, description: The payment provider's reference; may be empty. }
+
+    PayoutFailedEvent:
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { const: payout.failed }
+        data:
+          type: object
+          additionalProperties: false
+          required: [run_id, payslip_id, employee_id, amount_kobo, method, reference, reason]
+          properties:
+            run_id: { type: string, format: uuid }
+            payslip_id: { type: string, format: uuid }
+            employee_id: { type: string, format: uuid }
+            amount_kobo: { type: integer }
+            method: { type: string, enum: [WALLET, BANK] }
+            reference: { type: string }
+            reason: { type: string }
+
+    EmployeeCreatedEvent:
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { const: employee.created }
+        data:
+          type: object
+          additionalProperties: false
+          required: [employee]
+          properties:
+            employee: { $ref: "#/components/schemas/Employee" }
+
+    EmployeeChangedEvent:
+      description: employee.updated and employee.terminated.
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { enum: [employee.updated, employee.terminated] }
+        data:
+          type: object
+          additionalProperties: false
+          required: [employee, changed_fields]
+          properties:
+            employee: { $ref: "#/components/schemas/Employee" }
+            changed_fields:
+              type: array
+              items:
+                type: string
+                enum: [first_name, last_name, email, phone, department, status, employment_type, start_date, pay_method, external_ref]
+
+    PayslipIssuedEvent:
+      allOf: [{ $ref: "#/components/schemas/EventBase" }]
+      properties:
+        type: { const: payslip.issued }
+        data:
+          type: object
+          additionalProperties: false
+          required: [payslip_id, employee_id, run_id, period]
+          properties:
+            payslip_id: { type: string, format: uuid }
+            employee_id: { type: string, format: uuid }
+            run_id: { type: string, format: uuid }
+            period: { type: string, examples: ["September 2026"] }
