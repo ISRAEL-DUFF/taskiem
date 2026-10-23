@@ -23,6 +23,7 @@ const PAGES = [
   "/dashboard",
   "/templates",
   "/settings/keys",
+  "/settings/notifications",
   "/settings/billing",
   "/storefront",
   "/storefront/look",

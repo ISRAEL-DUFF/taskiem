@@ -81,6 +81,32 @@ func TestDigests(t *testing.T) {
 	owner, ownerEmail := person("owner", "+234801"+pad(n))
 	viewer, viewerEmail := person("viewer", "+234802"+pad(n))
 	_, quietOwnerEmail := person("owner", "") // email only: no chat
+	// Settings > Notifications, the money group: chat is the daily summary,
+	// email the monthly email.
+	choose := func(user uuid.UUID, daily, monthly bool) {
+		t.Helper()
+		in(func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO notification_settings (tenant_id, user_id, kind, chat, email) VALUES ($1, $2, 'money', $3, $4)
+				ON CONFLICT (tenant_id, user_id, kind) DO UPDATE SET chat = EXCLUDED.chat, email = EXCLUDED.email`, e.Tenant, user, daily, monthly)
+			return err
+		})
+	}
+	// An owner who turned the daily summary off but kept the email.
+	offOwner, offOwnerEmail := person("owner", "+234803"+pad(n))
+	choose(offOwner, false, true)
+	// A viewer who turned the daily summary on, not the email.
+	keen, keenEmail := person("viewer", "+234804"+pad(n))
+	choose(keen, true, false)
+	// A builder may not read invoices: nothing, whatever the setting says.
+	builder, builderEmail := person("builder", "+234805"+pad(n))
+	choose(builder, true, true)
+	// A custom role with invoice.read, who turned the email on.
+	in(func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO roles (tenant_id, name, permissions, created_by) VALUES ($1, 'bookkeeper', '{invoice.read}', 'test')`, e.Tenant)
+		return err
+	})
+	bookkeeper, bookkeeperEmail := person("bookkeeper", "")
+	choose(bookkeeper, false, true)
 	queued := func(user uuid.UUID) int {
 		t.Helper()
 		var c int
@@ -156,9 +182,32 @@ func TestDigests(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if queued(owner) != 1 || queued(viewer) != 0 {
-		t.Fatalf("queued: owner %d, viewer %d", queued(owner), queued(viewer))
+	if queued(owner) != 1 || queued(viewer) != 0 || queued(offOwner) != 0 || queued(keen) != 1 || queued(builder) != 0 {
+		t.Fatalf("queued: owner %d, viewer %d, owner who turned it off %d, viewer who turned it on %d, builder %d",
+			queued(owner), queued(viewer), queued(offOwner), queued(keen), queued(builder))
 	}
+	// Whether each still gets it, as the outbox asks before sending.
+	for _, c := range []struct {
+		who  uuid.UUID
+		want bool
+	}{{owner, true}, {viewer, false}, {offOwner, false}, {keen, true}, {builder, false}} {
+		var got bool
+		in(func(tx pgx.Tx) error {
+			var err error
+			got, err = moneydigest.Gets(ctx, tx, e.Tenant, c.who, moneydigest.Daily)
+			return err
+		})
+		if got != c.want {
+			t.Errorf("Gets(%s) = %v", c.who, got)
+		}
+	}
+	// Someone who turns it on after the day was taken waits for the next
+	// day's: the recipients were decided when it was taken.
+	choose(viewer, true, false)
+	if _, err := d.Tick(ctx); err != nil || queued(viewer) != 0 {
+		t.Fatalf("turned on later: %v, queued %d", err, queued(viewer))
+	}
+	choose(viewer, false, false)
 	var outcome string
 	in(func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT outcome FROM money_digests WHERE tenant_id = $1 AND kind = 'daily' AND period = $2`, e.Tenant, today.Format("2006-01-02")).Scan(&outcome)
@@ -213,6 +262,11 @@ func TestDigests(t *testing.T) {
 	got := m.to(ownerEmail)
 	if len(got) != 1 || len(m.to(quietOwnerEmail)) != 1 || len(m.to(viewerEmail)) != 0 {
 		t.Fatalf("emails: owner %d, second owner %d, viewer %d", len(got), len(m.to(quietOwnerEmail)), len(m.to(viewerEmail)))
+	}
+	// The email follows its own setting, not the daily summary's.
+	if len(m.to(offOwnerEmail)) != 1 || len(m.to(keenEmail)) != 0 || len(m.to(builderEmail)) != 0 || len(m.to(bookkeeperEmail)) != 1 {
+		t.Fatalf("emails: owner with the daily off %d, viewer with the daily on %d, builder %d, bookkeeper %d",
+			len(m.to(offOwnerEmail)), len(m.to(keenEmail)), len(m.to(builderEmail)), len(m.to(bookkeeperEmail)))
 	}
 	mail := got[0]
 	monthName := today.Format("January 2006")

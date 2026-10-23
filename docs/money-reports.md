@@ -6,7 +6,7 @@ What a business's money came to: every morning in chat, every month by email, an
 
 ## The daily summary in chat
 
-Every morning from 08:00 Lagos, each **owner** of a business who has linked WhatsApp or Telegram gets yesterday's money, on WhatsApp if they linked both:
+Every morning from 08:00 Lagos, everyone who [gets it](#who-gets-them) and has linked WhatsApp or Telegram gets yesterday's money, on WhatsApp if they linked both:
 
 > [Ada Foods] Yesterday: ₦300,000 in (₦20,000 pending) — Paystack ₦250,000, Moniepoint POS ₦50,000; ₦12,000 out; 1 invoice paid (₦250,000); 1 leak opened (₦7,777).
 >
@@ -14,21 +14,29 @@ Every morning from 08:00 Lagos, each **owner** of a business who has linked What
 
 - **In** is money in that settled, by channel, the largest first (at most five named); **pending** is money in still on its way. **Out** is money out that settled. Invoices paid are those paid in full that day, with what was paid on them; leaks are those [opened](leaks.md) that day.
 - **Nothing to say, nothing sent.** A day with no movement, no invoice paid and no leak opened sends no message.
-- **Once.** Each business's summary for a day is taken once (`money_digests`, migration 00205) in the transaction that queues it, so a restart or a second scheduler never sends it twice. It goes through the chat [outbox](whatsapp.md#delivery-and-retries) (kind `money_daily`, naming the summary and the owner) and is worded when sent, in the owner's language, from the log as it then stands.
-- **Only owners.** Members with other roles, including those who can read invoices, get no summary; they see the Money page.
-- **WhatsApp's 24-hour window.** Inside it the summary is a text message; outside it, it goes as the approved alert template (`taskiem_alert`): "[Ada Foods] Yesterday: ₦300,000 in … Details: <link>", the line cut at 200 characters, counted against the business's template allowance like other alerts. Telegram has no window. A summary that could not go out within a day is dropped, as is one for a person who is no longer an owner.
-
-There is no setting to turn the summary off yet: it would be a "Money" row in Settings > Notifications, which the web app does not show yet.
+- **Once.** Each business's summary for a day is taken once (`money_digests`, migration 00205) in the transaction that queues it, so a restart or a second scheduler never sends it twice. Who gets it is decided then: someone who turns the daily summary on later that day gets the next day's, not that day's. It goes through the chat [outbox](whatsapp.md#delivery-and-retries) (kind `money_daily`, naming the summary and the person) and is worded when sent, in the person's language, from the log as it then stands.
+- **WhatsApp's 24-hour window.** Inside it the summary is a text message; outside it, it goes as the approved alert template (`taskiem_alert`): "[Ada Foods] Yesterday: ₦300,000 in … Details: <link>", the line cut at 200 characters, counted against the business's template allowance like other alerts. Telegram has no window. A summary that could not go out within a day is dropped, as is one for a person who has since turned it off or can no longer read invoices.
 
 ## The monthly email
 
-On the 1st of each month from 09:00 Lagos (or on the 2nd or 3rd, if Taskiem's scheduler was down on the 1st), each owner with an email gets last month's money:
+On the 1st of each month from 09:00 Lagos (or on the 2nd or 3rd, if Taskiem's scheduler was down on the 1st), everyone who [gets it](#who-gets-them) and has an email gets last month's money:
 
 - Subject: **[Ada Foods] money in October 2026**.
 - Money in and out, settled and pending; the fees and the effective fee rate; each channel's money in, out and fees; invoices paid; leaks opened, leaks open now and the total recovered.
 - A link to the Money page, where the month's log, invoices and journal download as spreadsheets (CSV). The email carries no attachments.
 
-A month with no movement, no invoice paid and no leak opened sends no email. The email is sent once per business and month in the same way as the daily summary; when no owner's email could be sent, it is tried again at the next look. It needs the deployment's email (`TASKIEM_SMTP_URL` and `TASKIEM_ALERT_FROM`, as for alerts); without it no monthly email is sent and the scheduler says so when it starts.
+A month with no movement, no invoice paid and no leak opened sends no email. The email is sent once per business and month in the same way as the daily summary, to those who get it when the month is taken; when no one's email could be sent, it is tried again at the next look. It needs the deployment's email (`TASKIEM_SMTP_URL` and `TASKIEM_ALERT_FROM`, as for alerts); without it no monthly email is sent and the scheduler says so when it starts.
+
+## Who gets them
+
+Each person chooses under **Settings > Notifications**, in the **Money summaries** row: **Daily money summary (chat)** and **Monthly money email**, each on its own (`PUT /v1/me/notification-settings` with `{"settings": [{"group": "money", "chat": false, "email": true}]}`: `chat` is the daily summary, `email` the monthly email; see [notifications](alerts.md#notifications-with-nothing-set-up)).
+
+- **Owners** get both unless they turn them off.
+- **Anyone else who can read invoices** (`invoice.read`: the admin, operator, auditor and viewer roles, and custom roles that include it) gets neither unless they turn them on.
+- **People who cannot read invoices** do not see the row and never get either, whatever was chosen before: a person who loses `invoice.read` stops getting them, and a daily summary already queued for them is dropped. Taskiem checks when it takes the day or month, and again when the chat message goes.
+- Only active members: a person whose account is disabled gets nothing.
+
+The choices are per business (a person in two businesses chooses for each), kept with the other notification settings (`notification_settings`, group `money`, migration 00206).
 
 ## The Overview
 

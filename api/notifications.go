@@ -114,7 +114,8 @@ func (s *Server) readNotifications(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"read": n})
 }
 
-// getNotificationSettings is how the caller hears beyond the app.
+// getNotificationSettings is how the caller hears beyond the app; the
+// money group (the money summaries) only for people with invoice.read.
 func (s *Server) getNotificationSettings(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	if p.UserID == uuid.Nil {
@@ -124,7 +125,7 @@ func (s *Server) getNotificationSettings(w http.ResponseWriter, r *http.Request)
 	var out []notices.Setting
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out, err = notices.SettingsTx(r.Context(), tx, p.UserID)
+		out, err = notices.SettingsTx(r.Context(), tx, p.UserID, p.Can(PermInvoiceRead))
 		return err
 	})
 	if err != nil {
@@ -150,14 +151,17 @@ func (s *Server) putNotificationSettings(w http.ResponseWriter, r *http.Request)
 	}
 	var out []notices.Setting
 	err := s.tx(r, func(tx pgx.Tx) error {
-		if err := notices.SetTx(r.Context(), tx, p.TenantID, p.UserID, req.Settings); err != nil {
+		if err := notices.SetTx(r.Context(), tx, p.TenantID, p.UserID, req.Settings, p.Can(PermInvoiceRead)); err != nil {
 			if errors.Is(err, notices.ErrUnknownGroup) {
-				return fmt.Errorf("%w: a setting's group is failures, setup or finished", errBadRequest)
+				return fmt.Errorf("%w: a setting's group is failures, setup, finished or money", errBadRequest)
+			}
+			if errors.Is(err, notices.ErrNoMoney) {
+				return fmt.Errorf("%w: the money summaries need %s", errForbidden, PermInvoiceRead)
 			}
 			return err
 		}
 		var err error
-		out, err = notices.SettingsTx(r.Context(), tx, p.UserID)
+		out, err = notices.SettingsTx(r.Context(), tx, p.UserID, p.Can(PermInvoiceRead))
 		return err
 	})
 	if err != nil {

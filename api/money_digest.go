@@ -21,10 +21,11 @@ import (
 const moneyDailyStale = 24 * time.Hour
 
 // sendMoneyDailyItem sends a queued daily money summary
-// (moneydigest.OutboxDaily, docs/money-reports.md) to its owner, its
+// (moneydigest.OutboxDaily, docs/money-reports.md) to its person, its
 // figures read from the money log now. Outside WhatsApp's 24-hour window
 // it goes as the alert template, in the one line the template has.
-// Dropped when the person is no longer an owner or it waited too long.
+// Dropped when the person turned it off or may no longer read invoices
+// (moneydigest.Gets), or it waited too long.
 func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem) error {
 	if it.Digest == nil || it.User == uuid.Nil {
 		return fmt.Errorf("%w: incomplete", whatsapp.ErrNothingToSend)
@@ -39,12 +40,12 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 		if time.Since(sentAt) > moneyDailyStale {
 			return fmt.Errorf("%w: the summary waited more than a day", whatsapp.ErrNothingToSend)
 		}
-		ok, err := moneydigest.IsOwner(ctx, tx, it.Tenant, it.User)
+		ok, err := moneydigest.Gets(ctx, tx, it.Tenant, it.User, moneydigest.Daily)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("%w: the person is no longer an owner", whatsapp.ErrNothingToSend)
+			return fmt.Errorf("%w: the person turned the daily summary off, or may no longer read invoices", whatsapp.ErrNothingToSend)
 		}
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, it.Tenant).Scan(&business); err != nil {
 			return err
