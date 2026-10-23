@@ -1,0 +1,20 @@
+{
+ "action": "get_company",
+ "input": {},
+ "credentials": {
+  "api_key": "pyk_live_test_key"
+ },
+ "exchanges": [
+  "company"
+ ],
+ "expect": {
+  "output": {
+   "company": {
+    "name": "Acme Foods Ltd"
+   },
+   "key": {
+    "kind": "CONNECTED_APP"
+   }
+  }
+ }
+}

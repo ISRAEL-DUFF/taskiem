@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/connectors/opay"
 	"github.com/israel-duff/taskiem/connectors/opaybusiness"
+	"github.com/israel-duff/taskiem/connectors/payrolla"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/prembly"
@@ -53,6 +54,9 @@ type Options struct {
 	OpayBusinessURL                               string
 	MonoURL, PremblyURL, YouverifyURL             string
 	MpesaURL, MTNMoMoURL                          string
+	// PayrollaURL is Payrolla's Connect API (TASKIEM_PAYROLLA_URL; its
+	// production address by default).
+	PayrollaURL string
 	// XenibaseURL is the platform's Xenibase, for connections that name no
 	// server of their own (TASKIEM_XENIBASE_URL; none by default).
 	XenibaseURL string
@@ -100,6 +104,7 @@ func Register(r *connector.Registry, o Options) error {
 		youverify.New(youverify.Options{BaseURL: o.YouverifyURL}),
 		mpesa.New(mpesa.Options{BaseURL: o.MpesaURL}),
 		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
+		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL}),
 		postgres.New(),
 		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),
 		mysql.New(),

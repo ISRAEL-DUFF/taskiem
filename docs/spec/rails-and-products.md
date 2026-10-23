@@ -1,6 +1,6 @@
 # Rails and products: specification and build plan
 
-Status: **R1 to R4, R8 and R9 built**, R5 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
+Status: **R1 to R5, R8 and R9 built**, R6 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
 
 Taskiem connects to two kinds of service. **Rails** move money (Paystack, iswallet, Moniepoint and the rest) and Taskiem builds products on them as workflows. **Products** (Payrolla, and later accounting, HR and POS back offices) already run a whole process, and Taskiem connects to them, embeds their interface, and works around them. This document specifies both halves, and the retirement of the Payrolla integration that mixed them up.
 
@@ -399,21 +399,21 @@ Manifests gain `kind: rail | product | tool` (default `tool`), used by the catal
 
 ### 6.2 `payrolla@1`
 
-**To be confirmed against Payrolla's API and webhook documentation (R0).** Everything below is the shape to check, not a contract.
+**Confirmed** against Payrolla's Connect API, webhook and embedding references (23 October 2026, kept in [`integrations/payrolla-reference`](../integrations/payrolla-reference/02-taskiem-integration-guide.md)); built in R5. The draft guessed differently in the places marked.
 
-| Part | Draft |
+| Part | Confirmed |
 | --- | --- |
-| Auth | `api_key` (a company-scoped key), or OAuth if Payrolla offers it (rule 13) |
-| Base URL | Sandbox and production from Payrolla; production set by `TASKIEM_PAYROLLA_URL` like iswallet's |
-| Triggers | `payroll_event`: `payroll.created`, `payroll.approved`, `payroll.locked`, `payroll.paid`, `payroll.failed`; `payout_event`: `payout.succeeded`, `payout.failed`, `payout.reversed` (per employee); `employee_event`: `employee.added`, `employee.updated`, `employee.left` |
-| Verification | Payrolla's scheme (likely HMAC over the body with a timestamp, rule 7's `hmac_sha256_timestamped`) |
-| Routing | Per-connection webhook URL by default (`/hooks/{tenant}/connectors/payrolla/{trigger}`). If Payrolla prefers one subscription for all its companies, partner routing (decision 0031) with `route: {key: =body.company_id, field: company_ids}` |
-| Actions (reads) | `get_payroll`, `list_payrolls`, `get_payslip` (a file reference or link), `list_employees`, `get_employee`, `get_payout` |
-| Actions (writes, if offered) | `approve_payroll`, `reject_payroll` (idempotent on the payroll id and decision), `add_employee` |
-| Views | `payroll` (a payroll's page), `run_payroll` (Payrolla's own flow), `employees`; see §6.3 |
-| PII | Employee names, phones, account numbers, salaries marked `pii` so they are sealed in runs |
+| Auth | `api_key`: one key per company, made by its owner with chosen scopes (`payroll:read`, `employees:read`, `webhooks:manage`, `payslips:links`, `embed:launch`); no OAuth |
+| Base URL | `https://synledger.name.ng/payrolla/api/v1`, overridden by `TASKIEM_PAYROLLA_URL`. Payrolla's test company lives in production, with an unfunded wallet |
+| Triggers | Other names than the draft's: `run_event` (`run.computed` carrying `approval_url`, `run.approved`, `run.rejected`, `run.locked`, `run.cancelled`, `run.disbursement_started`, `run.completed`, `run.partially_completed`), `payout_event` (`payout.succeeded`, `payout.failed`, `payout.reversed`), `employee_event` (`employee.created`, `employee.updated`, `employee.terminated`), `payslip_event` (`payslip.issued`); `ping` on request |
+| Verification | `hmac_sha256_timestamped` with `signature_format: t_v1` on `Payrolla-Signature`, 5 minutes' tolerance |
+| Routing | Per company: the subscriptions are REST hooks made with each company's key, so Taskiem registers them remotely (decision 0021), one per deployed trigger; no partner routing |
+| Actions (reads) | `get_company`, `list_runs`, `get_run`, `get_run_lines` (each employee's net pay and payout status), `get_approval_link`, `list_employees`, `get_employee`, `list_events` (30 days of replay) |
+| Actions (writes) | None that change payroll: **no approve, reject or add employee** (approval is the approver's own, in Payrolla). `create_payslip_link` issues a 7-day link (an unsafe write: Payrolla takes no idempotency key) |
+| Views | A launch token from Taskiem's server and Payrolla's SDK, not URL templates: modes `full`, `launch` (`run-review`, `team`, `payslip`) and `payout`; the owner lists the allowed origins. For R6, which revises §6.3 to match |
+| PII | Events and reads carry names, emails, phones and net pay, never bank account numbers, salary breakdowns or ID numbers; the reads mark names, emails, phones and payslip links `pii` |
 
-Docs: `docs/integrations/archive/payrolla.md` is rewritten as the connector's page (Connection, Actions, Webhooks, Views, Templates, To confirm with Payrolla), published under Connectors like the others. The old partner guide moves to `docs/integrations/archive/payrolla-partner-guide.md`, kept internal, marked superseded by decision 0044.
+Docs: the connector's page is [`integrations/payrolla.md`](../integrations/payrolla.md); the old partner guide stays [archived](../integrations/archive/payrolla.md).
 
 ### 6.3 App views: a product's interface inside Taskiem
 
@@ -593,6 +593,13 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 **Build:** `connectors/payrolla` (manifest, Go code, fixtures from Payrolla's sandbox), triggers and actions as confirmed in R0, verification, routing per R0-4, `kind: product`, `docs/integrations/archive/payrolla.md` rewritten as the connector page, the old guide archived, SDK regenerated, conntest suite.
 
 **Done when:** a business connects Payrolla from Connections, a sandbox payroll's events start a test workflow, the reads return sealed personal fields, and the connector passes conformance.
+
+**Built** (R5): `connectors/payrolla` (`payrolla@1`, `kind: product`, no capabilities): the four triggers above, registered remotely per company and verified with Payrolla's own test vector; the eight reads and the payslip link, each against fixtures shaped after Payrolla's published examples and passing the conformance kit; a revoked key marks the connection expired (`ErrCredentialsRejected`); `TestPayrollaPayoutFailedStartsOnce` takes a signed `payout.failed` through deploy, subscription, ingest and dedup to one run, refuses a forged one, and deletes the subscription on undeploy. The connector page, the SDK and the spec are updated. Differences from the plan:
+
+- **Fixtures follow Payrolla's documentation, not recordings:** Payrolla's test company is in production and each person makes their own key; recordings follow once Taskiem's people have keys (partner tracker P4).
+- **No automatic catch-up yet:** `list_events` replays 30 days for a workflow that asks, but ingest does not replay by itself after an outage; Payrolla retries a delivery for about two days.
+- **A subscription is replaced, not updated:** Payrolla can neither change a subscription nor rotate its secret, so a redeploy with other events deletes and recreates it, and one found by URL but never recorded is deleted and made again.
+- **The embed launch token waits for R6**, where the view that uses it is built.
 
 ### R6: App views (L; needs R0-3)
 

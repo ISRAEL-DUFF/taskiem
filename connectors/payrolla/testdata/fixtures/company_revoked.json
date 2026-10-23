@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/connect/company",
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "error": {
+    "code": "API_KEY_INVALID",
+    "message": "This API key is unknown or has been revoked."
+   }
+  }
+ }
+}

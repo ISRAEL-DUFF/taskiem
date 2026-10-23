@@ -317,6 +317,7 @@ func loadConfig() (config, error) {
 			TermiiURL:   os.Getenv("TASKIEM_TERMII_URL"),
 			DojahURL:    os.Getenv("TASKIEM_DOJAH_URL"),
 			IswalletURL: os.Getenv("TASKIEM_ISWALLET_URL"),
+			PayrollaURL: os.Getenv("TASKIEM_PAYROLLA_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
 			// their provider's sandbox with environment=sandbox.
 			FlutterwaveURL:    os.Getenv("TASKIEM_FLUTTERWAVE_URL"),

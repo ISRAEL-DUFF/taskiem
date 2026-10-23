@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/connect/runs/5d2a7a62-6f0e-4c1e-9a5b-2d1f0c3e8a71/approval-link",
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": {
+    "url": "https://payroller.surge.sh/runs/5d2a7a62-6f0e-4c1e-9a5b-2d1f0c3e8a71/review",
+    "awaiting_approval": true,
+    "status": "COMPUTED"
+   }
+  }
+ }
+}

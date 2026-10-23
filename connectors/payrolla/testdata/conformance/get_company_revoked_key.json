@@ -1,0 +1,13 @@
+{
+ "action": "get_company",
+ "input": {},
+ "credentials": {
+  "api_key": "pyk_live_test_key"
+ },
+ "exchanges": [
+  "company_revoked"
+ ],
+ "expect": {
+  "error": "fatal"
+ }
+}

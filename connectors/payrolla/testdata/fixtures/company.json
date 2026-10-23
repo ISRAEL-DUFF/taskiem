@@ -1,0 +1,33 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/connect/company",
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": {
+    "company": {
+     "id": "0b6e3f9a-8c21-4d57-a6e4-1f2b7c9d0e58",
+     "name": "Acme Foods Ltd",
+     "pay_frequency": "MONTHLY"
+    },
+    "key": {
+     "id": "4f9a1c2e-5b6d-4e7f-8a9b-0c1d2e3f4a5b",
+     "name": "Taskiem",
+     "kind": "CONNECTED_APP",
+     "scopes": [
+      "payroll:read",
+      "employees:read",
+      "webhooks:manage",
+      "payslips:links",
+      "embed:launch"
+     ]
+    }
+   }
+  }
+ }
+}
