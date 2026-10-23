@@ -54,6 +54,7 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/payments/{payment}/undo", s.undoInvoicePayment)
 	r.With(read).Get("/invoice-settings", s.getInvoiceSettings)
 	r.With(manage, s.tenantWide).Put("/invoice-settings", s.putInvoiceSettings)
+	s.matchingRoutes(r)
 }
 
 func invoiceErr(err error) error {
@@ -297,7 +298,7 @@ func (s *Server) putInvoiceSettings(w http.ResponseWriter, r *http.Request) {
 			return invoiceErr(err)
 		}
 		return auditTx(r, tx, "invoice.settings", "invoices", map[string]any{"prefix": st.Prefix, "connection": st.Connection,
-			"fee_paid_by": st.FeePaidBy, "allow_part_payments": st.AllowPartPayments})
+			"fee_paid_by": st.FeePaidBy, "allow_part_payments": st.AllowPartPayments, "auto_match": st.AutoMatch})
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -328,12 +329,13 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 }
 
 // runInvoicePayments issues the accounts and links invoice pages and
-// chat ask for (every second) and looks their payments up (every 30
-// seconds).
+// chat ask for (every second), looks their payments up (every 30
+// seconds) and matches the money that came in (every 10 seconds).
 func (s *Server) runInvoicePayments(ctx context.Context) {
-	drain, check := time.NewTicker(time.Second), time.NewTicker(30*time.Second)
+	drain, check, match := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(10*time.Second)
 	defer drain.Stop()
 	defer check.Stop()
+	defer match.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -345,6 +347,10 @@ func (s *Server) runInvoicePayments(ctx context.Context) {
 		case <-check.C:
 			if err := s.Invoices.CheckPayments(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("invoices: payments", "err", err)
+			}
+		case <-match.C:
+			if err := s.matcher().Tick(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: matching", "err", err)
 			}
 		}
 	}

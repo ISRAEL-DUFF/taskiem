@@ -137,6 +137,8 @@ type Settings struct {
 	Connection        string `json:"connection"`
 	FeePaidBy         string `json:"fee_paid_by"`
 	AllowPartPayments bool   `json:"allow_part_payments"`
+	// AutoMatch: a strong suggestion is matched without asking (T5).
+	AutoMatch bool `json:"auto_match"`
 }
 
 // Invoices runs a business's invoices.
@@ -192,8 +194,8 @@ func invalid(format string, a ...any) error {
 // has none.
 func GetSettings(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, error) {
 	st := Settings{Prefix: "INV-", NextNumber: 1, Connection: "main", FeePaidBy: "business"}
-	err := tx.QueryRow(ctx, `SELECT prefix, next_number, connection, fee_paid_by, allow_part_payments FROM customer_invoice_settings WHERE tenant_id = $1`, tenant).
-		Scan(&st.Prefix, &st.NextNumber, &st.Connection, &st.FeePaidBy, &st.AllowPartPayments)
+	err := tx.QueryRow(ctx, `SELECT prefix, next_number, connection, fee_paid_by, allow_part_payments, auto_match FROM customer_invoice_settings WHERE tenant_id = $1`, tenant).
+		Scan(&st.Prefix, &st.NextNumber, &st.Connection, &st.FeePaidBy, &st.AllowPartPayments, &st.AutoMatch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return st, nil
 	}
@@ -222,10 +224,11 @@ func SaveSettings(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st Settings)
 	if st.FeePaidBy != "business" && st.FeePaidBy != "customer" {
 		return Settings{}, invalid("fee_paid_by is business or customer")
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO customer_invoice_settings (tenant_id, prefix, next_number, connection, fee_paid_by, allow_part_payments)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (tenant_id) DO UPDATE SET prefix = $2, next_number = $3, connection = $4, fee_paid_by = $5, allow_part_payments = $6, updated_at = now()`,
-		tenant, st.Prefix, st.NextNumber, st.Connection, st.FeePaidBy, st.AllowPartPayments)
+	_, err = tx.Exec(ctx, `INSERT INTO customer_invoice_settings (tenant_id, prefix, next_number, connection, fee_paid_by, allow_part_payments, auto_match)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (tenant_id) DO UPDATE SET prefix = $2, next_number = $3, connection = $4, fee_paid_by = $5, allow_part_payments = $6, auto_match = $7,
+		updated_at = now()`,
+		tenant, st.Prefix, st.NextNumber, st.Connection, st.FeePaidBy, st.AllowPartPayments, st.AutoMatch)
 	return st, err
 }
 
@@ -715,6 +718,9 @@ func (s *Invoices) deliver(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x I
 		switch {
 		case errors.Is(err, sender.ErrAllowance):
 			over = true
+		case errors.Is(err, sender.ErrRecipientLimit):
+			// The customer has had many messages this hour: this one is
+			// left out, and the invoice is sent all the same.
 		case err != nil:
 			return nil, false, err
 		case queued:
@@ -724,10 +730,11 @@ func (s *Invoices) deliver(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x I
 	if x.Customer.Email != "" {
 		queued, err := s.Messages.Enqueue(ctx, tx, sender.Message{Tenant: tenant, Channel: sender.Email, Purpose: sender.PurposeLink,
 			To: x.Customer.Email, SenderName: business, Subject: subject, Text: text, Key: key + ":email"})
-		if err != nil {
+		switch {
+		case errors.Is(err, sender.ErrRecipientLimit):
+		case err != nil:
 			return nil, false, err
-		}
-		if queued {
+		case queued:
 			channels = append(channels, "email")
 		}
 	}
@@ -784,6 +791,9 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 type PaymentIn struct {
 	AmountKobo int64
 	PaymentID  string // the rail's payment id, or the money log's entry
+	// EntryID is the money log entry the payment counts (T5): one entry
+	// counts towards one invoice at a time.
+	EntryID    *uuid.UUID
 	Connection string
 	How        string // exact, suggested, suggested_auto or manual
 	By         string
@@ -811,15 +821,41 @@ func (s *Invoices) RecordPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	if cur.Status == "draft" {
 		return Invoice{}, false, fmt.Errorf("%w: invoice %s has not been sent", ErrState, cur.Number)
 	}
-	reasons, _ := json.Marshal(nonNil(p.Reasons))
-	tag, err := tx.Exec(ctx, `INSERT INTO customer_invoice_payments (id, tenant_id, invoice_id, amount_kobo, payment_id, connection, how, by, reasons)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (invoice_id, payment_id) WHERE undoes IS NULL DO NOTHING`,
-		uuid.New(), tenant, cur.ID, p.AmountKobo, p.PaymentID, nullable(p.Connection), p.How, p.By, reasons)
-	if err != nil {
+	if p.EntryID != nil {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem money entry ' || $1::text, 0))`, *p.EntryID); err != nil {
+			return Invoice{}, false, err
+		}
+		var other string
+		err := tx.QueryRow(ctx, `SELECT i.number FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
+			WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)`,
+			tenant, *p.EntryID).Scan(&other)
+		switch {
+		case err == nil && other == cur.Number:
+			return cur, false, nil
+		case err == nil:
+			return Invoice{}, false, fmt.Errorf("%w: this payment is already counted towards %s; undo that first", ErrState, other)
+		case !errors.Is(err, pgx.ErrNoRows):
+			return Invoice{}, false, err
+		}
+	}
+	// The same payment counts towards an invoice once while it is not
+	// undone.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem invoice payment ' || $1::text || ' ' || $2, 0))`, cur.ID, p.PaymentID); err != nil {
 		return Invoice{}, false, err
 	}
-	if tag.RowsAffected() == 0 {
+	var counted bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
+		AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, p.PaymentID).Scan(&counted); err != nil {
+		return Invoice{}, false, err
+	}
+	if counted {
 		return cur, false, nil
+	}
+	reasons, _ := json.Marshal(nonNil(p.Reasons))
+	if _, err := tx.Exec(ctx, `INSERT INTO customer_invoice_payments (id, tenant_id, invoice_id, amount_kobo, payment_id, connection, how, by, reasons, entry_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		uuid.New(), tenant, cur.ID, p.AmountKobo, p.PaymentID, nullable(p.Connection), p.How, p.By, reasons, p.EntryID); err != nil {
+		return Invoice{}, false, err
 	}
 	if err := audit(ctx, tx, tenant, p.By, "invoice.payment", cur.Number, map[string]any{"amount_kobo": p.AmountKobo, "payment_id": p.PaymentID, "how": p.How}); err != nil {
 		return Invoice{}, false, err
@@ -859,7 +895,30 @@ func (s *Invoices) UndoPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	if err := audit(ctx, tx, tenant, by, "invoice.payment_undone", cur.Number, map[string]any{"amount_kobo": p.AmountKobo, "payment_id": p.PaymentID}); err != nil {
 		return Invoice{}, err
 	}
+	if err := reopenEntry(ctx, tx, tenant, p.ID); err != nil {
+		return Invoice{}, err
+	}
 	return s.Get(ctx, tx, tenant, cur.ID.String())
+}
+
+// reopenEntry puts the money of an undone match back to be matched (T5):
+// the suggestion it came from is not offered again, the entry's other
+// suggestions are, and with none it waits for a person.
+func reopenEntry(ctx context.Context, tx pgx.Tx, tenant, payment uuid.UUID) error {
+	var entry *uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT entry_id FROM customer_invoice_payments WHERE tenant_id = $1 AND id = $2`, tenant, payment).Scan(&entry); err != nil || entry == nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'rejected', decided_at = now() WHERE tenant_id = $1 AND payment_id = $2`, tenant, payment); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'open', decided_at = NULL WHERE tenant_id = $1 AND entry_id = $2 AND status = 'closed'`, tenant, *entry); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ($1, $2,
+		CASE WHEN EXISTS (SELECT 1 FROM money_suggestions WHERE entry_id = $1 AND status = 'open') THEN 'suggested' ELSE 'unmatched' END)
+		ON CONFLICT (entry_id) DO UPDATE SET state = EXCLUDED.state, considered_at = now()`, *entry, tenant)
+	return err
 }
 
 // Paid tells a run waiting on the invoice that it is paid. Call it after

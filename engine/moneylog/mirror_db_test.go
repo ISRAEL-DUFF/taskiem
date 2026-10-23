@@ -1,6 +1,7 @@
 package moneylog_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -15,8 +16,10 @@ import (
 	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
+	"github.com/israel-duff/taskiem/engine/sender"
 )
 
 var ctx = context.Background()
@@ -110,6 +113,43 @@ func TestMirrorCopiesEachEntryOnce(t *testing.T) {
 	if waiting != 0 {
 		t.Errorf("%d entries not copied", waiting)
 	}
+	// A match is copied to money_matches, and its undoing as its own row.
+	inv := &invoicing.Invoices{Pool: e.DB.App, Vault: e.Vault, PageBase: "https://forms.test", MoneyLog: log,
+		Messages: &sender.Queue{Vault: e.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}}
+	var bill invoicing.Invoice
+	if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
+		var err error
+		bill, err = inv.Create(ctx, tx, e.Tenant, invoicing.Draft{Customer: invoicing.Customer{Name: "Ada", Phone: "+2348031234567"}, AmountKobo: 250000}, "user:ada")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inv.Send(ctx, e.Tenant, bill.Number, "user:ada", "k"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
+		y, _, err := inv.RecordPayment(ctx, tx, e.Tenant, bill.Number, invoicing.PaymentIn{AmountKobo: 250000, PaymentID: "P-1", How: "manual", By: "user:ada"})
+		if err != nil {
+			return err
+		}
+		_, err = inv.UndoPayment(ctx, tx, e.Tenant, bill.Number, y.Payments[0].ID, "user:ada")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := m.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err = rows.Rows.Call(ctx, e.Tenant, "read_rows", map[string]any{"table": moneylog.MatchesTable, "limit": 10}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := got["rows"].([]any); len(list) != 2 || list[0].(map[string]any)["target"] != "invoice:"+bill.Number {
+		t.Fatalf("money_matches rows: %v", list)
+	}
+
 	// The kept table refuses everyone else's writes.
 	if kept, err := datatables.IsKept(ctx, e.DB.App, e.Tenant, moneylog.Table); err != nil || kept != moneylog.Table {
 		t.Errorf("kept %q %v", kept, err)

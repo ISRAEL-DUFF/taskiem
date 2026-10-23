@@ -7,6 +7,20 @@ import {
   FEE_CHOICES,
   INVOICE_FILTERS,
   INVOICE_LIMITS,
+  SUGGESTIONS_PATH,
+  UNMATCHED_PATH,
+  unmatchedPayments,
+  type UnmatchedMoney,
+  amountWords,
+  channelWords,
+  entryMatchPath,
+  groupSuggestions,
+  kindWords,
+  matchedLine,
+  openInvoices,
+  rejectedLine,
+  scoreWords,
+  suggestionPath,
   dateLabel,
   draftRequest,
   emptyItem,
@@ -37,7 +51,9 @@ import {
   type InvoiceSent,
   type InvoiceSettings,
   type ItemInput,
+  type MoneySuggestion,
   type SettingsForm,
+  type WaitingPayment,
 } from "../lib/invoices";
 import { isMasked, telLink } from "../lib/orders";
 
@@ -56,14 +72,186 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`badge sf-status ${s.tone}`}>{s.label}</span>;
 }
 
-export function InvoiceTabs() {
+/** Invoices, To match (with the number of payments waiting), Settings. */
+export function InvoiceTabs({ waiting }: { waiting?: number }) {
+  // The pages that know the number pass it; the others ask (a refusal leaves the tab without one).
+  const own = useLoad(() => (waiting === undefined ? get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH) : Promise.resolve(undefined)), [waiting === undefined]);
+  const n = waiting ?? (own.data ? groupSuggestions(own.data.suggestions).length : 0);
   return (
     <nav className="tabs" aria-label="Invoices">
       <NavLink to="/invoices" end>
         Invoices
       </NavLink>
+      <NavLink to="/invoices/match">
+        To match
+        {n > 0 && (
+          <span className="tab-count" data-testid="to-match-count">
+            {n}
+            <span className="sr-only"> {n === 1 ? "payment waiting" : "payments waiting"}</span>
+          </span>
+        )}
+      </NavLink>
       <NavLink to="/invoices/settings">Settings</NavLink>
     </nav>
+  );
+}
+
+// --- matching money to invoices ---
+
+/** Invoices > To match (GET /v1/money/suggestions): money received that may be for an invoice, one card per payment. */
+export function InvoiceMatch() {
+  const { can } = useAuth();
+  const manage = invoiceAccess(can).manage;
+  const list = useLoad(() => get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH), []);
+  const left = useLoad(() => get<{ payments: UnmatchedMoney[] | null }>(UNMATCHED_PATH), []);
+  useLiveRefresh(list.reload);
+  useLiveRefresh(left.reload);
+  // The invoices a payment can be matched to by hand.
+  const invoices = useLoad(() => (manage ? get<{ invoices: CustomerInvoice[] | null }>("/v1/invoices") : Promise.resolve({ invoices: [] })), [manage]);
+  const [said, setSaid] = useState("");
+  const waiting = list.data ? groupSuggestions(list.data.suggestions) : undefined;
+  const unmatched = unmatchedPayments(left.data?.payments);
+  const done = (line: string) => {
+    setSaid(line);
+    list.reload();
+    left.reload();
+    invoices.reload();
+  };
+  return (
+    <>
+      <PageHeader
+        title="To match"
+        description="Money that came in without the reference Taskiem gave, and the invoices it may be for. Match it, or say it is not that one."
+      />
+      <InvoiceTabs waiting={waiting?.length ?? 0} />
+      <div role="status" data-testid="match-status">
+        {said && <div className="notice">{said}</div>}
+      </div>
+      <ErrorBox error={list.error} />
+      {waiting === undefined && !list.error && <Skeleton rows={3} label="Loading payments to match…" />}
+      {waiting && waiting.length === 0 && unmatched.length === 0 && (
+        <EmptyState icon="invoices">Nothing to match. Payments into the accounts Taskiem gave are matched to their invoice as they come in.</EmptyState>
+      )}
+      {waiting?.map((p) => (
+        <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} onDone={done} />
+      ))}
+      <ErrorBox error={left.error} />
+      {unmatched.length > 0 && (
+        <>
+          <h2>No invoice suggested</h2>
+          <p className="hint">Money that came in with nothing to suggest, or whose suggestions were all turned down. Match it by hand if you know the invoice.</p>
+          {unmatched.map((p) => (
+            <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} onDone={done} />
+          ))}
+        </>
+      )}
+      {!manage && waiting && waiting.length > 0 && <p className="hint">You can see these. Someone who manages invoices can match them.</p>}
+    </>
+  );
+}
+
+function WaitingCard({ payment: p, manage, open, onDone }: { payment: WaitingPayment; manage: boolean; open: CustomerInvoice[]; onDone: (line: string) => void }) {
+  const act = useAction();
+  const [other, setOther] = useState("");
+  const [otherTried, setOtherTried] = useState(false);
+  const title = `match-${p.entry_id}`;
+  const choices = open.filter((x) => !p.candidates.some((c) => c.invoice_id === x.id));
+  const decide = (c: MoneySuggestion, action: "confirm" | "reject") =>
+    void act.run(async () => {
+      await plainly(post(suggestionPath(c.id, action)));
+      onDone(action === "confirm" ? matchedLine(p.amount_kobo, c.number) : rejectedLine(c.number));
+    }, false);
+  return (
+    <section className="card match-card" aria-labelledby={`${title} ${title}-when ${title}-ref`} data-testid="waiting-payment">
+      <h2 id={title}>
+        <span className="sf-price">{amountWords(p.amount_kobo)}</span> <span className="hint">{kindWords(p.kind)}</span>
+      </h2>
+      <dl className="kv">
+        <dt>Received</dt>
+        <dd id={`${title}-when`}>{fmtTime(p.received_at)}</dd>
+        <dt>Where</dt>
+        <dd>{channelWords(p.channel)}</dd>
+        <dt>Reference</dt>
+        <dd id={`${title}-ref`}>{p.reference || <span className="hint">None</span>}</dd>
+      </dl>
+      {p.candidates.length > 0 && <h3>May be for</h3>}
+      <ul className="match-candidates">
+        {p.candidates.map((c) => {
+          const w = scoreWords(c.score);
+          return (
+            <li key={c.id} data-testid="candidate">
+              <div className="match-head">
+                <Link to={`/invoices/${encodeURIComponent(c.number)}`}>{c.number}</Link>{" "}
+                <span className={`badge sf-status ${w.tone}`} title={`Score ${c.score} of 100`}>
+                  {w.label}
+                </span>
+              </div>
+              {(c.reasons ?? []).length > 0 && (
+                <ul className="match-reasons" aria-label={`Why ${c.number}`}>
+                  {(c.reasons ?? []).map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              )}
+              {manage && (
+                <div className="toolbar">
+                  <button type="button" className="primary" disabled={act.busy} onClick={() => decide(c, "confirm")} aria-label={`Match to ${c.number}`}>
+                    Match
+                  </button>
+                  <button type="button" disabled={act.busy} onClick={() => decide(c, "reject")} aria-label={`Not this one: ${c.number}`}>
+                    Not this one
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {manage && (
+        <details className="match-other">
+          <summary>Match to another invoice…</summary>
+          {choices.length === 0 ? (
+            <p className="hint">No other invoice is waiting for payment.</p>
+          ) : (
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                setOtherTried(true);
+                if (!other) return;
+                const number = choices.find((x) => x.id === other)?.number ?? other;
+                void act.run(async () => {
+                  await plainly(post(entryMatchPath(p.entry_id), { invoice: other }));
+                  onDone(matchedLine(p.amount_kobo, number));
+                }, false);
+              }}
+            >
+              <div className="row match-other-row">
+                <Field label="Invoice" hint="Invoices sent and not yet fully paid.">
+                  <select value={other} onChange={(e) => setOther(e.target.value)}>
+                    <option value="">Choose an invoice</option>
+                    {choices.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.number} · {naira(x.due_kobo)} due · {x.customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <button type="submit" disabled={act.busy}>
+                  Match to this invoice
+                </button>
+              </div>
+              {otherTried && !other && (
+                <div className="error" role="alert">
+                  Choose the invoice this payment is for.
+                </div>
+              )}
+            </form>
+          )}
+        </details>
+      )}
+      <ErrorBox error={act.error} />
+    </section>
   );
 }
 
@@ -666,7 +854,7 @@ function Payments({
 }) {
   const rows = paymentRows(invoice.payments);
   if (rows.length === 0)
-    return <p className="hint">No payments yet. Payments are counted here as they come in from your payments connection; nobody marks an invoice paid by hand.</p>;
+    return <p className="hint">No payments yet. Payments are counted here as they come in from your payments connection, or when money received is matched to this invoice on To match. Nobody marks an invoice paid without a payment.</p>;
   return (
     <table className="cards">
       <thead>
@@ -695,7 +883,16 @@ function Payments({
                   <span style={struck}>{p.payment_id}</span>
                 </td>
                 <td data-label="How it was matched">
-                  <span style={struck}>{howMatched(p.how)}</span>
+                  <span style={struck} data-testid="how-matched">
+                    {howMatched(p.how, p.by)}
+                  </span>
+                  {(p.reasons ?? []).length > 0 && (
+                    <ul className="match-reasons" aria-label="Why it was matched">
+                      {(p.reasons ?? []).map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  )}
                 </td>
                 <td data-label="By">
                   <span style={struck}>{p.by}</span>
@@ -765,7 +962,10 @@ export function InvoiceSettingsPage() {
   const settings = useLoad(() => get<InvoiceSettings>("/v1/invoice-settings"), []);
   return (
     <>
-      <PageHeader title="Invoice settings" description="How new invoices are numbered, and their usual payment options. Each invoice can change the payment options for itself." />
+      <PageHeader
+        title="Invoice settings"
+        description="How new invoices are numbered, their usual payment options, and how money is matched to them. Each invoice can change the payment options for itself."
+      />
       <InvoiceTabs />
       <ErrorBox error={settings.error} />
       {!settings.data && !settings.error && <Skeleton rows={4} label="Loading the settings…" />}
@@ -826,6 +1026,15 @@ function SettingsEditor({ saved: initial }: { saved: InvoiceSettings }) {
         <label className="row">
           <input type="checkbox" checked={form.partPayments} onChange={(e) => set({ partPayments: e.target.checked })} />
           <span>Customers may pay part of an invoice</span>
+        </label>
+        <label className="row">
+          <input type="checkbox" checked={form.autoMatch} onChange={(e) => set({ autoMatch: e.target.checked })} />
+          <span>
+            Match strong suggestions automatically{" "}
+            <span className="hint">
+              Off by default. A payment that clearly fits one invoice is matched without asking; each automatic match lists its reasons on the invoice and can be undone there.
+            </span>
+          </span>
         </label>
       </fieldset>
       {tried && problem && (

@@ -34,7 +34,7 @@ import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
-import { InvoiceEdit, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
+import { InvoiceEdit, InvoiceMatch, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
 import { get } from "./api";
@@ -306,6 +306,7 @@ function SignedIn() {
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/invoices/new" element={<InvoiceNew />} />
           <Route path="/invoices/settings" element={<InvoiceSettingsPage />} />
+          <Route path="/invoices/match" element={<InvoiceMatch />} />
           <Route path="/invoices/:id" element={<InvoicePage />} />
           <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
           <Route path="/forms" element={<Forms />} />

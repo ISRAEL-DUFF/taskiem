@@ -31,9 +31,22 @@ import {
   settingsRequest,
   toKobo,
   voidProblem,
+  amountWords,
+  channelWords,
+  entryMatchPath,
+  groupSuggestions,
+  unmatchedPayments,
+  UNMATCHED_PATH,
+  kindWords,
+  matchedLine,
+  openInvoices,
+  rejectedLine,
+  scoreWords,
+  suggestionPath,
   type CustomerInvoice,
   type InvoiceForm,
   type InvoicePayment,
+  type MoneySuggestion,
 } from "./invoices";
 
 const can =
@@ -322,8 +335,75 @@ describe("sending, voiding and undoing", () => {
     expect(rows[0]?.undoneBy?.by).toBe("user:ada");
     expect(rows[1]?.undoneBy).toBeUndefined();
     expect(paymentRows(null)).toEqual([]);
-    expect(howMatched("exact")).toBe("Exactly, by its reference");
-    expect(howMatched("manual")).toBe("By a person");
+    expect(howMatched("exact")).toBe("Paid into the account Taskiem gave");
+    expect(howMatched("suggested", "user:ada")).toBe("Suggested, confirmed by user:ada");
+    expect(howMatched("suggested")).toBe("Suggested, then confirmed");
+    expect(howMatched("suggested_auto", "taskiem")).toBe("Matched automatically");
+    expect(howMatched("manual", "user:ada")).toBe("Matched by hand");
+    expect(howMatched("some_new_way")).toBe("some new way");
+  });
+});
+
+describe("matching money to invoices", () => {
+  const s = (id: string, entry: string, score: number, extra: Partial<MoneySuggestion> = {}): MoneySuggestion => ({
+    id,
+    entry_id: entry,
+    invoice_id: `inv-${id}`,
+    number: `INV-${id}`,
+    score,
+    reasons: ["same amount"],
+    status: "open",
+    amount_kobo: 2500000,
+    channel: "paystack/main",
+    reference: `REF-${entry}`,
+    received_at: "2026-10-22T10:00:00Z",
+    kind: "account_credit",
+    ...extra,
+  });
+
+  it("words a score by the thresholds", () => {
+    expect(scoreWords(100).label).toBe("Strong");
+    expect(scoreWords(85)).toEqual({ label: "Strong", tone: "ok" });
+    expect(scoreWords(84).label).toBe("Likely");
+    expect(scoreWords(60).label).toBe("Likely");
+    expect(scoreWords(59)).toEqual({ label: "Possible", tone: "muted" });
+    expect(scoreWords(0).label).toBe("Possible");
+  });
+
+  it("groups suggestions by payment, newest payment first, strongest candidate first", () => {
+    const g = groupSuggestions([s("1", "e2", 55), s("2", "e1", 70), s("3", "e2", 92), s("4", "e1", 40)]);
+    expect(g.map((p) => p.entry_id)).toEqual(["e2", "e1"]);
+    expect(g[0]?.candidates.map((c) => c.number)).toEqual(["INV-3", "INV-1"]);
+    expect(g[1]?.candidates.map((c) => c.score)).toEqual([70, 40]);
+    expect(g[0]?.reference).toBe("REF-e2");
+    expect(groupSuggestions(null)).toEqual([]);
+  });
+
+  it("words where the money came from and what it was", () => {
+    expect(channelWords("paystack/main")).toBe("Paystack (main)");
+    expect(channelWords("opay/shop/2")).toBe("Opay (shop/2)");
+    expect(channelWords("upload")).toBe("Uploaded statement");
+    expect(channelWords("cash")).toBe("Cash");
+    expect(channelWords("moniepoint")).toBe("Moniepoint");
+    expect(kindWords("account_credit")).toBe("Transfer into an account");
+    expect(kindWords("pos_sale")).toBe("POS sale");
+    expect(kindWords("something_else")).toBe("something else");
+    expect(amountWords(null)).toBe("Amount not known");
+    expect(amountWords(2500000)).toBe(naira(2500000));
+  });
+
+  it("offers only open invoices to match by hand", () => {
+    const x = (status: string) => ({ id: status, number: status, status }) as unknown as CustomerInvoice;
+    expect(openInvoices(["draft", "sent", "part_paid", "paid", "overdue", "void"].map(x)).map((i) => i.status)).toEqual(["sent", "part_paid", "overdue"]);
+    expect(openInvoices(undefined)).toEqual([]);
+  });
+
+  it("names the routes and says what happened", () => {
+    expect(suggestionPath("a/b", "confirm")).toBe("/v1/money/suggestions/a%2Fb/confirm");
+    expect(suggestionPath("x", "reject")).toBe("/v1/money/suggestions/x/reject");
+    expect(entryMatchPath("e1")).toBe("/v1/money/entries/e1/match");
+    expect(matchedLine(2500000, "INV-0003")).toMatch(/matched to INV-0003\. If that is wrong, undo it on the invoice\.$/);
+    expect(rejectedLine("INV-0004")).toBe("INV-0004 will not be suggested for this payment again.");
   });
 });
 
@@ -333,7 +413,18 @@ describe("settings", () => {
   it("round-trips the settings", () => {
     const f = settingsForm(saved);
     expect(settingsProblem(f, saved)).toBeNull();
-    expect(settingsRequest({ ...f, nextNumber: "10", connection: " ", partPayments: true })).toEqual({ ...saved, next_number: 10, allow_part_payments: true });
+    expect(f.autoMatch).toBe(false);
+    expect(settingsRequest({ ...f, nextNumber: "10", connection: " ", partPayments: true })).toEqual({ ...saved, next_number: 10, allow_part_payments: true, auto_match: false });
+  });
+
+  it("sends every field it read, automatic matching too", () => {
+    const on = { ...saved, auto_match: true };
+    const f = settingsForm(on);
+    expect(f.autoMatch).toBe(true);
+    const body = settingsRequest(f);
+    expect(body).toEqual(on);
+    expect(Object.keys(body).sort()).toEqual(["allow_part_payments", "auto_match", "connection", "fee_paid_by", "next_number", "prefix"]);
+    expect(settingsRequest({ ...f, autoMatch: false }).auto_match).toBe(false);
     expect(numberPreview("INV-", 7)).toBe("INV-0007");
     expect(numberPreview("A/", 12345)).toBe("A/12345");
   });
@@ -350,5 +441,14 @@ describe("settings", () => {
     expect(settingsProblem({ ...f, prefix: "ABCDEFGHIJKLM" }, saved)).toMatch(/12 characters/);
     expect(settingsProblem({ ...f, prefix: "IN V" }, saved)).toMatch(/letters, digits/);
     expect(settingsProblem({ ...f, prefix: "INV/2026_" }, saved)).toBeNull();
+  });
+});
+
+describe("payments left to match by hand", () => {
+  it("become cards with nothing suggested", () => {
+    const u = { entry_id: "e9", amount_kobo: 120000, channel: "paystack/main", reference: "R-9", received_at: "2026-10-23T10:00:00Z", kind: "payment" };
+    expect(unmatchedPayments([u])).toEqual([{ ...u, candidates: [] }]);
+    expect(unmatchedPayments(null)).toEqual([]);
+    expect(UNMATCHED_PATH).toBe("/v1/money/unmatched");
   });
 });

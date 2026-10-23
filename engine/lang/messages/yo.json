@@ -84,6 +84,14 @@
       "text": "Kún un",
       "reviewed": false
     },
+    "button.match_no": {
+      "text": "Rárá",
+      "reviewed": false
+    },
+    "button.match_yes": {
+      "text": "Bẹ́ẹ̀ni, so pọ̀",
+      "reviewed": false
+    },
     "button.new_account": {
       "text": "Nọ́mbà àkáǹtì tuntun",
       "reviewed": false
@@ -1014,6 +1022,66 @@
     },
     "wa.linked": {
       "text": "A ti so nọ́mbà yìí mọ́ àkọọ́lẹ̀ Taskiem yín. Ẹ fi *help* ránṣẹ́ láti rí ohun tí ẹ lè ṣe níbí.",
+      "reviewed": false
+    },
+    "wa.match.already_decided": {
+      "text": "A ti pinnu èyí nínú web app tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.match.already_matched": {
+      "text": "A ti so ó pọ̀ mọ́ {number} tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.match.already_rejected": {
+      "text": "A ti kọ̀ ọ́ tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.match.ask": {
+      "text": "{amount} wọlé ní {when} nípasẹ̀ {channel}.\n\nṢé fún {number} ni, {due} tí oníbàárà jẹ? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.channel.cash": {
+      "text": "owó ní ọwọ́",
+      "reviewed": false
+    },
+    "wa.match.channel.upload": {
+      "text": "statement tí a gbé sókè",
+      "reviewed": false
+    },
+    "wa.match.denied": {
+      "text": "Ẹ kò lè so owó pọ̀ nínú {org}.",
+      "reviewed": false
+    },
+    "wa.match.matched_paid": {
+      "text": "Mo ti so ó pọ̀ mọ́ {number}. Wọ́n ti san án tán.",
+      "reviewed": false
+    },
+    "wa.match.matched_part": {
+      "text": "Mo ti so ó pọ̀ mọ́ {number}. Wọ́n ti san apá kan ({due} ṣì kù).",
+      "reviewed": false
+    },
+    "wa.match.more": {
+      "text": "Tí kì í bá ṣe é, Rárá yóò fi ìwé owó tó kàn hàn.",
+      "reviewed": false
+    },
+    "wa.match.other_person": {
+      "text": "Ẹlòmíràn ni a fi bọ́tìnnì yìí ránṣẹ́ sí.",
+      "reviewed": false
+    },
+    "wa.match.refused": {
+      "text": "Kò so pọ̀: {reason}",
+      "reviewed": false
+    },
+    "wa.match.rejected_left": {
+      "text": "Ó dáa, kì í ṣe é. Owó náà ń dúró kí ẹ so ó pọ̀ nínú web app, lábẹ́ Invoices.",
+      "reviewed": false
+    },
+    "wa.match.rejected_left_link": {
+      "text": "Ó dáa, kì í ṣe é. Owó náà ń dúró kí ẹ so ó pọ̀ nínú web app: {link}",
+      "reviewed": false
+    },
+    "wa.match.rejected_next": {
+      "text": "Ó dáa, kì í ṣe é. A kò ní dá a lábàá mọ́.",
       "reviewed": false
     },
     "wa.no_org": {

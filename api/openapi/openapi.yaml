@@ -1363,6 +1363,161 @@ paths:
                 $ref: '#/components/schemas/CustomerInvoice'
         default:
           $ref: '#/components/responses/Error'
+  /v1/money/suggestions:
+    get:
+      operationId: listMoneySuggestions
+      tags:
+      - Invoices
+      summary: Suggested matches waiting for a person
+      description: "Money received that may be for an open invoice, with each suggestion's score and reasons, newest payment first (docs/matching.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The open suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions]
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneySuggestion'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/unmatched:
+    get:
+      operationId: listUnmatchedMoney
+      tags:
+      - Invoices
+      summary: Money received that matching left for a person
+      description: "Payments with no open suggestion that count towards no invoice, newest first, to match by hand (docs/matching.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The payments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payments]
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UnmatchedMoney'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/suggestions/{id}/confirm:
+    post:
+      operationId: confirmMoneySuggestion
+      tags:
+      - Invoices
+      summary: Match a payment to the invoice suggested
+      description: "The payment counts towards the invoice; the payment's other suggestions close. Undo it as any payment of the invoice."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/suggestions/{id}/reject:
+    post:
+      operationId: rejectMoneySuggestion
+      tags:
+      - Invoices
+      summary: Turn a suggestion down
+      description: "It is not offered again."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rejected:
+                    type: boolean
+                  at:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/entries/{id}/match:
+    post:
+      operationId: matchMoneyEntry
+      tags:
+      - Invoices
+      summary: Match a payment to an invoice by hand
+      description: "For money in that no suggestion fits. {id} is the money log entry. One payment counts towards one invoice at a time."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoice]
+              properties:
+                invoice:
+                  type: string
+                  description: The invoice's id or number
+      responses:
+        '200':
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerInvoice'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoice-settings:
     get:
       operationId: getInvoiceSettings
@@ -16665,6 +16820,65 @@ components:
             enum: [sms, email, whatsapp, telegram]
         sms_over_allowance:
           type: boolean
+    MoneySuggestion:
+      type: object
+      required: [id, entry_id, invoice_id, number, score, reasons, status, amount_kobo, channel, reference, received_at, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        entry_id:
+          type: string
+          format: uuid
+        invoice_id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        reasons:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [open]
+        amount_kobo:
+          type:
+          - integer
+          - 'null'
+        channel:
+          type: string
+        reference:
+          type: string
+        received_at:
+          type: string
+          format: date-time
+        kind:
+          type: string
+    UnmatchedMoney:
+      type: object
+      required: [entry_id, amount_kobo, channel, reference, received_at, kind]
+      properties:
+        entry_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type:
+          - integer
+          - 'null'
+        channel:
+          type: string
+        reference:
+          type: string
+        received_at:
+          type: string
+          format: date-time
+        kind:
+          type: string
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]
@@ -16682,6 +16896,9 @@ components:
           enum: [business, customer]
         allow_part_payments:
           type: boolean
+        auto_match:
+          type: boolean
+          description: A strong suggestion is matched to its invoice without asking (docs/matching.md)
     StorefrontOrder:
       type: object
       required: [id, reference, kind, status, customer, basket, total_kobo, payment, created_at]
@@ -22727,6 +22944,7 @@ components:
                 - notice
                 - message
                 - invoice
+                - match
               status:
                 type: string
                 enum:

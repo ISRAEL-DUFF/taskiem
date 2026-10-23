@@ -122,6 +122,10 @@ func stepFix(id string) Fix {
 	return Fix{Label: "Open the step", Path: "#step=" + id}
 }
 
+// ServiceName is a connector's name as people know it: "paystack" is
+// "Paystack".
+func ServiceName(id string) string { return service(id) }
+
 func service(id string) string {
 	id = strings.Split(id, "@")[0]
 	if n, ok := serviceNames[id]; ok {
@@ -133,7 +137,7 @@ func service(id string) string {
 	return strings.ToUpper(id[:1]) + id[1:]
 }
 
-var serviceNames = map[string]string{"paystack": "Paystack", "googlesheets": "Google Sheets", "gmail": "Gmail", "termii": "Termii", "flutterwave": "Flutterwave",
+var serviceNames = map[string]string{"paystack": "Paystack", "googlesheets": "Google Sheets", "gmail": "Gmail", "termii": "Termii", "flutterwave": "Flutterwave", "opay": "OPay",
 	"xenibase": "your tables", "moniepoint": "Moniepoint", "mono": "Mono", "dojah": "Dojah", "slack": "Slack", "telegram": "Telegram", "whatsapp": "WhatsApp",
 	"africastalking": "Africa's Talking", "notify": "Tell me", "storefront": "your storefront"}
 
