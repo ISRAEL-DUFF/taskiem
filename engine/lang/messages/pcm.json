@@ -2284,6 +2284,10 @@
       "text": "When person fill the form “{title}” (na only members)",
       "reviewed": false
     },
+    "wd.trigger.invoice_paid": {
+      "text": "When person pay one of your invoice finish",
+      "reviewed": false
+    },
     "wd.trigger.manual": {
       "text": "When person start am",
       "reviewed": false

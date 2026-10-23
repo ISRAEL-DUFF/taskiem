@@ -332,7 +332,8 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 }
 
 // runInvoicePayments issues the accounts and links invoice pages and
-// chat ask for (every second), looks their payments up (every 30
+// chat ask for and starts the runs invoices being paid queued (every
+// second), looks their payments up (every 30
 // seconds), matches the money that came in (every 10 seconds) and looks
 // for leaks (every 15 minutes).
 func (s *Server) runInvoicePayments(ctx context.Context) {
@@ -349,6 +350,9 @@ func (s *Server) runInvoicePayments(ctx context.Context) {
 		case <-drain.C:
 			if err := s.Invoices.Drain(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("invoices: requests", "err", err)
+			}
+			if err := s.Invoices.StartPaid(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: runs on paid", "err", err)
 			}
 		case <-check.C:
 			if err := s.Invoices.CheckPayments(ctx); err != nil && ctx.Err() == nil {

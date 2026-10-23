@@ -2284,6 +2284,10 @@
       "text": "Nígbà tí ẹnìkan bá kún fọ́ọ̀mù “{title}” (àwọn ọmọ ẹgbẹ́ nìkan)",
       "reviewed": false
     },
+    "wd.trigger.invoice_paid": {
+      "text": "Nígbà tí wọ́n bá san ọ̀kan nínú àwọn invoice yín tán",
+      "reviewed": false
+    },
     "wd.trigger.manual": {
       "text": "Nígbà tí ẹnìkan bá bẹ̀rẹ̀ rẹ̀",
       "reviewed": false

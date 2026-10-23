@@ -2,7 +2,7 @@
   "id": "invoice-paid-receipt",
   "title": "Send a receipt when an invoice is paid",
   "summary": "When an invoice of yours is paid in full, send the customer a thank-you receipt by SMS and email with the link to their paid invoice, and tell you.",
-  "description": "Every hour, finds the invoices paid in full in the last few hours. Each customer gets one thank-you by SMS, and by email when you have their address, with the invoice's number and its link, which now shows it paid; you are told once too. Nobody is thanked twice for the same invoice, however often it runs. An invoice is paid only when the payments counted towards it cover it, never by the workflow.",
+  "description": "Starts the moment one of your invoices is paid in full. The customer gets one thank-you by SMS, and by email when you have their address, with the invoice's number and its link, which now shows it paid; you are told too. It starts once for each invoice paid, so nobody is thanked twice. An invoice is paid only when the payments counted towards it cover it, never by the workflow.",
   "category": "payments",
   "tags": [
     "payments",
@@ -36,85 +36,57 @@
     "id": "wf_invoicePaidReceipt",
     "version": 1,
     "name": "Thank customers for paid invoices",
-    "description": "Sends each customer whose invoice was paid one thank-you with its link, and tells the owner.",
+    "description": "Sends the customer whose invoice was just paid one thank-you with its link, and tells the owner.",
     "trigger": {
-      "type": "schedule",
+      "type": "invoice",
       "config": {
-        "cron": "5 * * * *",
-        "timezone": "Africa/Lagos"
+        "event": "paid"
       }
     },
     "steps": [
       {
-        "id": "paid",
+        "id": "receipt",
         "type": "connector",
-        "name": "Find the invoices paid lately",
+        "name": "Thank the customer",
         "connector": "invoices@1",
-        "action": "list",
+        "action": "notify_customer",
         "input": {
-          "status": "paid",
-          "paid_within_hours": 3,
-          "limit": 200
-        }
-      },
-      {
-        "id": "thank_each",
-        "type": "foreach",
-        "name": "For each paid invoice",
-        "needs": [
-          "paid"
-        ],
-        "config": {
-          "items": "=has(steps.paid.output.invoices) ? steps.paid.output.invoices : []",
-          "max_concurrency": 5,
-          "max_items": 200,
+          "number": "=trigger.body.number",
+          "text": "Thank you: we have received your payment for invoice {number}. See it, marked paid: {link}",
+          "subject": "=trigger.body.number + ' is paid: thank you'"
+        },
+        "effect": {
+          "idempotency_seed": "='receipt:' + trigger.body.number"
+        },
+        "on_error": {
           "steps": [
             {
-              "id": "receipt",
-              "type": "connector",
-              "name": "Thank the customer",
-              "connector": "invoices@1",
-              "action": "notify_customer",
-              "input": {
-                "number": "=item.number",
-                "text": "Thank you: we have received your payment for invoice {number}. See it, marked paid: {link}",
-                "subject": "=item.number + ' is paid: thank you'"
-              },
-              "effect": {
-                "idempotency_seed": "='receipt:' + item.number"
-              },
-              "on_error": {
-                "steps": [
-                  {
-                    "id": "receipt_failed",
-                    "type": "transform",
-                    "name": "Note the thank-you that could not go",
-                    "config": {
-                      "output": {
-                        "number": "=item.number",
-                        "reason": "=steps.receipt.error.message"
-                      }
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "id": "tell_owner",
-              "type": "connector",
-              "name": "Tell you it is paid",
-              "connector": "notify@1",
-              "action": "tell",
-              "when": "={{tell_me}}",
-              "input": {
-                "title": "Invoice paid",
-                "message": "='Invoice ' + item.number + ' (' + item.total + ') is paid in full.'"
-              },
-              "effect": {
-                "idempotency_seed": "='receipt-owner:' + item.number"
+              "id": "receipt_failed",
+              "type": "transform",
+              "name": "Note the thank-you that could not go",
+              "config": {
+                "output": {
+                  "number": "=trigger.body.number",
+                  "reason": "=steps.receipt.error.message"
+                }
               }
             }
           ]
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell you it is paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "when": "={{tell_me}}",
+        "input": {
+          "title": "Invoice paid",
+          "message": "='Invoice ' + trigger.body.number + ' (' + trigger.body.amount + ') is paid in full.'"
+        },
+        "effect": {
+          "idempotency_seed": "='receipt-owner:' + trigger.body.number"
         }
       }
     ],

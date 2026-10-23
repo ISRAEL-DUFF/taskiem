@@ -2854,6 +2854,11 @@
       "reviewed": true,
       "context": "Read-back: started by a hosted form only signed-in members can fill in; {title} is the tenant's"
     },
+    "wd.trigger.invoice_paid": {
+      "text": "When one of your invoices is paid in full",
+      "reviewed": true,
+      "context": "Read-back: started when one of the business's invoices to its customers is paid in full"
+    },
     "wd.trigger.manual": {
       "text": "When someone starts it",
       "reviewed": true,

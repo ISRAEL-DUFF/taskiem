@@ -2284,6 +2284,10 @@
       "text": "Lokacin da wani ya cike fom ɗin “{title}” (mambobi kawai)",
       "reviewed": false
     },
+    "wd.trigger.invoice_paid": {
+      "text": "Lokacin da aka biya ɗaya daga cikin invoice ɗinku gaba ɗaya",
+      "reviewed": false
+    },
     "wd.trigger.manual": {
       "text": "Lokacin da wani ya fara shi",
       "reviewed": false

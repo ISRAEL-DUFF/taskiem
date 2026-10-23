@@ -71,7 +71,7 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 		}
 		if invoiceTable(t) {
 			warns = append(warns, Warning{Kind: "table", Rule: RuleInvoiceTable, Message: fmt.Sprintf("the table %q keeps invoices with a status: invoices to customers are Taskiem's own (invoices@1), "+
-				"marked paid only by the payments counted towards them, with a page where the customer pays; use invoices@1 create and send, and wait for the invoice.paid signal, instead of a table", t.Name)})
+				"marked paid only by the payments counted towards them, with a page where the customer pays; use invoices@1 create and send, and wait for the invoice.paid signal (or start on the invoice trigger), instead of a table", t.Name)})
 		}
 		err := checkTableShape(t)
 		if err == nil && check != nil {

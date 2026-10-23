@@ -217,3 +217,17 @@ describe("forms", () => {
     expect(sdk.generate(evaluate(code))).toBe(code);
   });
 });
+
+describe("invoice trigger", () => {
+  it("builds a workflow that starts when an invoice is paid and prints back to it", () => {
+    const def = sdk
+      .workflow({ id: "wf_receipt", name: "receipt", trigger: sdk.invoiceTrigger({ event: "paid" }) })
+      .step("thanks", sdk.connector("invoices@1", "notify_customer", { number: "=trigger.body.number", text: "Thank you: {link}" }))
+      .build();
+    expect(def.trigger).toEqual({ type: "invoice", config: { event: "paid" } });
+    const code = sdk.generate(def);
+    expect(code).toContain("invoiceTrigger(");
+    expect(evaluate(code)).toEqual(def);
+    expect(sdk.generate(evaluate(code))).toBe(code);
+  });
+});

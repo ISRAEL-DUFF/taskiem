@@ -2284,6 +2284,10 @@
       "text": "Mgbe mmadụ dejupụtara fọm “{title}” (naanị ndị otu)",
       "reviewed": false
     },
+    "wd.trigger.invoice_paid": {
+      "text": "Mgbe akwụchara otu n'ime invoice gị",
+      "reviewed": false
+    },
     "wd.trigger.manual": {
       "text": "Mgbe mmadụ malitere ya",
       "reviewed": false

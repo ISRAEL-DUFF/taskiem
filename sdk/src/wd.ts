@@ -185,7 +185,7 @@ export type Step =
 export type StepType = Step["type"];
 
 export interface Trigger {
-  type: "webhook" | "schedule" | "connector_event" | "capability_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow" | "storefront" | "form";
+  type: "webhook" | "schedule" | "connector_event" | "capability_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow" | "storefront" | "form" | "invoice";
   config?: Record<string, unknown>;
 }
 

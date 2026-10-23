@@ -172,6 +172,11 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 			return nil
 		}
 		return fmt.Errorf("a storefront trigger's action is order, enquiry, callback or booking")
+	case "invoice":
+		if str(c, "event") != "paid" {
+			return fmt.Errorf("an invoice trigger's event is paid")
+		}
+		return nil
 	case "form":
 		// The pages, conditions and fields are checked by wd.Validate.
 		_, err := def.FormTriggerConfig()
@@ -295,6 +300,12 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			}
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action)
 				VALUES ($1, $2, $3, $4, $5, 'storefront', $6)`, id, tenant, wf, version, env, action)
+		case "invoice":
+			// Any number of workflows may start on an invoice being paid.
+			// Payments are counted in prod only, so only prod's start; the
+			// other environments' rows say what is deployed there.
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, events)
+				VALUES ($1, $2, $3, $4, $5, 'invoice', $6)`, id, tenant, wf, version, env, []string{str(c, "event")})
 		case "form":
 			// The form is live at its endpoint's public id, which stays
 			// the same across versions; a paused or closed form stays so.
