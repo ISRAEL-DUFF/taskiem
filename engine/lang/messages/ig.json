@@ -84,6 +84,14 @@
       "text": "Dejupụta",
       "reviewed": false
     },
+    "button.match_no": {
+      "text": "Mba",
+      "reviewed": false
+    },
+    "button.match_yes": {
+      "text": "Ee, jikọta",
+      "reviewed": false
+    },
     "button.new_account": {
       "text": "Nọmba akaụntụ ọhụrụ",
       "reviewed": false
@@ -1014,6 +1022,66 @@
     },
     "wa.linked": {
       "text": "Ejikọọla nọmba a na akaụntụ Taskiem gị. Ziga *help* ka ị hụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false
+    },
+    "wa.match.already_decided": {
+      "text": "E kpebiela nke a na web app.",
+      "reviewed": false
+    },
+    "wa.match.already_matched": {
+      "text": "Ejikọtalarị ya na {number}.",
+      "reviewed": false
+    },
+    "wa.match.already_rejected": {
+      "text": "Ajụlarị ya.",
+      "reviewed": false
+    },
+    "wa.match.ask": {
+      "text": "{amount} batara na {when} site na {channel}.\n\nỌ bụ maka {number}, {due} onye ahịa ji? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.channel.cash": {
+      "text": "ego n'aka",
+      "reviewed": false
+    },
+    "wa.match.channel.upload": {
+      "text": "statement e bugoro",
+      "reviewed": false
+    },
+    "wa.match.denied": {
+      "text": "Ị nweghị ike ijikọta ego na {org}.",
+      "reviewed": false
+    },
+    "wa.match.matched_paid": {
+      "text": "Ejikọtala ya na {number}. A kwụchala ya.",
+      "reviewed": false
+    },
+    "wa.match.matched_part": {
+      "text": "Ejikọtala ya na {number}. A kwụọla akụkụ ({due} ka fọdụrụ).",
+      "reviewed": false
+    },
+    "wa.match.more": {
+      "text": "Ọ bụrụ na ọ bụghị ya, Mba ga-egosi akwụkwọ ụgwọ ọzọ.",
+      "reviewed": false
+    },
+    "wa.match.other_person": {
+      "text": "E zigara onye ọzọ bọtịnụ a.",
+      "reviewed": false
+    },
+    "wa.match.refused": {
+      "text": "Ejikọtaghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.match.rejected_left": {
+      "text": "Ọ dị mma, ọ bụghị ya. Ego ahụ na-eche ka ị jikọta ya na web app, n'okpuru Invoices.",
+      "reviewed": false
+    },
+    "wa.match.rejected_left_link": {
+      "text": "Ọ dị mma, ọ bụghị ya. Ego ahụ na-eche ka ị jikọta ya na web app: {link}",
+      "reviewed": false
+    },
+    "wa.match.rejected_next": {
+      "text": "Ọ dị mma, ọ bụghị ya. A gaghị atụ aro ya ọzọ.",
       "reviewed": false
     },
     "wa.no_org": {

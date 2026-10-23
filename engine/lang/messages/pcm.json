@@ -84,6 +84,14 @@
       "text": "Fill am",
       "reviewed": false
     },
+    "button.match_no": {
+      "text": "No",
+      "reviewed": false
+    },
+    "button.match_yes": {
+      "text": "Yes, match am",
+      "reviewed": false
+    },
     "button.new_account": {
       "text": "New account number",
       "reviewed": false
@@ -1014,6 +1022,66 @@
     },
     "wa.linked": {
       "text": "This number don join your Taskiem account. Send *help* make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "wa.match.already_decided": {
+      "text": "Dem don already decide dis one for the web app.",
+      "reviewed": false
+    },
+    "wa.match.already_matched": {
+      "text": "E don already match {number}.",
+      "reviewed": false
+    },
+    "wa.match.already_rejected": {
+      "text": "Dem don already reject am.",
+      "reviewed": false
+    },
+    "wa.match.ask": {
+      "text": "{amount} enter for {when} through {channel}.\n\nNa for {number} be dis, {due} wey the customer owe? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.channel.cash": {
+      "text": "cash",
+      "reviewed": false
+    },
+    "wa.match.channel.upload": {
+      "text": "statement wey dem upload",
+      "reviewed": false
+    },
+    "wa.match.denied": {
+      "text": "You no fit match payment for {org}.",
+      "reviewed": false
+    },
+    "wa.match.matched_paid": {
+      "text": "E don match {number}. Dem don pay am finish.",
+      "reviewed": false
+    },
+    "wa.match.matched_part": {
+      "text": "E don match {number}. Dem don pay part ({due} still remain).",
+      "reviewed": false
+    },
+    "wa.match.more": {
+      "text": "If no be am, No go show the next invoice wey fit be.",
+      "reviewed": false
+    },
+    "wa.match.other_person": {
+      "text": "Na another person dem send dis button give.",
+      "reviewed": false
+    },
+    "wa.match.refused": {
+      "text": "E no match: {reason}",
+      "reviewed": false
+    },
+    "wa.match.rejected_left": {
+      "text": "Okay, no be am. The payment dey wait make you match am for the web app, under Invoices.",
+      "reviewed": false
+    },
+    "wa.match.rejected_left_link": {
+      "text": "Okay, no be am. The payment dey wait make you match am for the web app: {link}",
+      "reviewed": false
+    },
+    "wa.match.rejected_next": {
+      "text": "Okay, no be am. We no go suggest am again.",
       "reviewed": false
     },
     "wa.no_org": {

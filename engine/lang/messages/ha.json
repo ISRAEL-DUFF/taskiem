@@ -84,6 +84,14 @@
       "text": "Cike",
       "reviewed": false
     },
+    "button.match_no": {
+      "text": "A'a",
+      "reviewed": false
+    },
+    "button.match_yes": {
+      "text": "Eh, haɗa",
+      "reviewed": false
+    },
     "button.new_account": {
       "text": "Sabuwar lambar asusu",
       "reviewed": false
@@ -1014,6 +1022,66 @@
     },
     "wa.linked": {
       "text": "An haɗa wannan lamba da asusunka na Taskiem. Aika *help* don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "wa.match.already_decided": {
+      "text": "An riga an yanke wannan a web app.",
+      "reviewed": false
+    },
+    "wa.match.already_matched": {
+      "text": "An riga an haɗa da {number}.",
+      "reviewed": false
+    },
+    "wa.match.already_rejected": {
+      "text": "An riga an ƙi shi.",
+      "reviewed": false
+    },
+    "wa.match.ask": {
+      "text": "{amount} ya shigo a {when} ta {channel}.\n\nShin na {number} ne, {due} da abokin ciniki ke bi? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.channel.cash": {
+      "text": "kuɗi a hannu",
+      "reviewed": false
+    },
+    "wa.match.channel.upload": {
+      "text": "statement da aka ɗora",
+      "reviewed": false
+    },
+    "wa.match.denied": {
+      "text": "Ba za ku iya haɗa kuɗi a {org} ba.",
+      "reviewed": false
+    },
+    "wa.match.matched_paid": {
+      "text": "An haɗa da {number}. An biya shi gaba ɗaya.",
+      "reviewed": false
+    },
+    "wa.match.matched_part": {
+      "text": "An haɗa da {number}. An biya wani sashi ({due} ya rage).",
+      "reviewed": false
+    },
+    "wa.match.more": {
+      "text": "Idan ba haka ba, A'a zai nuna takardar kuɗi ta gaba.",
+      "reviewed": false
+    },
+    "wa.match.other_person": {
+      "text": "An aika wannan maɓallin ga wani.",
+      "reviewed": false
+    },
+    "wa.match.refused": {
+      "text": "Ba a haɗa ba: {reason}",
+      "reviewed": false
+    },
+    "wa.match.rejected_left": {
+      "text": "To, ba shi ba ne. Kuɗin na jiran ku haɗa shi a web app, ƙarƙashin Invoices.",
+      "reviewed": false
+    },
+    "wa.match.rejected_left_link": {
+      "text": "To, ba shi ba ne. Kuɗin na jiran ku haɗa shi a web app: {link}",
+      "reviewed": false
+    },
+    "wa.match.rejected_next": {
+      "text": "To, ba shi ba ne. Ba za a sake ba da shawararsa ba.",
       "reviewed": false
     },
     "wa.no_org": {

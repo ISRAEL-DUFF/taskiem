@@ -323,6 +323,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if strings.HasPrefix(in.Reply, "tk1.") {
 		return s.waDecide(ctx, c, in.Reply)
 	}
+	// So does a payment's Yes, match or No (whatsapp_matching.go).
+	if strings.HasPrefix(in.Reply, matchButtonPrefix) {
+		return s.matchPress(ctx, c, in.Reply)
+	}
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
 	}

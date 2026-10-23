@@ -104,6 +104,16 @@
       "reviewed": true,
       "context": "Form button, at most 20 characters"
     },
+    "button.match_no": {
+      "text": "No",
+      "reviewed": true,
+      "context": "A button under a payment asked about in chat: it is not for the invoice shown (max 20 characters)"
+    },
+    "button.match_yes": {
+      "text": "Yes, match",
+      "reviewed": true,
+      "context": "A button under a payment asked about in chat: match it to the invoice shown (max 20 characters)"
+    },
     "button.new_account": {
       "text": "New account number",
       "reviewed": true,
@@ -1268,6 +1278,81 @@
       "text": "This number is now linked to your Taskiem account. Send *help* to see what you can do here.",
       "reviewed": true,
       "context": "A number was linked by sending back its code"
+    },
+    "wa.match.already_decided": {
+      "text": "This was already decided in the web app.",
+      "reviewed": true,
+      "context": "A match button pressed for a suggestion closed without a match that can be named"
+    },
+    "wa.match.already_matched": {
+      "text": "Already matched to {number}.",
+      "reviewed": true,
+      "context": "A match button pressed for a payment that is already matched"
+    },
+    "wa.match.already_rejected": {
+      "text": "Already turned down.",
+      "reviewed": true,
+      "context": "A match button pressed for a suggestion already turned down"
+    },
+    "wa.match.ask": {
+      "text": "{amount} came in on {when} through {channel}.\n\nIs this for {number}, {due} due from the customer? {reasons}.",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), with the best suggestion. {when} is like 23 Oct 14:05 (Lagos); {channel} is like Paystack (main); {reasons} is in English, from the matcher, and names no one"
+    },
+    "wa.match.channel.cash": {
+      "text": "cash",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), how the money came in: recorded as cash"
+    },
+    "wa.match.channel.upload": {
+      "text": "a statement upload",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), how the money came in: a line of an uploaded bank statement"
+    },
+    "wa.match.denied": {
+      "text": "You cannot match payments in {org}.",
+      "reviewed": true,
+      "context": "A match button pressed by someone without invoice.manage"
+    },
+    "wa.match.matched_paid": {
+      "text": "Matched to {number}. It is now paid.",
+      "reviewed": true,
+      "context": "Yes, match was pressed and the invoice is now paid in full"
+    },
+    "wa.match.matched_part": {
+      "text": "Matched to {number}. It is now part-paid ({due} still due).",
+      "reviewed": true,
+      "context": "Yes, match was pressed and some of the invoice is still due"
+    },
+    "wa.match.more": {
+      "text": "If not, No shows the next possible invoice.",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), when more than one invoice could fit"
+    },
+    "wa.match.other_person": {
+      "text": "This button was sent to someone else.",
+      "reviewed": true,
+      "context": "A match button pressed from another member's chat"
+    },
+    "wa.match.refused": {
+      "text": "Not matched: {reason}",
+      "reviewed": true,
+      "context": "Yes, match was pressed but the invoice could not take the payment; {reason} is in English"
+    },
+    "wa.match.rejected_left": {
+      "text": "Turned down. The payment is left for you to match in the web app, under Invoices.",
+      "reviewed": true,
+      "context": "No was pressed and nothing else is suggested; no web address configured"
+    },
+    "wa.match.rejected_left_link": {
+      "text": "Turned down. The payment is left for you to match in the web app: {link}",
+      "reviewed": true,
+      "context": "No was pressed and nothing else is suggested; {link} is the web app's invoices page"
+    },
+    "wa.match.rejected_next": {
+      "text": "Turned down. It will not be suggested again.",
+      "reviewed": true,
+      "context": "No was pressed; the next possible invoice follows in the same message"
     },
     "wa.no_org": {
       "text": "Your Taskiem account has no active organisation.",

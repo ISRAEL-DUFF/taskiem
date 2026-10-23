@@ -28,11 +28,18 @@ func (s *Server) matchingRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/money/entries/{id}/match", s.matchEntry)
 }
 
+// matcher is Server.Matcher, or one made from Invoices, asking in chat
+// about what it suggests (whatsapp_matching.go) unless it already has a
+// Suggested hook.
 func (s *Server) matcher() *matching.Matcher {
+	m := matching.Matcher{Invoices: s.Invoices, PII: s.Store.PII}
 	if s.Matcher != nil {
-		return s.Matcher
+		m = *s.Matcher
 	}
-	return &matching.Matcher{Invoices: s.Invoices, PII: s.Store.PII}
+	if m.Suggested == nil {
+		m.Suggested = s.MatchSuggested
+	}
+	return &m
 }
 
 func (s *Server) listSuggestions(w http.ResponseWriter, r *http.Request) {

@@ -165,11 +165,24 @@ func TestSuggestConfirmUndo(t *testing.T) {
 // a strong and clear one is matched alone, an unclear one is not.
 func TestRejectAndAutoMatch(t *testing.T) {
 	w := newWorld(t)
+	// Suggested hears of what a person is asked, not of automatic matches.
+	var told [][]matching.Suggestion
+	w.m.Suggested = func(_ context.Context, tenant, entry uuid.UUID, top []matching.Suggestion) {
+		for _, s := range top {
+			if tenant != w.env.Tenant || s.EntryID != entry || s.ID == uuid.Nil || s.Status != "open" {
+				t.Errorf("told %s %s %+v", tenant, entry, s)
+			}
+		}
+		told = append(told, top)
+	}
 	a := w.invoice("Ada Obi", 2500000)
 	w.heard("payment.received", map[string]any{"payment_id": "PAY-1", "amount_kobo": int64(2500000)})
 	open := w.open()
 	if len(open) != 1 || open[0].Number != a.Number {
 		t.Fatalf("suggestions %+v", open)
+	}
+	if len(told) != 1 || len(told[0]) != 1 || told[0][0].ID != open[0].ID {
+		t.Fatalf("told %+v", told)
 	}
 	if err := w.m.Reject(ctx, w.env.Tenant, open[0].ID, "user:ada"); err != nil {
 		t.Fatal(err)
@@ -192,11 +205,17 @@ func TestRejectAndAutoMatch(t *testing.T) {
 	if y := w.read(b.Number); y.Status != "paid" || y.Payments[0].How != "suggested_auto" || len(y.Payments[0].Reasons) == 0 {
 		t.Fatalf("auto %+v", y)
 	}
+	if len(told) != 1 {
+		t.Errorf("told of an automatic match: %+v", told)
+	}
 	// Two invoices of the same amount and no name: not clear, so asked.
 	c1, c2 := w.invoice("Dayo", 400000), w.invoice("Efe", 400000)
 	w.heard("payment.received", map[string]any{"payment_id": "PAY-2", "amount_kobo": int64(400000)})
 	if w.read(c1.Number).Status != "sent" || w.read(c2.Number).Status != "sent" || len(w.open()) != 2 {
 		t.Errorf("unclear auto: %s %s %+v", w.read(c1.Number).Status, w.read(c2.Number).Status, w.open())
+	}
+	if len(told) != 2 || len(told[1]) != 2 || told[1][0].Score < told[1][1].Score {
+		t.Errorf("told of the unclear one: %+v", told)
 	}
 }
 
