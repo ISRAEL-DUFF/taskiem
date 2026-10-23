@@ -1,6 +1,6 @@
 # 0045 — Tally is folded into Taskiem: invoices, a money log and one-time accounts, no separate product
 
-Date: 2026-10-23 · Status: **Proposed** (build plan: [invoices and the money log](../spec/invoices-and-money-log.md))
+Date: 2026-10-23 · Status: **Accepted** 2026-10-23 (build plan: [invoices and the money log](../spec/invoices-and-money-log.md))
 
 ## Context
 

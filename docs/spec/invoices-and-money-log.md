@@ -1,6 +1,6 @@
 # Invoices and the money log: specification and build plan
 
-Status: **Proposed** · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
+Status: **Accepted**, T0 in progress · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
 
 What a small business needed from Tally, built in Taskiem: invoices that settle themselves, an account number per invoice that the customer asks for when they are ready to pay, one record of every naira that moved, payments matched to what they pay for, and the leaks and summaries that come from that record. Lending is out of scope.
 

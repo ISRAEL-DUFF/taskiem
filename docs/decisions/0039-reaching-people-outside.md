@@ -1,6 +1,6 @@
 # 0039 — Reaching people outside a business on WhatsApp and Telegram
 
-Date: 2026-10-21 · Status: Accepted
+Date: 2026-10-21 · Status: Accepted; point 7 amended by [0045](0045-tally-in-taskiem.md) (an invoice's buttons)
 
 ## Context
 
