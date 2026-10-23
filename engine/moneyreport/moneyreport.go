@@ -202,32 +202,40 @@ func text(v string) string {
 	return v
 }
 
+// The invoices and storefront orders a movement is counted towards, each
+// as its numbers joined by spaces (matches not undone).
+const (
+	matchedInvoices = `COALESCE((SELECT string_agg(i.number, ' ' ORDER BY i.number) FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
+			          WHERE p.entry_id = m.movement AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)), '')`
+	matchedOrders = `COALESCE((SELECT string_agg(o.reference, ' ' ORDER BY o.reference) FROM storefront_order_payments p JOIN storefront_orders o ON o.id = p.order_id
+			          WHERE p.entry_id = m.movement AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)), '')`
+)
+
 // ExportLog writes the period's money log as CSV: one line per movement,
 // its latest status, money in positive and out negative.
 func ExportLog(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.Time, w io.Writer) error {
 	rows, err := tx.Query(ctx, `SELECT m.movement, COALESCE(m.occurred_at, m.recorded_at), m.recorded_at, m.direction, m.kind, m.status, m.amount,
 			COALESCE(m.fee_kobo, 0), m.currency, m.channel, m.reference, COALESCE(m.description, m.note, ''), COALESCE(m.vendor, ''), COALESCE(m.category, ''), m.source,
-			COALESCE((SELECT string_agg(i.number, ' ' ORDER BY i.number) FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
-			          WHERE p.entry_id = m.movement AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)), '')
+			`+matchedInvoices+`, `+matchedOrders+`
 		FROM (`+latest+`) m ORDER BY COALESCE(m.occurred_at, m.recorded_at), m.movement`, tenant, from, to)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	cw := csv.NewWriter(w)
-	_ = cw.Write([]string{"date", "entry_id", "direction", "kind", "status", "amount", "fee", "currency", "channel", "reference", "description", "vendor", "category", "source", "invoice"})
+	_ = cw.Write([]string{"date", "entry_id", "direction", "kind", "status", "amount", "fee", "currency", "channel", "reference", "description", "vendor", "category", "source", "invoice", "order"})
 	for rows.Next() {
 		var id uuid.UUID
 		var at, recorded time.Time
-		var dir, kind, status, currency, channel, ref, desc, vendor, category, source, invoice string
+		var dir, kind, status, currency, channel, ref, desc, vendor, category, source, invoice, order string
 		var amount, fee int64
-		if err := rows.Scan(&id, &at, &recorded, &dir, &kind, &status, &amount, &fee, &currency, &channel, &ref, &desc, &vendor, &category, &source, &invoice); err != nil {
+		if err := rows.Scan(&id, &at, &recorded, &dir, &kind, &status, &amount, &fee, &currency, &channel, &ref, &desc, &vendor, &category, &source, &invoice, &order); err != nil {
 			return err
 		}
 		if dir == "out" {
 			amount = -amount
 		}
-		_ = cw.Write([]string{day(at), id.String(), dir, kind, status, Naira(amount), Naira(fee), currency, text(channel), text(ref), text(desc), text(vendor), text(category), source, text(invoice)})
+		_ = cw.Write([]string{day(at), id.String(), dir, kind, status, Naira(amount), Naira(fee), currency, text(channel), text(ref), text(desc), text(vendor), text(category), source, text(invoice), text(order)})
 	}
 	if err := rows.Err(); err != nil {
 		return err
@@ -318,13 +326,12 @@ func Expense(category string) string {
 // ExportJournal writes the period's settled movements as a double-entry
 // journal: every movement two lines (or four with a fee) whose debits and
 // credits balance. Money in matched to an invoice settles receivables,
-// POS sales are sales, other money in waits to be identified; payouts and
+// POS sales and money for storefront orders are sales, other money in waits to be identified; payouts and
 // expenses leave the bank they went through.
 func ExportJournal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.Time, w io.Writer) error {
 	rows, err := tx.Query(ctx, `SELECT m.movement, COALESCE(m.occurred_at, m.recorded_at), m.direction, m.kind, m.amount, COALESCE(m.fee_kobo, 0),
 			m.channel, m.reference, COALESCE(m.description, m.note, ''), COALESCE(m.category, ''),
-			COALESCE((SELECT string_agg(i.number, ' ' ORDER BY i.number) FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
-			          WHERE p.entry_id = m.movement AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)), '')
+			`+matchedInvoices+`, `+matchedOrders+`
 		FROM (`+latest+`) m WHERE m.status = 'settled' AND m.amount > 0
 		ORDER BY COALESCE(m.occurred_at, m.recorded_at), m.movement`, tenant, from, to)
 	if err != nil {
@@ -346,24 +353,27 @@ func ExportJournal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to ti
 	for rows.Next() {
 		var id uuid.UUID
 		var at time.Time
-		var dir, kind, channel, ref, desc, category, invoice string
+		var dir, kind, channel, ref, desc, category, invoice, order string
 		var amount, fee int64
-		if err := rows.Scan(&id, &at, &dir, &kind, &amount, &fee, &channel, &ref, &desc, &category, &invoice); err != nil {
+		if err := rows.Scan(&id, &at, &dir, &kind, &amount, &fee, &channel, &ref, &desc, &category, &invoice, &order); err != nil {
 			return err
 		}
 		bank := Bank(channel)
 		if desc == "" {
 			desc = strings.ReplaceAll(kind, "_", " ")
 		}
-		if invoice != "" {
+		switch {
+		case invoice != "":
 			desc = "Invoice " + invoice
+		case order != "":
+			desc = "Order " + order
 		}
 		if dir == "in" {
 			other := AccountUnmatched
 			switch {
 			case invoice != "":
 				other = AccountReceivable
-			case kind == "pos_sale":
+			case kind == "pos_sale", order != "":
 				other = AccountSales
 			case kind == "cash":
 				other = AccountOwner

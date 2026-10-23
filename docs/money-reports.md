@@ -68,6 +68,7 @@ One line per movement, at its latest status; money in positive, money out negati
 | `vendor`, `category` | For expenses |
 | `source` | `event` (the rail told Taskiem), `lookup` (Taskiem asked), `step` (a workflow's payout the rail answered as settled at once), `upload` (a statement) or `entered` (typed in) |
 | `invoice` | The invoice numbers it is matched to, if any |
+| `order` | The storefront orders it is matched to, if any |
 
 ### Invoices
 
@@ -89,6 +90,7 @@ The period's **settled** movements as a double-entry journal, in the shape bookk
 | Movement | Debit | Credit |
 | --- | --- | --- |
 | Money in matched to an invoice | `Bank: <channel>` | `Accounts receivable` |
+| Money in matched to a storefront order | `Bank: <channel>` | `Sales` |
 | A POS sale | `Bank: <channel>` | `Sales` |
 | Cash put in | `Cash` | `Owner's cash movements` |
 | Other money in | `Bank: <channel>` | `Money in to identify` |

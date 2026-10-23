@@ -146,3 +146,50 @@ func kobo(s string) int64 {
 	f, _ := strconv.ParseInt(frac, 10, 64)
 	return n*100 + f
 }
+
+// Money matched to a storefront order is named in the log and posted as
+// a sale in the journal, not as money to identify.
+func TestOrderMoneyInExports(t *testing.T) {
+	e := rt.New(t)
+	log := &moneylog.Log{Pool: e.DB.App, PII: e.Vault}
+	amount := int64(250000)
+	if _, _, err := log.Record(ctx, e.Tenant, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: "paystack/main", Reference: "P-ORDER",
+		Event: "payment.received", AmountKobo: &amount, Source: "event"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO storefronts (id, tenant_id, slug, draft, created_by) VALUES (gen_random_uuid(), $1, 'report-shop', '{}', 'user:ada')`,
+		`INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, total_kobo, payment, paid_at)
+			SELECT gen_random_uuid(), $1, s.id, 'order', 'AK-REPORT1', '\x00', 'paid', '{}', 'x', 250000, 'none', now() FROM storefronts s WHERE s.tenant_id = $1`,
+		`INSERT INTO storefront_order_payments (id, tenant_id, order_id, entry_id, amount_kobo, how, by)
+			SELECT gen_random_uuid(), $1, o.id, (SELECT id FROM money_entries WHERE tenant_id = $1 AND reference = 'P-ORDER'), 250000, 'exact', 'system'
+			FROM storefront_orders o WHERE o.reference = 'AK-REPORT1'`,
+	} {
+		if _, err := e.DB.Admin.Exec(ctx, q, e.Tenant); err != nil {
+			t.Fatal(err)
+		}
+	}
+	from, to := moneyreport.Day(time.Now())
+	export := func(fn func(pgx.Tx, *bytes.Buffer) error) [][]string {
+		t.Helper()
+		var buf bytes.Buffer
+		if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error { return fn(tx, &buf) }); err != nil {
+			t.Fatal(err)
+		}
+		recs, err := csv.NewReader(&buf).ReadAll()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return recs
+	}
+	lg := export(func(tx pgx.Tx, w *bytes.Buffer) error { return moneyreport.ExportLog(ctx, tx, e.Tenant, from, to, w) })
+	if h := lg[0]; h[len(h)-1] != "order" || len(lg) != 2 || lg[1][len(h)-1] != "AK-REPORT1" || lg[1][len(h)-2] != "" {
+		t.Fatalf("log: %v", lg)
+	}
+	j := export(func(tx pgx.Tx, w *bytes.Buffer) error {
+		return moneyreport.ExportJournal(ctx, tx, e.Tenant, from, to, w)
+	})
+	if len(j) != 3 || j[1][2] != "Bank: paystack/main" || j[2][2] != moneyreport.AccountSales || j[2][5] != "Order AK-REPORT1" {
+		t.Fatalf("journal: %v", j)
+	}
+}
