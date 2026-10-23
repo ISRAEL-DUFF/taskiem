@@ -1,8 +1,8 @@
 # Invoices and the money log: what is not covered yet
 
-Everything built for [decision 0045](../decisions/0045-tally-in-taskiem.md) so far (T1 to T7 of the [build plan](invoices-and-money-log.md)) that is not done, not verified, or done differently from the plan. Each item says what is missing, why, and what would close it. Update this list as items close; the plan's "Built" notes say how each milestone differs from it.
+Everything built for [decision 0045](../decisions/0045-tally-in-taskiem.md) so far (T1 to T8 of the [build plan](invoices-and-money-log.md)) that is not done, not verified, or done differently from the plan. Each item says what is missing, why, and what would close it. Update this list as items close; the plan's "Built" notes say how each milestone differs from it.
 
-Status as of 23 October 2026: T1, T3, T4, T2, T5, T6 and T7 are built. T8 is not started.
+Status as of 23 October 2026: T1 to T8 are all built. What is left is below.
 
 ## Needs people, not code
 
@@ -24,7 +24,6 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5, T6 and T7 are built. T8 is not
 - **The members' "invoice" chat command was off on the edge server** before T4 gave it invoices; check on staging that it works as expected.
 - **Editing a draft without `pii.reveal`** asks for the customer's details again, since the API returns them masked; the payments connection is typed by name, not picked.
 - **Chat command words in other languages are drafts** (T8): Pidgin, Yoruba, Hausa and Igbo words for an invoice, an expense, cash in and cash out, and for "for", are in each language's word list, unreviewed; what remains is a review by speakers (above). The vendor is still read after English `at` only, and expense categories from English words only.
-- **The `send-invoice` template's keywords avoid the word "invoice"** so the offline builder still picks the follow-up template for "chase an unpaid invoice"; T8 settles the builder and its evals.
 - **Number of messages to one customer**: a customer who has had five messages in an hour (twenty a day, from any business) is not sent another; the invoice is still sent and its page works. The web app and chat say no message went, not why.
 
 ## The money log and kept tables (T2)
@@ -70,7 +69,6 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5, T6 and T7 are built. T8 is not
 - **Templates:**
   - `invoice-paid-receipt` sends within the hour, not at once, since no trigger starts a run when an invoice is paid; if more than two hourly runs in a row are missed, invoices paid early in the gap get no receipt. A trigger on `invoice.paid` would fix both.
   - `chase-overdue-invoices` skips straight to the owner's note for an invoice already past all its reminder windows when the workflow first runs.
-  - Their keywords are "chase" and "receipt" only: "remind customers about overdue invoices" still offers `invoice-follow-up` (T8).
   - Adding them moved the offline builder eval's ungated `connector_recall` from 0.549 to 0.537 (five cases scoring just under the template threshold now start from a template); the gated measures did not regress.
 - **Expenses in chat** use a short fixed word list for categories, and record the member's bare user id, as the API does, where the invoice chat records `user:<id>`.
 - **Web app (Money pages):**
@@ -89,6 +87,11 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5, T6 and T7 are built. T8 is not
 - **The journal uses fixed account names** and no VAT; mapping to a business's own chart of accounts (or a bookkeeping tool's import format) is later.
 - **The Overview's channel table has no limit** on rows, and shows connection names, not the business's own names for accounts.
 
-## Later milestones (not started)
+## Templates and the AI builder (T8)
 
-- **T8:** templates and the AI builder (including the `send-invoice` keywords above, and other languages' chat command words).
+- **Measured offline only.** The real-model eval of the new invoice and money log cases (`evals/builder/invoices.jsonl`) needs the AI account (AI1); the offline heuristic answers the money log cases from unrelated templates or by guessing, since no template reads `money_log`.
+- **No template reads the money log** (a daily "who paid", money not matched, POS totals from the log): the builder writes those from the instructions; the daily chat summary (T7) covers the first for owners.
+- **The invoice-table check is narrow**: only a table the draft proposes, named with `invoice` or `invoices` and with a status or paid column, is warned about, and the warning is not fed back to the model. A payment link or account number made per invoice is caught by the instructions only.
+- **Invoice requests naming another system** (a Remita RRR, invoices in MySQL or a billing system) meet the invoice templates too; the model is told to use the named tool, but the offline heuristic starts from the template.
+- **The money log's columns are written into the instructions by hand**; `engine/moneylog`'s test fails if a column is renamed without them.
+- **The best template's connectors' schemas** are added to every prompt that offers a template, which adds about a tenth to the offline eval's input tokens.

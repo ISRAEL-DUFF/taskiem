@@ -2,6 +2,7 @@ package templates
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -22,6 +23,27 @@ const MinScore = 12
 // productBonus is what naming a template's product adds: more than any
 // one keyword, so the product's templates come first.
 const productBonus = 30
+
+// requiredBonus is what naming one of a template's required words adds:
+// about one distinctive keyword's worth.
+const requiredBonus = 8
+
+// names reports whether a goal's words name req: one word, or a phrase
+// whose words come in that order with nothing between them but stop
+// words ("bill a customer" in "bill my customers", never in "pay a
+// customer's bill").
+func names(goal []string, req string) bool {
+	want := Words(req)
+	if len(want) == 0 {
+		return false
+	}
+	for i := 0; i+len(want) <= len(goal); i++ {
+		if slices.Equal(goal[i:i+len(want)], want) {
+			return true
+		}
+	}
+	return false
+}
 
 var stopWords = map[string]bool{"the": true, "and": true, "for": true, "with": true, "when": true, "then": true, "that": true, "this": true,
 	"from": true, "into": true, "our": true, "their": true, "them": true, "they": true, "who": true, "what": true, "have": true, "has": true,
@@ -114,7 +136,8 @@ func (l *Library) index() *index {
 func (l *Library) Match(goal string, n int) []Match {
 	ix := l.index()
 	goalWords := map[string]bool{}
-	for _, w := range Words(goal) {
+	goalSeq := Words(goal)
+	for _, w := range goalSeq {
 		goalWords[w] = true
 	}
 	total := float64(len(l.list))
@@ -150,6 +173,19 @@ func (l *Library) Match(goal string, n int) []Match {
 				continue
 			}
 			score += productBonus
+			distinctive = true
+		}
+		if len(t.Requires) > 0 {
+			// A template about one thing (invoices) is for goals that
+			// name it, and then counts it as distinctive.
+			named := false
+			for _, req := range t.Requires {
+				named = named || names(goalSeq, req)
+			}
+			if !named {
+				continue
+			}
+			score += requiredBonus
 			distinctive = true
 		}
 		s := int(math.Round(score))

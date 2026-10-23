@@ -66,6 +66,12 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 			continue
 		case !used[t.Name]:
 			continue // described but not used: nothing to make
+		case slices.Contains(MoneyLogTables, t.Name):
+			continue // Taskiem's own: never made from a draft (see below)
+		}
+		if invoiceTable(t) {
+			warns = append(warns, Warning{Kind: "table", Rule: RuleInvoiceTable, Message: fmt.Sprintf("the table %q keeps invoices with a status: invoices to customers are Taskiem's own (invoices@1), "+
+				"marked paid only by the payments counted towards them, with a page where the customer pays; use invoices@1 create and send, and wait for the invoice.paid signal, instead of a table", t.Name)})
 		}
 		err := checkTableShape(t)
 		if err == nil && check != nil {
@@ -86,6 +92,10 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 	}
 	slices.Sort(missing)
 	for _, name := range missing {
+		if slices.Contains(MoneyLogTables, name) {
+			warns = append(warns, Warning{Kind: "table", Message: fmt.Sprintf("the workflow reads the money log's table %q, which Taskiem makes and fills itself once the business has data tables and its first movement of money is recorded; it is not made on the Tables page", name)})
+			continue
+		}
 		warns = append(warns, Warning{Kind: "table", Message: fmt.Sprintf("the workflow uses a table %q that does not exist: create it on the Tables page before publishing", name)})
 	}
 	written := tablesWritten(doc)
@@ -95,6 +105,37 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 		}
 	}
 	return keep, warns
+}
+
+// MoneyLogTables are the money log's kept tables (engine/moneylog.Table
+// and MatchesTable, which the builder may not import: moneylog's test
+// keeps them the same). Taskiem makes and fills them; a draft only reads
+// them (rule 12).
+var MoneyLogTables = []string{"money_log", "money_matches"}
+
+// RuleInvoiceTable flags a proposed table that keeps customers' invoices
+// with a status: invoices are invoices@1's (rule 17).
+const RuleInvoiceTable = "invoice_as_table"
+
+// invoiceTable reports whether a proposed table keeps invoices with a
+// status or paid column. A table of bills from suppliers is not one: the
+// business pays those.
+func invoiceTable(t TableSpec) bool {
+	parts := strings.Split(t.Name, "_")
+	if !slices.Contains(parts, "invoice") && !slices.Contains(parts, "invoices") {
+		return false
+	}
+	for _, p := range parts {
+		if slices.Contains([]string{"supplier", "suppliers", "vendor", "vendors", "purchase", "purchases", "payable", "payables", "bill", "bills", "expense", "expenses"}, p) {
+			return false
+		}
+	}
+	for _, c := range t.Columns {
+		if slices.Contains([]string{"status", "paid", "is_paid", "payment_status", "invoice_status", "paid_at", "paid_on"}, c.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // rowWrites are the xenibase@1 actions that change a table's rows.

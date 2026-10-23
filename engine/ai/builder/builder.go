@@ -569,6 +569,25 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 			refs = append(refs, r.Ref)
 		}
 	}
+	offered := []string{}
+	var tpls []map[string]any
+	if b.Templates != nil && len(req.Base) == 0 {
+		for i, m := range b.Templates.Match(req.Goal, 2) {
+			tc := TemplateContext(m.Template)
+			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
+			tpls = append(tpls, tc)
+			offered = append(offered, m.Template.ID)
+			// The best template brings its connectors' schemas, after the
+			// ranked ones: "bill a customer" names no connector, but
+			// send-invoice is written with invoices@1.
+			for _, ref := range m.Template.Connectors {
+				if _, ok := reg.Get(ref); ok && i == 0 && !seen[ref] {
+					seen[ref] = true
+					refs = append(refs, ref)
+				}
+			}
+		}
+	}
 	var details []map[string]any
 	for _, ref := range refs {
 		if c, ok := reg.Get(ref); ok {
@@ -591,15 +610,7 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	if refs == nil {
 		refs = []string{}
 	}
-	offered := []string{}
 	if b.Templates != nil && len(req.Base) == 0 {
-		var tpls []map[string]any
-		for _, m := range b.Templates.Match(req.Goal, 2) {
-			tc := TemplateContext(m.Template)
-			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
-			tpls = append(tpls, tc)
-			offered = append(offered, m.Template.ID)
-		}
 		doc["starting_templates"] = nonNil(tpls)
 	}
 	return doc, refs, offered
