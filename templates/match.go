@@ -19,6 +19,10 @@ type Match struct {
 // starting point: the builder then drafts freely.
 const MinScore = 12
 
+// productBonus is what naming a template's product adds: more than any
+// one keyword, so the product's templates come first.
+const productBonus = 30
+
 var stopWords = map[string]bool{"the": true, "and": true, "for": true, "with": true, "when": true, "then": true, "that": true, "this": true,
 	"from": true, "into": true, "our": true, "their": true, "them": true, "they": true, "who": true, "what": true, "have": true, "has": true,
 	"should": true, "want": true, "need": true, "please": true, "can": true, "you": true, "your": true, "are": true, "was": true, "will": true,
@@ -138,6 +142,15 @@ func (l *Library) Match(goal string, n int) []Match {
 					distinctive = true
 				}
 			}
+		}
+		if t.Product != "" {
+			// A template around a product is for the product's customers:
+			// offered when the goal names it, then above the rest.
+			if !goalWords[stem(strings.ToLower(t.Product))] {
+				continue
+			}
+			score += productBonus
+			distinctive = true
 		}
 		s := int(math.Round(score))
 		if s >= MinScore && len(matched) >= 2 && distinctive {

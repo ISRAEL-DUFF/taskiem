@@ -1,0 +1,220 @@
+{
+  "id": "payrolla-approve-by-chat",
+  "title": "Send payroll approvals on WhatsApp",
+  "summary": "When a payroll in Payrolla is ready for approval, send the approvers its total and the link to approve it, and remind them the day before payday.",
+  "description": "When Payrolla has calculated a payroll, Taskiem sends the people who approve it the period, the number of people, the total and the link to review it in Payrolla, where they approve with their own confirmation. If it is still not approved the day before payday, they are reminded once. Taskiem never approves or pays: Payrolla has no way to approve from outside, by design. Needs Payrolla's Read payroll permission.",
+  "category": "payroll",
+  "tags": [
+    "payrolla",
+    "approval",
+    "whatsapp"
+  ],
+  "keywords": [
+    "payrolla",
+    "approval link"
+  ],
+  "connectors": [
+    "payrolla@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Named in the messages people get.",
+      "required": true,
+      "example": "Chuks Electronics",
+      "max_length": 60
+    },
+    {
+      "name": "payrolla_connection",
+      "type": "connection",
+      "connector": "payrolla",
+      "title": "Payrolla connection",
+      "description": "The Payrolla company this follows: its key, from Payrolla → Settings → Connected apps.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "notify_role",
+      "type": "string",
+      "title": "Who else is told",
+      "description": "The role of the people who approve payroll in Payrolla.",
+      "required": false,
+      "default": "approver",
+      "example": "approver",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payrollaApproveByChat",
+    "version": 1,
+    "name": "Send payroll approvals",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "payrolla@1",
+        "trigger": "run_event",
+        "events": [
+          "run.computed"
+        ],
+        "connection": "{{payrolla_connection}}"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "run": {
+                "type": "object",
+                "properties": {
+                  "run_id": {
+                    "type": "string"
+                  },
+                  "period_start": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "period_end": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "pay_date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "employee_count": {
+                    "type": "integer"
+                  },
+                  "total_net_kobo": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "approval_url": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "ask",
+        "type": "connector",
+        "name": "Ask the approvers",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settings"
+        ],
+        "input": {
+          "to": "role",
+          "role": "{{notify_role}}",
+          "title": "=steps.settings.output.business_name + ' payroll is ready to approve'",
+          "message": "=steps.settings.output.business_name + ' payroll to ' + trigger.body.data.run.period_end + ' is ready: NGN ' + string(trigger.body.data.run.total_net_kobo / 100) + ' for ' + string(trigger.body.data.run.employee_count) + ' people, paid on ' + trigger.body.data.run.pay_date + '. Review and approve it in Payrolla: ' + trigger.body.data.approval_url"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "ask_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "day_before",
+        "type": "wait",
+        "name": "Wait until the day before payday",
+        "needs": [
+          "ask"
+        ],
+        "config": {
+          "until": "=string(timestamp(trigger.body.data.run.pay_date + 'T07:00:00Z') - duration('24h'))"
+        }
+      },
+      {
+        "id": "check",
+        "type": "connector",
+        "name": "Check whether it was approved",
+        "connector": "payrolla@1",
+        "action": "get_run",
+        "connection": "{{payrolla_connection}}",
+        "needs": [
+          "day_before"
+        ],
+        "input": {
+          "run_id": "=trigger.body.data.run.run_id"
+        }
+      },
+      {
+        "id": "remind",
+        "type": "connector",
+        "name": "Remind them once",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settings",
+          "check"
+        ],
+        "input": {
+          "to": "role",
+          "role": "{{notify_role}}",
+          "title": "=steps.settings.output.business_name + ' payroll still needs approval'",
+          "message": "=steps.settings.output.business_name + ' payroll to ' + trigger.body.data.run.period_end + ' is not approved yet, and payday is tomorrow. Approve it in Payrolla: ' + trigger.body.data.approval_url"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "remind_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        },
+        "when": "=steps.check.output.run.status == 'COMPUTED'"
+      }
+    ],
+    "settings": {
+      "timeout": "70d"
+    }
+  },
+  "product": "payrolla"
+}

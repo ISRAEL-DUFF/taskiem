@@ -14,6 +14,7 @@ import { SchemaForm } from "../forms/SchemaForm";
 import { NewConnection, startLink } from "./Connections";
 import { needsConnection } from "../lib/connections";
 import { railsForAll, templateCapabilities } from "../lib/capabilities";
+import type { ConnectionName } from "../forms/ConnectionPicker";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 
 // Get started (docs/onboarding.md): the checklist, derived from what the
@@ -88,7 +89,8 @@ export function Start() {
 /** The starter templates as cards; a card opens the guide. */
 function TemplatePicker() {
   const { data, error } = useLoad(() => get<{ templates: Template[] }>("/v1/templates"), []);
-  const list = useMemo(() => starterTemplates(data?.templates ?? []), [data]);
+  const names = useLoad(() => get<{ connections: ConnectionName[] }>("/v1/connection-names"), []);
+  const list = useMemo(() => starterTemplates(data?.templates ?? [], (names.data?.connections ?? []).map((c) => c.connector)), [data, names.data]);
   const [all, setAll] = useState(false);
   return (
     <>

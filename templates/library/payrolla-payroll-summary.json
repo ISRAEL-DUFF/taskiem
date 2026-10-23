@@ -1,0 +1,195 @@
+{
+  "id": "payrolla-payroll-summary",
+  "title": "Payroll summary from Payrolla",
+  "summary": "When Payrolla finishes paying a payroll, tell the owner how many were paid, the total, and who was not paid and why.",
+  "description": "When Payrolla finishes paying a payroll, Taskiem reads how each payment went and tells the owner and the people you choose: how many were paid, the total, and everyone who was not paid, with the reason. If a payment comes back from the bank later, Payrolla reports the payroll again and a new summary follows. Nothing is paid by Taskiem. Needs Payrolla's Read payroll permission.",
+  "category": "payroll",
+  "tags": [
+    "payrolla",
+    "summary",
+    "owner"
+  ],
+  "keywords": [
+    "payrolla",
+    "who was not paid"
+  ],
+  "connectors": [
+    "payrolla@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Named in the messages people get.",
+      "required": true,
+      "example": "Chuks Electronics",
+      "max_length": 60
+    },
+    {
+      "name": "payrolla_connection",
+      "type": "connection",
+      "connector": "payrolla",
+      "title": "Payrolla connection",
+      "description": "The Payrolla company this follows: its key, from Payrolla → Settings → Connected apps.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "notify_role",
+      "type": "string",
+      "title": "Who else is told",
+      "description": "Besides the owner, the role that gets the summary (for example finance).",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payrollaPayrollSummary",
+    "version": 1,
+    "name": "Payroll summary",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "payrolla@1",
+        "trigger": "run_event",
+        "events": [
+          "run.completed",
+          "run.partially_completed"
+        ],
+        "connection": "{{payrolla_connection}}"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "run": {
+                "type": "object",
+                "properties": {
+                  "run_id": {
+                    "type": "string"
+                  },
+                  "period_start": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "period_end": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "pay_date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "employee_count": {
+                    "type": "integer"
+                  },
+                  "total_net_kobo": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "paid_count": {
+                "type": "integer"
+              },
+              "failed_count": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "lines",
+        "type": "connector",
+        "name": "Read how each payment went",
+        "connector": "payrolla@1",
+        "action": "get_run_lines",
+        "connection": "{{payrolla_connection}}",
+        "input": {
+          "run_id": "=trigger.body.data.run.run_id"
+        }
+      },
+      {
+        "id": "summary",
+        "type": "transform",
+        "name": "Add it up",
+        "needs": [
+          "lines"
+        ],
+        "config": {
+          "output": {
+            "paid": "=size(steps.lines.output.lines.filter(l, l.disbursement_status == 'CONFIRMED'))",
+            "paid_naira": "=sum(steps.lines.output.lines.filter(l, l.disbursement_status == 'CONFIRMED').map(l, l.net_kobo)) / 100",
+            "not_paid": "=steps.lines.output.lines.filter(l, l.disbursement_status in ['FAILED', 'PERMANENTLY_FAILED', 'REVERSED']).map(l, l.first_name + ' ' + l.last_name + ' (' + (has(l.reason) && l.reason != '' ? l.reason : string(l.disbursement_status).lowerAscii()) + ')')"
+          }
+        }
+      },
+      {
+        "id": "tell",
+        "type": "connector",
+        "name": "Tell the owner and the team",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settings",
+          "summary"
+        ],
+        "input": {
+          "to": "role",
+          "role": "{{notify_role}}",
+          "title": "=steps.settings.output.business_name + ' payroll ' + trigger.body.data.run.period_end",
+          "message": "=steps.settings.output.business_name + ' payroll to ' + trigger.body.data.run.period_end + ': ' + string(steps.summary.output.paid) + ' paid (NGN ' + string(steps.summary.output.paid_naira) + ')' + (size(steps.summary.output.not_paid) > 0 ? '. Not paid: ' + steps.summary.output.not_paid.join(', ') + '.' : '. Everyone was paid.')"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  },
+  "product": "payrolla"
+}

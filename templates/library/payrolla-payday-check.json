@@ -1,0 +1,178 @@
+{
+  "id": "payrolla-payday-check",
+  "title": "Check the money is there before payday",
+  "summary": "Every morning, compare the payrolls Payrolla will pay soon with the balance of the account that funds them, and warn the owner if it is short.",
+  "description": "Every morning, Taskiem looks at the payrolls in Payrolla due in the next few days and compares their net total with the balance of the payments account you fund payroll from. If it is short, it tells the owner and the people you choose how much to top up, in time. It moves no money. Needs Payrolla's Read payroll permission, and a connected payments account that reports its balance (Paystack, Moniepoint, iswallet, Flutterwave or Anchor).",
+  "category": "payroll",
+  "tags": [
+    "payrolla",
+    "balance",
+    "schedule"
+  ],
+  "keywords": [
+    "payrolla",
+    "payday",
+    "enough money",
+    "top up"
+  ],
+  "connectors": [
+    "payrolla@1",
+    "notify@1",
+    "capability:balance"
+  ],
+  "params": [
+    {
+      "name": "payrolla_connection",
+      "type": "connection",
+      "connector": "payrolla",
+      "title": "Payrolla connection",
+      "description": "The Payrolla company this follows: its key, from Payrolla → Settings → Connected apps.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "balance"
+      ],
+      "title": "Account that funds payroll",
+      "description": "The payments account payroll money comes from: any you connected that reports its balance.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet to check",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one payroll comes from. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    },
+    {
+      "name": "days_before",
+      "type": "integer",
+      "title": "Days ahead",
+      "description": "How many days before payday to start checking.",
+      "required": false,
+      "default": 3,
+      "example": 3,
+      "minimum": 1,
+      "maximum": 14
+    },
+    {
+      "name": "check_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the check runs each day, Lagos time.",
+      "required": false,
+      "default": "08:00",
+      "example": "08:00"
+    },
+    {
+      "name": "notify_role",
+      "type": "string",
+      "title": "Who else is told",
+      "description": "Besides the owner, the role told when money is short.",
+      "required": false,
+      "default": "finance",
+      "example": "finance",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payrollaPaydayCheck",
+    "version": 1,
+    "name": "Check the money is there before payday",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{check_time:minute}} {{check_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "runs",
+        "type": "connector",
+        "name": "Find the payrolls due soon",
+        "connector": "payrolla@1",
+        "action": "list_runs",
+        "connection": "{{payrolla_connection}}",
+        "input": {
+          "status": "COMPUTED,APPROVED,LOCKED",
+          "limit": 50
+        }
+      },
+      {
+        "id": "due",
+        "type": "transform",
+        "name": "Add up what is due",
+        "needs": [
+          "runs"
+        ],
+        "config": {
+          "output": {
+            "total_kobo": "=sum((has(steps.runs.output.runs) ? steps.runs.output.runs : []).filter(r, timestamp(r.pay_date + 'T23:59:59Z') - timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) <= duration(string({{days_before}} * 24) + 'h')).map(r, r.total_net_kobo))",
+            "count": "=size((has(steps.runs.output.runs) ? steps.runs.output.runs : []).filter(r, timestamp(r.pay_date + 'T23:59:59Z') - timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) <= duration(string({{days_before}} * 24) + 'h')))"
+          }
+        }
+      },
+      {
+        "id": "balance",
+        "type": "capability",
+        "uses": "balance",
+        "name": "Check the balance",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "account": "{{funding_account}}"
+        },
+        "needs": [
+          "due"
+        ],
+        "when": "=steps.due.output.count > 0"
+      },
+      {
+        "id": "warn",
+        "type": "connector",
+        "name": "Warn that money is short",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "due",
+          "balance"
+        ],
+        "input": {
+          "to": "role",
+          "role": "{{notify_role}}",
+          "title": "Payroll money is short",
+          "message": "='Payroll due soon needs NGN ' + string(steps.due.output.total_kobo / 100) + ', but the account holds NGN ' + string(steps.balance.output.available_kobo / 100) + '. Top up NGN ' + string((steps.due.output.total_kobo - steps.balance.output.available_kobo) / 100) + ' before payday.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "warn_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        },
+        "when": "=steps.balance.output.available_kobo < steps.due.output.total_kobo"
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  },
+  "product": "payrolla"
+}

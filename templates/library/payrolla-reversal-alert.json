@@ -1,0 +1,188 @@
+{
+  "id": "payrolla-reversal-alert",
+  "title": "Alert when a Payrolla salary is returned",
+  "summary": "When the bank returns a salary Payrolla paid, tell the owner and the payroll admin who it was, how much, and why.",
+  "description": "When a payment Payrolla made to an employee comes back from the bank, that person has not been paid. Taskiem tells the owner and the people you choose at once, with the employee's name, the amount and the reference, so someone can check their account details in Payrolla and pay them again there. Taskiem pays nobody. Needs Payrolla's Read payroll and Read team permissions.",
+  "category": "payroll",
+  "tags": [
+    "payrolla",
+    "alerts",
+    "reversal"
+  ],
+  "keywords": [
+    "payrolla",
+    "returned pay",
+    "sent back",
+    "bank returned"
+  ],
+  "connectors": [
+    "payrolla@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "payrolla_connection",
+      "type": "connection",
+      "connector": "payrolla",
+      "title": "Payrolla connection",
+      "description": "The Payrolla company this follows: its key, from Payrolla → Settings → Connected apps.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "notify_role",
+      "type": "string",
+      "title": "Who else is told",
+      "description": "Besides the owner, the role told (for example the payroll admin).",
+      "required": false,
+      "default": "admin",
+      "example": "admin",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payrollaReversalAlert",
+    "version": 1,
+    "name": "Alert when a salary comes back",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "payrolla@1",
+        "trigger": "payout_event",
+        "events": [
+          "payout.reversed"
+        ],
+        "connection": "{{payrolla_connection}}"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "run_id": {
+                "type": "string"
+              },
+              "payslip_id": {
+                "type": "string"
+              },
+              "employee_id": {
+                "type": "string"
+              },
+              "amount_kobo": {
+                "type": "integer"
+              },
+              "method": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "employee",
+        "type": "connector",
+        "name": "Find the employee",
+        "connector": "payrolla@1",
+        "action": "get_employee",
+        "connection": "{{payrolla_connection}}",
+        "input": {
+          "employee_id": "=trigger.body.data.employee_id"
+        }
+      },
+      {
+        "id": "message",
+        "type": "transform",
+        "name": "Write the alert",
+        "needs": [
+          "employee"
+        ],
+        "config": {
+          "output": {
+            "text": "=steps.employee.output.employee.first_name + ' ' + steps.employee.output.employee.last_name + '\\'s pay of NGN ' + string(trigger.body.data.amount_kobo / 100) + ' came back from the bank (ref ' + trigger.body.data.reference + '), so they are not paid. Check their account details in Payrolla and pay them again there.'"
+          }
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell the owner",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "message"
+        ],
+        "input": {
+          "to": "owner",
+          "title": "A salary came back",
+          "message": "=steps.message.output.text"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_owner_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_team",
+        "type": "connector",
+        "name": "Tell the payroll admin",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "message"
+        ],
+        "input": {
+          "to": "role",
+          "role": "{{notify_role}}",
+          "title": "A salary came back",
+          "message": "=steps.message.output.text"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_team_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  },
+  "product": "payrolla"
+}
