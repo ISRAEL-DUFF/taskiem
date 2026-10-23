@@ -1,0 +1,12 @@
+{
+  "name": "a bill payment is sold from the account, not a sale",
+  "trigger": "transaction",
+  "body": {
+    "eventId": "11111111-2222-4333-8444-555555555555",
+    "eventType": "V1_POS_BILL_PAYMENT_TRANSACTION",
+    "data": {
+      "terminalSerial": "P260TEST01", "amount": 250000, "transactionReference": "MPOS-0003", "merchantReference": null,
+      "transactionTime": "2026/08/05 09:00:00", "transactionType": "BILL_PAYMENT", "transactionStatus": "COMPLETED"
+    }
+  }
+}

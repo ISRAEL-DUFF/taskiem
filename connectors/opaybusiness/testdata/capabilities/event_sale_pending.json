@@ -1,0 +1,15 @@
+{
+  "name": "an order still open is a pending sale; a payment with no method is told by its remark",
+  "trigger": "payment",
+  "body": {
+    "orderNo": "20220704741380171865833500", "payNo": "2334345345345300", "status": "INITIAL",
+    "amount": 2500, "fee": null, "settlementAmount": "", "sn": "", "remark": "Transfer from ADA OBI"
+  },
+  "event": "pos.sale",
+  "expect": {
+    "reference": "2334345345345300",
+    "amount_kobo": 250000,
+    "status": "pending",
+    "method": "transfer"
+  }
+}

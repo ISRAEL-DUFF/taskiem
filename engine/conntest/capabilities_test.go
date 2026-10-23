@@ -87,3 +87,45 @@ func TestCapabilityConformance(t *testing.T) {
 		t.Errorf("uncovered %v", rep.Uncovered)
 	}
 }
+
+// An event no capability of the rail leads to (a POS sale) is waited on
+// by nothing: its trigger may correlate on something else, such as the
+// payment request a sale answers.
+func TestEventNoCapabilityWaitsOn(t *testing.T) {
+	m, probs := connector.Parse([]byte(`
+manifest: connector/v1
+id: till
+version: 1.0.0
+name: Till
+category: payments
+kind: rail
+auth: { type: none }
+base_url: https://api.till.example
+actions:
+  ping:
+    title: Ping
+    class: read
+    input: { type: object, properties: {} }
+    output: { type: object, properties: {} }
+triggers:
+  sale:
+    type: webhook
+    verify: { scheme: none }
+    events: [sale]
+    event_type: '="sale"'
+    correlation: =body.request
+events:
+  pos.sale: { trigger: sale, when: "=true", fields: { reference: "=body.id", amount_kobo: "=body.kobo", status: "='approved'" } }
+`))
+	if len(probs) > 0 {
+		t.Fatal(probs)
+	}
+	c := &connector.Connector{Manifest: m, Actions: map[string]connector.Action{}}
+	s := &conntest.CapabilitySuite{Cases: []conntest.CapabilityCase{
+		{Name: "sale", Trigger: "sale", Body: map[string]any{"id": "t1", "kobo": 500, "request": "r1"}, Event: "pos.sale", Expect: map[string]any{"reference": "t1", "amount_kobo": 500}},
+	}}
+	rep := conntest.RunCapabilities(context.Background(), c, s, conntest.Options{})
+	if !rep.Passed() {
+		t.Errorf("%+v", rep.Results)
+	}
+}

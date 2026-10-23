@@ -254,3 +254,40 @@ triggers:
     events: [payment]
     event_type: '="payment"'
     dedup: '="x-opay-tranid" in headers ? string(headers["x-opay-tranid"]) : ""'
+# What a payment is in Taskiem's words (rule 16,
+# schemas/capabilities-v1.json): a pos.sale, which Taskiem's money log
+# records, declined ones included. The fields are read from OPay's plain
+# notification, as the enricher leaves it; the envelope as received is
+# encrypted, carries neither payNo nor orderNo, and is no sale. Amounts
+# are naira with two decimals as text ("300.00"); times are millisecond
+# epochs.
+events:
+  pos.sale:
+    trigger: payment
+    when: "=has(body.payNo) || has(body.orderNo)"
+    fields:
+      reference: >-
+        =[body.?payNo.orValue(null)].map(r, r != null && string(r) != '' ? string(r) : string(body.orderNo))[0]
+      amount_kobo: "=int(math.round(double(body.amount) * 100.0))"
+      fee_kobo: >-
+        =[body.?fee.orValue(null)].map(v, v != null && string(v) != '' ? dyn(int(math.round(double(v) * 100.0))) : dyn(null))[0]
+      settled_kobo: >-
+        =[body.?settlementAmount.orValue(null)].map(v, v != null && string(v) != '' ? dyn(int(math.round(double(v) * 100.0))) : dyn(null))[0]
+      status: >-
+        =[body.?status.orValue(null)].map(v, v == null ? '' : string(v).upperAscii())
+        .map(s, s == 'SUCCESS' ? 'approved' : s in ['PENDING', 'INITIAL', ''] ? 'pending'
+        : s.startsWith('REVERS') ? 'reversed' : 'declined')[0]
+      terminal: >-
+        =[body.?sn.orValue(null)].map(t, t != null && string(t) != '' ? dyn(string(t)) : dyn(null))[0]
+      occurred_at: >-
+        =[[body.?completedTime.orValue(null), body.?transactionTime.orValue(null)]
+        .filter(t, t != null && string(t).matches('^[1-9][0-9]*$'))]
+        .map(l, size(l) == 0 ? dyn(null) : dyn(string(timestamp(int(string(l[0])) / 1000) + duration(string(int(string(l[0])) % 1000) + 'ms'))))[0]
+      method: >-
+        =[body.?payMethod.orValue(null)].map(v, v == null ? '' : string(v).lowerAscii())
+        .map(m, m == 'bankcard' ? 'card' : m in ['banktransfer', 'bankaccount'] ? 'transfer'
+        : m == 'balancepayment' ? 'wallet' : m == 'ussd' ? 'ussd' : m == 'qrcode' ? 'qr'
+        : m == '' && [body.?remark.orValue(null), body.?transactionName.orValue(null)].exists(x, x != null && string(x).matches('(?i)virtual account|transfer')) ? 'transfer'
+        : 'other')[0]
+      payer_name: >-
+        =[body.?senderName.orValue(null)].map(n, n != null && string(n) != '' ? dyn(string(n)) : dyn(null))[0]
