@@ -112,7 +112,7 @@ A **Bursar** role template (custom role with `school.read`, `school.manage`, `in
 | **Class** | Name (JSS 1, Primary 4), arm (A, B), order | Unique name and arm per school |
 | **Session and term** | 2026/2027; First term with start, end and the date fees are due | One current term at a time; past terms read-only |
 | **Student** | Name, admission number, class, status (active, withdrawn, graduated), date of birth (optional) | Admission number unique per school; personal data sealed like customers' (`x-pii`) |
-| **Family** | Guardians (name, phone, email, relationship), their students | A student belongs to one family; a guardian may be in one family only (v1) |
+| **Family** | Guardians (name, phone, email, relationship), their students | A student belongs to one family, and a guardian to one family (decided 2026-10-23) |
 | **Enrollment** | A student in a class for a term | Created when a term starts from the student's class; changes are audited |
 | **Student account** | The student's account number, bank, account name, rail connection and reference (§6) | One active account per student and connection |
 
@@ -254,9 +254,11 @@ A parent asks for a plan on the family page; the bursar sees it with the parent'
 
 A student is **cleared** for a term when, for that term's invoices:
 
-- the balance is zero (or within the school's tolerance, a setting in naira, default zero); or
+- the balance is zero; or
 - an approved payment plan exists and no instalment is past due; or
 - an override is in force.
+
+A term with some money paid but a balance left is **partly paid**, never cleared: the clearance list and the family page say partly paid, and the gate says **See the bursar** (it shows no amounts). Each student is therefore **cleared**, **partly paid** or **not paid** for a term.
 
 Clearance is computed every time it is read. There is no clearance field.
 
@@ -379,9 +381,9 @@ A pilot school can start after B5 (students, fees, accounts, matching, cash and 
 | Paystack and Flutterwave may need approval or a BVN per permanent account | B0 records each rail's requirement; the school chooses its issuing connection |
 | A rail charges per account issued or per credit | B0 records the fee; shown before a batch is issued |
 | Credits reported net with no fee field | Counted as landed and flagged for the bursar; B0 confirms per rail |
-| A reversal that leaves a child's invoice paid when the money went back (Balans parked this) | A reversed or refunded credit undoes its matches and voids its receipts, reopening the invoice and recomputing clearance; the bursar is told. To confirm with the founder before B4 |
-| Clearance tolerance and partial payment: is 90% paid "cleared"? | A school setting (tolerance in naira); a percentage rule is an open question for the founder |
-| A guardian in two families (remarried parents, an uncle paying for two households) | v1 allows one family per guardian; revisit with pilot schools |
+| A reversal that leaves a child's invoice paid when the money went back (Balans parked this) | **Decided** (2026-10-23): a reversed or refunded credit undoes its matches, voids its receipts and reopens the invoice; clearance is recomputed and the bursar is told (B4, B5) |
+| Partial payment: is 90% paid "cleared"? | **Decided** (2026-10-23): no. A balance left is partly paid, never cleared (§12.1); an override with a reason is the only way to clear it |
+| A guardian in two families in one school (remarried parents, an uncle paying for two households) | **Decided** (2026-10-23): one family per guardian, to keep it simple. A guardian with children in two schools is in a family in each, since each school is its own business |
 | WhatsApp outside the 24-hour window | Utility templates for reminders and receipts submitted to Meta (founder); SMS until approved |
 | Parent links forwarded to others | Links show one family's fees only, expire, and show no other family's data; account numbers are meant to be shared |
 
