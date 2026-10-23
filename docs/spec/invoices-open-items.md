@@ -29,9 +29,12 @@ Status as of 23 October 2026: T1 to T8 are all built. What is left is below.
 ## The money log and kept tables (T2)
 
 - **The record of reference is in Taskiem's database** (`money_entries`); the `money_log` data table is a copy. A business that brings its own Xenibase project can still edit the copy there, outside Taskiem. This follows from data tables having no unique constraint.
-- **Not recorded yet:**
-  - payouts a rail reports as settled at once with no event after (`pay_bank` answering `settled`);
-  - refunds (the capability set has no refund event).
+- **Refunds and payouts settled at once** are recorded (a payout step answering `settled`, as `payout.settled` with source `step`, so the rail's later event is the same entry; the `refund.*` events, mapped for Paystack only). Still not recorded:
+  - refunds on Flutterwave (its refund webhook names no event and no amount unit) and OPay (callback not mapped);
+  - Paystack's refund events other than `refund.pending`, and the amount's unit, are read from the one documented example;
+  - two partial refunds of one payment that reach the same status are one entry (keyed by the payment refunded, since Paystack's pending event carries no refund reference), so money out is undercounted;
+  - `pay_many` batches, `get_payout` lookups that come back settled, and the `refund` action's own answer;
+  - a refund does not reduce an invoice's paid amount: the refunded payment stays matched.
 - **Paystack takes one webhook URL per account** while Taskiem has two Paystack triggers: transfer events reach the log through the 5-minute poll, not instantly. Fix: one Paystack trigger for both kinds of event.
 - **Moniepoint POS:** bill payments, airtime, BOOM, pay codes and collections are left out as money paid out of the balance; that is a reading of the docs, not confirmed. Moniepoint gives no fee or settled amount.
 - **POS statuses matched by name, not documented:** "reversed" for both POS rails, and OPay's FAIL and CLOSE.
@@ -43,7 +46,7 @@ Status as of 23 October 2026: T1 to T8 are all built. What is left is below.
 
 ## Matching (T5)
 
-- **Storefront orders are not matched through suggestions**; they keep their own payment check. Spec 8.1 also covers orders.
+- **Storefront orders** are matched like invoices (exactly from their checkout reference, by suggestion, automatically, or by hand), through one path shared with their own payment check. Not covered: an order paid after it is accepted is not suggested before its payment link exists; an undo is refused once the order's workflow went on; money paid to an order by transfer has no rail payment to refund, so the business refunds it itself; order suggestions use the invoice permissions, not `storefront.manage`.
 - **The permanent-account rule is not built**: no customer's permanent account (`virtual_account`) is linked to invoices, so a payment into one is suggested, not matched exactly to the customer's oldest open invoice.
 - **The score is Taskiem's own** (amount, a reference naming the invoice, the payer's name, days since sending), not Tally's; weights are in [matching](../matching.md). Tune with real data.
 - **Most payments carry no payer name** (`payment.received` has none), so suggestions mostly rest on the amount and timing.
@@ -67,7 +70,7 @@ Status as of 23 October 2026: T1 to T8 are all built. What is left is below.
 - **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`); a money permission of its own may be wanted.
 - **Agreed fees are set by hand** per connection; no rail's published rates are filled in.
 - **Templates:**
-  - `invoice-paid-receipt` sends within the hour, not at once, since no trigger starts a run when an invoice is paid; if more than two hourly runs in a row are missed, invoices paid early in the gap get no receipt. A trigger on `invoice.paid` would fix both.
+  - `invoice-paid-receipt` now starts on the `invoice` trigger (`{"event": "paid"}`) and sends at once. Workflows already made from its hourly version keep running as they were and are not offered the new one (same template id); making it again from the template gives the immediate version. A workflow deployed in the second between a payment and its start does not get that invoice.
   - `chase-overdue-invoices` skips straight to the owner's note for an invoice already past all its reminder windows when the workflow first runs.
   - Adding them moved the offline builder eval's ungated `connector_recall` from 0.549 to 0.537 (five cases scoring just under the template threshold now start from a template); the gated measures did not regress.
 - **Expenses in chat** use a short fixed word list for categories, and record the member's bare user id, as the API does, where the invoice chat records `user:<id>`.
@@ -80,7 +83,7 @@ Status as of 23 October 2026: T1 to T8 are all built. What is left is below.
 ## Summaries and exports (T7)
 
 - **The monthly email has no attachments**: it carries the summary and a link to the Money page's downloads, which needs a sign-in.
-- **Owners only, and no opt-out**: members with `invoice.read` who are not owners get no summary; a money group in the notification settings needs `engine/notices` and the web Settings page changed together.
+- **Who gets summaries** is a choice in the notification settings (group `money`: the daily chat and the monthly email apart): owners by default, anyone with `invoice.read` who turns it on. The roles that may read invoices are listed twice (`api` and `engine/moneydigest`, kept equal by a test); someone who turns the daily summary on gets the next day's, not that day's.
 - **Missed days are not caught up**: a scheduler down all day skips that day's chat summary; the monthly email is tried until the 3rd. An owner who links a chat later that day gets nothing for it.
 - **Outside WhatsApp's 24-hour window** the summary is sent as the `taskiem_alert` template (counted against the business's allowance), cut to 200 characters; a template of its own needs Meta's approval.
 - **The monthly email is in English**; the chat text is in five languages, four unreviewed.
