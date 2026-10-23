@@ -1,6 +1,6 @@
 # Invoices and the money log: specification and build plan
 
-Status: **Accepted**; T0 partly done (§4.3), **T1 built** · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
+Status: **Accepted**; T0 partly done (§4.3), **T1 and T3 built** · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
 
 What a small business needed from Tally, built in Taskiem: invoices that settle themselves, an account number per invoice that the customer asks for when they are ready to pay, one record of every naira that moved, payments matched to what they pay for, and the leaks and summaries that come from that record. Lending is out of scope.
 
@@ -373,6 +373,16 @@ Kept tables in data tables; `money_log` and its writer; the log's intake per rai
 The record, numbering, statuses, `invoices@1`, the Invoices pages (list, new, detail, void), and the `send-invoice` template.
 
 **Done when:** an owner creates and sends an invoice from the web and from chat; no action or page can set `paid`; a voided invoice takes no new account.
+
+**Built** (T3): migration 00197 (`customer_invoices`, `customer_invoice_settings`, `customer_invoice_payments`: the table `invoices` is Taskiem's own billing); `engine/invoicing` (numbering from a locked counter, drafts, sending by SMS and email with the page link, voiding, payments recorded and undone, the `invoice.paid` signal, the hourly overdue check); `invoices@1` (`create`, once per step key; `send`; `get`; `void`; `notify_customer`); `/v1/invoices` and `/v1/invoice-settings` with `invoice.read` and `invoice.manage`, customers masked unless revealed; the web app's Invoices pages and settings; the invoice's page at `/i/<token>` on the form host, read-only, in every theme; chat's `invoice <name> <amount> [for <what>]`; the `send-invoice` template ([invoices](../invoices.md)). Differences from §5:
+
+- **Payments live in Taskiem's database**, in `customer_invoice_payments`, inserted and never changed (an undo is a row naming the payment). The database computes an invoice's status, `paid_kobo` and `paid_at` from them; no role may write those columns. The money log's `money_matches` (T2, T5) will mirror these rows for the owner rather than be the source of an invoice's status, so the invariant holds in one database.
+- **Overdue is a status of its own**, computed from the due date (Lagos time) whenever the invoice is touched and by the hourly check; a part-paid invoice past its date shows overdue, with what was paid.
+- **Sending is by SMS and email only.** WhatsApp and Telegram delivery with the Pay by transfer button comes with T4, with the amendment to 0039.
+- **The page shows no payment options yet** ("Payment options will appear here soon"): T4 adds them.
+- **Chat understands the English command words** (`invoice`, `bill`); its replies are in all five catalogues (four as unreviewed drafts). The other languages' command words come with T8.
+- **The template's keywords avoid the word "invoice"** for now, so the offline builder still picks the follow-up template for "chase an unpaid invoice"; T8 settles the builder and its evals.
+- **Editing a draft without `pii.reveal`** asks for the customer's details again, since the API returns them masked; the payments connection is typed by name, not picked.
 
 ### T4: paying an invoice (L; needs T1, T3)
 
