@@ -102,3 +102,19 @@ func TestTableFor(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A draft writing a table Taskiem keeps is warned about; one reading it
+// is not.
+func TestReviewTablesWarnsOfKeptWrites(t *testing.T) {
+	existing := []DataTable{{Name: "leave", Kept: true}, {Name: "staff", Kept: true}, {Name: "audit_notes"}}
+	_, warns := reviewTables(nil, existing, []byte(leaveWF), nil)
+	var kept []string
+	for _, w := range warns {
+		if strings.Contains(w.Message, "which Taskiem keeps") {
+			kept = append(kept, w.Message)
+		}
+	}
+	if len(kept) != 1 || !strings.Contains(kept[0], `"leave"`) {
+		t.Fatalf("warnings %v", warns)
+	}
+}

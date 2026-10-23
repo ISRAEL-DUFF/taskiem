@@ -88,7 +88,49 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 	for _, name := range missing {
 		warns = append(warns, Warning{Kind: "table", Message: fmt.Sprintf("the workflow uses a table %q that does not exist: create it on the Tables page before publishing", name)})
 	}
+	written := tablesWritten(doc)
+	for _, t := range existing {
+		if t.Kept && written[t.Name] {
+			warns = append(warns, Warning{Kind: "table", Message: fmt.Sprintf("the workflow writes the table %q, which Taskiem keeps: its rows are added by Taskiem and cannot be changed or deleted, so that step will fail; read it instead", t.Name)})
+		}
+	}
 	return keep, warns
+}
+
+// rowWrites are the xenibase@1 actions that change a table's rows.
+var rowWrites = []string{"insert_rows", "upsert_rows", "update_rows", "delete_rows"}
+
+// tablesWritten are the data tables a definition's steps write, named
+// as they are (not an expression).
+func tablesWritten(doc []byte) map[string]bool {
+	out := map[string]bool{}
+	var v any
+	if json.Unmarshal(doc, &v) != nil {
+		return out
+	}
+	var walk func(any)
+	walk = func(x any) {
+		switch n := x.(type) {
+		case map[string]any:
+			action, _ := n["action"].(string)
+			if n["connector"] == "xenibase@1" && n["connection"] == "data_tables" && slices.Contains(rowWrites, action) {
+				if in, ok := n["input"].(map[string]any); ok {
+					if name, ok := in["table"].(string); ok && name != "" && !strings.HasPrefix(name, "=") {
+						out[name] = true
+					}
+				}
+			}
+			for _, c := range n {
+				walk(c)
+			}
+		case []any:
+			for _, c := range n {
+				walk(c)
+			}
+		}
+	}
+	walk(v)
+	return out
 }
 
 // tablesUsed are the data tables a definition names: input.table of its

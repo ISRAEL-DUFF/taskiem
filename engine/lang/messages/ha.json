@@ -1800,6 +1800,10 @@
       "text": "Lambar waya da lambar ƙasa, misali 2348012345678",
       "reviewed": false
     },
+    "wa.table.kept": {
+      "text": "Taskiem ne ke kula da {table}: Taskiem ne kawai ke ƙara layuka, ba za a iya canza su ko share su a nan ba. Gyara sabon layi ne.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Teburorin bayanai a {org}:",
       "reviewed": false

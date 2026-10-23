@@ -1800,6 +1800,10 @@
       "text": "One phone number with the country code, like 2348012345678",
       "reviewed": false
     },
+    "wa.table.kept": {
+      "text": "Na Taskiem dey keep {table}: na only Taskiem dey add rows, you no fit change or delete dem for here. Correction na new row.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Data tables for {org}:",
       "reviewed": false

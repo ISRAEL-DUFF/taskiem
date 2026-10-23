@@ -230,7 +230,7 @@ func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) (*buil
 			if err != nil {
 				return err
 			}
-			if err := datatables.CheckName("table", t.Name); err != nil {
+			if err := datatables.CheckTableName(t.Name); err != nil {
 				return err
 			}
 			return datatables.CheckColumns(tableReqOf(t).columns(), lim.MaxDataTableColumns)
@@ -406,7 +406,7 @@ func aiContext(ctx context.Context, tx pgx.Tx, env string, skip *uuid.UUID) (bui
 	if err != nil {
 		return c, err
 	}
-	rows, err = tx.Query(ctx, `SELECT t.id, t.name, t.title, c.name, c.type, c.required FROM data_tables t
+	rows, err = tx.Query(ctx, `SELECT t.id, t.name, t.title, t.kept_by IS NOT NULL, c.name, c.type, c.required FROM data_tables t
 		JOIN data_table_columns c ON c.table_id = t.id ORDER BY t.name, c.position LIMIT 2000`)
 	if err != nil {
 		return c, err
@@ -415,13 +415,14 @@ func aiContext(ctx context.Context, tx pgx.Tx, env string, skip *uuid.UUID) (bui
 	for rows.Next() {
 		var id uuid.UUID
 		var name, title string
+		var kept bool
 		var col builder.DataTableColumn
-		if err := rows.Scan(&id, &name, &title, &col.Name, &col.Type, &col.Required); err != nil {
+		if err := rows.Scan(&id, &name, &title, &kept, &col.Name, &col.Type, &col.Required); err != nil {
 			rows.Close()
 			return c, err
 		}
 		if id != last {
-			c.Tables = append(c.Tables, builder.DataTable{Name: name, Title: title})
+			c.Tables = append(c.Tables, builder.DataTable{Name: name, Title: title, Kept: kept})
 			last = id
 		}
 		c.Tables[len(c.Tables)-1].Columns = append(c.Tables[len(c.Tables)-1].Columns, col)

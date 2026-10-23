@@ -89,8 +89,18 @@ func (s *Server) tableRowsFor(ctx context.Context, tenant uuid.UUID, t datatable
 	return tableRows{table: t, conn: conn, creds: creds, hc: hc}, nil
 }
 
-// call runs one connector action on the table's connection.
+// writable refuses changing a kept table's rows (datatables.ErrKept).
+func (tr tableRows) writable() error { return datatables.Writable(tr.table) }
+
+// call runs one connector action on the table's connection. Every write
+// to a kept table is refused here, whichever handler asked, before
+// anything is sent.
 func (tr tableRows) call(ctx context.Context, s *Server, action string, in map[string]any, key string) (map[string]any, error) {
+	if datatables.WritesRows(action) {
+		if err := tr.writable(); err != nil {
+			return nil, err
+		}
+	}
 	req := connector.Request{Input: in, Credentials: tr.creds, HTTP: tr.hc, Logger: s.Logger, Attempt: 1}
 	if key != "" {
 		req.IdempotencyKey, req.KeyFirstSent = key, time.Now()
@@ -309,6 +319,9 @@ func (s *Server) insertTableRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tr, err := s.tableRows(r)
+	if err == nil {
+		err = tr.writable()
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -360,6 +373,9 @@ func (s *Server) updateTableRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tr, err := s.tableRows(r)
+	if err == nil {
+		err = tr.writable()
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -399,6 +415,9 @@ func (s *Server) deleteTableRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tr, err := s.tableRows(r)
+	if err == nil {
+		err = tr.writable()
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -429,6 +448,9 @@ func (s *Server) deleteTableRow(w http.ResponseWriter, r *http.Request) {
 // the same file again on purpose needs a new Idempotency-Key.
 func (s *Server) importTableRows(w http.ResponseWriter, r *http.Request) {
 	tr, err := s.tableRows(r)
+	if err == nil {
+		err = tr.writable()
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
