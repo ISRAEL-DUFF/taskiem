@@ -22944,6 +22944,7 @@ components:
                 - notice
                 - message
                 - invoice
+                - match
               status:
                 type: string
                 enum:

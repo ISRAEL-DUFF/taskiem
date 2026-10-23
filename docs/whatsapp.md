@@ -82,6 +82,24 @@ The decision is then recorded, and Taskiem confirms it in the chat.
 
 **What messages never show.** Secrets, and personal data unmasked: account and card numbers show their last four digits, phone numbers their country code and last four, BVN and NIN not at all, names their first letter, and anything under a field named like a credential is hidden. The full details stay in the web app, behind its permissions.
 
+**Matching payments.** See [below](#matching-payments): a payment Taskiem could not match to an invoice on its own comes with **Yes, match** and **No**.
+
+## Matching payments
+
+When money comes in that Taskiem cannot match to an invoice by itself (a transfer with no reference Taskiem gave, a POS sale, a statement line), it suggests up to three open invoices it may be for ([the spec](spec/invoices-and-money-log.md#82-suggested)). Unless the business has automatic matching on and the best suggestion is strong and clear, every member who holds `invoice.manage` and has linked WhatsApp or Telegram gets one message about the payment:
+
+> [Ada Foods] ₦25,000 came in on 23 Oct 14:05 through Paystack (main).
+>
+> Is this for INV-0104, ₦25,000 due from the customer? Same amount as what is due on INV-0104 (₦25,000), the payer's name matches the customer's, 2 days after INV-0104 was sent.
+
+with **Yes, match** and **No**. The time is Lagos time; the reasons are the matcher's, in English. Names are never shown: neither the payer's nor the customer's (the web app shows them masked too).
+
+- **Yes, match** records the match as confirming the suggestion in the web app does (`how: suggested`, by you), and answers "Matched to INV-0104. It is now paid." or "... It is now part-paid (₦x still due)."
+- **No** turns the suggestion down (it is not offered again) and shows the next possible invoice for the payment, if there is one; otherwise the payment is left to match by hand in the web app, with the link.
+- A suggestion already decided, by you, another member or in the web app, answers "Already matched to INV-0105" or "Already turned down".
+
+A button works only from the chat it was sent to, for a member of that business who holds `invoice.manage` when pressing it; its payload is signed (below). Exact matches (a payment into an account Taskiem gave for the invoice) and automatic matches ask no one. The question goes through the [outbox](#delivery-and-retries) (kind `match`) and shows the payment's best open suggestion as it stands when sent; there is no approved template for it, so outside WhatsApp's 24-hour window it is not sent and the suggestion waits in the web app.
+
 ## Data tables
 
 `tables`, `add to <table>` and `find <table> <text>` work on the organisation's [data tables](data-tables.md) with the same permissions as the Tables page (`table.read` to list and find, `table.edit` to add) and through the same path: the connector's actions on the `data_tables` connection, the values checked by the same code, the connection reads recorded under the purpose `tables.chat`.
@@ -200,7 +218,7 @@ An alert channel of kind **WhatsApp** names members by email (Alerts > Channels)
 
 ## Delivery and retries
 
-Messages that must arrive go through a durable outbox (`whatsapp_outbox`, migration 00086): **approval requests**, **how runs started from WhatsApp ended**, **alerts** to WhatsApp channels, and workflows' **Tell me** messages ([notify@1](integrations/notify.md), kind `notice`, rendered from the step's input in the run's history), messages to people outside the business (kind `message`), and invoices to customers who linked a chat app (kind `invoice`, naming the invoice and the contact; dropped when the invoice is paid or void, the person stopped, or WhatsApp's window is closed, the SMS and email having gone already). Each is one row per person, naming what to send (the approval, the run, the alert) and to whom (the person, not their number). The message is rendered at each attempt, from the record as it then stands: an approval request gets fresh decision tokens, so the database never holds message text, tokens or numbers.
+Messages that must arrive go through a durable outbox (`whatsapp_outbox`, migration 00086): **approval requests**, **how runs started from WhatsApp ended**, **alerts** to WhatsApp channels, and workflows' **Tell me** messages ([notify@1](integrations/notify.md), kind `notice`, rendered from the step's input in the run's history), messages to people outside the business (kind `message`), and invoices to customers who linked a chat app (kind `invoice`, naming the invoice and the contact; dropped when the invoice is paid or void, the person stopped, or WhatsApp's window is closed, the SMS and email having gone already), and payments to match (kind `match`, naming the money-in entry and the member; dropped when nothing is open for the payment any more, the member no longer holds `invoice.manage`, or WhatsApp's window is closed). Each is one row per person, naming what to send (the approval, the run, the alert) and to whom (the person, not their number). The message is rendered at each attempt, from the record as it then stands: an approval request gets fresh decision tokens, so the database never holds message text, tokens or numbers.
 
 - **Claimed once.** Each attempt claims its row (`FOR UPDATE SKIP LOCKED`, a five-minute lease), so two notifiers never send the same message at once. The `api` role's notifier drains the outbox every five seconds; an alert is also tried at once by the role that raised it.
 - **Backoff.** A failed attempt waits 1, 4, 16, 64 and 256 minutes, then six hours, up to eight attempts. Ordering across messages is not kept.
@@ -220,6 +238,7 @@ Messages that must arrive go through a durable outbox (`whatsapp_outbox`, migrat
 | Guessing a code | 6 digits, 10 minutes, five wrong guesses, three codes an hour and a few per number; stored only as a SHA-256 of number and code |
 | Forged or altered buttons | Decision tokens: HMAC-SHA256 under `TASKIEM_WHATSAPP_TOKEN_KEY` over the tenant, nonce, purpose, decision, expiry, run, step, approval level and approver, the last four kept in the tenant's `whatsapp_tokens` row under the nonce; a token verifies only with both the key and the row |
 | Forged or misused invoice buttons | An invoice's buttons carry the business, invoice and contact under an HMAC-SHA256 with the same key; a press counts only from that contact's own number or account (not stopped), for an invoice sent to that contact's phone, while it is open ([invoices](invoices.md#on-whatsapp-and-telegram)) |
+| Forged or misused match buttons | **Yes, match** and **No** carry Yes or No, the business, the suggestion and the member they were sent to, under an HMAC-SHA256 with the same key; a press counts only from that member's linked number or account, in a business they belong to, while they hold `invoice.manage` and the suggestion is open; the decision is the web app's (`matching.Matcher` `Confirm` and `Reject`) |
 | Replay | A token's row is marked used when tapped; the Approve and Reject of one request share a notice, so either spends both. Hand-off links are used once |
 | A button forwarded or tapped by someone else | The tapping number must be bound to the approver the token names; refusals are audited (`approval.token.refused`) |
 | Approving what you should not | The decision is `runtime.Store.VoteApproval`, the web app's path: role or delegation, makers cannot approve, distinct approvers, levels; a refusal is audited (`approval.decide.refused`) |

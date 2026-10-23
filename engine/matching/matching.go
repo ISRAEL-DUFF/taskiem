@@ -50,7 +50,16 @@ type Matcher struct {
 	PII      pii.Cipher
 	Logger   *slog.Logger
 	Now      func() time.Time
+	// Suggested, when set, is told of a payment that got suggestions and
+	// was not matched on its own, with its new suggestions (ids set), best
+	// first: chat asks the business's people (api). It is not told of
+	// exact or automatic matches.
+	Suggested func(ctx context.Context, tenant, entryID uuid.UUID, top []Suggestion)
 }
+
+// OutboxMatch is the chat outbox kind of a payment a member is asked to
+// match (api).
+const OutboxMatch = "match"
 
 func (m *Matcher) now() time.Time {
 	if m.Now != nil {
@@ -227,7 +236,9 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 		return m.mark(ctx, tenant, e.ID, "unmatched")
 	}
 	var top uuid.UUID
+	var fresh []Suggestion
 	err = db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		top, fresh = uuid.Nil, fresh[:0]
 		for i, s := range found {
 			reasons, _ := json.Marshal(s.Reasons)
 			id := uuid.New()
@@ -236,8 +247,12 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 			if err != nil {
 				return err
 			}
-			if i == 0 && tag.RowsAffected() == 1 {
-				top = id
+			if tag.RowsAffected() == 1 {
+				s.ID, s.EntryID, s.Status = id, e.ID, "open"
+				fresh = append(fresh, s)
+				if i == 0 {
+					top = id
+				}
 			}
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, considered_at) VALUES ($1, $2, 'suggested', $3)
@@ -249,9 +264,16 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 	}
 	clear := len(found) == 1 || found[0].Score-found[1].Score >= Margin
 	if auto && top != uuid.Nil && found[0].Score >= Auto && clear {
-		if _, err := m.Confirm(ctx, tenant, top, "system:matching", true); err != nil && !errors.Is(err, invoicing.ErrState) {
+		_, err := m.Confirm(ctx, tenant, top, "system:matching", true)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, invoicing.ErrState) {
 			return err
 		}
+	}
+	if m.Suggested != nil && len(fresh) > 0 {
+		m.Suggested(ctx, tenant, e.ID, fresh)
 	}
 	return nil
 }
