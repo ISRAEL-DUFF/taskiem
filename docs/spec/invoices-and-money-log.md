@@ -24,6 +24,9 @@ Contents:
 
 ---
 
+
+What is not covered yet, across the milestones built, is listed in [open items](invoices-open-items.md).
+
 ## 1. Summary
 
 | Tally feature | In Taskiem | Kind |
