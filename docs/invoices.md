@@ -29,6 +29,19 @@ Once sent, what the customer was sent cannot change: to correct an invoice, **vo
 
 Taskiem works the status out from the invoice and its payments; an invoice becomes overdue the day after its due date (Lagos time).
 
+## The invoice's page
+
+The link in the SMS and email opens the invoice's page, `https://<form host>/i/<token>` on the [public host](public-host.md#hosted-forms), drawn in the business's [look](storefronts.md#look). It shows:
+
+- the business's name and the invoice's number;
+- its status in plain words: **Awaiting payment** (sent), **Part-paid**, **Paid**, **Overdue** or **Void**;
+- each line (what, quantity × unit price, line total), the total, what was paid and what is still due;
+- the due date ("Due 31 Jan 2099") and the note.
+
+A paid invoice says "Paid in full. Thank you."; a void one says "This invoice was cancelled." (not the reason). Payment options will be shown there with T4; until then the page says they will appear soon.
+
+The page shows nothing about the customer: their name, phone and email stay sealed, and the public host cannot read them. A draft's page, an unknown link and a mistyped one all answer the same "This invoice was not found", so the page never tells whether a link exists. It is never cached (`Cache-Control: no-store`) or indexed (`X-Robots-Tag: noindex`).
+
 ## Payments
 
 Each payment counted towards an invoice is listed on it: the amount, the payment's reference at the payments provider, how it was matched to the invoice (exactly, by the reference Taskiem gave it; suggested; or by a person) and who matched it. **Undo** takes a payment out of an invoice when it was matched to the wrong one.

@@ -1,0 +1,17 @@
+{{template "fhead" .}}{{template "fbody" .}}
+<p class="kicker">{{.Status}}{{with .DueOn}} · {{.}}{{end}}</p>
+<h1>Invoice {{.Number}}</h1>
+{{with .Message}}<p class="notice" role="status">{{.}}</p>{{end}}
+<div class="inv">
+{{range .Lines}}<div class="inv-row"><div class="inv-what"><span class="line-name">{{.Description}}</span> <span class="line-price">{{.Each}}</span></div><span>{{.Amount}}</span></div>
+{{end}}</div>
+<div class="receipt">
+<dl class="inv-sums">
+<dt>Total</dt><dd>{{.Total}}</dd>
+{{with .Paid}}<dt>Paid</dt><dd>{{.}}</dd>
+{{end}}{{with .Due}}<dt>Still due</dt><dd class="inv-due">{{.}}</dd>
+{{end}}</dl>
+</div>
+{{with .Note}}<p class="row-sub inv-note">{{.}}</p>{{end}}
+{{if .Payable}}<p class="row-sub center">Payment options will appear here soon.</p>{{end}}
+{{template "ffoot" .}}
