@@ -57,6 +57,9 @@ func (s *Server) putStorefrontBookings(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return fmt.Errorf("%w: the services table: %w", errBadRequest, err)
 			}
+			if t.Kept() {
+				return fmt.Errorf("%w: the services cannot be a table Taskiem keeps (%s)", errBadRequest, t.Name)
+			}
 			if err := req.ServicesColumns.CheckServices(tableColumns(t)); err != nil {
 				return storefrontErr(err)
 			}

@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { cellText, cellValue, columnErrors, csvCell, exampleStep, importError, matchHeaders, nameError, newColumn, parseCSV, personalByDefault, tableFromCSV, toCSV, type Column, type Table } from "./tables";
+import {
+  KEPT_MESSAGE,
+  KEPT_OWN_NOTE,
+  cellText,
+  cellValue,
+  columnErrors,
+  csvCell,
+  exampleStep,
+  importError,
+  isKept,
+  keptNotice,
+  matchHeaders,
+  nameError,
+  newColumn,
+  parseCSV,
+  personalByDefault,
+  tableActions,
+  tableControls,
+  tableFromCSV,
+  toCSV,
+  type Column,
+  type Table,
+} from "./tables";
 
 const cols: Column[] = [
   { name: "name", title: "Name", type: "text", required: true, personal: false },
@@ -102,5 +124,27 @@ describe("data tables", () => {
     expect(step).toContain('"table": "debtors"');
     expect(step).toContain('"column": "balance_kobo"');
     expect(JSON.parse(step)).toHaveProperty("action", "read_rows");
+  });
+
+  it("shows a kept table read-only, with why", () => {
+    const ordinary = { kept_by: null };
+    const kept = { kept_by: "money_log" };
+    expect(isKept(ordinary)).toBe(false);
+    expect(isKept({})).toBe(false);
+    expect(isKept(kept)).toBe(true);
+    // An editor gets every control on an ordinary table, none that change a kept one.
+    expect(tableControls(ordinary, true)).toEqual({ addRow: true, editRows: true, importCSV: true, columns: true, deleteTable: true, export: true, search: true });
+    expect(tableControls(kept, true)).toEqual({ addRow: false, editRows: false, importCSV: false, columns: false, deleteTable: false, export: true, search: true });
+    expect(tableControls(ordinary, false).addRow).toBe(false);
+    // The sentence, and where it can still be edited when the project is the business's own.
+    expect(keptNotice(ordinary, { own: true })).toBeNull();
+    expect(keptNotice(kept, { own: false })).toEqual([KEPT_MESSAGE]);
+    expect(keptNotice(kept, null)).toEqual([KEPT_MESSAGE]);
+    expect(keptNotice(kept, { own: true })).toEqual([KEPT_MESSAGE, KEPT_OWN_NOTE]);
+    expect(KEPT_MESSAGE).toContain("Corrections are new rows.");
+    expect(KEPT_OWN_NOTE).toContain("outside Taskiem");
+    // Workflows only read it.
+    expect(tableActions(kept).map((a) => a.action)).toEqual(["read_rows", "row_changed (trigger)"]);
+    expect(tableActions(ordinary).map((a) => a.action)).toContain("insert_rows");
   });
 });

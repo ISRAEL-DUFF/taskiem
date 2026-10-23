@@ -174,6 +174,9 @@ func (s *Server) waTableAdd(ctx context.Context, c *chat, name string) error {
 // up (the first ten columns, required ones first; the rest follow in
 // chat), else column by column in chat.
 func (s *Server) waTableStart(ctx context.Context, c *chat, t datatables.Table) error {
+	if t.Kept() {
+		return s.waTableKept(ctx, c, t)
+	}
 	fields, _, err := waTableFields(t, c.lang.Tag)
 	if err != nil {
 		return err
@@ -494,6 +497,9 @@ func (s *Server) waTableInsert(ctx context.Context, c *chat) error {
 	if err != nil {
 		return s.waTableGone(ctx, c, err)
 	}
+	if t.Kept() {
+		return s.waTableKept(ctx, c, t)
+	}
 	var row map[string]any
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		opened, err := pii.Open(ctx, s.Store.PII, tx, c.tenant.ID, data.Row, pii.Taint{})
@@ -538,6 +544,15 @@ func (s *Server) waTableInsert(ctx context.Context, c *chat) error {
 	return c.say(ctx, s, c.t("wa.table.added", "id", id, "table", whatsapp.SafeText(data.Name)))
 }
 
+// waTableKept answers adding to a kept table (datatables.ErrKept): its
+// rows are Taskiem's to add, so nothing is collected or sent.
+func (s *Server) waTableKept(ctx context.Context, c *chat, t datatables.Table) error {
+	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+		return err
+	}
+	return c.say(ctx, s, c.t("wa.table.kept", "table", whatsapp.SafeText(tableTitle(t))))
+}
+
 // tablesChatReason says, in a few words, why Xenibase refused a row.
 func tablesChatReason(err error) string {
 	var pe *xenibase.Error
@@ -551,6 +566,8 @@ func tablesChatReason(err error) string {
 		}
 	case errors.As(err, &xe):
 		msg = xe.Code + ": " + xe.Message
+	case errors.Is(err, datatables.ErrKept):
+		msg = datatables.KeptMessage
 	case errors.Is(err, datatables.ErrNotFound):
 		msg = "the data_tables connection is missing"
 	}

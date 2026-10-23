@@ -43,6 +43,9 @@ type DataTable struct {
 	Name    string            `json:"name"`
 	Title   string            `json:"title,omitempty"`
 	Columns []DataTableColumn `json:"columns"`
+	// Kept: Taskiem keeps the table (the money log); workflows read it
+	// and never write it.
+	Kept bool `json:"kept,omitempty"`
 }
 
 // DataTableColumn is a column's name and type.

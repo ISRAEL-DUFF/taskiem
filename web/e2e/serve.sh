@@ -21,6 +21,11 @@ bin/taskiem tenants partner "$tenant" --capabilities white_label,custom_domains 
 psql "$dsn" -qc "UPDATE tenants SET advanced = true WHERE id = '$tenant'"
 # It also publishes a connector in the public catalogue (catalogue.spec.ts).
 bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant"
+# A table Taskiem keeps, as the money log makes it (tables.spec.ts): its
+# record only, as the superuser may write it; no Xenibase serves its rows.
+psql "$dsn" -v ON_ERROR_STOP=1 -q \
+  -c "INSERT INTO data_tables (id, tenant_id, name, title, created_by, kept_by) VALUES ('0192e2e0-0000-7000-8000-000000000001', '$tenant', 'money_log', 'Money log', 'taskiem:money_log', 'money_log')" \
+  -c "INSERT INTO data_table_columns (tenant_id, table_id, name, type, required, position) VALUES ('$tenant', '0192e2e0-0000-7000-8000-000000000001', 'entry_id', 'text', true, 0), ('$tenant', '0192e2e0-0000-7000-8000-000000000001', 'amount_kobo', 'integer', false, 1)"
 # An operator for ops.spec.ts: on the reviewer list, with a one-time link
 # to enrol a passkey (bin/ is not committed).
 TASKIEM_PUBLIC_URL=http://localhost:18080 bin/taskiem operators add ops@taskiem.test --name Ops | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-enrol.txt"

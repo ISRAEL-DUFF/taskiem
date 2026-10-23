@@ -21,6 +21,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/container"
+	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/drift"
 	"github.com/israel-duff/taskiem/engine/effects"
@@ -1070,6 +1071,9 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		if err != nil {
 			return w.secretFailure(p, err)
 		}
+		if ev, refused := w.guardKept(ctx, p, creds, input); refused {
+			return ev
+		}
 		var resp connector.Response
 		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
 		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
@@ -1086,6 +1090,33 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 	}
 	return completedEvent(p.c, out, false)
+}
+
+// guardKept refuses a xenibase@1 step that would change the rows of a
+// table Taskiem keeps (datatables.GuardStep), before anything is sent:
+// the step fails for good, saying why. Checked here, with the input
+// resolved, rather than when the definition is published, so a table
+// named by an expression, or kept after the workflow was published, is
+// refused too; the editor's checks warn about a table named outright.
+func (w *Worker) guardKept(ctx context.Context, p *plan, creds map[string]string, input map[string]any) (history.Event, bool) {
+	if p.conn.Manifest.ID != datatables.Connector || !datatables.WritesRows(p.action) {
+		return history.Event{}, false
+	}
+	var refusal error
+	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+		refusal = datatables.GuardStep(ctx, tx, p.c.tenant, p.sched.Connection, p.env, creds, p.action, input)
+		if errors.Is(refusal, datatables.ErrKept) {
+			return nil
+		}
+		return refusal
+	})
+	if err != nil {
+		return w.classify(p, fmt.Errorf("checking for kept tables: %w: %w", err, effects.ErrNotSent)), true
+	}
+	if refusal != nil {
+		return failed(p.c, "fatal", refusal.Error(), "fail"), true
+	}
+	return history.Event{}, false
 }
 
 // KindKeyUnavailable is the failure kind of a step parked because the
