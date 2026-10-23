@@ -50,6 +50,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
@@ -986,7 +987,17 @@ func serve(ctx context.Context, args []string) error {
 		// The money log, copied to each business's kept money_log table.
 		mirror := &moneylog.Mirror{Log: e.moneyLog(), Tables: e.tables(), Logger: log.With("component", "moneylog"),
 			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run)
+		// Money summaries: yesterday's to owners on chat each morning,
+		// last month's by email on the 1st (docs/money-reports.md).
+		money := &moneydigest.Digester{Pool: e.pool, Mailer: alerter.Mailer, From: alerter.From, PublicURL: cfg.PublicURL, Logger: log.With("component", "moneydigest")}
+		if e.wa != nil {
+			money.Channels = append(money.Channels, "whatsapp")
+		}
+		if e.tg != nil {
+			money.Channels = append(money.Channels, "telegram")
+		}
+		log.Info("money summaries", "daily_chat", len(money.Channels) > 0, "monthly_email", money.Mailer != nil && money.From != "")
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, money.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

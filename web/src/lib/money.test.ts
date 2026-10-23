@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   COMMON_COLUMNS,
+  EXPORTS,
   addedLine,
+  counted,
+  exportFileName,
+  exportPath,
+  feeRatePercent,
+  isDay,
+  lagosDate,
+  periodChoice,
+  periodFor,
+  periodProblem,
+  periodQuery,
+  periodWords,
+  summaryPath,
   bpToPercent,
   channelProblem,
   closeProblem,
@@ -275,5 +288,68 @@ describe("fees", () => {
     expect(feeRequest({ channel: "opay/main", percent: "", flat: "50", cap: "" })).toEqual({ channel: "opay/main", percent_bp: 0, flat_kobo: 5000 });
     expect(feeForm({ channel: "paystack/main", percent_bp: 150, flat_kobo: 10000, cap_kobo: 200000 })).toEqual({ channel: "paystack/main", percent: "1.5", flat: "100", cap: "2000" });
     expect(feeForm({ channel: "x", percent_bp: 150, flat_kobo: 0 })).toEqual({ channel: "x", percent: "1.5", flat: "", cap: "" });
+  });
+});
+
+describe("overview", () => {
+  // 23:30 UTC on Sunday 1 Nov 2026 is 00:30 on Monday 2 Nov in Lagos.
+  const lateSunday = new Date("2026-11-01T23:30:00Z");
+  // Friday 23 Oct 2026, midday in Lagos.
+  const friday = new Date("2026-10-23T11:00:00Z");
+
+  it("reads each choice as Lagos days, to inclusive", () => {
+    expect(periodFor("today", lateSunday)).toEqual({ from: "2026-11-02", to: "2026-11-02" });
+    expect(periodFor("yesterday", lateSunday)).toEqual({ from: "2026-11-01", to: "2026-11-01" });
+    expect(periodFor("week", lateSunday)).toEqual({ from: "2026-11-02", to: "2026-11-02" });
+    expect(periodFor("week", friday)).toEqual({ from: "2026-10-19", to: "2026-10-23" });
+    expect(periodFor("month", friday)).toEqual({ from: "2026-10-01", to: "2026-10-23" });
+    expect(periodFor("last_month", friday)).toEqual({ from: "2026-09-01", to: "2026-09-30" });
+    expect(periodFor("last_month", new Date("2026-03-10T12:00:00Z"))).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+    expect(periodFor("last_month", new Date("2027-01-05T12:00:00Z"))).toEqual({ from: "2026-12-01", to: "2026-12-31" });
+    expect(periodFor("custom", friday, { from: "2026-10-01", to: "2026-10-05" })).toEqual({ from: "2026-10-01", to: "2026-10-05" });
+    expect(lagosDate(lateSunday)).toBe("2026-11-02");
+  });
+
+  it("keeps the picker's choice to the known ones", () => {
+    expect(periodChoice(null)).toBe("today");
+    expect(periodChoice("month")).toBe("month");
+    expect(periodChoice("decade")).toBe("today");
+  });
+
+  it("checks chosen dates as the server does", () => {
+    expect(periodProblem({ from: "", to: "" })).toMatch(/first day/);
+    expect(periodProblem({ from: "2026-02-30", to: "2026-03-01" })).toMatch(/does not look right/);
+    expect(periodProblem({ from: "2026-10-01", to: "" })).toMatch(/last day/);
+    expect(periodProblem({ from: "2026-10-05", to: "2026-10-01" })).toMatch(/on or after/);
+    expect(periodProblem({ from: "2026-01-01", to: "2027-02-04" })).toBeNull(); // 400 days
+    expect(periodProblem({ from: "2026-01-01", to: "2027-02-05" })).toMatch(/at most 400 days/);
+    expect(periodProblem({ from: "2026-10-01", to: "2026-10-01" })).toBeNull();
+    expect(isDay("2026-10-01")).toBe(true);
+    expect(isDay("2026-13-01")).toBe(false);
+  });
+
+  it("builds the summary and export URLs", () => {
+    const p = { from: "2026-10-01", to: "2026-10-31" };
+    expect(periodQuery(p)).toBe("from=2026-10-01&to=2026-10-31");
+    expect(summaryPath(p)).toBe("/v1/money/summary?from=2026-10-01&to=2026-10-31");
+    expect(exportPath("journal", p)).toBe("/v1/money/exports/journal?from=2026-10-01&to=2026-10-31");
+    expect(exportPath("invoices", p, true)).toBe("/v1/money/exports/invoices?from=2026-10-01&to=2026-10-31&reveal=true");
+    expect(exportPath("log", p, true)).toBe("/v1/money/exports/log?from=2026-10-01&to=2026-10-31");
+    expect(exportFileName("journal", p)).toBe("journal-2026-10-01-to-2026-10-31.csv");
+    expect(EXPORTS.map((e) => e.kind)).toEqual(["log", "invoices", "journal"]);
+    expect(EXPORTS.find((e) => e.kind === "journal")?.help).toMatch(/debits equal credits/);
+  });
+
+  it("words the period, the fee rate and counts", () => {
+    expect(periodWords({ from: "2026-10-23", to: "2026-10-23" })).toBe("23 Oct 2026");
+    expect(periodWords({ from: "2026-10-01", to: "2026-10-23" })).toBe("1 Oct 2026 to 23 Oct 2026");
+    expect(feeRatePercent(150)).toBe("1.50%");
+    expect(feeRatePercent(7)).toBe("0.07%");
+    expect(feeRatePercent(0)).toBe("0.00%");
+    expect(feeRatePercent(undefined)).toBe("");
+    expect(feeRatePercent(null)).toBe("");
+    expect(counted(1, "invoice")).toBe("1 invoice");
+    expect(counted(3, "invoice")).toBe("3 invoices");
+    expect(counted(2, "leak")).toBe("2 leaks");
   });
 });

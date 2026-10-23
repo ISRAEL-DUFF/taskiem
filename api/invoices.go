@@ -57,6 +57,7 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/invoice-settings", s.putInvoiceSettings)
 	s.matchingRoutes(r)
 	s.moneyRoutes(r)
+	s.moneyReportRoutes(r)
 }
 
 func invoiceErr(err error) error {

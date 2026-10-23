@@ -32,6 +32,8 @@ const PAGES = [
   "/invoices/match",
   "/invoices/settings",
   "/money",
+  "/money?period=custom&from=2026-10-01&to=2026-10-31",
+  "/money/leaks",
   "/money/statements",
   "/money/entries",
   "/money/fees",

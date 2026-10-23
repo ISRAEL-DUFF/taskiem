@@ -445,6 +445,13 @@ The first five leaks, their lifecycle and the amount recovered; statement upload
 
 The daily summary, the Money page, monthly exports (log, invoices, journal).
 
+**Built** (T7): `engine/moneyreport` (a period's summary, each movement counted once at its latest status; the money log, invoices and a balanced double-entry journal as CSV, guarded against formulas); `GET /v1/money/summary` and `/v1/money/exports/{log|invoices|journal}`, audited; the web app's **Money > Overview** with a period picker, totals, by channel and the three downloads (Leaks moved to `/money/leaks`); `engine/moneydigest` and migration 00205 (`money_digests`, sent once per business and period): yesterday's money in chat to owners after 08:00 Lagos, and last month's by email on the 1st after 09:00 ([money reports](../money-reports.md)). Differences from §9.2 and §9.3:
+
+- **The monthly email links to the exports** instead of attaching them: Taskiem's mail has no attachments, and the link needs a sign-in.
+- **Summaries go to owners only**, with no opt-out yet (the notification settings have no money group).
+- **Outside WhatsApp's 24-hour window** the daily summary goes as the `taskiem_alert` template, cut to one line.
+- **The journal's accounts are fixed names** (Accounts receivable, Sales, Money in to identify, Bank: <channel>, Expenses: <category>, …); no chart of accounts is set per business, and no VAT export.
+
 ### T8: templates and AI (S)
 
 Start page entries, the AI builder's knowledge of invoices and the log (an `invoice` request uses `invoices@1`, never a data table with a status column), eval cases, `invoice-follow-up` superseded.

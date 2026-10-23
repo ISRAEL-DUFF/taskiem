@@ -264,6 +264,54 @@
       "text": "{name} ba ya samuwa a nan. Harsunan da ke nan: {languages}.",
       "reviewed": false
     },
+    "money.channel.cash": {
+      "text": "tsabar kuɗi",
+      "reviewed": false
+    },
+    "money.channel.upload": {
+      "text": "statement na banki",
+      "reviewed": false
+    },
+    "money.daily": {
+      "text": "Jiya: {in}; {out} ya fita; {invoices}; {leaks}.",
+      "reviewed": false
+    },
+    "money.daily.in": {
+      "text": "{amount} ya shigo",
+      "reviewed": false
+    },
+    "money.daily.in_pending": {
+      "text": "{amount} ya shigo ({pending} na jira)",
+      "reviewed": false
+    },
+    "money.daily.invoices": {
+      "text": "an biya invoice {n} ({amount})",
+      "reviewed": false
+    },
+    "money.daily.invoices_none": {
+      "text": "ba a biya invoice ba",
+      "reviewed": false
+    },
+    "money.daily.invoices_one": {
+      "text": "an biya invoice 1 ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks": {
+      "text": "sabbin zubewar kuɗi {n} ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks_none": {
+      "text": "babu sabuwar zubewar kuɗi",
+      "reviewed": false
+    },
+    "money.daily.leaks_one": {
+      "text": "sabuwar zubewar kuɗi 1 ({amount})",
+      "reviewed": false
+    },
+    "money.daily.link": {
+      "text": "Shafin kuɗi: {link}",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Wannan hira tana aiko maka da labarai daga {businesses}. Aika STOP don dakatar da na ƙarshe.",
       "reviewed": false

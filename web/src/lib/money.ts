@@ -1,10 +1,12 @@
 // The Money area (decision 0045, T6; docs/money-log.md "Money", docs/leaks.md;
 // /v1/money/leaks, /assign, /close, /v1/money/fee-rates,
-// /v1/money/statement-format, /v1/money/statements, /v1/money/entries):
+// /v1/money/statement-format, /v1/money/statements, /v1/money/entries;
+// and T7, docs/money-reports.md: /v1/money/summary, /v1/money/exports):
 // the API's shapes, leaks in words, the statement upload's column matching,
-// cash and expenses as typed, and the fees agreed with each connection.
+// cash and expenses as typed, the fees agreed with each connection, and the
+// overview's period, figures and exports.
 
-import { koboInput, naira, plainMessage, toKobo } from "./invoices";
+import { dateLabel, koboInput, naira, plainMessage, toKobo } from "./invoices";
 
 export type LeakKind = "unmatched" | "overdue" | "duplicate" | "overpaid" | "void_paid" | "fee";
 export type LeakStatus = "open" | "recovered" | "written_off" | "not_a_leak" | "resolved";
@@ -506,3 +508,159 @@ export function knownChannels(...lists: (readonly (string | undefined | null)[] 
   for (const l of lists) for (const c of l ?? []) if (c && c !== "cash") out.add(c);
   return [...out].sort();
 }
+
+// --- overview and exports ---
+
+/** One channel's money in a period (MoneySummary.channels). */
+export interface ChannelSummary {
+  channel: string;
+  in_settled_kobo: number;
+  in_pending_kobo: number;
+  out_settled_kobo: number;
+  out_pending_kobo: number;
+  fees_kobo: number;
+  fee_rate_bp?: number | null;
+  movements: number;
+}
+
+/** A period's money (MoneySummary). */
+export interface MoneySummary {
+  from: string;
+  to: string;
+  in_settled_kobo: number;
+  in_pending_kobo: number;
+  out_settled_kobo: number;
+  out_pending_kobo: number;
+  fees_kobo: number;
+  fee_rate_bp?: number | null;
+  channels: ChannelSummary[] | null;
+  invoices_paid: number;
+  invoices_paid_kobo: number;
+  leaks_opened: number;
+  leaks_opened_kobo: number;
+  leaks_open: number;
+  leaks_open_kobo: number;
+  recovered_kobo: number;
+}
+
+export const SUMMARY_PATH = "/v1/money/summary";
+export const EXPORTS_PATH = "/v1/money/exports";
+
+export type PeriodChoice = "today" | "yesterday" | "week" | "month" | "last_month" | "custom";
+
+export const PERIOD_CHOICES: { value: PeriodChoice; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "week", label: "This week" },
+  { value: "month", label: "This month" },
+  { value: "last_month", label: "Last month" },
+  { value: "custom", label: "Choose dates" },
+];
+
+/** The period picker's choice, as the page's ?period= holds it. */
+export function periodChoice(v: string | null): PeriodChoice {
+  return PERIOD_CHOICES.some((c) => c.value === v) ? (v as PeriodChoice) : "today";
+}
+
+/** A period as Lagos days, YYYY-MM-DD, to inclusive. */
+export interface Period {
+  from: string;
+  to: string;
+}
+
+/** The longest period the server sums up or exports, in days. */
+export const MAX_PERIOD_DAYS = 400;
+
+const lagosDayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" });
+
+/** The date in Lagos at a moment: "2026-10-23". */
+export const lagosDate = (now: Date) => lagosDayFmt.format(now);
+
+const asUTC = (day: string) => new Date(`${day}T00:00:00Z`);
+const dayOf = (d: Date) => d.toISOString().slice(0, 10);
+const addDays = (day: string, n: number) => {
+  const d = asUTC(day);
+  d.setUTCDate(d.getUTCDate() + n);
+  return dayOf(d);
+};
+
+/** Whether text is a real calendar date, YYYY-MM-DD. */
+export function isDay(text: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const d = asUTC(text);
+  return !Number.isNaN(d.getTime()) && dayOf(d) === text;
+}
+
+/** The period a choice means at a moment, in Lagos days; a week starts on Monday. Custom takes its dates as given. */
+export function periodFor(choice: PeriodChoice, now = new Date(), custom: Period = { from: "", to: "" }): Period {
+  const today = lagosDate(now);
+  switch (choice) {
+    case "yesterday": {
+      const y = addDays(today, -1);
+      return { from: y, to: y };
+    }
+    case "week": {
+      const weekday = (asUTC(today).getUTCDay() + 6) % 7; // Monday is 0
+      return { from: addDays(today, -weekday), to: today };
+    }
+    case "month":
+      return { from: `${today.slice(0, 8)}01`, to: today };
+    case "last_month": {
+      const end = addDays(`${today.slice(0, 8)}01`, -1);
+      return { from: `${end.slice(0, 8)}01`, to: end };
+    }
+    case "custom":
+      return { from: custom.from, to: custom.to };
+    default:
+      return { from: today, to: today };
+  }
+}
+
+/** Why the dates will be refused, or null. */
+export function periodProblem(p: Period): string | null {
+  if (!p.from) return "Choose the first day.";
+  if (!isDay(p.from)) return "The first day does not look right.";
+  if (!p.to) return "Choose the last day.";
+  if (!isDay(p.to)) return "The last day does not look right.";
+  if (p.to < p.from) return "The last day is on or after the first.";
+  const days = (asUTC(p.to).getTime() - asUTC(p.from).getTime()) / 86400000 + 1;
+  if (days > MAX_PERIOD_DAYS) return `A period is at most ${MAX_PERIOD_DAYS} days.`;
+  return null;
+}
+
+/** The period as the API's query: from and to, Lagos days, to inclusive. */
+export const periodQuery = (p: Period) => new URLSearchParams({ from: p.from, to: p.to }).toString();
+
+/** The period in words: "23 Oct 2026", or "1 Oct 2026 to 23 Oct 2026". */
+export function periodWords(p: Period): string {
+  return p.from === p.to ? dateLabel(p.from) : `${dateLabel(p.from)} to ${dateLabel(p.to)}`;
+}
+
+export const summaryPath = (p: Period) => `${SUMMARY_PATH}?${periodQuery(p)}`;
+
+export type ExportKind = "log" | "invoices" | "journal";
+
+export const EXPORTS: { kind: ExportKind; label: string; help: string }[] = [
+  { kind: "log", label: "Money log", help: "Every movement of money in the period, as the log holds it." },
+  { kind: "invoices", label: "Invoices", help: "The invoices sent in the period, with what was paid on each." },
+  { kind: "journal", label: "Accounting journal", help: "Double-entry lines a bookkeeping tool can import; debits equal credits." },
+];
+
+/** The CSV download for a period; reveal names the customers (invoices only, needing pii.reveal). */
+export function exportPath(kind: ExportKind, p: Period, reveal = false): string {
+  const q = new URLSearchParams({ from: p.from, to: p.to });
+  if (reveal && kind === "invoices") q.set("reveal", "true");
+  return `${EXPORTS_PATH}/${kind}?${q}`;
+}
+
+/** The file name the server gives a download: "journal-2026-10-01-to-2026-10-23.csv". */
+export const exportFileName = (kind: ExportKind, p: Period) => `${kind}-${p.from}-to-${p.to}.csv`;
+
+/** An effective fee rate as a percent: 150 basis points is "1.50%"; "" when there is none. */
+export function feeRatePercent(bp: number | null | undefined): string {
+  if (bp === undefined || bp === null || !Number.isFinite(bp)) return "";
+  return `${(bp / 100).toFixed(2)}%`;
+}
+
+/** A count with its noun: "1 invoice", "3 invoices". */
+export const counted = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

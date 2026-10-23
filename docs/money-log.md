@@ -61,12 +61,25 @@ The money that came in and the money that went out are also checked for [leaks](
 
 ## Money
 
-**Money** in the web app's sidebar is for anyone who may see invoices (`invoice.read`); assigning, closing, uploading and entering need `invoice.manage`. It has four tabs:
+**Money** in the web app's sidebar is for anyone who may see invoices (`invoice.read`); assigning, closing, uploading and entering need `invoice.manage`. It has five tabs:
 
+- **Overview** (the landing tab, at `/money`): the period's money and the exports; see [Overview and exports](#overview-and-exports) below. The leaks moved to `/money/leaks`; old links to `/money?status=…` still lead there.
 - **Leaks:** what Taskiem found the business may be losing ([leaks](leaks.md)), with the number open, their amount and the total recovered at the top. Each leak says what it is in words, with its amount, the day it was opened and a link to its invoice when it has one. It can be assigned to a member (people who cannot list members can assign it to themselves) and closed as **recovered** (with the amount got back), **written off** or **not a leak**, with an optional note. The filter shows open, closed or all; a closed leak says how it was closed, by whom and the amount recovered, and one whose cause went away (the money was matched, the invoice paid) says it closed by itself.
 - **Upload statement:** a bank statement as a CSV for an account Taskiem has no connection to, named like `gtbank/current`. A file in the common format (`date`, `description`, `amount` with money out negative, and optionally `reference` and `balance`) goes straight in. A file with the bank's own column names shows a form to match them once, guessed from their names: one amount column, or money in and money out apart. The match is remembered for the account. A file with any line Taskiem cannot read adds nothing and lists each line and why. Afterwards the page says how many lines were added and how many skipped as already in the log, so the same days can be uploaded again safely.
 - **Cash and expenses:** an expense (with an optional vendor and category), cash in or cash out, with its amount, date and description, and optionally the account it moved through (cash when empty). Each entry is recorded under the person's name, once per form even if it is sent twice.
 - **Fees:** the fee agreed with each connection (`paystack/main`): a percent of the amount, a flat fee, or both, with an optional cap. A fee above the agreed one becomes a leak.
+
+### Overview and exports
+
+The **Overview** sums up a period: today (the default), yesterday, this week (from Monday), this month, last month, or two dates chosen by hand, at most 400 days. Days are Lagos days, and the last day is included. It shows:
+
+- **Money in** and **money out**, settled, with what is still pending when there is any.
+- **Fees**, with the effective rate: the fees over the money they were taken on, as a percent. It is left out when no fee was reported.
+- **Invoices paid** in the period: how many, and what was paid on them.
+- **Leaks:** how many were opened in the period, how many are open now with their amount, and the total recovered so far, with a link to the Leaks tab.
+- **By channel:** each account (`paystack/main`, `gtbank/current`, cash) with its money in, pending, out, fees, fee rate and the number of movements.
+
+Under the figures, **Exports** download the period as CSV files: the **money log**, the **invoices** sent, and an **accounting journal**, double-entry lines a bookkeeping tool can import, whose debits equal credits. Someone who may see personal data (`pii.reveal`) can tick **Invoices with customers' names** to add each customer's name to the invoices export; that access is audited. The files and their columns are described in [money reports](money-reports.md).
 
 ## Not yet recorded
 

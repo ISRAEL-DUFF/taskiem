@@ -1,11 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
 
 // The Money area (decision 0045, T6; docs/money-log.md "Money"): uploading
 // a bank statement in the bank's own columns, entering an expense, setting
-// the fee agreed with a connection, and closing a leak. The leak is written
+// the fee agreed with a connection, the overview and its journal export
+// (T7), and closing a leak. The leak is written
 // straight into the e2e database (as the detector would write it; serve.sh
 // makes the database), so the test does not wait for the detector.
 test.use({ bypassCSP: true }); // axe is injected into the page
@@ -138,6 +140,51 @@ test("an expense is entered once, and a fee rate is set", async ({ page }) => {
   await axeBoth(page, "/money/fees");
 });
 
+test("the overview shows the period's money, and the journal downloads as CSV", async ({ page }) => {
+  await signIn(page);
+  // An expense through the API, on an account of its own so its row is this test's alone.
+  const channel = `till-${randomUUID().slice(0, 8)}`;
+  const made = await page.request.post("/v1/money/entries", {
+    headers: { "X-Taskiem-Request": "1", "Idempotency-Key": randomUUID() },
+    data: { kind: "expense", amount_kobo: 765400, description: "Overview e2e diesel", channel },
+  });
+  expect(made.status(), await made.text()).toBe(201);
+
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Money" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Money" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Money" }).getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("combobox", { name: "Period" })).toHaveValue("today");
+  await expect(page.getByTestId("money-out")).toContainText("Money out");
+  const row = page.getByTestId("channel-row").filter({ hasText: channel });
+  await expect(row).toContainText("₦7,654");
+  await expect(row.locator('[data-label="Movements"]')).toHaveText("1");
+  await expect(page.getByTestId("overview-leaks").getByRole("link", { name: "See the leaks" })).toHaveAttribute("href", "/money/leaks");
+  await expect(page.getByTestId("exports")).toContainText("debits equal credits");
+  await axeBoth(page, "/money");
+
+  // Dates chosen by hand; dates that cannot be a period are refused on the page.
+  await page.getByRole("combobox", { name: "Period" }).selectOption("custom");
+  await page.getByLabel("From", { exact: true }).fill("2026-10-05");
+  await page.getByLabel("To", { exact: true }).fill("2026-10-01");
+  await expect(page.getByRole("alert")).toHaveText("The last day is on or after the first.");
+  await expect(page.getByTestId("exports")).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Period" }).selectOption("today");
+
+  // The journal downloads for the period, a CSV with the expense on it.
+  const download = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download accounting journal" }).click();
+  const got = await download;
+  expect(got.suggestedFilename()).toMatch(/^journal-\d{4}-\d{2}-\d{2}-to-\d{4}-\d{2}-\d{2}\.csv$/);
+  const text = await readFile((await got.path()) as string, "utf8");
+  expect(text.split("\n")[0]).toBe("date,journal_id,account,debit,credit,description,reference");
+  expect(text).toContain("Overview e2e diesel");
+
+  // Old links to the leaks still land on them.
+  await page.goto("/money?status=closed");
+  await expect(page).toHaveURL(/\/money\/leaks\?status=closed$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Leaks" })).toBeVisible();
+});
+
 test("a leak is assigned and closed as recovered", async ({ page }) => {
   await signIn(page);
   const tenant = sql("SELECT id FROM tenants WHERE name = 'E2E'");
@@ -146,7 +193,7 @@ test("a leak is assigned and closed as recovered", async ({ page }) => {
     `INSERT INTO money_leaks (id, tenant_id, kind, subject, amount_kobo, detail, opened_at)
        VALUES ('${id}', '${tenant}', 'unmatched', 'e2e:${id}', 2500000, '₦25,000 came in on gtbank/current on 01 Oct 2026 and matches no invoice', now())`,
   );
-  await page.goto("/money");
+  await page.goto("/money/leaks");
   await expect(page.getByTestId("leak-totals")).toContainText("Open leaks");
   const card = page.getByTestId("leak").filter({ hasText: "₦25,000 came in on gtbank/current" });
   await expect(card).toContainText("Money with no invoice");
@@ -164,7 +211,7 @@ test("a leak is assigned and closed as recovered", async ({ page }) => {
   await card.getByLabel(/^Recovered/).check();
   await card.getByLabel("Amount recovered (₦)").fill("20,000");
   await card.getByLabel("Note (optional)").fill("The customer paid it back.");
-  await axeBoth(page, "/money (closing a leak)");
+  await axeBoth(page, "/money/leaks (closing a leak)");
   const before = await (await page.request.get("/v1/money/leaks")).json();
   await card.getByRole("button", { name: "Close leak" }).click();
   await expect(page.getByTestId("leak-status")).toHaveText("Money with no invoice closed: recovered ₦20,000.");
@@ -180,5 +227,5 @@ test("a leak is assigned and closed as recovered", async ({ page }) => {
   await expect(closed).toContainText("The customer paid it back.");
   await expect(closed).toContainText("Recovered");
   await expect(closed.getByRole("button")).toHaveCount(0);
-  await axeBoth(page, "/money?status=closed");
+  await axeBoth(page, "/money/leaks?status=closed");
 });
