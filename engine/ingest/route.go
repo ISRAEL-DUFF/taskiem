@@ -277,6 +277,15 @@ func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, 
 	if !ok {
 		return 0, nil, true
 	}
+	// The money log hears every movement in prod, whether or not a
+	// workflow listens (decision 0045). A failed write is answered 503 so
+	// the rail delivers again; the log keeps it once.
+	if h.MoneyLog != nil && ev.env == "prod" {
+		if _, err := h.MoneyLog.RecordEvent(ctx, t.tenant, ev.env, ev.conn.Manifest.ID, t.connection, name, fields); err != nil {
+			h.unavailable(w, r, err)
+			return 0, nil, false
+		}
+	}
 	woken := 0
 	corr := fmt.Sprint(fields[spec.Correlation])
 	if fields[spec.Correlation] != nil && corr != "" {

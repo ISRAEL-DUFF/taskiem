@@ -29,6 +29,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/secrets"
@@ -154,6 +155,9 @@ type Invoices struct {
 	// Answered is told of a request from chat once it is issued (or
 	// failed), to reply to the customer there.
 	Answered func(ctx context.Context, r Request, a Account, err error)
+	// MoneyLog records the payments the checker finds (T2); nil records
+	// none.
+	MoneyLog *moneylog.Log
 	// Reach finds a customer who asked the business for updates on
 	// WhatsApp or Telegram (decision 0039); Send then also queues the
 	// invoice there, with its buttons, on one of Chat (the channels this
