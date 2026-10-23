@@ -250,6 +250,8 @@ triggers:
   # cannot carry a correlation.
   payment:
     type: webhook
+    title: Sales
+    where: "OPay Business dashboard → Integration → Developer Tools → POS & Others → Add Webhook URL (a Super Admin adds it)"
     verify: { scheme: connector, secret_field: opay_public_key }
     events: [payment]
     event_type: '="payment"'

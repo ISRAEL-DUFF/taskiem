@@ -253,7 +253,7 @@ Readers take the latest row per movement, as `pos_sales` readers do.
 
 ### 7.3 Where rows come from
 
-- **Every connected rail's normalised events** (`payment.received`, `virtual_account.credited`, `payout.settled`, `.failed`, `.reversed`), whether or not a workflow listens. Each rail connection gets the log's own intake: a remote subscription where the rail allows it (as Xenibase does), polling where it offers lookups (as storefront payments poll Paystack), otherwise the URL on the connection page.
+- **Every connected rail's normalised events** (`payment.received`, `virtual_account.credited`, `payout.settled`, `.failed`, `.reversed`), whether or not a workflow listens. Each rail connection gets the log's own intake: a remote subscription where the rail allows it (as Xenibase does), polling where it offers lookups (as storefront payments poll Paystack), otherwise the URL on the connection page. Built: each prod connection of a rail with events carries `money_log_webhooks` in `GET /v1/connections` (one address per trigger its events come from, under `TASKIEM_HOOKS_URL`, with the events, how deliveries are verified, the manifest trigger's `title` and `where`, and `poll_minutes` when Taskiem also polls; remotely registered triggers are left out, and an address that would carry a secret shows a placeholder instead), shown under **Webhook for the money log** below the Connections page's list.
 - **POS sales** from `moniepoint_pos@1` and `opay_business@1`, alongside the `pos_sales` rows they already write.
 - **Payouts Taskiem makes** (Run payroll, Pay a list, refunds) through the same events.
 

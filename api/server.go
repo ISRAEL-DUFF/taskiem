@@ -126,6 +126,10 @@ type Server struct {
 	// PublicURL is where people reach the web app (TASKIEM_PUBLIC_URL);
 	// single sign-on and OAuth connection callbacks are built from it.
 	PublicURL string
+	// HooksURL is where providers reach /hooks (TASKIEM_HOOKS_URL); the
+	// addresses on the Connections page are built from it, or from
+	// PublicURL + /hooks when it is empty.
+	HooksURL string
 	// OAuthClients are Taskiem's registrations with providers whose
 	// connectors connect by OAuth, by connector id
 	// (TASKIEM_OAUTH_<CONNECTOR>_CLIENT_ID and _CLIENT_SECRET); a connector

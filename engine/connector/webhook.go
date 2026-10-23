@@ -58,6 +58,11 @@ type TriggerSpec struct {
 	// webhook would carry, for businesses that never set the webhook up in
 	// the provider's dashboard (no-technical-steps N4).
 	Poll *PollSpec `json:"poll"`
+	// Title and Where are shown with the trigger's address on the
+	// Connections page: what it hears, and where in the provider's
+	// dashboard the business pastes it.
+	Title string `json:"title,omitempty"`
+	Where string `json:"where,omitempty"`
 }
 
 // PollSpec is how a webhook trigger's events are also polled: Action, a

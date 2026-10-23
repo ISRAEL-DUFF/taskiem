@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuthField, ConnectorInfo } from "../api";
-import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, needsConnection, splitFields } from "./connections";
+import { connectorOf, eventsInWords, fieldsToComplete, keyProblem, linkResult, modesOf, needsConnection, pollNote, splitFields, withMoneyLogWebhooks } from "./connections";
 import { connectionLabel, connectorID, pickable } from "../forms/ConnectionPicker";
 import { sheetIdOf } from "../forms/SheetChooser";
 
@@ -125,5 +125,29 @@ describe("generateRsaKeyPair", () => {
     const lines = pair.publicPem.trim().split("\n").slice(1, -1);
     expect(lines.every((l) => l.length <= 64 && /^[A-Za-z0-9+/=]+$/.test(l))).toBe(true);
     expect(lines.length).toBeGreaterThan(2);
+  });
+});
+
+describe("money log webhooks", () => {
+  const hook = { trigger: "charge_event", title: "Payments you receive", url: "https://h.test/hooks/t/connectors/paystack@1/charge_event?connection=main&env=prod", events: ["payment.received"], verification: "", where: "" };
+  it("names the events in words", () => {
+    expect(eventsInWords(["payment.received", "payment.returned"])).toBe("payments received and payments returned");
+    expect(eventsInWords(["payout.failed", "payout.reversed", "payout.settled"])).toBe("transfers that failed, transfers reversed and transfers that went through");
+    expect(eventsInWords(["pos.sale"])).toBe("POS sales");
+    expect(eventsInWords(["something.new"])).toBe("something.new");
+  });
+  it("says when Taskiem also polls", () => {
+    expect(pollNote(undefined)).toBe("");
+    expect(pollNote(5)).toContain("every 5 minutes, so this is optional");
+    expect(pollNote(1)).toContain("every minute");
+  });
+  it("shows only prod connections that have addresses", () => {
+    const conns = [
+      { id: "a", environment: "prod", money_log_webhooks: [hook] },
+      { id: "b", environment: "dev", money_log_webhooks: [hook] },
+      { id: "c", environment: "prod", money_log_webhooks: [] },
+      { id: "d", environment: "prod" },
+    ];
+    expect(withMoneyLogWebhooks(conns).map((c) => c.id)).toEqual(["a"]);
   });
 });

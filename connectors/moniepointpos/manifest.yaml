@@ -114,6 +114,8 @@ triggers:
   # body together with two headers). Retries carry the same eventId.
   transaction:
     type: webhook
+    title: POS sales
+    where: "Moniepoint Business → Settings → POS Apps Developer → Webhooks → New Subscription: paste it, tick the transaction types, then Get API Secret and add it to this connection"
     verify: { scheme: connector, secret_field: webhook_secret }
     events: [V1_POS_PURCHASE_TRANSACTION, V1_POS_TRANSFER_TRANSACTION, V1_POS_CARD_TRANSFER_TRANSACTION, V1_POS_WITHDRAWAL_TRANSACTION, V1_POS_BILL_PAYMENT_TRANSACTION, V1_POS_COLLECTION_TRANSACTION, V1_POS_PAY_CODE_TRANSACTION, V1_POS_AIRTIME_TRANSACTION, V1_POS_BOOM_TRANSACTION, V1_TRANSFER_TRANSACTION]
     event_type: =body.eventType

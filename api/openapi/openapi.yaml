@@ -19481,6 +19481,47 @@ components:
               items:
                 $ref: '#/components/schemas/RemoteSubscription'
           additionalProperties: false
+        money_log_webhooks:
+          type: array
+          description: For a prod connection of a rail whose events the money log records, the addresses to set in the provider's dashboard so Taskiem hears them without a workflow, one per trigger (triggers Taskiem registers itself are left out). Never carries a secret.
+          items:
+            $ref: '#/components/schemas/MoneyLogWebhook'
+      additionalProperties: false
+    MoneyLogWebhook:
+      type: object
+      required:
+      - trigger
+      - title
+      - url
+      - events
+      - verification
+      - where
+      properties:
+        trigger:
+          type: string
+        title:
+          type: string
+          description: What it hears, in plain words.
+        url:
+          type: string
+          description: The absolute address, under the server's hooks URL.
+        events:
+          type: array
+          items:
+            type: string
+          description: The normalised events it carries, e.g. `payment.received`.
+        verification:
+          type: string
+          description: How Taskiem checks deliveries, naming the connection field used (never its value).
+        placeholder:
+          type: string
+          description: When the address must carry a secret, the part of `url` to replace with the connection field Taskiem does not show again.
+        where:
+          type: string
+          description: Where in the provider's dashboard it is pasted.
+        poll_minutes:
+          type: integer
+          description: Taskiem also asks the provider this often, so setting the address is optional.
       additionalProperties: false
     ConnectionList:
       type: object
