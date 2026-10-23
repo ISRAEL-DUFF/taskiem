@@ -253,7 +253,7 @@ Readers take the latest row per movement, as `pos_sales` readers do.
 
 ### 7.3 Where rows come from
 
-- **Every connected rail's normalised events** (`payment.received`, `virtual_account.credited`, `payout.settled`, `.failed`, `.reversed`), whether or not a workflow listens. Each rail connection gets the log's own intake: a remote subscription where the rail allows it (as Xenibase does), polling where it offers lookups (as storefront payments poll Paystack), otherwise the URL on the connection page.
+- **Every connected rail's normalised events** (`payment.received`, `payment.returned`, `virtual_account.credited`, `payout.settled`, `.failed`, `.reversed`, `pos.sale`), whether or not a workflow listens. Each rail connection gets the log's own intake: a remote subscription where the rail allows it (as Xenibase does), polling where it offers lookups (as storefront payments poll Paystack), otherwise the URL on the connection page.
 - **POS sales** from `moniepoint_pos@1` and `opay_business@1`, alongside the `pos_sales` rows they already write.
 - **Payouts Taskiem makes** (Run payroll, Pay a list, refunds) through the same events.
 
@@ -367,6 +367,15 @@ Differences from the plan above:
 Kept tables in data tables; `money_log` and its writer; the log's intake per rail connection (remote subscription, polling or URL); POS rows; payouts Taskiem makes.
 
 **Done when:** every event from a connected rail writes exactly one row whether or not a workflow listens; a replayed or duplicated event writes none; no person or workflow can change a row through Taskiem (tests on the page, the API, chat and the tables connector).
+
+**Built** (T2): migration 00200 (`money_entries`, inserted once and never changed, keyed by connection, event and reference) and `engine/moneylog` (the writer, and the copy to the kept `money_log` table); migration 00201 and `engine/datatables` kept tables (`kept_by`, `EnsureKept`), refused for writes and schema changes on the tables page and API, in chat, as a storefront's catalogue, and in workflow steps (checked in the worker on the resolved input, so a table named by an expression is refused too); the normalised event `pos.sale` for `moniepoint_pos@1` and `opay_business@1`; the poller asks every active prod connection whose triggers it can poll ([money log](../money-log.md), [kept tables](../data-tables.md#kept-tables)). Differences from §7:
+
+- **The record of reference is `money_entries` in Taskiem's database**, and `money_log` is its copy, as T3 did for payments: data tables have no unique constraint, so "exactly once" is kept where one exists. The copy looks for an entry by its id before inserting it and carries a key derived from the id, so a lost answer does not copy it twice.
+- **Each status is its own entry**, keyed by its event (`payout.settled`, then `payout.reversed` naming it); a POS sale's status is part of its key (`pos.sale.settled`).
+- **Only prod is recorded**; sandbox and staging events are not the business's money.
+- **Remote subscriptions for the log** are not needed for any rail today: no rail registers webhooks remotely. Paystack is polled; the others need the URL set in their dashboard.
+- **OPay deliveries are decrypted before they are read** as events (the trigger's enricher now runs for the normalised event too).
+- **Not recorded yet**: payouts a rail settles at once with no event after (no event reaches Taskiem), and refunds (the capability set has no refund event).
 
 ### T3: invoices (L)
 
