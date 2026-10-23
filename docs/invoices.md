@@ -69,11 +69,25 @@ These buttons are the only thing the customer can do in the chat besides STOP an
 
 ## Payments
 
-Each payment counted towards an invoice is listed on it: the amount, the payment's reference at the payments provider, how it was matched to the invoice (exactly, by the reference Taskiem gave it; suggested; or by a person) and who matched it. **Undo** takes a payment out of an invoice when it was matched to the wrong one.
+Each payment counted towards an invoice is listed on it: the amount, the payment's reference at the payments provider, how it was matched to the invoice ("Paid into the account Taskiem gave"; "Suggested, confirmed by" the person who confirmed it; "Matched automatically"; or "Matched by hand"), the reasons a suggested or automatic match was made, and who matched it. **Undo** takes a payment out of an invoice when it was matched to the wrong one.
 
-Payments into an account number or payment link Taskiem gave for an invoice are counted automatically: every 30 seconds Taskiem asks the payments provider about each one still waiting (for up to 48 hours after an account number expires, and 7 days for a link), and counts a payment once, as matched exactly, by the system. When that makes the invoice paid, a run waiting on `invoice.paid` continues. Other money that comes in (a transfer to the business's usual account, cash) is matched in a later milestone ([build plan](spec/invoices-and-money-log.md), T5).
+Payments into an account number or payment link Taskiem gave for an invoice are counted automatically: every 30 seconds Taskiem asks the payments provider about each one still waiting (for up to 48 hours after an account number expires, and 7 days for a link), and counts a payment once, as matched exactly, by the system. When that makes the invoice paid, a run waiting on `invoice.paid` continues. Other money that comes in (a transfer to the business's usual account, a POS sale, cash) is matched as below.
 
 The account numbers and links come from the prod connection named in **Payments connection** (`main` by default; write `paystack/main` when several providers have a connection called `main`). It needs a provider that can open one-time account numbers (Paystack with Pay with Transfer turned on, Flutterwave, OPay) or make payment links. For now the business pays the provider's fee: the "customer pays the fee" setting is kept but not yet applied, since the providers' fee rules are not yet confirmed.
+
+## Matching
+
+Money that comes in without the reference Taskiem gave gets up to three suggestions among the business's open invoices, each with a score and its reasons ("same amount", "payer ADA OBI matches the customer"). How suggestions are made and scored is in [Matching money to invoices](matching.md).
+
+**Invoices > To match** lists the payments waiting, newest first, with the number waiting shown on the tab. Each payment is a card: the amount, when it was received, where it came in, its reference and what kind of money it was, then the invoices it may be for, strongest first. A score reads **Strong** (85 or more), **Likely** (60 or more) or **Possible**. For each one:
+
+- **Match** counts the payment towards that invoice; the payment's other suggestions close.
+- **Not this one** turns the suggestion down; it is not offered again.
+- **Match to another invoice…** picks any other invoice that is sent and not yet fully paid, when none of the suggestions is right.
+
+A match from here can be undone on the invoice like any payment. People with `invoice.read` see the list; matching and turning down need `invoice.manage`. When the server refuses (the payment was matched meanwhile, or the invoice is paid or void), its reason is shown on the card.
+
+**Match strong suggestions automatically**, under Settings, is off by default. When on, a payment whose best suggestion is strong, and clearly ahead of the next one, is matched without asking; the invoice shows it as "Matched automatically", with its reasons, and it can be undone.
 
 ## Settings
 
@@ -86,6 +100,7 @@ Under **Invoices > Settings**:
 | Payments connection | `main` | The connection (Paystack, Flutterwave, OPay, …) that takes payments for invoices |
 | Who pays the transfer fee | The business | Or the customer, where the payments provider takes only the exact amount ([0045](decisions/0045-tally-in-taskiem.md)) |
 | Customers may pay part | Off | When on, a customer can pay part of an invoice |
+| Match strong suggestions automatically | Off | See [Matching](#matching) |
 
 Each invoice can override the connection, the fee and part payments.
 
@@ -93,8 +108,8 @@ Each invoice can override the connection, the fee and part payments.
 
 | Permission | Lets a person | Roles |
 | --- | --- | --- |
-| `invoice.read` | See invoices | Owner, admin, operator, auditor, viewer |
-| `invoice.manage` | Create, change, send and void invoices, undo a payment, change the settings | Owner, admin, operator |
+| `invoice.read` | See invoices and the payments waiting to be matched | Owner, admin, operator, auditor, viewer |
+| `invoice.manage` | Create, change, send and void invoices, match money to them, undo a payment, change the settings | Owner, admin, operator |
 
 Customers' names, phone numbers and emails are masked in lists. People with `pii.reveal` can show them on an invoice, which is recorded in the audit log.
 
@@ -114,4 +129,4 @@ There is no action that marks an invoice paid. A run that waits for payment wait
 
 ## API
 
-`GET` and `POST /v1/invoices`, `GET` and `PUT /v1/invoices/{id}` (a draft), `POST /v1/invoices/{id}/send`, `POST /v1/invoices/{id}/void`, `POST /v1/invoices/{id}/payments/{payment}/undo`, and `GET` and `PUT /v1/invoice-settings`; `{id}` is the invoice's id or number. Creating and sending take an `Idempotency-Key` header. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Invoices).
+`GET` and `POST /v1/invoices`, `GET` and `PUT /v1/invoices/{id}` (a draft), `POST /v1/invoices/{id}/send`, `POST /v1/invoices/{id}/void`, `POST /v1/invoices/{id}/payments/{payment}/undo`, `GET` and `PUT /v1/invoice-settings`, and for matching `GET /v1/money/suggestions`, `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` (with `{"invoice": "<id or number>"}`); `{id}` is the invoice's id or number. Creating and sending take an `Idempotency-Key` header. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Invoices).

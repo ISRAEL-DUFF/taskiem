@@ -1,7 +1,9 @@
 // Invoices a business sends its customers (decision 0045, T3;
 // docs/invoices.md; GET/POST /v1/invoices, /v1/invoices/{id}, /send,
-// /void, /payments/{payment}/undo, /v1/invoice-settings): the API's
-// shapes, the form a draft is made in, and how an invoice reads.
+// /void, /payments/{payment}/undo, /v1/invoice-settings) and matching money
+// to them (T5; docs/matching.md; /v1/money/suggestions, /confirm, /reject,
+// /v1/money/entries/{id}/match): the API's shapes, the form a draft is made
+// in, and how an invoice and a suggested match read.
 // Nothing here marks an invoice paid: only payments counted towards it do.
 
 import { formatPrice } from "./storefront";
@@ -90,6 +92,8 @@ export interface InvoiceSettings {
   connection: string;
   fee_paid_by: FeePaidBy;
   allow_part_payments: boolean;
+  /** A strong suggestion is matched without asking (off by default). */
+  auto_match?: boolean;
 }
 
 /** The limits the server holds an invoice to (engine/invoicing, openapi InvoiceDraft). */
@@ -226,14 +230,21 @@ export function newRequestKey(): string {
 
 // --- payments ---
 
-export const HOW_MATCHED: Record<string, string> = {
-  exact: "Exactly, by its reference",
-  suggested: "Suggested, then confirmed",
-  suggested_auto: "Suggested and counted",
-  manual: "By a person",
-};
-
-export const howMatched = (how: string) => HOW_MATCHED[how] ?? how.replaceAll("_", " ");
+/** How a payment was matched to the invoice, in words. */
+export function howMatched(how: string, by = ""): string {
+  switch (how) {
+    case "exact":
+      return "Paid into the account Taskiem gave";
+    case "suggested":
+      return by ? `Suggested, confirmed by ${by}` : "Suggested, then confirmed";
+    case "suggested_auto":
+      return "Matched automatically";
+    case "manual":
+      return "Matched by hand";
+    default:
+      return how.replaceAll("_", " ");
+  }
+}
 
 export interface PaymentRow {
   payment: InvoicePayment;
@@ -397,10 +408,18 @@ export interface SettingsForm {
   connection: string;
   feePaidBy: FeePaidBy;
   partPayments: boolean;
+  autoMatch: boolean;
 }
 
 export function settingsForm(s: InvoiceSettings): SettingsForm {
-  return { prefix: s.prefix, nextNumber: String(s.next_number), connection: s.connection, feePaidBy: s.fee_paid_by, partPayments: s.allow_part_payments };
+  return {
+    prefix: s.prefix,
+    nextNumber: String(s.next_number),
+    connection: s.connection,
+    feePaidBy: s.fee_paid_by,
+    partPayments: s.allow_part_payments,
+    autoMatch: !!s.auto_match,
+  };
 }
 
 /** Why the settings will be refused, or null; the next number only moves forward from what was saved. */
@@ -421,6 +440,7 @@ export function settingsRequest(f: SettingsForm): InvoiceSettings {
     connection: f.connection.trim() || "main",
     fee_paid_by: f.feePaidBy,
     allow_part_payments: f.partPayments,
+    auto_match: f.autoMatch,
   };
 }
 
@@ -433,3 +453,104 @@ export const FEE_CHOICES: { value: FeePaidBy; label: string; help: string }[] = 
   { value: "business", label: "The business", help: "The customer pays the invoice's amount; the fee comes out of what you receive." },
   { value: "customer", label: "The customer", help: "The fee is added to what the customer pays, where the payments provider allows it." },
 ];
+
+// --- matching money to invoices (T5) ---
+
+/** One open suggestion: money received that may be for an invoice (MoneySuggestion). */
+export interface MoneySuggestion {
+  id: string;
+  entry_id: string;
+  invoice_id: string;
+  number: string;
+  score: number;
+  reasons: string[] | null;
+  status: string;
+  amount_kobo: number | null;
+  channel: string;
+  reference: string;
+  received_at: string;
+  kind: string;
+}
+
+export const SUGGESTIONS_PATH = "/v1/money/suggestions";
+export const suggestionPath = (id: string, action: "confirm" | "reject") => `/v1/money/suggestions/${encodeURIComponent(id)}/${action}`;
+export const entryMatchPath = (entry: string) => `/v1/money/entries/${encodeURIComponent(entry)}/match`;
+
+/** Where a score's words change: 85 and up is strong (the least automatic matching takes), 60 and up likely. */
+export const SCORE_STRONG = 85;
+export const SCORE_LIKELY = 60;
+
+/** A suggestion's score (0 to 100) in words. */
+export function scoreWords(score: number): { label: string; tone: Tone } {
+  if (score >= SCORE_STRONG) return { label: "Strong", tone: "ok" };
+  if (score >= SCORE_LIKELY) return { label: "Likely", tone: "info" };
+  return { label: "Possible", tone: "muted" };
+}
+
+const KIND_WORDS: Record<string, string> = {
+  payment: "Payment",
+  account_credit: "Transfer into an account",
+  pos_sale: "POS sale",
+  statement: "Line of a bank statement",
+  cash: "Cash",
+};
+
+/** A money log entry's kind in words. */
+export const kindWords = (kind: string) => KIND_WORDS[kind] ?? kind.replaceAll("_", " ");
+
+/** Where the money came: "paystack/main" is "Paystack (main)"; "upload" an uploaded statement. */
+export function channelWords(channel: string): string {
+  if (channel === "upload") return "Uploaded statement";
+  if (channel === "cash") return "Cash";
+  const i = channel.indexOf("/");
+  const rail = i < 0 ? channel : channel.slice(0, i);
+  const name = i < 0 ? "" : channel.slice(i + 1);
+  const r = rail ? rail.charAt(0).toUpperCase() + rail.slice(1) : channel;
+  return name ? `${r} (${name})` : r;
+}
+
+/** A payment waiting to be matched, with the invoices it may be for, strongest first. */
+export interface WaitingPayment {
+  entry_id: string;
+  amount_kobo: number | null;
+  channel: string;
+  reference: string;
+  received_at: string;
+  kind: string;
+  candidates: MoneySuggestion[];
+}
+
+/** The suggestions as the To match view shows them: one card per payment, in the order the server sent them (newest payment first). */
+export function groupSuggestions(list: MoneySuggestion[] | null | undefined): WaitingPayment[] {
+  const out: WaitingPayment[] = [];
+  const by = new Map<string, WaitingPayment>();
+  for (const s of list ?? []) {
+    let g = by.get(s.entry_id);
+    if (!g) {
+      g = { entry_id: s.entry_id, amount_kobo: s.amount_kobo, channel: s.channel, reference: s.reference, received_at: s.received_at, kind: s.kind, candidates: [] };
+      by.set(s.entry_id, g);
+      out.push(g);
+    }
+    g.candidates.push(s);
+  }
+  for (const g of out) g.candidates.sort((a, b) => b.score - a.score);
+  return out;
+}
+
+/** An amount that may be missing, in words. */
+export const amountWords = (kobo: number | null | undefined) => (kobo === null || kobo === undefined ? "Amount not known" : naira(kobo));
+
+/** The invoices a payment can be matched to: sent and not yet fully paid. */
+export function openInvoices(list: CustomerInvoice[] | null | undefined): CustomerInvoice[] {
+  return (list ?? []).filter((x) => x.status === "sent" || x.status === "part_paid" || x.status === "overdue");
+}
+
+/** What the To match view says after a match. */
+export function matchedLine(amountKobo: number | null, number: string): string {
+  return `${amountWords(amountKobo)} matched to ${number}. If that is wrong, undo it on the invoice.`;
+}
+
+/** What the To match view says after "Not this one". */
+export function rejectedLine(number: string): string {
+  return `${number} will not be suggested for this payment again.`;
+}
