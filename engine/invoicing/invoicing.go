@@ -1010,3 +1010,74 @@ func (s Service) Cancel(ctx context.Context, tenant uuid.UUID, idOrNumber, reaso
 	})
 	return x, err
 }
+
+// Listed is an invoice in a workflow's list: no customer details, which a
+// run reaches through the invoice's number (notify_customer).
+type Listed struct {
+	Number    string     `json:"number"`
+	Status    string     `json:"status"`
+	TotalKobo int64      `json:"total_kobo"`
+	DueKobo   int64      `json:"due_kobo"`
+	DueOn     string     `json:"due_on,omitempty"`
+	PaidAt    *time.Time `json:"paid_at,omitempty"`
+	// DaysOverdue counts whole days past the due date, Lagos time (1 the
+	// day after it); 0 for an invoice not overdue.
+	DaysOverdue int `json:"days_overdue"`
+}
+
+// MaxListed is the most invoices one list returns.
+const MaxListed = 200
+
+// MaxPaidWithin is how far back paid invoices can be listed.
+const MaxPaidWithin = 7 * 24 * time.Hour
+
+// ListFor lists a tenant's invoices for a workflow: status "overdue"
+// (sent or part paid and past the due date, oldest due first) or "paid"
+// (paid within the last within, oldest paid first). Overdue is computed
+// from the date here as the status is, so an invoice the hourly check has
+// not reached yet is included.
+func (s Service) ListFor(ctx context.Context, tenant uuid.UUID, status string, within time.Duration, limit int) ([]Listed, error) {
+	if limit <= 0 || limit > MaxListed {
+		limit = 50
+	}
+	var q string
+	var args []any
+	switch status {
+	case "overdue":
+		q = `SELECT number, 'overdue', total_kobo, paid_kobo, to_char(due_on, 'YYYY-MM-DD'), paid_at,
+			((now() AT TIME ZONE 'Africa/Lagos')::date - due_on)
+			FROM customer_invoices WHERE tenant_id = $1 AND status IN ('sent', 'part_paid', 'overdue')
+			AND due_on IS NOT NULL AND due_on < (now() AT TIME ZONE 'Africa/Lagos')::date
+			ORDER BY due_on, number LIMIT $2`
+		args = []any{tenant, limit}
+	case "paid":
+		if within <= 0 || within > MaxPaidWithin {
+			return nil, invalid("paid invoices are listed for the last 1 to 168 hours")
+		}
+		q = `SELECT number, status, total_kobo, paid_kobo, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''), paid_at, 0
+			FROM customer_invoices WHERE tenant_id = $1 AND status = 'paid' AND paid_at > now() - make_interval(secs => $3)
+			ORDER BY paid_at, number LIMIT $2`
+		args = []any{tenant, limit, within.Seconds()}
+	default:
+		return nil, invalid("list overdue or paid invoices")
+	}
+	var out []Listed
+	err := s.in(ctx, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, q, args...)
+		if err != nil {
+			return err
+		}
+		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (Listed, error) {
+			var l Listed
+			var paid int64
+			err := r.Scan(&l.Number, &l.Status, &l.TotalKobo, &paid, &l.DueOn, &l.PaidAt, &l.DaysOverdue)
+			l.DueKobo = max(l.TotalKobo-paid, 0)
+			return l, err
+		})
+		return err
+	})
+	if out == nil {
+		out = []Listed{}
+	}
+	return out, err
+}

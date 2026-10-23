@@ -940,6 +940,10 @@
       "text": "• *language* na aha asụsụ: azịza n'asụsụ {languages}",
       "reviewed": false
     },
+    "wa.help.money": {
+      "text": "• *spent* na ego ole na ihe e ji ya mee (*spent 12,000 on diesel at Total*), ma ọ bụ *cash in* ma ọ bụ *cash out* na ego ole (*cash in 20,000 till*): m ga-edenye ya n'akwụkwọ ego unu",
+      "reviewed": false
+    },
     "wa.help.run": {
       "text": "• *run* na aha usoro ọrụ: malite ya (ị ga-ebu ụzọ kwado)",
       "reviewed": false
@@ -1082,6 +1086,50 @@
     },
     "wa.match.rejected_next": {
       "text": "Ọ dị mma, ọ bụghị ya. A gaghị atụ aro ya ọzọ.",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "Ka m dee {amount} ego batara: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "Ka m dee {amount} ego pụrụ: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense": {
+      "text": "Ka m dee na e mefuru {amount} na {what} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "Ka m dee na e mefuru {amount} na {what} na {vendor} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Zaa *yes* ka m dee ya ma ọ bụ *no* ka m hapụ ya.",
+      "reviewed": false
+    },
+    "wa.money.denied": {
+      "text": "Unu enweghị ike ide ego na {org}.",
+      "reviewed": false
+    },
+    "wa.money.how": {
+      "text": "Kwuo ego ole na ihe ọ bụ maka ya, dị ka nke a: *spent 12,000 on diesel at Total*, ma ọ bụ *cash in 20,000 till*",
+      "reviewed": false
+    },
+    "wa.money.not_recorded": {
+      "text": "E deghị ya.",
+      "reviewed": false
+    },
+    "wa.money.recorded_in": {
+      "text": "E dere ya. {amount} batara, {category}.",
+      "reviewed": false
+    },
+    "wa.money.recorded_out": {
+      "text": "E dere ya. {amount} pụrụ, {category}.",
+      "reviewed": false
+    },
+    "wa.money.refused": {
+      "text": "Enweghị m ike ide nke ahụ: {reason}",
       "reviewed": false
     },
     "wa.no_org": {

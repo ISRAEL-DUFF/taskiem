@@ -51,8 +51,25 @@ To read a movement's current status, take its latest entry by `recorded_at`.
 
 The log's own copy in Taskiem's database is the record of reference: the `money_log` table is a copy for reading. A business that brings its own Xenibase project can still edit the table there, outside Taskiem; the copy in Taskiem is unaffected.
 
+## Statements, cash and expenses
+
+**Statement upload.** A bank statement is uploaded as a CSV in one common format: the columns `date`, `description`, `amount` (money in positive, money out negative, in naira), and optionally `reference` and `balance`. A statement in a bank's own columns is uploaded once its columns are matched to these; the match is remembered for that account, so the next upload needs nothing. Banks that put money in and money out in separate columns are matched as such. Dates are read day first (23/10/2026, 23-Oct-2026) or as 2026-10-23; amounts as banks write them (1,234.50, (1,234.50), 1,234.50 DR). A file with any line Taskiem cannot read adds nothing, and says which lines and why. A line already in the log (the same account, date, amount and reference) is skipped, so uploading overlapping statements is safe. Each line becomes a `statement` entry on the account named at upload, such as `gtbank/current`, attributed to the person who uploaded it. Statement lines are matched to invoices like any money in ([matching](matching.md)).
+
+**Cash and expenses.** Cash in, cash out and expenses are entered with an amount, a date, what it was for, and for an expense the vendor and a category; each is recorded once, attributed to the person. Over the API: `POST /v1/money/statements` and `POST /v1/money/entries` (with an `Idempotency-Key`).
+
+The money that came in and the money that went out are also checked for [leaks](leaks.md).
+
+## Money
+
+**Money** in the web app's sidebar is for anyone who may see invoices (`invoice.read`); assigning, closing, uploading and entering need `invoice.manage`. It has four tabs:
+
+- **Leaks:** what Taskiem found the business may be losing ([leaks](leaks.md)), with the number open, their amount and the total recovered at the top. Each leak says what it is in words, with its amount, the day it was opened and a link to its invoice when it has one. It can be assigned to a member (people who cannot list members can assign it to themselves) and closed as **recovered** (with the amount got back), **written off** or **not a leak**, with an optional note. The filter shows open, closed or all; a closed leak says how it was closed, by whom and the amount recovered, and one whose cause went away (the money was matched, the invoice paid) says it closed by itself.
+- **Upload statement:** a bank statement as a CSV for an account Taskiem has no connection to, named like `gtbank/current`. A file in the common format (`date`, `description`, `amount` with money out negative, and optionally `reference` and `balance`) goes straight in. A file with the bank's own column names shows a form to match them once, guessed from their names: one amount column, or money in and money out apart. The match is remembered for the account. A file with any line Taskiem cannot read adds nothing and lists each line and why. Afterwards the page says how many lines were added and how many skipped as already in the log, so the same days can be uploaded again safely.
+- **Cash and expenses:** an expense (with an optional vendor and category), cash in or cash out, with its amount, date and description, and optionally the account it moved through (cash when empty). Each entry is recorded under the person's name, once per form even if it is sent twice.
+- **Fees:** the fee agreed with each connection (`paystack/main`): a percent of the amount, a flat fee, or both, with an optional cap. A fee above the agreed one becomes a leak.
+
 ## Not yet recorded
 
 - Payouts a service reports as settled at once, with no event after.
-- Refunds, statement uploads, cash and expenses (T6).
+- Refunds (the capability set has no refund event).
 - Matching payments to invoices and orders (T5).

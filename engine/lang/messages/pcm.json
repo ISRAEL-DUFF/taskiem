@@ -940,6 +940,10 @@
       "text": "• *language* and the language name: make I reply you for {languages}",
       "reviewed": false
     },
+    "wa.help.money": {
+      "text": "• *spent* plus how much and wetin e be for (*spent 12,000 on diesel at Total*), or *cash in* or *cash out* plus how much (*cash in 20,000 till*): I go write am for your money log",
+      "reviewed": false
+    },
     "wa.help.run": {
       "text": "• *run* and the workflow name: start am (you go confirm first)",
       "reviewed": false
@@ -1082,6 +1086,50 @@
     },
     "wa.match.rejected_next": {
       "text": "Okay, no be am. We no go suggest am again.",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "Make I write {amount} cash wey enter: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "Make I write {amount} cash wey comot: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense": {
+      "text": "Make I write say you spend {amount} for {what} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "Make I write say you spend {amount} for {what} for {vendor} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Reply *yes* make I write am or *no* make I leave am.",
+      "reviewed": false
+    },
+    "wa.money.denied": {
+      "text": "You no fit write money for {org}.",
+      "reviewed": false
+    },
+    "wa.money.how": {
+      "text": "Talk how much and wetin e be for, like this: *spent 12,000 on diesel at Total*, or *cash in 20,000 till*",
+      "reviewed": false
+    },
+    "wa.money.not_recorded": {
+      "text": "I no write am.",
+      "reviewed": false
+    },
+    "wa.money.recorded_in": {
+      "text": "I don write am. {amount} enter, {category}.",
+      "reviewed": false
+    },
+    "wa.money.recorded_out": {
+      "text": "I don write am. {amount} comot, {category}.",
+      "reviewed": false
+    },
+    "wa.money.refused": {
+      "text": "I no fit write am: {reason}",
       "reviewed": false
     },
     "wa.no_org": {

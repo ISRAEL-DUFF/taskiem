@@ -430,6 +430,17 @@ Exact matching, suggestions with reasons, confirm, reject and undo in the web ap
 
 The first five leaks, their lifecycle and the amount recovered; statement upload for the first formats; cash and expense entry; `chase-overdue-invoices` and `invoice-paid-receipt`.
 
+**Built** (T6): migration 00204 (entries' description, vendor, category and who entered them; `money_statement_formats`; `money_fee_rates`; `money_leaks`); `engine/moneylog` statements (the common format, a bank's own columns matched once and remembered per account, money in and out in one column or two) and cash and expenses; `engine/leaks` (the first five leaks of §9.1, as six kinds, every 15 minutes; assign, close as recovered, written off or not a leak; resolved by itself when the cause goes away); `/v1/money/leaks`, `/fee-rates`, `/statements`, `/entries` ([leaks](../leaks.md), [money log](../money-log.md#statements-cash-and-expenses)). Differences from §7.4 and §9.1:
+
+- **A file with any unreadable line adds nothing**, so a wrong match of columns cannot fill the log with wrong lines; the answer lists the lines and why.
+- **The first statement formats are the common one and any bank's columns matched to it**; formats parsed from a bank's own export without matching (Tally's parsers) can follow.
+- **"Overpayment, and money for a void invoice" are two kinds** (overpaid, void_paid), and money for a void invoice is not also "money in with nothing to match".
+- **POS sales and cash are not "money in with nothing to match"**: they are takings, not money owed.
+- **A duplicate is one movement reported as two kinds of event** on one connection; the log already keeps each event once, and statement lines without a reference repeat by nature.
+- **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`) for now.
+- **Expenses in chat**: "spent 12k on diesel at Total", "expense 5000 fuel", "cash in 20,000 till", confirmed with Yes and recorded once; categories from a short word list.
+- **`invoice-paid-receipt` runs hourly** over invoices paid in the last 3 hours, because nothing starts a run when an invoice is paid (the `invoice.paid` signal only resumes runs waiting on it); `chase-overdue-invoices` runs daily. Both use a new read-only `invoices@1` action, `list`. Their keywords are only "chase" and "receipt" so the offline builder's other cases are not taken over.
+
 ### T7: summaries and exports (M)
 
 The daily summary, the Money page, monthly exports (log, invoices, journal).

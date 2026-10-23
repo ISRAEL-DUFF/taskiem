@@ -1,0 +1,88 @@
+{
+  "schema": "wd-test/v1",
+  "template": "invoice-paid-receipt",
+  "params": {
+    "tell_me": true
+  },
+  "cases": [
+    {
+      "name": "each customer whose invoice was paid is thanked with its link, and the owner told",
+      "mocks": {
+        "paid": {
+          "output": {
+            "count": 2,
+            "invoices": [
+              {"number": "INV-0007", "status": "paid", "total": "₦25,000.50", "total_kobo": 2500050, "due": "₦0", "due_kobo": 0, "days_overdue": 0, "paid_at": "2026-10-23T08:10:00Z"},
+              {"number": "INV-0009", "status": "paid", "total": "₦4,000", "total_kobo": 400000, "due": "₦0", "due_kobo": 0, "days_overdue": 0, "paid_at": "2026-10-23T08:40:00Z"}
+            ]
+          }
+        },
+        "thank_each[0].receipt": {"output": {"number": "INV-0007", "queued": ["sms", "email"]}},
+        "thank_each[1].receipt": {"output": {"number": "INV-0009", "queued": ["sms"]}},
+        "thank_each[0].tell_owner": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}},
+        "thank_each[1].tell_owner": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "paid": {"status": "paid", "paid_within_hours": 3, "limit": 200},
+          "thank_each[0].receipt": {
+            "number": "INV-0007",
+            "text": "Thank you: we have received your payment for invoice {number}. See it, marked paid: {link}",
+            "subject": "INV-0007 is paid: thank you"
+          },
+          "thank_each[0].tell_owner": {
+            "title": "Invoice paid",
+            "message": "Invoice INV-0007 (₦25,000.50) is paid in full."
+          }
+        },
+        "steps": {
+          "thank_each[0].receipt": "completed",
+          "thank_each[1].receipt": "completed",
+          "thank_each[1].tell_owner": "completed"
+        },
+        "calls": {
+          "receipt": 2,
+          "tell_owner": 2
+        }
+      }
+    },
+    {
+      "name": "with tell me off only the customer hears",
+      "params": {
+        "tell_me": false
+      },
+      "mocks": {
+        "paid": {
+          "output": {
+            "count": 1,
+            "invoices": [
+              {"number": "INV-0007", "status": "paid", "total": "₦25,000.50", "total_kobo": 2500050, "due": "₦0", "due_kobo": 0, "days_overdue": 0, "paid_at": "2026-10-23T08:10:00Z"}
+            ]
+          }
+        },
+        "thank_each[0].receipt": {"output": {"number": "INV-0007", "queued": ["sms"]}}
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "thank_each[0].receipt": "completed",
+          "thank_each[0].tell_owner": "skipped"
+        }
+      }
+    },
+    {
+      "name": "nothing paid lately: nobody is messaged",
+      "mocks": {
+        "paid": {"output": {"count": 0, "invoices": []}}
+      },
+      "expect": {
+        "status": "completed",
+        "calls": {
+          "receipt": 0,
+          "tell_owner": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 # Invoices and the money log: what is not covered yet
 
-Everything built for [decision 0045](../decisions/0045-tally-in-taskiem.md) so far (T1 to T5 of the [build plan](invoices-and-money-log.md)) that is not done, not verified, or done differently from the plan. Each item says what is missing, why, and what would close it. Update this list as items close; the plan's "Built" notes say how each milestone differs from it.
+Everything built for [decision 0045](../decisions/0045-tally-in-taskiem.md) so far (T1 to T6 of the [build plan](invoices-and-money-log.md)) that is not done, not verified, or done differently from the plan. Each item says what is missing, why, and what would close it. Update this list as items close; the plan's "Built" notes say how each milestone differs from it.
 
-Status as of 23 October 2026: T1, T3, T4, T2 and T5 are built. T6 to T8 are not started.
+Status as of 23 October 2026: T1, T3, T4, T2, T5 and T6 are built. T7 and T8 are not started.
 
 ## Needs people, not code
 
@@ -11,7 +11,7 @@ Status as of 23 October 2026: T1, T3, T4, T2 and T5 are built. T6 to T8 are not 
 | **Sandbox runs on each rail** (Paystack, Flutterwave, OPay) | T4's "done when": a customer pays from the page and from WhatsApp on each rail. Everything is tested against fakes only | Sandbox `main` connections on staging; pay an invoice by transfer from the page and from WhatsApp; a transfer after expiry; a sixth request in an hour | Founders (credentials via the Connections page), then engineering |
 | **Paystack's Pay with Transfer must be turned on** by Paystack support for each business | Without it, `collect_transfer` on Paystack fails | Ask Paystack support; the connection page could say so (readiness) | Each business; engineering for the readiness note |
 | **A WhatsApp template for invoices with buttons**, and one for matching questions | Outside WhatsApp's 24-hour window neither message is sent: invoices go by SMS and email only, and matching questions wait in the web app | Submit utility templates to Meta and send them when the window is closed | Founders (Meta Business account), then engineering |
-| **Publishing the guides** `invoices.md`, `money-log.md`, `matching.md` | They are internal (`tools/docsite/pages.go`) until the sandbox runs pass | Remove them from the internal list | Engineering, after the sandbox runs |
+| **Publishing the guides** `invoices.md`, `money-log.md`, `matching.md`, `leaks.md` | They are internal (`tools/docsite/pages.go`) until the sandbox runs pass | Remove them from the internal list | Engineering, after the sandbox runs |
 | **Rail facts still unknown** (OPay and iswallet: late and wrong-amount transfers; every rail's fee for one-time accounts) | Pages say "unknown" where a rail does not document it; the fee setting cannot be applied | Confirm with each rail (questions are in the plan's §4.3) | Founders / partnerships |
 | **Reviewing the chat translations** | New chat messages in Pidgin, Yoruba, Hausa and Igbo are unreviewed drafts (`reviewed: false`) | A speaker reviews each catalogue entry | Founders / reviewers |
 
@@ -32,8 +32,7 @@ Status as of 23 October 2026: T1, T3, T4, T2 and T5 are built. T6 to T8 are not 
 - **The record of reference is in Taskiem's database** (`money_entries`); the `money_log` data table is a copy. A business that brings its own Xenibase project can still edit the copy there, outside Taskiem. This follows from data tables having no unique constraint.
 - **Not recorded yet:**
   - payouts a rail reports as settled at once with no event after (`pay_bank` answering `settled`);
-  - refunds (the capability set has no refund event);
-  - statement uploads, cash and expenses (T6).
+  - refunds (the capability set has no refund event).
 - **Paystack takes one webhook URL per account** while Taskiem has two Paystack triggers: transfer events reach the log through the 5-minute poll, not instantly. Fix: one Paystack trigger for both kinds of event.
 - **Moniepoint POS:** bill payments, airtime, BOOM, pay codes and collections are left out as money paid out of the balance; that is a reading of the docs, not confirmed. Moniepoint gives no fee or settled amount.
 - **POS statuses matched by name, not documented:** "reversed" for both POS rails, and OPay's FAIL and CLOSE.
@@ -59,8 +58,28 @@ Status as of 23 October 2026: T1, T3, T4, T2 and T5 are built. T6 to T8 are not 
   - "confirmed by" shows the member's id, not their name;
   - the To match count counts payments with suggestions, not those left for a person.
 
+## Leaks, statements, cash and expenses (T6)
+
+- **Two leaks of §9.1 are later:** short or late settlement, and a customer debited while the business was never credited. Both need each rail's settlement report as a capability, rail by rail.
+- **Statement formats:** the common format, and any bank's columns matched to it once; no bank's own export is parsed without matching yet (Tally's parsers).
+- **Statements give no payer name**, so matching statement lines rests on amount and timing.
+- **Duplicates are narrow:** one movement reported as two kinds of event on one connection. A payment seen both as an event and on an uploaded statement (two channels) is not flagged; deciding that two channels are the same account needs the owner to link them.
+- **Leaks are not sent in chat** and have no daily summary yet (T7).
+- **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`); a money permission of its own may be wanted.
+- **Agreed fees are set by hand** per connection; no rail's published rates are filled in.
+- **Templates:**
+  - `invoice-paid-receipt` sends within the hour, not at once, since no trigger starts a run when an invoice is paid; if more than two hourly runs in a row are missed, invoices paid early in the gap get no receipt. A trigger on `invoice.paid` would fix both.
+  - `chase-overdue-invoices` skips straight to the owner's note for an invoice already past all its reminder windows when the workflow first runs.
+  - Their keywords are "chase" and "receipt" only: "remind customers about overdue invoices" still offers `invoice-follow-up` (T8).
+  - Adding them moved the offline builder eval's ungated `connector_recall` from 0.549 to 0.537 (five cases scoring just under the template threshold now start from a template); the gated measures did not regress.
+- **Expenses in chat** use a short fixed word list for categories, and record the member's bare user id, as the API does, where the invoice chat records `user:<id>`.
+- **Web app (Money pages):**
+  - no list of accounts statements were uploaded for, so the account field suggests only those seen in fee rates and unmatched money;
+  - assigning a leak to someone else needs `member.manage` (the members list); others can assign to themselves or no one, and leaks show member ids, not names;
+  - fee rates can be changed but not removed (no delete);
+  - a leak's link to its invoice says "See the invoice", not its number.
+
 ## Later milestones (not started)
 
-- **T6:** leaks, statement uploads in the common format, cash and expenses.
 - **T7:** summaries and exports in the one common statement format (no VAT export at launch).
 - **T8:** templates and the AI builder (including the `send-invoice` keywords above, and other languages' chat command words).
