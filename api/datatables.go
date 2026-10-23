@@ -69,6 +69,8 @@ func (s *Server) failTables(w http.ResponseWriter, r *http.Request, err error) {
 	var xe *datatables.Error
 	var pe *xenibase.Error
 	switch {
+	case errors.Is(err, datatables.ErrKept):
+		code(http.StatusConflict, "table_kept", strings.TrimPrefix(err.Error(), datatables.ErrKept.Error()+": "))
 	case errors.Is(err, datatables.ErrUnavailable):
 		code(http.StatusServiceUnavailable, "tables_unavailable", "data tables are not available on this platform: no Xenibase is configured and the organisation brought no project")
 	case errors.Is(err, datatables.ErrProvisioning):
@@ -295,8 +297,12 @@ func tableView(t datatables.Table) map[string]any {
 	for _, c := range t.Columns {
 		cols = append(cols, map[string]any{"name": c.Name, "title": c.Title, "type": c.Type, "required": c.Required, "personal": c.Personal})
 	}
+	var kept any // null for an ordinary table
+	if t.Kept() {
+		kept = t.KeptBy
+	}
 	return map[string]any{"id": t.ID, "name": t.Name, "title": t.Title, "description": t.Description, "columns": cols,
-		"postgres_table": "public." + t.Name, "connection": datatables.ConnectionName, "created_by": t.CreatedBy,
+		"postgres_table": "public." + t.Name, "connection": datatables.ConnectionName, "created_by": t.CreatedBy, "kept_by": kept,
 		"created_at": t.CreatedAt.UTC().Format(time.RFC3339), "updated_at": t.UpdatedAt.UTC().Format(time.RFC3339)}
 }
 
@@ -455,7 +461,9 @@ func (s *Server) newDataTable(r *http.Request, p *Principal, req tableReq) (data
 		if taken {
 			return fmt.Errorf("%w: a table named %q already exists", errConflict, req.Name)
 		}
-		return nil
+		// A name Taskiem keeps for its own table is not made here, even
+		// before Taskiem has made it (datatables.KeptNames).
+		return datatables.CheckTableName(req.Name)
 	}); err != nil {
 		return datatables.Table{}, err
 	}
@@ -546,6 +554,9 @@ func (s *Server) patchTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t, err := s.loadTable(r)
+	if err == nil {
+		err = datatables.Writable(t)
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -582,6 +593,9 @@ func (s *Server) deleteTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t, err := s.loadTable(r)
+	if err == nil {
+		err = datatables.Writable(t)
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -630,6 +644,9 @@ func (s *Server) addTableColumn(w http.ResponseWriter, r *http.Request) {
 	}
 	c := req.column()
 	t, err := s.loadTable(r)
+	if err == nil {
+		err = datatables.Writable(t)
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -687,6 +704,9 @@ func (s *Server) dropTableColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t, err := s.loadTable(r)
+	if err == nil {
+		err = datatables.Writable(t)
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return

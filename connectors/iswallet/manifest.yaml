@@ -164,6 +164,8 @@ actions:
 triggers:
   outflow_event:
     type: webhook
+    title: Payouts
+    where: "An iswallet webhook subscription for the outflow events; add its signing secret to this connection"
     verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
     events: [wallet.outflow.confirmed, wallet.outflow.failed, wallet.outflow.reversed]
     event_type: =body.event_type

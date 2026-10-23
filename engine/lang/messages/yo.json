@@ -1800,6 +1800,10 @@
       "text": "Nọ́mbà fóònù pẹ̀lú kóòdù orílẹ̀-èdè, bíi 2348012345678",
       "reviewed": false
     },
+    "wa.table.kept": {
+      "text": "Taskiem ló ń tọ́jú {table}: Taskiem nìkan ló ń fi ìlà kún un, a kò sì lè yí wọn padà tàbí pa wọ́n rẹ́ níbí. Àtúnṣe jẹ́ ìlà tuntun.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Àwọn tábìlì dátà nínú {org}:",
       "reviewed": false

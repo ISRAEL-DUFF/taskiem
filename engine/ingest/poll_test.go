@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 )
 
 const onChargeFlow = `{"schema":"wd/v1","id":"wf_thanks","version":1,"name":"thanks",
@@ -93,5 +94,47 @@ func TestPollerDeliversPaystackPayments(t *testing.T) {
 	})
 	if err != nil || errText != nil {
 		t.Errorf("poll state: %v %v", errText, err)
+	}
+}
+
+// The money log's own intake (spec 7.3): with no workflow at all, a
+// connected Paystack is still asked about its payments, and each one is
+// logged once.
+func TestPollerFeedsTheMoneyLog(t *testing.T) {
+	w := newWorld(t)
+	w.h.MoneyLog = &moneylog.Log{Pool: w.DB.App, PII: w.Vault}
+	fake := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/transaction" {
+			_, _ = rw.Write([]byte(`{"status":true,"data":[{"reference":"P-7","amount":120000}]}`))
+			return
+		}
+		_, _ = rw.Write([]byte(`{"status":true,"data":[]}`))
+	}))
+	t.Cleanup(fake.Close)
+	if err := w.Registry.Register(paystack.New(paystack.Options{BaseURL: fake.URL})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Vault.CreateConnection(ctx, w.Tenant, "prod", "paystack", "main", "api_key", map[string]string{"secret_key": "sk_test_x"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	p := &ingest.Poller{Store: w.Store, Registry: w.Registry, Connections: w.Vault, Hooks: w.h, MoneyLog: true,
+		Egress: &egress.Guard{Blocked: func(netip.Addr) bool { return false }}, Now: func() time.Time { return now }}
+	for range 3 {
+		if _, err := p.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+		now = now.Add(6 * time.Minute)
+	}
+	got := w.moneyLog(t)
+	if len(got) != 1 || got[0].reference != "P-7" || got[0].kind != "payment" {
+		t.Fatalf("logged %+v", got)
+	}
+	// Without the log's intake, nothing is asked: no workflow wants it.
+	w2 := newWorld(t)
+	p2 := &ingest.Poller{Store: w2.Store, Registry: w2.Registry, Connections: w2.Vault, Hooks: w2.h}
+	if n, err := p2.Tick(ctx); err != nil || n != 0 {
+		t.Errorf("no targets: %d %v", n, err)
 	}
 }

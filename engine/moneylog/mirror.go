@@ -1,0 +1,286 @@
+package moneylog
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/secrets"
+)
+
+// Table is the kept data table the log is copied to.
+const Table = "money_log"
+
+// Columns are money_log's columns (spec 7.2): what the owner searches,
+// exports and reads from templates. Amounts are kobo, as in the log.
+var Columns = []datatables.Column{
+	{Name: "entry_id", Title: "Entry", Type: "text", Required: true},
+	{Name: "occurred_at", Title: "When it happened", Type: "datetime"},
+	{Name: "recorded_at", Title: "When Taskiem recorded it", Type: "datetime", Required: true},
+	{Name: "direction", Title: "In or out", Type: "text", Required: true},
+	{Name: "kind", Title: "Kind", Type: "text", Required: true},
+	{Name: "amount_kobo", Title: "Amount (kobo)", Type: "integer"},
+	{Name: "fee_kobo", Title: "Fee (kobo)", Type: "integer"},
+	{Name: "currency", Title: "Currency", Type: "text", Required: true},
+	{Name: "status", Title: "Status", Type: "text", Required: true},
+	{Name: "channel", Title: "Channel", Type: "text", Required: true},
+	{Name: "reference", Title: "Reference", Type: "text", Required: true},
+	{Name: "payer", Title: "Payer", Type: "text", Personal: true},
+	{Name: "source", Title: "Source", Type: "text", Required: true},
+	{Name: "note", Title: "Note", Type: "text"},
+	{Name: "corrects", Title: "Corrects entry", Type: "text"},
+}
+
+// Rows writes and finds rows of a tenant's data tables project.
+type Rows interface {
+	Call(ctx context.Context, tenant uuid.UUID, action string, in map[string]any, key string) (map[string]any, error)
+}
+
+// Mirror copies the log's entries to each business's kept money_log
+// table, once each: an entry is looked for by its id before it is
+// inserted, the insert carries a key derived from the id, and the entry
+// is marked copied only after.
+type Mirror struct {
+	Log    *Log
+	Tables *datatables.Service
+	Rows   Rows
+	Logger *slog.Logger
+
+	mu   sync.Mutex
+	kept map[uuid.UUID]bool
+}
+
+func (m *Mirror) log() *slog.Logger {
+	if m.Logger != nil {
+		return m.Logger
+	}
+	return slog.Default()
+}
+
+// Run copies every 30 seconds until ctx ends.
+func (m *Mirror) Run(ctx context.Context) error {
+	for {
+		if err := m.Tick(ctx); err != nil && ctx.Err() == nil {
+			m.log().Error("money log: copying to money_log", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(30 * time.Second):
+		}
+	}
+}
+
+// Tick copies what is waiting for every tenant. A tenant whose table
+// cannot be made or written waits for the next tick; the others go on.
+func (m *Mirror) Tick(ctx context.Context) error {
+	if m.Tables == nil {
+		return nil
+	}
+	rows, err := m.Log.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_money_unmirrored_tenants()`)
+	if err != nil {
+		return err
+	}
+	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	for _, t := range tenants {
+		err := m.Tenant(ctx, t)
+		if errors.Is(err, datatables.ErrUnavailable) {
+			// No data tables for this business: the log keeps its entries,
+			// and copies them once there are.
+			continue
+		}
+		if err != nil && ctx.Err() == nil {
+			m.log().Warn("money log: copying to money_log", "tenant", t, "err", err)
+		}
+	}
+	return nil
+}
+
+// Tenant copies up to 200 of a tenant's waiting entries, oldest first.
+func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
+	if err := m.ensure(ctx, tenant); err != nil {
+		return err
+	}
+	type waiting struct {
+		e     Entry
+		payer map[string]any
+	}
+	var list []waiting
+	err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rs, err := tx.Query(ctx, `SELECT id, occurred_at, recorded_at, direction, kind, amount_kobo, fee_kobo, currency, status, channel, reference,
+			COALESCE(event, ''), payer, source, COALESCE(note, ''), corrects FROM money_entries
+			WHERE tenant_id = $1 AND mirrored_at IS NULL ORDER BY recorded_at, id LIMIT 200`, tenant)
+		if err != nil {
+			return err
+		}
+		list, err = pgx.CollectRows(rs, func(r pgx.CollectableRow) (waiting, error) {
+			var w waiting
+			e := &w.e
+			err := r.Scan(&e.ID, &e.OccurredAt, &e.RecordedAt, &e.Direction, &e.Kind, &e.AmountKobo, &e.FeeKobo, &e.Currency, &e.Status, &e.Channel,
+				&e.Reference, &e.Event, &w.payer, &e.Source, &e.Note, &e.Corrects)
+			return w, err
+		})
+		if err != nil {
+			return err
+		}
+		for i := range list {
+			if list[i].payer == nil {
+				continue
+			}
+			v, err := m.Log.PII.OpenTx(ctx, tx, tenant, list[i].payer)
+			if errors.Is(err, pii.ErrErased) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if p, ok := v.(map[string]any); ok {
+				list[i].e.PayerName, _ = p["name"].(string)
+				list[i].e.PayerAccount, _ = p["account"].(string)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, w := range list {
+		if err := m.copy(ctx, tenant, w.e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Mirror) ensure(ctx context.Context, tenant uuid.UUID) error {
+	m.mu.Lock()
+	done := m.kept[tenant]
+	m.mu.Unlock()
+	if done {
+		return nil
+	}
+	if _, err := m.Tables.EnsureKept(ctx, tenant, Table, Table, Columns); err != nil {
+		return fmt.Errorf("the money_log table: %w", err)
+	}
+	m.mu.Lock()
+	if m.kept == nil {
+		m.kept = map[uuid.UUID]bool{}
+	}
+	m.kept[tenant] = true
+	m.mu.Unlock()
+	return nil
+}
+
+// copy writes one entry to money_log unless it is there, then marks it.
+func (m *Mirror) copy(ctx context.Context, tenant uuid.UUID, e Entry) error {
+	id := e.ID.String()
+	found, err := m.Rows.Call(ctx, tenant, "read_rows", map[string]any{"table": Table, "limit": 1, "select": "entry_id",
+		"filters": []any{map[string]any{"column": "entry_id", "op": "eq", "value": id}}}, "")
+	if err != nil {
+		return err
+	}
+	if rows, _ := found["rows"].([]any); len(rows) == 0 {
+		if _, err := m.Rows.Call(ctx, tenant, "insert_rows", map[string]any{"table": Table, "rows": []any{Row(e)}, "return": "minimal"}, rowKey(e.ID)); err != nil {
+			return err
+		}
+	}
+	return db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE money_entries SET mirrored_at = now() WHERE tenant_id = $1 AND id = $2 AND mirrored_at IS NULL`, tenant, e.ID)
+		return err
+	})
+}
+
+// Row is an entry as a money_log row.
+func Row(e Entry) map[string]any {
+	r := map[string]any{"entry_id": e.ID.String(), "recorded_at": e.RecordedAt.UTC().Format(time.RFC3339Nano), "direction": e.Direction,
+		"kind": e.Kind, "currency": e.Currency, "status": e.Status, "channel": e.Channel, "reference": e.Reference, "source": e.Source}
+	if e.OccurredAt != nil {
+		r["occurred_at"] = e.OccurredAt.UTC().Format(time.RFC3339Nano)
+	}
+	if e.AmountKobo != nil {
+		r["amount_kobo"] = *e.AmountKobo
+	}
+	if e.FeeKobo != nil {
+		r["fee_kobo"] = *e.FeeKobo
+	}
+	payer := e.PayerName
+	if e.PayerAccount != "" {
+		if payer != "" {
+			payer += ", "
+		}
+		payer += e.PayerAccount
+	}
+	if payer != "" {
+		r["payer"] = payer
+	}
+	if e.Note != "" {
+		r["note"] = e.Note
+	}
+	if e.Corrects != nil {
+		r["corrects"] = e.Corrects.String()
+	}
+	return r
+}
+
+// rowKey is the insert's idempotency key: the same entry, the same key.
+func rowKey(id uuid.UUID) string {
+	h := sha256.Sum256([]byte("taskiem money_log " + id.String()))
+	return "tsk-" + base64.RawURLEncoding.EncodeToString(h[:])[:22]
+}
+
+// XenibaseRows is Rows over the xenibase@1 connector on the data tables
+// connection, as Taskiem's own writers call it (not through a workflow
+// step, which refuses kept tables).
+type XenibaseRows struct {
+	Registry *connector.Registry
+	Vault    *secrets.Vault
+	Guard    *egress.Guard
+}
+
+// Call implements Rows.
+func (x *XenibaseRows) Call(ctx context.Context, tenant uuid.UUID, action string, in map[string]any, key string) (map[string]any, error) {
+	reg, err := x.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return nil, err
+	}
+	conn, ok := reg.Get(datatables.Connector + "@1")
+	if !ok {
+		return nil, errors.New("moneylog: the Xenibase connector is not installed")
+	}
+	creds, err := x.Vault.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: "moneylog.mirror"}),
+		tenant, datatables.Environment, conn.Manifest.ID, datatables.ConnectionName)
+	if err != nil {
+		return nil, err
+	}
+	g := x.Guard
+	if g == nil {
+		g = &egress.Guard{}
+	}
+	hc := g.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID}, 30*time.Second)
+	req := connector.Request{Input: in, Credentials: creds, HTTP: hc, Attempt: 1}
+	if key != "" {
+		req.IdempotencyKey, req.KeyFirstSent = key, time.Now()
+	}
+	resp, err := conn.Actions[action].Execute(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	out, _ := resp.Output.(map[string]any)
+	return out, nil
+}

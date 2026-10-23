@@ -8,4 +8,6 @@ A connection is your account with a service. Taskiem keeps it locked away and ne
 
 Your first connection to a service is called **main**, and templates use it unless you choose another.
 
+For a payment service whose money Taskiem keeps a log of (Paystack, Moniepoint, Flutterwave, Moniepoint POS, OPay Business and others), the Connections page shows **Webhook for the money log** below the list, for each live (prod) connection: the address to paste into the service's dashboard, a **Copy** button, what it carries (payments received, transfers that went through …), how Taskiem knows a delivery came from the service, and where in the dashboard it goes. With it, every payment on the account reaches the money log at once, even when no workflow uses it. Where Taskiem also checks the service itself (Paystack, every 5 minutes), the page says so, and the address is optional.
+
 A connection shows which step needs it when something is missing: the draft's list says *"Paystack is not connected"* with a **Connect it** button.

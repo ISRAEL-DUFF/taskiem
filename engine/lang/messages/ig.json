@@ -1800,6 +1800,10 @@
       "text": "Nọmba ekwentị nwere koodu mba, dị ka 2348012345678",
       "reviewed": false
     },
+    "wa.table.kept": {
+      "text": "Taskiem na-edebe {table}: ọ bụ naanị Taskiem na-agbakwunye ahịrị, enweghị ike ịgbanwe ma ọ bụ ihichapụ ha ebe a. Mmezi bụ ahịrị ọhụrụ.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Tebụl data na {org}:",
       "reviewed": false

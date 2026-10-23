@@ -114,6 +114,8 @@ triggers:
   # body together with two headers). Retries carry the same eventId.
   transaction:
     type: webhook
+    title: POS sales
+    where: "Moniepoint Business → Settings → POS Apps Developer → Webhooks → New Subscription: paste it, tick the transaction types, then Get API Secret and add it to this connection"
     verify: { scheme: connector, secret_field: webhook_secret }
     events: [V1_POS_PURCHASE_TRANSACTION, V1_POS_TRANSFER_TRANSACTION, V1_POS_CARD_TRANSFER_TRANSACTION, V1_POS_WITHDRAWAL_TRANSACTION, V1_POS_BILL_PAYMENT_TRANSACTION, V1_POS_COLLECTION_TRANSACTION, V1_POS_PAY_CODE_TRANSACTION, V1_POS_AIRTIME_TRANSACTION, V1_POS_BOOM_TRANSACTION, V1_TRANSFER_TRANSACTION]
     event_type: =body.eventType
@@ -123,3 +125,35 @@ triggers:
     correlation: >-
       =has(body.data.merchantReference) && body.data.merchantReference != null
       ? string(body.data.merchantReference) : ""
+# What a transaction is in Taskiem's words (rule 16,
+# schemas/capabilities-v1.json): a pos.sale, which Taskiem's money log
+# records, declined ones included. Card purchases, withdrawals and
+# transfers to the terminal bring money into the business's account; bill
+# payments, airtime, pay codes and collections are services sold from it,
+# so they are not sales and stay the trigger's own. amount is kobo already;
+# transactionTime is Lagos time ("2026/08/04 09:49:25"); the payer's name
+# is in metaData, JSON as text. The sale's reference is Moniepoint's
+# transactionReference, not the merchantReference the trigger correlates
+# a payment request on.
+events:
+  pos.sale:
+    trigger: transaction
+    when: "=body.eventType in ['V1_POS_PURCHASE_TRANSACTION', 'V1_POS_TRANSFER_TRANSACTION', 'V1_POS_CARD_TRANSFER_TRANSACTION', 'V1_POS_WITHDRAWAL_TRANSACTION', 'V1_TRANSFER_TRANSACTION']"
+    fields:
+      reference: >-
+        =[body.data.?transactionReference.orValue(null)].map(r, r != null && string(r) != '' ? string(r) : string(body.eventId))[0]
+      amount_kobo: =int(body.data.amount)
+      status: >-
+        =[body.data.?transactionStatus.orValue(null)].map(v, v == null ? '' : string(v).upperAscii())
+        .map(s, s in ['COMPLETED', 'APPROVED', 'SUCCESS', 'SUCCESSFUL'] ? 'approved'
+        : s in ['PENDING', ''] ? 'pending' : s.startsWith('REVERS') ? 'reversed' : 'declined')[0]
+      terminal: >-
+        =[body.data.?terminalSerial.orValue(null)].map(t, t != null && string(t) != '' ? dyn(string(t)) : dyn(null))[0]
+      occurred_at: >-
+        =[body.data.?transactionTime.orValue(null)].map(t, t != null && string(t).matches('^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$')
+        ? dyn(string(t).replace('/', '-').replace(' ', 'T') + '+01:00')
+        : t != null && string(t).matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$') ? dyn(string(t)) : dyn(null))[0]
+      method: "=body.eventType in ['V1_POS_TRANSFER_TRANSACTION', 'V1_TRANSFER_TRANSACTION'] ? 'transfer' : 'card'"
+      payer_name: >-
+        =[body.data.?metaData.orValue(null)].map(m, m != null && type(m) == string && string(m).startsWith('{') ? parseJSON(string(m)) : dyn({}))
+        .map(j, type(j) == map && has(j.customerName) && type(j.customerName) == string && j.customerName != '' ? dyn(j.customerName) : dyn(null))[0]

@@ -54,6 +54,9 @@ func (x *XenibaseStock) target(ctx context.Context, tenant uuid.UUID) (table, co
 		if err != nil {
 			return err
 		}
+		if err := datatables.Writable(t); err != nil {
+			return err // a kept table is never a catalogue (api/storefront.go): never write one
+		}
 		table, column = t.Name, sf.CatalogueColumns.Stock
 		return nil
 	})

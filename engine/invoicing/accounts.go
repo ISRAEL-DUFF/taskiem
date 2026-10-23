@@ -14,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 )
 
 // Paying an invoice (decision 0045, T4): one-time account numbers
@@ -421,7 +422,16 @@ func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Re
 			return err
 		}
 		if r.Account != uuid.Nil {
-			_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account)
+			if _, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account); err != nil {
+				return err
+			}
+		}
+		if s.MoneyLog != nil {
+			// The same movement the rail's payment.received event is: one
+			// entry whichever is heard first.
+			amount := r.AmountKobo
+			_, _, err = s.MoneyLog.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: r.Connection,
+				Reference: r.PaymentID, Event: "payment.received", AmountKobo: &amount, Source: "lookup", Note: "Invoice " + x.Number})
 		}
 		return err
 	})

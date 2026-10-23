@@ -52,6 +52,8 @@ Moniepoint posts one event per terminal transaction to the subscription's URL. R
 
 [`pos-sales-record`](../templates.md) keeps every event in the `pos_sales` table; `pos-daily-summary`, `pos-sale-alert` and `pos-cashup` are the evening summary, the big-sale and declined-payment alert, and the end-of-day cash-up over that table. All four make the tables they need when they are used.
 
+**Money log.** Card purchases, withdrawals and transfers to the terminal are also the normalised event `pos.sale` (reference `transactionReference`, `amount_kobo`, `status` approved, pending, declined or reversed, terminal, time, card or transfer, the payer's name from `metaData`), so they reach Taskiem's money log as well as `pos_sales`, and a `capability_event` trigger can start on them; bill payments, airtime, pay codes and collections are services sold from the account and are not sales.
+
 ## To confirm with Moniepoint before go-live
 
 1. **Card purchases in the webhook.** The documentation lists `V1_POS_PURCHASE_TRANSACTION`; a third-party guide shows only Withdrawal, Transfer and POS Transfers as subscription choices. A sandbox transaction, or a written answer from pos-integrations@moniepoint.com, settles whether walk-up card sales are delivered.

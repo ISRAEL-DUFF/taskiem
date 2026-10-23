@@ -220,6 +220,8 @@ triggers:
   # One webhook URL per Flutterwave account receives every event.
   event:
     type: webhook
+    title: Payments and transfers
+    where: "Flutterwave dashboard → Settings → Webhooks: paste it as the URL, set a secret hash, and add the same hash to this connection"
     verify: { scheme: header_secret, header: verif-hash, secret_field: webhook_hash }
     events: [transfer.completed, charge.completed]
     event_type: =body.event

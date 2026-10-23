@@ -2249,6 +2249,11 @@
       "reviewed": true,
       "context": "Under a phone column's question"
     },
+    "wa.table.kept": {
+      "text": "{table} is kept by Taskiem: rows are added by Taskiem and cannot be changed or deleted here. Corrections are new rows.",
+      "reviewed": true,
+      "context": "add to a table Taskiem keeps (the money log)"
+    },
     "wa.table.list_head": {
       "text": "Data tables in {org}:",
       "reviewed": true,

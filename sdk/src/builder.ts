@@ -76,7 +76,7 @@ export function connectorEvent(config: { connector: string; trigger: string; eve
   return { type: "connector_event", config };
 }
 /** Starts on a payment event from whichever rail is connected (decision 0044). */
-export function capabilityEvent(config: { events: ("payout.settled" | "payout.failed" | "payout.reversed" | "payment.received" | "virtual_account.credited")[]; connection?: string } & Values): Trigger {
+export function capabilityEvent(config: { events: ("payout.settled" | "payout.failed" | "payout.reversed" | "payment.received" | "virtual_account.credited" | "pos.sale")[]; connection?: string } & Values): Trigger {
   return { type: "capability_event", config };
 }
 export function manual(config?: Values): Trigger {

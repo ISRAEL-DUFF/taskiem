@@ -146,7 +146,7 @@ Each capability has one input and one output shape, defined by Taskiem in `schem
 | `virtual_account` | `customer {name, email, phone, bvn}` | `account_number`, `bank_name`, `account_name`, `reference` (what `virtual_account.credited` carries) | idempotent preferred; unsafe allowed and declared |
 | `refund` | `payment_id`, `amount_kobo` (optional: partial), `reason` | `refund_id`, `status` (`refunded` \| `pending` \| `failed`), `amount_kobo` | idempotent or reconcilable |
 
-Events, normalised the same way (§4.5): `payout.settled`, `payout.failed`, `payout.reversed`, `payment.received`, `payment.returned` (added by T1), `virtual_account.credited`.
+Events, normalised the same way (§4.5): `payout.settled`, `payout.failed`, `payout.reversed`, `payment.received`, `payment.returned` (added by T1), `virtual_account.credited`, `pos.sale` (added by T2: a POS terminal's transaction with its `status`, approved, pending, declined or reversed, from `moniepoint_pos@1` and `opay_business@1`).
 
 No capability takes a reference: the reference a rail needs is the idempotency key Taskiem derives for the step (one for each step of a composite), which is what makes a retry or a resend the same payment.
 

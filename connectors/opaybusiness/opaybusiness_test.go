@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/israel-duff/taskiem/connectors/internal/fixture"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 )
@@ -467,6 +468,17 @@ func TestDeliveriesAreVerifiedAndDecrypted(t *testing.T) {
 	if m["payNo"] != "2334345345345245" || m["amount"] != "300.00" || m["sn"] != "POS-SN-001" || m["status"] != "SUCCESS" {
 		t.Errorf("decrypted %v", m)
 	}
+	// The decrypted notification is the normalised sale; the envelope is none.
+	act := func(b any) map[string]any {
+		return map[string]any{"body": b, "headers": map[string]any{}, "query": map[string]any{}}
+	}
+	if name, fields, err := c.Manifest.EventOf("payment", act(plain)); err != nil || name != "pos.sale" ||
+		fields["reference"] != "2334345345345245" || fields["amount_kobo"] != int64(30000) || fields["settled_kobo"] != int64(29850) {
+		t.Errorf("decrypted notification as an event: %s %v %v", name, fields, err)
+	}
+	if _, _, err := c.Manifest.EventOf("payment", act(body)); !errors.Is(err, connector.ErrNoEvent) {
+		t.Errorf("the encrypted envelope as an event: %v", err)
+	}
 	// Another business's client auth key, or private key: refused.
 	other := map[string]string{}
 	for k, v := range cr {
@@ -523,4 +535,8 @@ func TestRoundTripsOPaysOwnExamples(t *testing.T) {
 	if _, err := ParsePublicKey(pemPub); err != nil {
 		t.Errorf("the PEM reads back: %v", err)
 	}
+}
+
+func TestCapabilities(t *testing.T) {
+	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
 }

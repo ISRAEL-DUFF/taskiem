@@ -50,6 +50,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/reach"
@@ -623,7 +624,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	tell.Set(n)
 	// Invoices (decision 0045): their pages are on the form host.
-	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Logger: log.With("component", "invoices")}
+	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Logger: log.With("component", "invoices")}
 	// A customer who asked for the business's updates on a chat app gets
 	// its invoices there too, with their buttons (decision 0045 point 7).
 	e.invoices.Reach, e.invoices.Chat = e.reach, n.Chat
@@ -635,6 +636,11 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	e.invoices.Rails = &invoicing.RegistryRails{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log, Loopback: connectorLoopback(reg, log)}}
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
 	return e, nil
+}
+
+// moneyLog is the money log's writer (decision 0045).
+func (e *engine) moneyLog() *moneylog.Log {
+	return &moneylog.Log{Pool: e.pool, PII: e.vault}
 }
 
 // connectorLoopback lets a connector the operator pointed at a loopback
@@ -667,7 +673,7 @@ func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]str
 }
 
 func (e *engine) hooks() *ingest.Handler {
-	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log,
+	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
 		Egress: &egress.Guard{Logger: e.log}}
 }
 
@@ -817,6 +823,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
+		srv.HooksURL = cfg.HooksURL
 		if srv.OAuthClients, err = oauthClients(e.registry, log); err != nil {
 			return err
 		}
@@ -973,10 +980,13 @@ func serve(ctx context.Context, args []string) error {
 		// they expire (docs/data-tables.md#token-renewal).
 		// Connector events without a webhook: Taskiem asks the provider
 		// (Paystack) itself for businesses that never set one up.
-		poller := &ingest.Poller{Store: e.store, Registry: e.registry, Connections: e.vault, Hooks: e.hooks(), Egress: &egress.Guard{Logger: log}, Logger: log}
+		poller := &ingest.Poller{Store: e.store, Registry: e.registry, Connections: e.vault, Hooks: e.hooks(), MoneyLog: true, Egress: &egress.Guard{Logger: log}, Logger: log}
 		// Pages closed for the day open again the next morning.
 		reopener := &storefront.Reopener{Pool: e.pool, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run)
+		// The money log, copied to each business's kept money_log table.
+		mirror := &moneylog.Mirror{Log: e.moneyLog(), Tables: e.tables(), Logger: log.With("component", "moneylog"),
+			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

@@ -12640,7 +12640,7 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: >-
-            A table of that name exists, or the project is being created (`tables_provisioning`, with Retry-After), or the platform's Xenibase organisation is at its project quota (`xenibase_quota`).
+            A table of that name exists, or the name is one Taskiem keeps for its own table (`table_kept`, as `money_log`), or the project is being created (`tables_provisioning`, with Retry-After), or the platform's Xenibase organisation is at its project quota (`xenibase_quota`).
           content:
             application/json:
               schema:
@@ -12739,6 +12739,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
     delete:
@@ -12792,6 +12799,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/tables/{id}/columns:
@@ -12838,7 +12852,7 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: >-
-            The table already has that column.
+            The table already has that column. Or `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -12917,6 +12931,13 @@ paths:
         '503':
           description: >-
             `tables_unavailable`: no platform Xenibase is configured and the organisation brought no project; `tables_project_failed`; `xenibase_unavailable` (with Retry-After).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -13040,7 +13061,7 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: >-
-            A unique constraint (`xenibase_conflict`).
+            A unique constraint (`xenibase_conflict`). Or `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -13166,6 +13187,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
     delete:
@@ -13211,6 +13239,13 @@ paths:
         '404':
           description: >-
             No such table or row.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -13278,6 +13313,13 @@ paths:
         '404':
           description: >-
             No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -19439,6 +19481,47 @@ components:
               items:
                 $ref: '#/components/schemas/RemoteSubscription'
           additionalProperties: false
+        money_log_webhooks:
+          type: array
+          description: For a prod connection of a rail whose events the money log records, the addresses to set in the provider's dashboard so Taskiem hears them without a workflow, one per trigger (triggers Taskiem registers itself are left out). Never carries a secret.
+          items:
+            $ref: '#/components/schemas/MoneyLogWebhook'
+      additionalProperties: false
+    MoneyLogWebhook:
+      type: object
+      required:
+      - trigger
+      - title
+      - url
+      - events
+      - verification
+      - where
+      properties:
+        trigger:
+          type: string
+        title:
+          type: string
+          description: What it hears, in plain words.
+        url:
+          type: string
+          description: The absolute address, under the server's hooks URL.
+        events:
+          type: array
+          items:
+            type: string
+          description: The normalised events it carries, e.g. `payment.received`.
+        verification:
+          type: string
+          description: How Taskiem checks deliveries, naming the connection field used (never its value).
+        placeholder:
+          type: string
+          description: When the address must carry a secret, the part of `url` to replace with the connection field Taskiem does not show again.
+        where:
+          type: string
+          description: Where in the provider's dashboard it is pasted.
+        poll_minutes:
+          type: integer
+          description: Taskiem also asks the provider this often, so setting the address is optional.
       additionalProperties: false
     ConnectionList:
       type: object
@@ -23633,6 +23716,7 @@ components:
       - postgres_table
       - connection
       - created_by
+      - kept_by
       - created_at
       - updated_at
       properties:
@@ -23660,6 +23744,10 @@ components:
           description: Estimated, when Xenibase answered.
         created_by:
           type: string
+        kept_by:
+          type: [string, 'null']
+          description: >-
+            The Taskiem feature that keeps the table (`money_log`), or null for an ordinary table. A kept table's rows are added only by Taskiem: its rows, columns, title and the table itself cannot be changed or deleted through the API, chat or workflows (409 `table_kept`), and it is read, searched and exported like any table.
         created_at:
           $ref: '#/components/schemas/Timestamp'
         updated_at:

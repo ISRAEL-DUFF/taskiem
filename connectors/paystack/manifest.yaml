@@ -279,6 +279,8 @@ actions:
 triggers:
   transfer_event:
     type: webhook
+    title: Transfers you send
+    where: "Paystack keeps one webhook address: give it the payments one. Transfers still reach Taskiem, which checks Paystack for them."
     verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
     events: [transfer.success, transfer.failed, transfer.reversed]
     event_type: =body.event
@@ -290,6 +292,8 @@ triggers:
     poll: { action: list_transfers, since: from, items: =output.data, event: "='transfer.' + item.status", every: 5m }
   charge_event:
     type: webhook
+    title: Payments you receive
+    where: "Paystack dashboard → Settings → API Keys & Webhooks → Live Webhook URL (Paystack keeps one address: use this one)"
     verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
     events: [charge.success, bank.transfer.rejected]
     event_type: =body.event
