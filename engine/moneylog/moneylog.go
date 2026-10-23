@@ -45,18 +45,18 @@ type Entry struct {
 	Reference string `json:"reference"`
 	Event     string `json:"event,omitempty"`
 	// PayerName and PayerAccount are personal data: sealed when written.
-	PayerName    string     `json:"payer_name,omitempty"`
-	PayerAccount string     `json:"payer_account,omitempty"`
-	Source       string     `json:"source"` // event, lookup, upload, entered
-	Note         string     `json:"note,omitempty"`
+	PayerName    string `json:"payer_name,omitempty"`
+	PayerAccount string `json:"payer_account,omitempty"`
+	Source       string `json:"source"` // event, lookup, upload, entered
+	Note         string `json:"note,omitempty"`
 	// What a person typed or a statement said (T6): the line's
 	// description, and an expense's vendor and category; EnteredBy is who
 	// entered or uploaded it.
-	Description string `json:"description,omitempty"`
-	Vendor      string `json:"vendor,omitempty"`
-	Category    string `json:"category,omitempty"`
-	EnteredBy   string `json:"entered_by,omitempty"`
-	Corrects     *uuid.UUID `json:"corrects,omitempty"`
+	Description string     `json:"description,omitempty"`
+	Vendor      string     `json:"vendor,omitempty"`
+	Category    string     `json:"category,omitempty"`
+	EnteredBy   string     `json:"entered_by,omitempty"`
+	Corrects    *uuid.UUID `json:"corrects,omitempty"`
 }
 
 // Key is what makes an entry one movement (and status): where, what and
