@@ -823,6 +823,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
+		srv.HooksURL = cfg.HooksURL
 		if srv.OAuthClients, err = oauthClients(e.registry, log); err != nil {
 			return err
 		}

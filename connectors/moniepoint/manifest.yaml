@@ -271,6 +271,8 @@ triggers:
   # the URLs set under Developer → Webhook URLs; all can point here.
   event:
     type: webhook
+    title: Payments, transfers and account credits
+    where: "Monnify dashboard → Developer → Webhook URLs: paste it as the Transaction Completion and Disbursement URLs"
     verify: { scheme: hmac_sha512, header: monnify-signature, secret_field: secret_key }
     events: [SUCCESSFUL_TRANSACTION, REJECTED_PAYMENT, SUCCESSFUL_DISBURSEMENT, FAILED_DISBURSEMENT, REVERSED_DISBURSEMENT, SUCCESSFUL_REFUND, FAILED_REFUND, SETTLEMENT, MANDATE_UPDATE]
     event_type: =body.eventType

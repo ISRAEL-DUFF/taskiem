@@ -26,7 +26,7 @@ If Taskiem cannot record an event, it answers the payment service with an error,
 
 ## Hearing from each connection
 
-- **Webhooks:** the payment service sends its events to Taskiem's webhook URL for the connection, set in the service's dashboard.
+- **Webhooks:** on the Connections page, each prod connection of a payment service shows its address under **Webhook for the money log**, with where to paste it in the service's dashboard. Paystack takes one address per account: paste the payments one; transfers still arrive because Taskiem checks Paystack every few minutes.
 - **Polling:** for Paystack, Taskiem also asks for new payments and transfers every few minutes, for every connected account, so a business that never set the webhook up is still recorded. The first look starts when the connection is made; nothing earlier is replayed.
 
 ## Where to see it
