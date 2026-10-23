@@ -456,6 +456,17 @@ The daily summary, the Money page, monthly exports (log, invoices, journal).
 
 Start page entries, the AI builder's knowledge of invoices and the log (an `invoice` request uses `invoices@1`, never a data table with a status column), eval cases, `invoice-follow-up` superseded.
 
+**Built** (T8): the builder's instructions gain rule 17 (invoices to customers are `invoices@1`'s, sent, chased and receipted with its actions, paid only by payments counted towards them and waited for with a `signal` step on `invoice.paid`; never a data table with a status or paid column, never a payment link or account number made per invoice) and rule 12 describes the money log's kept tables, `money_log` and `money_matches`, with their columns, to read and never write; "billing" and "owe" reach `invoices@1` in retrieval, and the best starting template brings its connectors' schemas; the builder warns of a proposed invoice table with a status (`invoice_as_table`) and never proposes the money log's tables. Templates can `require` words (or phrases) a goal must name: the three invoice templates require "invoice" (`send-invoice` also "bill a customer", "bill a client" or "bill someone"), which makes them distinctive and adds 8 to their score, and their keywords now include "invoice" (`send-invoice`), "overdue", "unpaid", "remind" and "nudge" (`chase-overdue-invoices`) and "receipts" (`invoice-paid-receipt`). `invoice-follow-up` is superseded by `chase-overdue-invoices`. Seven builder eval cases in `evals/builder/invoices.jsonl` (an invoice sent on WhatsApp, a customer billed, overdue invoices chased, a receipt when paid, who paid from the money log, money not matched, POS totals from the log), and the offline baseline regenerated ([AI](../ai.md#what-it-does), [templates](../templates.md)). Differences from §11's T8:
+
+- **The data-table check is a warning, not a correction.** A proposed table named with `invoice` and a status or paid column is flagged for the reviewer, as the other table warnings are; it is not fed back to the model, and an existing table, or one named otherwise, is not checked. A hand-made payment link per invoice is in the instructions only: from the definition it cannot be told from a storefront's link per order.
+- **The money log in the eval runs without data tables**: the eval's context has no tables, so the model is told the log's tables may be read before they appear in its context.
+- **`sme-chase-unpaid-invoice` expects `invoices@1`**, no longer a wait and a branch: with invoices in Taskiem, "remind them if they have not paid" is `chase-overdue-invoices`.
+- **Invoice requests naming another system** (a Remita RRR paid, an invoice in MySQL or a billing system) now meet the invoice templates too; the offline heuristic then starts from one, which moved its ungated connector recall on two such cases from 0.33 to 0. Over the 249 cases the old baseline shares, the gated measures did not move and connector recall went from 0.537 to 0.536, step recall from 0.744 to 0.741 and trigger accuracy from 0.554 to 0.550 (cases that started from `invoice-follow-up` now start elsewhere or from nothing).
+
+Also built for T8 (Start page and chat):
+
+- Start page entries and the other languages' chat command words: noted here by their change.
+
 ## 12. Order and timing
 
 | Order | Milestone | Why here |
