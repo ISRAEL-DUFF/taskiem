@@ -438,6 +438,8 @@ The first five leaks, their lifecycle and the amount recovered; statement upload
 - **POS sales and cash are not "money in with nothing to match"**: they are takings, not money owed.
 - **A duplicate is one movement reported as two kinds of event** on one connection; the log already keeps each event once, and statement lines without a reference repeat by nature.
 - **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`) for now.
+- **Expenses in chat**: "spent 12k on diesel at Total", "expense 5000 fuel", "cash in 20,000 till", confirmed with Yes and recorded once; categories from a short word list.
+- **`invoice-paid-receipt` runs hourly** over invoices paid in the last 3 hours, because nothing starts a run when an invoice is paid (the `invoice.paid` signal only resumes runs waiting on it); `chase-overdue-invoices` runs daily. Both use a new read-only `invoices@1` action, `list`. Their keywords are only "chase" and "receipt" so the offline builder's other cases are not taken over.
 
 ### T7: summaries and exports (M)
 

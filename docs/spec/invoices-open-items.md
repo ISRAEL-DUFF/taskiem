@@ -67,6 +67,12 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5 and T6 are built. T7 and T8 are
 - **Leaks are not sent in chat** and have no daily summary yet (T7).
 - **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`); a money permission of its own may be wanted.
 - **Agreed fees are set by hand** per connection; no rail's published rates are filled in.
+- **Templates:**
+  - `invoice-paid-receipt` sends within the hour, not at once, since no trigger starts a run when an invoice is paid; if more than two hourly runs in a row are missed, invoices paid early in the gap get no receipt. A trigger on `invoice.paid` would fix both.
+  - `chase-overdue-invoices` skips straight to the owner's note for an invoice already past all its reminder windows when the workflow first runs.
+  - Their keywords are "chase" and "receipt" only: "remind customers about overdue invoices" still offers `invoice-follow-up` (T8).
+  - Adding them moved the offline builder eval's ungated `connector_recall` from 0.549 to 0.537 (five cases scoring just under the template threshold now start from a template); the gated measures did not regress.
+- **Expenses in chat** use a short fixed word list for categories, and record the member's bare user id, as the API does, where the invoice chat records `user:<id>`.
 - **Web app (Money pages):**
   - no list of accounts statements were uploaded for, so the account field suggests only those seen in fee rates and unmatched money;
   - assigning a leak to someone else needs `member.manage` (the members list); others can assign to themselves or no one, and leaks show member ids, not names;
