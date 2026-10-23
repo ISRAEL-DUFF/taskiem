@@ -37,7 +37,9 @@ People with `invoice.manage` work through the suggestions:
 
 People with `invoice.read` can see the suggestions.
 
-Over the API: `GET /v1/money/suggestions`, `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` with `{"invoice": "INV-0104"}`.
+In the web app this is **Invoices > To match**: one card per payment with the invoices it may be for, and below them, under **No invoice suggested**, money that had nothing to suggest or whose suggestions were all turned down.
+
+Over the API: `GET /v1/money/suggestions`, `GET /v1/money/unmatched` (the payments left for a person), `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` with `{"invoice": "INV-0104"}`.
 
 ## Automatic matching
 

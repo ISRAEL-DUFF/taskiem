@@ -23,6 +23,7 @@ import (
 func (s *Server) matchingRoutes(r chi.Router) {
 	read, manage := s.need(PermInvoiceRead), s.need(PermInvoiceManage)
 	r.With(read).Get("/money/suggestions", s.listSuggestions)
+	r.With(read).Get("/money/unmatched", s.listUnmatched)
 	r.With(manage, s.tenantWide).Post("/money/suggestions/{id}/confirm", s.confirmSuggestion)
 	r.With(manage, s.tenantWide).Post("/money/suggestions/{id}/reject", s.rejectSuggestion)
 	r.With(manage, s.tenantWide).Post("/money/entries/{id}/match", s.matchEntry)

@@ -1390,6 +1390,33 @@ paths:
                       $ref: '#/components/schemas/MoneySuggestion'
         default:
           $ref: '#/components/responses/Error'
+  /v1/money/unmatched:
+    get:
+      operationId: listUnmatchedMoney
+      tags:
+      - Invoices
+      summary: Money received that matching left for a person
+      description: "Payments with no open suggestion that count towards no invoice, newest first, to match by hand (docs/matching.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The payments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payments]
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UnmatchedMoney'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/money/suggestions/{id}/confirm:
     post:
       operationId: confirmMoneySuggestion
@@ -16819,6 +16846,26 @@ components:
         status:
           type: string
           enum: [open]
+        amount_kobo:
+          type:
+          - integer
+          - 'null'
+        channel:
+          type: string
+        reference:
+          type: string
+        received_at:
+          type: string
+          format: date-time
+        kind:
+          type: string
+    UnmatchedMoney:
+      type: object
+      required: [entry_id, amount_kobo, channel, reference, received_at, kind]
+      properties:
+        entry_id:
+          type: string
+          format: uuid
         amount_kobo:
           type:
           - integer

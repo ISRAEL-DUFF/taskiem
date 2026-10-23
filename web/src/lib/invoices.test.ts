@@ -35,6 +35,8 @@ import {
   channelWords,
   entryMatchPath,
   groupSuggestions,
+  unmatchedPayments,
+  UNMATCHED_PATH,
   kindWords,
   matchedLine,
   openInvoices,
@@ -439,5 +441,14 @@ describe("settings", () => {
     expect(settingsProblem({ ...f, prefix: "ABCDEFGHIJKLM" }, saved)).toMatch(/12 characters/);
     expect(settingsProblem({ ...f, prefix: "IN V" }, saved)).toMatch(/letters, digits/);
     expect(settingsProblem({ ...f, prefix: "INV/2026_" }, saved)).toBeNull();
+  });
+});
+
+describe("payments left to match by hand", () => {
+  it("become cards with nothing suggested", () => {
+    const u = { entry_id: "e9", amount_kobo: 120000, channel: "paystack/main", reference: "R-9", received_at: "2026-10-23T10:00:00Z", kind: "payment" };
+    expect(unmatchedPayments([u])).toEqual([{ ...u, candidates: [] }]);
+    expect(unmatchedPayments(null)).toEqual([]);
+    expect(UNMATCHED_PATH).toBe("/v1/money/unmatched");
   });
 });

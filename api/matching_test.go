@@ -72,6 +72,11 @@ func TestMatchingAPI(t *testing.T) {
 	if l := owner.must(200, "GET", "/v1/money/suggestions", nil)["suggestions"].([]any); len(l) != 0 {
 		t.Fatalf("left %v", l)
 	}
+	// Turned down, it waits to be matched by hand.
+	waiting := viewer.must(200, "GET", "/v1/money/unmatched", nil)["payments"].([]any)
+	if len(waiting) != 1 || waiting[0].(map[string]any)["entry_id"] != b["entry_id"] {
+		t.Fatalf("unmatched %v", waiting)
+	}
 	// By hand, then undone: the invoice moves back and keeps both rows.
 	entry := b["entry_id"].(string)
 	owner.must(400, "POST", "/v1/money/entries/"+entry+"/match", map[string]any{})
@@ -83,6 +88,9 @@ func TestMatchingAPI(t *testing.T) {
 	undone := owner.must(200, "POST", "/v1/invoices/"+second+"/payments/"+pays[0].(map[string]any)["id"].(string)+"/undo", nil)
 	if undone["status"] != "sent" || len(undone["payments"].([]any)) != 2 {
 		t.Errorf("undone %v", undone)
+	}
+	if l := owner.must(200, "GET", "/v1/money/unmatched", nil)["payments"].([]any); len(l) != 1 {
+		t.Errorf("undone payment not waiting: %v", l)
 	}
 	// The setting.
 	st := owner.must(200, "GET", "/v1/invoice-settings", nil)

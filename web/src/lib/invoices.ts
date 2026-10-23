@@ -537,6 +537,23 @@ export function groupSuggestions(list: MoneySuggestion[] | null | undefined): Wa
   return out;
 }
 
+export const UNMATCHED_PATH = "/v1/money/unmatched";
+
+/** Money received that matching left for a person (GET /v1/money/unmatched). */
+export interface UnmatchedMoney {
+  entry_id: string;
+  amount_kobo: number | null;
+  channel: string;
+  reference: string;
+  received_at: string;
+  kind: string;
+}
+
+/** Unmatched payments as To match cards, with nothing suggested. */
+export function unmatchedPayments(list: UnmatchedMoney[] | null | undefined): WaitingPayment[] {
+  return (list ?? []).map((u) => ({ ...u, candidates: [] }));
+}
+
 /** An amount that may be missing, in words. */
 export const amountWords = (kobo: number | null | undefined) => (kobo === null || kobo === undefined ? "Amount not known" : naira(kobo));
 

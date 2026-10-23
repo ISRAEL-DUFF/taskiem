@@ -8,6 +8,9 @@ import {
   INVOICE_FILTERS,
   INVOICE_LIMITS,
   SUGGESTIONS_PATH,
+  UNMATCHED_PATH,
+  unmatchedPayments,
+  type UnmatchedMoney,
   amountWords,
   channelWords,
   entryMatchPath,
@@ -100,14 +103,18 @@ export function InvoiceMatch() {
   const { can } = useAuth();
   const manage = invoiceAccess(can).manage;
   const list = useLoad(() => get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH), []);
+  const left = useLoad(() => get<{ payments: UnmatchedMoney[] | null }>(UNMATCHED_PATH), []);
   useLiveRefresh(list.reload);
+  useLiveRefresh(left.reload);
   // The invoices a payment can be matched to by hand.
   const invoices = useLoad(() => (manage ? get<{ invoices: CustomerInvoice[] | null }>("/v1/invoices") : Promise.resolve({ invoices: [] })), [manage]);
   const [said, setSaid] = useState("");
   const waiting = list.data ? groupSuggestions(list.data.suggestions) : undefined;
+  const unmatched = unmatchedPayments(left.data?.payments);
   const done = (line: string) => {
     setSaid(line);
     list.reload();
+    left.reload();
     invoices.reload();
   };
   return (
@@ -122,12 +129,22 @@ export function InvoiceMatch() {
       </div>
       <ErrorBox error={list.error} />
       {waiting === undefined && !list.error && <Skeleton rows={3} label="Loading payments to match…" />}
-      {waiting && waiting.length === 0 && (
+      {waiting && waiting.length === 0 && unmatched.length === 0 && (
         <EmptyState icon="invoices">Nothing to match. Payments into the accounts Taskiem gave are matched to their invoice as they come in.</EmptyState>
       )}
       {waiting?.map((p) => (
         <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} onDone={done} />
       ))}
+      <ErrorBox error={left.error} />
+      {unmatched.length > 0 && (
+        <>
+          <h2>No invoice suggested</h2>
+          <p className="hint">Money that came in with nothing to suggest, or whose suggestions were all turned down. Match it by hand if you know the invoice.</p>
+          {unmatched.map((p) => (
+            <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} onDone={done} />
+          ))}
+        </>
+      )}
       {!manage && waiting && waiting.length > 0 && <p className="hint">You can see these. Someone who manages invoices can match them.</p>}
     </>
   );
@@ -157,7 +174,7 @@ function WaitingCard({ payment: p, manage, open, onDone }: { payment: WaitingPay
         <dt>Reference</dt>
         <dd id={`${title}-ref`}>{p.reference || <span className="hint">None</span>}</dd>
       </dl>
-      <h3>May be for</h3>
+      {p.candidates.length > 0 && <h3>May be for</h3>}
       <ul className="match-candidates">
         {p.candidates.map((c) => {
           const w = scoreWords(c.score);
