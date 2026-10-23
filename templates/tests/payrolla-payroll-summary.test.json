@@ -1,0 +1,141 @@
+{
+  "schema": "wd-test/v1",
+  "template": "payrolla-payroll-summary",
+  "params": {
+    "business_name": "Chuks Electronics",
+    "notify_role": "finance"
+  },
+  "cases": [
+    {
+      "name": "the owner and finance hear who was paid and who was not, and why",
+      "trigger": {
+        "event": "run.partially_completed",
+        "body": {
+          "id": "01J9Z0000000000000000000E1",
+          "type": "run.partially_completed",
+          "api_version": "2026-11-01",
+          "created_at": "2026-10-28T10:00:00Z",
+          "company_id": "co",
+          "data": {
+            "run": {
+              "run_id": "run-10",
+              "period_start": "2026-10-01",
+              "period_end": "2026-10-31",
+              "pay_date": "2026-10-28",
+              "run_type": "REGULAR",
+              "status": "PARTIALLY_COMPLETED",
+              "employee_count": 2,
+              "total_gross_kobo": 50000000,
+              "total_net_kobo": 42000000
+            },
+            "paid_count": 1,
+            "failed_count": 1
+          }
+        }
+      },
+      "mocks": {
+        "lines": {
+          "output": {
+            "lines": [
+              {
+                "payslip_id": "ps-1",
+                "employee_id": "emp-1",
+                "first_name": "Ngozi",
+                "last_name": "Eze",
+                "net_kobo": 18500000,
+                "disbursement_status": "CONFIRMED",
+                "reference": "NIP-1"
+              },
+              {
+                "payslip_id": "ps-2",
+                "employee_id": "emp-2",
+                "first_name": "Tunde",
+                "last_name": "Bello",
+                "net_kobo": 23500000,
+                "disbursement_status": "FAILED",
+                "reference": "NIP-2",
+                "reason": "beneficiary account is dormant"
+              }
+            ]
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "lines": {
+            "run_id": "run-10"
+          },
+          "tell": {
+            "to": "role",
+            "role": "finance",
+            "message": "Chuks Electronics payroll to 2026-10-31: 1 paid (NGN 185000). Not paid: Tunde Bello (beneficiary account is dormant)."
+          }
+        }
+      }
+    },
+    {
+      "name": "a payroll paid in full says so",
+      "trigger": {
+        "event": "run.completed",
+        "body": {
+          "id": "01J9Z0000000000000000000E1",
+          "type": "run.completed",
+          "api_version": "2026-11-01",
+          "created_at": "2026-10-28T10:00:00Z",
+          "company_id": "co",
+          "data": {
+            "run": {
+              "run_id": "run-10",
+              "period_start": "2026-10-01",
+              "period_end": "2026-10-31",
+              "pay_date": "2026-10-28",
+              "run_type": "REGULAR",
+              "status": "COMPLETED",
+              "employee_count": 2,
+              "total_gross_kobo": 50000000,
+              "total_net_kobo": 42000000
+            },
+            "paid_count": 1,
+            "failed_count": 0
+          }
+        }
+      },
+      "mocks": {
+        "lines": {
+          "output": {
+            "lines": [
+              {
+                "payslip_id": "ps-1",
+                "employee_id": "emp-1",
+                "first_name": "Ngozi",
+                "last_name": "Eze",
+                "net_kobo": 18500000,
+                "disbursement_status": "CONFIRMED",
+                "reference": "NIP-1"
+              }
+            ]
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "tell": {
+            "message": "Chuks Electronics payroll to 2026-10-31: 1 paid (NGN 185000). Everyone was paid."
+          }
+        }
+      }
+    }
+  ]
+}

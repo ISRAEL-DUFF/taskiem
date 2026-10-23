@@ -1,6 +1,6 @@
 # Rails and products: specification and build plan
 
-Status: **R1 to R5, R8 and R9 built**, R6 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
+Status: **R1 to R5, R7, R8 and R9 built**, R6 planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
 
 Taskiem connects to two kinds of service. **Rails** move money (Paystack, iswallet, Moniepoint and the rest) and Taskiem builds products on them as workflows. **Products** (Payrolla, and later accounting, HR and POS back offices) already run a whole process, and Taskiem connects to them, embeds their interface, and works around them. This document specifies both halves, and the retirement of the Payrolla integration that mixed them up.
 
@@ -612,6 +612,15 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 **Build:** the seven templates of §6.4 (`payrolla-approve-by-chat` only if Payrolla's API can approve), each with template tests on fake Payrolla events, Start page entries when a business has Payrolla connected, AI eval cases ("tell my staff on WhatsApp when Payrolla pays them").
 
 **Done when:** a Payrolla customer gets WhatsApp payslip messages and an owner summary from templates alone, and no template has a money-moving step.
+
+**Built** (R7): the seven templates of §6.4 on Payrolla's real events (`templates/library/payrolla-*.json`, each with workflow tests on fake Payrolla events in `templates/tests/`); a template `product` field, so retrieval offers them only for goals that name Payrolla and above the rest, and the Start page only to businesses with a Payrolla connection; `TestProductTemplatesMoveNoMoney` (capability steps and rail steps only read); the builder eval rule `no_payment_with_product` with five Payrolla cases (baselines regenerated). Differences from §6.4:
+
+- **`payrolla-approve-by-chat` sends Payrolla's approval link** instead of approving: Payrolla has no approve API, by design, so the approver confirms in Payrolla with their own factor. It starts on `run.computed` and reminds once the day before payday.
+- **Payrolla's event names:** `run.completed` and `run.partially_completed` instead of `payroll.paid` and `payroll.failed`; the people not paid come from `get_run_lines`.
+- **The payslip link is a second message**, so a payslip link Payrolla refuses (`PAYSLIP_LINKS_DISABLED`) never stops the employee hearing they were paid.
+- **The payday check reads a connected payments account** (`balance`): Payrolla does not expose its wallet's balance.
+- **The lock reminder runs each morning** for approved payrolls due within a set number of days, rather than at a cut-off Payrolla does not publish.
+- **Recording keeps every report:** a payroll reported again after a reversal adds new rows; the latest are the outcome.
 
 ### R8: Retire Payrolla-as-a-rail (S; after R3)
 

@@ -1,0 +1,83 @@
+{
+  "schema": "wd-test/v1",
+  "template": "payrolla-lock-reminder",
+  "params": {},
+  "cases": [
+    {
+      "name": "an approved payroll near payday that is not locked is reminded",
+      "trigger": {
+        "scheduled_time": "2026-10-27T08:00:00Z"
+      },
+      "mocks": {
+        "runs": {
+          "output": {
+            "runs": [
+              {
+                "run_id": "run-10",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "pay_date": "2026-10-28",
+                "run_type": "REGULAR",
+                "status": "APPROVED",
+                "employee_count": 2,
+                "total_gross_kobo": 50000000,
+                "total_net_kobo": 42000000
+              }
+            ],
+            "next_cursor": ""
+          }
+        },
+        "remind": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "runs": {
+            "status": "APPROVED"
+          },
+          "remind": {
+            "to": "role",
+            "role": "admin",
+            "message": "These payrolls are approved but not locked, and payday is close: to 2026-10-31 (payday 2026-10-28). Lock them in Payrolla so they can be paid."
+          }
+        }
+      }
+    },
+    {
+      "name": "nothing near payday reminds nobody",
+      "trigger": {
+        "scheduled_time": "2026-10-01T08:00:00Z"
+      },
+      "mocks": {
+        "runs": {
+          "output": {
+            "runs": [
+              {
+                "run_id": "run-10",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "pay_date": "2026-10-28",
+                "run_type": "REGULAR",
+                "status": "APPROVED",
+                "employee_count": 2,
+                "total_gross_kobo": 50000000,
+                "total_net_kobo": 42000000
+              }
+            ],
+            "next_cursor": ""
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "remind": "skipped"
+        }
+      }
+    }
+  ]
+}

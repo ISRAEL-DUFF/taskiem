@@ -128,8 +128,8 @@ func TestRules(t *testing.T) {
 	reg := registry(t)
 	good, bad := mustLoad(t, goodPayout), mustLoad(t, badPayout)
 	for _, name := range ruleNames() {
-		if name == "capability_when_unnamed" {
-			continue // its good definition pays by capability: below
+		if name == "capability_when_unnamed" || name == "no_payment_with_product" {
+			continue // their good definitions are below
 		}
 		if ok, why := rules[name](good, reg); !ok {
 			t.Errorf("%s fails the good definition: %s", name, why)
@@ -152,6 +152,27 @@ func TestCapabilityWhenUnnamed(t *testing.T) {
 	}
 	if ok, _ := rules["capability_when_unnamed"](mustLoad(t, goodPayout), reg); ok {
 		t.Error("a Paystack payment passes")
+	}
+}
+
+// A workflow on a product's events tells and links; one that also pays,
+// or that uses no product at all, does not pass.
+func TestNoPaymentWithProduct(t *testing.T) {
+	reg := registry(t)
+	tells := mustLoad(t, `{"schema":"wd/v1","id":"wf_p","version":1,"name":"P",
+	  "trigger":{"type":"connector_event","config":{"connector":"payrolla@1","trigger":"payout_event","events":["payout.succeeded"]}},
+	  "steps":[{"id":"tell","type":"connector","connector":"notify@1","action":"message","input":{"phone":"=trigger.body.data.employee_id","message":"Paid"}}]}`)
+	if ok, why := rules["no_payment_with_product"](tells, reg); !ok {
+		t.Errorf("a product workflow that tells: %s", why)
+	}
+	pays := mustLoad(t, `{"schema":"wd/v1","id":"wf_p","version":1,"name":"P",
+	  "trigger":{"type":"connector_event","config":{"connector":"payrolla@1","trigger":"payout_event","events":["payout.failed"]}},
+	  "steps":[{"id":"again","type":"capability","uses":"pay_bank","input":{"amount_kobo":100,"bank_code":"058","account_number":"0123456789","account_name":"A","narration":"Again"}}]}`)
+	if ok, _ := rules["no_payment_with_product"](pays, reg); ok {
+		t.Error("a product workflow that pays passes")
+	}
+	if ok, _ := rules["no_payment_with_product"](mustLoad(t, goodPayout), reg); ok {
+		t.Error("a workflow with no product passes")
 	}
 }
 

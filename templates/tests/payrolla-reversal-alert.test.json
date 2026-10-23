@@ -1,0 +1,73 @@
+{
+  "schema": "wd-test/v1",
+  "template": "payrolla-reversal-alert",
+  "params": {},
+  "cases": [
+    {
+      "name": "the owner and the payroll admin hear whose pay came back",
+      "trigger": {
+        "event": "payout.reversed",
+        "body": {
+          "id": "01J9Z0000000000000000000E1",
+          "type": "payout.reversed",
+          "api_version": "2026-11-01",
+          "created_at": "2026-10-28T10:00:00Z",
+          "company_id": "co",
+          "data": {
+            "run_id": "run-10",
+            "payslip_id": "ps-1",
+            "employee_id": "emp-1",
+            "amount_kobo": 18500000,
+            "method": "BANK",
+            "reference": "NIP-1"
+          }
+        }
+      },
+      "mocks": {
+        "employee": {
+          "output": {
+            "employee": {
+              "id": "emp-1",
+              "first_name": "Ngozi",
+              "last_name": "Eze",
+              "email": "ngozi@chuks.ng",
+              "phone": "+2348030000001",
+              "department": "Sales",
+              "status": "ACTIVE",
+              "employment_type": "SALARIED",
+              "start_date": "2024-02-01",
+              "pay_method": "BANK"
+            }
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_team": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "message": {
+            "text": "Ngozi Eze's pay of NGN 185000 came back from the bank (ref NIP-1), so they are not paid. Check their account details in Payrolla and pay them again there."
+          }
+        },
+        "inputs": {
+          "tell_owner": {
+            "to": "owner"
+          },
+          "tell_team": {
+            "to": "role",
+            "role": "admin"
+          }
+        }
+      }
+    }
+  ]
+}

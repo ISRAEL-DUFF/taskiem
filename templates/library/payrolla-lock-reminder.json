@@ -1,0 +1,139 @@
+{
+  "id": "payrolla-lock-reminder",
+  "title": "Remind the payroll admin to lock the payroll",
+  "summary": "Every morning, remind the payroll admin about any approved payroll in Payrolla that is not locked yet as payday gets close.",
+  "description": "A payroll in Payrolla is paid only after it is locked. Every morning, Taskiem looks for approved payrolls due in the next few days that are not locked yet, and reminds the payroll admin to lock them in Payrolla. It never locks or pays anything itself. Needs Payrolla's Read payroll permission.",
+  "category": "payroll",
+  "tags": [
+    "payrolla",
+    "reminder",
+    "schedule"
+  ],
+  "keywords": [
+    "payrolla",
+    "lock",
+    "locked",
+    "cut-off"
+  ],
+  "connectors": [
+    "payrolla@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "payrolla_connection",
+      "type": "connection",
+      "connector": "payrolla",
+      "title": "Payrolla connection",
+      "description": "The Payrolla company this follows: its key, from Payrolla → Settings → Connected apps.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "days_before",
+      "type": "integer",
+      "title": "Days ahead",
+      "description": "How many days before payday to start reminding.",
+      "required": false,
+      "default": 2,
+      "example": 2,
+      "minimum": 1,
+      "maximum": 14
+    },
+    {
+      "name": "remind_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the reminder goes out, Lagos time.",
+      "required": false,
+      "default": "09:00",
+      "example": "09:00"
+    },
+    {
+      "name": "notify_role",
+      "type": "string",
+      "title": "Who else is told",
+      "description": "The role of whoever locks payrolls in Payrolla.",
+      "required": false,
+      "default": "admin",
+      "example": "admin",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payrollaLockReminder",
+    "version": 1,
+    "name": "Remind to lock the payroll",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{remind_time:minute}} {{remind_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "runs",
+        "type": "connector",
+        "name": "Find approved payrolls",
+        "connector": "payrolla@1",
+        "action": "list_runs",
+        "connection": "{{payrolla_connection}}",
+        "input": {
+          "status": "APPROVED",
+          "limit": 50
+        }
+      },
+      {
+        "id": "due",
+        "type": "transform",
+        "name": "Pick those due soon",
+        "needs": [
+          "runs"
+        ],
+        "config": {
+          "output": {
+            "runs": "=(has(steps.runs.output.runs) ? steps.runs.output.runs : []).filter(r, timestamp(r.pay_date + 'T23:59:59Z') - timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) <= duration(string({{days_before}} * 24) + 'h')).map(r, 'to ' + r.period_end + ' (payday ' + r.pay_date + ')')"
+          }
+        }
+      },
+      {
+        "id": "remind",
+        "type": "connector",
+        "name": "Remind the payroll admin",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "due"
+        ],
+        "input": {
+          "to": "role",
+          "role": "{{notify_role}}",
+          "title": "Lock the payroll",
+          "message": "='These payrolls are approved but not locked, and payday is close: ' + steps.due.output.runs.join(', ') + '. Lock them in Payrolla so they can be paid.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "remind_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        },
+        "when": "=size(steps.due.output.runs) > 0"
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  },
+  "product": "payrolla"
+}

@@ -1,0 +1,265 @@
+{
+  "id": "payrolla-record-payroll",
+  "title": "Record each Payrolla payroll in tables",
+  "summary": "When Payrolla finishes paying a payroll, add it and each person's payment to tables your accountant can read.",
+  "description": "When Payrolla finishes paying a payroll, Taskiem adds a row for it to the Payrolla payrolls table (period, payday, people, totals, paid and not paid) and a row for each person's payment to the Payrolla payments table (name, net pay, status, reference, reason). If a payment comes back later, Payrolla reports the payroll again and new rows record it, so the latest rows are the outcome. No bank details are ever recorded. Needs Payrolla's Read payroll permission.",
+  "category": "payroll",
+  "tags": [
+    "payrolla",
+    "bookkeeping",
+    "data table"
+  ],
+  "keywords": [
+    "payrolla",
+    "accountant"
+  ],
+  "connectors": [
+    "payrolla@1",
+    "xenibase@1"
+  ],
+  "params": [
+    {
+      "name": "payrolla_connection",
+      "type": "connection",
+      "connector": "payrolla",
+      "title": "Payrolla connection",
+      "description": "The Payrolla company this follows: its key, from Payrolla → Settings → Connected apps.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
+  ],
+  "tables": [
+    {
+      "name": "payrolla_payrolls",
+      "title": "Payrolla payrolls",
+      "description": "One row each time Payrolla reports a payroll finished.",
+      "columns": [
+        {
+          "name": "run_id",
+          "title": "Payroll",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "period_end",
+          "title": "Period to",
+          "type": "text"
+        },
+        {
+          "name": "pay_date",
+          "title": "Payday",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "people",
+          "title": "People",
+          "type": "integer"
+        },
+        {
+          "name": "total_net_naira",
+          "title": "Net total (naira)",
+          "type": "number"
+        },
+        {
+          "name": "paid",
+          "title": "Paid",
+          "type": "integer"
+        },
+        {
+          "name": "not_paid",
+          "title": "Not paid",
+          "type": "integer"
+        },
+        {
+          "name": "event_id",
+          "title": "Payrolla event",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "payrolla_payments",
+      "title": "Payrolla payments",
+      "description": "One row per person each time Payrolla reports a payroll finished.",
+      "columns": [
+        {
+          "name": "run_id",
+          "title": "Payroll",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "employee",
+          "title": "Name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "net_naira",
+          "title": "Net pay (naira)",
+          "type": "number"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "reference",
+          "title": "Reference",
+          "type": "text"
+        },
+        {
+          "name": "reason",
+          "title": "Reason",
+          "type": "text"
+        },
+        {
+          "name": "event_id",
+          "title": "Payrolla event",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payrollaRecordPayroll",
+    "version": 1,
+    "name": "Record each payroll",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "payrolla@1",
+        "trigger": "run_event",
+        "events": [
+          "run.completed",
+          "run.partially_completed"
+        ],
+        "connection": "{{payrolla_connection}}"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "run": {
+                "type": "object",
+                "properties": {
+                  "run_id": {
+                    "type": "string"
+                  },
+                  "period_start": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "period_end": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "pay_date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "employee_count": {
+                    "type": "integer"
+                  },
+                  "total_net_kobo": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "paid_count": {
+                "type": "integer"
+              },
+              "failed_count": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "lines",
+        "type": "connector",
+        "name": "Read how each payment went",
+        "connector": "payrolla@1",
+        "action": "get_run_lines",
+        "connection": "{{payrolla_connection}}",
+        "input": {
+          "run_id": "=trigger.body.data.run.run_id"
+        }
+      },
+      {
+        "id": "record_run",
+        "type": "connector",
+        "name": "Record the payroll",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "payrolla_payrolls",
+          "return": "minimal",
+          "row": {
+            "run_id": "=trigger.body.data.run.run_id",
+            "period_end": "=trigger.body.data.run.period_end",
+            "pay_date": "=trigger.body.data.run.pay_date",
+            "status": "=trigger.body.data.run.status",
+            "people": "=trigger.body.data.run.employee_count",
+            "total_net_naira": "=double(trigger.body.data.run.total_net_kobo) / 100.0",
+            "paid": "=trigger.body.data.paid_count",
+            "not_paid": "=trigger.body.data.failed_count",
+            "event_id": "=trigger.body.id"
+          }
+        },
+        "effect": {
+          "idempotency_seed": "='payrolla-run:' + trigger.body.id"
+        }
+      },
+      {
+        "id": "record_lines",
+        "type": "connector",
+        "name": "Record each person's payment",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "lines"
+        ],
+        "when": "=size(steps.lines.output.lines) > 0",
+        "input": {
+          "table": "payrolla_payments",
+          "return": "minimal",
+          "rows": "=steps.lines.output.lines.map(l, {'run_id': trigger.body.data.run.run_id, 'employee': l.first_name + ' ' + l.last_name, 'net_naira': double(l.net_kobo) / 100.0, 'status': l.disbursement_status, 'reference': has(l.reference) ? l.reference : '', 'reason': has(l.reason) ? l.reason : '', 'event_id': trigger.body.id})"
+        },
+        "effect": {
+          "idempotency_seed": "='payrolla-lines:' + trigger.body.id"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  },
+  "product": "payrolla"
+}

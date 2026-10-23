@@ -49,14 +49,17 @@ type templateView struct {
 	NeedsDeveloper bool `json:"needs_developer"`
 	// SupersededBy names the template that replaces this one, which is
 	// no longer offered.
-	SupersededBy string          `json:"superseded_by,omitempty"`
-	Definition   json.RawMessage `json:"definition,omitempty"`
+	SupersededBy string `json:"superseded_by,omitempty"`
+	// Product is the product the template works around (payrolla): the
+	// Start page offers it to businesses that connected the product.
+	Product    string          `json:"product,omitempty"`
+	Definition json.RawMessage `json:"definition,omitempty"`
 }
 
 func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templateView {
 	v := templateView{ID: t.ID, Title: t.Title, Summary: t.Summary, Description: t.Description, Category: t.Category,
 		Tags: nonNil(t.Tags), Connectors: nonNil(t.Connectors), Variables: nonNil(t.Variables), Params: nonNil(t.Params),
-		Tables: nonNil(t.Tables), Steps: []wdtext.Line{}, Available: true, SupersededBy: t.SupersededBy}
+		Tables: nonNil(t.Tables), Steps: []wdtext.Line{}, Available: true, SupersededBy: t.SupersededBy, Product: t.Product}
 	for _, c := range t.Connectors {
 		if uses, ok := strings.CutPrefix(c, templates.CapabilityPrefix); ok {
 			if !railCan(reg, uses) {

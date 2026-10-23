@@ -54,6 +54,8 @@ export interface Template {
   tables?: TemplateTable[];
   /** The template that replaces this one, which is no longer offered. */
   superseded_by?: string;
+  /** The product it works around (payrolla): offered to businesses that connected it. */
+  product?: string;
 }
 
 export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];

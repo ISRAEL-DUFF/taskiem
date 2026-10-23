@@ -1,0 +1,165 @@
+{
+  "schema": "wd-test/v1",
+  "template": "payrolla-payday-check",
+  "params": {},
+  "cases": [
+    {
+      "name": "a payroll due soon with too little money warns the owner how much to top up",
+      "trigger": {
+        "scheduled_time": "2026-10-26T07:00:00Z"
+      },
+      "mocks": {
+        "runs": {
+          "output": {
+            "runs": [
+              {
+                "run_id": "run-10",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "pay_date": "2026-10-28",
+                "run_type": "REGULAR",
+                "status": "APPROVED",
+                "employee_count": 2,
+                "total_gross_kobo": 50000000,
+                "total_net_kobo": 42000000
+              },
+              {
+                "run_id": "run-11",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "pay_date": "2026-11-28",
+                "run_type": "REGULAR",
+                "status": "COMPUTED",
+                "employee_count": 2,
+                "total_gross_kobo": 50000000,
+                "total_net_kobo": 42000000
+              }
+            ],
+            "next_cursor": ""
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 30000000,
+            "currency": "NGN"
+          }
+        },
+        "warn": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "due": {
+            "total_kobo": 42000000,
+            "count": 1
+          }
+        },
+        "inputs": {
+          "runs": {
+            "status": "COMPUTED,APPROVED,LOCKED"
+          },
+          "warn": {
+            "message": "Payroll due soon needs NGN 420000, but the account holds NGN 300000. Top up NGN 120000 before payday."
+          }
+        }
+      }
+    },
+    {
+      "name": "enough money says nothing",
+      "trigger": {
+        "scheduled_time": "2026-10-26T07:00:00Z"
+      },
+      "mocks": {
+        "runs": {
+          "output": {
+            "runs": [
+              {
+                "run_id": "run-10",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "pay_date": "2026-10-28",
+                "run_type": "REGULAR",
+                "status": "APPROVED",
+                "employee_count": 2,
+                "total_gross_kobo": 50000000,
+                "total_net_kobo": 42000000
+              },
+              {
+                "run_id": "run-11",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "pay_date": "2026-11-28",
+                "run_type": "REGULAR",
+                "status": "COMPUTED",
+                "employee_count": 2,
+                "total_gross_kobo": 50000000,
+                "total_net_kobo": 42000000
+              }
+            ],
+            "next_cursor": ""
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 90000000,
+            "currency": "NGN"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "warn": "skipped"
+        }
+      }
+    },
+    {
+      "name": "nothing due soon checks no balance",
+      "trigger": {
+        "scheduled_time": "2026-10-01T07:00:00Z"
+      },
+      "mocks": {
+        "runs": {
+          "output": {
+            "runs": [
+              {
+                "run_id": "run-10",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "pay_date": "2026-10-28",
+                "run_type": "REGULAR",
+                "status": "APPROVED",
+                "employee_count": 2,
+                "total_gross_kobo": 50000000,
+                "total_net_kobo": 42000000
+              },
+              {
+                "run_id": "run-11",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "pay_date": "2026-11-28",
+                "run_type": "REGULAR",
+                "status": "COMPUTED",
+                "employee_count": 2,
+                "total_gross_kobo": 50000000,
+                "total_net_kobo": 42000000
+              }
+            ],
+            "next_cursor": ""
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "balance": "skipped",
+          "warn": "skipped"
+        }
+      }
+    }
+  ]
+}

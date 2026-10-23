@@ -34,6 +34,7 @@ var rules = map[string]rule{
 	"no_inline_secrets":       ruleNoInlineSecrets,
 	"reach_by_phone":          ruleReachByPhone,
 	"capability_when_unnamed": ruleCapabilityWhenUnnamed,
+	"no_payment_with_product": ruleNoPaymentWithProduct,
 }
 
 // hygiene rules apply to every case.
@@ -419,6 +420,31 @@ func ruleCapabilityWhenUnnamed(def *wd.Definition, reg connector.Lookup) (bool, 
 	})
 	if n == 0 {
 		return false, "no step moves money"
+	}
+	return why == "", why
+}
+
+// When the business's payroll (or another process) runs in a product it
+// connected (Payrolla: decision 0044), the product pays: the workflow uses
+// the product's events or reads, and moves no money itself.
+func ruleNoPaymentWithProduct(def *wd.Definition, reg connector.Lookup) (bool, string) {
+	product := false
+	if ref, ok := def.Trigger.Config["connector"].(string); ok {
+		if c, ok := reg.Get(ref); ok && c.Manifest.KindOf() == "product" {
+			product = true
+		}
+	}
+	why := ""
+	walk(def.Steps, func(st *wd.Step) {
+		if c, ok := reg.Get(st.Connector); ok && c.Manifest.KindOf() == "product" {
+			product = true
+		}
+		if isPaymentWrite(reg, st) {
+			why = "step " + st.ID + " moves money; the product pays, so the workflow only tells, records or links"
+		}
+	})
+	if !product {
+		return false, "the workflow uses no product connector (its events or reads)"
 	}
 	return why == "", why
 }
