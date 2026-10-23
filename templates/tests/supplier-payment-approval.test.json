@@ -1,0 +1,192 @@
+{
+  "schema": "wd-test/v1",
+  "template": "supplier-payment-approval",
+  "params": {},
+  "cases": [
+    {
+      "name": "an approved invoice is paid once to the account, and the owner told when it settles",
+      "trigger": {
+        "body": {
+          "supplier": "Kano Grains",
+          "bank_code": "058",
+          "account_number": "0123456789",
+          "amount_naira": 450000,
+          "invoice_number": "INV-77"
+        }
+      },
+      "mocks": {
+        "check_name": {
+          "output": {
+            "account_name": "KANO GRAINS LTD"
+          }
+        },
+        "text_paid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "text_settled": {
+          "output": {
+            "people": 1
+          }
+        },
+        "text_rejected": {
+          "output": {
+            "people": 1
+          }
+        },
+        "pay_supplier": {
+          "output": {
+            "payout_id": "po_77",
+            "status": "pending"
+          }
+        },
+        "settle": {
+          "output": {
+            "status": "settled"
+          }
+        }
+      },
+      "approvals": {
+        "approve_payment": {
+          "decision": "approved",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "check_name": {
+            "bank_code": "058",
+            "account_number": "0123456789"
+          },
+          "pay_supplier": {
+            "amount_kobo": 45000000,
+            "bank_code": "058",
+            "account_number": "0123456789",
+            "account_name": "KANO GRAINS LTD",
+            "narration": "Invoice INV-77"
+          },
+          "text_settled": {
+            "message": "Payment for invoice INV-77 to Kano Grains (NGN 450000): paid"
+          }
+        },
+        "steps": {
+          "text_paid": "skipped",
+          "text_rejected": "skipped"
+        },
+        "calls": {
+          "pay_supplier": 1
+        }
+      }
+    },
+    {
+      "name": "a payment the rail settles at once is reported at once",
+      "trigger": {
+        "body": {
+          "supplier": "Kano Grains",
+          "bank_code": "058",
+          "account_number": "0123456789",
+          "amount_naira": 450000,
+          "invoice_number": "INV-77"
+        }
+      },
+      "mocks": {
+        "check_name": {
+          "output": {
+            "account_name": "KANO GRAINS LTD"
+          }
+        },
+        "text_paid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "text_settled": {
+          "output": {
+            "people": 1
+          }
+        },
+        "text_rejected": {
+          "output": {
+            "people": 1
+          }
+        },
+        "pay_supplier": {
+          "output": {
+            "payout_id": "po_77",
+            "status": "settled"
+          }
+        }
+      },
+      "approvals": {
+        "approve_payment": {
+          "decision": "approved",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "settle": "skipped",
+          "text_paid": "completed"
+        },
+        "inputs": {
+          "text_paid": {
+            "message": "Payment for invoice INV-77 to Kano Grains (NGN 450000): paid"
+          }
+        }
+      }
+    },
+    {
+      "name": "a rejected invoice pays nothing",
+      "trigger": {
+        "body": {
+          "supplier": "Kano Grains",
+          "bank_code": "058",
+          "account_number": "0123456789",
+          "amount_naira": 450000,
+          "invoice_number": "INV-77"
+        }
+      },
+      "mocks": {
+        "check_name": {
+          "output": {
+            "account_name": "KANO GRAINS LTD"
+          }
+        },
+        "text_paid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "text_settled": {
+          "output": {
+            "people": 1
+          }
+        },
+        "text_rejected": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "approvals": {
+        "approve_payment": {
+          "decision": "rejected",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_supplier": "skipped",
+          "text_rejected": "completed"
+        },
+        "calls": {
+          "pay_supplier": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,474 @@
+{
+  "id": "payment-link-per-order",
+  "title": "Collect a payment with a link",
+  "summary": "Make a payment link for an order, send it to the customer, remind them once, and record the order as paid when the money arrives.",
+  "description": "Start it with an order's reference, the customer and the amount (from a form, another system or by hand). It makes a payment page with whichever payments account you connected, sends the customer the link, and waits. When the customer pays, they are thanked and the order is recorded as paid. If they have not paid in time, they are reminded once; if they still do not pay, the order is recorded as unpaid and the owner is told. One order never gets two links, however often it is started. Works with Paystack or Moniepoint.",
+  "category": "payments",
+  "tags": [
+    "payments",
+    "customers",
+    "data table"
+  ],
+  "keywords": [
+    "payment link",
+    "pay link",
+    "link to pay",
+    "payment page"
+  ],
+  "connectors": [
+    "notify@1",
+    "xenibase@1",
+    "capability:collect_link"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Named in the messages the customer gets.",
+      "required": true,
+      "example": "Ada's Kitchen",
+      "max_length": 60
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "collect_link"
+      ],
+      "title": "Collect with",
+      "description": "The payments account that makes the payment page: any you connected that can.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "pay_hours",
+      "type": "integer",
+      "title": "Hours before the reminder",
+      "description": "How long the customer has to pay before they are reminded, and again after the reminder.",
+      "required": false,
+      "default": 24,
+      "example": 24,
+      "minimum": 1,
+      "maximum": 168
+    }
+  ],
+  "tables": [
+    {
+      "name": "order_payments",
+      "title": "Order payments",
+      "description": "One row per order: whether the customer paid its link.",
+      "columns": [
+        {
+          "name": "order_ref",
+          "title": "Order",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "customer",
+          "title": "Customer",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "amount_naira",
+          "title": "Amount (naira)",
+          "type": "number"
+        },
+        {
+          "name": "status",
+          "title": "Status",
+          "type": "text"
+        },
+        {
+          "name": "payment_id",
+          "title": "Payment reference",
+          "type": "text"
+        },
+        {
+          "name": "paid_at",
+          "title": "Paid at",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_paymentLinkPerOrder",
+    "version": 1,
+    "name": "Send a payment link for an order",
+    "description": "Collects an order's payment with a link, with one reminder, through the connected payments account.",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "order",
+          "name",
+          "email",
+          "amount_naira"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "order": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "title": "Order"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "title": "Customer's name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 200,
+            "title": "Customer's email"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Customer's phone",
+            "description": "For WhatsApp or SMS; the email is used when it is left out."
+          },
+          "amount_naira": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100000000,
+            "title": "Amount (naira)"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "link",
+        "type": "capability",
+        "uses": "collect_link",
+        "name": "Make the payment link",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "amount_kobo": "=int(math.round(double(trigger.body.amount_naira) * 100.0))",
+          "customer": {
+            "name": "=trigger.body.name",
+            "email": "=trigger.body.email"
+          },
+          "description": "='Order ' + trigger.body.order"
+        },
+        "effect": {
+          "idempotency_seed": "='order:' + trigger.body.order"
+        }
+      },
+      {
+        "id": "send_link",
+        "type": "connector",
+        "name": "Send the customer the link",
+        "connector": "notify@1",
+        "action": "message",
+        "needs": [
+          "settings",
+          "link"
+        ],
+        "input": {
+          "phone": "=has(trigger.body.phone) ? trigger.body.phone : ''",
+          "email": "=trigger.body.email",
+          "message": "=steps.settings.output.business_name + ': to pay for order ' + trigger.body.order + ' (NGN ' + string(trigger.body.amount_naira) + '), use ' + steps.link.output.payment_url",
+          "about": "your order"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "send_link_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "paid",
+        "type": "capability",
+        "uses": "await_payment",
+        "name": "Wait for the customer to pay",
+        "needs": [
+          "send_link"
+        ],
+        "timeout": "{{pay_hours}}h",
+        "input": {
+          "payment_id": "=steps.link.output.payment_id"
+        }
+      },
+      {
+        "id": "thank",
+        "type": "connector",
+        "name": "Thank the customer",
+        "connector": "notify@1",
+        "action": "message",
+        "needs": [
+          "settings",
+          "paid"
+        ],
+        "input": {
+          "phone": "=has(trigger.body.phone) ? trigger.body.phone : ''",
+          "email": "=trigger.body.email",
+          "message": "=steps.settings.output.business_name + ': thank you, we have your payment for order ' + trigger.body.order + '.'",
+          "about": "your order"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "thank_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        },
+        "when": "=steps.paid.output.status == 'paid'"
+      },
+      {
+        "id": "record_paid",
+        "type": "connector",
+        "name": "Record the order as paid",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "paid"
+        ],
+        "when": "=steps.paid.output.status == 'paid'",
+        "input": {
+          "table": "order_payments",
+          "return": "minimal",
+          "row": {
+            "order_ref": "=trigger.body.order",
+            "customer": "=trigger.body.name",
+            "amount_naira": "=double(trigger.body.amount_naira)",
+            "status": "paid",
+            "payment_id": "=steps.link.output.payment_id",
+            "paid_at": "=has(steps.paid.output.paid_at) ? steps.paid.output.paid_at : ''"
+          }
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_paid_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.record_paid.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "remind",
+        "type": "connector",
+        "name": "Remind the customer once",
+        "connector": "notify@1",
+        "action": "message",
+        "needs": [
+          "settings",
+          "paid"
+        ],
+        "input": {
+          "phone": "=has(trigger.body.phone) ? trigger.body.phone : ''",
+          "email": "=trigger.body.email",
+          "message": "=steps.settings.output.business_name + ': a reminder that order ' + trigger.body.order + ' (NGN ' + string(trigger.body.amount_naira) + ') is not paid yet: ' + steps.link.output.payment_url",
+          "about": "your order"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "remind_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        },
+        "when": "=steps.paid.output.status != 'paid'"
+      },
+      {
+        "id": "paid_late",
+        "type": "capability",
+        "uses": "await_payment",
+        "name": "Wait again after the reminder",
+        "needs": [
+          "remind"
+        ],
+        "timeout": "{{pay_hours}}h",
+        "input": {
+          "payment_id": "=steps.link.output.payment_id"
+        }
+      },
+      {
+        "id": "thank_late",
+        "type": "connector",
+        "name": "Thank the customer",
+        "connector": "notify@1",
+        "action": "message",
+        "needs": [
+          "settings",
+          "paid_late"
+        ],
+        "input": {
+          "phone": "=has(trigger.body.phone) ? trigger.body.phone : ''",
+          "email": "=trigger.body.email",
+          "message": "=steps.settings.output.business_name + ': thank you, we have your payment for order ' + trigger.body.order + '.'",
+          "about": "your order"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "thank_late_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        },
+        "when": "=steps.paid_late.output.status == 'paid'"
+      },
+      {
+        "id": "record_late",
+        "type": "connector",
+        "name": "Record the order as paid",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "paid_late"
+        ],
+        "when": "=steps.paid_late.output.status == 'paid'",
+        "input": {
+          "table": "order_payments",
+          "return": "minimal",
+          "row": {
+            "order_ref": "=trigger.body.order",
+            "customer": "=trigger.body.name",
+            "amount_naira": "=double(trigger.body.amount_naira)",
+            "status": "paid",
+            "payment_id": "=steps.link.output.payment_id",
+            "paid_at": "=has(steps.paid_late.output.paid_at) ? steps.paid_late.output.paid_at : ''"
+          }
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_late_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.record_late.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "record_unpaid",
+        "type": "connector",
+        "name": "Record the order as unpaid",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "paid_late"
+        ],
+        "when": "=steps.paid_late.output.status != 'paid'",
+        "input": {
+          "table": "order_payments",
+          "return": "minimal",
+          "row": {
+            "order_ref": "=trigger.body.order",
+            "customer": "=trigger.body.name",
+            "amount_naira": "=double(trigger.body.amount_naira)",
+            "status": "unpaid",
+            "payment_id": "=steps.link.output.payment_id",
+            "paid_at": ""
+          }
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_unpaid_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.record_unpaid.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_unpaid",
+        "type": "connector",
+        "name": "Tell the owner the order is unpaid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "paid_late"
+        ],
+        "when": "=steps.paid_late.output.status != 'paid'",
+        "input": {
+          "to": "owner",
+          "title": "='Order ' + trigger.body.order + ' not paid'",
+          "message": "='Order ' + trigger.body.order + ' for ' + trigger.body.name + ' (NGN ' + string(trigger.body.amount_naira) + ') is still not paid after a reminder.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_unpaid_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15d"
+    }
+  }
+}

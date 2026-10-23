@@ -1,0 +1,37 @@
+{
+  "schema": "wd-test/v1",
+  "template": "weekly-balance-email",
+  "params": {},
+  "cases": [
+    {
+      "name": "the owner gets the week's balance",
+      "trigger": {
+        "scheduled_time": "2026-10-26T08:00:00Z"
+      },
+      "mocks": {
+        "balance": {
+          "output": {
+            "available_kobo": 123456700,
+            "currency": "NGN"
+          }
+        },
+        "email_owner": {
+          "output": {
+            "id": "m1"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "email_owner": {
+            "text": "Balance this week (NGN): 1234567"
+          }
+        }
+      }
+    }
+  ],
+  "env": {
+    "owner_email": "owner@example.com"
+  }
+}

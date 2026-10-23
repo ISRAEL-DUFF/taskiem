@@ -1976,6 +1976,10 @@
       "text": "Arrange the data for the next steps",
       "reviewed": false
     },
+    "wd.trigger.capability_event": {
+      "text": "When your payment account report: {events}",
+      "reviewed": false
+    },
     "wd.trigger.database_change": {
       "text": "When one row for database change",
       "reviewed": false

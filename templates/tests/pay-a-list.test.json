@@ -1,0 +1,452 @@
+{
+  "schema": "wd-test/v1",
+  "template": "pay-a-list",
+  "params": {},
+  "cases": [
+    {
+      "name": "pays each valid row of the batch once, after approval",
+      "trigger": {
+        "body": {
+          "batch": "OCT-COMMS"
+        }
+      },
+      "mocks": {
+        "read_list": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "batch": "OCT-COMMS",
+                "name": "Ada Obi",
+                "amount_naira": 25000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi"
+              },
+              {
+                "id": 2,
+                "batch": "OCT-COMMS",
+                "name": "Bola Ade",
+                "amount_naira": 15000.5,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade"
+              },
+              {
+                "id": 3,
+                "batch": "OCT-COMMS",
+                "name": "Chidi Eze",
+                "amount_naira": 9000,
+                "bank_code": "058",
+                "account_number": "12345",
+                "account_name": "Chidi Eze"
+              }
+            ]
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 10000000,
+            "currency": "NGN"
+          }
+        },
+        "record": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        },
+        "pay_all[0].pay": {
+          "output": {
+            "payout_id": "po_1",
+            "status": "settled"
+          }
+        },
+        "pay_all[1].pay": {
+          "output": {
+            "payout_id": "po_2",
+            "status": "pending"
+          }
+        },
+        "pay_all[1].settle": {
+          "output": {
+            "status": "settled",
+            "settled_at": "2026-10-23T10:00:00Z"
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all[0].settle": "skipped",
+          "pay_all[1].settle": "completed",
+          "tell_rejected": "skipped"
+        },
+        "inputs": {
+          "read_list": {
+            "table": "payees",
+            "filters": [
+              {
+                "column": "batch",
+                "op": "eq",
+                "value": "OCT-COMMS"
+              }
+            ]
+          },
+          "pay_all[0].pay": {
+            "amount_kobo": 2500000,
+            "bank_code": "044",
+            "account_number": "0690000031",
+            "account_name": "Ada Obi",
+            "narration": "OCT-COMMS"
+          },
+          "pay_all[1].pay": {
+            "amount_kobo": 1500050
+          },
+          "record": {
+            "table": "list_payments",
+            "rows": [
+              {
+                "batch": "OCT-COMMS",
+                "name": "Ada Obi",
+                "amount_naira": 25000.0,
+                "status": "paid",
+                "payout_id": "po_1",
+                "reason": ""
+              },
+              {
+                "batch": "OCT-COMMS",
+                "name": "Bola Ade",
+                "amount_naira": 15000.5,
+                "status": "paid",
+                "payout_id": "po_2",
+                "reason": ""
+              }
+            ]
+          }
+        },
+        "outputs": {
+          "check": {
+            "refused": [
+              {
+                "name": "Chidi Eze",
+                "reason": "the account number is not 10 digits"
+              }
+            ]
+          },
+          "summary": {
+            "paid": 2,
+            "failed": 0,
+            "unconfirmed": 0
+          }
+        },
+        "calls": {
+          "pay": 2
+        }
+      }
+    },
+    {
+      "name": "the approver sees the total, the balance and the rows not paid",
+      "trigger": {
+        "body": {
+          "batch": "OCT-COMMS"
+        }
+      },
+      "mocks": {
+        "read_list": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "batch": "OCT-COMMS",
+                "name": "Ada Obi",
+                "amount_naira": 25000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi"
+              },
+              {
+                "id": 2,
+                "batch": "OCT-COMMS",
+                "name": "Bola Ade",
+                "amount_naira": 15000.5,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade"
+              },
+              {
+                "id": 3,
+                "batch": "OCT-COMMS",
+                "name": "Chidi Eze",
+                "amount_naira": 9000,
+                "bank_code": "058",
+                "account_number": "12345",
+                "account_name": "Chidi Eze"
+              }
+            ]
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 100000,
+            "currency": "NGN"
+          }
+        },
+        "record": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "rejected",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "approve": {
+            "decision": "rejected"
+          },
+          "totals": {
+            "total_kobo": 4000050
+          },
+          "balance": {
+            "available_kobo": 100000
+          },
+          "check": {
+            "refused": [
+              {
+                "name": "Chidi Eze",
+                "reason": "the account number is not 10 digits"
+              }
+            ]
+          }
+        },
+        "steps": {
+          "pay_all": "skipped",
+          "tell_rejected": "completed",
+          "record": "skipped"
+        },
+        "calls": {
+          "pay": 0
+        }
+      }
+    },
+    {
+      "name": "a refused payment does not stop the others and is reported",
+      "trigger": {
+        "body": {
+          "batch": "OCT-COMMS"
+        }
+      },
+      "mocks": {
+        "read_list": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "batch": "OCT-COMMS",
+                "name": "Ada Obi",
+                "amount_naira": 25000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi"
+              },
+              {
+                "id": 2,
+                "batch": "OCT-COMMS",
+                "name": "Bola Ade",
+                "amount_naira": 15000.5,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade"
+              },
+              {
+                "id": 3,
+                "batch": "OCT-COMMS",
+                "name": "Chidi Eze",
+                "amount_naira": 9000,
+                "bank_code": "058",
+                "account_number": "12345",
+                "account_name": "Chidi Eze"
+              }
+            ]
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 10000000,
+            "currency": "NGN"
+          }
+        },
+        "record": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        },
+        "pay_all[0].pay": {
+          "error": {
+            "kind": "fatal",
+            "message": "Account closed"
+          }
+        },
+        "pay_all[1].pay": {
+          "output": {
+            "payout_id": "po_2",
+            "status": "settled"
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "summary": {
+            "paid": 1,
+            "failed": 1,
+            "not_paid": [
+              "Ada Obi (failed: Account closed)"
+            ]
+          }
+        },
+        "steps": {
+          "pay_all[1].pay": "completed"
+        }
+      }
+    },
+    {
+      "name": "the same batch started again pays under the same keys",
+      "trigger": {
+        "body": {
+          "batch": "OCT-COMMS"
+        }
+      },
+      "mocks": {
+        "read_list": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "batch": "OCT-COMMS",
+                "name": "Ada Obi",
+                "amount_naira": 25000,
+                "bank_code": "044",
+                "account_number": "0690000031",
+                "account_name": "Ada Obi"
+              },
+              {
+                "id": 2,
+                "batch": "OCT-COMMS",
+                "name": "Bola Ade",
+                "amount_naira": 15000.5,
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Bola Ade"
+              },
+              {
+                "id": 3,
+                "batch": "OCT-COMMS",
+                "name": "Chidi Eze",
+                "amount_naira": 9000,
+                "bank_code": "058",
+                "account_number": "12345",
+                "account_name": "Chidi Eze"
+              }
+            ]
+          }
+        },
+        "balance": {
+          "output": {
+            "available_kobo": 10000000,
+            "currency": "NGN"
+          }
+        },
+        "record": {
+          "output": {
+            "affected": 2
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        },
+        "pay": [
+          {
+            "error": {
+              "kind": "retryable",
+              "message": "timeout"
+            }
+          },
+          {
+            "output": {
+              "payout_id": "po_x",
+              "status": "settled"
+            }
+          }
+        ]
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "calls": {
+          "pay_all[0].pay": 2,
+          "pay_all[1].pay": 2
+        }
+      }
+    }
+  ]
+}

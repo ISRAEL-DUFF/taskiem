@@ -1976,6 +1976,10 @@
       "text": "Shirya bayanai don matakai na gaba",
       "reviewed": false
     },
+    "wd.trigger.capability_event": {
+      "text": "Lokacin da asusun biyan kuɗi ya ba da rahoto: {events}",
+      "reviewed": false
+    },
     "wd.trigger.database_change": {
       "text": "Lokacin da layi a cikin rumbun bayanai ya canja",
       "reviewed": false

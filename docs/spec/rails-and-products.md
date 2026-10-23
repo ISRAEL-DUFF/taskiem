@@ -1,6 +1,6 @@
 # Rails and products: specification and build plan
 
-Status: **R1, R2, R3, R8 and R9 built**, R4 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
+Status: **R1 to R4, R8 and R9 built**, R5 onwards planned · Decision: [0044](../decisions/0044-rails-and-products.md) · Workstream **R0 to R9**, one pull request per milestone.
 
 Taskiem connects to two kinds of service. **Rails** move money (Paystack, iswallet, Moniepoint and the rest) and Taskiem builds products on them as workflows. **Products** (Payrolla, and later accounting, HR and POS back offices) already run a whole process, and Taskiem connects to them, embeds their interface, and works around them. This document specifies both halves, and the retirement of the Payrolla integration that mixed them up.
 
@@ -577,6 +577,16 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 **Build:** Pay a list (§5.2), a payment link per order (§5.3), a virtual account per customer (§5.4, Moniepoint), refund with approval (§5.5), and the five existing money templates moved onto capabilities (§5.6), each with template tests on every capable rail, Start page starters and AI eval cases.
 
 **Done when:** each template runs on at least two rails in tests; the moved templates keep their ids and existing workflows keep running.
+
+**Built** (R4): a `capability_event` trigger (wd/v1) that starts on a rail's normalised payment events whichever rail is connected, registered as each sending rail's own connector trigger and started by ingest from the normalised event only; an `await_payment` wait (a `collect_link` payment's `payment.received` raced against a deadline, then `get_payment`); and the templates `pay-a-list` (§5.2), `payment-link-per-order` (§5.3), `virtual-account-per-customer` (§5.4) and `refund-with-approval` (§5.5), with `supplier-payment-approval`, `failed-transfer-alert`, `transfer-received-notify`, `low-balance-alert` and `weekly-balance-email` moved onto capabilities under their ids (§5.6). `TestTemplatesOnEveryCapableRail` expands every rail template on each built-in rail that can run it, and wants two; each template has workflow tests in `templates/tests/`. Readiness, the Start page and the connection picker know payment events (`GET /v1/capabilities` lists them as `kind: event`); the website names the rails each template runs on; the builder evals grade a request that names a rail as met by a capability that rail runs, with eight new cases. Differences from §5:
+
+- **One rail for two templates for now:** `virtual-account-per-customer` runs on Moniepoint only (Lenco's account is unsafe, OPay's temporary) and `refund-with-approval` on Paystack only (OPay's refund is not declared yet). The test names both and fails when another rail can.
+- **Pay a list pays one by one** (`pay_bank` per row, five at a time): no R1 rail declares `pay_many`, so `prefer` is not built yet. Rows come from a data table by batch, not a sheet.
+- **A payment link is per run, not per new row:** the order's details start the run (manual, or the API), and one reminder is sent after `pay_hours`; the outcome is a row in `order_payments`.
+- **Credits to customers' account numbers** are told and logged by `transfer-received-notify` (`virtual_account.credited`), not matched to invoices inside the template.
+- **Refunds are in full:** Paystack refunds in full, so the template asks no amount.
+- **The moved templates changed what they ask:** the supplier template takes the supplier's bank account (checked with `resolve_account`) instead of a Paystack recipient code, and follows the payment until the bank confirms; the weekly email reports one payments account's balance, not two. Workflows made from the old versions keep their own definitions and keep running.
+- **Found on the way:** `await_reversal` on a rail without a reversal event (Flutterwave) was refused at expansion, so Run payroll could not run there; it now looks the payout up when the watch ends.
 
 ### R5: The Payrolla connector (M; needs R0-2, R0-4)
 

@@ -194,12 +194,38 @@ func grade(r *Result, c Case, p *builder.Proposal, reg connector.Lookup) {
 	if ref, ok := def.Trigger.Config["connector"].(string); ok {
 		usedC[ref] = true
 	}
+	if def.Trigger.Type == "capability_event" {
+		if evs, ok := def.Trigger.Config["events"].([]any); ok {
+			for _, ev := range evs {
+				usedC["capability:"+fmt.Sprint(ev)] = true
+			}
+		}
+	}
+	// A request that names a rail (Paystack) is met by a capability step
+	// or payment event that rail can run: the workflow runs on whichever
+	// rail is connected, the named one included (decision 0044).
+	for _, ref := range c.Expect.Connectors {
+		if usedC[ref] {
+			continue
+		}
+		if k, ok := reg.Get(ref); ok && k.Manifest.KindOf() == "rail" {
+			for u := range usedC {
+				name, isCap := strings.CutPrefix(u, "capability:")
+				_, can := k.Manifest.Capabilities[name]
+				_, sends := k.Manifest.Events[name]
+				if isCap && (can || sends) {
+					usedC[ref] = true
+				}
+			}
+		}
+	}
 	var missC, missS []string
 	r.ConnectorRecall, missC = coverage(c.Expect.Connectors, usedC)
 	r.StepRecall, missS = coverage(c.Expect.Steps, usedS)
 	r.Missing = append(r.Missing, missC...)
 	r.Missing = append(r.Missing, missS...)
-	r.TriggerOK = c.Expect.Trigger == "" || def.Trigger.Type == c.Expect.Trigger
+	r.TriggerOK = c.Expect.Trigger == "" || def.Trigger.Type == c.Expect.Trigger ||
+		c.Expect.Trigger == "connector_event" && def.Trigger.Type == "capability_event" // the rail's event, whichever rail
 	if !r.TriggerOK {
 		r.Missing = append(r.Missing, "trigger "+c.Expect.Trigger)
 	}

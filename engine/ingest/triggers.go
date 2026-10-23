@@ -155,6 +155,8 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 	case "connector_event":
 		_, err := parseEvent(c, reg)
 		return err
+	case "capability_event":
+		return checkCapabilityEvent(c, reg)
 	case "schedule":
 		_, err := parseSchedule(c)
 		return err
@@ -254,6 +256,8 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 				_, err = remote.Declare(ctx, tx, tenant, wf, env, version, remote.Declaration{
 					Connector: e.connector, Trigger: e.trigger, Connection: e.connection, Events: e.events, Options: e.options})
 			}
+		case "capability_event":
+			err = registerCapabilityEvent(ctx, tx, tenant, wf, version, env, c, reg)
 		case "schedule":
 			if env != ScheduleEnvironment {
 				continue

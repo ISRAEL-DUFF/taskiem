@@ -1318,7 +1318,8 @@
             "email",
             "subflow",
             "storefront",
-            "form"
+            "form",
+            "capability_event"
           ]
         },
         "config": {
@@ -1696,6 +1697,50 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "capability_event"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "events"
+                ],
+                "description": "Starts on a rail's normalised payment events (schemas/capabilities-v1.json), whichever rail the business connected: each environment's connections whose rail sends them (or the one named).",
+                "properties": {
+                  "events": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "payout.settled",
+                        "payout.failed",
+                        "payout.reversed",
+                        "payment.received",
+                        "virtual_account.credited"
+                      ]
+                    }
+                  },
+                  "connection": {
+                    "type": "string",
+                    "description": "One connection to listen on; left out, every connection whose rail sends the events."
+                  }
+                }
+              }
+            }
+          }
         }
       ]
     },
@@ -2043,12 +2088,13 @@
             "virtual_account",
             "refund",
             "await_settlement",
-            "await_reversal"
+            "await_reversal",
+            "await_payment"
           ]
         },
         "connection": {
           "type": "string",
-          "description": "Connection name in the run's environment; defaults to the only one whose rail can do it. await_settlement and await_reversal default to the connection of the payment they follow."
+          "description": "Connection name in the run's environment; defaults to the only one whose rail can do it. await_settlement and await_reversal default to the connection of the payment they follow, await_payment to that of the collect_link it waits on."
         },
         "input": {
           "$ref": "#/$defs/values"

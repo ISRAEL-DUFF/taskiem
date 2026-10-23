@@ -1,0 +1,104 @@
+{
+  "schema": "wd-test/v1",
+  "template": "virtual-account-per-customer",
+  "params": {
+    "business_name": "Ada's Kitchen"
+  },
+  "cases": [
+    {
+      "name": "a customer gets their own account number, recorded and sent to them",
+      "trigger": {
+        "body": {
+          "name": "Ngozi Okafor",
+          "email": "ngozi@example.com",
+          "phone": "+2348030000001"
+        }
+      },
+      "mocks": {
+        "open": {
+          "output": {
+            "account_number": "5012345678",
+            "bank_name": "Moniepoint MFB",
+            "account_name": "Ada's Kitchen - Ngozi Okafor",
+            "reference": "acct_ngozi"
+          }
+        },
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_customer": {
+          "output": {
+            "ok": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open": {
+            "customer": {
+              "name": "Ngozi Okafor",
+              "email": "ngozi@example.com"
+            }
+          },
+          "record": {
+            "table": "customer_accounts",
+            "row": {
+              "customer": "Ngozi Okafor",
+              "account_number": "5012345678",
+              "reference": "acct_ngozi"
+            }
+          },
+          "tell_customer": {
+            "phone": "+2348030000001",
+            "message": "Ada's Kitchen: pay us any time by bank transfer to 5012345678 (Moniepoint MFB, Ada's Kitchen - Ngozi Okafor). It is yours alone, so we know the money is from you."
+          }
+        }
+      }
+    },
+    {
+      "name": "a message that cannot be sent does not lose the account number",
+      "trigger": {
+        "body": {
+          "name": "Ngozi Okafor",
+          "email": "ngozi@example.com"
+        }
+      },
+      "mocks": {
+        "open": {
+          "output": {
+            "account_number": "5012345678",
+            "bank_name": "Moniepoint MFB",
+            "account_name": "Ada's Kitchen - Ngozi Okafor",
+            "reference": "acct_ngozi"
+          }
+        },
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_customer": {
+          "error": {
+            "kind": "fatal",
+            "message": "no channel"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "record": "completed"
+        },
+        "inputs": {
+          "tell_customer": {
+            "phone": "",
+            "email": "ngozi@example.com"
+          }
+        }
+      }
+    }
+  ]
+}

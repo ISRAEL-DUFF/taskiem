@@ -75,6 +75,10 @@ export function schedule(config: { cron: string; timezone?: string } & Values): 
 export function connectorEvent(config: { connector: string; trigger: string; events?: string[] } & Values): Trigger {
   return { type: "connector_event", config };
 }
+/** Starts on a payment event from whichever rail is connected (decision 0044). */
+export function capabilityEvent(config: { events: ("payout.settled" | "payout.failed" | "payout.reversed" | "payment.received" | "virtual_account.credited")[]; connection?: string } & Values): Trigger {
+  return { type: "capability_event", config };
+}
 export function manual(config?: Values): Trigger {
   return config === undefined ? { type: "manual" } : { type: "manual", config };
 }

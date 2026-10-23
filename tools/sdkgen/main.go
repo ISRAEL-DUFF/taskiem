@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 func main() {
@@ -144,9 +145,10 @@ func capabilities(b *bytes.Buffer, conns []*connector.Connector) error {
 		fmt.Fprintf(b, "/** %s: output */\nexport type Capability%sOutput = %s;\n", spec.Title, typeName(n), outType(out, ""))
 	}
 	b.WriteString("/** await_settlement and await_reversal: input */\nexport interface CapabilityAwaitInput {\n  /** The payout to follow: the payment step's output.payout_id */\n  payout_id: Val<string>;\n}\n")
+	b.WriteString("/** await_payment: input */\nexport interface CapabilityAwaitPaymentInput {\n  /** The payment page to wait on: the collect_link step's output.payment_id */\n  payment_id: Val<string>;\n}\n")
 	groups := map[string][][2]string{} // helper object -> (key, uses)
 	helperOf := map[string]string{}
-	for _, n := range append(capability.Names(), "await_settlement", "await_reversal") {
+	for _, n := range append(capability.Names(), wd.Waits...) {
 		g, key := helperGroup(n)
 		groups[g] = append(groups[g], [2]string{key, n})
 		helperOf[n] = g + "." + key
@@ -164,6 +166,9 @@ func capabilities(b *bytes.Buffer, conns []*connector.Connector) error {
 				title = spec.Title
 			} else {
 				iface, title = "CapabilityAwaitInput", capability.WaitTitle(e[1])
+				if e[1] == "await_payment" {
+					iface = "CapabilityAwaitPaymentInput"
+				}
 			}
 			fmt.Fprintf(b, "  /** %s */\n  %s: (input: %s, extra?: CapabilityExtra): StepSpec => capability(%q, input, extra),\n", title, e[0], iface, e[1])
 		}

@@ -332,7 +332,9 @@ func checkTemplateIDs(ids []string) error {
 // railCan reports whether a rail the tenant can use declares the capability.
 func railCan(reg connector.Lookup, uses string) bool {
 	for _, c := range reg.List() {
-		if _, ok := c.Manifest.Capabilities[uses]; ok && c.Manifest.KindOf() == "rail" {
+		_, can := c.Manifest.Capabilities[uses]
+		_, sends := c.Manifest.Events[uses] // capability:payout.failed, for a capability_event trigger
+		if (can || sends) && c.Manifest.KindOf() == "rail" {
 			return true
 		}
 	}

@@ -95,14 +95,16 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		}
 		out["signalled"], out["duplicate"] = len(woke), !fresh
 	}
-	if n, ok := h.deliverNormalised(ctx, w, r, t, ev); !ok {
+	n, started, ok := h.deliverNormalised(ctx, w, r, t, ev)
+	if !ok {
 		return nil, false
-	} else if n > 0 {
+	}
+	if n > 0 {
 		out["normalised"] = n
 	}
-	runs := []uuid.UUID{}
+	runs := append([]uuid.UUID{}, started...)
 	for _, s := range t.subs {
-		if (len(s.events) > 0 || ev.test) && !slices.Contains(s.events, ev.event) {
+		if capabilitySub(s) || (len(s.events) > 0 || ev.test) && !slices.Contains(s.events, ev.event) {
 			continue
 		}
 		if s.connection != nil && *s.connection != t.connection {
@@ -257,33 +259,68 @@ func (h *Handler) routeEvent(ctx context.Context, w http.ResponseWriter, r *http
 }
 
 // deliverNormalised delivers the rail's normalised event for a delivery
-// (connector/v1 rule 16), if it is one, to runs waiting on it: an
+// (connector/v1 rule 16), if it is one: to runs waiting on it (an
 // await_settlement waits on paystack@1:payout.settled correlated on the
-// payout_id, whichever rail it is. It reports the runs it woke.
-func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, r *http.Request, t target, ev eventItem) (int, bool) {
+// payout_id, whichever rail it is), and as a new run of every workflow
+// whose capability_event trigger lists it. It reports the runs it woke and
+// started; on failure it has answered the delivery.
+func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, r *http.Request, t target, ev eventItem) (int, []uuid.UUID, bool) {
 	if ev.conn == nil || len(ev.conn.Manifest.Events) == 0 || ev.test {
-		return 0, true
+		return 0, nil, true
 	}
 	act := map[string]any{"body": ev.body, "headers": map[string]any{}, "query": map[string]any{}, "item": ev.item}
 	name, fields, err := ev.conn.Manifest.EventOf(ev.name, act)
 	if err != nil {
-		return 0, true // none, or a delivery its mapping cannot read: the trigger's own signal went out
+		return 0, nil, true // none, or a delivery its mapping cannot read: the trigger's own signal went out
 	}
 	spec, ok := capability.GetEvent(name)
 	if !ok {
-		return 0, true
+		return 0, nil, true
 	}
+	woken := 0
 	corr := fmt.Sprint(fields[spec.Correlation])
-	if fields[spec.Correlation] == nil || corr == "" {
-		return 0, true
+	if fields[spec.Correlation] != nil && corr != "" {
+		woke, _, err := h.Store.DeliverSignalOnce(ctx, t.tenant, ev.env, capability.SignalName(ev.ref, name), corr, ev.dedup+":"+name,
+			map[string]any{"event": name, "fields": fields})
+		if err != nil {
+			h.unavailable(w, r, err)
+			return 0, nil, false
+		}
+		woken = len(woke)
 	}
-	woke, _, err := h.Store.DeliverSignalOnce(ctx, t.tenant, ev.env, capability.SignalName(ev.ref, name), corr, ev.dedup+":"+name,
-		map[string]any{"event": name, "fields": fields})
-	if err != nil {
-		h.unavailable(w, r, err)
-		return 0, false
+	var runs []uuid.UUID
+	for _, s := range t.subs {
+		if !capabilitySub(s) || !slices.Contains(s.events, name) || (s.connection != nil && *s.connection != t.connection) {
+			continue
+		}
+		trig := map[string]any{"type": "capability_event", "event": name, "fields": fields, "connector": ev.ref, "trigger": ev.name, "body": ev.body}
+		if s.connection != nil {
+			trig["connection"] = *s.connection
+		}
+		run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
+			TenantID: t.tenant, WorkflowID: s.workflow, Version: s.version, Environment: ev.env,
+			Trigger: trig, StartedBy: "connector:" + ev.ref, TriggerID: "event/" + s.workflow.String() + "/" + ev.env, DedupKey: ev.dedup + ":" + name,
+			Throttled: t.throttled,
+		})
+		if le, ok := runtime.IsLimit(err); ok {
+			limited(w, le)
+			return 0, nil, false
+		}
+		if errors.Is(err, runtime.ErrTenantSuspended) {
+			h.suspended(w, r, t.tenant)
+			return 0, nil, false
+		}
+		if ce := (*runtime.CapabilityError)(nil); errors.As(err, &ce) {
+			h.Logger.Warn("event not started: capability", "tenant", t.tenant, "workflow", s.workflow, "env", ev.env, "err", ce.Error())
+			continue
+		}
+		if err != nil {
+			h.unavailable(w, r, err)
+			return 0, nil, false
+		}
+		runs = append(runs, run.ID)
 	}
-	return len(woke), true
+	return woken, runs, true
 }
 
 func asList(v any) []string {
