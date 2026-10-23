@@ -264,6 +264,54 @@
       "text": "{name} kò sí níbí. Àwọn èdè tó wà níbí: {languages}.",
       "reviewed": false
     },
+    "money.channel.cash": {
+      "text": "owó ní ọwọ́",
+      "reviewed": false
+    },
+    "money.channel.upload": {
+      "text": "statement báńkì",
+      "reviewed": false
+    },
+    "money.daily": {
+      "text": "Àná: {in}; {out} jáde; {invoices}; {leaks}.",
+      "reviewed": false
+    },
+    "money.daily.in": {
+      "text": "{amount} wọlé",
+      "reviewed": false
+    },
+    "money.daily.in_pending": {
+      "text": "{amount} wọlé ({pending} ń dúró)",
+      "reviewed": false
+    },
+    "money.daily.invoices": {
+      "text": "ìwé owó {n} ni a sán ({amount})",
+      "reviewed": false
+    },
+    "money.daily.invoices_none": {
+      "text": "kò sí ìwé owó tí a sán",
+      "reviewed": false
+    },
+    "money.daily.invoices_one": {
+      "text": "ìwé owó 1 ni a sán ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks": {
+      "text": "ìjò owó {n} tuntun ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks_none": {
+      "text": "kò sí ìjò owó tuntun",
+      "reviewed": false
+    },
+    "money.daily.leaks_one": {
+      "text": "ìjò owó 1 tuntun ({amount})",
+      "reviewed": false
+    },
+    "money.daily.link": {
+      "text": "Ojú-ìwé owó: {link}",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Ìjíròrò yìí ń fi ìròyìn ránṣẹ́ sí ọ láti ọ̀dọ̀ {businesses}. Fi STOP ránṣẹ́ láti dá èyí tó kẹ́yìn dúró.",
       "reviewed": false

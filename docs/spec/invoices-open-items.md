@@ -1,8 +1,8 @@
 # Invoices and the money log: what is not covered yet
 
-Everything built for [decision 0045](../decisions/0045-tally-in-taskiem.md) so far (T1 to T6 of the [build plan](invoices-and-money-log.md)) that is not done, not verified, or done differently from the plan. Each item says what is missing, why, and what would close it. Update this list as items close; the plan's "Built" notes say how each milestone differs from it.
+Everything built for [decision 0045](../decisions/0045-tally-in-taskiem.md) so far (T1 to T7 of the [build plan](invoices-and-money-log.md)) that is not done, not verified, or done differently from the plan. Each item says what is missing, why, and what would close it. Update this list as items close; the plan's "Built" notes say how each milestone differs from it.
 
-Status as of 23 October 2026: T1, T3, T4, T2, T5 and T6 are built. T7 and T8 are not started.
+Status as of 23 October 2026: T1, T3, T4, T2, T5, T6 and T7 are built. T8 is not started.
 
 ## Needs people, not code
 
@@ -11,7 +11,7 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5 and T6 are built. T7 and T8 are
 | **Sandbox runs on each rail** (Paystack, Flutterwave, OPay) | T4's "done when": a customer pays from the page and from WhatsApp on each rail. Everything is tested against fakes only | Sandbox `main` connections on staging; pay an invoice by transfer from the page and from WhatsApp; a transfer after expiry; a sixth request in an hour | Founders (credentials via the Connections page), then engineering |
 | **Paystack's Pay with Transfer must be turned on** by Paystack support for each business | Without it, `collect_transfer` on Paystack fails | Ask Paystack support; the connection page could say so (readiness) | Each business; engineering for the readiness note |
 | **A WhatsApp template for invoices with buttons**, and one for matching questions | Outside WhatsApp's 24-hour window neither message is sent: invoices go by SMS and email only, and matching questions wait in the web app | Submit utility templates to Meta and send them when the window is closed | Founders (Meta Business account), then engineering |
-| **Publishing the guides** `invoices.md`, `money-log.md`, `matching.md`, `leaks.md` | They are internal (`tools/docsite/pages.go`) until the sandbox runs pass | Remove them from the internal list | Engineering, after the sandbox runs |
+| **Publishing the guides** `invoices.md`, `money-log.md`, `matching.md`, `leaks.md`, `money-reports.md` | They are internal (`tools/docsite/pages.go`) until the sandbox runs pass | Remove them from the internal list | Engineering, after the sandbox runs |
 | **Rail facts still unknown** (OPay and iswallet: late and wrong-amount transfers; every rail's fee for one-time accounts) | Pages say "unknown" where a rail does not document it; the fee setting cannot be applied | Confirm with each rail (questions are in the plan's §4.3) | Founders / partnerships |
 | **Reviewing the chat translations** | New chat messages in Pidgin, Yoruba, Hausa and Igbo are unreviewed drafts (`reviewed: false`) | A speaker reviews each catalogue entry | Founders / reviewers |
 
@@ -64,7 +64,7 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5 and T6 are built. T7 and T8 are
 - **Statement formats:** the common format, and any bank's columns matched to it once; no bank's own export is parsed without matching yet (Tally's parsers).
 - **Statements give no payer name**, so matching statement lines rests on amount and timing.
 - **Duplicates are narrow:** one movement reported as two kinds of event on one connection. A payment seen both as an event and on an uploaded statement (two channels) is not flagged; deciding that two channels are the same account needs the owner to link them.
-- **Leaks are not sent in chat** and have no daily summary yet (T7).
+- **Leaks are not sent in chat** one by one; the daily summary counts those opened.
 - **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`); a money permission of its own may be wanted.
 - **Agreed fees are set by hand** per connection; no rail's published rates are filled in.
 - **Templates:**
@@ -79,7 +79,16 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5 and T6 are built. T7 and T8 are
   - fee rates can be changed but not removed (no delete);
   - a leak's link to its invoice says "See the invoice", not its number.
 
+## Summaries and exports (T7)
+
+- **The monthly email has no attachments**: it carries the summary and a link to the Money page's downloads, which needs a sign-in.
+- **Owners only, and no opt-out**: members with `invoice.read` who are not owners get no summary; a money group in the notification settings needs `engine/notices` and the web Settings page changed together.
+- **Missed days are not caught up**: a scheduler down all day skips that day's chat summary; the monthly email is tried until the 3rd. An owner who links a chat later that day gets nothing for it.
+- **Outside WhatsApp's 24-hour window** the summary is sent as the `taskiem_alert` template (counted against the business's allowance), cut to 200 characters; a template of its own needs Meta's approval.
+- **The monthly email is in English**; the chat text is in five languages, four unreviewed.
+- **The journal uses fixed account names** and no VAT; mapping to a business's own chart of accounts (or a bookkeeping tool's import format) is later.
+- **The Overview's channel table has no limit** on rows, and shows connection names, not the business's own names for accounts.
+
 ## Later milestones (not started)
 
-- **T7:** summaries and exports in the one common statement format (no VAT export at launch).
 - **T8:** templates and the AI builder (including the `send-invoice` keywords above, and other languages' chat command words).
