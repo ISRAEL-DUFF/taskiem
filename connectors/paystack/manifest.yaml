@@ -295,10 +295,14 @@ triggers:
     title: Payments you receive
     where: "Paystack dashboard → Settings → API Keys & Webhooks → Live Webhook URL (Paystack keeps one address: use this one)"
     verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
-    events: [charge.success, bank.transfer.rejected]
+    # Refund events come to the same address (Paystack sends every event to
+    # its one webhook URL). They name the payment refunded in
+    # transaction_reference, not reference (docs-v2.paystack.com/docs/payments/refunds/,
+    # "Listen to notifications").
+    events: [charge.success, bank.transfer.rejected, refund.pending, refund.processing, refund.processed, refund.failed]
     event_type: =body.event
-    dedup: =body.data.reference + ':' + body.event
-    correlation: =body.data.reference
+    dedup: "=body.event.startsWith('refund.') ? body.data.transaction_reference + ':' + body.event + ':' + string(body.data.amount) : body.data.reference + ':' + body.event"
+    correlation: "=body.event.startsWith('refund.') ? body.data.transaction_reference : body.data.reference"
     poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", every: 5m }
 # What Paystack can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
 capabilities:
@@ -413,3 +417,40 @@ events:
     trigger: charge_event
     when: =body.event == 'bank.transfer.rejected'
     fields: { payment_id: "=body.data.reference", amount_kobo: "=body.data.?amount", reason: "='other'" }
+  # Refunds, from Paystack's public documentation (docs-v2.paystack.com,
+  # read 23 October 2026): the events are listed on
+  # https://docs-v2.paystack.com/docs/payments/webhooks/ (refund.pending,
+  # refund.processing, refund.processed, refund.failed), and one example
+  # body, refund.pending, is on
+  # https://docs-v2.paystack.com/docs/payments/refunds/#listen-to-notifications
+  # (data: status, transaction_reference, refund_reference (null there),
+  # amount as a string, currency, processor, customer). The other three are
+  # read the same way. amount is read in the currency's subunit, as the
+  # Create Refund API takes it (https://docs-v2.paystack.com/docs/api/refund/);
+  # the webhook example does not say. A failed refund's reason is not
+  # documented and is left out. refund.processing (the processor has it) is
+  # still pending. Confirm in sandbox.
+  refund.pending:
+    trigger: charge_event
+    when: =body.event in ['refund.pending', 'refund.processing']
+    fields:
+      payment_id: =body.data.transaction_reference
+      refund_id: =body.data.?refund_reference
+      amount_kobo: "=has(body.data.amount) && body.data.amount != null ? optional.of(int(body.data.amount)) : optional.none()"
+      currency: =body.data.?currency
+  refund.processed:
+    trigger: charge_event
+    when: =body.event == 'refund.processed'
+    fields:
+      payment_id: =body.data.transaction_reference
+      refund_id: =body.data.?refund_reference
+      amount_kobo: "=has(body.data.amount) && body.data.amount != null ? optional.of(int(body.data.amount)) : optional.none()"
+      currency: =body.data.?currency
+  refund.failed:
+    trigger: charge_event
+    when: =body.event == 'refund.failed'
+    fields:
+      payment_id: =body.data.transaction_reference
+      refund_id: =body.data.?refund_reference
+      amount_kobo: "=has(body.data.amount) && body.data.amount != null ? optional.of(int(body.data.amount)) : optional.none()"
+      currency: =body.data.?currency

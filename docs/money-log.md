@@ -1,6 +1,6 @@
 # The money log
 
-The money log is a business's record of every movement of money on its connected payment services: payments received, credits to its accounts, payouts and what became of them, and sales on its POS terminals. Taskiem writes each movement once and nobody changes it, following [decision 0045](decisions/0045-tally-in-taskiem.md). It is what invoices, matching and summaries will be built on ([build plan](spec/invoices-and-money-log.md), T2).
+The money log is a business's record of every movement of money on its connected payment services: payments received, credits to its accounts, payouts and what became of them, refunds to customers, and sales on its POS terminals. Taskiem writes each movement once and nobody changes it, following [decision 0045](decisions/0045-tally-in-taskiem.md). It is what invoices, matching and summaries will be built on ([build plan](spec/invoices-and-money-log.md), T2).
 
 ## What is recorded
 
@@ -12,9 +12,12 @@ Every event a connected payment service sends Taskiem in its prod connections, w
 | `payment.returned` | Money in that the service sent back to the payer (paid late, or not the amount asked), reversed |
 | `virtual_account.credited` | Money in to one of the business's accounts, settled, with the payer's name |
 | `payout.settled`, `payout.failed`, `payout.reversed` | Money out, a payout, with its outcome |
+| `refund.pending`, `refund.processed`, `refund.failed` | Money out, a refund of a payment to the customer: pending, settled (it went out) or failed (the money stayed). The entry's reference is the payment refunded; its note names it, with the service's own refund reference when the event gives one. Paystack sends these |
 | `pos.sale` | A sale on a POS terminal (Moniepoint, OPay Business): approved, pending, declined or reversed, with its fee where the service gives one |
 
 Payments that Taskiem finds by asking the payment service (an invoice paid into its one-time account number) are recorded too, as the same entry the service's own event would make.
+
+A payout that a workflow makes (pay a bank account, a wallet or a mobile money number) and that the service answers as settled there and then is recorded when the step finishes, as the same entry the service's `payout.settled` event would make, so the event, if it comes later, adds nothing. A payout answered pending is recorded when its event comes; one answered failed moved no money and is not recorded.
 
 Sandbox and staging connections are not recorded: the log is the business's real money.
 
@@ -26,8 +29,8 @@ If Taskiem cannot record an event, it answers the payment service with an error,
 
 ## Hearing from each connection
 
-- **Webhooks:** on the Connections page, each prod connection of a payment service shows its address under **Webhook for the money log**, with where to paste it in the service's dashboard. Paystack takes one address per account: paste the payments one; transfers still arrive because Taskiem checks Paystack every few minutes.
-- **Polling:** for Paystack, Taskiem also asks for new payments and transfers every few minutes, for every connected account, so a business that never set the webhook up is still recorded. The first look starts when the connection is made; nothing earlier is replayed.
+- **Webhooks:** on the Connections page, each prod connection of a payment service shows its address under **Webhook for the money log**, with where to paste it in the service's dashboard. Paystack takes one address per account: paste the payments one, which also carries refunds; transfers still arrive because Taskiem checks Paystack every few minutes.
+- **Polling:** for Paystack, Taskiem also asks for new payments and transfers every few minutes, for every connected account, so a business that never set the webhook up is still recorded. The first look starts when the connection is made; nothing earlier is replayed. Refunds are not polled: they arrive only through the webhook.
 
 ## Where to see it
 
@@ -38,13 +41,13 @@ The log is copied to a data table named `money_log`, a [kept table](data-tables.
 | `entry_id` | The entry's id |
 | `occurred_at`, `recorded_at` | When it happened at the service (when the service says), and when Taskiem recorded it |
 | `direction` | `in` or `out` |
-| `kind` | `payment`, `account_credit`, `payout`, `pos_sale` (and, later, `refund`, `statement`, `cash`, `expense`, `correction`) |
+| `kind` | `payment`, `account_credit`, `payout`, `refund`, `pos_sale`, `statement`, `cash`, `expense` (and, later, `correction`) |
 | `amount_kobo`, `fee_kobo`, `currency` | Amounts in kobo |
 | `status` | `settled`, `pending`, `failed` or `reversed` |
 | `channel` | The connection, such as `paystack/main` |
 | `reference` | The payment service's reference |
 | `payer` | The payer's name and account, where the service gives them (personal data) |
-| `source` | `event` (the service told Taskiem) or `lookup` (Taskiem asked) |
+| `source` | `event` (the service told Taskiem), `lookup` (Taskiem asked), `step` (a workflow's payout the service answered as settled at once), `upload` (a statement) or `entered` (typed in) |
 | `note`, `corrects` | A short explanation, and the entry a later status refers to |
 
 To read a movement's current status, take its latest entry by `recorded_at`.
@@ -87,6 +90,8 @@ Under the figures, **Exports** download the period as CSV files: the **money log
 
 ## Not yet recorded
 
-- Payouts a service reports as settled at once, with no event after.
-- Refunds (the capability set has no refund event).
+- Refunds on services other than Paystack: Flutterwave's documentation shows a refund webhook body without an event name, and OPay's callbacks are not read yet.
+- Two partial refunds of one payment that reach the same status are one entry: Paystack's refund events name the payment, and its own refund reference is empty while a refund is pending.
+- A refund does not change what an invoice shows as paid; a refunded invoice payment stays matched.
+- Payouts made in one batch (`pay_many`) and answered settled at once, and payouts settled when a workflow looks them up with no event after.
 - Matching payments to invoices and orders (T5).

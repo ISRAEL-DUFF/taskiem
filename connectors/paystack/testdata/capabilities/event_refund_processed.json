@@ -1,0 +1,23 @@
+{
+  "trigger": "charge_event",
+  "body": {
+    "event": "refund.processed",
+    "data": {
+      "status": "processed",
+      "transaction_reference": "tvunjbbd_412829_4b18075d_c7had",
+      "refund_reference": "1234567890123",
+      "amount": "10000",
+      "currency": "NGN",
+      "processor": "instant-transfer",
+      "integration": 412829,
+      "domain": "live"
+    }
+  },
+  "event": "refund.processed",
+  "expect": {
+    "payment_id": "tvunjbbd_412829_4b18075d_c7had",
+    "refund_id": "1234567890123",
+    "amount_kobo": 10000,
+    "currency": "NGN"
+  }
+}

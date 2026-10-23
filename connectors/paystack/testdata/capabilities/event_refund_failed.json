@@ -1,0 +1,21 @@
+{
+  "trigger": "charge_event",
+  "body": {
+    "event": "refund.failed",
+    "data": {
+      "status": "failed",
+      "transaction_reference": "tvunjbbd_412829_4b18075d_c7had",
+      "refund_reference": null,
+      "amount": "10000",
+      "currency": "NGN",
+      "processor": "instant-transfer",
+      "integration": 412829,
+      "domain": "live"
+    }
+  },
+  "event": "refund.failed",
+  "expect": {
+    "payment_id": "tvunjbbd_412829_4b18075d_c7had",
+    "amount_kobo": 10000
+  }
+}

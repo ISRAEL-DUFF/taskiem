@@ -88,3 +88,36 @@ func TestMoneyLogHearsEveryEvent(t *testing.T) {
 		}
 	}
 }
+
+// A Paystack refund, delivered to the payments address as Paystack sends
+// every event, is money out of the business: one refund entry per status
+// however often it is delivered, the later status naming the first.
+func TestMoneyLogHearsRefunds(t *testing.T) {
+	w := newWorld(t)
+	w.h.MoneyLog = &moneylog.Log{Pool: w.DB.App, PII: w.Vault}
+	if _, err := w.Vault.CreateConnection(ctx, w.Tenant, "prod", "paystack", "main", "api_key", map[string]string{"secret_key": "sk_test_x"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	deliver := func(body []byte) {
+		t.Helper()
+		if st, out := w.post(t, "/connectors/paystack@1/charge_event", body, "x-paystack-signature", sign(sha512.New, "sk_test_x", body)); st != 202 {
+			t.Fatalf("%s: %d %v", body, st, out)
+		}
+	}
+	pending := []byte(`{"event":"refund.pending","data":{"status":"pending","transaction_reference":"PAY-9","refund_reference":null,"amount":"10000","currency":"NGN","processor":"instant-transfer","domain":"live"}}`)
+	processed := []byte(`{"event":"refund.processed","data":{"status":"processed","transaction_reference":"PAY-9","refund_reference":"RF-1","amount":"10000","currency":"NGN","processor":"instant-transfer","domain":"live"}}`)
+	deliver(pending)
+	deliver(processed)
+	deliver(processed) // a retry
+
+	got := w.moneyLog(t)
+	if len(got) != 2 {
+		t.Fatalf("entries: %+v", got)
+	}
+	if g := got[0]; g.kind != "refund" || g.status != "pending" || g.reference != "PAY-9" || g.amount == nil || *g.amount != 10000 || g.corrects != nil {
+		t.Errorf("pending: %+v", g)
+	}
+	if g := got[1]; g.kind != "refund" || g.status != "settled" || g.reference != "PAY-9" || g.source != "event" || g.corrects == nil {
+		t.Errorf("processed: %+v", g)
+	}
+}
