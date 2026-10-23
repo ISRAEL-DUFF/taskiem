@@ -1,0 +1,8 @@
+{
+  "name": "the envelope as received, still encrypted, is no sale",
+  "trigger": "payment",
+  "body": {
+    "clientAuthKey": "00000000000000000000000000000000", "version": "V1.0.1", "bodyFormat": "JSON",
+    "timestamp": "1692773950143", "paramContent": "c2VhbGVk", "sign": "c2lnbmVk"
+  }
+}

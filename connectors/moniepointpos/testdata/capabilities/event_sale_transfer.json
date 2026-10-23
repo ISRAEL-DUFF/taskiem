@@ -1,0 +1,28 @@
+{
+  "name": "the documentation's walk-up transfer is an approved sale",
+  "trigger": "transaction",
+  "body": {
+    "eventId": "7a35b4d4-f985-4c14-846a-173af3fa677c",
+    "eventType": "V1_POS_TRANSFER_TRANSACTION",
+    "subject": {"domain": "CHANNELS", "resource": "business", "resourceId": "00000"},
+    "data": {
+      "businessId": 0, "businessOwnerId": 0, "terminalSerial": "TEST", "amount": 10000,
+      "transactionReference": "TEST", "merchantReference": null, "retrievalReferenceNumber": "",
+      "transactionTime": "2026/08/04 09:49:25", "transactionType": "POS_TRANSFER", "transactionStatus": "COMPLETED",
+      "responseCode": "20000", "responseMessage": "APPROVED", "customFields": {},
+      "metaData": "{\"customerPhone\":null,\"narration\":\"TRANSF\",\"customerAccountNumber\":\"******4058\",\"customerBank\":\"Moniepoint MFB\",\"customerName\":\"TEST\"}",
+      "narration": "TEST"
+    },
+    "createdAt": "2026-08-04T09:55:55.210365017"
+  },
+  "event": "pos.sale",
+  "expect": {
+    "reference": "TEST",
+    "amount_kobo": 10000,
+    "status": "approved",
+    "terminal": "TEST",
+    "occurred_at": "2026-08-04T09:49:25+01:00",
+    "method": "transfer",
+    "payer_name": "TEST"
+  }
+}

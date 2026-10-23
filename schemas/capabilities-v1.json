@@ -424,6 +424,26 @@
           "payer_name": { "type": "string", "x-pii": "name" }
         }
       }
+    },
+    "pos.sale": {
+      "title": "A POS terminal took a payment",
+      "correlation": "reference",
+      "fields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reference", "amount_kobo", "status"],
+        "properties": {
+          "reference": { "type": "string", "description": "The provider's reference for the transaction; a later report of the same transaction carries it again" },
+          "amount_kobo": { "type": "integer", "description": "What the customer paid" },
+          "fee_kobo": { "type": "integer", "description": "The provider's charge, when it reports one" },
+          "settled_kobo": { "type": "integer", "description": "What reaches the business's account, when the provider reports it" },
+          "status": { "enum": ["approved", "pending", "declined", "reversed"], "description": "A declined sale is reported too: no money moved" },
+          "terminal": { "type": "string", "description": "The terminal's serial number" },
+          "occurred_at": { "type": "string", "description": "RFC 3339" },
+          "method": { "enum": ["card", "transfer", "wallet", "ussd", "qr", "other"], "description": "How the customer paid" },
+          "payer_name": { "type": "string", "x-pii": "name" }
+        }
+      }
     }
   },
   "$defs": {
