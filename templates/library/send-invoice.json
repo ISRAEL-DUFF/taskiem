@@ -9,9 +9,17 @@
     "customers"
   ],
   "keywords": [
+    "invoice",
+    "invoices",
     "bill a customer",
     "bill someone",
     "billing"
+  ],
+  "requires": [
+    "invoice",
+    "bill a customer",
+    "bill a client",
+    "bill someone"
   ],
   "connectors": [
     "invoices@1",

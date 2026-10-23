@@ -26,8 +26,13 @@
     "publish": ["publish"],
     "close_shop": ["close my shop", "close shop"],
     "order_ready": ["e don ready", "don ready"],
-    "order_delivered": ["e don reach", "dem don collect"]
+    "order_delivered": ["e don reach", "dem don collect"],
+    "invoice": ["send invoice give", "send bill give"],
+    "expense": ["i spend", "i don spend"],
+    "cash_in": ["cash enter", "money enter"],
+    "cash_out": ["cash comot", "money comot"]
   },
   "fillers": ["abeg", "abeg o", "please"],
-  "markers": ["abeg", "wetin", "dey", "una", "wahala", "comot", "sabi", "oya", "abi", "sef", "wan", "pikin", "chop", "dem", "wey", "make i", "how far", "no be", "na im", "e don", "go dey", "fit", "dis", "dat"]
+  "markers": ["abeg", "wetin", "dey", "una", "wahala", "comot", "sabi", "oya", "abi", "sef", "wan", "pikin", "chop", "dem", "wey", "make i", "how far", "no be", "na im", "e don", "go dey", "fit", "dis", "dat", "i spend", "i don spend"],
+  "for_words": ["for"]
 }

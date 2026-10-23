@@ -9,7 +9,18 @@
     "customers"
   ],
   "keywords": [
-    "chase"
+    "chase",
+    "overdue",
+    "unpaid",
+    "late",
+    "remind",
+    "reminder",
+    "outstanding",
+    "nudge",
+    "past due"
+  ],
+  "requires": [
+    "invoice"
   ],
   "connectors": [
     "invoices@1",

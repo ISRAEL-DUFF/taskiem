@@ -25,7 +25,8 @@ Taskiem can talk to people on [WhatsApp](whatsapp.md), [USSD](ussd.md) and SMS i
 - *phrases*: whole messages that mean a command (`wetin fail today` is `status`);
 - *prefixes*: words that start one, followed by what it is about (`abeg run payroll`, `bẹ̀rẹ̀ payroll`);
 - *fillers*: polite words a command may start with (`abeg`, `biko`, `don allah`);
-- *markers*: words typical of the language, used to recognise it.
+- *markers*: words typical of the language, used to recognise it;
+- *for_words*: the word for "for" in an invoice or an expense (`fún`, `don`, `maka`), besides English's `for` ([invoices and money](whatsapp.md#invoices-and-money-in-other-languages)).
 
 Messages are compared without case, accents or tone marks, so `bẹ́ẹ̀ni` and `beeni` match. English commands always work, whatever the language. Yes, no and cancel come only from these lists.
 
@@ -86,7 +87,7 @@ A native speaker of the language, ideally two who check each other, reviews it.
 
 1. Open `engine/lang/messages/<language>.json` beside `en.json`. For each entry, read the English `context` (where it is sent) and the draft. Fix the text. Keep every `{placeholder}` and every `*command*` word exactly as in English: commands are matched in English as well. Keep it short: buttons hold 20 characters, and USSD and SMS texts are folded to ASCII and must fit 160 characters (the tests check both).
 2. Set `"reviewed": true` on each entry you checked.
-3. Do the same for `engine/lang/intents/<language>.json`: the phrases and prefixes people would really type, and fillers and markers that are common in the language but not in English or the other three. A word must not mean a different command in English (a test checks).
+3. Do the same for `engine/lang/intents/<language>.json`: the phrases and prefixes people would really type, and fillers and markers that are common in the language but not in English or the other three, the invoice, expense and cash words (`invoice`, `expense`, `cash_in`, `cash_out`) and `for_words`. A word must not mean a different command in English (a test checks).
 4. Add yourself to `"reviewers"` with the date (`"Ada Obi, 2026-11-02"`). When every entry is reviewed, set the file's `"reviewed": true` and change `"status"` from DRAFT to a line saying who reviewed it and when. A test refuses entries marked reviewed with no reviewer named.
 5. Run `go test ./engine/lang/` and open a pull request. The tester then uses the language on a test number, including voice notes, and records what failed.
 

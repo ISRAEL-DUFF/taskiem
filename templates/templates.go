@@ -150,6 +150,13 @@ type Template struct {
 	// in Payrolla" meets Payrolla's templates, never one that pays the
 	// staff itself.
 	Product string `json:"product,omitempty"`
+	// Requires are words a goal must name one of for retrieval to offer
+	// the template, and which then add requiredBonus: the invoice
+	// templates need "invoice" (or "bill"), so loans overdue in a
+	// database never meet chase-overdue-invoices, and "send an invoice"
+	// meets send-invoice although invoices are named in several
+	// templates' titles.
+	Requires []string `json:"requires,omitempty"`
 }
 
 // CapabilityPrefix marks a capability among a template's connectors:
@@ -229,6 +236,11 @@ func Load(fsys fs.FS) (*Library, error) {
 	for _, t := range lib.list {
 		if s := t.SupersededBy; s != "" && (lib.byID[s] == nil || lib.byID[s].SupersededBy != "") {
 			return nil, fmt.Errorf("%s: superseded_by %q is not a template that is offered", t.ID, s)
+		}
+		for _, req := range t.Requires {
+			if len(Words(req)) == 0 {
+				return nil, fmt.Errorf("%s: requires %q has no word retrieval compares", t.ID, req)
+			}
 		}
 	}
 	return lib, nil

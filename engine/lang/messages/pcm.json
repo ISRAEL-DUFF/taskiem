@@ -981,7 +981,7 @@
       "reviewed": false
     },
     "wa.help.invoice": {
-      "text": "• *invoice* wit name, amount and wetin e be for (*invoice Ada 25,000 for 5 bags of rice*): e go send invoice give your customer",
+      "text": "• *invoice* (or *send invoice give*) wit name, amount and wetin e be for (*invoice Ada 25,000 for 5 bags of rice*): e go send invoice give your customer",
       "reviewed": false
     },
     "wa.help.language": {
@@ -989,7 +989,7 @@
       "reviewed": false
     },
     "wa.help.money": {
-      "text": "• *spent* plus how much and wetin e be for (*spent 12,000 on diesel at Total*), or *cash in* or *cash out* plus how much (*cash in 20,000 till*): I go write am for your money log",
+      "text": "• *spent* (or *I spend*) plus how much and wetin e be for (*spent 12,000 on diesel at Total*), or *cash in* (*cash enter*) or *cash out* (*cash comot*) plus how much (*cash in 20,000 till*): I go write am for your money log",
       "reviewed": false
     },
     "wa.help.run": {

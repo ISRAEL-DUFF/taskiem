@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -18,6 +19,8 @@ import (
 // POST /v1/money/entries. The entry is shown and recorded on Yes, once:
 // its key is the confirmation's nonce, so a Yes delivered twice records
 // one entry. Money moves through "cash" (the log's default channel).
+// The other languages' words ("mo ná 12,000 fún epo") are draft lists in
+// engine/lang intents/<tag>.json; English's work in every language.
 
 // chatMoney is cash or an expense waiting for Yes.
 type chatMoney struct {
@@ -103,13 +106,45 @@ func parseMoneyCommand(text string) (m chatMoney, command, ok bool) {
 	if len(rest) == 0 {
 		return m, true, false
 	}
-	kobo, isAmount := parseKobo(rest[0])
+	m, isAmount, ok := parseMoneyArgs(m, rest, nil)
 	if !isAmount {
 		// "expense report every Friday" is not an expense.
 		return m, m.Kind != "expense" || strings.ToLower(fields[0]) == "spent", false
 	}
+	return m, true, ok
+}
+
+// parseMoneyWords reads an expense or cash from another language's
+// command words (engine/lang intents/<tag>.json): "mo ná 12,000 fún epo".
+// Only an amount right after the words makes it a command, so ordinary
+// chat that starts with them ("I spend the whole day…") is left alone.
+func parseMoneyWords(mm lang.Match) (m chatMoney, command, ok bool) {
+	switch mm.Intent {
+	case lang.IntentExpense:
+		m.Kind, m.Direction = "expense", "out"
+	case lang.IntentCashIn:
+		m.Kind, m.Direction = "cash", "in"
+	case lang.IntentCashOut:
+		m.Kind, m.Direction = "cash", "out"
+	default:
+		return m, false, false
+	}
+	return parseMoneyArgs(m, strings.Fields(mm.Arg), lang.ForWords(mm.Language))
+}
+
+// parseMoneyArgs reads "<amount> [on|for] <what> [at <vendor>]" into m;
+// isAmount is false when it does not start with an amount. forWords are
+// another language's words for "for", folded.
+func parseMoneyArgs(m chatMoney, rest, forWords []string) (_ chatMoney, isAmount, ok bool) {
+	if len(rest) == 0 {
+		return m, false, false
+	}
+	kobo, isAmount := parseKobo(rest[0])
+	if !isAmount {
+		return m, false, false
+	}
 	m.AmountKobo, rest = kobo, rest[1:]
-	if len(rest) > 0 && (strings.EqualFold(rest[0], "on") || strings.EqualFold(rest[0], "for")) {
+	if len(rest) > 0 && (strings.EqualFold(rest[0], "on") || isForWord(rest[0], forWords)) {
 		rest = rest[1:]
 	}
 	for i := len(rest) - 1; i > 0; i-- {
@@ -138,6 +173,16 @@ func parseMoneyCommand(text string) (m chatMoney, command, ok bool) {
 // the text is not one.
 func (s *Server) waMoneyCommand(ctx context.Context, c *chat, text string) (bool, error) {
 	m, command, ok := parseMoneyCommand(text)
+	return s.waMoneyStart(ctx, c, m, command, ok)
+}
+
+// waMoneyWords is waMoneyCommand for another language's command words.
+func (s *Server) waMoneyWords(ctx context.Context, c *chat, mm lang.Match) (bool, error) {
+	m, command, ok := parseMoneyWords(mm)
+	return s.waMoneyStart(ctx, c, m, command, ok)
+}
+
+func (s *Server) waMoneyStart(ctx context.Context, c *chat, m chatMoney, command, ok bool) (bool, error) {
 	if !command {
 		return false, nil
 	}

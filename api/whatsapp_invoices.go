@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -46,9 +48,15 @@ func parseInvoiceCommand(text string) (name string, kobo int64, what string, ok 
 	default:
 		return "", 0, "", false
 	}
-	rest := fields[1:]
+	return parseInvoiceArgs(fields[1:], nil)
+}
+
+// parseInvoiceArgs reads what follows the command word: "<name> <amount>
+// [for <what>]", "for" being English's or one of forWords (another
+// language's, folded: engine/lang ForWords).
+func parseInvoiceArgs(rest, forWords []string) (name string, kobo int64, what string, ok bool) {
 	for i := range rest {
-		if strings.EqualFold(rest[i], "for") && i+1 < len(rest) {
+		if isForWord(rest[i], forWords) && i+1 < len(rest) {
 			what = strings.Join(rest[i+1:], " ")
 			rest = rest[:i]
 			break
@@ -84,6 +92,11 @@ func parseInvoiceCommand(text string) (name string, kobo int64, what string, ok 
 	return name, kobo, strings.TrimSpace(what), true
 }
 
+// isForWord is "for", or one of forWords typed with or without accents.
+func isForWord(w string, forWords []string) bool {
+	return strings.EqualFold(w, "for") || slices.Contains(forWords, lang.Fold(w))
+}
+
 // waInvoiceCommand starts an invoice from an idle chat; false when the
 // text is not an invoice command.
 func (s *Server) waInvoiceCommand(ctx context.Context, c *chat, text, cmd string) (bool, error) {
@@ -97,8 +110,28 @@ func (s *Server) waInvoiceCommand(ctx context.Context, c *chat, text, cmd string
 		return true, c.say(ctx, s, c.t("wa.invoice.denied", "org", c.tenant.Name))
 	}
 	name, kobo, what, ok := parseInvoiceCommand(text)
+	return true, s.waInvoiceStart(ctx, c, name, kobo, what, ok)
+}
+
+// waInvoiceWords starts an invoice from another language's command words
+// (engine/lang intents/<tag>.json): "ìwé owó Ada 25,000 fún ìrẹsì";
+// false when invoices are off.
+func (s *Server) waInvoiceWords(ctx context.Context, c *chat, m lang.Match) (bool, error) {
+	if s.Invoices == nil {
+		return false, nil
+	}
+	if !c.p.Can(PermInvoiceManage) {
+		return true, c.say(ctx, s, c.t("wa.invoice.denied", "org", c.tenant.Name))
+	}
+	name, kobo, what, ok := parseInvoiceArgs(strings.Fields(m.Arg), lang.ForWords(m.Language))
+	return true, s.waInvoiceStart(ctx, c, name, kobo, what, ok)
+}
+
+// waInvoiceStart asks for the customer's address of an invoice command
+// read (ok), or says how to write one.
+func (s *Server) waInvoiceStart(ctx context.Context, c *chat, name string, kobo int64, what string, ok bool) error {
 	if !ok {
-		return true, c.say(ctx, s, c.t("wa.invoice.how"))
+		return c.say(ctx, s, c.t("wa.invoice.how"))
 	}
 	inv := &chatInvoice{AmountKobo: kobo, For: what}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
@@ -106,12 +139,12 @@ func (s *Server) waInvoiceCommand(ctx context.Context, c *chat, text, cmd string
 		inv.Name, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, "name", sender.CleanName(name))
 		return err
 	}); err != nil {
-		return true, err
+		return err
 	}
 	if err := s.saveSession(ctx, c, stateCollecting, chatData{Invoice: inv}, waPendingTTL); err != nil {
-		return true, err
+		return err
 	}
-	return true, c.say(ctx, s, c.t("wa.invoice.contact", "name", whatsapp.SafeText(sender.CleanName(name))))
+	return c.say(ctx, s, c.t("wa.invoice.contact", "name", whatsapp.SafeText(sender.CleanName(name))))
 }
 
 // waInvoiceReply takes the customer's address, then Yes or No.

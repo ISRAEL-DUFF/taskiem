@@ -1,6 +1,51 @@
 package api
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/israel-duff/taskiem/engine/lang"
+)
+
+// The other languages' expense and cash words (draft lists in
+// engine/lang): only with an amount right after them.
+func TestMoneyWordsPerLanguage(t *testing.T) {
+	for _, c := range []struct {
+		tag     lang.Tag
+		in      string
+		want    chatMoney
+		command bool
+		ok      bool
+	}{
+		{lang.PCM, "I spend 12,000 for diesel at Total", chatMoney{Kind: "expense", Direction: "out", AmountKobo: 1200000, Description: "diesel", Vendor: "Total", Category: "fuel"}, true, true},
+		{lang.PCM, "i don spend 1500 on airtime", chatMoney{Kind: "expense", Direction: "out", AmountKobo: 150000, Description: "airtime", Category: "phone"}, true, true},
+		{lang.PCM, "cash enter 20,000 till", chatMoney{Kind: "cash", Direction: "in", AmountKobo: 2000000, Description: "till"}, true, true},
+		{lang.PCM, "money comot 3k", chatMoney{Kind: "cash", Direction: "out", AmountKobo: 300000, Description: "Cash out"}, true, true},
+		{lang.PCM, "I spend the whole day for market", chatMoney{}, false, false},
+		{lang.YO, "Mo ná 12,000 fún diesel", chatMoney{Kind: "expense", Direction: "out", AmountKobo: 1200000, Description: "diesel", Category: "fuel"}, true, true},
+		{lang.YO, "ìnáwó 5000 epo", chatMoney{Kind: "expense", Direction: "out", AmountKobo: 500000, Description: "epo", Category: "other"}, true, true},
+		{lang.YO, "owo wole 20000", chatMoney{Kind: "cash", Direction: "in", AmountKobo: 2000000, Description: "Cash in"}, true, true},
+		{lang.YO, "owó jáde 3,000 float", chatMoney{Kind: "cash", Direction: "out", AmountKobo: 300000, Description: "float"}, true, true},
+		{lang.YO, "mo ná 12000", chatMoney{}, true, false},
+		{lang.HA, "na kashe 12,000 don diesel", chatMoney{Kind: "expense", Direction: "out", AmountKobo: 1200000, Description: "diesel", Category: "fuel"}, true, true},
+		{lang.HA, "kuɗi ya shigo 20,000", chatMoney{Kind: "cash", Direction: "in", AmountKobo: 2000000, Description: "Cash in"}, true, true},
+		{lang.HA, "kudi ya fita 3000 float", chatMoney{Kind: "cash", Direction: "out", AmountKobo: 300000, Description: "float"}, true, true},
+		{lang.HA, "na kashe kudi da yawa", chatMoney{}, false, false},
+		{lang.IG, "emefuru m 12,000 maka diesel", chatMoney{Kind: "expense", Direction: "out", AmountKobo: 1200000, Description: "diesel", Category: "fuel"}, true, true},
+		{lang.IG, "mmefu 2,500 rent", chatMoney{Kind: "expense", Direction: "out", AmountKobo: 250000, Description: "rent", Category: "rent"}, true, true},
+		{lang.IG, "ego batara 20000 till", chatMoney{Kind: "cash", Direction: "in", AmountKobo: 2000000, Description: "till"}, true, true},
+		{lang.IG, "ego pụrụ 3000", chatMoney{Kind: "cash", Direction: "out", AmountKobo: 300000, Description: "Cash out"}, true, true},
+	} {
+		m, matched := lang.MatchIntent(c.in, []lang.Tag{c.tag, lang.EN})
+		if !matched || m.Language != c.tag {
+			t.Errorf("%s %q: matched %+v %v", c.tag, c.in, m, matched)
+			continue
+		}
+		got, command, ok := parseMoneyWords(m)
+		if command != c.command || ok != c.ok || (ok && got != c.want) {
+			t.Errorf("%s %q: %+v %v %v", c.tag, c.in, got, command, ok)
+		}
+	}
+}
 
 func TestParseMoneyCommand(t *testing.T) {
 	for _, c := range []struct {

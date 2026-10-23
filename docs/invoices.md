@@ -67,6 +67,10 @@ These buttons are the only thing the customer can do in the chat besides STOP an
 
 **Limit.** WhatsApp lets a business message someone only within 24 hours of their last message unless it uses a template Meta has approved, and the template for an invoice with buttons is not approved yet. Outside that window the invoice goes by SMS and email only; on Telegram there is no window.
 
+## From chat
+
+A member with `invoice.manage` who linked WhatsApp or Telegram can make and send an invoice there: `invoice Ada 25,000 for 5 bags of rice` (or `bill Chi 10k`) asks for the customer's phone number or email, shows the invoice and sends it after **yes** ([WhatsApp commands](whatsapp.md#for-people-using-taskiem-on-whatsapp)). In Pidgin, Yoruba, Hausa or Igbo, where that language is on, its own words work too, such as `ìwé owó Ada 25,000 fún ìrẹsì` or `takardar kuɗi Musa 25,000 don shinkafa`; they are unreviewed drafts ([the words](whatsapp.md#invoices-and-money-in-other-languages)). The English words work in every language.
+
 ## Payments
 
 Each payment counted towards an invoice is listed on it: the amount, the payment's reference at the payments provider, how it was matched to the invoice ("Paid into the account Taskiem gave"; "Suggested, confirmed by" the person who confirmed it; "Matched automatically"; or "Matched by hand"), the reasons a suggested or automatic match was made, and who matched it. **Undo** takes a payment out of an invoice when it was matched to the wrong one.

@@ -9,7 +9,12 @@
     "customers"
   ],
   "keywords": [
-    "receipt"
+    "receipt",
+    "receipts",
+    "thank you"
+  ],
+  "requires": [
+    "invoice"
   ],
   "connectors": [
     "invoices@1",

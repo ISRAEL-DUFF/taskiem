@@ -75,7 +75,16 @@ export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href:
 /** Templates suited to a first workflow, in this order when present: the
  * first needs nothing connected, none needs a developer; then the rest of
  * the library, with those that need a developer last. */
-export const STARTERS = ["daily-reminder", "payroll-reminder", "payment-link-per-order", "pay-a-list", "low-balance-alert", "stock-reorder-alert"];
+export const STARTERS = [
+  "daily-reminder",
+  "payroll-reminder",
+  "send-invoice",
+  "payment-link-per-order",
+  "pay-a-list",
+  "chase-overdue-invoices",
+  "low-balance-alert",
+  "stock-reorder-alert",
+];
 
 export function starterTemplates(list: Template[], connected: string[] = []): Template[] {
   // A template around a product (Payrolla) is for businesses that
@@ -89,6 +98,42 @@ export function starterTemplates(list: Template[], connected: string[] = []): Te
   return [...list]
     .filter((t) => t.available && (!t.product || connected.includes(t.product)))
     .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
+}
+
+/** First things a small business can do besides the checklist: links,
+ * not steps, since not every business invoices. Each needs the permission
+ * its page needs. */
+export interface FirstThing {
+  id: "invoice" | "money";
+  title: string;
+  text: string;
+  href: string;
+  action: string;
+  perm: string;
+}
+
+export const FIRST_THINGS: FirstThing[] = [
+  {
+    id: "invoice",
+    title: "Send your first invoice",
+    text: "Bill a customer by SMS, email or WhatsApp with a page they pay from. It marks itself paid when the money comes in.",
+    href: "/invoices/new",
+    action: "Make an invoice",
+    perm: "invoice.manage",
+  },
+  {
+    id: "money",
+    title: "See your money",
+    text: "Every naira in and out in one place: what is still owed, what came in with no invoice, and fees that look wrong.",
+    href: "/money",
+    action: "Open Money",
+    perm: "invoice.read",
+  },
+];
+
+/** The first things this person may do. */
+export function firstThings(can: (perm: string) => boolean): FirstThing[] {
+  return FIRST_THINGS.filter((f) => can(f.perm));
 }
 
 /** "4 min 05 s", "2 h 10 min", "3 days". */

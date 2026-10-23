@@ -981,7 +981,7 @@
       "reviewed": false
     },
     "wa.help.invoice": {
-      "text": "• *invoice* ya na aha, ego na ihe ọ bụ maka ya (*invoice Ada 25,000 for 5 bags of rice*): ọ ga-eziga onye ahịa gị akwụkwọ ụgwọ",
+      "text": "• *invoice* (ma ọ bụ *akwụkwọ ụgwọ*) ya na aha, ego na ihe ọ bụ maka ya (*invoice Ada 25,000 for 5 bags of rice*): ọ ga-eziga onye ahịa gị akwụkwọ ụgwọ",
       "reviewed": false
     },
     "wa.help.language": {
@@ -989,7 +989,7 @@
       "reviewed": false
     },
     "wa.help.money": {
-      "text": "• *spent* na ego ole na ihe e ji ya mee (*spent 12,000 on diesel at Total*), ma ọ bụ *cash in* ma ọ bụ *cash out* na ego ole (*cash in 20,000 till*): m ga-edenye ya n'akwụkwọ ego unu",
+      "text": "• *spent* (ma ọ bụ *emefuru m*) na ego ole na ihe e ji ya mee (*spent 12,000 on diesel at Total*), ma ọ bụ *cash in* (*ego batara*) ma ọ bụ *cash out* (*ego pụrụ*) na ego ole (*cash in 20,000 till*): m ga-edenye ya n'akwụkwọ ego unu",
       "reviewed": false
     },
     "wa.help.run": {

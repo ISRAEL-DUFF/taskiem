@@ -26,8 +26,13 @@
     "publish": ["tẹ̀ jáde"],
     "close_shop": ["ti ṣọ́ọ̀bù mi", "ti ṣọ́ọ̀bù"],
     "order_ready": ["ti ṣetán"],
-    "order_delivered": ["ti dé ọ̀dọ̀ wọn", "wọ́n ti gbà á"]
+    "order_delivered": ["ti dé ọ̀dọ̀ wọn", "wọ́n ti gbà á"],
+    "invoice": ["ìwé owó", "ìwé ìsanwó", "fi ìwé owó ránṣẹ́ sí"],
+    "expense": ["mo ná", "mo ti ná", "ìnáwó"],
+    "cash_in": ["owó wọlé"],
+    "cash_out": ["owó jáde"]
   },
   "fillers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "ẹ jọ̀ọ́"],
-  "markers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "mo fẹ́", "kí ni", "báwo", "owó", "ọjọ́", "lónìí", "ṣé", "àwọn", "fún", "ẹ kú", "ìrànlọ́wọ́", "kùnà", "fagilé", "bẹ́ẹ̀ni", "rárá", "ẹ ṣé", "oníbàárà"]
+  "markers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "mo fẹ́", "kí ni", "báwo", "owó", "ọjọ́", "lónìí", "ṣé", "àwọn", "fún", "ẹ kú", "ìrànlọ́wọ́", "kùnà", "fagilé", "bẹ́ẹ̀ni", "rárá", "ẹ ṣé", "oníbàárà", "ìwé owó", "mo ná", "owó wọlé", "owó jáde"],
+  "for_words": ["fún"]
 }
