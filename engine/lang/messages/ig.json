@@ -872,6 +872,10 @@
       "text": "Ị nwere ike iziga:",
       "reviewed": false
     },
+    "wa.help.invoice": {
+      "text": "• *invoice* ya na aha, ego na ihe ọ bụ maka ya (*invoice Ada 25,000 for 5 bags of rice*): ọ ga-eziga onye ahịa gị akwụkwọ ụgwọ",
+      "reviewed": false
+    },
     "wa.help.language": {
       "text": "• *language* na aha asụsụ: azịza n'asụsụ {languages}",
       "reviewed": false
@@ -906,6 +910,50 @@
     },
     "wa.help.voice": {
       "text": "• ozi olu: aga m anwa ide ya (nnwale)",
+      "reviewed": false
+    },
+    "wa.invoice.amount_due": {
+      "text": "Ego a na-akwụ",
+      "reviewed": false
+    },
+    "wa.invoice.confirm": {
+      "text": "Ka m ziga {name} ({to}) akwụkwọ ụgwọ nke {amount}: {for}?",
+      "reviewed": false
+    },
+    "wa.invoice.confirm_reminder": {
+      "text": "Zaa *yes* ka m ziga akwụkwọ ụgwọ ahụ ma ọ bụ *no* ka anyị hapụ ya.",
+      "reviewed": false
+    },
+    "wa.invoice.contact": {
+      "text": "Gịnị bụ nọmba ekwentị ma ọ bụ email {name}? Ọ bụ ebe ahụ ka akwụkwọ ụgwọ ga-aga.",
+      "reviewed": false
+    },
+    "wa.invoice.contact_again": {
+      "text": "Nke ahụ abụghị nọmba ekwentị ma ọ bụ email. Gịnị bụ nọmba ekwentị ma ọ bụ email {name}?",
+      "reviewed": false
+    },
+    "wa.invoice.denied": {
+      "text": "Ị nweghị ike ime akwụkwọ ụgwọ na {org}.",
+      "reviewed": false
+    },
+    "wa.invoice.how": {
+      "text": "Kwuo onye, ole na ihe ọ bụ maka ya, dị ka nke a: *invoice Ada 25,000 for 5 bags of rice*",
+      "reviewed": false
+    },
+    "wa.invoice.not_sent": {
+      "text": "Ezighị ya. Ọ dịghị ihe echekwara.",
+      "reviewed": false
+    },
+    "wa.invoice.refused": {
+      "text": "Enweghị m ike ime akwụkwọ ụgwọ ahụ: {reason}",
+      "reviewed": false
+    },
+    "wa.invoice.saved_not_sent": {
+      "text": "Echekwala {number} mana enweghị ike iziga ya: edoziteghị ozi nye ndị ahịa. Ziga ya site na Invoices na web app.",
+      "reviewed": false
+    },
+    "wa.invoice.sent": {
+      "text": "Ezigala m {number} nye {name} maka {amount}. Ị nwere ike ịhụ ya n'okpuru Invoices na web app.",
       "reviewed": false
     },
     "wa.link_at": {

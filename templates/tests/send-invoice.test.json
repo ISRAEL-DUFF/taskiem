@@ -1,0 +1,245 @@
+{
+  "schema": "wd-test/v1",
+  "template": "send-invoice",
+  "params": {
+    "wait_days": 14
+  },
+  "cases": [
+    {
+      "name": "the invoice is made and sent, and the owner is told when it is paid",
+      "trigger": {
+        "body": {
+          "name": "Bola Ade",
+          "phone": "+2348031234567",
+          "amount_naira": 25000.5,
+          "for": "5 bags of rice",
+          "due_on": "2026-01-31"
+        }
+      },
+      "mocks": {
+        "invoice": {
+          "output": {
+            "number": "INV-0007",
+            "status": "draft",
+            "total": "₦25,000.50",
+            "total_kobo": 2500050
+          }
+        },
+        "send": {
+          "output": {
+            "number": "INV-0007",
+            "status": "sent",
+            "queued": [
+              "sms"
+            ]
+          }
+        },
+        "tell_paid": {
+          "output": {
+            "people": 1,
+            "chat": 1,
+            "email": 0,
+            "nobody": false
+          }
+        }
+      },
+      "signals": {
+        "paid": {
+          "payload": {
+            "number": "INV-0007",
+            "status": "paid",
+            "total_kobo": 2500050,
+            "paid_kobo": 2500050
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "invoice": {
+            "customer": {
+              "name": "Bola Ade",
+              "phone": "+2348031234567",
+              "email": ""
+            },
+            "amount_kobo": 2500050,
+            "description": "5 bags of rice",
+            "due_on": "2026-01-31"
+          },
+          "send": {
+            "number": "INV-0007"
+          },
+          "tell_paid": {
+            "title": "Invoice paid",
+            "message": "Invoice INV-0007 (₦25,000.50) is paid in full."
+          }
+        },
+        "steps": {
+          "tell_paid": "completed",
+          "check": "not_run",
+          "tell_unpaid": "not_run"
+        }
+      }
+    },
+    {
+      "name": "an invoice not paid in time is reported with what is still due",
+      "trigger": {
+        "body": {
+          "name": "Bola Ade",
+          "phone": "+2348031234567",
+          "amount_naira": 25000.5,
+          "for": "5 bags of rice",
+          "due_on": "2026-01-31"
+        }
+      },
+      "mocks": {
+        "invoice": {
+          "output": {
+            "number": "INV-0007",
+            "status": "draft",
+            "total": "₦25,000.50",
+            "total_kobo": 2500050
+          }
+        },
+        "send": {
+          "output": {
+            "number": "INV-0007",
+            "status": "sent",
+            "queued": [
+              "sms"
+            ]
+          }
+        },
+        "check": {
+          "output": {
+            "number": "INV-0007",
+            "status": "part_paid",
+            "due": "₦5,000.50",
+            "due_kobo": 500050,
+            "total": "₦25,000.50",
+            "total_kobo": 2500050,
+            "paid_kobo": 2000000
+          }
+        },
+        "tell_unpaid": {
+          "output": {
+            "people": 1,
+            "chat": 1,
+            "email": 0,
+            "nobody": false
+          }
+        }
+      },
+      "signals": {
+        "paid": {
+          "timeout": true
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "check": {
+            "number": "INV-0007"
+          },
+          "tell_unpaid": {
+            "title": "Invoice not paid yet",
+            "message": "Invoice INV-0007 is not paid yet: ₦5,000.50 still due."
+          }
+        },
+        "steps": {
+          "tell_paid": "skipped",
+          "check": "completed",
+          "tell_unpaid": "completed"
+        }
+      }
+    },
+    {
+      "name": "an invoice voided while waiting is not chased",
+      "trigger": {
+        "body": {
+          "name": "Bola Ade",
+          "phone": "+2348031234567",
+          "amount_naira": 25000.5,
+          "for": "5 bags of rice",
+          "due_on": "2026-01-31"
+        }
+      },
+      "mocks": {
+        "invoice": {
+          "output": {
+            "number": "INV-0007",
+            "status": "draft",
+            "total": "₦25,000.50",
+            "total_kobo": 2500050
+          }
+        },
+        "send": {
+          "output": {
+            "number": "INV-0007",
+            "status": "sent",
+            "queued": [
+              "sms"
+            ]
+          }
+        },
+        "check": {
+          "output": {
+            "number": "INV-0007",
+            "status": "void",
+            "due": "₦25,000.50",
+            "due_kobo": 2500050,
+            "total": "₦25,000.50",
+            "total_kobo": 2500050,
+            "paid_kobo": 0
+          }
+        }
+      },
+      "signals": {
+        "paid": {
+          "timeout": true
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "tell_paid": "skipped",
+          "tell_unpaid": "skipped"
+        }
+      }
+    },
+    {
+      "name": "an invoice the customer cannot be sent fails plainly",
+      "trigger": {
+        "body": {
+          "name": "Bola Ade",
+          "phone": "+2348031234567",
+          "amount_naira": 25000.5,
+          "for": "5 bags of rice",
+          "due_on": "2026-01-31"
+        }
+      },
+      "mocks": {
+        "invoice": {
+          "output": {
+            "number": "INV-0007",
+            "status": "draft",
+            "total": "₦25,000.50",
+            "total_kobo": 2500050
+          }
+        },
+        "send": {
+          "error": {
+            "kind": "fatal",
+            "message": "invoice INV-0007 is void"
+          }
+        }
+      },
+      "expect": {
+        "status": "failed",
+        "steps": {
+          "paid": "not_run"
+        }
+      }
+    }
+  ]
+}

@@ -1089,6 +1089,11 @@
       "reviewed": true,
       "context": "Help: first line"
     },
+    "wa.help.invoice": {
+      "text": "• *invoice* with a name, an amount and what it is for (*invoice Ada 25,000 for 5 bags of rice*): sends your customer an invoice",
+      "reviewed": true,
+      "context": "Help line, with invoice.manage; keep the command word invoice in English"
+    },
     "wa.help.language": {
       "text": "• *language* and a language's name: replies in {languages}",
       "reviewed": true,
@@ -1133,6 +1138,61 @@
       "text": "• a voice note: I will try to transcribe it (beta)",
       "reviewed": true,
       "context": "Help line, when voice notes are on"
+    },
+    "wa.invoice.amount_due": {
+      "text": "Amount due",
+      "reviewed": true,
+      "context": "what an invoice with no description is for"
+    },
+    "wa.invoice.confirm": {
+      "text": "Send {name} ({to}) an invoice for {amount}: {for}?",
+      "reviewed": true,
+      "context": "the invoice shown before sending; {to} is masked"
+    },
+    "wa.invoice.confirm_reminder": {
+      "text": "Reply *yes* to send the invoice or *no* to leave it.",
+      "reviewed": true,
+      "context": "while an invoice waits for yes or no"
+    },
+    "wa.invoice.contact": {
+      "text": "What is {name}'s phone number or email? The invoice goes there.",
+      "reviewed": true,
+      "context": "asking for the customer's address"
+    },
+    "wa.invoice.contact_again": {
+      "text": "That is not a phone number or an email. What is {name}'s phone number or email?",
+      "reviewed": true,
+      "context": "the address could not be read"
+    },
+    "wa.invoice.denied": {
+      "text": "You cannot make invoices in {org}.",
+      "reviewed": true,
+      "context": "invoice without invoice.manage"
+    },
+    "wa.invoice.how": {
+      "text": "Say who, how much and what for, like this: *invoice Ada 25,000 for 5 bags of rice*",
+      "reviewed": true,
+      "context": "an invoice command that could not be read; keep the example in English"
+    },
+    "wa.invoice.not_sent": {
+      "text": "Not sent. Nothing was saved.",
+      "reviewed": true,
+      "context": "the person said no"
+    },
+    "wa.invoice.refused": {
+      "text": "I could not make that invoice: {reason}",
+      "reviewed": true,
+      "context": "the invoice was refused; {reason} says why, in English"
+    },
+    "wa.invoice.saved_not_sent": {
+      "text": "{number} is saved but could not be sent: messages to customers are not set up. Send it from Invoices in the web app.",
+      "reviewed": true,
+      "context": "the invoice was made but no SMS or email could be queued"
+    },
+    "wa.invoice.sent": {
+      "text": "Sent {number} to {name} for {amount}. You can see it under Invoices in the web app.",
+      "reviewed": true,
+      "context": "the invoice was sent"
     },
     "wa.link_at": {
       "text": " at {url}",
