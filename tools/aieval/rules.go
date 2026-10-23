@@ -122,7 +122,7 @@ func ruleIdempotency(def *wd.Definition, reg connector.Lookup) (bool, string) {
 // by their connector).
 func ruleWebhookAuth(def *wd.Definition, _ connector.Lookup) (bool, string) {
 	switch def.Trigger.Type {
-	case "connector_event":
+	case "connector_event", "capability_event":
 		return true, ""
 	case "webhook":
 		if a, _ := def.Trigger.Config["auth"].(string); a != "" && a != "none" {
@@ -138,7 +138,7 @@ func ruleWebhookAuth(def *wd.Definition, _ connector.Lookup) (bool, string) {
 // submission (on its submission id) or an email (on its Message-ID).
 func ruleDedup(def *wd.Definition, _ connector.Lookup) (bool, string) {
 	switch def.Trigger.Type {
-	case "connector_event", "form", "email":
+	case "connector_event", "capability_event", "form", "email":
 		return true, ""
 	case "webhook":
 		if d, _ := def.Trigger.Config["dedup"].(string); d != "" {

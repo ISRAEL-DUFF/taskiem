@@ -332,6 +332,8 @@ export interface CapabilityInfo {
   output?: JSONSchemaLike;
   /** Connectors (id@major) that can do it. */
   rails: string[];
+  /** A normalised payment event a capability_event trigger starts on (payout.failed): not a step's capability. */
+  kind?: "event";
 }
 
 type JSONSchemaLike = { type?: string; properties?: Record<string, unknown>; required?: string[] } & Record<string, unknown>;

@@ -4225,7 +4225,7 @@ paths:
       tags:
       - Connectors
       summary: List capabilities
-      description: 'What rails can do in Taskiem''s words (schemas/capabilities-v1.json), with await_settlement and await_reversal, and the rails the tenant can use for each: what a capability step may use.'
+      description: 'What rails can do in Taskiem''s words (schemas/capabilities-v1.json), with the waits (await_settlement, await_reversal, await_payment) and the normalised payment events (kind event), and the rails the tenant can use for each: what a capability step or a capability_event trigger may use.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -4267,6 +4267,11 @@ paths:
                           items:
                             type: string
                           description: Connectors (id@major) the tenant can use that can do it.
+                        kind:
+                          type: string
+                          enum:
+                          - event
+                          description: A normalised payment event a capability_event trigger starts on; its input is the event's fields.
                       additionalProperties: false
                 additionalProperties: false
         default:

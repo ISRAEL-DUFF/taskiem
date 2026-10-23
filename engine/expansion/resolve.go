@@ -85,15 +85,27 @@ func railOf(c Connection, uses string, reg connector.Lookup) (Rail, bool) {
 
 func declares(m *connector.Manifest, uses string) bool {
 	if wd.IsWait(uses) {
-		for _, c := range m.Capabilities {
-			if c.SettlesBy != nil {
-				return true
-			}
-		}
-		return false
+		return CanWait(m, uses)
 	}
 	_, ok := m.Capabilities[uses]
 	return ok
+}
+
+// CanWait reports whether a rail can run the wait: for await_payment, it
+// makes payment pages and says when one is paid; for the payout waits, it
+// settles a payment later (settles_by).
+func CanWait(m *connector.Manifest, uses string) bool {
+	if uses == "await_payment" {
+		_, links := m.Capabilities["collect_link"]
+		_, paid := m.Events["payment.received"]
+		return links && paid
+	}
+	for _, c := range m.Capabilities {
+		if c.SettlesBy != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // cannot says that a connection's service cannot do the capability, and

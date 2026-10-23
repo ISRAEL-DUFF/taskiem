@@ -14,7 +14,7 @@
     "patch_valid_rate": 1,
     "patch_pass_rate": 0.7778,
     "usage": {
-      "input_tokens": 156463,
+      "input_tokens": 160660,
       "output_tokens": 7005,
       "cache_creation_tokens": 0,
       "cache_read_tokens": 0
@@ -189,7 +189,7 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 12792,
+        "input_tokens": 13092,
         "output_tokens": 24,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -394,7 +394,7 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 12809,
+        "input_tokens": 13109,
         "output_tokens": 793,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -421,7 +421,7 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 18365,
+        "input_tokens": 18665,
         "output_tokens": 4180,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -447,7 +447,7 @@
       "attempts": 3,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29985,
+        "input_tokens": 30884,
         "output_tokens": 390,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -473,7 +473,7 @@
       "attempts": 3,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30216,
+        "input_tokens": 31115,
         "output_tokens": 516,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -499,7 +499,7 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 11840,
+        "input_tokens": 12140,
         "output_tokens": 173,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -525,7 +525,7 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 11843,
+        "input_tokens": 12142,
         "output_tokens": 173,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -551,7 +551,7 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 9401,
+        "input_tokens": 9701,
         "output_tokens": 128,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -577,7 +577,7 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 9404,
+        "input_tokens": 9704,
         "output_tokens": 121,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -604,7 +604,7 @@
       "attempts": 1,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 9808,
+        "input_tokens": 10108,
         "output_tokens": 507,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0

@@ -1,0 +1,178 @@
+{
+  "schema": "wd-test/v1",
+  "template": "refund-with-approval",
+  "params": {},
+  "cases": [
+    {
+      "name": "a paid payment is refunded once, after approval",
+      "trigger": {
+        "body": {
+          "payment": "ref_1042",
+          "customer": "Ngozi Okafor",
+          "reason": "Order cancelled"
+        }
+      },
+      "mocks": {
+        "tell_done": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_not_paid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "look": {
+          "output": {
+            "status": "paid",
+            "amount_kobo": 1250000,
+            "paid_at": "2026-10-20T12:00:00Z"
+          }
+        },
+        "refund": {
+          "output": {
+            "refund_id": "rf_1",
+            "status": "pending"
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "approve": {
+            "decision": "approved"
+          },
+          "look": {
+            "status": "paid",
+            "amount_kobo": 1250000
+          }
+        },
+        "inputs": {
+          "refund": {
+            "payment_id": "ref_1042",
+            "reason": "Order cancelled"
+          },
+          "tell_done": {
+            "message": "The refund of payment ref_1042 for Ngozi Okafor is pending."
+          }
+        },
+        "steps": {
+          "tell_rejected": "skipped",
+          "tell_not_paid": "skipped"
+        },
+        "calls": {
+          "refund": 1
+        }
+      }
+    },
+    {
+      "name": "a refund not approved refunds nothing",
+      "trigger": {
+        "body": {
+          "payment": "ref_1042",
+          "customer": "Ngozi Okafor",
+          "reason": "Order cancelled"
+        }
+      },
+      "mocks": {
+        "tell_done": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_not_paid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "look": {
+          "output": {
+            "status": "paid",
+            "amount_kobo": 1250000
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "rejected",
+          "by": "finance"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "refund": "skipped",
+          "tell_rejected": "completed"
+        },
+        "calls": {
+          "refund": 0
+        }
+      }
+    },
+    {
+      "name": "a payment not made, or refunded already, is not refunded and needs no approval",
+      "trigger": {
+        "body": {
+          "payment": "ref_1042",
+          "customer": "Ngozi Okafor",
+          "reason": "Order cancelled"
+        }
+      },
+      "mocks": {
+        "tell_done": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_rejected": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_not_paid": {
+          "output": {
+            "people": 1
+          }
+        },
+        "look": {
+          "output": {
+            "status": "refunded"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "approve": "skipped",
+          "refund": "skipped",
+          "tell_not_paid": "completed"
+        },
+        "calls": {
+          "refund": 0
+        },
+        "inputs": {
+          "tell_not_paid": {
+            "message": "Payment ref_1042 is refunded, not paid, so there is nothing to refund."
+          }
+        }
+      }
+    }
+  ]
+}

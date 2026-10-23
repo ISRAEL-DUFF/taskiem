@@ -1,40 +1,153 @@
 {
   "id": "transfer-received-notify",
-  "title": "Tell the owner about each bank transfer received",
-  "summary": "When Moniepoint (Monnify) reports money received into your account, tell the owner and log it in a sheet.",
-  "description": "Whenever Moniepoint (Monnify) reports a successful payment into your reserved account, tells the owner who paid and how much, and adds a row to your collections sheet at the same time. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
+  "title": "Tell the owner about each payment received",
+  "summary": "When a customer pays, by a payment page or a transfer to their account number, tell the owner and log it in a sheet.",
+  "description": "Whenever your payments account reports money received (a customer paying a payment page, or a bank transfer from a customer), tells the owner who paid and how much, and adds a row to a Google Sheet: date, reference, payer and amount. Works with Paystack, Moniepoint or Flutterwave; the owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
   "category": "collections",
-  "tags": ["collections", "payments", "transfers", "moniepoint", "sms", "google sheets", "owner"],
-  "keywords": ["received", "receive", "transfer", "inflow", "credit", "credited", "deposit", "bank", "account", "money", "moniepoint", "monnify"],
-  "connectors": ["moniepoint@1", "notify@1", "googlesheets@1"],
+  "tags": [
+    "collections",
+    "payments",
+    "google sheets",
+    "owner"
+  ],
+  "keywords": [
+    "received",
+    "receive",
+    "transfer",
+    "inflow",
+    "credit",
+    "credited",
+    "deposit",
+    "account",
+    "money",
+    "moniepoint",
+    "monnify",
+    "paystack",
+    "flutterwave",
+    "paid",
+    "payment received"
+  ],
+  "connectors": [
+    "notify@1",
+    "googlesheets@1",
+    "capability:payment.received",
+    "capability:virtual_account.credited"
+  ],
   "variables": [],
   "params": [
-    {"name": "spreadsheet_id", "type": "string", "title": "Collections spreadsheet", "description": "Paste the sheet's link from your browser.", "required": true, "example": "1CoLlEcTiOnSsHeEtId0123456789abcdef", "pattern": "^[A-Za-z0-9_-]{20,100}$", "picker": "sheet"},
-    {"name": "sheet_range", "type": "string", "title": "Tab", "description": "The tab each payment is added to.", "required": false, "default": "Collections", "example": "Collections", "picker": "sheet_tab", "from": "spreadsheet_id"},
-    {"name": "moniepoint_connection", "type": "connection", "connector": "moniepoint", "title": "Moniepoint connection", "description": "The Moniepoint (Monnify) connection whose webhooks start this workflow.", "required": false, "default": "main", "example": "main"},
-    {"name": "sheets_connection", "type": "connection", "connector": "googlesheets", "title": "Google Sheets connection", "description": "The name of your Google Sheets connection.", "required": false, "default": "main", "example": "main"}
+    {
+      "name": "spreadsheet_id",
+      "type": "string",
+      "title": "Collections spreadsheet",
+      "description": "Paste the sheet's link from your browser.",
+      "required": true,
+      "example": "1CoLlEcTiOnSsHeEtId0123456789abcdef",
+      "pattern": "^[A-Za-z0-9_-]{20,100}$",
+      "picker": "sheet"
+    },
+    {
+      "name": "sheet_range",
+      "type": "string",
+      "title": "Tab",
+      "description": "The tab each payment is added to.",
+      "required": false,
+      "default": "Collections",
+      "example": "Collections",
+      "picker": "sheet_tab",
+      "from": "spreadsheet_id"
+    },
+    {
+      "name": "sheets_connection",
+      "type": "connection",
+      "connector": "googlesheets",
+      "title": "Google Sheets connection",
+      "description": "The name of your Google Sheets connection.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "payment.received"
+      ],
+      "title": "Payments account",
+      "description": "Whose payments to report; every connected payments account when left blank.",
+      "required": false,
+      "default": "",
+      "example": ""
+    }
   ],
   "definition": {
     "schema": "wd/v1",
     "id": "wf_transferReceivedNotify",
     "version": 1,
     "name": "Tell the owner about transfers received",
-    "trigger": {"type": "connector_event", "config": {"connector": "moniepoint@1", "trigger": "event", "events": ["SUCCESSFUL_TRANSACTION"], "connection": "{{moniepoint_connection}}"}},
-    "inputs": {"schema": {"type": "object", "properties": {"eventData": {"type": "object", "properties": {
-      "transactionReference": {"type": "string"}, "amountPaid": {"type": "number"}, "paidOn": {"type": "string"},
-      "customer": {"type": "object", "properties": {"name": {"type": "string"}}}}}}}},
+    "trigger": {
+      "type": "capability_event",
+      "config": {
+        "events": [
+          "payment.received",
+          "virtual_account.credited"
+        ],
+        "connection": "{{rail_connection}}"
+      }
+    },
     "steps": [
-      {"id": "record", "type": "parallel", "name": "Tell the owner and log it", "config": {"branches": [
-        {"name": "owner_sms", "steps": [
-          {"id": "text_owner", "type": "connector", "name": "Tell the owner who paid", "connector": "notify@1", "action": "tell",
-           "input": {"message": "='Received NGN ' + string(trigger.body.eventData.amountPaid) + ' from ' + (has(trigger.body.eventData.customer.name) ? trigger.body.eventData.customer.name : 'a customer') + ' (ref ' + trigger.body.eventData.transactionReference + ')'"}}]},
-        {"name": "collections_sheet", "steps": [
-          {"id": "add_row", "type": "connector", "name": "Add it to the collections sheet", "connector": "googlesheets@1", "action": "append_rows", "connection": "{{sheets_connection}}",
-           "input": {"spreadsheet_id": "{{spreadsheet_id}}", "range": "{{sheet_range}}", "value_input_option": "RAW",
-             "values": [["=has(trigger.body.eventData.paidOn) ? trigger.body.eventData.paidOn : run.started_at", "=trigger.body.eventData.transactionReference",
-               "=has(trigger.body.eventData.customer.name) ? trigger.body.eventData.customer.name : ''", "=trigger.body.eventData.amountPaid"]]}}]}
-      ]}}
+      {
+        "id": "record",
+        "type": "parallel",
+        "name": "Tell the owner and log it",
+        "config": {
+          "branches": [
+            {
+              "name": "owner_sms",
+              "steps": [
+                {
+                  "id": "text_owner",
+                  "type": "connector",
+                  "name": "Tell the owner who paid",
+                  "connector": "notify@1",
+                  "action": "tell",
+                  "input": {
+                    "message": "='Received NGN ' + string(double(trigger.fields.amount_kobo) / 100.0) + ' from ' + (has(trigger.fields.payer_name) ? trigger.fields.payer_name : 'a customer') + ' (ref ' + (has(trigger.fields.payment_id) ? trigger.fields.payment_id : trigger.fields.reference) + ')'"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "collections_sheet",
+              "steps": [
+                {
+                  "id": "add_row",
+                  "type": "connector",
+                  "name": "Add it to the collections sheet",
+                  "connector": "googlesheets@1",
+                  "action": "append_rows",
+                  "connection": "{{sheets_connection}}",
+                  "input": {
+                    "spreadsheet_id": "{{spreadsheet_id}}",
+                    "range": "{{sheet_range}}",
+                    "value_input_option": "RAW",
+                    "values": [
+                      [
+                        "=has(trigger.fields.paid_at) ? trigger.fields.paid_at : run.started_at",
+                        "=(has(trigger.fields.payment_id) ? trigger.fields.payment_id : trigger.fields.reference)",
+                        "=has(trigger.fields.payer_name) ? trigger.fields.payer_name : ''",
+                        "=double(trigger.fields.amount_kobo) / 100.0"
+                      ]
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
     ],
-    "settings": {"timeout": "15m"}
+    "settings": {
+      "timeout": "15m"
+    }
   }
 }

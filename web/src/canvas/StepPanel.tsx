@@ -407,7 +407,7 @@ function CapabilityConfig({ step, connectors, set, advanced, sources }: { step: 
       <Field label="What to do">
         <select value={step.uses} onChange={(e) => set({ uses: e.target.value, input: undefined })}>
           {!cap && <option value={step.uses}>{step.uses}</option>}
-          {(caps.data?.capabilities ?? []).map((c) => (
+          {(caps.data?.capabilities ?? []).filter((c) => c.kind !== "event").map((c) => (
             <option key={c.name} value={c.name}>
               {c.title}
             </option>

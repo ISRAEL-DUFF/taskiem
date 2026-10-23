@@ -1,0 +1,59 @@
+{
+  "schema": "wd-test/v1",
+  "template": "low-balance-alert",
+  "params": {
+    "threshold": 50000
+  },
+  "cases": [
+    {
+      "name": "a balance below the level tells the owner",
+      "trigger": {
+        "scheduled_time": "2026-10-23T09:05:00Z"
+      },
+      "mocks": {
+        "balance": {
+          "output": {
+            "available_kobo": 3000000,
+            "currency": "NGN"
+          }
+        },
+        "text_owner": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "text_owner": "completed"
+        },
+        "inputs": {
+          "text_owner": {
+            "message": "Low balance: your payments account holds NGN 30000, below your alert level of NGN 50000. Top up to keep payouts running."
+          }
+        }
+      }
+    },
+    {
+      "name": "a balance above the level says nothing",
+      "trigger": {
+        "scheduled_time": "2026-10-23T09:05:00Z"
+      },
+      "mocks": {
+        "balance": {
+          "output": {
+            "available_kobo": 9000000,
+            "currency": "NGN"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "text_owner": "skipped"
+        }
+      }
+    }
+  ]
+}

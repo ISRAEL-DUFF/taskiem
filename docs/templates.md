@@ -11,21 +11,25 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | `debtor-reminder-whatsapp` | The same by an approved WhatsApp template | Google Sheets, WhatsApp |
 | `debtor-reminder-table` | Every week, text each customer in the debtors [data table](data-tables.md) who still has a balance; no spreadsheet | Xenibase (the `data_tables` connection), Tell me |
 | `invoice-follow-up` | After an invoice, wait a few days, check with Paystack, remind the customer if unpaid | Paystack, Tell me |
-| `transfer-received-notify` | Tell the owner about each transfer into the Moniepoint (Monnify) account and log it in a sheet | Moniepoint, Tell me, Google Sheets |
+| `transfer-received-notify` | Tell the owner about each payment received (a payment page paid, or a transfer into a customer's account number) and log it in a sheet | Any rail that sends payment events (Paystack, Moniepoint, Flutterwave), Tell me, Google Sheets |
 | `daily-sales-summary` | Every evening, add up today's sales from the sales sheet and tell the owner | Google Sheets, Tell me |
 | `sales-ledger-sheet` | Record every Paystack payment in a ledger sheet | Paystack, Google Sheets |
-| `weekly-balance-email` | Every week, email the owner the Paystack and Moniepoint balances | Paystack, Moniepoint, Gmail |
+| `weekly-balance-email` | Every week, email the owner the payments account's balance | Any rail with a balance (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), Gmail |
 | `payment-thank-you-sms` | Thank customers by SMS when Paystack confirms their payment | Paystack, Tell me |
 | `payment-receipt-whatsapp` | Send customers an approved WhatsApp receipt when they pay | Paystack, WhatsApp |
 | `new-customer-welcome` | Welcome new sign-ups by SMS and add them to the customer sheet | Tell me, Google Sheets |
 | `new-order-alert-sms` | Tell the owner each new order from the online shop (needs a developer: it starts from a web address the shop calls) | Tell me |
-| `low-balance-alert` | Tell the owner when the Paystack balance drops below a level | Paystack, Tell me |
-| `failed-transfer-alert` | Tell the owner and email the accountant when a transfer fails or is reversed | Paystack, Tell me, Gmail |
+| `low-balance-alert` | Tell the owner when the payments account's balance drops below a level | Any rail with a balance (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), Tell me |
+| `failed-transfer-alert` | Tell the owner and email the accountant when a payment sent fails or comes back | Any rail that reports payouts (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), Tell me, Gmail |
 | `stock-reorder-alert` | Every morning, tell the owner the items at or below their reorder level | Google Sheets, Tell me |
 | `payroll-reminder` | Before payday, remind the owner on WhatsApp or Telegram and the accountant by email | Tell me, Gmail |
 | `run-payroll` | On payday, check the staff table and every account's name with the bank, get the payroll approved, pay each person once through whichever payments account is connected, wait for the bank to confirm, record every payment and the payroll, tell each person and the owner, and watch each bank payment for 35 days in case it comes back ([rails and products](spec/rails-and-products.md#51-run-payroll)) | Any rail that can pay bank accounts (Paystack, Moniepoint, iswallet, Flutterwave, Anchor), Xenibase (the `data_tables` connection), Tell me |
 | `salary-payout-approval` | Replaced by `run-payroll` (`superseded_by`): no longer offered; workflows made from it keep working and are offered the upgrade | Google Sheets, Paystack, Tell me |
-| `supplier-payment-approval` | Pay a supplier invoice by Paystack transfer after approval and tell the owner the outcome | Paystack, Tell me |
+| `supplier-payment-approval` | Check the name on a supplier's account, pay the invoice after approval, follow it until the bank confirms, and tell the owner | Any rail that pays bank accounts (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), Tell me |
+| `pay-a-list` | Pay each row of a batch (suppliers, refunds owed, prizes, commissions) once after one approval, follow each to its end and record it | Any rail that pays bank accounts (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), data tables, Tell me |
+| `payment-link-per-order` | Send a customer a payment link for an order, remind them once, and record the order as paid or unpaid | Any rail that makes payment pages (Paystack, Moniepoint), data tables, Tell me |
+| `virtual-account-per-customer` | Open a customer their own account number to pay into, record it and send it to them | Moniepoint, data tables, Tell me |
+| `refund-with-approval` | Look a payment up, refund it once after approval, and tell the owner | Paystack, Tell me |
 | `kyc-bvn-check` | Check an applicant's BVN with Dojah; welcome them if the name matches, flag it otherwise | Dojah, Tell me, Gmail |
 | `pos-sales-record` | Every transaction your Moniepoint POS terminals make becomes a row in the `pos_sales` [data table](data-tables.md); the record the next three read ([POS terminals](strategy/pos-terminals.md)) | Moniepoint POS terminals, Xenibase (the `data_tables` connection) |
 | `pos-daily-summary` | Every evening, add up today's POS sales per terminal and per kind from the table and tell the owner | Xenibase, Tell me |

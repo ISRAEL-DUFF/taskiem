@@ -254,6 +254,46 @@ func TestConnectorEventsNormalised(t *testing.T) {
 	}
 }
 
+// A capability_event trigger (decision 0044) starts on the rail's
+// normalised event, not on its raw one: payout.failed from Paystack's
+// transfer.failed, once however often Paystack retries, and not on a
+// transfer.success.
+func TestCapabilityEventStarts(t *testing.T) {
+	w := newWorld(t)
+	if _, err := w.Vault.CreateConnection(ctx, w.Tenant, "prod", "paystack", "main", "api_key", map[string]string{"secret_key": "sk_test_x"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	wf := w.publish(t, `{"schema":"wd/v1","id":"wf_failed","version":1,"name":"failed",
+	  "trigger":{"type":"capability_event","config":{"events":["payout.failed","payout.reversed"]}},
+	  "steps":[{"id":"a","type":"transform","config":{"output":"=trigger.event + ' ' + trigger.fields.payout_id"}}]}`)
+	failed := []byte(`{"event":"transfer.failed","data":{"reference":"T-7","amount":5000,"reason":"Account closed"}}`)
+	sig := sign(sha512.New, "sk_test_x", failed)
+	st, out := w.post(t, "/connectors/paystack@1/transfer_event", failed, "x-paystack-signature", sig)
+	if st != 202 || len(out["runs"].([]any)) != 1 {
+		t.Fatalf("delivery: %d %v", st, out)
+	}
+	if st, out := w.post(t, "/connectors/paystack@1/transfer_event", failed, "x-paystack-signature", sig); st != 202 || out["duplicate"] != true {
+		t.Fatalf("retry: %d %v", st, out)
+	}
+	ok := []byte(`{"event":"transfer.success","data":{"reference":"T-8","amount":5000}}`)
+	if st, _ := w.post(t, "/connectors/paystack@1/transfer_event", ok, "x-paystack-signature", sign(sha512.New, "sk_test_x", ok)); st != 202 {
+		t.Fatalf("success: %d", st)
+	}
+	if n := w.runCount(t, wf); n != 1 {
+		t.Errorf("runs: %d, want 1", n)
+	}
+	run := runtime.RunRef{ID: uuid.MustParse(out["runs"].([]any)[0].(string)), TenantID: w.Tenant}
+	w.Drain(t)
+	h, _ := w.Store.RunHistory(ctx, run)
+	var all strings.Builder
+	for _, e := range h {
+		all.Write(e.Payload)
+	}
+	if !strings.Contains(all.String(), "payout.failed T-7") || w.Status(t, run) != "completed" {
+		t.Errorf("the run: %s %s", w.Status(t, run), all.String())
+	}
+}
+
 func TestScheduleFiresOnceAndAdvances(t *testing.T) {
 	w := newWorld(t)
 	wf := w.publish(t, `{"schema":"wd/v1","id":"wf_payroll","version":1,"name":"payroll","trigger":{"type":"schedule","config":{"cron":"0 9 25 * *"}},

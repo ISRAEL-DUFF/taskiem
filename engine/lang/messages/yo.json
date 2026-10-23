@@ -1976,6 +1976,10 @@
       "text": "Ṣètò dátà fún àwọn ìgbésẹ̀ tó kàn",
       "reviewed": false
     },
+    "wd.trigger.capability_event": {
+      "text": "Nígbà tí àkáǹtì ìsanwó bá ròyìn: {events}",
+      "reviewed": false
+    },
     "wd.trigger.database_change": {
       "text": "Nígbà tí ìlà kan nínú àkójọpọ̀ dátà bá yí padà",
       "reviewed": false

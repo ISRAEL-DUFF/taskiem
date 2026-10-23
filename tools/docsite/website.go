@@ -117,6 +117,9 @@ type wwwConnector struct {
 	ID, Name, Category, Description string
 	DocURL                          string // the connector's docs page, when it has one
 	Icon, Kind                      string // the adapter grid's icon and category label
+	// Can are a rail's capabilities and the payment events it sends
+	// (connector/v1 rule 16), for naming the rails a template runs on.
+	Can map[string]bool
 }
 
 type wwwConnectorGroup struct {
@@ -226,7 +229,7 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 		}
 		data.FeaturedServices = append(data.FeaturedServices, n)
 	}
-	data.Templates, data.Featured, err = groupTemplates(data.App, names)
+	data.Templates, data.Featured, err = groupTemplates(data.App, names, conns)
 	if err != nil {
 		return err
 	}
@@ -306,7 +309,17 @@ func loadConnectors(root string) ([]wwwConnector, error) {
 		if len(probs) > 0 {
 			return nil, fmt.Errorf("%s: %s", p, strings.Join(probs, "; "))
 		}
-		out = append(out, wwwConnector{ID: m.ID, Name: m.Name, Category: m.Category, Description: strings.TrimSpace(m.Description)})
+		c := wwwConnector{ID: m.ID, Name: m.Name, Category: m.Category, Description: strings.TrimSpace(m.Description)}
+		if m.KindOf() == "rail" {
+			c.Can = map[string]bool{}
+			for n := range m.Capabilities {
+				c.Can[n] = true
+			}
+			for n := range m.Events {
+				c.Can[n] = true
+			}
+		}
+		out = append(out, c)
 	}
 	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name) })
 	return out, nil
@@ -344,21 +357,63 @@ func groupConnectors(conns []wwwConnector) []wwwConnectorGroup {
 	return out
 }
 
-// anyRail is how a template that runs on any payments account names it.
-const anyRail = "Paystack, Moniepoint, iswallet, Flutterwave or Anchor"
+// railOrder is the order a business most likely knows the rails in.
+var railOrder = []string{"paystack", "moniepoint", "iswallet", "flutterwave", "anchor"}
+
+// railsFor names the rails that can run a template's capabilities: each
+// capability, and any one of its payment events ("Paystack, Moniepoint
+// or Flutterwave").
+func railsFor(uses []string, conns []wwwConnector) string {
+	var names []string
+	rank := func(id string) int {
+		if i := slices.Index(railOrder, id); i >= 0 {
+			return i
+		}
+		return len(railOrder)
+	}
+	rails := slices.Clone(conns)
+	sort.SliceStable(rails, func(i, j int) bool { return rank(rails[i].ID) < rank(rails[j].ID) })
+	for _, c := range rails {
+		if c.Can == nil {
+			continue
+		}
+		can, events, sends := true, false, false
+		for _, u := range uses {
+			if strings.Contains(u, ".") { // a payment event: payout.failed
+				events = true
+				sends = sends || c.Can[u]
+			} else {
+				can = can && c.Can[u]
+			}
+		}
+		if can && (!events || sends) {
+			names = append(names, c.Name)
+		}
+	}
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
+}
 
 // groupTemplates arranges the embedded library by category, and picks
 // the home page's cards.
-func groupTemplates(app string, names map[string]string) ([]wwwTemplateGroup, []wwwTemplate, error) {
+func groupTemplates(app string, names map[string]string, conns []wwwConnector) ([]wwwTemplateGroup, []wwwTemplate, error) {
 	lib := templates.Default()
 	as := func(t *templates.Template) wwwTemplate {
 		w := wwwTemplate{ID: t.ID, Title: t.Title, Summary: t.Summary}
+		var uses []string
+		for _, c := range t.Connectors {
+			if u, ok := strings.CutPrefix(c, templates.CapabilityPrefix); ok {
+				uses = append(uses, u)
+			}
+		}
+		if len(uses) > 0 {
+			// The rails that can, named once, as the business would.
+			w.Uses = append(w.Uses, railsFor(uses, conns))
+		}
 		for _, c := range t.Connectors {
 			if strings.HasPrefix(c, templates.CapabilityPrefix) {
-				// Any rail that can: named once, as the business would.
-				if !slices.Contains(w.Uses, anyRail) {
-					w.Uses = append(w.Uses, anyRail)
-				}
 				continue
 			}
 			id, _, _ := strings.Cut(c, "@")

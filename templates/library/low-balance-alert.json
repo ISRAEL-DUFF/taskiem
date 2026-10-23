@@ -1,30 +1,119 @@
 {
   "id": "low-balance-alert",
   "title": "Low balance alert",
-  "summary": "Check your Paystack balance regularly and tell the owner when it drops below a level you set.",
-  "description": "Every few hours, checks your Paystack naira balance and, when it is below the amount you set, tells the owner so payouts do not fail for lack of funds. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
+  "summary": "Check your payments account's balance regularly and tell the owner when it drops below a level you set.",
+  "description": "Every few hours, checks the naira balance of your payments account and, when it is below the amount you set, tells the owner so payouts do not fail for lack of funds. Works with Paystack, Moniepoint, iswallet, Flutterwave or Anchor; the owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
   "category": "alerts",
-  "tags": ["alerts", "balance", "treasury", "paystack", "sms", "schedule", "owner"],
-  "keywords": ["low", "balance", "below", "funds", "float", "alert", "top", "running", "out", "money", "account"],
-  "connectors": ["paystack@1", "notify@1"],
+  "tags": [
+    "alerts",
+    "balance",
+    "treasury",
+    "schedule",
+    "owner"
+  ],
+  "keywords": [
+    "low",
+    "balance",
+    "below",
+    "funds",
+    "float",
+    "alert",
+    "top",
+    "running",
+    "out",
+    "money",
+    "account"
+  ],
+  "connectors": [
+    "notify@1",
+    "capability:balance"
+  ],
   "variables": [],
   "params": [
-    {"name": "threshold", "type": "number", "title": "Alert below (naira)", "description": "Text the owner when the balance is below this many naira.", "required": true, "example": 50000, "minimum": 1, "maximum": 1000000000},
-    {"name": "every_hours", "type": "integer", "title": "Check every (hours)", "description": "How often to check, in hours.", "required": false, "default": 3, "example": 3, "minimum": 1, "maximum": 12},
-    {"name": "paystack_connection", "type": "connection", "connector": "paystack", "title": "Paystack connection", "description": "The name of your Paystack connection.", "required": false, "default": "main", "example": "main"}
+    {
+      "name": "threshold",
+      "type": "number",
+      "title": "Alert below (naira)",
+      "description": "Text the owner when the balance is below this many naira.",
+      "required": true,
+      "example": 50000,
+      "minimum": 1,
+      "maximum": 1000000000
+    },
+    {
+      "name": "every_hours",
+      "type": "integer",
+      "title": "Check every (hours)",
+      "description": "How often to check, in hours.",
+      "required": false,
+      "default": 3,
+      "example": 3,
+      "minimum": 1,
+      "maximum": 12
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "balance"
+      ],
+      "title": "Payments account",
+      "description": "The account whose balance is checked: any you connected that reports one.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet to check",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one to check. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    }
   ],
   "definition": {
     "schema": "wd/v1",
     "id": "wf_lowBalanceAlert",
     "version": 1,
     "name": "Low balance alert",
-    "trigger": {"type": "schedule", "config": {"cron": "5 */{{every_hours}} * * *", "timezone": "Africa/Lagos"}},
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "5 */{{every_hours}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
     "steps": [
-      {"id": "balance", "type": "connector", "name": "Check the Paystack balance", "connector": "paystack@1", "action": "check_balance", "connection": "{{paystack_connection}}", "input": {}},
-      {"id": "text_owner", "type": "connector", "name": "Tell the owner that the balance is low", "connector": "notify@1", "action": "tell", "needs": ["balance"],
-       "when": "=has(steps.balance.output.balances) && steps.balance.output.balances.exists(b, b.currency == 'NGN' && b.balance < {{threshold:kobo}})",
-       "input": {"message": "='Low balance: Paystack holds NGN ' + string(double(steps.balance.output.balances.filter(b, b.currency == 'NGN')[0].balance) / 100.0) + ', below your alert level of NGN ' + string(double({{threshold:kobo}}) / 100.0) + '. Top up to keep payouts running.'"}}
+      {
+        "id": "balance",
+        "type": "capability",
+        "uses": "balance",
+        "name": "Check the balance",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "account": "{{funding_account}}"
+        }
+      },
+      {
+        "id": "text_owner",
+        "type": "connector",
+        "name": "Tell the owner that the balance is low",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "balance"
+        ],
+        "when": "=steps.balance.output.available_kobo < {{threshold:kobo}}",
+        "input": {
+          "message": "='Low balance: your payments account holds NGN ' + string(steps.balance.output.available_kobo / 100) + ', below your alert level of NGN ' + string(double({{threshold:kobo}}) / 100.0) + '. Top up to keep payouts running.'"
+        }
+      }
     ],
-    "settings": {"timeout": "10m"}
+    "settings": {
+      "timeout": "10m"
+    }
   }
 }

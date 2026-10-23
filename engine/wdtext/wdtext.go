@@ -202,6 +202,16 @@ func (d describer) trigger(t wd.Trigger) string {
 			return d.t("wd.trigger.event_reports", "connector", name, "events", strings.Join(evs, d.t("wd.or")))
 		}
 		return d.t("wd.trigger.event", "connector", name, "trigger", strings.ReplaceAll(str("trigger"), "_", " "))
+	case "capability_event":
+		var evs []string
+		if list, ok := cfg["events"].([]any); ok {
+			for _, e := range list {
+				if s, ok := e.(string); ok {
+					evs = append(evs, capability.EventTitle(s))
+				}
+			}
+		}
+		return d.t("wd.trigger.capability_event", "events", strings.Join(evs, d.t("wd.or")))
 	case "polling":
 		return d.t("wd.trigger.polling", "interval", DurationIn(str("interval"), d.lang), "connector", d.connectorName(str("connector")),
 			"action", d.actionTitle(str("connector"), str("action")))

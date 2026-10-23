@@ -2469,6 +2469,11 @@
       "reviewed": true,
       "context": "Read-back: a step that reshapes data"
     },
+    "wd.trigger.capability_event": {
+      "text": "When your payments account reports: {events}",
+      "reviewed": true,
+      "context": "Read-back: started by a payment event from whichever payments account is connected; {events} are the events, e.g. A payout failed; the money is back"
+    },
     "wd.trigger.database_change": {
       "text": "When a database row changes",
       "reviewed": true,

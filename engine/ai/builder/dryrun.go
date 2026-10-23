@@ -77,6 +77,16 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 		trig["form"] = map[string]any{"submission_id": "00000000-0000-7000-8000-000000000000", "reference": "F-SAMPLE23", "submitted_at": "2026-01-01T09:00:00Z",
 			"respondent": map[string]any{"kind": "verified", "phone": "+2348030000000"}, "channel": "direct", "consents": []any{}}
 	}
+	if def.Trigger.Type == "capability_event" {
+		// A normalised payment event: its name and sample fields.
+		if evs, ok := def.Trigger.Config["events"].([]any); ok && len(evs) > 0 {
+			name, _ := evs[0].(string)
+			trig["event"] = name
+			if spec, ok := capability.GetEvent(name); ok {
+				trig["fields"] = sample(rawAny(spec.Fields), nil, nil, 0)
+			}
+		}
+	}
 	if def.Trigger.Type == "connector_event" {
 		if evs, ok := def.Trigger.Config["events"].([]any); ok && len(evs) > 0 {
 			trig["event"] = evs[0]
@@ -117,6 +127,8 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 					out = map[string]any{"status": "settled"}
 				case "await_reversal":
 					out = map[string]any{"status": "none"}
+				case "await_payment":
+					out = map[string]any{"status": "paid", "amount_kobo": int64(100000)}
 				default:
 					if spec, ok := capability.Get(st.Uses); ok {
 						if o := sample(rawAny(spec.Output), nil, nil, 0); o != nil {

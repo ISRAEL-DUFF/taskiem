@@ -1976,6 +1976,10 @@
       "text": "Kwadebe data maka nzọụkwụ ndị ọzọ",
       "reviewed": false
     },
+    "wd.trigger.capability_event": {
+      "text": "Mgbe akaụntụ ịkwụ ụgwọ gị kọrọ: {events}",
+      "reviewed": false
+    },
     "wd.trigger.database_change": {
       "text": "Mgbe ahịrị n'ime ọdụ data gbanwere",
       "reviewed": false
