@@ -1,0 +1,196 @@
+{
+  "schema": "wd-test/v1",
+  "template": "payrolla-tell-staff",
+  "params": {
+    "business_name": "Chuks Electronics"
+  },
+  "cases": [
+    {
+      "name": "a paid employee is told the amount and sent their payslip link",
+      "trigger": {
+        "event": "payout.succeeded",
+        "body": {
+          "id": "01J9Z0000000000000000000E1",
+          "type": "payout.succeeded",
+          "api_version": "2026-11-01",
+          "created_at": "2026-10-28T10:00:00Z",
+          "company_id": "co",
+          "data": {
+            "run_id": "run-10",
+            "payslip_id": "ps-1",
+            "employee_id": "emp-1",
+            "amount_kobo": 18500000,
+            "method": "BANK",
+            "reference": "NIP-1"
+          }
+        }
+      },
+      "mocks": {
+        "employee": {
+          "output": {
+            "employee": {
+              "id": "emp-1",
+              "first_name": "Ngozi",
+              "last_name": "Eze",
+              "email": "ngozi@chuks.ng",
+              "phone": "+2348030000001",
+              "department": "Sales",
+              "status": "ACTIVE",
+              "employment_type": "SALARIED",
+              "start_date": "2024-02-01",
+              "pay_method": "BANK"
+            }
+          }
+        },
+        "tell": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "payslip": {
+          "output": {
+            "url": "https://payroller.surge.sh/p/abc",
+            "expires_at": "2026-11-04T10:00:00Z"
+          }
+        },
+        "send_payslip": {
+          "output": {
+            "via": "whatsapp"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "employee": {
+            "employee_id": "emp-1"
+          },
+          "tell": {
+            "phone": "+2348030000001",
+            "message": "Chuks Electronics: hello Ngozi, your pay of NGN 185000 has been paid."
+          },
+          "payslip": {
+            "payslip_id": "ps-1"
+          },
+          "send_payslip": {
+            "message": "Chuks Electronics: your payslip is here, for 7 days: https://payroller.surge.sh/p/abc (you will be asked for the last four digits of your phone)."
+          }
+        }
+      }
+    },
+    {
+      "name": "payslip links switched off in Payrolla still tells the employee they were paid",
+      "trigger": {
+        "event": "payout.succeeded",
+        "body": {
+          "id": "01J9Z0000000000000000000E1",
+          "type": "payout.succeeded",
+          "api_version": "2026-11-01",
+          "created_at": "2026-10-28T10:00:00Z",
+          "company_id": "co",
+          "data": {
+            "run_id": "run-10",
+            "payslip_id": "ps-1",
+            "employee_id": "emp-1",
+            "amount_kobo": 18500000,
+            "method": "BANK",
+            "reference": "NIP-1"
+          }
+        }
+      },
+      "mocks": {
+        "employee": {
+          "output": {
+            "employee": {
+              "id": "emp-1",
+              "first_name": "Ngozi",
+              "last_name": "Eze",
+              "email": "ngozi@chuks.ng",
+              "phone": "+2348030000001",
+              "department": "Sales",
+              "status": "ACTIVE",
+              "employment_type": "SALARIED",
+              "start_date": "2024-02-01",
+              "pay_method": "BANK"
+            }
+          }
+        },
+        "tell": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "payslip": {
+          "error": {
+            "kind": "fatal",
+            "message": "payrolla 403 PAYSLIP_LINKS_DISABLED"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "tell": "completed",
+          "send_payslip": "skipped"
+        }
+      }
+    },
+    {
+      "name": "without payslip links the employee gets one message",
+      "params": {
+        "send_payslip": false
+      },
+      "trigger": {
+        "event": "payout.succeeded",
+        "body": {
+          "id": "01J9Z0000000000000000000E1",
+          "type": "payout.succeeded",
+          "api_version": "2026-11-01",
+          "created_at": "2026-10-28T10:00:00Z",
+          "company_id": "co",
+          "data": {
+            "run_id": "run-10",
+            "payslip_id": "ps-1",
+            "employee_id": "emp-1",
+            "amount_kobo": 18500000,
+            "method": "BANK",
+            "reference": "NIP-1"
+          }
+        }
+      },
+      "mocks": {
+        "employee": {
+          "output": {
+            "employee": {
+              "id": "emp-1",
+              "first_name": "Ngozi",
+              "last_name": "Eze",
+              "email": "ngozi@chuks.ng",
+              "phone": "+2348030000001",
+              "department": "Sales",
+              "status": "ACTIVE",
+              "employment_type": "SALARIED",
+              "start_date": "2024-02-01",
+              "pay_method": "BANK"
+            }
+          }
+        },
+        "tell": {
+          "output": {
+            "via": "whatsapp"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "payslip": "skipped",
+          "send_payslip": "skipped"
+        },
+        "calls": {
+          "tell": 1
+        }
+      }
+    }
+  ]
+}

@@ -55,4 +55,18 @@ Events never carry bank account numbers, salary breakdowns or ID numbers. They d
 - **Catching up by itself.** `list_events` replays the last 30 days, but nothing calls it automatically after an outage yet; Payrolla retries a failed delivery for about two days, and the owner can resend one.
 - **Connecting by OAuth.** Payrolla issues keys by hand only.
 
-Templates built on this connector are listed in the [template library](../templates.md).
+## Templates
+
+Seven templates work around Payrolla ([template library](../templates.md)), offered on the Start page once Payrolla is connected. None moves money or approves a payroll.
+
+| Template | Starts on | Does |
+| --- | --- | --- |
+| `payrolla-tell-staff` | `payout.succeeded` | Tells the employee their pay arrived (on the WhatsApp they asked for updates on, else by SMS), and sends their payslip link when you allow it |
+| `payrolla-payroll-summary` | `run.completed`, `run.partially_completed` | Tells the owner and a role who was paid, the total, and who was not and why |
+| `payrolla-approve-by-chat` | `run.computed` | Sends the approvers the total and `approval_url`; reminds them the day before payday if it is still not approved |
+| `payrolla-reversal-alert` | `payout.reversed` | Alerts the owner and the payroll admin whose pay came back |
+| `payrolla-record-payroll` | `run.completed`, `run.partially_completed` | Rows in `payrolla_payrolls` and `payrolla_payments` for the accountant; no bank details |
+| `payrolla-payday-check` | Every morning | Compares payrolls due soon with a connected payments account's balance and warns if short |
+| `payrolla-lock-reminder` | Every morning | Reminds the payroll admin of approved payrolls near payday that are not locked |
+
+Messages to employees go by `notify@1`: on WhatsApp only to someone who asked for updates there with the business's link, else by SMS. Payrolla's go-live checklist asks for each employee's consent before WhatsApp messages; asking through that link is how it is recorded.

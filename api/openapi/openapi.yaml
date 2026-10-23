@@ -18484,6 +18484,9 @@ components:
         superseded_by:
           type: string
           description: The template that replaces this one; it is no longer listed, and workflows made from it are offered the upgrade.
+        product:
+          type: string
+          description: The product the template works around (payrolla); the Start page offers it to organisations that connected the product, and retrieval only for goals that name it.
         definition:
           description: The template's definition, with placeholders (one template only).
       additionalProperties: false

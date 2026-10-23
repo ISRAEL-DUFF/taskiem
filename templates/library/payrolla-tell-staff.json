@@ -1,0 +1,226 @@
+{
+  "id": "payrolla-tell-staff",
+  "title": "Tell each employee when Payrolla pays them",
+  "summary": "When Payrolla pays an employee, message them the amount on WhatsApp or by SMS, and send their payslip link.",
+  "description": "Whenever Payrolla reports that it paid an employee, Taskiem messages them that their pay has arrived, with the amount, on the WhatsApp they asked for updates on, or else by SMS. If you allow it, they also get a link to their payslip, which opens after they confirm the last four digits of their phone. Payrolla pays; Taskiem only tells. Payslip links need Payrolla's Read payroll and Send payslip links permissions, with payslip links switched on in Payrolla.",
+  "category": "payroll",
+  "tags": [
+    "payrolla",
+    "staff",
+    "whatsapp",
+    "sms"
+  ],
+  "keywords": [
+    "payrolla",
+    "payslip",
+    "payslips",
+    "employees paid"
+  ],
+  "connectors": [
+    "payrolla@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "Named in the messages people get.",
+      "required": true,
+      "example": "Chuks Electronics",
+      "max_length": 60
+    },
+    {
+      "name": "payrolla_connection",
+      "type": "connection",
+      "connector": "payrolla",
+      "title": "Payrolla connection",
+      "description": "The Payrolla company this follows: its key, from Payrolla → Settings → Connected apps.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "send_payslip",
+      "type": "boolean",
+      "title": "Send the payslip link",
+      "description": "Also send each person a link to their payslip.",
+      "required": false,
+      "default": true,
+      "example": true
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payrollaTellStaff",
+    "version": 1,
+    "name": "Tell each employee they were paid",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "payrolla@1",
+        "trigger": "payout_event",
+        "events": [
+          "payout.succeeded"
+        ],
+        "connection": "{{payrolla_connection}}"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "run_id": {
+                "type": "string"
+              },
+              "payslip_id": {
+                "type": "string"
+              },
+              "employee_id": {
+                "type": "string"
+              },
+              "amount_kobo": {
+                "type": "integer"
+              },
+              "method": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "employee",
+        "type": "connector",
+        "name": "Find the employee",
+        "connector": "payrolla@1",
+        "action": "get_employee",
+        "connection": "{{payrolla_connection}}",
+        "input": {
+          "employee_id": "=trigger.body.data.employee_id"
+        }
+      },
+      {
+        "id": "tell",
+        "type": "connector",
+        "name": "Tell them they were paid",
+        "connector": "notify@1",
+        "action": "message",
+        "needs": [
+          "settings",
+          "employee"
+        ],
+        "when": "=steps.employee.output.employee.phone != '' || steps.employee.output.employee.email != ''",
+        "input": {
+          "phone": "=steps.employee.output.employee.phone",
+          "email": "=steps.employee.output.employee.email",
+          "about": "your pay",
+          "message": "=steps.settings.output.business_name + ': hello ' + steps.employee.output.employee.first_name + ', your pay of NGN ' + string(trigger.body.data.amount_kobo / 100) + ' has been paid.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "payslip",
+        "type": "connector",
+        "name": "Get their payslip link",
+        "connector": "payrolla@1",
+        "action": "create_payslip_link",
+        "connection": "{{payrolla_connection}}",
+        "needs": [
+          "tell"
+        ],
+        "when": "={{send_payslip}}",
+        "input": {
+          "payslip_id": "=trigger.body.data.payslip_id"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "payslip_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.payslip.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "send_payslip",
+        "type": "connector",
+        "name": "Send them the payslip link",
+        "connector": "notify@1",
+        "action": "message",
+        "needs": [
+          "settings",
+          "employee",
+          "payslip"
+        ],
+        "input": {
+          "phone": "=steps.employee.output.employee.phone",
+          "email": "=steps.employee.output.employee.email",
+          "about": "your payslip",
+          "message": "=steps.settings.output.business_name + ': your payslip is here, for 7 days: ' + steps.payslip.output.url + ' (you will be asked for the last four digits of your phone).'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "send_payslip_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  },
+  "product": "payrolla"
+}

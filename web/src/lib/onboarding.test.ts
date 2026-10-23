@@ -37,6 +37,12 @@ describe("getting started", () => {
     expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder", "payroll-reminder", "alpha", "kyc-bvn-check", "new-order-alert-sms"]);
   });
 
+  it("offers a product's templates first, and only to a business that connected it", () => {
+    const list = [tpl("daily-reminder", ["notify@1"]), { ...tpl("payrolla-tell-staff", ["payrolla@1", "notify@1"]), product: "payrolla" }];
+    expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder"]);
+    expect(starterTemplates(list, ["paystack", "payrolla"]).map((t) => t.id)).toEqual(["payrolla-tell-staff", "daily-reminder"]);
+  });
+
   it("formats durations", () => {
     expect(formatDuration(42)).toBe("42 s");
     expect(formatDuration(245)).toBe("4 min 05 s");

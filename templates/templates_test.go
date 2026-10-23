@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/flowcode"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -330,21 +331,28 @@ func TestCoerce(t *testing.T) {
 func TestMatch(t *testing.T) {
 	lib := templates.Default()
 	for goal, want := range map[string]string{
-		"Every Friday, text my customers who owe me":                        "debtor-reminder-sms",
-		"remind my debtors on whatsapp every week":                          "debtor-reminder-whatsapp",
-		"send me a summary of today's sales every evening":                  "daily-sales-summary",
-		"when a customer pays on paystack send them a thank you sms":        "payment-thank-you-sms",
-		"alert me when my paystack balance is low":                          "low-balance-alert",
-		"pay my suppliers after I approve":                                  "supplier-payment-approval",
-		"remind me before salaries are due every month":                     "payroll-reminder",
-		"tell me when stock is running low on my inventory sheet":           "stock-reorder-alert",
-		"verify a new customer's BVN before onboarding them":                "kyc-bvn-check",
-		"pay staff salaries from the payroll sheet once the owner approves": "run-payroll",
-		"pay a list of commissions once I approve the batch":                "pay-a-list",
-		"send the customer a payment link for their order":                  "payment-link-per-order",
-		"give each customer their own account number to pay into":           "virtual-account-per-customer",
-		"refund a customer's payment after a supervisor approves":           "refund-with-approval",
-		"tell me when a payment I send fails or comes back":                 "failed-transfer-alert",
+		"Every Friday, text my customers who owe me":                         "debtor-reminder-sms",
+		"remind my debtors on whatsapp every week":                           "debtor-reminder-whatsapp",
+		"send me a summary of today's sales every evening":                   "daily-sales-summary",
+		"when a customer pays on paystack send them a thank you sms":         "payment-thank-you-sms",
+		"alert me when my paystack balance is low":                           "low-balance-alert",
+		"pay my suppliers after I approve":                                   "supplier-payment-approval",
+		"remind me before salaries are due every month":                      "payroll-reminder",
+		"tell me when stock is running low on my inventory sheet":            "stock-reorder-alert",
+		"verify a new customer's BVN before onboarding them":                 "kyc-bvn-check",
+		"pay staff salaries from the payroll sheet once the owner approves":  "run-payroll",
+		"pay a list of commissions once I approve the batch":                 "pay-a-list",
+		"send the customer a payment link for their order":                   "payment-link-per-order",
+		"give each customer their own account number to pay into":            "virtual-account-per-customer",
+		"refund a customer's payment after a supervisor approves":            "refund-with-approval",
+		"tell me when a payment I send fails or comes back":                  "failed-transfer-alert",
+		"tell my staff on WhatsApp when Payrolla pays them":                  "payrolla-tell-staff",
+		"when Payrolla finishes paying, tell me who was not paid":            "payrolla-payroll-summary",
+		"our salaries run in Payrolla: send the approvers the approval link": "payrolla-approve-by-chat",
+		"warn me when a salary Payrolla paid is returned by the bank":        "payrolla-reversal-alert",
+		"keep Payrolla's finished payroll in tables for the accountant":      "payrolla-record-payroll",
+		"check there is enough money before a Payrolla payday":               "payrolla-payday-check",
+		"remind the payroll admin to lock the payroll in Payrolla":           "payrolla-lock-reminder",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want {
@@ -653,5 +661,49 @@ func TestTemplatesOnEveryCapableRail(t *testing.T) {
 				t.Errorf("runs on %v, want at least two rails", rails)
 			}
 		})
+	}
+}
+
+// A template around a product (Payrolla: decision 0044) moves no money:
+// the product pays, Taskiem tells, records and links. Its capability steps
+// only read (a balance), and its steps on a rail only read.
+func TestProductTemplatesMoveNoMoney(t *testing.T) {
+	reg := registry(t)
+	n := 0
+	for _, tpl := range templates.Default().List() {
+		product := false
+		for _, c := range tpl.Connectors {
+			if k, ok := reg.Get(c); ok && k.Manifest.KindOf() == "product" {
+				product = true
+			}
+		}
+		if !product {
+			continue
+		}
+		n++
+		doc, err := tpl.Instantiate(tpl.Examples(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		def, err := wd.Load(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		def.Walk(func(st *wd.Step) {
+			switch {
+			case st.Type == "capability":
+				if spec, ok := capability.Get(st.Uses); !ok || wd.IsWait(st.Uses) || !spec.Allows(effects.Read) || len(spec.Classes) != 1 {
+					t.Errorf("%s: step %s uses %s, which is not a read", tpl.ID, st.ID, st.Uses)
+				}
+			case st.Connector != "":
+				k, _ := reg.Get(st.Connector)
+				if k != nil && k.Manifest.KindOf() == "rail" && k.Manifest.Actions[st.Action].Class != effects.Read {
+					t.Errorf("%s: step %s writes to the rail %s", tpl.ID, st.ID, st.Connector)
+				}
+			}
+		})
+	}
+	if n < 7 {
+		t.Errorf("%d templates around a product, want Payrolla's seven", n)
 	}
 }

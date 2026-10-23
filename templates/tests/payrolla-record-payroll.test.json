@@ -1,0 +1,112 @@
+{
+  "schema": "wd-test/v1",
+  "template": "payrolla-record-payroll",
+  "params": {},
+  "cases": [
+    {
+      "name": "the payroll and each payment are recorded for the accountant",
+      "trigger": {
+        "event": "run.partially_completed",
+        "body": {
+          "id": "01J9Z0000000000000000000E1",
+          "type": "run.partially_completed",
+          "api_version": "2026-11-01",
+          "created_at": "2026-10-28T10:00:00Z",
+          "company_id": "co",
+          "data": {
+            "run": {
+              "run_id": "run-10",
+              "period_start": "2026-10-01",
+              "period_end": "2026-10-31",
+              "pay_date": "2026-10-28",
+              "run_type": "REGULAR",
+              "status": "PARTIALLY_COMPLETED",
+              "employee_count": 2,
+              "total_gross_kobo": 50000000,
+              "total_net_kobo": 42000000
+            },
+            "paid_count": 1,
+            "failed_count": 1
+          }
+        }
+      },
+      "mocks": {
+        "lines": {
+          "output": {
+            "lines": [
+              {
+                "payslip_id": "ps-1",
+                "employee_id": "emp-1",
+                "first_name": "Ngozi",
+                "last_name": "Eze",
+                "net_kobo": 18500000,
+                "disbursement_status": "CONFIRMED",
+                "reference": "NIP-1"
+              },
+              {
+                "payslip_id": "ps-2",
+                "employee_id": "emp-2",
+                "first_name": "Tunde",
+                "last_name": "Bello",
+                "net_kobo": 23500000,
+                "disbursement_status": "FAILED",
+                "reference": "NIP-2",
+                "reason": "beneficiary account is dormant"
+              }
+            ]
+          }
+        },
+        "record_run": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "record_lines": {
+          "output": {
+            "affected": 2
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "record_run": {
+            "table": "payrolla_payrolls",
+            "row": {
+              "run_id": "run-10",
+              "status": "PARTIALLY_COMPLETED",
+              "people": 2,
+              "total_net_naira": 420000.0,
+              "paid": 1,
+              "not_paid": 1,
+              "event_id": "01J9Z0000000000000000000E1"
+            }
+          },
+          "record_lines": {
+            "table": "payrolla_payments",
+            "rows": [
+              {
+                "run_id": "run-10",
+                "employee": "Ngozi Eze",
+                "net_naira": 185000.0,
+                "status": "CONFIRMED",
+                "reference": "NIP-1",
+                "reason": "",
+                "event_id": "01J9Z0000000000000000000E1"
+              },
+              {
+                "run_id": "run-10",
+                "employee": "Tunde Bello",
+                "net_naira": 235000.0,
+                "status": "FAILED",
+                "reference": "NIP-2",
+                "reason": "beneficiary account is dormant",
+                "event_id": "01J9Z0000000000000000000E1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

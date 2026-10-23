@@ -77,13 +77,18 @@ export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href:
  * the library, with those that need a developer last. */
 export const STARTERS = ["daily-reminder", "payroll-reminder", "payment-link-per-order", "pay-a-list", "low-balance-alert", "stock-reorder-alert"];
 
-export function starterTemplates(list: Template[]): Template[] {
+export function starterTemplates(list: Template[], connected: string[] = []): Template[] {
+  // A template around a product (Payrolla) is for businesses that
+  // connected it, and comes first for them.
   const rank = (t: Template) => {
+    if (t.product) return -1;
     const i = STARTERS.indexOf(t.id);
     if (i >= 0) return i;
     return STARTERS.length + t.connectors.length + (t.needs_developer ? 100 : 0);
   };
-  return [...list].filter((t) => t.available).sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
+  return [...list]
+    .filter((t) => t.available && (!t.product || connected.includes(t.product)))
+    .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
 }
 
 /** "4 min 05 s", "2 h 10 min", "3 days". */

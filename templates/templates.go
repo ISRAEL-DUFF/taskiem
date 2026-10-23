@@ -144,6 +144,12 @@ type Template struct {
 	// longer offered, but workflows made from it keep working and are
 	// offered the upgrade.
 	SupersededBy string `json:"superseded_by,omitempty"`
+	// Product is the product the template works around (payrolla:
+	// decision 0044). Retrieval offers the template only for a goal that
+	// names the product, and then above the rest, so "salaries calculated
+	// in Payrolla" meets Payrolla's templates, never one that pays the
+	// staff itself.
+	Product string `json:"product,omitempty"`
 }
 
 // CapabilityPrefix marks a capability among a template's connectors:

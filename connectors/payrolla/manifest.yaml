@@ -66,7 +66,7 @@ actions:
     output:
       type: object
       properties:
-        runs: { type: array, items: { type: object, properties: { run_id: { type: string }, period_start: { type: string, description: YYYY-MM-DD }, period_end: { type: string }, pay_date: { type: string }, run_type: { type: string, description: REGULAR or OFF_CYCLE }, status: { type: string }, employee_count: { type: integer }, total_gross_kobo: { type: integer }, total_net_kobo: { type: integer } } } }
+        runs: { type: array, items: { type: object, properties: { run_id: { type: string }, period_start: { type: string, format: date }, period_end: { type: string, format: date }, pay_date: { type: string, format: date }, run_type: { type: string, description: REGULAR or OFF_CYCLE }, status: { type: string }, employee_count: { type: integer }, total_gross_kobo: { type: integer }, total_net_kobo: { type: integer } } } }
         next_cursor: { type: string }
   get_run:
     title: Get a payroll run
@@ -84,9 +84,9 @@ actions:
           type: object
           properties:
             run_id: { type: string }
-            period_start: { type: string }
-            period_end: { type: string }
-            pay_date: { type: string }
+            period_start: { type: string, format: date }
+            period_end: { type: string, format: date }
+            pay_date: { type: string, format: date }
             run_type: { type: string }
             status: { type: string }
             employee_count: { type: integer }
