@@ -268,7 +268,18 @@ func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, 
 	if ev.conn == nil || len(ev.conn.Manifest.Events) == 0 || ev.test {
 		return 0, nil, true
 	}
-	act := map[string]any{"body": ev.body, "headers": map[string]any{}, "query": map[string]any{}, "item": ev.item}
+	body := ev.body
+	if enrich := ev.conn.Enrichers[ev.name]; enrich != nil {
+		// The delivery as the rail meant it (OPay's is encrypted): the
+		// mapping reads that, not the envelope.
+		b, err := h.enrich(ctx, enrich, t.tenant, ev.env, ev.conn, t.connection, nil, ev.body)
+		if err != nil {
+			h.unavailable(w, r, fmt.Errorf("completing the event: %w", err))
+			return 0, nil, false
+		}
+		body = b
+	}
+	act := map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}, "item": ev.item}
 	name, fields, err := ev.conn.Manifest.EventOf(ev.name, act)
 	if err != nil {
 		return 0, nil, true // none, or a delivery its mapping cannot read: the trigger's own signal went out
@@ -302,7 +313,7 @@ func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, 
 		if !capabilitySub(s) || !slices.Contains(s.events, name) || (s.connection != nil && *s.connection != t.connection) {
 			continue
 		}
-		trig := map[string]any{"type": "capability_event", "event": name, "fields": fields, "connector": ev.ref, "trigger": ev.name, "body": ev.body}
+		trig := map[string]any{"type": "capability_event", "event": name, "fields": fields, "connector": ev.ref, "trigger": ev.name, "body": body}
 		if s.connection != nil {
 			trig["connection"] = *s.connection
 		}
