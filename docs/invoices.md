@@ -14,6 +14,8 @@ Under **Invoices**, **New invoice** asks for:
 
 It is saved as a **draft** with the business's next number (`INV-0001` upwards). A draft can be changed. **Send** sends it to the customer by SMS and email, with the link to its page, and the invoice becomes **sent**. Sending again sends the same link.
 
+A customer who asked the business for updates on WhatsApp or Telegram also gets it there, with buttons to pay ([below](#on-whatsapp-and-telegram)).
+
 Once sent, what the customer was sent cannot change: to correct an invoice, **void** it with the reason and send a new one.
 
 ## Statuses
@@ -51,6 +53,19 @@ While something is due, the page has **Pay this invoice**:
 Asking again for the same amount while a number is still valid shows the same number. An invoice gets at most 5 account numbers an hour and 20 in all (the same again for card links); past that the page says to try later or contact the business. The page only queues the request: the public host holds no credentials, and Taskiem's API server asks the payments provider within a second or two, while the page shows "Getting your account number…".
 
 The page shows nothing about the customer: their name, phone and email stay sealed, and the public host cannot read them. A draft's page, an unknown link and a mistyped one all answer the same "This invoice was not found", so the page never tells whether a link exists. It is never cached (`Cache-Control: no-store`) or indexed (`X-Robots-Tag: noindex`).
+
+## On WhatsApp and Telegram
+
+When the customer's phone is one that asked the business for updates on WhatsApp or Telegram ([updates for people outside the business](updates.md)), **Send** also sends the invoice there, as well as by SMS and email: "Invoice INV-0001 from Ada Stores: ₦25,000 to pay", with two buttons.
+
+- **Pay by transfer** answers within seconds with an account number to pay into: the account number, the bank, the account name, the amount and "Valid until 14:35" (Lagos time), with a **New account number** button for when it has expired. It is the same one-time account the invoice's page gives, issued from the business's payments connection, under the same limits (five an hour, twenty in all); while one is still open, it is given again.
+- **Open invoice** answers with the invoice's page link.
+
+If no account number can be had (the payments connection cannot open one, or the limit is reached), the answer says so and gives the page link. On an invoice that is paid, the buttons say "Invoice INV-0001 is paid. Thank you!"; on a void one, that it can no longer be paid.
+
+These buttons are the only thing the customer can do in the chat besides STOP and START ([decision 0045](decisions/0045-tally-in-taskiem.md), point 7). Each button is signed for the business, the invoice and the contact it was sent to: it works only from that contact's own WhatsApp number or Telegram account (while they have not sent STOP), only for an invoice sent to that contact's phone, and only while the invoice is open. Anyone else pressing it is told the button no longer works. The messages hold no customer details beyond what the invoice was sent with, and nothing about the customer is logged.
+
+**Limit.** WhatsApp lets a business message someone only within 24 hours of their last message unless it uses a template Meta has approved, and the template for an invoice with buttons is not approved yet. Outside that window the invoice goes by SMS and email only; on Telegram there is no window.
 
 ## Payments
 

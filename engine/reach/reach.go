@@ -242,6 +242,20 @@ func (b *Book) AddressTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, t Tar
 	return addr, nil
 }
 
+// ContactAtTx reports whether addr is contact's link on channel and not
+// stopped, in tx (the tenant's scope), and the contact's phone hash: how
+// a button press from a chat app is tied to the person it was sent to.
+func (b *Book) ContactAtTx(ctx context.Context, tx pgx.Tx, tenant, contact uuid.UUID, channel, addr string) ([]byte, bool, error) {
+	var h []byte
+	err := tx.QueryRow(ctx, `SELECT c.phone_hash FROM reach_contacts c JOIN reach_channels ch ON ch.contact_id = c.id
+		WHERE c.id = $1 AND c.tenant_id = $2 AND ch.channel = $3 AND ch.address_hash = $4 AND ch.stopped_at IS NULL`,
+		contact, tenant, channel, b.AddressHash(channel, addr)).Scan(&h)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	return h, err == nil, err
+}
+
 // --- what a chat address says (no tenant: SECURITY DEFINER functions) ---
 
 // Stop stops the business that reached addr most recently; its name, or

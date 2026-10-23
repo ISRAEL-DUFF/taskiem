@@ -64,11 +64,14 @@ type OutboxItem struct {
 	User      uuid.UUID
 	Contact   *uuid.UUID
 	Reference *string
-	Run       *uuid.UUID
-	Step      *string
-	Level     *int
-	Alert     *uuid.UUID
-	Attempts  int
+	// Invoice is the invoice a message to a contact carries (kind
+	// "invoice", engine/invoicing).
+	Invoice  *uuid.UUID
+	Run      *uuid.UUID
+	Step     *string
+	Level    *int
+	Alert    *uuid.UUID
+	Attempts int
 }
 
 // Enqueue queues an item in tx unless one with the same dedup key exists
@@ -84,9 +87,9 @@ func Enqueue(ctx context.Context, tx pgx.Tx, it OutboxItem, dedup string) (bool,
 	if it.User != uuid.Nil {
 		user = &it.User
 	}
-	tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_outbox (id, tenant_id, channel, kind, user_id, contact_id, reach_reference, run_id, step_id, level, alert_id, dedup_key)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (tenant_id, dedup_key) DO NOTHING`,
-		it.ID, it.Tenant, it.Channel, it.Kind, user, it.Contact, it.Reference, it.Run, it.Step, it.Level, it.Alert, dedup)
+	tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_outbox (id, tenant_id, channel, kind, user_id, contact_id, reach_reference, run_id, step_id, level, alert_id, dedup_key, invoice_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (tenant_id, dedup_key) DO NOTHING`,
+		it.ID, it.Tenant, it.Channel, it.Kind, user, it.Contact, it.Reference, it.Run, it.Step, it.Level, it.Alert, dedup, it.Invoice)
 	return err == nil && tag.RowsAffected() == 1, err
 }
 
@@ -99,13 +102,13 @@ func ClaimOutbox(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, limi
 			WHERE o.id IN (SELECT id FROM whatsapp_outbox WHERE status = 'pending' AND next_attempt_at <= now()
 			  AND ($2::uuid[] IS NULL OR id = ANY ($2)) ORDER BY next_attempt_at LIMIT $1 FOR UPDATE SKIP LOCKED)
 			RETURNING o.id, o.tenant_id, o.channel, o.kind, coalesce(o.user_id, '00000000-0000-0000-0000-000000000000'), o.contact_id, o.reach_reference,
-			  o.run_id, o.step_id, o.level, o.alert_id, o.attempts`, limit, ids)
+			  o.run_id, o.step_id, o.level, o.alert_id, o.attempts, o.invoice_id`, limit, ids)
 		if err != nil {
 			return err
 		}
 		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (OutboxItem, error) {
 			var it OutboxItem
-			return it, r.Scan(&it.ID, &it.Tenant, &it.Channel, &it.Kind, &it.User, &it.Contact, &it.Reference, &it.Run, &it.Step, &it.Level, &it.Alert, &it.Attempts)
+			return it, r.Scan(&it.ID, &it.Tenant, &it.Channel, &it.Kind, &it.User, &it.Contact, &it.Reference, &it.Run, &it.Step, &it.Level, &it.Alert, &it.Attempts, &it.Invoice)
 		})
 		return err
 	})

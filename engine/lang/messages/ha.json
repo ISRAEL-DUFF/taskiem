@@ -84,8 +84,20 @@
       "text": "Cike",
       "reviewed": false
     },
+    "button.new_account": {
+      "text": "Sabuwar lambar asusu",
+      "reviewed": false
+    },
     "button.no": {
       "text": "A'a",
+      "reviewed": false
+    },
+    "button.open_invoice": {
+      "text": "Buɗe invoice",
+      "reviewed": false
+    },
+    "button.pay_transfer": {
+      "text": "Biya ta transfer",
       "reviewed": false
     },
     "button.reject": {
@@ -182,6 +194,46 @@
     },
     "customer.order_ready": {
       "text": "{name}: odar ku {reference} ta shirya.",
+      "reviewed": false
+    },
+    "invoice.chat.account": {
+      "text": "Ku biya {amount} na invoice {number} ta bank transfer zuwa:\nLambar asusu: {account}\nBanki: {bank}\nSunan asusu: {name}\nTana aiki har zuwa {until}. Ku yi amfani da ita don wannan biyan kawai.",
+      "reviewed": false
+    },
+    "invoice.chat.account_open": {
+      "text": "Ku biya {amount} na invoice {number} ta bank transfer zuwa:\nLambar asusu: {account}\nBanki: {bank}\nSunan asusu: {name}",
+      "reviewed": false
+    },
+    "invoice.chat.button_invalid": {
+      "text": "Wannan maɓallin ba ya aiki kuma.",
+      "reviewed": false
+    },
+    "invoice.chat.closed": {
+      "text": "Ba za a iya biyan invoice {number} kuma ba. Ku tambayi {business} idan kuna ganin kuskure ne.",
+      "reviewed": false
+    },
+    "invoice.chat.failed": {
+      "text": "Ba a samu lambar asusu na invoice {number} yanzu ba. Ku sake gwadawa nan ba da jimawa ba, ko ku biya a shafin invoice:",
+      "reviewed": false
+    },
+    "invoice.chat.limit": {
+      "text": "An ba da lambobin asusu da yawa na invoice {number} cikin awa ɗaya. Ku yi amfani da ta ƙarshe, ko ku sake gwadawa daga baya a shafin invoice:",
+      "reviewed": false
+    },
+    "invoice.chat.link": {
+      "text": "Invoice {number}: {link}",
+      "reviewed": false
+    },
+    "invoice.chat.paid": {
+      "text": "An biya invoice {number} gaba ɗaya. Na gode!",
+      "reviewed": false
+    },
+    "invoice.chat.sent": {
+      "text": "Invoice {number} daga {business}: {amount} za a biya. Danna Biya ta transfer don samun lambar asusu da za ku biya ciki, ko Buɗe invoice don ganin ta.",
+      "reviewed": false
+    },
+    "invoice.chat.wait": {
+      "text": "Lambar asusunku na invoice {number} tana kan hanya. Idan ba ta zo cikin minti ɗaya ba, danna Sabuwar lambar asusu.",
       "reviewed": false
     },
     "lang.current": {

@@ -624,6 +624,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	tell.Set(n)
 	// Invoices (decision 0045): their pages are on the form host.
 	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Logger: log.With("component", "invoices")}
+	// A customer who asked for the business's updates on a chat app gets
+	// its invoices there too, with their buttons (decision 0045 point 7).
+	e.invoices.Reach, e.invoices.Chat = e.reach, n.Chat
 	if h := formHost(cfg); h != "" {
 		e.invoices.PageBase = "https://" + h
 	}
@@ -698,7 +701,8 @@ func aiSettings(c ai.Config) (*api.AISettings, error) {
 // callbacks. Building over WhatsApp uses the same model, effort, answer
 // size and budgets as the api role.
 func edgeServer(e *engine, cfg config, log *slog.Logger) (*api.Server, error) {
-	srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL, TrustProxy: cfg.TrustProxy}
+	srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Logger: log, WhatsApp: e.wa, PublicURL: cfg.PublicURL, TrustProxy: cfg.TrustProxy,
+		Invoices: e.invoices} // invoices from chat, and their customers' buttons
 	e.chat(srv)
 	var err error
 	if srv.AI, err = aiSettings(cfg.AI); err != nil {
@@ -875,6 +879,9 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.Email = e.email
 		srv.Invoices = e.invoices
+		// Account numbers asked for with an invoice's chat buttons are
+		// answered in the chat.
+		e.invoices.Answered = srv.InvoiceAnswered
 		srv.MailDomain = cfg.Mail.Domain
 		if e.email != nil {
 			tasks = append(tasks, func(ctx context.Context) error { e.email.Run(ctx, emailDrainInterval); return nil })

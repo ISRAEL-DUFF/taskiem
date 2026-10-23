@@ -42,12 +42,15 @@ The person gets it, in this order of preference:
 
 The step's output says how (`via`: `whatsapp`, `telegram`, `sms`, `email` or `nobody`). On WhatsApp outside the 24-hour window, the message goes as the `taskiem_update` template: "[Acme Ltd] Update on your leave request: …", so `about` should say what they asked about. See [the integration page](integrations/notify.md#messaging-someone-outside-the-business-message) for every input.
 
+**Invoices** reach them the same way: when a business sends an invoice to a phone that linked an app with it, the invoice also goes there (besides SMS and email) with **Pay by transfer** and **Open invoice** buttons ([invoices](invoices.md#on-whatsapp-and-telegram)).
+
 The AI builder uses this step whenever a goal messages someone outside the business, even when it says "on Telegram". The publish check warns about a form field that asks for a chat ID or a Telegram username. The **Leave request** template is a complete example.
 
 ## Stopping
 
 - **STOP** stops the business that messaged the person most recently, on that app. They then get its messages by text.
 - **START** undoes it.
+- Besides these, a person can only press the buttons of an invoice the business sent them (**Pay by transfer**, **New account number**, **Open invoice**; [decision 0045](decisions/0045-tally-in-taskiem.md), point 7). Anything else gets one answer naming who sends them updates.
 - Blocking the Telegram bot stops every business there.
 - **Remove** in **Settings > People you message** stops the business reaching someone on chat apps.
 

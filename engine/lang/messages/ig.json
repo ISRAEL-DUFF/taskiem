@@ -84,8 +84,20 @@
       "text": "Dejupụta",
       "reviewed": false
     },
+    "button.new_account": {
+      "text": "Nọmba akaụntụ ọhụrụ",
+      "reviewed": false
+    },
     "button.no": {
       "text": "Mba",
+      "reviewed": false
+    },
+    "button.open_invoice": {
+      "text": "Mepee invoice",
+      "reviewed": false
+    },
+    "button.pay_transfer": {
+      "text": "Kwụọ na transfer",
       "reviewed": false
     },
     "button.reject": {
@@ -182,6 +194,46 @@
     },
     "customer.order_ready": {
       "text": "{name}: iwu gị {reference} adịla njikere.",
+      "reviewed": false
+    },
+    "invoice.chat.account": {
+      "text": "Kwụọ {amount} maka invoice {number} site na bank transfer gaa na:\nNọmba akaụntụ: {account}\nBank: {bank}\nAha akaụntụ: {name}\nỌ ga-arụ ọrụ ruo {until}. Jiri ya maka ịkwụ ụgwọ a naanị.",
+      "reviewed": false
+    },
+    "invoice.chat.account_open": {
+      "text": "Kwụọ {amount} maka invoice {number} site na bank transfer gaa na:\nNọmba akaụntụ: {account}\nBank: {bank}\nAha akaụntụ: {name}",
+      "reviewed": false
+    },
+    "invoice.chat.button_invalid": {
+      "text": "Bọtịnụ a anaghị arụ ọrụ ọzọ.",
+      "reviewed": false
+    },
+    "invoice.chat.closed": {
+      "text": "Enweghị ike ịkwụ invoice {number} ọzọ. Jụọ {business} ma ọ bụrụ na ị chere na nke a ezighi ezi.",
+      "reviewed": false
+    },
+    "invoice.chat.failed": {
+      "text": "Enweghị ike ịnweta nọmba akaụntụ maka invoice {number} ugbu a. Nwaa ọzọ n'oge na-adịghị anya, ma ọ bụ kwụọ ụgwọ na ibe invoice ahụ:",
+      "reviewed": false
+    },
+    "invoice.chat.limit": {
+      "text": "Enyela ọtụtụ nọmba akaụntụ maka invoice {number} n'ime otu awa. Jiri nke ikpeazụ, ma ọ bụ nwaa ọzọ ma emechaa na ibe invoice ahụ:",
+      "reviewed": false
+    },
+    "invoice.chat.link": {
+      "text": "Invoice {number}: {link}",
+      "reviewed": false
+    },
+    "invoice.chat.paid": {
+      "text": "Akwụchaala invoice {number}. Daalụ!",
+      "reviewed": false
+    },
+    "invoice.chat.sent": {
+      "text": "Invoice {number} sitere n'aka {business}: {amount} ka a ga-akwụ. Pịa Kwụọ na transfer maka nọmba akaụntụ ị ga-akwụ ego na ya, ma ọ bụ Mepee invoice ka ị hụ ya.",
+      "reviewed": false
+    },
+    "invoice.chat.wait": {
+      "text": "Nọmba akaụntụ gị maka invoice {number} na-abịa. Ọ bụrụ na ọ bịaghị n'ime otu nkeji, pịa Nọmba akaụntụ ọhụrụ.",
       "reviewed": false
     },
     "lang.current": {

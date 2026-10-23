@@ -84,8 +84,20 @@
       "text": "Fill am",
       "reviewed": false
     },
+    "button.new_account": {
+      "text": "New account number",
+      "reviewed": false
+    },
     "button.no": {
       "text": "No",
+      "reviewed": false
+    },
+    "button.open_invoice": {
+      "text": "Open invoice",
+      "reviewed": false
+    },
+    "button.pay_transfer": {
+      "text": "Pay with transfer",
       "reviewed": false
     },
     "button.reject": {
@@ -182,6 +194,46 @@
     },
     "customer.order_ready": {
       "text": "{name}: your order {reference} don ready.",
+      "reviewed": false
+    },
+    "invoice.chat.account": {
+      "text": "Pay {amount} for invoice {number} with bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nE go work reach {until}. Use am for dis payment only.",
+      "reviewed": false
+    },
+    "invoice.chat.account_open": {
+      "text": "Pay {amount} for invoice {number} with bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}",
+      "reviewed": false
+    },
+    "invoice.chat.button_invalid": {
+      "text": "Dis button no dey work again.",
+      "reviewed": false
+    },
+    "invoice.chat.closed": {
+      "text": "You no fit pay invoice {number} again. Ask {business} if you think say e no correct.",
+      "reviewed": false
+    },
+    "invoice.chat.failed": {
+      "text": "We no fit get account number for invoice {number} now. Try again small time, or pay for the invoice page:",
+      "reviewed": false
+    },
+    "invoice.chat.limit": {
+      "text": "Dem don give too many account number for invoice {number} for the last one hour. Use the last one, or try again later for the invoice page:",
+      "reviewed": false
+    },
+    "invoice.chat.link": {
+      "text": "Invoice {number}: {link}",
+      "reviewed": false
+    },
+    "invoice.chat.paid": {
+      "text": "Invoice {number} don pay finish. Thank you!",
+      "reviewed": false
+    },
+    "invoice.chat.sent": {
+      "text": "Invoice {number} from {business}: {amount} to pay. Tap Pay with transfer make you get account number to pay enter, or Open invoice make you see am.",
+      "reviewed": false
+    },
+    "invoice.chat.wait": {
+      "text": "Your account number for invoice {number} dey come. If e no come for one minute, tap New account number.",
       "reviewed": false
     },
     "lang.current": {

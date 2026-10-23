@@ -84,8 +84,20 @@
       "text": "Kún un",
       "reviewed": false
     },
+    "button.new_account": {
+      "text": "Nọ́mbà àkáǹtì tuntun",
+      "reviewed": false
+    },
     "button.no": {
       "text": "Rárá",
+      "reviewed": false
+    },
+    "button.open_invoice": {
+      "text": "Ṣí invoice",
+      "reviewed": false
+    },
+    "button.pay_transfer": {
+      "text": "San nípa transfer",
       "reviewed": false
     },
     "button.reject": {
@@ -182,6 +194,46 @@
     },
     "customer.order_ready": {
       "text": "{name}: àṣẹ yín {reference} ti ṣetán.",
+      "reviewed": false
+    },
+    "invoice.chat.account": {
+      "text": "Ẹ san {amount} fún invoice {number} nípa bank transfer sí:\nNọ́mbà àkáǹtì: {account}\nBáńkì: {bank}\nOrúkọ àkáǹtì: {name}\nÓ wà títí di {until}. Ẹ lò ó fún ìsanwó yìí nìkan.",
+      "reviewed": false
+    },
+    "invoice.chat.account_open": {
+      "text": "Ẹ san {amount} fún invoice {number} nípa bank transfer sí:\nNọ́mbà àkáǹtì: {account}\nBáńkì: {bank}\nOrúkọ àkáǹtì: {name}",
+      "reviewed": false
+    },
+    "invoice.chat.button_invalid": {
+      "text": "Bọ́tìnnì yìí kò ṣiṣẹ́ mọ́.",
+      "reviewed": false
+    },
+    "invoice.chat.closed": {
+      "text": "Kò ṣeé ṣe láti san invoice {number} mọ́. Ẹ béèrè lọ́wọ́ {business} bí ẹ bá rò pé àṣìṣe ni.",
+      "reviewed": false
+    },
+    "invoice.chat.failed": {
+      "text": "A kò lè rí nọ́mbà àkáǹtì fún invoice {number} báyìí. Ẹ gbìyànjú láìpẹ́, tàbí ẹ sanwó ní ojú-ìwé invoice náà:",
+      "reviewed": false
+    },
+    "invoice.chat.limit": {
+      "text": "Wọ́n ti fún invoice {number} ní nọ́mbà àkáǹtì púpọ̀ jù láàárín wákàtí kan. Ẹ lo èyí tó kẹ́yìn, tàbí ẹ gbìyànjú lẹ́yìn náà ní ojú-ìwé invoice náà:",
+      "reviewed": false
+    },
+    "invoice.chat.link": {
+      "text": "Invoice {number}: {link}",
+      "reviewed": false
+    },
+    "invoice.chat.paid": {
+      "text": "Wọ́n ti san invoice {number} tán. Ẹ ṣé o!",
+      "reviewed": false
+    },
+    "invoice.chat.sent": {
+      "text": "Invoice {number} láti ọ̀dọ̀ {business}: {amount} ni ẹ ó san. Tẹ San nípa transfer fún nọ́mbà àkáǹtì tí ẹ ó sanwó sí, tàbí Ṣí invoice láti rí i.",
+      "reviewed": false
+    },
+    "invoice.chat.wait": {
+      "text": "Nọ́mbà àkáǹtì yín fún invoice {number} ń bọ̀. Bí kò bá dé láàárín ìṣẹ́jú kan, ẹ tẹ Nọ́mbà àkáǹtì tuntun.",
       "reviewed": false
     },
     "lang.current": {
