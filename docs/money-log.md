@@ -51,8 +51,16 @@ To read a movement's current status, take its latest entry by `recorded_at`.
 
 The log's own copy in Taskiem's database is the record of reference: the `money_log` table is a copy for reading. A business that brings its own Xenibase project can still edit the table there, outside Taskiem; the copy in Taskiem is unaffected.
 
+## Statements, cash and expenses
+
+**Statement upload.** A bank statement is uploaded as a CSV in one common format: the columns `date`, `description`, `amount` (money in positive, money out negative, in naira), and optionally `reference` and `balance`. A statement in a bank's own columns is uploaded once its columns are matched to these; the match is remembered for that account, so the next upload needs nothing. Banks that put money in and money out in separate columns are matched as such. Dates are read day first (23/10/2026, 23-Oct-2026) or as 2026-10-23; amounts as banks write them (1,234.50, (1,234.50), 1,234.50 DR). A file with any line Taskiem cannot read adds nothing, and says which lines and why. A line already in the log (the same account, date, amount and reference) is skipped, so uploading overlapping statements is safe. Each line becomes a `statement` entry on the account named at upload, such as `gtbank/current`, attributed to the person who uploaded it. Statement lines are matched to invoices like any money in ([matching](matching.md)).
+
+**Cash and expenses.** Cash in, cash out and expenses are entered with an amount, a date, what it was for, and for an expense the vendor and a category; each is recorded once, attributed to the person. Over the API: `POST /v1/money/statements` and `POST /v1/money/entries` (with an `Idempotency-Key`).
+
+The money that came in and the money that went out are also checked for [leaks](leaks.md).
+
 ## Not yet recorded
 
 - Payouts a service reports as settled at once, with no event after.
-- Refunds, statement uploads, cash and expenses (T6).
+- Refunds (the capability set has no refund event).
 - Matching payments to invoices and orders (T5).

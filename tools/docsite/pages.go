@@ -61,6 +61,7 @@ var internal = []struct{ pattern, why string }{
 	{"invoices", "invoices are being built (decision 0045, T3 to T8); publish once customers can pay them (T4)"},
 	{"money-log", "the money log is being built (decision 0045, T2 to T7); publish it with invoices"},
 	{"matching", "matching is being built (decision 0045, T5 to T7); publish it with invoices"},
+	{"leaks", "leaks are being built (decision 0045, T6 and T7); publish them with invoices"},
 	{"forms", "hosted forms are built but off until Phase 5 ships; publish them with storefronts"},
 	{"moderation", "storefront trust and safety is built but idle until Phase 5 ships; publish it with storefronts"},
 	{"agents", "field agents are built but idle until Phase 5 ships; publish them with storefronts"},
