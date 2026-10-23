@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHECKLIST, formatDuration, helpLink, sampleInput, starterTemplates } from "./onboarding";
+import { CHECKLIST, firstThings, formatDuration, helpLink, sampleInput, starterTemplates } from "./onboarding";
 import type { Template } from "./templates";
 
 const tpl = (id: string, connectors: string[], available = true): Template => ({
@@ -41,6 +41,21 @@ describe("getting started", () => {
     const list = [tpl("daily-reminder", ["notify@1"]), { ...tpl("payrolla-tell-staff", ["payrolla@1", "notify@1"]), product: "payrolla" }];
     expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder"]);
     expect(starterTemplates(list, ["paystack", "payrolla"]).map((t) => t.id)).toEqual(["payrolla-tell-staff", "daily-reminder"]);
+  });
+
+  it("offers invoices among the starters, after the one that needs nothing connected", () => {
+    const list = [tpl("chase-overdue-invoices", ["invoices@1", "notify@1"]), tpl("send-invoice", ["invoices@1", "notify@1"]), tpl("daily-reminder", ["notify@1"]), tpl("alpha", ["notify@1"])];
+    expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder", "send-invoice", "chase-overdue-invoices", "alpha"]);
+  });
+
+  it("offers invoices and money to those who may open them", () => {
+    const can = (...perms: string[]) => (p: string) => perms.includes(p);
+    expect(firstThings(can()).map((f) => f.id)).toEqual([]);
+    expect(firstThings(can("invoice.read")).map((f) => f.id)).toEqual(["money"]);
+    expect(firstThings(can("invoice.read", "invoice.manage")).map((f) => [f.id, f.href])).toEqual([
+      ["invoice", "/invoices/new"],
+      ["money", "/money"],
+    ]);
   });
 
   it("formats durations", () => {

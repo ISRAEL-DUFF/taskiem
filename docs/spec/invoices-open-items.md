@@ -13,7 +13,7 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5, T6 and T7 are built. T8 is not
 | **A WhatsApp template for invoices with buttons**, and one for matching questions | Outside WhatsApp's 24-hour window neither message is sent: invoices go by SMS and email only, and matching questions wait in the web app | Submit utility templates to Meta and send them when the window is closed | Founders (Meta Business account), then engineering |
 | **Publishing the guides** `invoices.md`, `money-log.md`, `matching.md`, `leaks.md`, `money-reports.md` | They are internal (`tools/docsite/pages.go`) until the sandbox runs pass | Remove them from the internal list | Engineering, after the sandbox runs |
 | **Rail facts still unknown** (OPay and iswallet: late and wrong-amount transfers; every rail's fee for one-time accounts) | Pages say "unknown" where a rail does not document it; the fee setting cannot be applied | Confirm with each rail (questions are in the plan's §4.3) | Founders / partnerships |
-| **Reviewing the chat translations** | New chat messages in Pidgin, Yoruba, Hausa and Igbo are unreviewed drafts (`reviewed: false`) | A speaker reviews each catalogue entry | Founders / reviewers |
+| **Reviewing the chat translations** | New chat messages in Pidgin, Yoruba, Hausa and Igbo are unreviewed drafts (`reviewed: false`), and so are T8's command words for invoices, expenses and cash (`ìwé owó`, `mo ná`, `takardar kuɗi`…) in `engine/lang/intents/<language>.json` | A speaker reviews each catalogue entry, and the invoice, expense and cash words and `for_words` in each word list ([words](../languages.md#reviewing-a-language)) | Founders / reviewers |
 
 ## Invoices and paying them (T3, T4)
 
@@ -23,7 +23,7 @@ Status as of 23 October 2026: T1, T3, T4, T2, T5, T6 and T7 are built. T8 is not
 - **Paystack needs an email**: a customer without one is sent to Paystack as `invoices+<number>@<page host>`.
 - **The members' "invoice" chat command was off on the edge server** before T4 gave it invoices; check on staging that it works as expected.
 - **Editing a draft without `pii.reveal`** asks for the customer's details again, since the API returns them masked; the payments connection is typed by name, not picked.
-- **Chat understands English command words only** (`invoice`, `bill`); other languages' command words are T8.
+- **Chat command words in other languages are drafts** (T8): Pidgin, Yoruba, Hausa and Igbo words for an invoice, an expense, cash in and cash out, and for "for", are in each language's word list, unreviewed; what remains is a review by speakers (above). The vendor is still read after English `at` only, and expense categories from English words only.
 - **The `send-invoice` template's keywords avoid the word "invoice"** so the offline builder still picks the follow-up template for "chase an unpaid invoice"; T8 settles the builder and its evals.
 - **Number of messages to one customer**: a customer who has had five messages in an hour (twenty a day, from any business) is not sent another; the invoice is still sent and its page works. The web app and chat say no message went, not why.
 

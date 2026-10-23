@@ -981,7 +981,7 @@
       "reviewed": false
     },
     "wa.help.invoice": {
-      "text": "• *invoice* tare da suna, kuɗi da abin da yake domin shi (*invoice Ada 25,000 for 5 bags of rice*): zai aika wa abokin cinikinku takardar kuɗi",
+      "text": "• *invoice* (ko *takardar kuɗi*) tare da suna, kuɗi da abin da yake domin shi (*invoice Ada 25,000 for 5 bags of rice*): zai aika wa abokin cinikinku takardar kuɗi",
       "reviewed": false
     },
     "wa.help.language": {
@@ -989,7 +989,7 @@
       "reviewed": false
     },
     "wa.help.money": {
-      "text": "• *spent* tare da adadin kuɗi da abin da aka kashe a kai (*spent 12,000 on diesel at Total*), ko *cash in* ko *cash out* da adadi (*cash in 20,000 till*): zan rubuta shi a littafin kuɗinku",
+      "text": "• *spent* (ko *na kashe*) tare da adadin kuɗi da abin da aka kashe a kai (*spent 12,000 on diesel at Total*), ko *cash in* (*kuɗi ya shigo*) ko *cash out* (*kuɗi ya fita*) da adadi (*cash in 20,000 till*): zan rubuta shi a littafin kuɗinku",
       "reviewed": false
     },
     "wa.help.run": {

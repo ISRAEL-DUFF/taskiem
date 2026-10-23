@@ -456,6 +456,11 @@ The daily summary, the Money page, monthly exports (log, invoices, journal).
 
 Start page entries, the AI builder's knowledge of invoices and the log (an `invoice` request uses `invoices@1`, never a data table with a status column), eval cases, `invoice-follow-up` superseded.
 
+Start page and chat words (T8):
+
+- **Get started** (`/start`) has a "Get paid and see your money" list beside the checklist: **Send your first invoice** (`/invoices/new`, for `invoice.manage`) and **See your money** (`/money`, for `invoice.read`). They are links, not checklist steps, since not every business invoices: the checklist and its count (`GET /v1/onboarding`) are unchanged. `send-invoice` and `chase-overdue-invoices` are starter templates, third and sixth, so both are among the first six cards ([onboarding](../onboarding.md#getting-started)).
+- **Chat command words in Pidgin, Yoruba, Hausa and Igbo** for an invoice, an expense, cash in and cash out, and each language's word for "for", are new intents in `engine/lang/intents/<language>.json` (`invoice`, `expense`, `cash_in`, `cash_out`, `for_words`), matched like the other commands (without case or accents, after a polite word, in the person's language), and read by the same parsers as English. English's words work in every language. An expense or cash word counts only with an amount right after it, so ordinary chat that starts with it is left to the model as before. All the words are unreviewed drafts ([languages](../languages.md#how-it-works)); Yes and No were already in every word list.
+
 ## 12. Order and timing
 
 | Order | Milestone | Why here |

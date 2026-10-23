@@ -542,6 +542,24 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
 			return err
 		}
+		// The same in the person's language (English's are read above).
+		if matched && m.Language != lang.EN {
+			switch m.Intent {
+			case lang.IntentInvoice:
+				if done, err := s.waInvoiceWords(ctx, c, m); done || err != nil {
+					return err
+				}
+			case lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut:
+				if done, err := s.waMoneyWords(ctx, c, m); done || err != nil {
+					return err
+				}
+			}
+		}
+		// Words that only looked like one ("I spend the whole day…") are
+		// ordinary chat, which the model may still route.
+		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut}, m.Intent) {
+			matched = false
+		}
 		// A way into the web app for someone with no password (N6).
 		switch cmd {
 		case "sign in", "signin", "log in", "login", "web link", "sign in link", "web app":

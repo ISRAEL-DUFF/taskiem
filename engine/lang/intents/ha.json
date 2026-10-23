@@ -26,8 +26,13 @@
     "publish": ["buga"],
     "close_shop": ["rufe shagona", "rufe shago"],
     "order_ready": ["ya shirya"],
-    "order_delivered": ["an kai", "an karba"]
+    "order_delivered": ["an kai", "an karba"],
+    "invoice": ["takardar kuɗi", "aika takardar kuɗi ga"],
+    "expense": ["na kashe", "kashewa"],
+    "cash_in": ["kuɗi ya shigo"],
+    "cash_out": ["kuɗi ya fita"]
   },
   "fillers": ["don allah", "dan allah"],
-  "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana"]
+  "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana", "takardar kuɗi", "na kashe", "kuɗi ya shigo", "kuɗi ya fita"],
+  "for_words": ["don"]
 }

@@ -981,7 +981,7 @@
       "reviewed": false
     },
     "wa.help.invoice": {
-      "text": "• *invoice* pẹ̀lú orúkọ, iye owó àti ohun tí ó jẹ́ fún (*invoice Ada 25,000 for 5 bags of rice*): yóò fi ìwé owó ránṣẹ́ sí oníbàárà yín",
+      "text": "• *invoice* (tàbí *ìwé owó*) pẹ̀lú orúkọ, iye owó àti ohun tí ó jẹ́ fún (*invoice Ada 25,000 for 5 bags of rice*): yóò fi ìwé owó ránṣẹ́ sí oníbàárà yín",
       "reviewed": false
     },
     "wa.help.language": {
@@ -989,7 +989,7 @@
       "reviewed": false
     },
     "wa.help.money": {
-      "text": "• *spent* pẹ̀lú iye owó àti ohun tí ẹ ná an sí (*spent 12,000 on diesel at Total*), tàbí *cash in* tàbí *cash out* àti iye owó (*cash in 20,000 till*): yóò kọ ọ́ sínú àkọsílẹ̀ owó yín",
+      "text": "• *spent* (tàbí *mo ná*) pẹ̀lú iye owó àti ohun tí ẹ ná an sí (*spent 12,000 on diesel at Total*), tàbí *cash in* (*owó wọlé*) tàbí *cash out* (*owó jáde*) àti iye owó (*cash in 20,000 till*): yóò kọ ọ́ sínú àkọsílẹ̀ owó yín",
       "reviewed": false
     },
     "wa.help.run": {
