@@ -16617,9 +16617,10 @@ components:
           description: The invoice's page
         queued:
           type: array
+          description: How the invoice went out. whatsapp or telegram when the customer asked the business for updates there (decision 0039); the message carries Pay by transfer and Open invoice
           items:
             type: string
-            enum: [sms, email]
+            enum: [sms, email, whatsapp, telegram]
         sms_over_allowance:
           type: boolean
     InvoiceSettings:
@@ -22640,6 +22641,9 @@ components:
                 - approval
                 - run_outcome
                 - alert
+                - notice
+                - message
+                - invoice
               status:
                 type: string
                 enum:

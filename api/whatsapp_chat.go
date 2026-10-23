@@ -249,6 +249,12 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 	if m := reachCodeRe.FindStringSubmatch(in.Text); m != nil && in.Type == "text" {
 		return s.reachStart(ctx, wa, reach.WhatsApp, number, m[1])
 	}
+	// An invoice's buttons, which its customer may use (invoice_chat.go).
+	if in.Reply != "" {
+		if done, err := s.invoicePress(ctx, wa, reach.WhatsApp, number, in.Reply); done || err != nil {
+			return err
+		}
+	}
 	// An owner agreeing to a field agent, or ending their sessions (agents.go).
 	if done, err := s.waAgentMessage(ctx, wa, number, in); done || err != nil {
 		return err

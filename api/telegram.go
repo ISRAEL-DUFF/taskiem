@@ -231,6 +231,18 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 	if code, ok := strings.CutPrefix(in.Text, "/start "); ok {
 		return s.tgRedeem(ctx, u, strings.TrimSpace(code))
 	}
+	// An invoice's buttons, which its customer may use (invoice_chat.go).
+	if u.Kind == "callback" {
+		payload, ok, err := tg.ResolveCallback(ctx, u.FromID, u.CallbackData)
+		if err != nil {
+			return err
+		}
+		if ok {
+			if done, err := s.invoicePress(ctx, tg, reach.Telegram, addr, payload); done || err != nil {
+				return err
+			}
+		}
+	}
 	if user == uuid.Nil {
 		if done, err := s.reachStopStart(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err

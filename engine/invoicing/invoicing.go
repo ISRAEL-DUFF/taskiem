@@ -30,6 +30,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
 )
@@ -153,8 +154,14 @@ type Invoices struct {
 	// Answered is told of a request from chat once it is issued (or
 	// failed), to reply to the customer there.
 	Answered func(ctx context.Context, r Request, a Account, err error)
-	Logger   *slog.Logger
-	Now      func() time.Time
+	// Reach finds a customer who asked the business for updates on
+	// WhatsApp or Telegram (decision 0039); Send then also queues the
+	// invoice there, with its buttons, on one of Chat (the channels this
+	// deployment runs). Nil: SMS and email only.
+	Reach  *reach.Book
+	Chat   []string
+	Logger *slog.Logger
+	Now    func() time.Time
 }
 
 func (s *Invoices) now() time.Time {
@@ -572,7 +579,8 @@ type Sent struct {
 }
 
 // Send sends an invoice to its customer by SMS and email, with its page's
-// link, and marks it sent. Sending again resends the same link; a key
+// link, and marks it sent. A customer who asked the business for updates
+// on WhatsApp or Telegram also gets it there, with its buttons (chat.go). Sending again resends the same link; a key
 // makes each send's messages go once.
 func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, key string) (Sent, error) {
 	var out Sent
@@ -609,6 +617,13 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, sendText(business, cur, out.Link), "Invoice "+cur.Number+" from "+business, "invoice:"+key)
 		if err != nil {
 			return err
+		}
+		ch, err := s.queueChat(ctx, tx, tenant, cur, "invoice:"+key)
+		if err != nil {
+			return err
+		}
+		if ch != "" {
+			out.Queued = append(out.Queued, ch)
 		}
 		if err := audit(ctx, tx, tenant, by, "invoice.sent", cur.Number, map[string]any{"channels": out.Queued}); err != nil {
 			return err

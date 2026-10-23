@@ -104,10 +104,25 @@
       "reviewed": true,
       "context": "Form button, at most 20 characters"
     },
+    "button.new_account": {
+      "text": "New account number",
+      "reviewed": true,
+      "context": "A button under an account number given for an invoice: asks for another one (max 20 characters)"
+    },
     "button.no": {
       "text": "No",
       "reviewed": true,
       "context": "Reply button, at most 20 characters"
+    },
+    "button.open_invoice": {
+      "text": "Open invoice",
+      "reviewed": true,
+      "context": "A button under an invoice sent in chat: answers with the invoice's page link (max 20 characters)"
+    },
+    "button.pay_transfer": {
+      "text": "Pay by transfer",
+      "reviewed": true,
+      "context": "A button under an invoice sent on WhatsApp or Telegram: asks for an account number to pay into (max 20 characters)"
     },
     "button.reject": {
       "text": "Reject",
@@ -228,6 +243,56 @@
       "text": "{name}: your order {reference} is ready.",
       "reviewed": true,
       "context": "SMS to a customer: the owner said the order is ready"
+    },
+    "invoice.chat.account": {
+      "text": "Pay {amount} for invoice {number} by bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nValid until {until}. Use it for this payment only.",
+      "reviewed": true,
+      "context": "The one-time account a customer asked for with Pay by transfer; {until} is a time of day in Lagos (14:35)"
+    },
+    "invoice.chat.account_open": {
+      "text": "Pay {amount} for invoice {number} by bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}",
+      "reviewed": true,
+      "context": "The account a customer asked for with Pay by transfer, when it does not expire"
+    },
+    "invoice.chat.button_invalid": {
+      "text": "This button no longer works.",
+      "reviewed": true,
+      "context": "A tapped invoice button that is not valid for this chat (another person's, altered, or the invoice is gone)"
+    },
+    "invoice.chat.closed": {
+      "text": "Invoice {number} can no longer be paid. Ask {business} if you think this is wrong.",
+      "reviewed": true,
+      "context": "A customer tapped a button of an invoice that was voided"
+    },
+    "invoice.chat.failed": {
+      "text": "No account number could be got for invoice {number} just now. Try again shortly, or pay on the invoice's page:",
+      "reviewed": true,
+      "context": "Issuing an account failed; the page link follows on its own line"
+    },
+    "invoice.chat.limit": {
+      "text": "Too many account numbers were given for invoice {number} in the last hour. Use the last one, or try again later on the invoice's page:",
+      "reviewed": true,
+      "context": "Five accounts an hour or twenty in all were given for the invoice; the page link follows on its own line"
+    },
+    "invoice.chat.link": {
+      "text": "Invoice {number}: {link}",
+      "reviewed": true,
+      "context": "A customer tapped Open invoice: the invoice's page"
+    },
+    "invoice.chat.paid": {
+      "text": "Invoice {number} is paid. Thank you!",
+      "reviewed": true,
+      "context": "A customer tapped an invoice's button after it was paid in full"
+    },
+    "invoice.chat.sent": {
+      "text": "Invoice {number} from {business}: {amount} to pay. Tap Pay by transfer for an account number to pay into, or Open invoice to see it.",
+      "reviewed": true,
+      "context": "An invoice sent to a customer outside the business on the chat app they asked for updates on; {amount} is what is still due, in naira"
+    },
+    "invoice.chat.wait": {
+      "text": "Your account number for invoice {number} is on its way. If it has not come in a minute, tap New account number.",
+      "reviewed": true,
+      "context": "The rail has not given the account yet"
     },
     "lang.current": {
       "text": "I write to you in {language}. Languages here: {languages}. Send *language* and a name to change.",
