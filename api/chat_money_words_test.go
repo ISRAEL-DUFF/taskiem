@@ -56,7 +56,8 @@ func TestChatMoneyWordsInOtherLanguages(t *testing.T) {
 	}
 
 	// Hausa: cash in, recorded on "na'am".
-	w.bind(t, owner, hn)
+	op := w.member(t, owner, "musa@adafoods.test", "operator")
+	w.bind(t, op, hn)
 	w.say(t, hn, "language hausa")
 	if r := w.say(t, hn, "kuɗi ya shigo 20,000 till"); !strings.Contains(r, ha("wa.money.confirm_cash_in", "amount", "₦20,000", "what", "till")) {
 		t.Fatalf("ha cash in: %q", r)
