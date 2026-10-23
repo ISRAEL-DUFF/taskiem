@@ -100,6 +100,10 @@ export function ussd(config: UssdMenuSpec): Trigger {
 export function formTrigger(config: FormTriggerConfig): Trigger {
   return { type: "form", config: config as unknown as Record<string, unknown> };
 }
+/** Starts once per invoice of the business paid in full, in prod; trigger.body is the invoice (docs/invoices.md). */
+export function invoiceTrigger(config: { event: "paid" }): Trigger {
+  return { type: "invoice", config };
+}
 /** Any trigger type, for those without a helper. */
 export function trigger(type: Trigger["type"], config?: Values): Trigger {
   return config === undefined ? { type } : { type, config };

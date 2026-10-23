@@ -136,10 +136,11 @@ func ruleWebhookAuth(def *wd.Definition, _ connector.Lookup) (bool, string) {
 
 // The same event delivered twice starts one run: a webhook dedup
 // expression, a connector event (deduplicated by its connector), a form
-// submission (on its submission id) or an email (on its Message-ID).
+// submission (on its submission id), an email (on its Message-ID) or an
+// invoice paid (once per invoice).
 func ruleDedup(def *wd.Definition, _ connector.Lookup) (bool, string) {
 	switch def.Trigger.Type {
-	case "connector_event", "capability_event", "form", "email":
+	case "connector_event", "capability_event", "form", "email", "invoice":
 		return true, ""
 	case "webhook":
 		if d, _ := def.Trigger.Config["dedup"].(string); d != "" {

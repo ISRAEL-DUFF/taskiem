@@ -75,7 +75,7 @@ A member with `invoice.manage` who linked WhatsApp or Telegram can make and send
 
 Each payment counted towards an invoice is listed on it: the amount, the payment's reference at the payments provider, how it was matched to the invoice ("Paid into the account Taskiem gave"; "Suggested, confirmed by" the person who confirmed it; "Matched automatically"; or "Matched by hand"), the reasons a suggested or automatic match was made, and who matched it. **Undo** takes a payment out of an invoice when it was matched to the wrong one.
 
-Payments into an account number or payment link Taskiem gave for an invoice are counted automatically: every 30 seconds Taskiem asks the payments provider about each one still waiting (for up to 48 hours after an account number expires, and 7 days for a link), and counts a payment once, as matched exactly, by the system. When that makes the invoice paid, a run waiting on `invoice.paid` continues. Other money that comes in (a transfer to the business's usual account, a POS sale, cash) is matched as below.
+Payments into an account number or payment link Taskiem gave for an invoice are counted automatically: every 30 seconds Taskiem asks the payments provider about each one still waiting (for up to 48 hours after an account number expires, and 7 days for a link), and counts a payment once, as matched exactly, by the system. When that makes the invoice paid, a run waiting on `invoice.paid` continues, and the workflows that [start when an invoice is paid](#starting-a-workflow-when-an-invoice-is-paid) start. Other money that comes in (a transfer to the business's usual account, a POS sale, cash) is matched as below.
 
 The account numbers and links come from the prod connection named in **Payments connection** (`main` by default; write `paystack/main` when several providers have a connection called `main`). It needs a provider that can open one-time account numbers (Paystack with Pay with Transfer turned on, Flutterwave, OPay) or make payment links. For now the business pays the provider's fee: the "customer pays the fee" setting is kept but not yet applied, since the providers' fee rules are not yet confirmed.
 
@@ -130,9 +130,38 @@ The **Invoices** platform connector (`invoices@1`, no connection needed) acts on
 | `notify_customer` | An SMS, and an email when there is one, to the invoice's customer: `{link}` becomes the invoice's page link, `{number}` its number and `{due}` what is still due |
 | `list` | `status: overdue` (sent or part paid and past the due date, oldest due first, with `days_overdue`, Lagos time) or `status: paid` (paid within `paid_within_hours`, 1 to 168, default 24); at most `limit` (default 50, up to 200). Numbers, totals, what is due and dates only: no customer details |
 
-There is no action that marks an invoice paid. A run that waits for payment waits for the `invoice.paid` signal, correlated by the invoice's number; the signal resumes a waiting run and starts none.
+There is no action that marks an invoice paid. A run that waits for payment waits for the `invoice.paid` signal, correlated by the invoice's number; the signal resumes a waiting run and starts none. A workflow that should start when an invoice is paid has the invoice trigger instead ([below](#starting-a-workflow-when-an-invoice-is-paid)).
 
-**Templates.** `send-invoice` makes and sends an invoice and waits for `invoice.paid`. `chase-overdue-invoices` runs daily: `list` the overdue invoices and `notify_customer` each one, at most once per reminder (reminder *n* covers the days `(n−1)×every` to `n×every−1` after the first overdue day, and its `effect.idempotency_seed` is the invoice and *n*, so a second run that day, or a run after a missed day, sends no duplicate), then a note to the owner once. `invoice-paid-receipt` runs hourly over the invoices paid in the last three hours, thanking each customer once (seeded by the invoice): since `invoice.paid` starts no run, polling with a stable key is how a receipt follows payment without a new trigger type; a receipt can come up to an hour after payment, and if more than two hourly runs in a row are missed, invoices paid early in that gap get no receipt.
+**Templates.** `send-invoice` makes and sends an invoice and waits for `invoice.paid`. `chase-overdue-invoices` runs daily: `list` the overdue invoices and `notify_customer` each one, at most once per reminder (reminder *n* covers the days `(n−1)×every` to `n×every−1` after the first overdue day, and its `effect.idempotency_seed` is the invoice and *n*, so a second run that day, or a run after a missed day, sends no duplicate), then a note to the owner once. `invoice-paid-receipt` starts on the invoice trigger: the moment an invoice is paid in full it thanks the customer with `notify_customer` and tells the owner, each seeded by the invoice, so the receipt goes at once and none is missed. A workflow made from its earlier hourly version (which looked at the invoices paid in the last three hours) keeps running as it was; making it again from the template gives the immediate one, with the same **Tell me too** setting.
+
+## Starting a workflow when an invoice is paid
+
+A workflow whose trigger is
+
+```json
+{"type": "invoice", "config": {"event": "paid"}}
+```
+
+starts when one of the business's invoices is paid in full, by whatever counted the last payment: a payment into the account number or link Taskiem gave, a suggestion confirmed, a match made by hand or an automatic match. In the editor's read-back it says "When one of your invoices is paid in full". It is how a receipt, a thank-you or a note to the owner goes the moment the money is counted.
+
+- **Once per invoice.** Each workflow starts once for each invoice, whatever happens after: the same payment reported again, another payment on the paid invoice, a restart, or the invoice paid again after a wrong match was undone start no second run. A payment undone before its run could start (within a second or so) starts none; when the invoice is paid again, it starts then.
+- **In prod only.** Payments are counted in prod, so only the version deployed to prod starts. Deployed to staging only, or never deployed, a workflow starts nothing; any number of workflows can start on the same invoice.
+- **Durable.** The runs to start are written in the same transaction as the payment that makes the invoice paid, so a payment never commits without them and a crash loses none; Taskiem's API server starts them within a second. A start the plan's limits or a suspended organisation refuse is not tried again; the reason is kept.
+
+The run's `trigger.body` is the invoice:
+
+| Field | Is |
+| --- | --- |
+| `id`, `number` | The invoice's id and number (`INV-0001`) |
+| `amount_kobo`, `amount` | Its total, in kobo and in words (`₦25,000`) |
+| `paid_kobo` | What was paid towards it (at least the total) |
+| `currency` | `NGN` |
+| `customer` | `{name, phone, email}`, as the invoice has them (phone and email only when it has them) |
+| `paid_at` | When it became paid (RFC 3339) |
+| `link` | The invoice's page link, which now shows it paid |
+| `status`, `event` | `paid` |
+
+The customer's name, phone and email, and the link, are personal data: they are sealed in the run's history like a form's marked fields and shown masked. To message the customer, use `notify_customer` with `"number": "=trigger.body.number"`, which finds their phone and email itself.
 
 ## API
 

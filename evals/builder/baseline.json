@@ -28,7 +28,7 @@
     "trigger_accuracy": 0.5547,
     "template_starts": 168,
     "usage": {
-      "input_tokens": 8694406,
+      "input_tokens": 8744563,
       "output_tokens": 20617,
       "cache_creation_tokens": 0,
       "cache_read_tokens": 0
@@ -887,7 +887,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31151,
+        "input_tokens": 31349,
         "output_tokens": 199,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -924,7 +924,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 22424,
+        "input_tokens": 22621,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -962,7 +962,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34493,
+        "input_tokens": 34690,
         "output_tokens": 149,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1001,7 +1001,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 41347,
+        "input_tokens": 41544,
         "output_tokens": 208,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1037,7 +1037,7 @@
       "template": "refund-with-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37893,
+        "input_tokens": 38090,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1080,7 +1080,7 @@
       "template": "pos-sale-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32218,
+        "input_tokens": 32415,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1118,7 +1118,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32388,
+        "input_tokens": 32585,
         "output_tokens": 137,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1159,7 +1159,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 46892,
+        "input_tokens": 47089,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1198,7 +1198,7 @@
       "template": "pay-a-list",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 45567,
+        "input_tokens": 45764,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1240,7 +1240,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27186,
+        "input_tokens": 27383,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1278,7 +1278,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36248,
+        "input_tokens": 36445,
         "output_tokens": 185,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1314,7 +1314,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38180,
+        "input_tokens": 38378,
         "output_tokens": 276,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1357,7 +1357,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31042,
+        "input_tokens": 31239,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1396,7 +1396,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40707,
+        "input_tokens": 40904,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1437,7 +1437,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27427,
+        "input_tokens": 27624,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1478,7 +1478,7 @@
       "template": "pos-sale-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29744,
+        "input_tokens": 29942,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1515,7 +1515,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35773,
+        "input_tokens": 35970,
         "output_tokens": 151,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1551,7 +1551,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32954,
+        "input_tokens": 33151,
         "output_tokens": 127,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1592,7 +1592,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38608,
+        "input_tokens": 38805,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1633,7 +1633,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30356,
+        "input_tokens": 30553,
         "output_tokens": 177,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1673,7 +1673,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37824,
+        "input_tokens": 38021,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1712,7 +1712,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27329,
+        "input_tokens": 27526,
         "output_tokens": 282,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1751,7 +1751,7 @@
       "template": "invoice-paid-receipt",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26396,
+        "input_tokens": 26409,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1791,7 +1791,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23523,
+        "input_tokens": 23721,
         "output_tokens": 155,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1829,7 +1829,7 @@
       "template": "new-order-alert-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33016,
+        "input_tokens": 33213,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1870,7 +1870,7 @@
       "template": "pos-opay-settlement-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 44860,
+        "input_tokens": 45057,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1907,7 +1907,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38125,
+        "input_tokens": 38322,
         "output_tokens": 132,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1947,7 +1947,7 @@
       "template": "debtor-reminder-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36452,
+        "input_tokens": 36650,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -1986,7 +1986,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35368,
+        "input_tokens": 35565,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2026,7 +2026,7 @@
       "template": "send-invoice",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26286,
+        "input_tokens": 26299,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2062,7 +2062,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27764,
+        "input_tokens": 27961,
         "output_tokens": 142,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2104,7 +2104,7 @@
       "template": "payroll-reminder",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28809,
+        "input_tokens": 29006,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2143,7 +2143,7 @@
       "template": "send-invoice",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38141,
+        "input_tokens": 38338,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2178,7 +2178,7 @@
       "template": "debtor-reminder-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28693,
+        "input_tokens": 28890,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2214,7 +2214,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35141,
+        "input_tokens": 35339,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2257,7 +2257,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33080,
+        "input_tokens": 33277,
         "output_tokens": 141,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2297,7 +2297,7 @@
       "template": "pos-sale-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31397,
+        "input_tokens": 31594,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2336,7 +2336,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30553,
+        "input_tokens": 30750,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2376,7 +2376,7 @@
       "template": "pos-sales-record",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36566,
+        "input_tokens": 36764,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2409,7 +2409,7 @@
       "template": "payment-link-per-order",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 44522,
+        "input_tokens": 44720,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2442,7 +2442,7 @@
       "template": "virtual-account-per-customer",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40585,
+        "input_tokens": 40783,
         "output_tokens": 36,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2479,7 +2479,7 @@
       "template": "send-invoice",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30134,
+        "input_tokens": 30151,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2513,7 +2513,7 @@
       "template": "send-invoice",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33924,
+        "input_tokens": 34121,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2549,7 +2549,7 @@
       "template": "chase-overdue-invoices",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31661,
+        "input_tokens": 31858,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2583,7 +2583,7 @@
       "template": "invoice-paid-receipt",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26041,
+        "input_tokens": 26054,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2620,7 +2620,7 @@
       "template": "daily-sales-summary",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36932,
+        "input_tokens": 37129,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2658,7 +2658,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29439,
+        "input_tokens": 30030,
         "output_tokens": 131,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2695,7 +2695,7 @@
       "template": "pos-cashup",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36461,
+        "input_tokens": 36658,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2734,7 +2734,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35959,
+        "input_tokens": 36156,
         "output_tokens": 148,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2774,7 +2774,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33637,
+        "input_tokens": 33834,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2814,7 +2814,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34018,
+        "input_tokens": 34216,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2851,7 +2851,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40532,
+        "input_tokens": 40729,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2893,7 +2893,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28476,
+        "input_tokens": 28673,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2931,7 +2931,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40126,
+        "input_tokens": 40323,
         "output_tokens": 169,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -2969,7 +2969,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 41735,
+        "input_tokens": 41932,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3005,7 +3005,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34609,
+        "input_tokens": 34806,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3045,7 +3045,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33039,
+        "input_tokens": 33236,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3084,7 +3084,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39374,
+        "input_tokens": 39571,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3122,7 +3122,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37580,
+        "input_tokens": 37777,
         "output_tokens": 152,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3159,7 +3159,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34477,
+        "input_tokens": 34674,
         "output_tokens": 209,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3200,7 +3200,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36227,
+        "input_tokens": 36425,
         "output_tokens": 159,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3239,7 +3239,7 @@
       "template": "payroll-reminder",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27093,
+        "input_tokens": 27290,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3274,7 +3274,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40921,
+        "input_tokens": 41118,
         "output_tokens": 140,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3312,7 +3312,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35999,
+        "input_tokens": 36197,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3349,7 +3349,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32307,
+        "input_tokens": 32504,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3389,7 +3389,7 @@
       "template": "storefront-callback",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39767,
+        "input_tokens": 39965,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3427,7 +3427,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 42859,
+        "input_tokens": 43056,
         "output_tokens": 145,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3465,7 +3465,7 @@
       "template": "debtor-reminder-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33278,
+        "input_tokens": 33475,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3501,7 +3501,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34598,
+        "input_tokens": 34795,
         "output_tokens": 183,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3539,7 +3539,7 @@
       "template": "debtor-reminder-table",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35214,
+        "input_tokens": 35411,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3574,7 +3574,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33684,
+        "input_tokens": 33882,
         "output_tokens": 225,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3611,7 +3611,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35171,
+        "input_tokens": 35368,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3648,7 +3648,7 @@
       "template": "payment-receipt-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29152,
+        "input_tokens": 29350,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3687,7 +3687,7 @@
       "template": "pos-sale-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29986,
+        "input_tokens": 30183,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3722,7 +3722,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24814,
+        "input_tokens": 25011,
         "output_tokens": 188,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3759,7 +3759,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32468,
+        "input_tokens": 32666,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3796,7 +3796,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33317,
+        "input_tokens": 33514,
         "output_tokens": 213,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3835,7 +3835,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27294,
+        "input_tokens": 27491,
         "output_tokens": 165,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3872,7 +3872,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32500,
+        "input_tokens": 32697,
         "output_tokens": 211,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3908,7 +3908,7 @@
       "template": "pay-a-list",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34428,
+        "input_tokens": 34625,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3940,7 +3940,7 @@
       "strict": true,
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31713,
+        "input_tokens": 31910,
         "output_tokens": 212,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -3978,7 +3978,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23062,
+        "input_tokens": 23260,
         "output_tokens": 163,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4013,7 +4013,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 24840,
+        "input_tokens": 25037,
         "output_tokens": 129,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4049,7 +4049,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30896,
+        "input_tokens": 31093,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4084,7 +4084,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31530,
+        "input_tokens": 31727,
         "output_tokens": 143,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4130,7 +4130,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 45575,
+        "input_tokens": 45772,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4169,7 +4169,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 42528,
+        "input_tokens": 42725,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4212,7 +4212,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40976,
+        "input_tokens": 41173,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4255,7 +4255,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30371,
+        "input_tokens": 30568,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4294,7 +4294,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31276,
+        "input_tokens": 31473,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4338,7 +4338,7 @@
       "template": "pos-sale-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33951,
+        "input_tokens": 34148,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4379,7 +4379,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39290,
+        "input_tokens": 39487,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4421,7 +4421,7 @@
       "template": "send-invoice",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37338,
+        "input_tokens": 37535,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4462,7 +4462,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38596,
+        "input_tokens": 38793,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4505,7 +4505,7 @@
       "template": "supplier-invoice-email",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33024,
+        "input_tokens": 33221,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4548,7 +4548,7 @@
       "template": "bank-alert-email",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39774,
+        "input_tokens": 39971,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4588,7 +4588,7 @@
       "template": "virtual-account-per-customer",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 41959,
+        "input_tokens": 42156,
         "output_tokens": 36,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4627,7 +4627,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37899,
+        "input_tokens": 38097,
         "output_tokens": 193,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4667,7 +4667,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28247,
+        "input_tokens": 28444,
         "output_tokens": 142,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4709,7 +4709,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 41475,
+        "input_tokens": 41672,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4748,7 +4748,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33599,
+        "input_tokens": 33797,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4784,7 +4784,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33727,
+        "input_tokens": 33925,
         "output_tokens": 225,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4826,7 +4826,7 @@
       "template": "bank-alert-email",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36389,
+        "input_tokens": 36586,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4871,7 +4871,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30971,
+        "input_tokens": 31168,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4910,7 +4910,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38046,
+        "input_tokens": 38244,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4945,7 +4945,7 @@
       "template": "payment-receipt-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28511,
+        "input_tokens": 28708,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -4981,7 +4981,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34534,
+        "input_tokens": 34731,
         "output_tokens": 128,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5017,7 +5017,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31095,
+        "input_tokens": 31292,
         "output_tokens": 126,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5055,7 +5055,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31307,
+        "input_tokens": 31505,
         "output_tokens": 148,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5092,7 +5092,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33700,
+        "input_tokens": 33897,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5128,7 +5128,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29089,
+        "input_tokens": 29286,
         "output_tokens": 187,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5164,7 +5164,7 @@
       "template": "payment-thank-you-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29069,
+        "input_tokens": 29267,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5202,7 +5202,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33535,
+        "input_tokens": 33733,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5237,7 +5237,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38086,
+        "input_tokens": 38283,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5274,7 +5274,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25626,
+        "input_tokens": 25823,
         "output_tokens": 146,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5311,7 +5311,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27246,
+        "input_tokens": 27443,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5346,7 +5346,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32149,
+        "input_tokens": 32346,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5381,7 +5381,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34549,
+        "input_tokens": 34747,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5419,7 +5419,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26314,
+        "input_tokens": 26512,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5455,7 +5455,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37506,
+        "input_tokens": 37703,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5494,7 +5494,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28163,
+        "input_tokens": 28360,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5532,7 +5532,7 @@
       "template": "debtor-reminder-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28515,
+        "input_tokens": 28712,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5570,7 +5570,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37507,
+        "input_tokens": 37704,
         "output_tokens": 160,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5607,7 +5607,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27813,
+        "input_tokens": 28010,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5642,7 +5642,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39659,
+        "input_tokens": 39856,
         "output_tokens": 267,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5675,7 +5675,7 @@
       "template": "xenibase-new-row-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31952,
+        "input_tokens": 32149,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5709,7 +5709,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31679,
+        "input_tokens": 31876,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5742,7 +5742,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28827,
+        "input_tokens": 29025,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5776,7 +5776,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35673,
+        "input_tokens": 35870,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5820,7 +5820,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 43413,
+        "input_tokens": 43610,
         "output_tokens": 217,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5860,7 +5860,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 41376,
+        "input_tokens": 41573,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5896,7 +5896,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38212,
+        "input_tokens": 38410,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5940,7 +5940,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32123,
+        "input_tokens": 32320,
         "output_tokens": 143,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -5980,7 +5980,7 @@
       "template": "pos-sales-record",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39851,
+        "input_tokens": 40048,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6020,7 +6020,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34009,
+        "input_tokens": 34206,
         "output_tokens": 258,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6060,7 +6060,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33119,
+        "input_tokens": 33317,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6101,7 +6101,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32821,
+        "input_tokens": 33018,
         "output_tokens": 207,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6145,7 +6145,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30287,
+        "input_tokens": 30485,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6190,7 +6190,7 @@
       "template": "pos-opay-settlement-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 44107,
+        "input_tokens": 44305,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6233,7 +6233,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28516,
+        "input_tokens": 28713,
         "output_tokens": 189,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6270,7 +6270,7 @@
       "template": "refund-with-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31923,
+        "input_tokens": 32121,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6307,7 +6307,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31948,
+        "input_tokens": 32145,
         "output_tokens": 289,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6351,7 +6351,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36948,
+        "input_tokens": 37146,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6392,7 +6392,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38374,
+        "input_tokens": 38572,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6431,7 +6431,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 45574,
+        "input_tokens": 45771,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6476,7 +6476,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31018,
+        "input_tokens": 31215,
         "output_tokens": 164,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6519,7 +6519,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31101,
+        "input_tokens": 31298,
         "output_tokens": 138,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6557,7 +6557,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28136,
+        "input_tokens": 28333,
         "output_tokens": 135,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6596,7 +6596,7 @@
       "template": "payment-receipt-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37000,
+        "input_tokens": 37197,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6639,7 +6639,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36467,
+        "input_tokens": 36664,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6684,7 +6684,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33505,
+        "input_tokens": 33702,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6722,7 +6722,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40408,
+        "input_tokens": 40605,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6760,7 +6760,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40567,
+        "input_tokens": 40764,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6798,7 +6798,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40541,
+        "input_tokens": 40738,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6834,7 +6834,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38965,
+        "input_tokens": 39162,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6871,7 +6871,7 @@
       "template": "pay-a-list",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 42108,
+        "input_tokens": 42306,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6907,7 +6907,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37030,
+        "input_tokens": 37227,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6942,7 +6942,7 @@
       "template": "refund-with-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38196,
+        "input_tokens": 38393,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -6977,7 +6977,7 @@
       "template": "payrolla-tell-staff",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26993,
+        "input_tokens": 27191,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7011,7 +7011,7 @@
       "template": "payrolla-payroll-summary",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32291,
+        "input_tokens": 32488,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7045,7 +7045,7 @@
       "template": "payrolla-approve-by-chat",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31550,
+        "input_tokens": 31747,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7079,7 +7079,7 @@
       "template": "payrolla-reversal-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32248,
+        "input_tokens": 32446,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7113,7 +7113,7 @@
       "template": "payrolla-record-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34429,
+        "input_tokens": 34626,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7154,7 +7154,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32859,
+        "input_tokens": 33056,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7195,7 +7195,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34462,
+        "input_tokens": 34660,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7235,7 +7235,7 @@
       "template": "bank-alert-email",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39131,
+        "input_tokens": 39328,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7274,7 +7274,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34971,
+        "input_tokens": 35169,
         "output_tokens": 201,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7314,7 +7314,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32964,
+        "input_tokens": 33162,
         "output_tokens": 131,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7351,7 +7351,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33892,
+        "input_tokens": 34090,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7390,7 +7390,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31132,
+        "input_tokens": 31330,
         "output_tokens": 125,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7427,7 +7427,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26938,
+        "input_tokens": 27136,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7465,7 +7465,7 @@
       "template": "pay-a-list",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37780,
+        "input_tokens": 37977,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7503,7 +7503,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27817,
+        "input_tokens": 28015,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7547,7 +7547,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32862,
+        "input_tokens": 33060,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7586,7 +7586,7 @@
       "template": "pos-opay-backfill",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 43059,
+        "input_tokens": 43256,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7622,7 +7622,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 47040,
+        "input_tokens": 47238,
         "output_tokens": 252,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7661,7 +7661,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32362,
+        "input_tokens": 32560,
         "output_tokens": 130,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7701,7 +7701,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29713,
+        "input_tokens": 29911,
         "output_tokens": 265,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7740,7 +7740,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26590,
+        "input_tokens": 26787,
         "output_tokens": 137,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7778,7 +7778,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29642,
+        "input_tokens": 29839,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7817,7 +7817,7 @@
       "template": "payment-receipt-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36721,
+        "input_tokens": 36918,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7856,7 +7856,7 @@
       "template": "pos-opay-backfill",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35076,
+        "input_tokens": 35273,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7894,7 +7894,7 @@
       "template": "daily-sales-summary",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28886,
+        "input_tokens": 29083,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7932,7 +7932,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38656,
+        "input_tokens": 38853,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -7971,7 +7971,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31944,
+        "input_tokens": 32141,
         "output_tokens": 156,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8009,7 +8009,7 @@
       "template": "debtor-reminder-table",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34419,
+        "input_tokens": 34616,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8048,7 +8048,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30852,
+        "input_tokens": 31050,
         "output_tokens": 137,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8084,7 +8084,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36341,
+        "input_tokens": 36538,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8121,7 +8121,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30120,
+        "input_tokens": 30317,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8158,7 +8158,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36372,
+        "input_tokens": 36570,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8195,7 +8195,7 @@
       "template": "daily-sales-summary",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31976,
+        "input_tokens": 32173,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8233,7 +8233,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23092,
+        "input_tokens": 23289,
         "output_tokens": 185,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8271,7 +8271,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38762,
+        "input_tokens": 38959,
         "output_tokens": 167,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8311,7 +8311,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31340,
+        "input_tokens": 31537,
         "output_tokens": 154,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8347,7 +8347,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 44559,
+        "input_tokens": 44756,
         "output_tokens": 237,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8384,7 +8384,7 @@
       "template": "pos-cashup",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39632,
+        "input_tokens": 39829,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8424,7 +8424,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29520,
+        "input_tokens": 29717,
         "output_tokens": 143,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8460,7 +8460,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25018,
+        "input_tokens": 25215,
         "output_tokens": 137,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8496,7 +8496,7 @@
       "template": "payroll-reminder",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29757,
+        "input_tokens": 29955,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8532,7 +8532,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30065,
+        "input_tokens": 30262,
         "output_tokens": 146,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8569,7 +8569,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25016,
+        "input_tokens": 25213,
         "output_tokens": 136,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8604,7 +8604,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31863,
+        "input_tokens": 32060,
         "output_tokens": 191,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8644,7 +8644,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31790,
+        "input_tokens": 31988,
         "output_tokens": 123,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8681,7 +8681,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 46049,
+        "input_tokens": 46246,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8718,7 +8718,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33893,
+        "input_tokens": 34090,
         "output_tokens": 149,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8754,7 +8754,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28547,
+        "input_tokens": 28744,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8792,7 +8792,7 @@
       "template": "debtor-reminder-table",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30251,
+        "input_tokens": 30448,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8834,7 +8834,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 42395,
+        "input_tokens": 42592,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8874,7 +8874,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30220,
+        "input_tokens": 30418,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8910,7 +8910,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31010,
+        "input_tokens": 31208,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8946,7 +8946,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36617,
+        "input_tokens": 36814,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -8981,7 +8981,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33043,
+        "input_tokens": 33240,
         "output_tokens": 144,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9018,7 +9018,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32991,
+        "input_tokens": 33188,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9059,7 +9059,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31480,
+        "input_tokens": 31677,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9094,7 +9094,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30907,
+        "input_tokens": 31104,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9131,7 +9131,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 46502,
+        "input_tokens": 46700,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9171,7 +9171,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37152,
+        "input_tokens": 37349,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9207,7 +9207,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39324,
+        "input_tokens": 39521,
         "output_tokens": 211,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9239,7 +9239,7 @@
       "template": "payment-receipt-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27570,
+        "input_tokens": 27767,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9274,7 +9274,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33464,
+        "input_tokens": 33661,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9313,7 +9313,7 @@
       "template": "debtor-reminder-table",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39466,
+        "input_tokens": 39664,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9357,7 +9357,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31048,
+        "input_tokens": 31245,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9396,7 +9396,7 @@
       "template": "refund-with-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 38849,
+        "input_tokens": 39046,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9432,7 +9432,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31706,
+        "input_tokens": 31903,
         "output_tokens": 150,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9467,7 +9467,7 @@
       "template": "sales-ledger-sheet",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34131,
+        "input_tokens": 34328,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9505,7 +9505,7 @@
       "template": "pos-opay-settlement-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30431,
+        "input_tokens": 30628,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9544,7 +9544,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 41229,
+        "input_tokens": 41426,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9579,7 +9579,7 @@
       "template": "kyc-bvn-check",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 23556,
+        "input_tokens": 23753,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9614,7 +9614,7 @@
       "template": "debtor-reminder-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 27899,
+        "input_tokens": 28096,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9653,7 +9653,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37299,
+        "input_tokens": 37496,
         "output_tokens": 181,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9687,7 +9687,7 @@
       "template": "daily-sales-summary",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28833,
+        "input_tokens": 29030,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9720,7 +9720,7 @@
       "template": "payment-receipt-whatsapp",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29736,
+        "input_tokens": 29933,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9754,7 +9754,7 @@
       "template": "low-balance-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34728,
+        "input_tokens": 34925,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9787,7 +9787,7 @@
       "template": "payroll-reminder",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37428,
+        "input_tokens": 37625,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9825,7 +9825,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40131,
+        "input_tokens": 40328,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9860,7 +9860,7 @@
       "template": "supplier-payment-approval",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 37729,
+        "input_tokens": 37926,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9895,7 +9895,7 @@
       "template": "new-order-alert-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33797,
+        "input_tokens": 33994,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9928,7 +9928,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 31064,
+        "input_tokens": 31261,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9962,7 +9962,7 @@
       "template": "failed-transfer-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 34067,
+        "input_tokens": 34264,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -9995,7 +9995,7 @@
       "template": "weekly-balance-email",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25193,
+        "input_tokens": 25390,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10028,7 +10028,7 @@
       "template": "stock-reorder-alert",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30214,
+        "input_tokens": 30411,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10060,7 +10060,7 @@
       "template": "transfer-received-notify",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 36056,
+        "input_tokens": 36254,
         "output_tokens": 35,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10094,7 +10094,7 @@
       "template": "new-customer-welcome",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 25495,
+        "input_tokens": 25692,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10130,7 +10130,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33097,
+        "input_tokens": 33294,
         "output_tokens": 131,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10163,7 +10163,7 @@
       "template": "chase-overdue-invoices",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 30825,
+        "input_tokens": 31023,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10202,7 +10202,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33332,
+        "input_tokens": 33529,
         "output_tokens": 212,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10240,7 +10240,7 @@
       "template": "daily-sales-summary",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 28697,
+        "input_tokens": 28894,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10275,7 +10275,7 @@
       "template": "debtor-reminder-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 32723,
+        "input_tokens": 32920,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10313,7 +10313,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 26504,
+        "input_tokens": 26702,
         "output_tokens": 237,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10352,7 +10352,7 @@
       "template": "run-payroll",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40493,
+        "input_tokens": 40691,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10390,7 +10390,7 @@
       "template": "pay-a-list",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 40031,
+        "input_tokens": 40229,
         "output_tokens": 31,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10424,7 +10424,7 @@
       "template": "bank-alert-email",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 39951,
+        "input_tokens": 40148,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10457,7 +10457,7 @@
       "template": "supplier-invoice-email",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 29807,
+        "input_tokens": 30004,
         "output_tokens": 34,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10493,7 +10493,7 @@
       "template": "leave-request",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 35068,
+        "input_tokens": 35266,
         "output_tokens": 32,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10532,7 +10532,7 @@
       "template": "storefront-order",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33242,
+        "input_tokens": 33439,
         "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
@@ -10570,7 +10570,7 @@
       ],
       "model": "heuristic",
       "usage": {
-        "input_tokens": 33576,
+        "input_tokens": 33774,
         "output_tokens": 148,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0

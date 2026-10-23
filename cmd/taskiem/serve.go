@@ -625,7 +625,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	tell.Set(n)
 	// Invoices (decision 0045): their pages are on the form host.
-	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Logger: log.With("component", "invoices")}
+	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Start: e.store.Start, Logger: log.With("component", "invoices")}
 	// A customer who asked for the business's updates on a chat app gets
 	// its invoices there too, with their buttons (decision 0045 point 7).
 	e.invoices.Reach, e.invoices.Chat = e.reach, n.Chat

@@ -32,12 +32,15 @@ import (
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
 )
 
 // PaidSignal is the signal a run waiting on an invoice receives when it is
-// paid in full, correlated by the invoice's number.
+// paid in full, correlated by the invoice's number. It resumes runs and
+// starts none: a workflow that starts on an invoice being paid has the
+// invoice trigger (TriggerType).
 const PaidSignal = "invoice.paid"
 
 // Limits on what one invoice holds.
@@ -151,6 +154,9 @@ type Invoices struct {
 	PageBase string
 	// Signal delivers a signal (runtime.Store.DeliverSignalOnce).
 	Signal func(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error)
+	// Start starts a run (runtime.Store.Start): StartPaid starts the
+	// workflows whose trigger is an invoice being paid. Nil starts none.
+	Start func(ctx context.Context, req runtime.StartRequest) (runtime.Started, error)
 	// Rails issues accounts and links and looks payments up (T4); nil:
 	// invoices take no payments on their page.
 	Rails Rails
@@ -803,8 +809,10 @@ type PaymentIn struct {
 // RecordPayment counts a payment towards an invoice, once: the same
 // payment again is a no-op. Matching (T5) and one-time accounts (T4) call
 // it; nothing else marks an invoice paid. When the invoice becomes paid,
-// a run waiting on it is signalled after the transaction commits (the
-// caller's commit: call Paid with what this returns).
+// the runs of the workflows that start on it are queued in tx (once per
+// invoice and workflow; StartPaid starts them), and a run waiting on it
+// is signalled after the transaction commits (the caller's commit: call
+// Paid with what this returns).
 func (s *Invoices) RecordPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber string, p PaymentIn) (Invoice, bool, error) {
 	cur, err := s.Get(ctx, tx, tenant, idOrNumber)
 	if err != nil {
@@ -861,7 +869,19 @@ func (s *Invoices) RecordPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 		return Invoice{}, false, err
 	}
 	x, err := s.Get(ctx, tx, tenant, cur.ID.String())
-	return x, x.Status == "paid" && cur.Status != "paid", err
+	if err != nil {
+		return Invoice{}, false, err
+	}
+	became := x.Status == "paid" && cur.Status != "paid"
+	if became {
+		// Workflows that start on an invoice being paid: queued here, in
+		// the payment's transaction, so the payment and its runs commit
+		// together (StartPaid starts them).
+		if err := queuePaidStarts(ctx, tx, tenant, x.ID); err != nil {
+			return Invoice{}, false, err
+		}
+	}
+	return x, became, nil
 }
 
 // UndoPayment undoes a counted payment (a wrong match): its row stays,
