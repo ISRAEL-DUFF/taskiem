@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from "react";
-import { Link, NavLink, useSearchParams } from "react-router-dom";
+import { Link, NavLink, Navigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, useAction, useLiveRefresh, useLoad } from "../ui";
@@ -10,10 +10,12 @@ import {
   ENTRIES_PATH,
   ENTRY_KINDS,
   ENTRY_LIMITS,
+  EXPORTS,
   FEE_RATES_PATH,
   LEAK_FILTERS,
   MAX_STATEMENT_BYTES,
   NOTE_LIMIT,
+  PERIOD_CHOICES,
   STATEMENTS_PATH,
   addedLine,
   bpToPercent,
@@ -24,7 +26,19 @@ import {
   columnsForm,
   columnsProblem,
   columnsRequest,
+  counted,
   csvHeader,
+  exportFileName,
+  exportPath,
+  feeRatePercent,
+  periodChoice,
+  periodFor,
+  periodProblem,
+  periodWords,
+  summaryPath,
+  type MoneySummary,
+  type Period,
+  type PeriodChoice,
   emptyClose,
   emptyEntry,
   emptyFee,
@@ -70,13 +84,14 @@ async function plainly<T>(p: Promise<T>): Promise<T> {
   }
 }
 
-/** Leaks, Upload statement, Cash and expenses, Fees. */
+/** Overview, Leaks, Upload statement, Cash and expenses, Fees. */
 function MoneyTabs() {
   return (
     <nav className="tabs" aria-label="Money">
       <NavLink to="/money" end>
-        Leaks
+        Overview
       </NavLink>
+      <NavLink to="/money/leaks">Leaks</NavLink>
       <NavLink to="/money/statements">Upload statement</NavLink>
       <NavLink to="/money/entries">Cash and expenses</NavLink>
       <NavLink to="/money/fees">Fees</NavLink>
@@ -113,6 +128,183 @@ function Problem({ shown, problem }: { shown: boolean; problem: string | null })
   );
 }
 
+// --- overview ---
+
+/** Money > Overview (GET /v1/money/summary, /v1/money/exports): a period's money in and out, fees, invoices paid, leaks, and the CSV exports. */
+export function MoneyOverview() {
+  const { can } = useAuth();
+  const [params, setParams] = useSearchParams();
+  // Links from before the overview (/money?status=closed) were to the leaks.
+  const oldLeaks = params.get("status");
+  const choice = periodChoice(params.get("period"));
+  const custom = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
+  const p = periodFor(choice, new Date(), custom);
+  const problem = choice === "custom" ? periodProblem(p) : null;
+  const key = problem ? "" : summaryPath(p);
+  const sum = useLoad(() => (key ? get<MoneySummary>(key) : Promise.resolve(undefined)), [key]);
+  useLiveRefresh(sum.reload);
+  const [reveal, setReveal] = useState(false);
+  const fromId = useId();
+  const toId = useId();
+  if (oldLeaks !== null) return <Navigate to={`/money/leaks?${new URLSearchParams({ status: oldLeaks })}`} replace />;
+  const choose = (v: PeriodChoice) => {
+    if (v === "today") setParams({}, { replace: true });
+    else if (v === "custom") setParams({ period: v, from: custom.from || p.from, to: custom.to || p.to }, { replace: true });
+    else setParams({ period: v }, { replace: true });
+  };
+  const setDate = (patch: Partial<Period>) => setParams({ period: "custom", ...custom, ...patch }, { replace: true });
+  const s = sum.data && !problem ? sum.data : undefined;
+  const channels = s?.channels ?? [];
+  const rate = feeRatePercent(s?.fee_rate_bp);
+  return (
+    <>
+      <PageHeader title="Money" description="Your business's money for a period: what came in and went out, settled and pending, the fees taken, invoices paid and leaks." />
+      <MoneyTabs />
+      <div className="filters" role="group" aria-label="Period">
+        <label>
+          Period{" "}
+          <select value={choice} onChange={(e) => choose(e.target.value as PeriodChoice)}>
+            {PERIOD_CHOICES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {choice === "custom" && (
+          <>
+            <label htmlFor={fromId}>From</label>
+            <input id={fromId} type="date" value={custom.from} max={custom.to || undefined} onChange={(e) => setDate({ from: e.target.value })} />
+            <label htmlFor={toId}>To</label>
+            <input id={toId} type="date" value={custom.to} min={custom.from || undefined} onChange={(e) => setDate({ to: e.target.value })} />
+          </>
+        )}
+        <button type="button" onClick={sum.reload} disabled={!!problem}>
+          Refresh
+        </button>
+      </div>
+      {problem ? (
+        <div className="error" role="alert">
+          {problem}
+        </div>
+      ) : (
+        <p className="hint" data-testid="period-words">
+          {periodWords(p)}, in Lagos time.
+        </p>
+      )}
+      <ErrorBox error={sum.error} />
+      {!problem && !s && !sum.error && <Skeleton rows={3} label="Loading the period's money…" />}
+      {s && (
+        <>
+          <section className="stats" aria-label="The period's money" data-testid="money-totals">
+            <div className="stat" data-testid="money-in">
+              <span className="stat-label">Money in</span>
+              <span className="stat-value">{naira(s.in_settled_kobo)}</span>
+              <span className="stat-hint">{s.in_pending_kobo ? `Settled. ${naira(s.in_pending_kobo)} more pending.` : "Settled."}</span>
+            </div>
+            <div className="stat" data-testid="money-out">
+              <span className="stat-label">Money out</span>
+              <span className="stat-value">{naira(s.out_settled_kobo)}</span>
+              <span className="stat-hint">{s.out_pending_kobo ? `Settled. ${naira(s.out_pending_kobo)} more pending.` : "Settled."}</span>
+            </div>
+            <div className="stat" data-testid="money-fees">
+              <span className="stat-label">Fees</span>
+              <span className="stat-value">{naira(s.fees_kobo)}</span>
+              {rate && <span className="stat-hint">{rate} of the money they were taken on</span>}
+            </div>
+            <div className="stat" data-testid="invoices-paid">
+              <span className="stat-label">Invoices paid</span>
+              <span className="stat-value">{naira(s.invoices_paid_kobo)}</span>
+              <span className="stat-hint">{counted(s.invoices_paid, "invoice")}</span>
+            </div>
+          </section>
+          <section className="card" aria-labelledby="leaks-h" data-testid="overview-leaks">
+            <h2 id="leaks-h">Leaks</h2>
+            <ul>
+              <li>
+                Opened in the period: {counted(s.leaks_opened, "leak")}
+                {s.leaks_opened ? `, ${naira(s.leaks_opened_kobo)}` : ""}
+              </li>
+              <li>
+                Open now: {counted(s.leaks_open, "leak")}, {naira(s.leaks_open_kobo)}
+              </li>
+              <li>Recovered so far: {naira(s.recovered_kobo)}</li>
+            </ul>
+            <Link to="/money/leaks">See the leaks</Link>
+          </section>
+          <h2>By channel</h2>
+          {channels.length === 0 ? (
+            <EmptyState icon="money">No money moved in this period.</EmptyState>
+          ) : (
+            <table className="cards" data-testid="channels">
+              <caption className="sr-only">Money by channel, {periodWords(p)}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Channel</th>
+                  <th scope="col">In</th>
+                  <th scope="col">Pending</th>
+                  <th scope="col">Out</th>
+                  <th scope="col">Fees</th>
+                  <th scope="col">Fee rate</th>
+                  <th scope="col">Movements</th>
+                </tr>
+              </thead>
+              <tbody>
+                {channels.map((c) => (
+                  <tr key={c.channel} data-testid="channel-row">
+                    <th scope="row" className="primary" data-label="Channel">
+                      {channelWords(c.channel)} <span className="hint">{c.channel}</span>
+                    </th>
+                    <td data-label="In" className="num">
+                      {naira(c.in_settled_kobo)}
+                    </td>
+                    <td data-label="Pending" className="num">
+                      {c.in_pending_kobo || c.out_pending_kobo ? [c.in_pending_kobo ? `${naira(c.in_pending_kobo)} in` : "", c.out_pending_kobo ? `${naira(c.out_pending_kobo)} out` : ""].filter(Boolean).join(", ") : <span className="hint">None</span>}
+                    </td>
+                    <td data-label="Out" className="num">
+                      {naira(c.out_settled_kobo)}
+                    </td>
+                    <td data-label="Fees" className="num">
+                      {naira(c.fees_kobo)}
+                    </td>
+                    <td data-label="Fee rate" className="num">
+                      {feeRatePercent(c.fee_rate_bp) || <span className="hint">None</span>}
+                    </td>
+                    <td data-label="Movements" className="num">
+                      {c.movements}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+      {!problem && (
+        <section className="card" aria-labelledby="exports-h" data-testid="exports">
+          <h2 id="exports-h">Exports</h2>
+          <p className="hint">Download {periodWords(p)} as a CSV file, for your accountant or a spreadsheet.</p>
+          {can("pii.reveal") && (
+            <label className="inline" title="Adds each customer's name to the invoices export; the access is audited">
+              <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Invoices with customers' names
+            </label>
+          )}
+          <ul className="exports">
+            {EXPORTS.map((x) => (
+              <li key={x.kind}>
+                <a className="button" href={exportPath(x.kind, p, reveal)} download={exportFileName(x.kind, p)}>
+                  Download {x.label.toLowerCase()}
+                </a>{" "}
+                <span className="hint">{x.help}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  );
+}
+
 // --- leaks ---
 
 /** Money > Leaks (GET /v1/money/leaks): what Taskiem found, the totals, and closing them. */
@@ -135,7 +327,7 @@ export function MoneyLeaks() {
   const t = list.data?.totals;
   return (
     <>
-      <PageHeader title="Money" description="Money your business may be losing, found by Taskiem: payments with no invoice, overdue invoices, money paid twice or too much, and fees above what you agreed." />
+      <PageHeader title="Leaks" description="Money your business may be losing, found by Taskiem: payments with no invoice, overdue invoices, money paid twice or too much, and fees above what you agreed." />
       <MoneyTabs />
       {t && (
         <section className="stats" aria-label="Leaks at a glance" data-testid="leak-totals">
