@@ -1,0 +1,36 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/connect/employees",
+  "query": {
+   "status": "ACTIVE",
+   "limit": "100"
+  },
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": {
+    "employees": [
+     {
+      "id": "e3f0b9d4-2c7a-4f8e-b1d6-9a0c5e7f3b12",
+      "first_name": "Ngozi",
+      "last_name": "Eze",
+      "email": "ngozi@acme.ng",
+      "phone": "+2348030000001",
+      "department": "Sales",
+      "status": "ACTIVE",
+      "employment_type": "SALARIED",
+      "start_date": "2024-02-01",
+      "pay_method": "BANK",
+      "external_ref": "ACME-014"
+     }
+    ],
+    "next_cursor": "c2"
+   }
+  }
+ }
+}

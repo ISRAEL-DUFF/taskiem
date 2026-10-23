@@ -1,0 +1,19 @@
+{
+ "action": "get_employee",
+ "input": {
+  "employee_id": "e3f0b9d4-2c7a-4f8e-b1d6-9a0c5e7f3b12"
+ },
+ "credentials": {
+  "api_key": "pyk_live_test_key"
+ },
+ "exchanges": [
+  "employee"
+ ],
+ "expect": {
+  "output": {
+   "employee": {
+    "pay_method": "BANK"
+   }
+  }
+ }
+}

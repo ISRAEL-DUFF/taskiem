@@ -1,0 +1,34 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/connect/runs",
+  "query": {
+   "status": "COMPUTED,APPROVED",
+   "limit": "50"
+  },
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": {
+    "runs": [
+     {
+      "run_id": "5d2a7a62-6f0e-4c1e-9a5b-2d1f0c3e8a71",
+      "period_start": "2026-10-01",
+      "period_end": "2026-10-31",
+      "pay_date": "2026-10-28",
+      "run_type": "REGULAR",
+      "status": "COMPUTED",
+      "employee_count": 48,
+      "total_gross_kobo": 1240000000,
+      "total_net_kobo": 920000000
+     }
+    ],
+    "next_cursor": ""
+   }
+  }
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/connect/employees/e3f0b9d4-2c7a-4f8e-b1d6-9a0c5e7f3b12",
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 429,
+  "headers": {
+   "Retry-After": "30"
+  },
+  "body": {
+   "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many requests."
+   }
+  }
+ }
+}

@@ -1,12 +1,12 @@
 # Partner tracker: what is still needed
 
-Last updated 14 October 2026, after iswallet's answers to Xenibase. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
+Last updated 23 October 2026, after Payrolla's integration pack. One place for what is outstanding with each partner, and what each one is waiting on from us. Every item has an id that matches the request page or guide where it was asked, so replies can be ticked off here.
 
 The request pages sent to partners:
 
 | Partner | Page | Last sent |
 | --- | --- | --- |
-| Payrolla | [Payrolla integration: our answers, what's left, and the guide](https://claude.ai/artifact/QqY5U7DNXwAYVXq2hWZGDt) | 14 October 2026, answering Payrolla's reply |
+| Payrolla | [Payrolla integration: our answers, what's left, and the guide](https://claude.ai/artifact/QqY5U7DNXwAYVXq2hWZGDt) | 14 October 2026, answering Payrolla's reply. Payrolla's integration pack came back on 23 October ([kept here](integrations/payrolla-reference/01-reply-email.md)) |
 | iswallet (and iSpend) | [What Taskiem needs from iswallet to go live](https://claude.ai/artifact/QkzDpSN1V75TozwWs73Tpo) | 9 October 2026, plus section 3a on 14 October |
 | Xenibase | [What Taskiem needs from Xenibase](https://claude.ai/artifact/KjzURqhiLmdUsBttbXk7to) | 9 October 2026 |
 
@@ -26,10 +26,12 @@ Keys, tokens and signing secrets never travel in email, chat, tickets or these p
 | N6 | Pilot company's production `funding_wallet_id` (R6), start date, on-call contact for payroll days (T2) | Before production | [x] Withdrawn (decision 0044) |
 | N7 | Confirm 35 days of watching for reversals is enough (settable per company, 1–60) | Confirm | [x] Withdrawn: Payrolla watches its own payouts |
 | E1 | Embedding the builder: after the payroll pilot | Later | Deferred by Payrolla |
-| P1 | Payrolla's API (R0-2): how Taskiem connects (API key or OAuth), the sandbox, rate limits, and reading payrolls, payslips and approvals | Now | [ ] Asked |
-| P2 | Payrolla's webhooks (R0-2, R0-4): the events (payroll approved, paid, payment failed or returned), their signature, and whether they are set per company or once for all | Now | [ ] Asked |
-| P3 | Payrolla's embeddable screens (R0-3): their URLs, how a Payrolla user is signed in inside a frame, `frame-ancestors` allowing Taskiem's origins, and postMessage events | Now | [ ] Asked |
-| P4 | A Payrolla sandbox account for Taskiem's tests | Now | [ ] |
+| P1 | Payrolla's API (R0-2): how Taskiem connects (API key or OAuth), the sandbox, rate limits, and reading payrolls, payslips and approvals | Now | [x] 23 October: the Connect API, one key per company (API key, no OAuth), 120 requests a minute, no approve API (an `approval_url` instead), 7-day payslip links ([reference](integrations/payrolla-reference/02-taskiem-integration-guide.md)); built as `payrolla@1` (R5) |
+| P2 | Payrolla's webhooks (R0-2, R0-4): the events (payroll approved, paid, payment failed or returned), their signature, and whether they are set per company or once for all | Now | [x] 23 October: 15 event types, signed `t=<unix>,v1=<HMAC-SHA256>` with 5 minutes' tolerance, subscriptions per company made with the company's key, retries for about two days and 30 days of replay ([webhooks](integrations/payrolla-reference/api/webhooks.md)) |
+| P3 | Payrolla's embeddable screens (R0-3): their URLs, how a Payrolla user is signed in inside a frame, `frame-ancestors` allowing Taskiem's origins, and postMessage events | Now | [x] 23 October: a server-minted launch token and Payrolla's SDK, `frame-ancestors` from the owner's allowed origins, `EMBED_*` messages ([embedding](integrations/payrolla-reference/api/embedding.md)); for R6 |
+| P4 | A Payrolla sandbox account for Taskiem's tests | Now | [~] 23 October: a test company in production (test employees, an unfunded wallet, so nothing can be paid). Payrolla asks who on our team needs access; each person makes their own key |
+| P5 | Taskiem's exact production origins, for each owner's embedding settings and Payrolla's customer guide | Before R6 | [ ] Owed by us |
+| P6 | The pilot: Chuks Electronics, proposed from 23 October, after the go-live checklist ([checklist](integrations/payrolla-reference/04-go-live-checklist.md)) | Before the pilot | [ ] The connector is built (R5); the checklist's Taskiem items, the test company's keys and a public hooks URL are open |
 
 For the record, from Payrolla's reply about the withdrawn integration: report base URL `https://synledger.name.ng/payrolla/api/v1/integrations/taskiem` (sandbox; the reply said `/payroller`, but staging serves Payrolla under `/payrolla`, checked 15 October: `/payrolla/health` answers ok and the integration path answers 401 without a token) and `https://ispend.name.ng/payroller/api/v1/integrations/taskiem` (production, as the reply gave it; confirm whether it moved to `/payrolla` too), one bearer token per company issued in Payrolla and entered by the company's account holder; re-sends use `{run_id}-r2`, `-r3`; payrolls are sent once locked.
 
@@ -86,7 +88,7 @@ Xenibase (formerly PGDock). Phase 1 is built from its published contracts ([plan
 | Item | For | Blocked by |
 | --- | --- | --- |
 | A Taskiem staging deployment with a public URL | Everyone: webhook URLs for iswallet subscriptions, Payrolla's events, Xenibase testing | Infrastructure ([needs people](needs-people.md) D5, P4-C1) |
-| Payrolla's sandbox account and API key, entered on Taskiem's Connections page | The Payrolla connector (P1, P4) | Payrolla's sandbox |
+| The names of Taskiem people who need Payrolla's test company (P4), and our embedding origins (P5) | Payrolla's recordings and the pilot | Nothing; send with the next Payrolla message |
 | Webhook URLs per product and environment | iswallet W3, P3; Payrolla's events (P2) | Staging, then production |
 | Fixed egress IPs | Xenibase (if they allow-list); iswallet for forensics only | Cloud provider and NAT (P4-C1, P4-C5) |
 | Telling iswallet that Taskiem no longer pays for Payrolla, and Run payroll's expected figures | iswallet H3, P1 | Nothing; send with the next iswallet message |

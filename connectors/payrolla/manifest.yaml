@@ -1,0 +1,274 @@
+# Payrolla (payroll for Nigerian companies), Connect API version 2026-11-01.
+# Built from what Payrolla published for Taskiem (decision 0044 R5), read
+# 23 October 2026 (docs/integrations/payrolla-reference):
+#   api/payrolla-connect-v1.yaml   /connect/company, runs, run lines, the
+#                                  approval link, employees, payslip links,
+#                                  webhooks (list, create, delete, test),
+#                                  events (replay), every event's body
+#   api/webhooks.md                Payrolla-Signature (t=<unix>,v1=<hex>),
+#                                  5-minute tolerance, retries, 410, replay
+#   02-taskiem-integration-guide.md  the model: one key per company, no
+#                                  money moves and nothing is approved
+#                                  through the API
+# Payrolla is a product (decision 0044): it pays its customers' staff
+# itself, so this connector reads, reacts and links, and declares no rail
+# capabilities. See docs/integrations/payrolla.md.
+manifest: connector/v1
+id: payrolla
+version: 1.0.0
+name: Payrolla
+description: Start workflows when a payroll is ready for approval, approved, paid or returned, or when employees change; read runs, each employee's pay status and the team; send an approval link or a payslip link. Payrolla pays and approves; Taskiem never does.
+category: productivity
+kind: product
+regions: [NG]
+auth:
+  type: api_key
+  fields:
+    - { key: api_key, label: "API key (pyk_live_…), from Payrolla → Settings → Connected apps", secret: true }
+  test: { action: get_company }
+base_url: https://synledger.name.ng/payrolla/api/v1
+egress_hosts: [synledger.name.ng]
+actions:
+  get_company:
+    title: Check the connection
+    description: >-
+      The company the key belongs to, and what the owner allowed it to do
+      (its scopes). A key belongs to one company and sees only that company.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        company:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            pay_frequency: { type: string }
+        key:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            kind: { type: string, description: CONNECTED_APP or OWN_PRODUCT }
+            scopes: { type: array, items: { type: string } }
+  list_runs:
+    title: Find payroll runs
+    description: Payroll runs, newest first; one page at a time (pass next_cursor back as cursor; empty at the end). Needs payroll:read.
+    class: read
+    input:
+      type: object
+      properties:
+        status: { type: string, description: "Comma-separated statuses: DRAFT, COMPUTED, APPROVED, LOCKED, DISBURSING, COMPLETED, PARTIALLY_COMPLETED, CANCELLED, FAILED" }
+        updated_since: { type: string, description: Only runs changed at or after this time (RFC 3339) }
+        cursor: { type: string }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+    output:
+      type: object
+      properties:
+        runs: { type: array, items: { type: object, properties: { run_id: { type: string }, period_start: { type: string, description: YYYY-MM-DD }, period_end: { type: string }, pay_date: { type: string }, run_type: { type: string, description: REGULAR or OFF_CYCLE }, status: { type: string }, employee_count: { type: integer }, total_gross_kobo: { type: integer }, total_net_kobo: { type: integer } } } }
+        next_cursor: { type: string }
+  get_run:
+    title: Get a payroll run
+    description: One run with its timeline, and its approval link while it waits for approval. Needs payroll:read.
+    class: read
+    input:
+      type: object
+      required: [run_id]
+      properties:
+        run_id: { type: string }
+    output:
+      type: object
+      properties:
+        run:
+          type: object
+          properties:
+            run_id: { type: string }
+            period_start: { type: string }
+            period_end: { type: string }
+            pay_date: { type: string }
+            run_type: { type: string }
+            status: { type: string }
+            employee_count: { type: integer }
+            total_gross_kobo: { type: integer }
+            total_net_kobo: { type: integer }
+            created_at: { type: string }
+            updated_at: { type: string }
+            approved_at: { type: string }
+            locked_at: { type: string }
+            approval_url: { type: string }
+  get_run_lines:
+    title: Get each employee's pay in a run
+    description: >-
+      Each employee's net pay and how its payout went (CONFIRMED, FAILED,
+      REVERSED, …), with the provider's reference and the reason a payout
+      failed. No bank details and no pay breakdown. Needs payroll:read.
+    class: read
+    input:
+      type: object
+      required: [run_id]
+      properties:
+        run_id: { type: string }
+    output:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              payslip_id: { type: string }
+              employee_id: { type: string }
+              first_name: { type: string }
+              last_name: { type: string }
+              net_kobo: { type: integer }
+              disbursement_status: { type: string, description: "PENDING, AWAITING_FUNDS, SENT, CONFIRMED, FAILED, PERMANENTLY_FAILED or REVERSED" }
+              reference: { type: string }
+              reason: { type: string }
+    pii:
+      - { field: output.lines.*.first_name, category: name }
+      - { field: output.lines.*.last_name, category: name }
+  get_approval_link:
+    title: Get a run's approval link
+    description: >-
+      Where an approver reviews the run in Payrolla. There is no approve
+      API: approval needs the approver's own sign-in and confirmation, so
+      the link carries no credential and is safe to send in a message.
+      Needs payroll:read.
+    class: read
+    input:
+      type: object
+      required: [run_id]
+      properties:
+        run_id: { type: string }
+    output:
+      type: object
+      properties:
+        url: { type: string }
+        awaiting_approval: { type: boolean }
+        status: { type: string }
+  list_employees:
+    title: Find employees
+    description: The team, one page at a time (pass next_cursor back as cursor). Names and contact details only; never bank details, ID numbers or pay. Needs employees:read.
+    class: read
+    input:
+      type: object
+      properties:
+        status: { type: string, description: "Comma-separated: ACTIVE, INACTIVE, TERMINATED" }
+        updated_since: { type: string }
+        cursor: { type: string }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+    output:
+      type: object
+      properties:
+        employees: { type: array, items: { type: object, properties: { id: { type: string }, first_name: { type: string }, last_name: { type: string }, email: { type: string }, phone: { type: string }, department: { type: string }, status: { type: string, description: "ACTIVE, INACTIVE or TERMINATED" }, employment_type: { type: string, description: "SALARIED, DAILY or COMMISSION" }, start_date: { type: string }, pay_method: { type: string, description: "WALLET, BANK or NONE" }, external_ref: { type: string } } } }
+        next_cursor: { type: string }
+    pii:
+      - { field: output.employees.*.first_name, category: name }
+      - { field: output.employees.*.last_name, category: name }
+      - { field: output.employees.*.email, category: email }
+      - { field: output.employees.*.phone, category: phone }
+  get_employee:
+    title: Get an employee
+    description: One employee's name, contact details and employment; never bank details, ID numbers or pay. Needs employees:read.
+    class: read
+    input:
+      type: object
+      required: [employee_id]
+      properties:
+        employee_id: { type: string }
+    output:
+      type: object
+      properties:
+        employee: { type: object, properties: { id: { type: string }, first_name: { type: string }, last_name: { type: string }, email: { type: string }, phone: { type: string }, department: { type: string }, status: { type: string, description: "ACTIVE, INACTIVE or TERMINATED" }, employment_type: { type: string, description: "SALARIED, DAILY or COMMISSION" }, start_date: { type: string }, pay_method: { type: string, description: "WALLET, BANK or NONE" }, external_ref: { type: string } } }
+    pii:
+      - { field: output.employee.first_name, category: name }
+      - { field: output.employee.last_name, category: name }
+      - { field: output.employee.email, category: email }
+      - { field: output.employee.phone, category: phone }
+  create_payslip_link:
+    title: Get a payslip link for an employee
+    description: >-
+      A link that opens one payslip for 7 days; the employee confirms the
+      last four digits of their phone first. Asking again gives another
+      link and cancels none. Payrolla takes no idempotency key, so a call
+      whose answer was lost is not sent again on its own. Refused until
+      the owner turns on payslip links (PAYSLIP_LINKS_DISABLED) and before
+      the run is locked (PAYSLIP_NOT_FINAL). Keep the link private until
+      it reaches the employee. Needs payslips:links.
+    class: unsafe_write
+    input:
+      type: object
+      required: [payslip_id]
+      properties:
+        payslip_id: { type: string }
+    output:
+      type: object
+      properties:
+        url: { type: string }
+        expires_at: { type: string }
+    pii:
+      - { field: output.url, category: other }
+  list_events:
+    title: Replay events
+    description: >-
+      The company's events from the last 30 days, oldest first, each the
+      envelope a webhook carries; pass next_cursor back as after (null at
+      the end). For catching up after an outage. Only types the key's
+      scopes allow.
+    class: read
+    input:
+      type: object
+      properties:
+        after: { type: string, description: An event id; events after it. Empty starts 30 days back. }
+        types: { type: string, description: Comma-separated event types }
+        limit: { type: integer, minimum: 1, maximum: 200 }
+    output:
+      type: object
+      properties:
+        events: { type: array, items: { type: object } }
+        next_cursor: { type: [string, "null"] }
+# Taskiem creates the Payrolla webhook subscription when a workflow using
+# a trigger is deployed and deletes it when the workflow leaves the
+# environment (decision 0021); the signing secret Payrolla returns once is
+# kept in the vault. Payrolla delivers at least once, so events are
+# deduplicated on the signed body's id, never the Payrolla-Event-Id header.
+# Payrolla sends a ping only when asked for a test (POST
+# /connect/webhooks/{id}/test).
+triggers:
+  run_event:
+    type: webhook
+    registration: remote
+    verify: { scheme: hmac_sha256_timestamped, header: Payrolla-Signature, signature_format: t_v1, tolerance: 5m }
+    events: [run.computed, run.approved, run.rejected, run.locked, run.cancelled, run.disbursement_started, run.completed, run.partially_completed, ping]
+    event_type: =body.type
+    dedup: =body.id
+    correlation: "=body.type == 'ping' ? '' : body.data.run.run_id"
+    test_event: =body.type == 'ping'
+  payout_event:
+    type: webhook
+    registration: remote
+    verify: { scheme: hmac_sha256_timestamped, header: Payrolla-Signature, signature_format: t_v1, tolerance: 5m }
+    events: [payout.succeeded, payout.failed, payout.reversed, ping]
+    event_type: =body.type
+    dedup: =body.id
+    correlation: "=body.type == 'ping' ? '' : body.data.run_id"
+    test_event: =body.type == 'ping'
+  employee_event:
+    type: webhook
+    registration: remote
+    verify: { scheme: hmac_sha256_timestamped, header: Payrolla-Signature, signature_format: t_v1, tolerance: 5m }
+    events: [employee.created, employee.updated, employee.terminated, ping]
+    event_type: =body.type
+    dedup: =body.id
+    correlation: "=body.type == 'ping' ? '' : body.data.employee.id"
+    test_event: =body.type == 'ping'
+  payslip_event:
+    type: webhook
+    registration: remote
+    verify: { scheme: hmac_sha256_timestamped, header: Payrolla-Signature, signature_format: t_v1, tolerance: 5m }
+    events: [payslip.issued, ping]
+    event_type: =body.type
+    dedup: =body.id
+    correlation: "=body.type == 'ping' ? '' : body.data.run_id"
+    test_event: =body.type == 'ping'

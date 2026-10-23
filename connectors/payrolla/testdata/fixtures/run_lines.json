@@ -1,0 +1,37 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/connect/runs/5d2a7a62-6f0e-4c1e-9a5b-2d1f0c3e8a71/lines",
+  "headers": {
+   "Authorization": "Bearer pyk_live_test_key"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": {
+    "lines": [
+     {
+      "payslip_id": "a81c4e2b-7d39-4b6f-8e15-c0d2f9a6b734",
+      "employee_id": "e3f0b9d4-2c7a-4f8e-b1d6-9a0c5e7f3b12",
+      "first_name": "Ngozi",
+      "last_name": "Eze",
+      "net_kobo": 18500000,
+      "disbursement_status": "CONFIRMED",
+      "reference": "NIP-000123"
+     },
+     {
+      "payslip_id": "b92d5f3c-8e4a-4c7b-9f26-d1e3a0b7c845",
+      "employee_id": "f4a1c0e5-3d8b-4a9f-c2e7-0b1d6f8a4c23",
+      "first_name": "Tunde",
+      "last_name": "Bello",
+      "net_kobo": 15000000,
+      "disbursement_status": "FAILED",
+      "reference": "NIP-000124",
+      "reason": "beneficiary account is dormant"
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,15 @@
+{
+ "action": "create_payslip_link",
+ "input": {
+  "payslip_id": "a81c4e2b-7d39-4b6f-8e15-c0d2f9a6b734"
+ },
+ "credentials": {
+  "api_key": "pyk_live_test_key"
+ },
+ "exchanges": [
+  "payslip_not_final"
+ ],
+ "expect": {
+  "error": "fatal"
+ }
+}
