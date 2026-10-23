@@ -215,6 +215,36 @@
         }
       }
     },
+    "collect_transfer": {
+      "title": "Give a customer a bank account number for one payment",
+      "description": "A one-time (dynamic) account for one amount, which stops taking new payments at expires_at. Money paid into it arrives as payment.received with the payment_id it answered; a rail that sends a late or wrong-amount transfer back says so with payment.returned. The rail's mapping declares what it does with late and wrong-amount transfers and the lifetimes it allows (transfer).",
+      "classes": ["idempotent_write", "reconcilable_write", "unsafe_write"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["amount_kobo", "customer", "description"],
+        "properties": {
+          "amount_kobo": { "type": "integer", "minimum": 1, "description": "What the customer must send" },
+          "currency": { "type": "string", "default": "NGN" },
+          "customer": { "$ref": "#/$defs/customer" },
+          "description": { "type": "string", "description": "What the payment is for" },
+          "expires_minutes": { "type": "integer", "minimum": 1, "description": "How long the account should take payments; the rail keeps it within its own range (transfer.min_minutes to transfer.max_minutes)" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payment_id", "account_number", "bank_name", "amount_kobo", "expires_at"],
+        "properties": {
+          "payment_id": { "type": "string", "description": "For get_payment, payment.received and payment.returned" },
+          "account_number": { "type": "string", "x-pii": "account_number" },
+          "bank_name": { "type": "string" },
+          "account_name": { "type": "string", "x-pii": "name" },
+          "amount_kobo": { "type": "integer", "description": "What the customer must send" },
+          "expires_at": { "type": "string", "description": "When the account stops taking new payments, RFC 3339, as the rail set it" }
+        }
+      }
+    },
     "collect_push": {
       "title": "Ask a customer to approve a payment on their phone or a terminal",
       "classes": ["idempotent_write", "reconcilable_write"],
@@ -247,7 +277,7 @@
         "additionalProperties": false,
         "required": ["payment_id"],
         "properties": {
-          "payment_id": { "type": "string", "description": "As collect_link answered it, or the reference a payment event carried" }
+          "payment_id": { "type": "string", "description": "As collect_link or collect_transfer answered it, or the reference a payment event carried" }
         }
       },
       "output": {
@@ -364,6 +394,20 @@
           "amount_kobo": { "type": "integer" },
           "currency": { "type": "string" },
           "paid_at": { "type": "string" }
+        }
+      }
+    },
+    "payment.returned": {
+      "title": "A customer's transfer went back to them",
+      "correlation": "payment_id",
+      "fields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payment_id"],
+        "properties": {
+          "payment_id": { "type": "string" },
+          "amount_kobo": { "type": "integer" },
+          "reason": { "enum": ["late", "wrong_amount", "other"], "description": "late: after the account expired; wrong_amount: not the amount asked" }
         }
       }
     },

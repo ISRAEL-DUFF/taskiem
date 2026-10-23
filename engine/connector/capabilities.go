@@ -39,7 +39,46 @@ type CapabilityMap struct {
 	// allows one.
 	Unsafe    bool       `json:"unsafe,omitempty"`
 	SettlesBy *SettlesBy `json:"settles_by,omitempty"`
-	Notes     string     `json:"notes,omitempty"`
+	// Transfer is what the rail does with a one-time account
+	// (collect_transfer only, which needs it): the page and chat tell the
+	// customer what happens to a late or wrong-amount transfer.
+	Transfer *TransferFacts `json:"transfer,omitempty"`
+	Notes    string         `json:"notes,omitempty"`
+}
+
+// TransferFacts are a rail's documented behaviour for one-time accounts.
+type TransferFacts struct {
+	// OnLate is what happens to a transfer after expires_at: returned to
+	// the sender, credited, or unknown (not documented).
+	OnLate string `json:"on_late"`
+	// OnWrongAmount: returned, credited (any amount is taken),
+	// excess_returned (less is returned, more is taken and the excess
+	// returned), or unknown.
+	OnWrongAmount string `json:"on_wrong_amount"`
+	// The lifetimes the rail allows, in minutes, and its default.
+	MinMinutes     int `json:"min_minutes"`
+	MaxMinutes     int `json:"max_minutes"`
+	DefaultMinutes int `json:"default_minutes,omitempty"`
+}
+
+// checkTransfer checks a collect_transfer mapping's facts.
+func checkTransfer(p string, t *TransferFacts, add func(string, ...any)) {
+	if t == nil {
+		add("%s/transfer: collect_transfer must say what the rail does with late and wrong-amount transfers, and the lifetimes it allows", p)
+		return
+	}
+	if !slices.Contains([]string{"returned", "credited", "unknown"}, t.OnLate) {
+		add("%s/transfer/on_late: %q is not returned, credited or unknown", p, t.OnLate)
+	}
+	if !slices.Contains([]string{"returned", "credited", "excess_returned", "unknown"}, t.OnWrongAmount) {
+		add("%s/transfer/on_wrong_amount: %q is not returned, credited, excess_returned or unknown", p, t.OnWrongAmount)
+	}
+	if t.MinMinutes < 1 || t.MaxMinutes < t.MinMinutes {
+		add("%s/transfer: min_minutes must be at least 1 and max_minutes at least min_minutes", p)
+	}
+	if t.DefaultMinutes != 0 && (t.DefaultMinutes < t.MinMinutes || t.DefaultMinutes > t.MaxMinutes) {
+		add("%s/transfer/default_minutes: %d is outside %d to %d", p, t.DefaultMinutes, t.MinMinutes, t.MaxMinutes)
+	}
 }
 
 // CapabilityStep is one action of a composite capability.
@@ -128,6 +167,11 @@ func (m *Manifest) checkCapability(name string, c CapabilityMap, add func(string
 	if !ok {
 		add("%s: not a Taskiem capability (one of %s)", p, strings.Join(capability.Names(), ", "))
 		return
+	}
+	if name == "collect_transfer" {
+		checkTransfer(p, c.Transfer, add)
+	} else if c.Transfer != nil {
+		add("%s/transfer: only collect_transfer says how transfers are handled", p)
 	}
 	capFields := capability.Fields(spec.Input)
 	field := func(n string) (capability.Field, bool) {

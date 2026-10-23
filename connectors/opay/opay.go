@@ -33,6 +33,7 @@ import (
 	"hash"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/israel-duff/taskiem/connectors/internal/money"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -280,6 +281,9 @@ func (p payment) output() (map[string]any, error) {
 	}
 	if rd.Err != nil {
 		return nil, unreadable(rd.Err)
+	}
+	if sec, _ := out["expires_at"].(int64); sec > 0 {
+		out["expires_at_rfc3339"] = time.Unix(sec, 0).UTC().Format(time.RFC3339)
 	}
 	return out, nil
 }

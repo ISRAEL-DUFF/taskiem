@@ -1,6 +1,6 @@
 # Invoices and the money log: specification and build plan
 
-Status: **Accepted**; T0 partly done (§4.3) · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
+Status: **Accepted**; T0 partly done (§4.3), **T1 built** · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
 
 What a small business needed from Tally, built in Taskiem: invoices that settle themselves, an account number per invoice that the customer asks for when they are ready to pay, one record of every naira that moved, payments matched to what they pay for, and the leaks and summaries that come from that record. Lending is out of scope.
 
@@ -345,6 +345,22 @@ The capability and the `payment.returned` event in `schemas/capabilities-v1.json
 - iswallet: mapped once its answers to §4.3's questions arrive; until then it does not declare the capability.
 
 **Done when:** each mapped rail passes conformance on recorded fixtures; a retried issue returns the same account; a payment into it produces `payment.received` with its `payment_id`; a returned transfer on Paystack produces `payment.returned`.
+
+**Built** (T1): `collect_transfer` and `payment.returned` in `schemas/capabilities-v1.json`; the `transfer` facts in connector/v1 (required for `collect_transfer` by rule 16, refused elsewhere); `await_payment` waiting on a `collect_transfer` payment as on a payment link; the SDK's `collect.transfer`; the catalogue's "take payments by bank transfer". Rails:
+
+| Rail | Action | Class | Late | Wrong amount | Lifetime (minutes) | Events |
+| --- | --- | --- | --- | --- | --- | --- |
+| Paystack | `pay_with_transfer` (`POST /charge`, `bank_transfer`); a reused reference reads the charge back (`GET /charge/:reference`) | idempotent | returned | returned | 15 to 480, default 480 | `payment.received` (`charge.success`), `payment.returned` (`bank.transfer.rejected`) |
+| Flutterwave | `create_dynamic_account` (`POST /virtual-account-numbers`, `is_permanent: false`) | unsafe (no lookup by `tx_ref`) | unknown | excess returned | 1 to 87,840, default 60 | `payment.received` (`charge.completed`, by `tx_ref`) |
+| OPay | `create_bank_transfer_payment`, its first capability block, with `get_payment` | idempotent | unknown | unknown | 1 to 30, default 30 | none yet |
+
+Differences from the plan above:
+
+- **iswallet is not mapped**: the request fields for a temporary account are not documented (§4.3).
+- **OPay's payment callback is not mapped** to `payment.received`: its amount's unit is unconfirmed, so a payment is confirmed with `get_payment` and `await_payment` does not run on OPay.
+- **Paystack's `bank.transfer.rejected` has no documented example body**: it is read like Paystack's other charge events (`data.reference`, `data.amount`) with reason `other`, to confirm in sandbox. Whether Paystack sends an event when it refunds a late transfer is not documented.
+- **Flutterwave's expiry** is counted from when the request was sent, since its `expiry_date` carries no time zone; amounts are sent in naira, as its examples show.
+- **The readiness note for Paystack** (Pay with Transfer must be turned on) is in the capability's notes and the step's error, not yet on the connection page: readiness changes come with T4.
 
 ### T2: kept tables and the money log (L)
 

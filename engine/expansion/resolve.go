@@ -92,13 +92,14 @@ func declares(m *connector.Manifest, uses string) bool {
 }
 
 // CanWait reports whether a rail can run the wait: for await_payment, it
-// makes payment pages and says when one is paid; for the payout waits, it
+// makes payment pages or one-time accounts and says when one is paid; for the payout waits, it
 // settles a payment later (settles_by).
 func CanWait(m *connector.Manifest, uses string) bool {
 	if uses == "await_payment" {
 		_, links := m.Capabilities["collect_link"]
+		_, accounts := m.Capabilities["collect_transfer"]
 		_, paid := m.Events["payment.received"]
-		return links && paid
+		return (links || accounts) && paid
 	}
 	for _, c := range m.Capabilities {
 		if c.SettlesBy != nil {

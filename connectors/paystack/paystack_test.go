@@ -5,10 +5,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/israel-duff/taskiem/connectors/internal/fixture"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -195,4 +198,52 @@ func TestBankKey(t *testing.T) {
 
 func TestCapabilities(t *testing.T) {
 	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+}
+
+func TestPayWithTransferAsksForTheExpiry(t *testing.T) {
+	now := time.Date(2026, 10, 23, 18, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		minutes any
+		want    string
+	}{
+		{30, "2026-10-23T18:30:00Z"},
+		{5, "2026-10-23T18:15:00Z"},   // under 15 minutes: Paystack's minimum
+		{900, "2026-10-24T02:00:00Z"}, // over 8 hours: its maximum
+		{nil, "2026-10-24T02:00:00Z"}, // none: 8 hours, as Paystack does
+	} {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			_, _ = w.Write([]byte(`{"status":true,"data":{"status":"pending_bank_transfer","reference":"` + ref + `","amount":2500000,"account_number":"1231084927","account_name":"PAYSTACK CHECKOUT","bank":{"name":"Test Bank"},"account_expires_at":"x"}}`))
+		}))
+		in := map[string]any{"amount": 2500000, "email": "ada@example.com", "reference": ref}
+		if c.minutes != nil {
+			in["expires_minutes"] = c.minutes
+		}
+		conn := New(Options{BaseURL: srv.URL, Now: func() time.Time { return now }})
+		r, err := conn.Actions["pay_with_transfer"].Execute(context.Background(), connector.Request{Input: in, Credentials: map[string]string{"secret_key": "sk_test_xyz"}, HTTP: srv.Client()})
+		srv.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		bt, _ := got["bank_transfer"].(map[string]any)
+		if bt["account_expires_at"] != c.want || got["reference"] != ref || got["email"] != "ada@example.com" {
+			t.Errorf("minutes %v: sent %v", c.minutes, got)
+		}
+		if out := r.Output.(map[string]any); out["account_number"] != "1231084927" || out["bank_name"] != "Test Bank" {
+			t.Errorf("output %v", out)
+		}
+	}
+}
+
+func TestPayWithTransferWithoutAnAccountIsIndeterminate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":true,"data":{"status":"failed","reference":"` + ref + `"}}`))
+	}))
+	defer srv.Close()
+	_, err := New(Options{BaseURL: srv.URL}).Actions["pay_with_transfer"].Execute(context.Background(), connector.Request{
+		Input: map[string]any{"amount": 100, "email": "a@b.co", "reference": ref}, Credentials: map[string]string{"secret_key": "k"}, HTTP: srv.Client()})
+	if !errors.Is(err, effects.ErrIndeterminate) {
+		t.Errorf("err %v", err)
+	}
 }

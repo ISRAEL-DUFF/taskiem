@@ -23,6 +23,8 @@ var manifest []byte
 // Options configure the connector; BaseURL defaults to the manifest's.
 type Options struct {
 	BaseURL string
+	// Now is the clock for one-time accounts' expiry; nil uses time.Now.
+	Now func() time.Time
 }
 
 // New returns the Paystack connector.
@@ -30,7 +32,10 @@ func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
 	m.OverrideBaseURL(o.BaseURL)
 	base := strings.TrimRight(m.BaseURL, "/")
-	c := &client{base: base}
+	c := &client{base: base, now: o.Now}
+	if c.now == nil {
+		c.now = time.Now
+	}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"check_balance":          connector.ActionFunc(c.checkBalance),
 		"list_transactions":      connector.ActionFunc(c.listSince("/transaction", "success")),
@@ -42,12 +47,16 @@ func New(o Options) *connector.Connector {
 		"verify_transfer":        connector.ActionFunc(c.verifyTransfer),
 		"verify_charge":          connector.ActionFunc(c.verifyCharge),
 		"initialize_transaction": connector.ActionFunc(c.checkout),
+		"pay_with_transfer":      connector.ActionFunc(c.payWithTransfer),
 		"refund_transaction":     connector.ActionFunc(c.refund),
 		"refund_status":          connector.ActionFunc(c.refundStatus),
 	}}
 }
 
-type client struct{ base string }
+type client struct {
+	base string
+	now  func() time.Time
+}
 
 // envelope is Paystack's response wrapper.
 type envelope struct {
@@ -182,6 +191,71 @@ func (c *client) checkout(ctx context.Context, req connector.Request) (connector
 		if v, ok := env.Data[k].(string); ok {
 			out[k] = v
 		}
+	}
+	return connector.Response{Output: out}, nil
+}
+
+// Pay with Transfer keeps an account between 15 minutes and 8 hours
+// (account_expires_at, docs: payments/payment-channels).
+const (
+	transferMinMinutes = 15
+	transferMaxMinutes = 8 * 60
+)
+
+// payWithTransfer opens a one-time account for one payment: Paystack's
+// Pay with Transfer (POST /charge with bank_transfer), which Paystack
+// must have turned on for the business. A transfer of another amount, or
+// after the account expires, is sent back by Paystack. A reference used
+// before reads the waiting charge back (GET /charge/:reference), so a
+// retry never opens a second account.
+func (c *client) payWithTransfer(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	ref, _ := in["reference"].(string)
+	if ref == "" {
+		return connector.Response{}, fmt.Errorf("pay_with_transfer needs a reference: %w", effects.ErrFatal)
+	}
+	minutes := transferMaxMinutes
+	if m, ok := in["expires_minutes"].(float64); ok {
+		minutes = int(m)
+	} else if m, ok := in["expires_minutes"].(int); ok {
+		minutes = m
+	}
+	minutes = min(max(minutes, transferMinMinutes), transferMaxMinutes)
+	body := map[string]any{
+		"amount": in["amount"], "email": in["email"], "reference": ref,
+		"bank_transfer": map[string]any{"account_expires_at": c.now().UTC().Add(time.Duration(minutes) * time.Minute).Format(time.RFC3339)},
+	}
+	if v, ok := in["metadata"]; ok {
+		body["metadata"] = v
+	}
+	var env envelope
+	err := c.do(ctx, req, http.MethodPost, "/charge", body, &env)
+	if err != nil && connector.StatusOf(err) == http.StatusBadRequest && strings.Contains(strings.ToLower(errBody(err)), "duplicate") {
+		err = c.do(ctx, req, http.MethodGet, "/charge/"+url.PathEscape(ref), nil, &env)
+	}
+	if err != nil {
+		if connector.StatusOf(err) >= 400 && connector.StatusOf(err) < 500 {
+			return connector.Response{}, fmt.Errorf("paystack: %s (if Pay with Transfer is not on for this business, Paystack's support turns it on): %w", paystackMessage(err), err)
+		}
+		return connector.Response{}, err
+	}
+	if !env.Status {
+		return connector.Response{}, fmt.Errorf("paystack: %s: %w", env.Message, effects.ErrFatal)
+	}
+	d := env.Data
+	number, _ := d["account_number"].(string)
+	if number == "" {
+		return connector.Response{}, fmt.Errorf("paystack: the charge %s has no account number to show (status %v): %w", ref, d["status"], effects.ErrIndeterminate)
+	}
+	out := map[string]any{"reference": ref, "account_number": number, "amount": d["amount"], "status": d["status"]}
+	if v, ok := d["account_name"].(string); ok {
+		out["account_name"] = v
+	}
+	if b, ok := d["bank"].(map[string]any); ok {
+		out["bank_name"] = b["name"]
+	}
+	if v, ok := d["account_expires_at"].(string); ok {
+		out["expires_at"] = v
 	}
 	return connector.Response{Output: out}, nil
 }

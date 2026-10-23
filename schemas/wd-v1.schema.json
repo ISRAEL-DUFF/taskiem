@@ -2083,6 +2083,7 @@
             "get_payout",
             "pay_many",
             "collect_link",
+            "collect_transfer",
             "collect_push",
             "get_payment",
             "virtual_account",

@@ -273,6 +273,46 @@
             }
           }
         },
+        "transfer": {
+          "description": "collect_transfer only, and required there: what the rail does with a transfer after the account expires and with a wrong amount, and the lifetimes it allows, in minutes.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "on_late",
+            "on_wrong_amount",
+            "min_minutes",
+            "max_minutes"
+          ],
+          "properties": {
+            "on_late": {
+              "enum": [
+                "returned",
+                "credited",
+                "unknown"
+              ]
+            },
+            "on_wrong_amount": {
+              "enum": [
+                "returned",
+                "credited",
+                "excess_returned",
+                "unknown"
+              ]
+            },
+            "min_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "default_minutes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
         "notes": {
           "type": "string"
         }

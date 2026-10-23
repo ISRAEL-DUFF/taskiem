@@ -145,7 +145,7 @@ func capabilities(b *bytes.Buffer, conns []*connector.Connector) error {
 		fmt.Fprintf(b, "/** %s: output */\nexport type Capability%sOutput = %s;\n", spec.Title, typeName(n), outType(out, ""))
 	}
 	b.WriteString("/** await_settlement and await_reversal: input */\nexport interface CapabilityAwaitInput {\n  /** The payout to follow: the payment step's output.payout_id */\n  payout_id: Val<string>;\n}\n")
-	b.WriteString("/** await_payment: input */\nexport interface CapabilityAwaitPaymentInput {\n  /** The payment page to wait on: the collect_link step's output.payment_id */\n  payment_id: Val<string>;\n}\n")
+	b.WriteString("/** await_payment: input */\nexport interface CapabilityAwaitPaymentInput {\n  /** The payment to wait on: the collect_link or collect_transfer step's output.payment_id */\n  payment_id: Val<string>;\n}\n")
 	groups := map[string][][2]string{} // helper object -> (key, uses)
 	helperOf := map[string]string{}
 	for _, n := range append(capability.Names(), wd.Waits...) {

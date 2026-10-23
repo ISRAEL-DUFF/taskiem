@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/israel-duff/taskiem/connectors/internal/money"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -36,13 +37,18 @@ var manifest []byte
 // Options configure the connector; BaseURL defaults to the manifest's.
 type Options struct {
 	BaseURL string
+	// Now is the clock for dynamic accounts' expiry; nil uses time.Now.
+	Now func() time.Time
 }
 
 // New returns the Flutterwave connector.
 func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
 	m.OverrideBaseURL(o.BaseURL)
-	c := &client{base: strings.TrimRight(m.BaseURL, "/")}
+	c := &client{base: strings.TrimRight(m.BaseURL, "/"), now: o.Now}
+	if c.now == nil {
+		c.now = time.Now
+	}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"get_balance":               connector.ActionFunc(c.getBalance),
 		"list_banks":                connector.ActionFunc(c.listBanks),
@@ -52,10 +58,14 @@ func New(o Options) *connector.Connector {
 		"get_transfer":              connector.ActionFunc(c.getTransfer),
 		"get_transfer_by_reference": connector.ActionFunc(c.getTransferByReference),
 		"verify_payment":            connector.ActionFunc(c.verifyPayment),
+		"create_dynamic_account":    connector.ActionFunc(c.createDynamicAccount),
 	}}
 }
 
-type client struct{ base string }
+type client struct {
+	base string
+	now  func() time.Time
+}
 
 // scales are the decimal places of currencies' minor units; others are 2.
 var scales = map[string]int{"UGX": 0, "RWF": 0, "XOF": 0, "XAF": 0, "JPY": 0}
@@ -399,6 +409,71 @@ func (c *client) verifyPayment(ctx context.Context, req connector.Request) (conn
 		"payment_type": p.PaymentType, "customer_email": p.Customer.Email}
 	if rd.Err != nil {
 		return connector.Response{}, unreadable(rd.Err)
+	}
+	return connector.Response{Output: out}, nil
+}
+
+// A dynamic account takes payments for 60 seconds to about two months
+// (expires, in seconds: docs ngn-virtual-accounts).
+const (
+	dynamicMinSeconds = 60
+	dynamicMaxSeconds = 5270400
+)
+
+// createDynamicAccount opens an account number for one payment
+// (POST /virtual-account-numbers, is_permanent false). Flutterwave returns
+// a transfer of less than the amount and keeps the amount of a larger one,
+// returning the excess. The payment arrives as charge.completed carrying
+// tx_ref, which is the step's key. Flutterwave's v3 API cannot look such
+// an account up by tx_ref, so the action is unsafe: an unknown outcome
+// parks rather than risk a second account.
+func (c *client) createDynamicAccount(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	ref := req.IdempotencyKey
+	if ref == "" {
+		return connector.Response{}, fmt.Errorf("flutterwave: create_dynamic_account needs the engine's key: %w", effects.ErrFatal)
+	}
+	k, err := money.Minor(in["amount"])
+	if err != nil || k < 100 {
+		return connector.Response{}, fmt.Errorf("flutterwave: amount must be kobo, at least 100, got %v: %w", in["amount"], effects.ErrFatal)
+	}
+	seconds := 60 * 60
+	if m, err := money.Minor(in["expires_minutes"]); err == nil && in["expires_minutes"] != nil {
+		seconds = int(m) * 60
+	}
+	seconds = min(max(seconds, dynamicMinSeconds), dynamicMaxSeconds)
+	// Flutterwave's amounts are naira: whole naira as an integer, else
+	// naira and kobo as a decimal.
+	var amount any = k / 100
+	if k%100 != 0 {
+		amount = json.Number(strconv.FormatInt(k/100, 10) + "." + fmt.Sprintf("%02d", k%100))
+	}
+	body := map[string]any{"email": str(in, "email"), "amount": amount, "tx_ref": ref, "is_permanent": false, "expires": seconds, "currency": "NGN"}
+	if n := str(in, "narration"); n != "" {
+		body["narration"] = n
+	}
+	var a struct {
+		AccountNumber string `json:"account_number"`
+		BankName      string `json:"bank_name"`
+		ExpiryDate    string `json:"expiry_date"`
+		OrderRef      string `json:"order_ref"`
+		FlwRef        string `json:"flw_ref"`
+		Note          string `json:"note"`
+	}
+	sent := c.now().UTC()
+	if err := c.do(ctx, req, http.MethodPost, "/virtual-account-numbers", body, &a); err != nil {
+		return connector.Response{}, err
+	}
+	if a.AccountNumber == "" {
+		return connector.Response{}, fmt.Errorf("flutterwave: no account number in the answer: %w", effects.ErrUnknownOutcome)
+	}
+	out := map[string]any{"tx_ref": ref, "account_number": a.AccountNumber, "bank_name": a.BankName, "amount": k,
+		// Flutterwave's expiry_date carries no time zone; the expiry is
+		// counted from when the request was sent, which is no later.
+		"expires_at": sent.Add(time.Duration(seconds) * time.Second).Format(time.RFC3339), "expiry_date": a.ExpiryDate,
+		"order_ref": a.OrderRef, "flw_ref": a.FlwRef}
+	if a.Note != "" {
+		out["note"] = a.Note
 	}
 	return connector.Response{Output: out}, nil
 }

@@ -192,6 +192,44 @@ actions:
         reference:         { type: string }
     pii:
       - { field: email, category: email }
+  pay_with_transfer:
+    title: Open an account number for one payment
+    description: >-
+      Pay with Transfer: a temporary account number for one amount, which
+      Paystack must have turned on for the business. It takes payments
+      until expires_at (15 minutes to 8 hours; 8 hours when no time is
+      given); a transfer of another amount, or after that, is sent back to
+      the payer. The payment arrives as charge.success with this reference.
+    class: idempotent_write
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 50, charset: "a-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [amount, email]
+      properties:
+        amount:          { type: integer, description: Amount in kobo, minimum: 100 }
+        email:           { type: string, description: The customer's email; Paystack requires one }
+        expires_minutes: { type: integer, minimum: 1, description: Kept between 15 and 480 }
+        metadata:        { type: object }
+    output:
+      type: object
+      properties:
+        reference:      { type: string }
+        account_number: { type: string }
+        account_name:   { type: string }
+        bank_name:      { type: string }
+        amount:         { type: integer, description: Kobo }
+        expires_at:     { type: string, description: RFC 3339 }
+        status:         { type: string, description: pending_bank_transfer until paid }
+    pii:
+      - { field: email, category: email }
+      - { field: output.account_number, category: account_number }
+      - { field: output.account_name, category: name }
   verify_charge:
     title: Verify charge
     class: read
@@ -253,7 +291,7 @@ triggers:
   charge_event:
     type: webhook
     verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
-    events: [charge.success]
+    events: [charge.success, bank.transfer.rejected]
     event_type: =body.event
     dedup: =body.data.reference + ':' + body.event
     correlation: =body.data.reference
@@ -309,6 +347,28 @@ capabilities:
     output: { payment_url: "=output.authorization_url", payment_id: "=output.reference" }
     requires: [customer.email]
     ignores: [customer.name, customer.phone, customer.bvn]
+  collect_transfer:
+    action: pay_with_transfer
+    input:
+      amount: =input.amount_kobo
+      email: =input.customer.email
+      expires_minutes: =input.?expires_minutes
+      metadata: "={'description': input.description}"
+    output:
+      payment_id: =output.reference
+      account_number: =output.account_number
+      bank_name: =output.bank_name
+      account_name: =output.?account_name
+      amount_kobo: =output.amount
+      expires_at: =output.expires_at
+    requires: [customer.email]
+    ignores: [customer.name, customer.phone, customer.bvn]
+    fixed: { currency: NGN }
+    transfer: { on_late: returned, on_wrong_amount: returned, min_minutes: 15, max_minutes: 480, default_minutes: 480 }
+    notes: >-
+      Pay with Transfer must be turned on for the business by Paystack's support. A transfer
+      of another amount, or after the account expires, is refunded to the payer by Paystack
+      (bank.transfer.rejected for a wrong amount).
   get_payment:
     action: verify_charge
     input: { reference: "=input.payment_id" }
@@ -342,3 +402,10 @@ events:
     trigger: charge_event
     when: =body.event == 'charge.success'
     fields: { payment_id: "=body.data.reference", amount_kobo: "=body.data.amount", currency: "=body.data.?currency", paid_at: "=body.data.?paid_at" }
+  payment.returned:
+    # Paystack's documentation describes the event (an incorrect amount, or
+    # a payer its fraud checks flagged) without an example body; the
+    # reference is read as in its other charge events. Confirm in sandbox.
+    trigger: charge_event
+    when: =body.event == 'bank.transfer.rejected'
+    fields: { payment_id: "=body.data.reference", amount_kobo: "=body.data.?amount", reason: "='other'" }

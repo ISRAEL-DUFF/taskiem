@@ -1,0 +1,84 @@
+{
+  "capability": "collect_transfer",
+  "credentials": {
+    "merchant_id": "256621051120756",
+    "public_key": "OPAYPUB_test",
+    "secret_key": "OPAYPRV_test_secret"
+  },
+  "input": {
+    "amount_kobo": 2300,
+    "customer": {
+      "name": "Ada Obi",
+      "phone": "+2348011112222"
+    },
+    "description": "Invoice 9",
+    "expires_minutes": 30
+  },
+  "keys": {
+    "create_bank_transfer_payment": "tskab12cd34ef56gh78ij90kl12mn34op5"
+  },
+  "exchanges": [
+    {
+      "name": "create_bank_transfer_payment",
+      "request": {
+        "method": "POST",
+        "path": "/payment/create",
+        "headers": {
+          "MerchantId": "256621051120756"
+        },
+        "body": {
+          "amount": {
+            "currency": "NGN",
+            "total": 2300
+          },
+          "country": "NG",
+          "reference": "tskab12cd34ef56gh78ij90kl12mn34op5",
+          "payMethod": "BankTransfer",
+          "product": {
+            "name": "Invoice 9"
+          },
+          "customerName": "Ada Obi",
+          "userPhone": "+2348011112222",
+          "userInfo": {
+            "userName": "Ada Obi",
+            "userMobile": "+2348011112222"
+          },
+          "expireAt": 30
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "00000",
+          "message": "SUCCESSFUL",
+          "data": {
+            "reference": "tskab12cd34ef56gh78ij90kl12mn34op5",
+            "orderNo": "220110144664537659",
+            "nextAction": {
+              "actionType": "TRANSFER_ACCOUNT",
+              "transferAccountNumber": "7827845341",
+              "transferBankName": "WEMA BANK",
+              "expiredTimestamp": 1641773850
+            },
+            "status": "PENDING",
+            "amount": {
+              "total": 2300,
+              "currency": "NGN"
+            },
+            "vat": {
+              "total": 0,
+              "currency": "NGN"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "payment_id": "tskab12cd34ef56gh78ij90kl12mn34op5",
+    "account_number": "7827845341",
+    "bank_name": "WEMA BANK",
+    "amount_kobo": 2300,
+    "expires_at": "2022-01-10T00:17:30Z"
+  }
+}
