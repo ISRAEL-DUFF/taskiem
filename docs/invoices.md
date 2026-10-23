@@ -124,8 +124,11 @@ The **Invoices** platform connector (`invoices@1`, no connection needed) acts on
 | `get` | Its status, total, what was paid and what is still due |
 | `void` | Voids it, with a `reason` |
 | `notify_customer` | An SMS, and an email when there is one, to the invoice's customer: `{link}` becomes the invoice's page link, `{number}` its number and `{due}` what is still due |
+| `list` | `status: overdue` (sent or part paid and past the due date, oldest due first, with `days_overdue`, Lagos time) or `status: paid` (paid within `paid_within_hours`, 1 to 168, default 24); at most `limit` (default 50, up to 200). Numbers, totals, what is due and dates only: no customer details |
 
-There is no action that marks an invoice paid. A run that waits for payment waits for the `invoice.paid` signal, correlated by the invoice's number.
+There is no action that marks an invoice paid. A run that waits for payment waits for the `invoice.paid` signal, correlated by the invoice's number; the signal resumes a waiting run and starts none.
+
+**Templates.** `send-invoice` makes and sends an invoice and waits for `invoice.paid`. `chase-overdue-invoices` runs daily: `list` the overdue invoices and `notify_customer` each one, at most once per reminder (reminder *n* covers the days `(n−1)×every` to `n×every−1` after the first overdue day, and its `effect.idempotency_seed` is the invoice and *n*, so a second run that day, or a run after a missed day, sends no duplicate), then a note to the owner once. `invoice-paid-receipt` runs hourly over the invoices paid in the last three hours, thanking each customer once (seeded by the invoice): since `invoice.paid` starts no run, polling with a stable key is how a receipt follows payment without a new trigger type; a receipt can come up to an hour after payment, and if more than two hourly runs in a row are missed, invoices paid early in that gap get no receipt.
 
 ## API
 

@@ -542,6 +542,13 @@ export interface InvoicesCreateInput {
 export interface InvoicesGetInput {
   number: Val<string>;
 }
+export interface InvoicesListInput {
+  /** At most this many (default 50) */
+  limit?: Val<number>;
+  /** For paid */
+  paid_within_hours?: Val<number>;
+  status: Val<"overdue" | "paid">;
+}
 export interface InvoicesNotifyCustomerInput {
   number: Val<string>;
   /** The email's subject */
@@ -560,6 +567,8 @@ export const invoices = {
   create: (input: InvoicesCreateInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "create", input, extra),
   /** Read an invoice (read) */
   get: (input: InvoicesGetInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "get", input, extra),
+  /** List overdue or paid invoices (read) */
+  list: (input: InvoicesListInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "list", input, extra),
   /** Message the invoice's customer (idempotent_write) */
   notify_customer: (input: InvoicesNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "notify_customer", input, extra),
   /** Send an invoice (idempotent_write) */
@@ -2576,7 +2585,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
-  "invoices@1": ["create", "get", "notify_customer", "send", "void"],
+  "invoices@1": ["create", "get", "list", "notify_customer", "send", "void"],
   "iswallet@1": ["get_balance", "get_payout", "list_banks", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
