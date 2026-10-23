@@ -969,3 +969,12 @@ table.audit code { font-size: 12px; white-space: nowrap; }
   .bell-panel { left: 16px; right: 16px; top: 64px; width: auto; max-height: calc(100dvh - 150px); }
   .bell-scrim { background: rgba(14, 15, 12, 0.3); }
 }
+
+/* Money (docs/money-log.md "Money"): leaks, and matching a statement's columns. */
+.leak-card h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.leak-card .kv { margin-bottom: 4px; }
+.leak-actions { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
+.leak-assign { align-items: flex-end; max-width: 480px; }
+.leak-close .sf-choices { margin-bottom: 8px; }
+.column-match { border-top: 1px solid var(--border); padding-top: 12px; margin-bottom: 12px; }
+.column-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
