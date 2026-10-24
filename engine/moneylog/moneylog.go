@@ -60,7 +60,8 @@ type Entry struct {
 	// Credit is the rail's id for one credit to a customer's permanent
 	// account (virtual_account.credited's credit_id): Reference names the
 	// account, which takes many credits, so the credit is part of the key.
-	// It is kept only in the key.
+	// It is also kept on its own (credit_id), so a refund naming the
+	// credit finds it.
 	Credit string `json:"-"`
 
 	// Net says AmountKobo is what landed, the rail's fee (FeeKobo) taken
@@ -199,13 +200,13 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 	}
 	id = uuid.New()
 	tag, err := tx.Exec(ctx, `INSERT INTO money_entries (id, tenant_id, entry_key, occurred_at, recorded_at, direction, kind, amount_kobo, fee_kobo, currency,
-		status, channel, reference, event, payer, source, note, corrects, description, vendor, category, entered_by, account_number, net)
+		status, channel, reference, event, payer, source, note, corrects, description, vendor, category, entered_by, account_number, net, credit_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''), $15, $16, NULLIF($17, ''), $18,
-		NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''), NULLIF($22, ''), NULLIF($23, ''), $24)
+		NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''), NULLIF($22, ''), NULLIF($23, ''), $24, NULLIF($25, ''))
 		ON CONFLICT (tenant_id, entry_key) DO NOTHING`,
 		id, tenant, key, e.OccurredAt, l.now(), e.Direction, e.Kind, e.AmountKobo, e.FeeKobo, e.Currency,
 		e.Status, e.Channel, e.Reference, e.Event, payer, e.Source, e.Note, e.Corrects,
-		clip(e.Description, 300), clip(e.Vendor, 120), clip(e.Category, 60), e.EnteredBy, clip(e.AccountNumber, 40), e.Net && e.FeeKobo != nil)
+		clip(e.Description, 300), clip(e.Vendor, 120), clip(e.Category, 60), e.EnteredBy, clip(e.AccountNumber, 40), e.Net && e.FeeKobo != nil, clip(e.Credit, 200))
 	if err != nil {
 		return uuid.Nil, false, err
 	}
@@ -284,6 +285,21 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 	if e.Reference == "" {
 		return Entry{}, false
 	}
+	return e, true
+}
+
+// FromCredit is the entry for one credit list_credits read back (the
+// look-back, docs/spec/schools.md 6.5), on channel: the entry the rail's
+// virtual_account.credited event for it would be, with the same key
+// (connection, event, the account's reference and credit_id), so a credit
+// heard by webhook and read back is one entry. ok is false for a credit
+// without a reference or credit_id.
+func FromCredit(channel string, credit map[string]any) (Entry, bool) {
+	e, ok := FromEvent(channel, "virtual_account.credited", credit)
+	if !ok || e.Credit == "" {
+		return Entry{}, false
+	}
+	e.Source = "lookup"
 	return e, true
 }
 

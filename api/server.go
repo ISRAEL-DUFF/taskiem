@@ -105,6 +105,9 @@ type Server struct {
 	// Matcher matches money to invoices (T5); nil: one is made from
 	// Invoices.
 	Matcher *matching.Matcher
+	// AccountRails issue students' account numbers and read customers'
+	// credits back (B4); nil: Invoices.Rails, when it can.
+	AccountRails invoicing.CapabilityRails
 	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
 	Forms *forms.Service
 	// Email is inbound email's api side (N10); MailDomain is where

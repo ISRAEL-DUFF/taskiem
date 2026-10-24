@@ -306,6 +306,7 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 		return nil
 	}
 	go s.runInvoicePayments(ctx)
+	go s.runSchoolAccounts(ctx)
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
 	for {
