@@ -25,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/lru"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -49,6 +50,10 @@ type Store struct {
 	// Read is the optional read replica for staleness-tolerant reads
 	// (ReadTx); nil reads from Pool (decision 0024).
 	Read *db.Replica
+	// MoneyLog, when set, records a payout a payment step's rail answered
+	// settled at once in the money log, with the step's outcome (prod
+	// only; docs/money-log.md); nil records nothing.
+	MoneyLog *moneylog.Log
 
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache

@@ -1,0 +1,22 @@
+{
+  "name": "a declined withdrawal is still a sale, declined",
+  "trigger": "transaction",
+  "body": {
+    "eventId": "9f8e7d6c-5b4a-4392-8170-ffeeddccbbaa",
+    "eventType": "V1_POS_WITHDRAWAL_TRANSACTION",
+    "data": {
+      "terminalSerial": "P260TEST01", "amount": 500050,
+      "transactionReference": "MPOS-0002", "merchantReference": null,
+      "transactionTime": "2026-08-05T08:00:00.120+01:00", "transactionType": "WITHDRAWAL", "transactionStatus": "FAILED",
+      "responseCode": "51", "responseMessage": "INSUFFICIENT FUNDS", "metaData": "{}", "narration": ""
+    }
+  },
+  "event": "pos.sale",
+  "expect": {
+    "reference": "MPOS-0002",
+    "amount_kobo": 500050,
+    "status": "declined",
+    "occurred_at": "2026-08-05T08:00:00.120+01:00",
+    "method": "card"
+  }
+}

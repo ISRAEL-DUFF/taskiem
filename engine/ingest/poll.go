@@ -37,6 +37,10 @@ type Poller struct {
 	Hooks  http.Handler
 	Egress *egress.Guard
 	Logger *slog.Logger
+	// MoneyLog: also poll every active prod connection's triggers that
+	// carry money events, workflow or not, so the money log hears them
+	// (decision 0045; spec 7.3).
+	MoneyLog bool
 	// Now is the clock (tests).
 	Now func() time.Time
 }
@@ -94,6 +98,11 @@ func (p *Poller) Tick(ctx context.Context) (int, error) {
 	})
 	if err != nil {
 		return 0, err
+	}
+	if p.MoneyLog {
+		if targets, err = p.moneyTargets(ctx, targets); err != nil {
+			return 0, err
+		}
 	}
 	n := 0
 	for _, t := range targets {
@@ -230,4 +239,59 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 		n++
 	}
 	return n, nil
+}
+
+// moneyTargets adds to targets each active prod connection's polled
+// triggers that map to a normalised event, where no workflow already has
+// them polled.
+func (p *Poller) moneyTargets(ctx context.Context, targets []pollTarget) ([]pollTarget, error) {
+	rows, err := p.Store.Pool.Query(ctx, `SELECT tenant_id, connector, connection FROM taskiem_money_connections()`)
+	if err != nil {
+		return nil, err
+	}
+	type conn struct {
+		tenant         uuid.UUID
+		id, connection string
+	}
+	conns, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (conn, error) {
+		var c conn
+		return c, r.Scan(&c.tenant, &c.id, &c.connection)
+	})
+	if err != nil {
+		return nil, err
+	}
+	have := map[pollTarget]bool{}
+	for _, t := range targets {
+		have[t] = true
+	}
+	for _, c := range conns {
+		reg, err := p.Registry.For(ctx, c.tenant.String())
+		if err != nil {
+			return nil, err
+		}
+		var best *connector.Connector
+		for _, x := range reg.List() {
+			if x.Manifest.ID == c.id && (best == nil || x.Ref() > best.Ref()) {
+				best = x
+			}
+		}
+		if best == nil {
+			continue
+		}
+		for _, ev := range best.Manifest.Events {
+			spec, ok := best.Manifest.Triggers[ev.Trigger]
+			if !ok || spec.Poll == nil {
+				continue
+			}
+			t := pollTarget{tenant: c.tenant, connector: best.Ref(), trigger: ev.Trigger, connection: c.connection}
+			blank := t
+			blank.connection = ""
+			if have[t] || have[blank] {
+				continue
+			}
+			have[t] = true
+			targets = append(targets, t)
+		}
+	}
+	return targets, nil
 }

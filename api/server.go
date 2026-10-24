@@ -38,6 +38,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lru"
+	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -101,6 +102,9 @@ type Server struct {
 	// Invoices are the business's invoices to its customers (decision
 	// 0045); nil: their routes answer that they are not available.
 	Invoices *invoicing.Invoices
+	// Matcher matches money to invoices (T5); nil: one is made from
+	// Invoices.
+	Matcher *matching.Matcher
 	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
 	Forms *forms.Service
 	// Email is inbound email's api side (N10); MailDomain is where
@@ -126,6 +130,10 @@ type Server struct {
 	// PublicURL is where people reach the web app (TASKIEM_PUBLIC_URL);
 	// single sign-on and OAuth connection callbacks are built from it.
 	PublicURL string
+	// HooksURL is where providers reach /hooks (TASKIEM_HOOKS_URL); the
+	// addresses on the Connections page are built from it, or from
+	// PublicURL + /hooks when it is empty.
+	HooksURL string
 	// OAuthClients are Taskiem's registrations with providers whose
 	// connectors connect by OAuth, by connector id
 	// (TASKIEM_OAUTH_<CONNECTOR>_CLIENT_ID and _CLIENT_SECRET); a connector
@@ -380,6 +388,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/actions", s.listStorefrontActions)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{kind}", s.putStorefrontAction)
 			s.invoiceRoutes(r)
+			s.schoolRoutes(r) // the Schools area (schools.go)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
@@ -458,6 +467,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
 			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
+			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
+			r.With(s.tenantWide).Put("/settings/schools", s.putSchoolSettings)
 			r.Get("/settings/brand", s.getBrand) // how public pages look (brand.go)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/brand", s.putBrand)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/settings/brand/preview", s.previewBrand)

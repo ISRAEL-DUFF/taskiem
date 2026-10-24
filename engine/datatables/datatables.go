@@ -471,18 +471,21 @@ type Table struct {
 	CreatedBy   string    `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	// KeptBy names the feature that keeps the table (kept.go), empty for
+	// an ordinary table.
+	KeptBy string `json:"kept_by,omitempty"`
 }
 
 // ListTables reads the tenant's tables with their columns. tx must have
 // the tenant in scope.
 func ListTables(ctx context.Context, tx pgx.Tx) ([]Table, error) {
-	rows, err := tx.Query(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at FROM data_tables ORDER BY name`)
+	rows, err := tx.Query(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, '') FROM data_tables ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
 	tables, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Table, error) {
 		var t Table
-		return t, r.Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt)
+		return t, r.Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy)
 	})
 	if err != nil {
 		return nil, err
@@ -513,8 +516,8 @@ func ListTables(ctx context.Context, tx pgx.Tx) ([]Table, error) {
 // GetTable reads one table with its columns.
 func GetTable(ctx context.Context, tx pgx.Tx, id uuid.UUID) (Table, error) {
 	var t Table
-	err := tx.QueryRow(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at FROM data_tables WHERE id = $1`, id).
-		Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt)
+	err := tx.QueryRow(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, '') FROM data_tables WHERE id = $1`, id).
+		Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, fmt.Errorf("table %s: %w", id, ErrNotFound)
 	}

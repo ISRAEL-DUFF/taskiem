@@ -11,7 +11,7 @@ import { publishNotice, type Trust } from "../lib/trust";
 import { StorefrontDomains } from "./StorefrontDomains";
 import { StorefrontEmbedSites } from "./StorefrontEmbedSites";
 import { StorefrontPreview } from "./StorefrontPreview";
-import type { Table } from "../lib/tables";
+import { isKept, type Table } from "../lib/tables";
 import { THEMES, type Brand } from "../lib/brand";
 import {
   DAYS,
@@ -75,7 +75,7 @@ export function Storefront() {
       </>
     );
   }
-  return <StorefrontEditor initial={sf.data} tables={tables.data?.tables} tablesError={tables.error} />;
+  return <StorefrontEditor initial={sf.data} tables={tables.data?.tables.filter((t) => !isKept(t))} tablesError={tables.error} />;
 }
 
 function StorefrontEditor({ initial, tables, tablesError }: { initial: SF | null; tables: Table[] | undefined; tablesError: unknown }) {

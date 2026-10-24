@@ -106,3 +106,52 @@ function pemBlock(label: string, der: ArrayBuffer): string {
   const lines = btoa(bin).match(/.{1,64}/g) ?? [];
   return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
 }
+
+/** An address to set in a rail's dashboard so the money log hears a prod
+ * connection's events without a workflow (GET /v1/connections,
+ * money_log_webhooks; decision 0045). Never carries a secret: when the
+ * address needs one, placeholder is the part to replace. */
+export interface MoneyLogWebhook {
+  trigger: string;
+  title: string;
+  url: string;
+  events: string[];
+  verification: string;
+  placeholder?: string;
+  where: string;
+  poll_minutes?: number;
+}
+
+const EVENT_WORDS: Record<string, string> = {
+  "payment.received": "payments received",
+  "payment.returned": "payments returned",
+  "payout.settled": "transfers that went through",
+  "payout.failed": "transfers that failed",
+  "payout.reversed": "transfers reversed",
+  "virtual_account.credited": "money into account numbers",
+  "pos.sale": "POS sales",
+  "refund.pending": "refunds started",
+  "refund.processed": "refunds paid out",
+  "refund.failed": "refunds that failed",
+};
+
+/** The normalised events an address carries, in words: "payments
+ * received and payments returned". */
+export function eventsInWords(events: string[]): string {
+  const words = events.map((e) => EVENT_WORDS[e] ?? e);
+  if (words.length <= 1) return words.join("");
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
+/** Whether Taskiem also asks the provider itself, so setting the address
+ * up is optional. Empty when it does not. */
+export function pollNote(minutes: number | undefined): string {
+  if (!minutes) return "";
+  return `Taskiem also checks every ${minutes === 1 ? "minute" : `${minutes} minutes`}, so this is optional; with it, money shows at once.`;
+}
+
+/** The connections whose page shows addresses for the money log: prod
+ * connections of rails whose events it records. */
+export function withMoneyLogWebhooks<T extends { environment: string; money_log_webhooks?: MoneyLogWebhook[] }>(conns: T[]): T[] {
+  return conns.filter((c) => c.environment === "prod" && (c.money_log_webhooks?.length ?? 0) > 0);
+}

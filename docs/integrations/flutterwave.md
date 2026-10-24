@@ -22,6 +22,8 @@ The connector is `connectors/flutterwave` (`flutterwave@1`), built on Flutterwav
 | `get_transfer_by_reference` | `GET /transfers?reference=` | read | |
 | `verify_payment` | `GET /transactions/{id}/verify`, `/transactions/verify_by_reference` | read | Confirm a collection before giving value |
 | `create_dynamic_account` | `POST /virtual-account-numbers` (`is_permanent: false`) | unsafe write | An account number for one payment, until `expires_at` (1 minute to about two months; an hour when no time is asked). Amounts are sent in naira. Less than the amount is returned to the payer; more is kept up to the amount and the excess returned. The payment arrives as `charge.completed` with `tx_ref`, the step's key. Flutterwave cannot look the account up by `tx_ref`, so an unknown outcome parks. The `collect_transfer` capability |
+| `create_static_account` | `POST /virtual-account-numbers` (`is_permanent: true`) | unsafe write | A customer's permanent account number, which needs their email and BVN or NIN. Its `tx_ref` is `tva_` and the step's key; every transfer into it arrives as `charge.completed` with that `tx_ref` and is the `virtual_account.credited` event (not `payment.received`). No lookup of one account, so an unknown outcome parks. The `virtual_account` capability |
+| `list_transactions` | `GET /transactions` (`from`, `to` as dates, `status=successful`) | read | Successful collections between two days, every page, in minor units. The `list_credits` capability keeps the `tva_` ones |
 
 **Amounts.** Taskiem amounts are minor units; Flutterwave v3 uses major units (naira). Its payout `amount` is an integer, so payouts must be whole naira: the connector refuses an amount that is not a multiple of 100 kobo rather than round someone's pay. Fees, which Flutterwave quotes to fractions of a kobo (₦26.875), round up.
 
@@ -43,3 +45,7 @@ Verify a charge with `verify_payment` before giving value, as Flutterwave advise
 1. That NGN payouts are in naira (every v3 example is in major units, but the field description does not say).
 2. How long a reference stays unique.
 3. Sandbox payouts stay `PENDING` unless the reference ends `_PMCK`; the engine's references do not, so test settlement with `event` deliveries or Flutterwave's dashboard.
+
+## Customers' account numbers
+
+`virtual_account` opens a static account for a customer (each student, for a school) and `virtual_account.credited` reports each transfer into it, with the payer's name, masked account and bank from the event's `meta_data`. Flutterwave does not document which of `amount` and `charged_amount` is what the payer sent, nor whether `app_fee` is taken from it, so only `amount` is mapped and no fee. The account's name is Flutterwave's to show (the name asked for is sent as `narration`). The facts and open questions are in [schools rail facts](../spec/schools-rail-facts.md#flutterwave).

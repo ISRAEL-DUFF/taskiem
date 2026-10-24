@@ -1,9 +1,10 @@
 // Package invoices is the invoices platform connector (docs/invoices.md,
 // decision 0045): create, send, read and void the business's invoices to
-// its customers, and message their customers. Like the storefront
-// connector it acts on Taskiem's own records, for the tenant of the run
-// calling it (connector.CallerFrom), never one named in its input. It has
-// no action that marks an invoice paid.
+// its customers, list the overdue and lately paid ones, and message their
+// customers. Like the storefront connector it acts on Taskiem's own
+// records, for the tenant of the run calling it (connector.CallerFrom),
+// never one named in its input. It has no action that marks an invoice
+// paid.
 package invoices
 
 import (
@@ -13,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -32,6 +34,7 @@ type Ops interface {
 	Read(ctx context.Context, tenant uuid.UUID, number string) (invoicing.Invoice, error)
 	Cancel(ctx context.Context, tenant uuid.UUID, number, reason, by string) (invoicing.Invoice, error)
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, number, text, subject, key string) (map[string]any, error)
+	ListFor(ctx context.Context, tenant uuid.UUID, status string, within time.Duration, limit int) ([]invoicing.Listed, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -44,6 +47,7 @@ func New(ops Ops) *connector.Connector {
 		"get":             connector.ActionFunc(a.get),
 		"void":            connector.ActionFunc(a.void),
 		"notify_customer": connector.ActionFunc(a.notify),
+		"list":            connector.ActionFunc(a.list),
 	}}
 }
 
@@ -178,6 +182,59 @@ func (a *actions) notify(ctx context.Context, req connector.Request) (connector.
 	return connector.Response{Output: out}, classify(err)
 }
 
+// list reads overdue invoices, or those paid lately, with no customer
+// details: a run reaches the customer through notify_customer.
+func (a *actions) list(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	status, _ := req.Input["status"].(string)
+	hours, limit := 24, 50
+	if v, ok := intIn(req.Input["paid_within_hours"]); ok {
+		hours = v
+	}
+	if v, ok := intIn(req.Input["limit"]); ok {
+		limit = v
+	}
+	if limit < 1 || limit > invoicing.MaxListed {
+		return connector.Response{}, fmt.Errorf("limit is 1 to %d: %w", invoicing.MaxListed, effects.ErrFatal)
+	}
+	got, err := a.ops.ListFor(ctx, c.Tenant, status, time.Duration(hours)*time.Hour, limit)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	list := make([]any, 0, len(got))
+	for _, l := range got {
+		x := map[string]any{"number": l.Number, "status": l.Status, "total_kobo": l.TotalKobo, "total": invoicing.Naira(l.TotalKobo),
+			"due_kobo": l.DueKobo, "due": invoicing.Naira(l.DueKobo), "days_overdue": l.DaysOverdue}
+		if l.DueOn != "" {
+			x["due_on"] = l.DueOn
+		}
+		if l.PaidAt != nil {
+			x["paid_at"] = l.PaidAt.UTC().Format(time.RFC3339)
+		}
+		list = append(list, x)
+	}
+	return connector.Response{Output: map[string]any{"invoices": list, "count": len(list)}}, nil
+}
+
+// intIn reads a whole number from a step's input (JSON numbers arrive as
+// float64).
+func intIn(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case float64:
+		if n == float64(int(n)) {
+			return int(n), true
+		}
+	}
+	return 0, false
+}
+
 func classify(err error) error {
 	switch {
 	case err == nil:
@@ -242,6 +299,15 @@ func (l *Late) Cancel(ctx context.Context, t uuid.UUID, number, reason, by strin
 		return invoicing.Invoice{}, err
 	}
 	return o.Cancel(ctx, t, number, reason, by)
+}
+
+// ListFor implements Ops.
+func (l *Late) ListFor(ctx context.Context, t uuid.UUID, status string, within time.Duration, limit int) ([]invoicing.Listed, error) {
+	o, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return o.ListFor(ctx, t, status, within, limit)
 }
 
 // NotifyCustomer implements Ops.

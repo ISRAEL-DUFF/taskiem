@@ -1,0 +1,23 @@
+{
+  "name": "a card purchase answering a payment request keeps Moniepoint's own reference",
+  "trigger": "transaction",
+  "body": {
+    "eventId": "0c1d2e3f-4a5b-4c6d-8e7f-001122334455",
+    "eventType": "V1_POS_PURCHASE_TRANSACTION",
+    "data": {
+      "businessId": 0, "businessOwnerId": 0, "terminalSerial": "P260TEST01", "amount": 1100000,
+      "transactionReference": "MPOS-0001", "merchantReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "transactionTime": "2026/08/04 23:30:01", "transactionType": "PURCHASE", "transactionStatus": "COMPLETED",
+      "responseCode": "00", "responseMessage": "APPROVED", "metaData": null, "narration": ""
+    }
+  },
+  "event": "pos.sale",
+  "expect": {
+    "reference": "MPOS-0001",
+    "amount_kobo": 1100000,
+    "status": "approved",
+    "terminal": "P260TEST01",
+    "occurred_at": "2026-08-04T23:30:01+01:00",
+    "method": "card"
+  }
+}

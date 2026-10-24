@@ -362,7 +362,7 @@ func runEvent(m *connector.Manifest, cs CapabilityCase) Result {
 		if !subset(norm(cs.Expect), norm(fields)) {
 			fail("fields %s do not match the expected %s", compact(fields), compact(cs.Expect))
 		}
-		if t.Correlation != "" {
+		if t.Correlation != "" && answers(m, ev.Correlation) {
 			corr, err := triggerExprs.Eval(t.Correlation, act)
 			if err != nil {
 				fail("the trigger's correlation: %v", err)
@@ -373,6 +373,27 @@ func runEvent(m *connector.Manifest, cs CapabilityCase) Result {
 	}
 	res.Pass = len(res.Problems) == 0
 	return res
+}
+
+// answers reports whether one of the rail's capabilities answers or takes
+// field (pay answers a payout_id, get_payout takes one), so a workflow can
+// hold it and wait for an event on it.
+// An event no capability leads to (a pos.sale, correlated on the
+// provider's own reference) is waited on by nothing, and its trigger may
+// correlate on something else (a payment request's reference).
+func answers(m *connector.Manifest, field string) bool {
+	for name := range m.Capabilities {
+		spec, ok := capability.Get(name)
+		if !ok {
+			continue
+		}
+		for _, f := range append(capability.Fields(spec.Output), capability.Fields(spec.Input)...) {
+			if f.Name() == field {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 var triggerExprs = expr.MustNewTriggerEngine("body", "headers", "query", "item")

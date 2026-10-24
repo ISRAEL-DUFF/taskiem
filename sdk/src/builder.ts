@@ -76,7 +76,7 @@ export function connectorEvent(config: { connector: string; trigger: string; eve
   return { type: "connector_event", config };
 }
 /** Starts on a payment event from whichever rail is connected (decision 0044). */
-export function capabilityEvent(config: { events: ("payout.settled" | "payout.failed" | "payout.reversed" | "payment.received" | "virtual_account.credited")[]; connection?: string } & Values): Trigger {
+export function capabilityEvent(config: { events: ("payout.settled" | "payout.failed" | "payout.reversed" | "payment.received" | "payment.returned" | "refund.pending" | "refund.processed" | "refund.failed" | "virtual_account.credited" | "pos.sale")[]; connection?: string } & Values): Trigger {
   return { type: "capability_event", config };
 }
 export function manual(config?: Values): Trigger {
@@ -99,6 +99,10 @@ export function ussd(config: UssdMenuSpec): Trigger {
 /** A hosted form whose fields are the workflow's inputs schema; trigger.body is the answers (docs/spec/forms.md). */
 export function formTrigger(config: FormTriggerConfig): Trigger {
   return { type: "form", config: config as unknown as Record<string, unknown> };
+}
+/** Starts once per invoice of the business paid in full, in prod; trigger.body is the invoice (docs/invoices.md). */
+export function invoiceTrigger(config: { event: "paid" }): Trigger {
+  return { type: "invoice", config };
 }
 /** Any trigger type, for those without a helper. */
 export function trigger(type: Trigger["type"], config?: Values): Trigger {

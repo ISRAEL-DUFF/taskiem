@@ -57,6 +57,9 @@ func New(o Options) *connector.Connector {
 		"get_payout":   connector.ActionFunc(c.getPayout),
 		"name_enquiry": connector.ActionFunc(c.nameEnquiry),
 		"list_banks":   connector.ActionFunc(c.listBanks),
+
+		"issue_virtual_account": connector.ActionFunc(c.issueVirtualAccount),
+		"list_transactions":     connector.ActionFunc(c.listTransactions),
 	}, CheckCredentials: CheckCredentials}
 }
 
@@ -363,6 +366,101 @@ func (c *client) listBanks(ctx context.Context, req connector.Request) (connecto
 		banks = []any{}
 	}
 	return connector.Response{Output: map[string]any{"banks": banks}}, nil
+}
+
+// issueVirtualAccount issues one permanent account number on a wallet
+// through iswallet's bulk endpoint (POST /v1/wallets/{id}/virtual-accounts/batch),
+// whose request is documented in its OpenAPI: one item, its reference
+// our key. iswallet is idempotent per reference, so a resend answers the
+// account already issued (status existing).
+func (c *client) issueVirtualAccount(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	wallet, ref := str(in, "wallet_id"), str(in, "reference")
+	if err := allowWallet(req, "wallet_id", wallet); err != nil {
+		return connector.Response{}, err
+	}
+	if ref == "" {
+		return connector.Response{}, fmt.Errorf("issue_virtual_account needs a reference: %w", effects.ErrFatal)
+	}
+	item := map[string]any{"reference": ref}
+	if n := str(in, "account_name"); n != "" {
+		item["account_name"] = n
+	}
+	var r struct {
+		WalletID string           `json:"wallet_id"`
+		Accounts []map[string]any `json:"accounts"`
+	}
+	if err := c.do(ctx, req, http.MethodPost, "/v1/wallets/"+url.PathEscape(wallet)+"/virtual-accounts/batch", map[string]any{"accounts": []any{item}}, &r); err != nil {
+		return connector.Response{}, err
+	}
+	var a map[string]any
+	for _, x := range r.Accounts {
+		if s, _ := x["reference"].(string); s == ref {
+			a = x
+		}
+	}
+	if a == nil {
+		return connector.Response{}, fmt.Errorf("iswallet: the answer names no account under reference %s: %w", ref, effects.ErrIndeterminate)
+	}
+	if st, _ := a["status"].(string); st == "failed" {
+		// A refusal per item (a business wallet without its director's
+		// BVN answers KYC_REQUIRED): nothing was issued, and sending the
+		// same request again fails the same way.
+		return connector.Response{}, fmt.Errorf("iswallet %v: %v: %w", a["error_code"], a["error_message"], effects.ErrFatal)
+	}
+	if n, _ := a["account_number"].(string); n == "" {
+		return connector.Response{}, fmt.Errorf("iswallet: account %s has no number yet (status %v): %w", ref, a["status"], effects.ErrIndeterminate)
+	}
+	out := pick(a, "reference", "account_number", "account_name", "bank_name", "status")
+	out["wallet_id"] = wallet
+	return connector.Response{Output: out}, nil
+}
+
+// maxTransactionPages bounds one listing: at 100 a page, 2,000
+// transactions; more is reported as truncated.
+const maxTransactionPages = 20
+
+// listTransactions lists a wallet's transactions in a window, every page
+// (GET /v1/wallets/{id}/transactions, cursor-paged, 100 a page).
+func (c *client) listTransactions(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	wallet := str(in, "wallet_id")
+	if err := allowWallet(req, "wallet_id", wallet); err != nil {
+		return connector.Response{}, err
+	}
+	q := url.Values{"limit": {"100"}}
+	for _, k := range []string{"from", "to"} {
+		if v := str(in, k); v != "" {
+			if _, err := time.Parse(time.RFC3339, v); err != nil {
+				return connector.Response{}, fmt.Errorf("iswallet: %s must be a time (RFC 3339): %w", k, effects.ErrFatal)
+			}
+			q.Set(k, v)
+		}
+	}
+	list := []any{}
+	truncated := false
+	for page := 0; ; page++ {
+		if page == maxTransactionPages {
+			truncated = true
+			break
+		}
+		var r struct {
+			Transactions []any `json:"transactions"`
+			Pagination   struct {
+				HasMore    bool   `json:"has_more"`
+				NextCursor string `json:"next_cursor"`
+			} `json:"pagination"`
+		}
+		if err := c.do(ctx, req, http.MethodGet, "/v1/wallets/"+url.PathEscape(wallet)+"/transactions?"+q.Encode(), nil, &r); err != nil {
+			return connector.Response{}, err
+		}
+		list = append(list, r.Transactions...)
+		if !r.Pagination.HasMore || r.Pagination.NextCursor == "" {
+			break
+		}
+		q.Set("cursor", r.Pagination.NextCursor)
+	}
+	return connector.Response{Output: map[string]any{"wallet_id": wallet, "transactions": list, "truncated": truncated}}, nil
 }
 
 // pick keeps the named fields that are present; numbers stay JSON numbers.

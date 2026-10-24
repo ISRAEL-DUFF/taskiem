@@ -124,6 +124,35 @@ actions:
       properties:
         number: { type: string }
         status: { type: string }
+  list:
+    title: List overdue or paid invoices
+    description: The business's overdue invoices (oldest due first, with the days past the due date, Lagos time), or those paid in the last hours (oldest paid first). No customer details; message a customer with notify_customer.
+    class: read
+    input:
+      type: object
+      required: [status]
+      properties:
+        status:            { type: string, enum: [overdue, paid] }
+        paid_within_hours: { type: integer, minimum: 1, maximum: 168, description: For paid, how far back (default 24) }
+        limit:             { type: integer, minimum: 1, maximum: 200, description: At most this many (default 50) }
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        invoices:
+          type: array
+          items:
+            type: object
+            properties:
+              number:       { type: string }
+              status:       { type: string }
+              total_kobo:   { type: integer }
+              total:        { type: string }
+              due_kobo:     { type: integer }
+              due:          { type: string }
+              due_on:       { type: string }
+              days_overdue: { type: integer, description: Whole days past the due date; 0 when not overdue }
+              paid_at:      { type: string }
   notify_customer:
     title: Message the invoice's customer
     description: An SMS, and an email when there is one, to the invoice's customer. {link} becomes the invoice's page link, {number} its number and {due} what is still due.

@@ -8,6 +8,7 @@ import { WhatsAppNumber } from "./WhatsAppNumber";
 import { PeopleYouMessage } from "./PeopleYouMessage";
 import { USSDChannels } from "./USSDChannels";
 import { Help } from "../onboarding";
+import { SchoolsSwitch } from "./Schools";
 
 interface Secret {
   environment: string;
@@ -46,7 +47,7 @@ function AdvancedSwitch() {
 }
 
 export function Settings() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const advanced = useAdvanced();
   const [env, setEnv] = useState("prod");
   return (
@@ -57,6 +58,7 @@ export function Settings() {
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
       {can("member.manage") && <AdvancedSwitch />}
+      {me?.roles.includes("owner") && <SchoolsSwitch />}
       {advanced && <Environments editable={can("secret.manage")} />}
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />

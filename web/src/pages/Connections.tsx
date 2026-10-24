@@ -2,10 +2,23 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ApiError, del, get, post, put, upload, type AuthField, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
 import { useAdvanced, useAuth } from "../auth";
-import { connectorOf, fieldsToComplete, keyProblem, linkResult, modesOf, splitFields, generateRsaKeyPair } from "../lib/connections";
+import {
+  connectorOf,
+  eventsInWords,
+  fieldsToComplete,
+  keyProblem,
+  linkResult,
+  modesOf,
+  pollNote,
+  splitFields,
+  generateRsaKeyPair,
+  withMoneyLogWebhooks,
+  type MoneyLogWebhook,
+} from "../lib/connections";
 import { Help } from "../onboarding";
 import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
+import { Copy } from "./Forms";
 
 interface Conn {
   id: string;
@@ -26,6 +39,8 @@ interface Conn {
     health: string;
     problems: { workflow_id: string; environment: string; health: string; status_reason: string | null; last_error: string | null }[];
   };
+  /** Addresses to set in the rail's dashboard so the money log hears this prod connection, workflow or not. */
+  money_log_webhooks?: MoneyLogWebhook[];
 }
 
 /** The worst state of a connection's remote subscriptions, with what is wrong. */
@@ -178,6 +193,7 @@ export function Connections() {
           </tbody>
         </table>
       )}
+      {list.data && <MoneyLogWebhooks conns={withMoneyLogWebhooks(list.data.connections)} connectors={connectors.data?.connectors} />}
       {adding && connectors.data && (
         <NewConnection connectors={connectors.data.connectors} onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} onLink={startLink} />
       )}
@@ -326,6 +342,41 @@ function Disconnect({ conn, connector, onClose, onDone }: { conn: Conn; connecto
         </button>
       </div>
     </Modal>
+  );
+}
+
+/** Where to paste each rail connection's address so the money log hears
+ * every payment on it, even when no workflow uses it (decision 0045). */
+function MoneyLogWebhooks({ conns, connectors }: { conns: Conn[]; connectors: ConnectorInfo[] | undefined }) {
+  if (conns.length === 0) return null;
+  return (
+    <section className="card" style={{ marginTop: 24 }} aria-labelledby="money-log-webhooks">
+      <h2 id="money-log-webhooks">Webhook for the money log</h2>
+      <p className="hint">Paste each address into the service's dashboard, and Taskiem records every payment and transfer on the account in the money log, whether or not a workflow uses it.</p>
+      {conns.map((c) => {
+        const service = connectorOf(connectors, c.connector)?.name ?? c.connector;
+        return (
+          <div key={c.id} style={{ marginTop: 16 }}>
+            <h3>
+              {service} <span className="hint">({c.name})</span>
+            </h3>
+            {(c.money_log_webhooks ?? []).map((h) => (
+              <div key={h.trigger} style={{ marginTop: 8 }}>
+                <strong>{h.title}</strong>
+                <div className="email-address" style={{ marginTop: 4 }}>
+                  <code>{h.url}</code>
+                  <Copy text={h.url} label={`Copy the ${h.title} address for ${service} (${c.name})`} />
+                </div>
+                <p className="hint">
+                  Carries {eventsInWords(h.events)}. {h.verification} {pollNote(h.poll_minutes)}
+                </p>
+                <p>Where to paste it: {h.where}</p>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 

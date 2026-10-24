@@ -84,6 +84,14 @@
       "text": "Cike",
       "reviewed": false
     },
+    "button.match_no": {
+      "text": "A'a",
+      "reviewed": false
+    },
+    "button.match_yes": {
+      "text": "Eh, haɗa",
+      "reviewed": false
+    },
     "button.new_account": {
       "text": "Sabuwar lambar asusu",
       "reviewed": false
@@ -254,6 +262,54 @@
     },
     "lang.unavailable": {
       "text": "{name} ba ya samuwa a nan. Harsunan da ke nan: {languages}.",
+      "reviewed": false
+    },
+    "money.channel.cash": {
+      "text": "tsabar kuɗi",
+      "reviewed": false
+    },
+    "money.channel.upload": {
+      "text": "statement na banki",
+      "reviewed": false
+    },
+    "money.daily": {
+      "text": "Jiya: {in}; {out} ya fita; {invoices}; {leaks}.",
+      "reviewed": false
+    },
+    "money.daily.in": {
+      "text": "{amount} ya shigo",
+      "reviewed": false
+    },
+    "money.daily.in_pending": {
+      "text": "{amount} ya shigo ({pending} na jira)",
+      "reviewed": false
+    },
+    "money.daily.invoices": {
+      "text": "an biya invoice {n} ({amount})",
+      "reviewed": false
+    },
+    "money.daily.invoices_none": {
+      "text": "ba a biya invoice ba",
+      "reviewed": false
+    },
+    "money.daily.invoices_one": {
+      "text": "an biya invoice 1 ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks": {
+      "text": "sabbin zubewar kuɗi {n} ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks_none": {
+      "text": "babu sabuwar zubewar kuɗi",
+      "reviewed": false
+    },
+    "money.daily.leaks_one": {
+      "text": "sabuwar zubewar kuɗi 1 ({amount})",
+      "reviewed": false
+    },
+    "money.daily.link": {
+      "text": "Shafin kuɗi: {link}",
       "reviewed": false
     },
     "reach.about": {
@@ -925,11 +981,15 @@
       "reviewed": false
     },
     "wa.help.invoice": {
-      "text": "• *invoice* tare da suna, kuɗi da abin da yake domin shi (*invoice Ada 25,000 for 5 bags of rice*): zai aika wa abokin cinikinku takardar kuɗi",
+      "text": "• *invoice* (ko *takardar kuɗi*) tare da suna, kuɗi da abin da yake domin shi (*invoice Ada 25,000 for 5 bags of rice*): zai aika wa abokin cinikinku takardar kuɗi",
       "reviewed": false
     },
     "wa.help.language": {
       "text": "• *language* da sunan harshe: amsoshi da {languages}",
+      "reviewed": false
+    },
+    "wa.help.money": {
+      "text": "• *spent* (ko *na kashe*) tare da adadin kuɗi da abin da aka kashe a kai (*spent 12,000 on diesel at Total*), ko *cash in* (*kuɗi ya shigo*) ko *cash out* (*kuɗi ya fita*) da adadi (*cash in 20,000 till*): zan rubuta shi a littafin kuɗinku",
       "reviewed": false
     },
     "wa.help.run": {
@@ -1014,6 +1074,130 @@
     },
     "wa.linked": {
       "text": "An haɗa wannan lamba da asusunka na Taskiem. Aika *help* don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "wa.match.already_decided": {
+      "text": "An riga an yanke wannan a web app.",
+      "reviewed": false
+    },
+    "wa.match.already_matched": {
+      "text": "An riga an haɗa da {number}.",
+      "reviewed": false
+    },
+    "wa.match.already_rejected": {
+      "text": "An riga an ƙi shi.",
+      "reviewed": false
+    },
+    "wa.match.ask": {
+      "text": "{amount} ya shigo a {when} ta {channel}.\n\nShin na {number} ne, {due} da abokin ciniki ke bi? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.ask_order": {
+      "text": "{amount} ya shigo a {when} ta {channel}.\n\nShin na odar shago {number} ne, {due} da za a biya? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.ask_split": {
+      "text": "{amount} ya shigo a {when} ta {channel}.\n\nShin daga abokin ciniki na {number} ne, {due} da ake bi? Ya fi haka, don haka za a raba shi a kan takardun kuɗin abokin ciniki da ba a biya ba, na farko da farko: {parts}. {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.channel.cash": {
+      "text": "kuɗi a hannu",
+      "reviewed": false
+    },
+    "wa.match.channel.upload": {
+      "text": "statement da aka ɗora",
+      "reviewed": false
+    },
+    "wa.match.denied": {
+      "text": "Ba za ku iya haɗa kuɗi a {org} ba.",
+      "reviewed": false
+    },
+    "wa.match.matched_order": {
+      "text": "An haɗa da odar {number}. An biya ta yanzu.",
+      "reviewed": false
+    },
+    "wa.match.matched_paid": {
+      "text": "An haɗa da {number}. An biya shi gaba ɗaya.",
+      "reviewed": false
+    },
+    "wa.match.matched_part": {
+      "text": "An haɗa da {number}. An biya wani sashi ({due} ya rage).",
+      "reviewed": false
+    },
+    "wa.match.matched_split": {
+      "text": "An haɗa shi a sassa: {parts}.",
+      "reviewed": false
+    },
+    "wa.match.more": {
+      "text": "Idan ba haka ba, A'a zai nuna takardar kuɗi ta gaba.",
+      "reviewed": false
+    },
+    "wa.match.other_person": {
+      "text": "An aika wannan maɓallin ga wani.",
+      "reviewed": false
+    },
+    "wa.match.refused": {
+      "text": "Ba a haɗa ba: {reason}",
+      "reviewed": false
+    },
+    "wa.match.rejected_left": {
+      "text": "To, ba shi ba ne. Kuɗin na jiran ku haɗa shi a web app, ƙarƙashin Invoices.",
+      "reviewed": false
+    },
+    "wa.match.rejected_left_link": {
+      "text": "To, ba shi ba ne. Kuɗin na jiran ku haɗa shi a web app: {link}",
+      "reviewed": false
+    },
+    "wa.match.rejected_next": {
+      "text": "To, ba shi ba ne. Ba za a sake ba da shawararsa ba.",
+      "reviewed": false
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} zai rage a matsayin kuɗin abokin ciniki a hannunmu",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "In rubuta {amount} kuɗin da suka shigo: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "In rubuta {amount} kuɗin da suka fita: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense": {
+      "text": "In rubuta cewa an kashe {amount} a kan {what} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "In rubuta cewa an kashe {amount} a kan {what} a {vendor} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Ku amsa *yes* in rubuta ko *no* in bar shi.",
+      "reviewed": false
+    },
+    "wa.money.denied": {
+      "text": "Ba za ku iya rubuta kuɗi a {org} ba.",
+      "reviewed": false
+    },
+    "wa.money.how": {
+      "text": "Ku faɗi adadi da abin da aka kashe a kai, kamar haka: *spent 12,000 on diesel at Total*, ko *cash in 20,000 till*",
+      "reviewed": false
+    },
+    "wa.money.not_recorded": {
+      "text": "Ban rubuta ba.",
+      "reviewed": false
+    },
+    "wa.money.recorded_in": {
+      "text": "An rubuta. {amount} ya shigo, {category}.",
+      "reviewed": false
+    },
+    "wa.money.recorded_out": {
+      "text": "An rubuta. {amount} ya fita, {category}.",
+      "reviewed": false
+    },
+    "wa.money.refused": {
+      "text": "Ban iya rubuta wannan ba: {reason}",
       "reviewed": false
     },
     "wa.no_org": {
@@ -1800,6 +1984,10 @@
       "text": "Lambar waya da lambar ƙasa, misali 2348012345678",
       "reviewed": false
     },
+    "wa.table.kept": {
+      "text": "Taskiem ne ke kula da {table}: Taskiem ne kawai ke ƙara layuka, ba za a iya canza su ko share su a nan ba. Gyara sabon layi ne.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Teburorin bayanai a {org}:",
       "reviewed": false
@@ -2106,6 +2294,10 @@
     },
     "wd.trigger.form_members": {
       "text": "Lokacin da wani ya cike fom ɗin “{title}” (mambobi kawai)",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_paid": {
+      "text": "Lokacin da aka biya ɗaya daga cikin invoice ɗinku gaba ɗaya",
       "reviewed": false
     },
     "wd.trigger.manual": {

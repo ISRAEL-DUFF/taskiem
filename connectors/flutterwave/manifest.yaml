@@ -6,7 +6,7 @@ manifest: connector/v1
 id: flutterwave
 version: 1.0.0
 name: Flutterwave
-description: Bank payouts, balances, name enquiry, fee quotes and payment verification on Flutterwave (API v3).
+description: Bank payouts, balances, name enquiry, fee quotes, payment verification and customers' account numbers on Flutterwave (API v3).
 category: payments
 kind: rail
 regions: [NG, GH, KE, ZA, UG, TZ, RW]
@@ -216,10 +216,85 @@ actions:
     pii:
       - { field: email, category: email }
       - { field: output.account_number, category: account_number }
+  # Static (permanent) accounts and the transaction list, from Flutterwave's
+  # public documentation, read 23 October 2026 (docs/spec/schools-rail-facts.md):
+  #   https://developer.flutterwave.com/v3.0/docs/ngn-virtual-accounts
+  #   https://developer.flutterwave.com/v3.0/reference/get-all-transactions
+  #   https://developer.flutterwave.com/v3.0/docs/webhooks
+  create_static_account:
+    title: Give a customer their own account number
+    description: >-
+      A static (permanent) virtual account (is_permanent true) for one customer,
+      which needs their email and BVN or NIN. Every transfer into it arrives as
+      charge.completed with its tx_ref (tva_ and the step's key). Flutterwave
+      cannot look one account up, so a lost answer parks the step.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [email]
+      properties:
+        email:       { type: string }
+        bvn:         { type: string, description: The customer's BVN (11 digits); or nin }
+        nin:         { type: string }
+        firstname:   { type: string }
+        lastname:    { type: string }
+        phonenumber: { type: string }
+        narration:   { type: string, description: '"The name should be shown when the account details are fetched" (Flutterwave)' }
+    output:
+      type: object
+      properties:
+        tx_ref:         { type: string, description: The account's reference; transfers into it carry it }
+        account_number: { type: string }
+        bank_name:      { type: string }
+        order_ref:      { type: string }
+        flw_ref:        { type: string }
+        note:           { type: string, description: "Flutterwave's line for the payer, e.g. Please make a bank transfer to <name>" }
+    pii:
+      - { field: email, category: email }
+      - { field: bvn, category: bvn }
+      - { field: nin, category: nin }
+      - { field: firstname, category: name }
+      - { field: lastname, category: name }
+      - { field: phonenumber, category: phone }
+      - { field: narration, category: name }
+      - { field: output.account_number, category: account_number }
+  list_transactions:
+    title: List successful collections
+    description: Successful collections between two days (GET /transactions, from and to as dates), every page; amounts in minor units.
+    class: read
+    input:
+      type: object
+      required: [from]
+      properties:
+        from: { type: string, format: date-time, description: Its day is the first listed }
+        to:   { type: string, format: date-time, description: Its day is the last listed; today when left out }
+    output:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:           { type: string }
+              tx_ref:       { type: string }
+              flw_ref:      { type: string }
+              amount:       { type: integer, description: Minor units }
+              currency:     { type: string }
+              narration:    { type: string }
+              status:       { type: string }
+              payment_type: { type: string }
+              created_at:   { type: string }
+        truncated: { type: boolean }
+    pii:
+      - { field: output.transactions, category: other }
 triggers:
   # One webhook URL per Flutterwave account receives every event.
   event:
     type: webhook
+    title: Payments and transfers
+    where: "Flutterwave dashboard → Settings → Webhooks: paste it as the URL, set a secret hash, and add the same hash to this connection"
     verify: { scheme: header_secret, header: verif-hash, secret_field: webhook_hash }
     events: [transfer.completed, charge.completed]
     event_type: =body.event
@@ -280,7 +355,7 @@ capabilities:
       amount_kobo: =output.amount
       expires_at: =output.expires_at
     requires: [customer.email]
-    ignores: [customer.name, customer.phone, customer.bvn, description]
+    ignores: [customer.name, customer.phone, customer.bvn, customer.nin, description]
     fixed: { currency: NGN }
     unsafe: true
     transfer: { on_late: unknown, on_wrong_amount: excess_returned, min_minutes: 1, max_minutes: 87840, default_minutes: 60 }
@@ -295,6 +370,44 @@ capabilities:
       status: "=output.status == 'successful' ? 'paid' : output.status == 'failed' ? 'failed' : 'pending'"
       amount_kobo: "=output.?amount"
       currency: "=output.?currency"
+  virtual_account:
+    # Flutterwave says nothing of the account's name beyond narration ("the
+    # name should be shown when the account details are fetched"), and its
+    # answer carries none, so account_name is sent as narration and the
+    # output names no account_name.
+    action: create_static_account
+    input:
+      email: "=input.customer.email"
+      bvn: "=input.customer.?bvn"
+      nin: "=input.customer.?nin"
+      firstname: "=input.customer.name.split(' ').filter(w, w != '')[0]"
+      lastname: "=[input.customer.name.split(' ').filter(w, w != '')].map(ws, size(ws) > 1 ? ws.slice(1, size(ws)).join(' ') : ws[0])[0]"
+      phonenumber: "=input.customer.?phone"
+      narration: "=input.?account_name.orValue(input.customer.name)"
+    output:
+      account_number: "=output.account_number"
+      bank_name: "=output.bank_name"
+      reference: "=output.tx_ref"
+    requires: [customer.email]
+    ignores: [account]
+    unsafe: true
+    notes: >-
+      Flutterwave needs the customer's BVN or NIN for a permanent account (for a student, a
+      parent's); a step with neither is refused. The account's name is Flutterwave's to show.
+  list_credits:
+    # Transfers into customers' static accounts among the successful
+    # collections: their tx_ref starts tva_. Flutterwave lists by day, so a
+    # window reads whole days; credit_id is the transaction id its
+    # charge.completed carries. The payer is not in the list.
+    action: list_transactions
+    input: { from: "=input.since", to: "=input.?until" }
+    output:
+      credits: >-
+        =output.transactions.filter(t, t.tx_ref.startsWith('tva_')).map(t, {'reference': t.tx_ref, 'credit_id': t.id,
+        'amount_kobo': t.amount, 'currency': t.currency, ?'narration': t.?narration,
+        ?'occurred_at': t.created_at != '' ? optional.of(t.created_at) : optional.none()})
+      truncated: "=output.?truncated"
+    unsupported: [account]
 events:
   payout.settled:
     trigger: event
@@ -306,8 +419,31 @@ events:
     fields: { payout_id: "=body.data.reference", reason: "=body.data.?complete_message" }
   payment.received:
     trigger: event
-    when: "=body.event == 'charge.completed' && body.data.status == 'successful'"
+    # Not a transfer into a customer's permanent account (tx_ref tva_):
+    # that is virtual_account.credited.
+    when: "=body.event == 'charge.completed' && body.data.status == 'successful' && !(has(body.data.tx_ref) && string(body.data.tx_ref).startsWith('tva_'))"
     fields:
       payment_id: "=body.data.tx_ref"
       amount_kobo: "=int(math.round(double(body.data.amount) * 100.0))"
       currency: "=body.data.?currency"
+  virtual_account.credited:
+    # A transfer into a customer's static account: charge.completed with
+    # the account's tx_ref (tva_). The payer is in the top-level meta_data
+    # (originatorname, originatoraccountnumber, masked, bankname), as the
+    # NGN virtual accounts guide's example shows. amount is in naira, as in
+    # every v3 example. charged_amount and app_fee are not mapped: the
+    # documentation does not say which is what the payer sent or whether
+    # the fee is taken from the amount (its example has amount 100,
+    # charged_amount 102, app_fee 2).
+    trigger: event
+    when: "=body.event == 'charge.completed' && body.data.status == 'successful' && has(body.data.tx_ref) && string(body.data.tx_ref).startsWith('tva_')"
+    fields:
+      reference: "=body.data.tx_ref"
+      credit_id: "=string(int(body.data.id))"
+      amount_kobo: "=int(math.round(double(body.data.amount) * 100.0))"
+      currency: "=body.data.?currency"
+      payer_name: "=body.?meta_data.?originatorname"
+      payer_account: "=body.?meta_data.?originatoraccountnumber"
+      payer_bank: "=body.?meta_data.?bankname"
+      narration: "=body.data.?narration"
+      occurred_at: "=body.data.?created_at"

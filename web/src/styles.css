@@ -241,6 +241,26 @@ tr.highlight td { background: color-mix(in srgb, var(--accent) 7%, var(--panel))
 .tabs button, .tabs a { min-height: 30px; border: none; box-shadow: none; background: none; padding: 0 12px; border-radius: 7px; color: var(--muted); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; text-decoration: none; }
 .tabs button:hover:not(:disabled), .tabs a:hover { background: none; color: var(--text); text-decoration: none; }
 .tabs button.active, .tabs a.active { background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border), var(--shadow); }
+.tabs .tab-count { margin-left: 6px; font-size: 12px; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--warn) 55%, var(--text)); background: color-mix(in srgb, var(--warn) 13%, var(--panel)); border-radius: 999px; padding: 0 7px; }
+
+/* Invoices > To match: one card per payment, its candidate invoices with their reasons. */
+.match-card h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.match-card h3 { font-size: 14px; margin: 16px 0 8px; }
+.match-candidates { list-style: none; margin: 0; padding: 0; }
+.match-candidates > li { border-top: 1px solid var(--border); padding: 12px 0 4px; }
+.match-head { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.match-reasons { margin: 6px 0 10px; padding-left: 20px; color: var(--text); }
+.match-reasons li { margin: 2px 0; }
+td .match-reasons { font-size: 13px; margin-bottom: 0; }
+.match-other { margin-top: 8px; }
+.match-other > summary { color: var(--accent); font-size: 14px; line-height: 18px; padding: 3px 0; }
+.match-other form { margin-top: 10px; }
+.match-other-row { align-items: flex-end; }
+.match-split { margin: 4px 0 10px; }
+.match-split > summary { color: var(--accent); font-size: 14px; line-height: 18px; padding: 3px 0; }
+.match-split form { margin-top: 10px; max-width: 420px; }
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.plain-list li { margin: 4px 0; }
 
 .editor { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 0; height: 600px; min-height: 520px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
 .canvas { background: var(--panel-2); background-image: radial-gradient(color-mix(in srgb, var(--border-strong) 80%, transparent) 1px, transparent 1px); background-size: 20px 20px; overflow: hidden; position: relative; }
@@ -354,6 +374,7 @@ a.stat:hover { text-decoration: none; background: var(--panel-2); }
 .stat-label { font-size: 13px; color: var(--muted); }
 .stat-value { font-size: 28px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .stat-hint { font-size: 13px; color: var(--muted); }
+.exports { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
 .home-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .home-col { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -954,3 +975,12 @@ table.audit code { font-size: 12px; white-space: nowrap; }
   .bell-panel { left: 16px; right: 16px; top: 64px; width: auto; max-height: calc(100dvh - 150px); }
   .bell-scrim { background: rgba(14, 15, 12, 0.3); }
 }
+
+/* Money (docs/money-log.md "Money"): leaks, and matching a statement's columns. */
+.leak-card h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.leak-card .kv { margin-bottom: 4px; }
+.leak-actions { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
+.leak-assign { align-items: flex-end; max-width: 480px; }
+.leak-close .sf-choices { margin-bottom: 8px; }
+.column-match { border-top: 1px solid var(--border); padding-top: 12px; margin-bottom: 12px; }
+.column-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }

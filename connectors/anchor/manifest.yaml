@@ -153,6 +153,8 @@ actions:
 triggers:
   transfer_event:
     type: webhook
+    title: Transfers you send
+    where: "An Anchor webhook (AtLeastOnce delivery) for the transfer events, with a token you also add to this connection"
     verify: { scheme: hmac_sha1, header: x-anchor-signature, encoding: base64_of_hex, secret_field: webhook_token }
     events: [nip.transfer.initiated, nip.transfer.successful, nip.transfer.failed, nip.transfer.reversed, book.transfer.initiated, book.transfer.successful, book.transfer.failed]
     event_type: '=has(body.data) ? body.data.type : body.type'

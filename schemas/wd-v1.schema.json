@@ -1319,7 +1319,8 @@
             "subflow",
             "storefront",
             "form",
-            "capability_event"
+            "capability_event",
+            "invoice"
           ]
         },
         "config": {
@@ -1548,6 +1549,37 @@
         },
         {
           "if": {
+            "properties": {
+              "type": {
+                "const": "invoice"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "description": "Starts a run in prod when one of the business's invoices is paid in full, once per invoice (docs/invoices.md); trigger.body is the invoice.",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "event"
+                ],
+                "properties": {
+                  "event": {
+                    "enum": [
+                      "paid"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
             "required": [
               "type"
             ],
@@ -1729,7 +1761,12 @@
                         "payout.failed",
                         "payout.reversed",
                         "payment.received",
-                        "virtual_account.credited"
+                        "payment.returned",
+                        "refund.pending",
+                        "refund.processed",
+                        "refund.failed",
+                        "virtual_account.credited",
+                        "pos.sale"
                       ]
                     }
                   },
@@ -2087,6 +2124,7 @@
             "collect_push",
             "get_payment",
             "virtual_account",
+            "list_credits",
             "refund",
             "await_settlement",
             "await_reversal",

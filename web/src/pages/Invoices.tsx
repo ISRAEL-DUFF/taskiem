@@ -1,12 +1,40 @@
 import { Fragment, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ApiError, get, postOnce, put, post } from "../api";
+import { ApiError, del, get, postOnce, put, post } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import {
+  amendmentProblem,
+  amendmentRequest,
+  emptyAmendment,
+  lineNote,
+  removableLines,
+  type AmendmentForm,
   FEE_CHOICES,
   INVOICE_FILTERS,
   INVOICE_LIMITS,
+  SUGGESTIONS_PATH,
+  UNMATCHED_PATH,
+  unmatchedPayments,
+  type UnmatchedMoney,
+  amountWords,
+  channelWords,
+  entryMatchPath,
+  groupSuggestions,
+  kindWords,
+  isOrder,
+  matchChoices,
+  matchRequest,
+  matchedLine,
+  openInvoices,
+  pickerWords,
+  rejectedLine,
+  targetLabel,
+  targetPath,
+  type MatchChoice,
+  type MoneyOpenOrder,
+  scoreWords,
+  suggestionPath,
   dateLabel,
   draftRequest,
   emptyItem,
@@ -37,7 +65,22 @@ import {
   type InvoiceSent,
   type InvoiceSettings,
   type ItemInput,
+  type MoneySuggestion,
   type SettingsForm,
+  type WaitingPayment,
+  creditWords,
+  invoiceCustomerPath,
+  leftWords,
+  payerPath,
+  payerWords,
+  splitLine,
+  splitProblem,
+  splitRequest,
+  splitRows,
+  splitTotal,
+  type InvoiceCustomerView,
+  type MoneySplit,
+  type SplitRow,
 } from "../lib/invoices";
 import { isMasked, telLink } from "../lib/orders";
 
@@ -56,14 +99,353 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`badge sf-status ${s.tone}`}>{s.label}</span>;
 }
 
-export function InvoiceTabs() {
+/** Invoices, To match (with the number of payments waiting), Settings. */
+export function InvoiceTabs({ waiting }: { waiting?: number }) {
+  // The pages that know the number pass it; the others ask (a refusal leaves the tab without one).
+  const own = useLoad(() => (waiting === undefined ? get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH) : Promise.resolve(undefined)), [waiting === undefined]);
+  const n = waiting ?? (own.data ? groupSuggestions(own.data.suggestions).length : 0);
   return (
     <nav className="tabs" aria-label="Invoices">
       <NavLink to="/invoices" end>
         Invoices
       </NavLink>
+      <NavLink to="/invoices/match">
+        To match
+        {n > 0 && (
+          <span className="tab-count" data-testid="to-match-count">
+            {n}
+            <span className="sr-only"> {n === 1 ? "payment waiting" : "payments waiting"}</span>
+          </span>
+        )}
+      </NavLink>
       <NavLink to="/invoices/settings">Settings</NavLink>
     </nav>
+  );
+}
+
+// --- matching money to invoices ---
+
+/** Invoices > To match (GET /v1/money/suggestions): money received that may be for an invoice or a storefront order, one card per payment. */
+export function InvoiceMatch() {
+  const { can } = useAuth();
+  const manage = invoiceAccess(can).manage;
+  const list = useLoad(() => get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH), []);
+  const left = useLoad(() => get<{ payments: UnmatchedMoney[] | null; orders?: MoneyOpenOrder[] | null }>(UNMATCHED_PATH), []);
+  useLiveRefresh(list.reload);
+  useLiveRefresh(left.reload);
+  // The invoices a payment can be matched to by hand.
+  const invoices = useLoad(() => (manage ? get<{ invoices: CustomerInvoice[] | null }>("/v1/invoices") : Promise.resolve({ invoices: [] })), [manage]);
+  const [said, setSaid] = useState("");
+  const waiting = list.data ? groupSuggestions(list.data.suggestions) : undefined;
+  const unmatched = unmatchedPayments(left.data?.payments);
+  const done = (line: string) => {
+    setSaid(line);
+    list.reload();
+    left.reload();
+    invoices.reload();
+  };
+  return (
+    <>
+      <PageHeader
+        title="To match"
+        description="Money that came in without the reference Taskiem gave, and the invoices or storefront orders it may be for. Match it, or say it is not that one."
+      />
+      <InvoiceTabs waiting={waiting?.length ?? 0} />
+      <div role="status" data-testid="match-status">
+        {said && <div className="notice">{said}</div>}
+      </div>
+      <ErrorBox error={list.error} />
+      {waiting === undefined && !list.error && <Skeleton rows={3} label="Loading payments to match…" />}
+      {waiting && waiting.length === 0 && unmatched.length === 0 && (
+        <EmptyState icon="invoices">Nothing to match. Payments into the accounts Taskiem gave are matched to their invoice as they come in.</EmptyState>
+      )}
+      {waiting?.map((p) => (
+        <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} orders={left.data?.orders} onDone={done} />
+      ))}
+      <ErrorBox error={left.error} />
+      {unmatched.length > 0 && (
+        <>
+          <h2>No invoice suggested</h2>
+          <p className="hint">Money that came in with nothing to suggest, or whose suggestions were all turned down. Match it by hand if you know the invoice or order.</p>
+          {unmatched.map((p) => (
+            <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} orders={left.data?.orders} onDone={done} />
+          ))}
+        </>
+      )}
+      {!manage && waiting && waiting.length > 0 && <p className="hint">You can see these. Someone who manages invoices can match them.</p>}
+    </>
+  );
+}
+
+function WaitingCard({
+  payment: p,
+  manage,
+  open,
+  orders,
+  onDone,
+}: {
+  payment: WaitingPayment;
+  manage: boolean;
+  open: CustomerInvoice[];
+  orders?: MoneyOpenOrder[] | null;
+  onDone: (line: string) => void;
+}) {
+  const act = useAction();
+  const [other, setOther] = useState("");
+  const [otherTried, setOtherTried] = useState(false);
+  const title = `match-${p.entry_id}`;
+  const choices: MatchChoice[] = matchChoices(open, orders, p.candidates);
+  const words = pickerWords((orders ?? []).length > 0);
+  const decide = (c: MoneySuggestion, action: "confirm" | "reject") =>
+    void act.run(async () => {
+      await plainly(post(suggestionPath(c.id, action)));
+      const kind = isOrder(c) ? "order" : "invoice";
+      onDone(action === "confirm" ? matchedLine(p.amount_kobo, c.number, kind) : rejectedLine(c.number, kind));
+    }, false);
+  return (
+    <section className="card match-card" aria-labelledby={`${title} ${title}-when ${title}-ref`} data-testid="waiting-payment">
+      <h2 id={title}>
+        <span className="sf-price">{amountWords(p.amount_kobo)}</span> <span className="hint">{kindWords(p.kind)}</span>
+      </h2>
+      <dl className="kv">
+        <dt>Received</dt>
+        <dd id={`${title}-when`}>{fmtTime(p.received_at)}</dd>
+        <dt>Where</dt>
+        <dd>{channelWords(p.channel)}</dd>
+        <dt>Reference</dt>
+        <dd id={`${title}-ref`}>{p.reference || <span className="hint">None</span>}</dd>
+      </dl>
+      {p.held_reason && (
+        <div className="notice" data-testid="held-reason">
+          Held for you: {p.held_reason}. Nothing was counted towards an invoice.
+        </div>
+      )}
+      {leftWords(p) && (
+        <p className="hint" data-testid="left-to-match">
+          {leftWords(p)}
+        </p>
+      )}
+      {p.candidates.length > 0 && <h3>May be for</h3>}
+      <ul className="match-candidates">
+        {p.candidates.map((c) => {
+          const w = scoreWords(c.score);
+          return (
+            <li key={c.id} data-testid="candidate">
+              <div className="match-head">
+                <Link to={targetPath(c)}>{targetLabel(c)}</Link>{" "}
+                <span className={`badge sf-status ${w.tone}`} title={`Score ${c.score} of 100`}>
+                  {w.label}
+                </span>
+                {isOrder(c) && (
+                  <span className="hint">
+                    {" "}
+                    {naira(c.due_kobo ?? 0)} to pay{c.customer ? ` · ${c.customer}` : ""}
+                  </span>
+                )}
+              </div>
+              {(c.reasons ?? []).length > 0 && (
+                <ul className="match-reasons" aria-label={`Why ${targetLabel(c)}`}>
+                  {(c.reasons ?? []).map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              )}
+              {manage && (
+                <div className="toolbar">
+                  <button type="button" className="primary" disabled={act.busy} onClick={() => decide(c, "confirm")} aria-label={`Match to ${targetLabel(c)}`}>
+                    Match
+                  </button>
+                  <button type="button" disabled={act.busy} onClick={() => decide(c, "reject")} aria-label={`Not this one: ${targetLabel(c)}`}>
+                    Not this one
+                  </button>
+                </div>
+              )}
+              {manage && c.split && (c.split.parts ?? []).length > 0 && (
+                <SplitForm suggestion={c} leftKobo={c.left_kobo ?? p.amount_kobo ?? 0} onDone={onDone} />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {manage && (
+        <details className="match-other">
+          <summary>{words.summary}</summary>
+          {choices.length === 0 ? (
+            <p className="hint">{words.none}</p>
+          ) : (
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                setOtherTried(true);
+                if (!other) return;
+                const chosen = choices.find((x) => x.value === other);
+                void act.run(async () => {
+                  await plainly(post(entryMatchPath(p.entry_id), matchRequest(other)));
+                  onDone(matchedLine(p.amount_kobo, chosen?.number ?? other, chosen?.kind));
+                }, false);
+              }}
+            >
+              <div className="row match-other-row">
+                <Field label={words.label} hint={words.hint}>
+                  <select value={other} onChange={(e) => setOther(e.target.value)}>
+                    <option value="">{words.empty}</option>
+                    {choices.map((x) => (
+                      <option key={x.value} value={x.value}>
+                        {x.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <button type="submit" disabled={act.busy}>
+                  {words.submit}
+                </button>
+              </div>
+              {otherTried && !other && (
+                <div className="error" role="alert">
+                  {words.missing}
+                </div>
+              )}
+            </form>
+          )}
+        </details>
+      )}
+      <ErrorBox error={act.error} />
+    </section>
+  );
+}
+
+/** Split a payment across the customer's open invoices, oldest first as offered, amounts editable. */
+function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySuggestion; leftKobo: number; onDone: (line: string) => void }) {
+  const act = useAction();
+  const [rows, setRows] = useState<SplitRow[]>(() => splitRows(c.split));
+  const [creditRest, setCreditRest] = useState(true);
+  const [tried, setTried] = useState(false);
+  const problem = splitProblem(rows, leftKobo);
+  const total = splitTotal(rows);
+  const rest = Number.isNaN(total) ? 0 : Math.max(leftKobo - total, 0);
+  const id = `split-${c.id}`;
+  return (
+    <details className="match-split" data-testid="split">
+      <summary>Split across the customer's invoices…</summary>
+      <p className="hint">
+        The payment is more than is due on {c.number}. Offered oldest first across the same customer's open invoices; change the amounts if you know better. Each part is a
+        match of its own, and can be undone on its own.
+      </p>
+      <form
+        noValidate
+        aria-labelledby={id}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setTried(true);
+          if (problem) return;
+          void act.run(async () => {
+            const r = await plainly(post<MoneySplit>(suggestionPath(c.id, "confirm"), splitRequest(rows, creditRest && rest > 0)));
+            onDone(splitLine(r));
+          }, false);
+        }}
+      >
+        <h4 id={id} className="sr-only">
+          Split for {c.number}
+        </h4>
+        {rows.map((r, i) => (
+          <Field key={r.invoice} label={`${r.invoice} (${naira(r.due_kobo)} due)`}>
+            <input
+              inputMode="decimal"
+              value={r.amount}
+              onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
+              aria-describedby={`${id}-rest`}
+            />
+          </Field>
+        ))}
+        <p className="hint" id={`${id}-rest`} data-testid="split-rest">
+          {rest > 0 ? `${naira(rest)} not counted towards these invoices.` : "All of the payment counts towards these invoices."}
+        </p>
+        {rest > 0 && (
+          <label className="row">
+            <input type="checkbox" checked={creditRest} onChange={(e) => setCreditRest(e.target.checked)} />
+            <span>Keep the rest as the customer's credit, for their next invoice
+            (otherwise it waits here to be matched)</span>
+          </label>
+        )}
+        {tried && problem && (
+          <div className="error" role="alert">
+            {problem}
+          </div>
+        )}
+        <div className="toolbar">
+          <button type="submit" className="primary" disabled={act.busy}>
+            Match in parts
+          </button>
+        </div>
+      </form>
+      <ErrorBox error={act.error} />
+    </details>
+  );
+}
+
+/** The invoice's customer in matching: their credit, permanent account numbers and remembered payers (GET /v1/invoices/{id}/customer). */
+function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manage: boolean }) {
+  const view = useLoad(() => get<InvoiceCustomerView>(invoiceCustomerPath(invoice.id)), [invoice.id, invoice.paid_kobo]);
+  const forget = useAction();
+  const v = view.data;
+  return (
+    <section className="card" aria-labelledby="inv-customer-money" data-testid="customer-money">
+      <h2 id="inv-customer-money">The customer's money</h2>
+      <ErrorBox error={view.error} />
+      {!v && !view.error && <Skeleton rows={2} label="Loading the customer's credit…" />}
+      {v && (
+        <>
+          <dl className="kv">
+            <dt>Credit</dt>
+            <dd data-testid="customer-credit">{creditWords(v.credit_kobo)}</dd>
+            <dt>Account numbers</dt>
+            <dd>
+              {(v.accounts ?? []).length === 0 ? (
+                <span className="hint">None. Money into an account number of the customer's own is matched to their oldest open invoice first.</span>
+              ) : (
+                <ul className="plain-list">
+                  {(v.accounts ?? []).map((a) => (
+                    <li key={a.id}>
+                      {a.account_number}
+                      {a.bank_name ? ` · ${a.bank_name}` : ""} <span className="hint">({a.channel})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </dd>
+          </dl>
+          <h3>Payers remembered</h3>
+          {(v.payers ?? []).length === 0 ? (
+            <p className="hint">None yet. When someone pays for this customer and you match it, Taskiem remembers the payer and suggests this customer first next time.</p>
+          ) : (
+            <ul className="plain-list" aria-label="Payers remembered for this customer">
+              {(v.payers ?? []).map((p) => (
+                <li key={p.id} data-testid="payer">
+                  {payerWords(p)}{" "}
+                  {manage && (
+                    <button
+                      type="button"
+                      disabled={forget.busy}
+                      aria-label={`Forget this payer: ${p.payer}`}
+                      onClick={() =>
+                        void forget.run(async () => {
+                          await plainly(del(payerPath(p.id)));
+                          view.reload();
+                        }, "Payer forgotten")
+                      }
+                    >
+                      Forget this payer
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <ErrorBox error={forget.error} />
+        </>
+      )}
+    </section>
   );
 }
 
@@ -535,9 +917,12 @@ export function InvoicePage() {
                 <tbody>
                   {(x.lines ?? []).map((l, i) => (
                     <tr key={i}>
-                      <td>{l.description}</td>
+                      <td>
+                        {l.description}
+                        {lineNote(l) && <div className="hint">{lineNote(l)}</div>}
+                      </td>
                       <td>{l.quantity}</td>
-                      <td className="sf-price">{naira(l.unit_kobo)}</td>
+                      <td className="sf-price">{l.kind ? "" : naira(l.unit_kobo)}</td>
                       <td className="sf-price">{naira(l.quantity * l.unit_kobo)}</td>
                     </tr>
                   ))}
@@ -555,6 +940,8 @@ export function InvoicePage() {
               <dd className="sf-price">{x.status === "void" ? "Nothing: it is void" : naira(x.due_kobo)}</dd>
             </dl>
           </section>
+
+          {may.amend && <Amend invoice={x} onDone={reload} />}
 
           <section className="card" aria-labelledby="inv-details">
             <h2 id="inv-details">Details</h2>
@@ -622,6 +1009,8 @@ export function InvoicePage() {
             {!revealed && !may.reveal && <p className="hint">The customer's details are hidden. Someone who may see personal data can show them.</p>}
           </section>
 
+          {x.status !== "draft" && <CustomerMatching invoice={x} manage={invoiceAccess(can).manage} />}
+
           <section className="card" aria-labelledby="inv-payments">
             <h2 id="inv-payments">Payments</h2>
             <Payments
@@ -649,6 +1038,116 @@ export function InvoicePage() {
   );
 }
 
+/** Amendments to a sent invoice: each a recorded change with a reason, a line of its own. */
+function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState<AmendmentForm>(emptyAmendment);
+  const [tried, setTried] = useState(false);
+  const act = useAction();
+  const problem = amendmentProblem(f);
+  const removable = removableLines(x);
+  const done = x.amendments ?? [];
+  return (
+    <section className="card" aria-labelledby="inv-amend">
+      <h2 id="inv-amend">Amendments</h2>
+      <p className="hint">
+        A sent invoice is not edited: it is amended, with a reason, and each amendment shows as its own line to the customer. The total never goes below what was paid; a paid invoice whose total rises
+        is part-paid again.
+      </p>
+      {done.length > 0 && (
+        <ul data-testid="amendments">
+          {done.map((a) => (
+            <li key={a.id}>
+              {a.line.description}: {naira(a.amount_kobo)}. {a.reason} <span className="hint">({fmtTime(a.created_at)})</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)}>
+          Amend…
+        </button>
+      ) : (
+        <form
+          aria-label="Amend the invoice"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setTried(true);
+            if (problem) return;
+            void act.run(async () => {
+              await plainly(post(invoicePath(x.id, "/amendments"), amendmentRequest(f)));
+              setF(emptyAmendment());
+              setTried(false);
+              setOpen(false);
+              onDone();
+            }, "Invoice amended");
+          }}
+        >
+          <Field label="Change">
+            <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as AmendmentForm["kind"] })}>
+              <option value="add">Add a line</option>
+              <option value="discount">Give a discount</option>
+              <option value="remove" disabled={removable.length === 0}>
+                Take a line out
+              </option>
+            </select>
+          </Field>
+          {f.kind === "remove" ? (
+            <Field label="Line to take out">
+              <select value={f.line} onChange={(e) => setF({ ...f, line: e.target.value })}>
+                <option value="">Choose…</option>
+                {removable.map((l) => (
+                  <option key={l.index} value={String(l.index)}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <>
+              <Field label={f.kind === "add" ? "What it is for" : "Description (optional)"}>
+                <input value={f.description} maxLength={INVOICE_LIMITS.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
+              </Field>
+              <Field label="Amount (₦)">
+                <input inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+              </Field>
+              {f.kind === "add" && (
+                <Field label="Collected on behalf of (optional)" hint="For money passed on to someone else, such as an exam body.">
+                  <input value={f.passThroughFor} maxLength={60} onChange={(e) => setF({ ...f, passThroughFor: e.target.value })} />
+                </Field>
+              )}
+            </>
+          )}
+          <Field label="Reason">
+            <textarea value={f.reason} rows={2} maxLength={300} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+          </Field>
+          {tried && problem && (
+            <div className="error" role="alert">
+              {problem}
+            </div>
+          )}
+          <ErrorBox error={act.error} />
+          <div className="toolbar">
+            <button type="submit" className="primary" disabled={act.busy}>
+              Amend the invoice
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setTried(false);
+                act.clear();
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
+}
+
 function Payments({
   invoice,
   canUndo,
@@ -666,7 +1165,7 @@ function Payments({
 }) {
   const rows = paymentRows(invoice.payments);
   if (rows.length === 0)
-    return <p className="hint">No payments yet. Payments are counted here as they come in from your payments connection; nobody marks an invoice paid by hand.</p>;
+    return <p className="hint">No payments yet. Payments are counted here as they come in from your payments connection, or when money received is matched to this invoice on To match. Nobody marks an invoice paid without a payment.</p>;
   return (
     <table className="cards">
       <thead>
@@ -695,7 +1194,16 @@ function Payments({
                   <span style={struck}>{p.payment_id}</span>
                 </td>
                 <td data-label="How it was matched">
-                  <span style={struck}>{howMatched(p.how)}</span>
+                  <span style={struck} data-testid="how-matched">
+                    {howMatched(p.how, p.by)}
+                  </span>
+                  {(p.reasons ?? []).length > 0 && (
+                    <ul className="match-reasons" aria-label="Why it was matched">
+                      {(p.reasons ?? []).map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  )}
                 </td>
                 <td data-label="By">
                   <span style={struck}>{p.by}</span>
@@ -765,7 +1273,10 @@ export function InvoiceSettingsPage() {
   const settings = useLoad(() => get<InvoiceSettings>("/v1/invoice-settings"), []);
   return (
     <>
-      <PageHeader title="Invoice settings" description="How new invoices are numbered, and their usual payment options. Each invoice can change the payment options for itself." />
+      <PageHeader
+        title="Invoice settings"
+        description="How new invoices are numbered, their usual payment options, and how money is matched to them. Each invoice can change the payment options for itself."
+      />
       <InvoiceTabs />
       <ErrorBox error={settings.error} />
       {!settings.data && !settings.error && <Skeleton rows={4} label="Loading the settings…" />}
@@ -826,6 +1337,15 @@ function SettingsEditor({ saved: initial }: { saved: InvoiceSettings }) {
         <label className="row">
           <input type="checkbox" checked={form.partPayments} onChange={(e) => set({ partPayments: e.target.checked })} />
           <span>Customers may pay part of an invoice</span>
+        </label>
+        <label className="row">
+          <input type="checkbox" checked={form.autoMatch} onChange={(e) => set({ autoMatch: e.target.checked })} />
+          <span>
+            Match strong suggestions automatically{" "}
+            <span className="hint">
+              Off by default. A payment that clearly fits one invoice is matched without asking; each automatic match lists its reasons on the invoice and can be undone there.
+            </span>
+          </span>
         </label>
       </fieldset>
       {tried && problem && (

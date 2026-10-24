@@ -15,6 +15,7 @@
   "event": "virtual_account.credited",
   "expect": {
     "reference": "acct-ref-1",
-    "amount_kobo": 300000
+    "amount_kobo": 300000,
+    "credit_id": "MNFY|04|1"
   }
 }

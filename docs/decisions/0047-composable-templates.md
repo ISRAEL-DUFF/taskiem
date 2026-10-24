@@ -1,4 +1,4 @@
-# 0046 — Templates compose: a template can be a step of another workflow
+# 0047 — Templates compose: a template can be a step of another workflow
 
 Date: 2026-10-23 · Status: **Proposed**
 

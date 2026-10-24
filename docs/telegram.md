@@ -29,6 +29,8 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 
 **Approving.** A request comes with **Approve** and **Reject** buttons. A button works once, only from your account, for 24 hours or until the request times out; the web app's rules apply. When the policy needs step-up, Taskiem sends a link: open it signed in to Taskiem and confirm with your passkey or authenticator code within 10 minutes. (The WhatsApp PIN is entered in a WhatsApp form; on Telegram the link is used instead, which satisfies a PIN policy.) If you have linked both WhatsApp and Telegram, a request goes to both, and deciding on either closes it.
 
+**Matching payments.** A payment Taskiem could not match to an invoice on its own comes with **Yes, match** and **No**, as on WhatsApp ([matching payments](whatsapp.md#matching-payments)), to members who manage invoices.
+
 **What messages never show** is as on WhatsApp: no secrets, and personal data masked.
 
 **People outside a business** (customers, staff who don't sign in) can get a business's workflow messages from the same bot, without a Taskiem account: they open the business's link and press **Start** ([updates](updates.md)). To them the bot only sends updates, and understands STOP and START.

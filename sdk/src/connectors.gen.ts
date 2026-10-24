@@ -229,6 +229,17 @@ export interface FlutterwaveCreateDynamicAccountInput {
   /** The name payers see when they check the account */
   narration?: Val<string>;
 }
+export interface FlutterwaveCreateStaticAccountInput {
+  /** The customer's BVN (11 digits); or nin */
+  bvn?: Val<string>;
+  email: Val<string>;
+  firstname?: Val<string>;
+  lastname?: Val<string>;
+  /** "The name should be shown when the account details are fetched" (Flutterwave) */
+  narration?: Val<string>;
+  nin?: Val<string>;
+  phonenumber?: Val<string>;
+}
 export interface FlutterwaveGetBalanceInput {
   currency?: Val<string>;
 }
@@ -244,6 +255,12 @@ export interface FlutterwaveGetTransferFeeInput {
 }
 export interface FlutterwaveListBanksInput {
   country?: Val<string>;
+}
+export interface FlutterwaveListTransactionsInput {
+  /** Its day is the first listed */
+  from: Val<string>;
+  /** Its day is the last listed; today when left out */
+  to?: Val<string>;
 }
 export interface FlutterwaveResolveAccountInput {
   account_number: Val<string>;
@@ -267,6 +284,8 @@ export interface FlutterwaveVerifyPaymentInput {
 export const flutterwave = {
   /** Open an account number for one payment (unsafe_write) */
   create_dynamic_account: (input: FlutterwaveCreateDynamicAccountInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "create_dynamic_account", input, extra),
+  /** Give a customer their own account number (unsafe_write) */
+  create_static_account: (input: FlutterwaveCreateStaticAccountInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "create_static_account", input, extra),
   /** Get wallet balance (read) */
   get_balance: (input?: FlutterwaveGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "get_balance", input, extra),
   /** Get transfer (read) */
@@ -277,6 +296,8 @@ export const flutterwave = {
   get_transfer_fee: (input: FlutterwaveGetTransferFeeInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "get_transfer_fee", input, extra),
   /** List banks (read) */
   list_banks: (input?: FlutterwaveListBanksInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "list_banks", input, extra),
+  /** List successful collections (read) */
+  list_transactions: (input: FlutterwaveListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "list_transactions", input, extra),
   /** Resolve account name (read) */
   resolve_account: (input: FlutterwaveResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("flutterwave@1", "resolve_account", input, extra),
   /** Pay out to a Nigerian bank account (idempotent_write) */
@@ -542,6 +563,13 @@ export interface InvoicesCreateInput {
 export interface InvoicesGetInput {
   number: Val<string>;
 }
+export interface InvoicesListInput {
+  /** At most this many (default 50) */
+  limit?: Val<number>;
+  /** For paid */
+  paid_within_hours?: Val<number>;
+  status: Val<"overdue" | "paid">;
+}
 export interface InvoicesNotifyCustomerInput {
   number: Val<string>;
   /** The email's subject */
@@ -560,6 +588,8 @@ export const invoices = {
   create: (input: InvoicesCreateInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "create", input, extra),
   /** Read an invoice (read) */
   get: (input: InvoicesGetInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "get", input, extra),
+  /** List overdue or paid invoices (read) */
+  list: (input: InvoicesListInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "list", input, extra),
   /** Message the invoice's customer (idempotent_write) */
   notify_customer: (input: InvoicesNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "notify_customer", input, extra),
   /** Send an invoice (idempotent_write) */
@@ -575,8 +605,20 @@ export interface IswalletGetBalanceInput {
 export interface IswalletGetPayoutInput {
   outflow_id: Val<string>;
 }
+export interface IswalletIssueVirtualAccountInput {
+  /** Asked for; iswallet says the name and bank are its partner's, so the number may show another */
+  account_name?: Val<string>;
+  reference?: Val<string>;
+  /** The wallet the number pays into */
+  wallet_id: Val<string>;
+}
 export interface IswalletListBanksInput {
   [key: string]: Value;
+}
+export interface IswalletListTransactionsInput {
+  from: Val<string>;
+  to?: Val<string>;
+  wallet_id: Val<string>;
 }
 export interface IswalletNameEnquiryInput {
   account_number: Val<string>;
@@ -608,8 +650,12 @@ export const iswallet = {
   get_balance: (input: IswalletGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "get_balance", input, extra),
   /** Get payout status (read) */
   get_payout: (input: IswalletGetPayoutInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "get_payout", input, extra),
+  /** Issue a customer's account number (idempotent_write) */
+  issue_virtual_account: (input: IswalletIssueVirtualAccountInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "issue_virtual_account", input, extra),
   /** List banks (read) */
   list_banks: (input?: IswalletListBanksInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "list_banks", input, extra),
+  /** List a wallet's transactions (read) */
+  list_transactions: (input: IswalletListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "list_transactions", input, extra),
   /** Resolve account name (read) */
   name_enquiry: (input: IswalletNameEnquiryInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "name_enquiry", input, extra),
   /** Pay out to a bank account (idempotent_write) */
@@ -682,8 +728,8 @@ export const lenco = {
 
 // Moniepoint (Monnify) (moniepoint@1)
 export interface MoniepointCreateReservedAccountInput {
-  /** Shown when payers resolve the number */
-  account_name: Val<string>;
+  /** Shown when payers resolve the number; customer_name when left out */
+  account_name?: Val<string>;
   account_reference?: Val<string>;
   /** BVN or NIN is required by Monnify depending on the account tier */
   bvn?: Val<string>;
@@ -1470,6 +1516,13 @@ export const payrolla = {
 export interface PaystackCheckBalanceInput {
   [key: string]: Value;
 }
+export interface PaystackCreateDedicatedAccountInput {
+  /** The customer's email; one account per email */
+  email: Val<string>;
+  first_name?: Val<string>;
+  last_name?: Val<string>;
+  phone?: Val<string>;
+}
 export interface PaystackCreateRecipientInput {
   account_number: Val<string>;
   /** The bank's name as people write it (GTBank, First Bank, Opay), when there is no code */
@@ -1491,6 +1544,10 @@ export interface PaystackInitializeTransactionInput {
 }
 export interface PaystackListBanksInput {
   [key: string]: Value;
+}
+export interface PaystackListPaymentsInput {
+  from: Val<string>;
+  to?: Val<string>;
 }
 export interface PaystackListTransactionsInput {
   /** Since when */
@@ -1541,12 +1598,16 @@ export interface PaystackVerifyTransferInput {
 export const paystack = {
   /** Check balance (read) */
   check_balance: (input?: PaystackCheckBalanceInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "check_balance", input, extra),
+  /** Give a customer their own account number (unsafe_write) */
+  create_dedicated_account: (input: PaystackCreateDedicatedAccountInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "create_dedicated_account", input, extra),
   /** Save a person or business to pay (idempotent_write) */
   create_recipient: (input: PaystackCreateRecipientInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "create_recipient", input, extra),
   /** Create a payment page (idempotent_write) */
   initialize_transaction: (input: PaystackInitializeTransactionInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "initialize_transaction", input, extra),
   /** List Nigerian banks (read) */
   list_banks: (input?: PaystackListBanksInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_banks", input, extra),
+  /** List successful payments in a window (read) */
+  list_payments: (input: PaystackListPaymentsInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_payments", input, extra),
   /** List successful payments (read) */
   list_transactions: (input: PaystackListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("paystack@1", "list_transactions", input, extra),
   /** List transfers (read) */
@@ -1874,6 +1935,63 @@ export const s3 = {
   presign_url: (input: S3PresignUrlInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "presign_url", input, extra),
   /** Put an object (idempotent_write) */
   put_object: (input: S3PutObjectInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "put_object", input, extra),
+};
+
+// Schools (schools@1)
+export interface SchoolsCurrentTermInput {
+  [key: string]: Value;
+}
+export interface SchoolsGetStudentInput {
+  /** The student's id or admission number */
+  student: Val<string>;
+}
+export interface SchoolsInvoiceTermInput {
+  /** Send the invoices now (else they are drafts for a person to send) */
+  send?: Val<boolean>;
+  /** A term's id; the current term by default */
+  term?: Val<string>;
+}
+export interface SchoolsListClassesInput {
+  [key: string]: Value;
+}
+export interface SchoolsListFeeItemsInput {
+  /** A class's id or label, such as JSS 1 A */
+  class?: Val<string>;
+  /** A term's id; the current term by default */
+  term?: Val<string>;
+}
+export interface SchoolsListStudentsInput {
+  /** A class's id or label, such as JSS 1 A */
+  class?: Val<string>;
+  /** At most this many (default 200) */
+  limit?: Val<number>;
+  /** active by default; any for every status */
+  status?: Val<"active" | "withdrawn" | "graduated" | "any">;
+}
+export interface SchoolsTermInvoicesInput {
+  /** A class's id or label, such as JSS 1 A */
+  class?: Val<string>;
+  /** At most this many (default 200) */
+  limit?: Val<number>;
+  status?: Val<"draft" | "sent" | "part_paid" | "paid" | "overdue" | "void">;
+  /** A term's id; the current term by default */
+  term?: Val<string>;
+}
+export const schools = {
+  /** The current term (read) */
+  current_term: (input?: SchoolsCurrentTermInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "current_term", input, extra),
+  /** Read a student (read) */
+  get_student: (input: SchoolsGetStudentInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "get_student", input, extra),
+  /** Invoice the term (idempotent_write) */
+  invoice_term: (input?: SchoolsInvoiceTermInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "invoice_term", input, extra),
+  /** List classes (read) */
+  list_classes: (input?: SchoolsListClassesInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_classes", input, extra),
+  /** List fee items (read) */
+  list_fee_items: (input?: SchoolsListFeeItemsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_fee_items", input, extra),
+  /** List students (read) */
+  list_students: (input?: SchoolsListStudentsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_students", input, extra),
+  /** List a term's invoices (read) */
+  term_invoices: (input?: SchoolsTermInvoicesInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "term_invoices", input, extra),
 };
 
 // SFTP (sftp@1)
@@ -2554,6 +2672,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "prembly@1": "prembly",
   "remita@1": "remita",
   "s3@1": "s3",
+  "schools@1": "schools",
   "sftp@1": "sftp",
   "slack@1": "slack",
   "storefront@1": "storefront",
@@ -2571,13 +2690,13 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
   "email@1": ["file_url"],
-  "flutterwave@1": ["create_dynamic_account", "get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "resolve_account", "transfer", "verify_payment"],
+  "flutterwave@1": ["create_dynamic_account", "create_static_account", "get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "list_transactions", "resolve_account", "transfer", "verify_payment"],
   "form@1": ["file_url", "respond"],
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
-  "invoices@1": ["create", "get", "notify_customer", "send", "void"],
-  "iswallet@1": ["get_balance", "get_payout", "list_banks", "name_enquiry", "payout", "transfer"],
+  "invoices@1": ["create", "get", "list", "notify_customer", "send", "void"],
+  "iswallet@1": ["get_balance", "get_payout", "issue_virtual_account", "list_banks", "list_transactions", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
   "moniepoint_pos@1": ["check_access", "get_transaction", "request_payment"],
@@ -2589,11 +2708,12 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "opay_business@1": ["get_balance", "get_payment_request", "get_terminal", "get_transaction", "list_terminal_transactions", "request_payment"],
   "payrolla@1": ["create_payslip_link", "get_approval_link", "get_company", "get_employee", "get_run", "get_run_lines", "list_employees", "list_events", "list_runs"],
-  "paystack@1": ["check_balance", "create_recipient", "initialize_transaction", "list_banks", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
+  "paystack@1": ["check_balance", "create_dedicated_account", "create_recipient", "initialize_transaction", "list_banks", "list_payments", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
+  "schools@1": ["current_term", "get_student", "invoice_term", "list_classes", "list_fee_items", "list_students", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
@@ -2698,6 +2818,33 @@ export type CapabilityListBanksOutput = {
     name: string;
   }>;
 };
+/** List money paid into customers' account numbers: input */
+export interface CapabilityListCreditsInput {
+  /** The wallet or account the numbers pay into, on rails that hold several */
+  account?: Val<string>;
+  /** From when, RFC 3339 */
+  since: Val<string>;
+  /** Until when, RFC 3339; now when left out */
+  until?: Val<string>;
+}
+/** List money paid into customers' account numbers: output */
+export type CapabilityListCreditsOutput = {
+  credits: Array<{
+    account_number?: string;
+    amount_kobo: number;
+    credit_id: string;
+    currency?: string;
+    fee_kobo?: number;
+    narration?: string;
+    occurred_at?: string;
+    payer_account?: string;
+    payer_bank?: string;
+    payer_name?: string;
+    reference: string;
+    settled_kobo?: number;
+  }>;
+  truncated?: boolean;
+};
 /** Pay a bank account: input */
 export interface CapabilityPayBankInput {
   /** As resolve_account found it */
@@ -2792,11 +2939,15 @@ export type CapabilityResolveAccountOutput = {
 };
 /** Open a bank account number for a customer to pay into: input */
 export interface CapabilityVirtualAccountInput {
+  /** The wallet or account the number pays into, on rails that hold several */
+  account?: Val<string>;
+  /** The name payers should see when they check the number; used where the rail lets the business set it, and shortened by the caller to the rail's limit. Elsewhere the rail names the account itself (from the customer's name on most) */
+  account_name?: Val<string>;
   customer: Value;
 }
 /** Open a bank account number for a customer to pay into: output */
 export type CapabilityVirtualAccountOutput = {
-  account_name: string;
+  account_name?: string;
   account_number: string;
   bank_name: string;
   reference: string;
@@ -2841,6 +2992,8 @@ export const rail = {
   get_payout: (input: CapabilityGetPayoutInput, extra?: CapabilityExtra): StepSpec => capability("get_payout", input, extra),
   /** List the banks */
   list_banks: (input: CapabilityListBanksInput, extra?: CapabilityExtra): StepSpec => capability("list_banks", input, extra),
+  /** List money paid into customers' account numbers */
+  list_credits: (input: CapabilityListCreditsInput, extra?: CapabilityExtra): StepSpec => capability("list_credits", input, extra),
   /** Refund a payment */
   refund: (input: CapabilityRefundInput, extra?: CapabilityExtra): StepSpec => capability("refund", input, extra),
   /** Find the name on a bank account */
@@ -2870,6 +3023,7 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
   get_payment: "rail.get_payment",
   get_payout: "rail.get_payout",
   list_banks: "rail.list_banks",
+  list_credits: "rail.list_credits",
   pay_bank: "pay.bank",
   pay_many: "pay.many",
   pay_mobile_money: "pay.mobile_money",
@@ -2888,11 +3042,12 @@ export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   get_payment: ["flutterwave@1", "moniepoint@1", "opay@1", "paystack@1"],
   get_payout: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   list_banks: ["anchor@1", "flutterwave@1", "moniepoint@1", "paystack@1"],
+  list_credits: ["flutterwave@1", "iswallet@1", "paystack@1"],
   pay_bank: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   pay_many: [],
   pay_mobile_money: [],
   pay_wallet: ["anchor@1", "iswallet@1"],
   refund: ["paystack@1"],
   resolve_account: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
-  virtual_account: ["moniepoint@1"],
+  virtual_account: ["flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
 };

@@ -1,0 +1,54 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "customer": {
+      "name": "Ebube Eze"
+    },
+    "account": "6f1e"
+  },
+  "keys": {
+    "issue_virtual_account": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    {
+      "name": "issue_again",
+      "request": {
+        "method": "POST",
+        "path": "/v1/wallets/6f1e/virtual-accounts/batch",
+        "body": {
+          "accounts": [
+            {
+              "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+              "account_name": "Ebube Eze"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "wallet_id": "6f1e",
+          "created": 0,
+          "existing": 1,
+          "failed": 0,
+          "accounts": [
+            {
+              "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+              "status": "existing",
+              "account_number": "9901234567",
+              "account_name": "ISPEND / EBUBE EZE",
+              "bank_name": "Wema Bank"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "account_number": "9901234567",
+    "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+}

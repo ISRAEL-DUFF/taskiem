@@ -104,6 +104,16 @@
       "reviewed": true,
       "context": "Form button, at most 20 characters"
     },
+    "button.match_no": {
+      "text": "No",
+      "reviewed": true,
+      "context": "A button under a payment asked about in chat: it is not for the invoice shown (max 20 characters)"
+    },
+    "button.match_yes": {
+      "text": "Yes, match",
+      "reviewed": true,
+      "context": "A button under a payment asked about in chat: match it to the invoice shown (max 20 characters)"
+    },
     "button.new_account": {
       "text": "New account number",
       "reviewed": true,
@@ -318,6 +328,66 @@
       "text": "{name} is not available here. Languages here: {languages}.",
       "reviewed": true,
       "context": "A language that is not on"
+    },
+    "money.channel.cash": {
+      "text": "cash",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: money recorded as cash, as a channel name"
+    },
+    "money.channel.upload": {
+      "text": "bank statement",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: money from an uploaded bank statement, as a channel name"
+    },
+    "money.daily": {
+      "text": "Yesterday: {in}; {out} out; {invoices}; {leaks}.",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning. {in} is money.daily.in or money.daily.in_pending followed by the channels (— Paystack ₦20,000, cash ₦5,000); {out} is like ₦12,000; {invoices} and {leaks} are the money.daily.invoices and money.daily.leaks lines"
+    },
+    "money.daily.in": {
+      "text": "{amount} in",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: money that came in and settled, like ₦25,000"
+    },
+    "money.daily.in_pending": {
+      "text": "{amount} in ({pending} pending)",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: money that came in and settled, and money still on its way (pending)"
+    },
+    "money.daily.invoices": {
+      "text": "{n} invoices paid ({amount})",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: several invoices paid that day, and what was paid on them"
+    },
+    "money.daily.invoices_none": {
+      "text": "no invoice paid",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: no invoice paid that day"
+    },
+    "money.daily.invoices_one": {
+      "text": "1 invoice paid ({amount})",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: one invoice paid that day"
+    },
+    "money.daily.leaks": {
+      "text": "{n} leaks opened ({amount})",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: several leaks (money the business may be losing) found that day, and how much"
+    },
+    "money.daily.leaks_none": {
+      "text": "no leak opened",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: no leak found that day"
+    },
+    "money.daily.leaks_one": {
+      "text": "1 leak opened ({amount})",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: one leak (money the business may be losing) found that day"
+    },
+    "money.daily.link": {
+      "text": "Money page: {link}",
+      "reviewed": true,
+      "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: the link to the Money page in the web app"
     },
     "reach.about": {
       "text": "This chat sends you updates from {businesses}. Send STOP to stop the latest one.",
@@ -1164,6 +1234,11 @@
       "reviewed": true,
       "context": "Help line, when languages beyond English are on"
     },
+    "wa.help.money": {
+      "text": "• *spent* with an amount and what it was for (*spent 12,000 on diesel at Total*), or *cash in* or *cash out* and an amount (*cash in 20,000 till*): records it in your money log",
+      "reviewed": true,
+      "context": "Help line, with invoice.manage; keep the command words and the examples in English"
+    },
     "wa.help.run": {
       "text": "• *run* and a workflow's name: start it (you confirm first)",
       "reviewed": true,
@@ -1268,6 +1343,161 @@
       "text": "This number is now linked to your Taskiem account. Send *help* to see what you can do here.",
       "reviewed": true,
       "context": "A number was linked by sending back its code"
+    },
+    "wa.match.already_decided": {
+      "text": "This was already decided in the web app.",
+      "reviewed": true,
+      "context": "A match button pressed for a suggestion closed without a match that can be named"
+    },
+    "wa.match.already_matched": {
+      "text": "Already matched to {number}.",
+      "reviewed": true,
+      "context": "A match button pressed for a payment that is already matched"
+    },
+    "wa.match.already_rejected": {
+      "text": "Already turned down.",
+      "reviewed": true,
+      "context": "A match button pressed for a suggestion already turned down"
+    },
+    "wa.match.ask": {
+      "text": "{amount} came in on {when} through {channel}.\n\nIs this for {number}, {due} due from the customer? {reasons}.",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), with the best suggestion. {when} is like 23 Oct 14:05 (Lagos); {channel} is like Paystack (main); {reasons} is in English, from the matcher, and names no one"
+    },
+    "wa.match.ask_order": {
+      "text": "{amount} came in on {when} through {channel}.\n\nIs this for storefront order {number}, {due} to pay? {reasons}.",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to a storefront order (WhatsApp or Telegram), with the best suggestion. {number} is the order's reference like AK-7QX4KD; {due} is what the customer pays online; {when}, {channel} and {reasons} as in wa.match.ask"
+    },
+    "wa.match.ask_split": {
+      "text": "{amount} came in on {when} through {channel}.\n\nIs this from the customer of {number}, {due} due? It is more than that, so it would be split across the customer's open invoices, oldest first: {parts}. {reasons}.",
+      "reviewed": true,
+      "context": "A payment a member is asked to match, when it is more than is due on the suggested invoice: Yes splits it across the same customer's open invoices oldest first. {parts} is like 'INV-0101 ₦20,000, INV-0104 ₦30,000' and may end with what would be left as credit (wa.match.split_credit); {number}, {due}, {when}, {channel} and {reasons} as in wa.match.ask"
+    },
+    "wa.match.channel.cash": {
+      "text": "cash",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), how the money came in: recorded as cash"
+    },
+    "wa.match.channel.upload": {
+      "text": "a statement upload",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), how the money came in: a line of an uploaded bank statement"
+    },
+    "wa.match.denied": {
+      "text": "You cannot match payments in {org}.",
+      "reviewed": true,
+      "context": "A match button pressed by someone without invoice.manage"
+    },
+    "wa.match.matched_order": {
+      "text": "Matched to order {number}. It is now paid.",
+      "reviewed": true,
+      "context": "Yes, match was pressed and the storefront order (reference like AK-7QX4KD) is now paid"
+    },
+    "wa.match.matched_paid": {
+      "text": "Matched to {number}. It is now paid.",
+      "reviewed": true,
+      "context": "Yes, match was pressed and the invoice is now paid in full"
+    },
+    "wa.match.matched_part": {
+      "text": "Matched to {number}. It is now part-paid ({due} still due).",
+      "reviewed": true,
+      "context": "Yes, match was pressed and some of the invoice is still due"
+    },
+    "wa.match.matched_split": {
+      "text": "Matched in parts: {parts}.",
+      "reviewed": true,
+      "context": "Yes, match was pressed on a split (wa.match.ask_split): each invoice with what of the payment counts towards it, like 'INV-0101 ₦20,000, INV-0104 ₦30,000', maybe ending with wa.match.split_credit"
+    },
+    "wa.match.more": {
+      "text": "If not, No shows the next possible invoice.",
+      "reviewed": true,
+      "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), when more than one invoice could fit"
+    },
+    "wa.match.other_person": {
+      "text": "This button was sent to someone else.",
+      "reviewed": true,
+      "context": "A match button pressed from another member's chat"
+    },
+    "wa.match.refused": {
+      "text": "Not matched: {reason}",
+      "reviewed": true,
+      "context": "Yes, match was pressed but the invoice could not take the payment; {reason} is in English"
+    },
+    "wa.match.rejected_left": {
+      "text": "Turned down. The payment is left for you to match in the web app, under Invoices.",
+      "reviewed": true,
+      "context": "No was pressed and nothing else is suggested; no web address configured"
+    },
+    "wa.match.rejected_left_link": {
+      "text": "Turned down. The payment is left for you to match in the web app: {link}",
+      "reviewed": true,
+      "context": "No was pressed and nothing else is suggested; {link} is the web app's invoices page"
+    },
+    "wa.match.rejected_next": {
+      "text": "Turned down. It will not be suggested again.",
+      "reviewed": true,
+      "context": "No was pressed; the next possible invoice follows in the same message"
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} left as the customer's credit",
+      "reviewed": true,
+      "context": "The end of the parts in wa.match.ask_split and wa.match.matched_split: what of the payment no open invoice takes, kept to count towards the customer's next invoice"
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "Record {amount} cash in: {what}?",
+      "reviewed": true,
+      "context": "cash coming in, shown before it is recorded"
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "Record {amount} cash out: {what}?",
+      "reviewed": true,
+      "context": "cash going out, shown before it is recorded"
+    },
+    "wa.money.confirm_expense": {
+      "text": "Record {amount} spent on {what} ({category})?",
+      "reviewed": true,
+      "context": "an expense shown before it is recorded; {category} is an English word such as fuel"
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "Record {amount} spent on {what} at {vendor} ({category})?",
+      "reviewed": true,
+      "context": "an expense with where it was spent, shown before it is recorded; {category} is an English word such as fuel"
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Reply *yes* to record it or *no* to leave it.",
+      "reviewed": true,
+      "context": "while cash or an expense waits for yes or no"
+    },
+    "wa.money.denied": {
+      "text": "You cannot record money in {org}.",
+      "reviewed": true,
+      "context": "spent or cash in/out without invoice.manage"
+    },
+    "wa.money.how": {
+      "text": "Say how much and what for, like this: *spent 12,000 on diesel at Total*, or *cash in 20,000 till*",
+      "reviewed": true,
+      "context": "a spent or cash command that could not be read; keep the examples in English"
+    },
+    "wa.money.not_recorded": {
+      "text": "Not recorded.",
+      "reviewed": true,
+      "context": "the person said no"
+    },
+    "wa.money.recorded_in": {
+      "text": "Recorded. {amount} in, {category}.",
+      "reviewed": true,
+      "context": "cash in was recorded; {category} is cash"
+    },
+    "wa.money.recorded_out": {
+      "text": "Recorded. {amount} out, {category}.",
+      "reviewed": true,
+      "context": "cash out or an expense was recorded; {category} is an English word such as fuel or cash"
+    },
+    "wa.money.refused": {
+      "text": "I could not record that: {reason}",
+      "reviewed": true,
+      "context": "the entry was refused; {reason} says why, in English"
     },
     "wa.no_org": {
       "text": "Your Taskiem account has no active organisation.",
@@ -2249,6 +2479,11 @@
       "reviewed": true,
       "context": "Under a phone column's question"
     },
+    "wa.table.kept": {
+      "text": "{table} is kept by Taskiem: rows are added by Taskiem and cannot be changed or deleted here. Corrections are new rows.",
+      "reviewed": true,
+      "context": "add to a table Taskiem keeps (the money log)"
+    },
     "wa.table.list_head": {
       "text": "Data tables in {org}:",
       "reviewed": true,
@@ -2633,6 +2868,11 @@
       "text": "When someone fills in the form “{title}” (members only)",
       "reviewed": true,
       "context": "Read-back: started by a hosted form only signed-in members can fill in; {title} is the tenant's"
+    },
+    "wd.trigger.invoice_paid": {
+      "text": "When one of your invoices is paid in full",
+      "reviewed": true,
+      "context": "Read-back: started when one of the business's invoices to its customers is paid in full"
     },
     "wd.trigger.manual": {
       "text": "When someone starts it",

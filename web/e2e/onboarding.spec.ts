@@ -46,6 +46,12 @@ test("sign up, set up a template, and run it once", async ({ page }) => {
   expect(ob.seconds_to_first_run).toBeLessThan(15 * 60);
   expect(ob.seconds_to_first_run).toBeLessThanOrEqual(Math.ceil((Date.now() - started) / 1000));
 
+  // Invoices and money are offered beside the checklist, which they do not count in.
+  await expect(page.getByTestId("onboarding-progress")).toHaveText(/ of 8 done$/);
+  await expect(page.getByTestId("first-money").getByRole("link", { name: "Open Money" })).toHaveAttribute("href", "/money");
+  await page.getByTestId("first-invoice").getByRole("link", { name: "Make an invoice" }).click();
+  await expect(page.getByRole("heading", { name: "New invoice" })).toBeVisible();
+
   // Inviting waits for the confirmed email.
   const invite = await page.request.post("/v1/members", {
     headers: { "X-Taskiem-Request": "1" },

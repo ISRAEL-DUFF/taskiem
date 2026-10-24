@@ -1006,6 +1006,14 @@
           "$ref": "#/$defs/expr",
           "description": "Marks a delivery the provider sends to test the endpoint: it is verified and acknowledged, and starts only workflows that list its event by name."
         },
+        "title": {
+          "type": "string",
+          "description": "A short name for what the trigger hears, in plain words (Payments, Transfers), shown next to its address on the Connections page."
+        },
+        "where": {
+          "type": "string",
+          "description": "Where the business pastes the trigger's address in the provider's dashboard, in one line, e.g. Paystack dashboard → Settings → API Keys & Webhooks → Live Webhook URL."
+        },
         "poll": {
           "description": "Taskiem also asks the provider itself, for businesses that have not set the webhook up: a read action listing records since a time, each delivered as {event, data} signed with the connection's secret, so it takes the webhook's own checks and is taken once either way.",
           "type": "object",

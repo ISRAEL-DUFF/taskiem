@@ -1,0 +1,153 @@
+{
+  "id": "chase-overdue-invoices",
+  "title": "Chase overdue invoices every day",
+  "summary": "Every morning, text and email each customer whose invoice is past its due date a reminder with its link, every few days, and tell you when one is still unpaid after the last reminder.",
+  "description": "Once a day at the time you choose, finds your invoices that are past their due date and not fully paid. Each customer gets a reminder by SMS, and by email when you have their address, with the invoice's number, what is still due and the link to pay it: the first the day after the due date, then one every few days, up to the number you choose. After the last reminder you are told once that the invoice is still unpaid. A customer never gets the same reminder twice, even if the workflow runs again the same day. Paid and voided invoices are left alone.",
+  "category": "collections",
+  "tags": [
+    "collections",
+    "customers"
+  ],
+  "keywords": [
+    "chase",
+    "overdue",
+    "unpaid",
+    "late",
+    "remind",
+    "reminder",
+    "outstanding",
+    "nudge",
+    "past due"
+  ],
+  "requires": [
+    "invoice"
+  ],
+  "connectors": [
+    "invoices@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the reminders go out each day, Lagos time.",
+      "required": true,
+      "default": "09:00",
+      "example": "09:00"
+    },
+    {
+      "name": "every_days",
+      "type": "integer",
+      "title": "Days between reminders",
+      "description": "How many days to leave between two reminders about the same invoice.",
+      "required": false,
+      "default": 3,
+      "example": 3,
+      "minimum": 1,
+      "maximum": 30
+    },
+    {
+      "name": "reminders",
+      "type": "integer",
+      "title": "Reminders before you are told",
+      "description": "How many reminders a customer gets before you are told the invoice is still unpaid.",
+      "required": false,
+      "default": 3,
+      "example": 3,
+      "minimum": 1,
+      "maximum": 10
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_chaseOverdueInvoices",
+    "version": 1,
+    "name": "Chase overdue invoices",
+    "description": "Reminds each customer with an overdue invoice every few days, then tells the owner.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "overdue",
+        "type": "connector",
+        "name": "Find the overdue invoices",
+        "connector": "invoices@1",
+        "action": "list",
+        "input": {
+          "status": "overdue",
+          "limit": 200
+        }
+      },
+      {
+        "id": "chase_each",
+        "type": "foreach",
+        "name": "For each overdue invoice",
+        "needs": [
+          "overdue"
+        ],
+        "config": {
+          "items": "=has(steps.overdue.output.invoices) ? steps.overdue.output.invoices : []",
+          "max_concurrency": 5,
+          "max_items": 200,
+          "steps": [
+            {
+              "id": "remind",
+              "type": "connector",
+              "name": "Remind the customer",
+              "connector": "invoices@1",
+              "action": "notify_customer",
+              "when": "=(int(item.days_overdue) - 1) / {{every_days}} < {{reminders}}",
+              "input": {
+                "number": "=item.number",
+                "text": "A reminder that invoice {number} is overdue: {due} is still due. See it and pay: {link}",
+                "subject": "=item.number + ' is overdue'"
+              },
+              "effect": {
+                "idempotency_seed": "='overdue:' + item.number + ':' + string((int(item.days_overdue) - 1) / {{every_days}})"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "remind_failed",
+                    "type": "transform",
+                    "name": "Note the reminder that could not go",
+                    "config": {
+                      "output": {
+                        "number": "=item.number",
+                        "reason": "=steps.remind.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "tell_owner",
+              "type": "connector",
+              "name": "Tell you it is still unpaid after the last reminder",
+              "connector": "notify@1",
+              "action": "tell",
+              "when": "=(int(item.days_overdue) - 1) / {{every_days}} >= {{reminders}}",
+              "input": {
+                "title": "Invoice still unpaid",
+                "message": "='Invoice ' + item.number + ' is ' + string(int(item.days_overdue)) + ' days overdue after ' + string({{reminders}}) + ' reminders: ' + item.due + ' still due.'"
+              },
+              "effect": {
+                "idempotency_seed": "='overdue-owner:' + item.number"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "2h"
+    }
+  }
+}

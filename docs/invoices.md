@@ -8,15 +8,17 @@ Invoices follow [decision 0045](decisions/0045-tally-in-taskiem.md): **an invoic
 
 Under **Invoices**, **New invoice** asks for:
 
-- **The customer**: a name, and a phone number or an email (or both) to send it to.
+- **The customer**: a name, and a phone number or an email (or both) to send it to. Over the API, `customer.key` is the business's own key for them (`student:42`, up to 100 letters, digits and `:._/-`): invoices with the same key are one customer's in [matching](matching.md#customers-own-account-numbers), else invoices to the same phone (else email) are.
 - **What it is for**: an amount with a short description, or a list of items, each with a quantity and a price.
 - **When it is due** (optional), and a note for the customer (optional).
 
-It is saved as a **draft** with the business's next number (`INV-0001` upwards). A draft can be changed. **Send** sends it to the customer by SMS and email, with the link to its page, and the invoice becomes **sent**. Sending again sends the same link.
+It is saved as a **draft** with the business's next number (`INV-0001` upwards). A draft can be changed. **Send** sends it to the customer by SMS and email, with the link to its page, and the invoice becomes **sent**. Sending again sends the same link. A customer who has had many messages in the last hour (five an hour, twenty a day, from any business) is not sent another: the invoice is sent all the same, its page works, and it says which messages went.
 
 A customer who asked the business for updates on WhatsApp or Telegram also gets it there, with buttons to pay ([below](#on-whatsapp-and-telegram)).
 
-Once sent, what the customer was sent cannot change: to correct an invoice, **void** it with the reason and send a new one.
+Once sent, what the customer was sent is never edited: it is **amended** ([below](#amending-a-sent-invoice)), or **voided** with the reason and a new one sent.
+
+Over the API a line can also say who it is collected for (`pass_through_for`, such as `WAEC`): money the business collects on someone else's behalf, which its page shows as "collected on behalf of WAEC" and the [money reports](money-reports.md#pass-through) keep out of the business's own income. A line of `kind: "discount"` (quantity 1, a negative price, never pass-through) takes money off the business's own items, and says why in `reason`.
 
 ## Statuses
 
@@ -30,6 +32,27 @@ Once sent, what the customer was sent cannot change: to correct an invoice, **vo
 | Void | Cancelled, with the reason; it takes no new payment |
 
 Taskiem works the status out from the invoice and its payments; an invoice becomes overdue the day after its due date (Lagos time).
+
+## Amending a sent invoice
+
+A sent invoice (sent, part-paid, overdue or paid) changes only by an **amendment**: a recorded change with a reason, which becomes a line of its own at the end of the invoice, on its page too. On the invoice's page, **Amend…** offers three:
+
+| Amendment | Line it adds |
+| --- | --- |
+| **Add a line** (what it is for, an amount, optionally who it is collected for) | The line, marked "Added after the invoice was sent" |
+| **Give a discount** (an amount, optionally a description) | A negative line, "Discount" or what you called it. A discount comes off the business's own items, never off money collected for someone else |
+| **Take a line out** (one of the invoice's items) | A negative line, "Taken out: …", for that item's amount. A line is taken out once |
+
+The total is then the sum of the lines, and the status follows from it and the payments counted, as always: nothing marks an invoice paid but its payments.
+
+- The total can never go below what has been paid: such an amendment is refused (409). Refund the customer instead.
+- A paid invoice whose total rises is **part-paid** again, for what the amendment added; a discount that brings the total down to what was paid makes it **paid**, and starts the workflows that start on an invoice being paid, once, as a payment would.
+- The total stays at least ₦1: to cancel what is left, void the invoice.
+- A draft is not amended: change it instead.
+- Every amendment is in the audit log (`invoice.amended`, with who, the amount and the reason) and in the [invoices export](money-reports.md#invoices) (`amended`).
+- Where the [Schools](schools.md) area is on, a discount at or above the school's discount threshold needs a second person ([discounts](schools.md#discounts)).
+
+The database keeps the rule whoever writes: a sent invoice's lines can only grow, each new line naming a recorded amendment of that invoice (once), its total is recomputed from its lines, and never below what was paid.
 
 ## The invoice's page
 
@@ -67,13 +90,35 @@ These buttons are the only thing the customer can do in the chat besides STOP an
 
 **Limit.** WhatsApp lets a business message someone only within 24 hours of their last message unless it uses a template Meta has approved, and the template for an invoice with buttons is not approved yet. Outside that window the invoice goes by SMS and email only; on Telegram there is no window.
 
+## From chat
+
+A member with `invoice.manage` who linked WhatsApp or Telegram can make and send an invoice there: `invoice Ada 25,000 for 5 bags of rice` (or `bill Chi 10k`) asks for the customer's phone number or email, shows the invoice and sends it after **yes** ([WhatsApp commands](whatsapp.md#for-people-using-taskiem-on-whatsapp)). In Pidgin, Yoruba, Hausa or Igbo, where that language is on, its own words work too, such as `ìwé owó Ada 25,000 fún ìrẹsì` or `takardar kuɗi Musa 25,000 don shinkafa`; they are unreviewed drafts ([the words](whatsapp.md#invoices-and-money-in-other-languages)). The English words work in every language.
+
 ## Payments
 
-Each payment counted towards an invoice is listed on it: the amount, the payment's reference at the payments provider, how it was matched to the invoice (exactly, by the reference Taskiem gave it; suggested; or by a person) and who matched it. **Undo** takes a payment out of an invoice when it was matched to the wrong one.
+Each payment counted towards an invoice is listed on it: the amount, the payment's reference at the payments provider, how it was matched to the invoice ("Paid into the account Taskiem gave"; "Suggested, confirmed by" the person who confirmed it; "Matched automatically"; or "Matched by hand"), the reasons a suggested or automatic match was made, and who matched it. **Undo** takes a payment out of an invoice when it was matched to the wrong one.
 
-Payments into an account number or payment link Taskiem gave for an invoice are counted automatically: every 30 seconds Taskiem asks the payments provider about each one still waiting (for up to 48 hours after an account number expires, and 7 days for a link), and counts a payment once, as matched exactly, by the system. When that makes the invoice paid, a run waiting on `invoice.paid` continues. Other money that comes in (a transfer to the business's usual account, cash) is matched in a later milestone ([build plan](spec/invoices-and-money-log.md), T5).
+Payments into an account number or payment link Taskiem gave for an invoice are counted automatically: every 30 seconds Taskiem asks the payments provider about each one still waiting (for up to 48 hours after an account number expires, and 7 days for a link), and counts a payment once, as matched exactly, by the system. When that makes the invoice paid, a run waiting on `invoice.paid` continues, and the workflows that [start when an invoice is paid](#starting-a-workflow-when-an-invoice-is-paid) start. Other money that comes in (a transfer to the business's usual account, a POS sale, cash) is matched as below.
 
 The account numbers and links come from the prod connection named in **Payments connection** (`main` by default; write `paystack/main` when several providers have a connection called `main`). It needs a provider that can open one-time account numbers (Paystack with Pay with Transfer turned on, Flutterwave, OPay) or make payment links. For now the business pays the provider's fee: the "customer pays the fee" setting is kept but not yet applied, since the providers' fee rules are not yet confirmed.
+
+## Matching
+
+Money that comes in without the reference Taskiem gave gets up to three suggestions among the business's open invoices, each with a score and its reasons ("same amount", "payer ADA OBI matches the customer"). How suggestions are made and scored is in [Matching money to invoices](matching.md).
+
+**Invoices > To match** lists the payments waiting, newest first, with the number waiting shown on the tab. Each payment is a card: the amount, when it was received, where it came in, its reference and what kind of money it was, then the invoices it may be for, strongest first. A score reads **Strong** (85 or more), **Likely** (60 or more) or **Possible**. For each one:
+
+- **Match** counts the payment towards that invoice; the payment's other suggestions close.
+- **Not this one** turns the suggestion down; it is not offered again.
+- **Match to another invoice…** picks any other invoice that is sent and not yet fully paid, when none of the suggestions is right.
+
+A match from here can be undone on the invoice like any payment. People with `invoice.read` see the list; matching and turning down need `invoice.manage`. When the server refuses (the payment was matched meanwhile, or the invoice is paid or void), its reason is shown on the card.
+
+A payment that is more than is due on the invoice suggested can be **split** across the same customer's open invoices, oldest first, with the amounts editable; each part is a match of its own, and what is left over is the customer's credit or waits to be matched ([split payments](matching.md#split-payments)). A credit held for a person (paid into a customer's account number with a reference that disagrees) says why on its card.
+
+Each sent invoice shows **The customer's money**: the customer's credit (paid and not yet counted towards an invoice), their own account numbers, and the payers remembered for them, each with **Forget this payer** for people with `invoice.manage` ([payer memory](matching.md#payer-memory)). A customer's credit counts towards the next invoice sent to them: Send says how much of it did, and the message to the customer says what is left to pay.
+
+**Match strong suggestions automatically**, under Settings, is off by default. When on, a payment whose best suggestion is strong, and clearly ahead of the next one, is matched without asking; the invoice shows it as "Matched automatically", with its reasons, and it can be undone.
 
 ## Settings
 
@@ -86,6 +131,7 @@ Under **Invoices > Settings**:
 | Payments connection | `main` | The connection (Paystack, Flutterwave, OPay, …) that takes payments for invoices |
 | Who pays the transfer fee | The business | Or the customer, where the payments provider takes only the exact amount ([0045](decisions/0045-tally-in-taskiem.md)) |
 | Customers may pay part | Off | When on, a customer can pay part of an invoice |
+| Match strong suggestions automatically | Off | See [Matching](#matching) |
 
 Each invoice can override the connection, the fee and part payments.
 
@@ -93,8 +139,8 @@ Each invoice can override the connection, the fee and part payments.
 
 | Permission | Lets a person | Roles |
 | --- | --- | --- |
-| `invoice.read` | See invoices | Owner, admin, operator, auditor, viewer |
-| `invoice.manage` | Create, change, send and void invoices, undo a payment, change the settings | Owner, admin, operator |
+| `invoice.read` | See invoices and the payments waiting to be matched | Owner, admin, operator, auditor, viewer |
+| `invoice.manage` | Create, change, send and void invoices, match money to them, undo a payment, change the settings | Owner, admin, operator |
 
 Customers' names, phone numbers and emails are masked in lists. People with `pii.reveal` can show them on an invoice, which is recorded in the audit log.
 
@@ -109,9 +155,41 @@ The **Invoices** platform connector (`invoices@1`, no connection needed) acts on
 | `get` | Its status, total, what was paid and what is still due |
 | `void` | Voids it, with a `reason` |
 | `notify_customer` | An SMS, and an email when there is one, to the invoice's customer: `{link}` becomes the invoice's page link, `{number}` its number and `{due}` what is still due |
+| `list` | `status: overdue` (sent or part paid and past the due date, oldest due first, with `days_overdue`, Lagos time) or `status: paid` (paid within `paid_within_hours`, 1 to 168, default 24); at most `limit` (default 50, up to 200). Numbers, totals, what is due and dates only: no customer details |
 
-There is no action that marks an invoice paid. A run that waits for payment waits for the `invoice.paid` signal, correlated by the invoice's number.
+There is no action that marks an invoice paid. A run that waits for payment waits for the `invoice.paid` signal, correlated by the invoice's number; the signal resumes a waiting run and starts none. A workflow that should start when an invoice is paid has the invoice trigger instead ([below](#starting-a-workflow-when-an-invoice-is-paid)).
+
+**Templates.** `send-invoice` makes and sends an invoice and waits for `invoice.paid`. `chase-overdue-invoices` runs daily: `list` the overdue invoices and `notify_customer` each one, at most once per reminder (reminder *n* covers the days `(n−1)×every` to `n×every−1` after the first overdue day, and its `effect.idempotency_seed` is the invoice and *n*, so a second run that day, or a run after a missed day, sends no duplicate), then a note to the owner once. `invoice-paid-receipt` starts on the invoice trigger: the moment an invoice is paid in full it thanks the customer with `notify_customer` and tells the owner, each seeded by the invoice, so the receipt goes at once and none is missed. A workflow made from its earlier hourly version (which looked at the invoices paid in the last three hours) keeps running as it was; making it again from the template gives the immediate one, with the same **Tell me too** setting.
+
+## Starting a workflow when an invoice is paid
+
+A workflow whose trigger is
+
+```json
+{"type": "invoice", "config": {"event": "paid"}}
+```
+
+starts when one of the business's invoices is paid in full, by whatever counted the last payment: a payment into the account number or link Taskiem gave, a suggestion confirmed, a match made by hand or an automatic match. In the editor's read-back it says "When one of your invoices is paid in full". It is how a receipt, a thank-you or a note to the owner goes the moment the money is counted.
+
+- **Once per invoice.** Each workflow starts once for each invoice, whatever happens after: the same payment reported again, another payment on the paid invoice, a restart, or the invoice paid again after a wrong match was undone start no second run. A payment undone before its run could start (within a second or so) starts none; when the invoice is paid again, it starts then.
+- **In prod only.** Payments are counted in prod, so only the version deployed to prod starts. Deployed to staging only, or never deployed, a workflow starts nothing; any number of workflows can start on the same invoice.
+- **Durable.** The runs to start are written in the same transaction as the payment that makes the invoice paid, so a payment never commits without them and a crash loses none; Taskiem's API server starts them within a second. A start the plan's limits or a suspended organisation refuse is not tried again; the reason is kept.
+
+The run's `trigger.body` is the invoice:
+
+| Field | Is |
+| --- | --- |
+| `id`, `number` | The invoice's id and number (`INV-0001`) |
+| `amount_kobo`, `amount` | Its total, in kobo and in words (`₦25,000`) |
+| `paid_kobo` | What was paid towards it (at least the total) |
+| `currency` | `NGN` |
+| `customer` | `{name, phone, email}`, as the invoice has them (phone and email only when it has them) |
+| `paid_at` | When it became paid (RFC 3339) |
+| `link` | The invoice's page link, which now shows it paid |
+| `status`, `event` | `paid` |
+
+The customer's name, phone and email, and the link, are personal data: they are sealed in the run's history like a form's marked fields and shown masked. To message the customer, use `notify_customer` with `"number": "=trigger.body.number"`, which finds their phone and email itself.
 
 ## API
 
-`GET` and `POST /v1/invoices`, `GET` and `PUT /v1/invoices/{id}` (a draft), `POST /v1/invoices/{id}/send`, `POST /v1/invoices/{id}/void`, `POST /v1/invoices/{id}/payments/{payment}/undo`, and `GET` and `PUT /v1/invoice-settings`; `{id}` is the invoice's id or number. Creating and sending take an `Idempotency-Key` header. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Invoices).
+`GET` and `POST /v1/invoices`, `GET` and `PUT /v1/invoices/{id}` (a draft), `POST /v1/invoices/{id}/send`, `POST /v1/invoices/{id}/void`, `POST /v1/invoices/{id}/amendments` (`{kind: "add" | "remove" | "discount", description, amount_kobo, pass_through_for, line, reason}`), `POST /v1/invoices/{id}/payments/{payment}/undo`, `GET` and `PUT /v1/invoice-settings`, and for matching `GET /v1/money/suggestions`, `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` (with `{"invoice": "<id or number>"}`, or `{"parts": [...]}` to split), `GET /v1/invoices/{id}/customer` (the customer's credit, accounts and remembered payers), `POST /v1/customer-accounts` (a customer's permanent account) and `DELETE /v1/money/payers/{id}`; `{id}` is the invoice's id or number. Creating and sending take an `Idempotency-Key` header. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Invoices).

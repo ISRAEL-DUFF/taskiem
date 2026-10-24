@@ -36,7 +36,7 @@ func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []prob
 	if err != nil {
 		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
 	}
-	return s.checkWith(ctx, tenant, doc, reg)
+	return append(s.checkWith(ctx, tenant, doc, reg), s.keptProblems(ctx, tenant, doc)...)
 }
 
 // checkWith is wdcheck.Check holding a tenant-code slot: checking code

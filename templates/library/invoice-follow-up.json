@@ -4,6 +4,7 @@
   "summary": "When you send an invoice, wait a few days, check with Paystack whether it was paid, and text the customer a reminder if not.",
   "description": "Gives your invoicing tool a signed web address. For each invoice it sends (invoice number, Paystack payment reference, customer phone, amount in naira), waits the number of days you choose, checks with Paystack whether the payment came in, and texts the customer a reminder only if it has not. Paid invoices get no message.",
   "category": "collections",
+  "superseded_by": "chase-overdue-invoices",
   "tags": ["collections", "invoices", "reminders", "follow up", "paystack", "sms", "wait"],
   "keywords": ["invoice", "invoices", "unpaid", "follow", "remind", "reminder", "overdue", "late", "chase", "check", "paid"],
   "connectors": ["paystack@1", "notify@1"],

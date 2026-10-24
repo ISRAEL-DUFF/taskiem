@@ -353,6 +353,11 @@ func TestMatch(t *testing.T) {
 		"keep Payrolla's finished payroll in tables for the accountant":      "payrolla-record-payroll",
 		"check there is enough money before a Payrolla payday":               "payrolla-payday-check",
 		"remind the payroll admin to lock the payroll in Payrolla":           "payrolla-lock-reminder",
+		"send an invoice to a customer":                                      "send-invoice",
+		"bill a customer for 5 bags of rice":                                 "send-invoice",
+		"chase an unpaid invoice":                                            "chase-overdue-invoices",
+		"remind customers about overdue invoices":                            "chase-overdue-invoices",
+		"send a receipt when an invoice is paid":                             "invoice-paid-receipt",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want {
@@ -365,6 +370,83 @@ func TestMatch(t *testing.T) {
 	}
 	if m := lib.Match("reconcile our settlement files from the bank's SFTP server into S3", 3); len(m) != 0 {
 		t.Errorf("an unrelated goal matched %s", m[0].Template.ID)
+	}
+}
+
+// The invoice templates are offered strongly enough for the offline
+// builder to start from them (its threshold is 20), and only for goals
+// about invoices: not for loans overdue in a database, nor for paying a
+// bill. The template they supersede is never offered.
+func TestMatchInvoices(t *testing.T) {
+	lib := templates.Default()
+	for goal, want := range map[string]string{
+		"send an invoice to a customer by WhatsApp":                 "send-invoice",
+		"invoice Ada 25,000 for 5 bags":                             "send-invoice",
+		"bill my customers for this month's deliveries":             "send-invoice",
+		"chase an unpaid invoice":                                   "chase-overdue-invoices",
+		"remind customers about overdue invoices":                   "chase-overdue-invoices",
+		"three days after I send an invoice, remind them if unpaid": "chase-overdue-invoices",
+		"send a receipt when an invoice is paid":                    "invoice-paid-receipt",
+		"when a customer pays an invoice, send them a receipt":      "invoice-paid-receipt",
+	} {
+		m := lib.Match(goal, 3)
+		if len(m) == 0 || m[0].Template.ID != want || m[0].Score < 20 {
+			t.Errorf("%q: got %+v, want %s first scoring at least 20", goal, m, want)
+		}
+	}
+	for _, goal := range []string{
+		"Every morning, find loans that are 7 days overdue in Postgres and text each borrower",
+		"Pay a customer's electricity bill through Interswitch and text them the token",
+		"Every Friday, text my customers who owe me",
+	} {
+		for _, m := range lib.Match(goal, 3) {
+			if len(m.Template.Requires) > 0 {
+				t.Errorf("%q: offered %s", goal, m.Template.ID)
+			}
+		}
+	}
+	old, ok := lib.Get("invoice-follow-up")
+	if !ok || old.SupersededBy != "chase-overdue-invoices" {
+		t.Fatalf("invoice-follow-up: %+v", old)
+	}
+	for _, tpl := range lib.Offered() {
+		if tpl.ID == old.ID {
+			t.Error("a superseded template is offered")
+		}
+	}
+	for _, goal := range []string{"follow up an unpaid invoice with Paystack", "chase an unpaid invoice"} {
+		for _, m := range lib.Match(goal, 5) {
+			if m.Template.ID == old.ID {
+				t.Errorf("%q: matched the superseded template", goal)
+			}
+		}
+	}
+
+	// The receipt starts on the invoice being paid, once per invoice: no
+	// schedule, no window of recent invoices to miss one from, and its
+	// parameters are what they were, so a workflow made from the hourly
+	// version is still filled in the same way.
+	rc, ok := lib.Get("invoice-paid-receipt")
+	if !ok {
+		t.Fatal("no invoice-paid-receipt")
+	}
+	var def struct {
+		Trigger struct {
+			Type   string         `json:"type"`
+			Config map[string]any `json:"config"`
+		} `json:"trigger"`
+	}
+	if err := json.Unmarshal(rc.Definition, &def); err != nil {
+		t.Fatal(err)
+	}
+	if def.Trigger.Type != "invoice" || def.Trigger.Config["event"] != "paid" {
+		t.Errorf("invoice-paid-receipt starts on %+v", def.Trigger)
+	}
+	if strings.Contains(string(rc.Definition), "paid_within_hours") || strings.Contains(string(rc.Definition), "foreach") {
+		t.Error("invoice-paid-receipt still looks through recently paid invoices")
+	}
+	if len(rc.Params) != 1 || rc.Params[0].Name != "tell_me" || rc.Params[0].Type != "boolean" {
+		t.Errorf("invoice-paid-receipt params changed: %+v", rc.Params)
 	}
 }
 
@@ -564,8 +646,7 @@ func TestTemplateWorkflowTests(t *testing.T) {
 // oneRail are the rail templates that run on one built-in rail for now
 // (decision 0044): no other rail declares what they need yet.
 var oneRail = map[string]string{
-	"virtual-account-per-customer": "only Moniepoint opens account numbers (Lenco's is unsafe, OPay's temporary)",
-	"refund-with-approval":         "only Paystack refunds (OPay's refund is not declared yet)",
+	"refund-with-approval": "only Paystack refunds (OPay's refund is not declared yet)",
 }
 
 // Every template on rails expands, as a run would, on each built-in rail

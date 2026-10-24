@@ -116,6 +116,21 @@ Rows, requests and size are the Xenibase project's own quotas: the data API's `p
 
 `DELETE /v1/tables/{id}` with `{"confirm": "<the table's name>"}` drops the Postgres table and every row (Xenibase keeps the project's backups on its own schedule), then forgets the table; it is audited as `table.delete`. Decision 0033 has an organisation's project deleted with the organisation; Taskiem has no organisation deletion yet, so until it does an operator deletes the project in Xenibase.
 
+## Kept tables
+
+Some tables are **kept** by Taskiem (decision 0045; [the money log spec](spec/invoices-and-money-log.md#71-kept-tables)): their rows are written only by Taskiem's own writers, such as the money log. A kept table is listed, read, searched and exported like any other, and workflows read it with `read_rows`, `query_rows` and `get_row`, but nothing in Taskiem changes it:
+
+- The table page shows it read-only, with no add, edit, delete, import or column controls, and says: *This table is kept by Taskiem: rows are added by Taskiem and cannot be changed or deleted. Corrections are new rows.* Having `table.edit` does not change that.
+- The rows API (insert, update, delete, import) and the schema routes (changing the title, adding or dropping a column, deleting the table) answer 409 `table_kept`. Tables list `kept_by`, the feature keeping each one (`money_log`), null for an ordinary table.
+- On WhatsApp, `add to <table>` answers why instead of collecting a row.
+- A workflow step on the project (the `data_tables` connection, or another xenibase connection to the same project) that would insert, upsert, update or delete its rows fails before anything is sent, as does `call_function` there while any table is kept. The editor flags a step that names a kept table outright, and the AI builder is told to read it only.
+- It cannot be a storefront's catalogue or services table, and the names Taskiem keeps (`money_log`, `money_matches`, and the [Schools](schools.md#kept-copies-for-workflows) copies `school_students`, `school_classes` and `school_term_fees`) cannot be taken by a table of your own, even before Taskiem makes them.
+- Kept tables do not count towards `max_data_tables`.
+
+In the money log a correction is a new row that Taskiem adds, naming the row it corrects; the Schools copies are a copy of the school's record, which Taskiem changes in place when the record changes. The guarantee is against changes through Taskiem: a business that [brought its own Xenibase project](#bringing-your-own-project) can still edit the rows there, outside Taskiem, and the table's page says so.
+
+For developers: `datatables.EnsureKept` makes a kept table (provisioning the project first when needed) and adds columns it lacks; it never takes over an ordinary table of the same name, which it reports instead. Every refusal wraps `datatables.ErrKept`. In Postgres (migration 00201) the app role can neither set nor clear `kept_by`, nor change or delete a kept table's record or columns; only the keeping functions `EnsureKept` calls can.
+
 ## For operators
 
 ### Configuration

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -214,6 +215,57 @@ func TestVoidOverdueAndSettings(t *testing.T) {
 	})
 }
 
+// Workflows list overdue invoices with how late they are, and those paid
+// lately; drafts, void and future invoices are left out.
+func TestListFor(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	svc := invoicing.Service{Invoices: w.inv}
+	late := w.create(invoicing.Draft{Customer: ada, AmountKobo: 500000, DueOn: "2020-01-01"})
+	future := w.create(invoicing.Draft{Customer: ada, AmountKobo: 600000, DueOn: "2099-01-01"})
+	paid := w.create(invoicing.Draft{Customer: ada, AmountKobo: 700000, DueOn: "2020-01-02"})
+	voided := w.create(invoicing.Draft{Customer: ada, AmountKobo: 800000, DueOn: "2020-01-03"})
+	w.create(invoicing.Draft{Customer: ada, AmountKobo: 900000, DueOn: "2020-01-04"}) // a draft
+	for _, x := range []invoicing.Invoice{late, future, paid, voided} {
+		if _, err := w.inv.Send(ctx, w.env.Tenant, x.Number, "user:ada", "s-"+x.Number); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.in(func(tx pgx.Tx) error {
+		if _, _, err := w.inv.RecordPayment(ctx, tx, w.env.Tenant, late.Number, invoicing.PaymentIn{AmountKobo: 200000, PaymentID: "part", How: "manual", By: "user:ada"}); err != nil {
+			return err
+		}
+		if _, _, err := w.inv.RecordPayment(ctx, tx, w.env.Tenant, paid.Number, invoicing.PaymentIn{AmountKobo: 700000, PaymentID: "full", How: "manual", By: "user:ada"}); err != nil {
+			return err
+		}
+		_, err := w.inv.Void(ctx, tx, w.env.Tenant, voided.Number, "Raised in error", "user:ada")
+		return err
+	})
+	over, err := svc.ListFor(ctx, w.env.Tenant, "overdue", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(over) != 1 || over[0].Number != late.Number || over[0].DueKobo != 300000 || over[0].DueOn != "2020-01-01" || over[0].DaysOverdue < 2000 {
+		t.Fatalf("overdue %+v", over)
+	}
+	got, err := svc.ListFor(ctx, w.env.Tenant, "paid", time.Hour, 10)
+	if err != nil || len(got) != 1 || got[0].Number != paid.Number || got[0].PaidAt == nil || got[0].DueKobo != 0 {
+		t.Fatalf("paid %v %+v", err, got)
+	}
+	// Another tenant sees none of them.
+	if other, err := svc.ListFor(ctx, uuid.New(), "overdue", 0, 0); err != nil || len(other) != 0 {
+		t.Errorf("another tenant: %v %+v", err, other)
+	}
+	for _, c := range []struct {
+		status string
+		within time.Duration
+	}{{"draft", 0}, {"paid", 0}, {"paid", 30 * 24 * time.Hour}} {
+		if _, err := svc.ListFor(ctx, w.env.Tenant, c.status, c.within, 0); !errors.Is(err, invoicing.ErrInvalid) {
+			t.Errorf("%v: %v", c, err)
+		}
+	}
+}
+
 func TestNumbersUnderConcurrency(t *testing.T) {
 	w := newWorld(t)
 	var mu sync.Mutex
@@ -262,6 +314,27 @@ func TestNaira(t *testing.T) {
 	for k, want := range map[int64]string{2500000: "₦25,000", 2500050: "₦25,000.50", 100: "₦1", 123456789: "₦1,234,567.89"} {
 		if got := invoicing.Naira(k); got != want {
 			t.Errorf("%d: %q, want %q", k, got, want)
+		}
+	}
+}
+
+// A customer who has had many messages this hour still gets the invoice
+// sent: the throttled channel is left out, not the send refused.
+func TestSendPastTheRecipientLimit(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	cust := invoicing.Customer{Name: "Ada Obi", Phone: "+2348031234567"}
+	for i := range 7 {
+		x := w.create(invoicing.Draft{Customer: cust, AmountKobo: 100000})
+		sent, err := w.inv.Send(ctx, w.env.Tenant, x.Number, "user:ada", "k"+x.Number)
+		if err != nil {
+			t.Fatalf("send %d: %v", i+1, err)
+		}
+		if sent.Invoice.Status != "sent" {
+			t.Fatalf("send %d: %+v", i+1, sent.Invoice)
+		}
+		if i >= 5 && len(sent.Queued) != 0 {
+			t.Errorf("send %d queued %v past the limit", i+1, sent.Queued)
 		}
 	}
 }

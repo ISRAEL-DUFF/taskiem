@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/byok"
 	"github.com/israel-duff/taskiem/engine/secrets"
@@ -20,7 +21,7 @@ import (
 
 // PermKeyManage lets a member see the tenant's keys, rotate the tenant key,
 // and bring, check, replace or remove a customer key. Owners hold it.
-const PermKeyManage = "key.manage"
+const PermKeyManage = access.KeyManage
 
 // Key operations that change what protects the tenant's data. Each needs a
 // person's step-up (self-review K5), bound to the operation and the tenant.
@@ -30,12 +31,6 @@ const (
 	keyOpCredentials = "key.byok.credentials" //nolint:gosec // an operation name, not a credential
 	keyOpDisable     = "key.byok.disable"
 )
-
-func init() {
-	allPermissions = append(allPermissions, PermKeyManage)
-	rolePermissions["owner"] = allPermissions
-	permissionInfo[PermKeyManage] = "Manage encryption keys: rotate the tenant key, bring your own key (customer KMS), check and replace its credentials"
-}
 
 // keyRoutes mounts /v1/keys inside the authenticated group.
 func (s *Server) keyRoutes(r chi.Router) {

@@ -1,0 +1,96 @@
+{
+  "schema": "wd-test/v1",
+  "template": "chase-overdue-invoices",
+  "params": {
+    "send_time": "09:00",
+    "every_days": 3,
+    "reminders": 3
+  },
+  "cases": [
+    {
+      "name": "customers are reminded every three days, and the owner once after the last reminder",
+      "mocks": {
+        "overdue": {
+          "output": {
+            "count": 3,
+            "invoices": [
+              {"number": "INV-0003", "status": "overdue", "total": "₦25,000", "total_kobo": 2500000, "due": "₦25,000", "due_kobo": 2500000, "due_on": "2026-10-22", "days_overdue": 1},
+              {"number": "INV-0002", "status": "overdue", "total": "₦10,000", "total_kobo": 1000000, "due": "₦4,000", "due_kobo": 400000, "due_on": "2026-10-18", "days_overdue": 5},
+              {"number": "INV-0001", "status": "overdue", "total": "₦8,000", "total_kobo": 800000, "due": "₦8,000", "due_kobo": 800000, "due_on": "2026-10-13", "days_overdue": 10}
+            ]
+          }
+        },
+        "chase_each[0].remind": {"output": {"number": "INV-0003", "queued": ["sms"]}},
+        "chase_each[1].remind": {"output": {"number": "INV-0002", "queued": ["sms", "email"]}},
+        "chase_each[2].tell_owner": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "overdue": {"status": "overdue", "limit": 200},
+          "chase_each[0].remind": {
+            "number": "INV-0003",
+            "text": "A reminder that invoice {number} is overdue: {due} is still due. See it and pay: {link}",
+            "subject": "INV-0003 is overdue"
+          },
+          "chase_each[1].remind": {"number": "INV-0002"},
+          "chase_each[2].tell_owner": {
+            "title": "Invoice still unpaid",
+            "message": "Invoice INV-0001 is 10 days overdue after 3 reminders: ₦8,000 still due."
+          }
+        },
+        "steps": {
+          "chase_each[0].remind": "completed",
+          "chase_each[0].tell_owner": "skipped",
+          "chase_each[1].remind": "completed",
+          "chase_each[1].tell_owner": "skipped",
+          "chase_each[2].remind": "skipped",
+          "chase_each[2].tell_owner": "completed"
+        },
+        "calls": {
+          "remind": 2,
+          "tell_owner": 1
+        }
+      }
+    },
+    {
+      "name": "a reminder that cannot go does not stop the others",
+      "mocks": {
+        "overdue": {
+          "output": {
+            "count": 2,
+            "invoices": [
+              {"number": "INV-0005", "status": "overdue", "total": "₦5,000", "total_kobo": 500000, "due": "₦5,000", "due_kobo": 500000, "due_on": "2026-10-20", "days_overdue": 3},
+              {"number": "INV-0006", "status": "overdue", "total": "₦6,000", "total_kobo": 600000, "due": "₦6,000", "due_kobo": 600000, "due_on": "2026-10-19", "days_overdue": 4}
+            ]
+          }
+        },
+        "chase_each[0].remind": {"error": {"kind": "fatal", "message": "invoice INV-0005 is void"}},
+        "chase_each[1].remind": {"output": {"number": "INV-0006", "queued": ["sms"]}}
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "chase_each[0].remind_failed": "completed",
+          "chase_each[1].remind": "completed"
+        },
+        "outputs": {
+          "chase_each[0].remind_failed": {"number": "INV-0005", "reason": "invoice INV-0005 is void"}
+        }
+      }
+    },
+    {
+      "name": "no overdue invoices: nothing is sent",
+      "mocks": {
+        "overdue": {"output": {"count": 0, "invoices": []}}
+      },
+      "expect": {
+        "status": "completed",
+        "calls": {
+          "remind": 0,
+          "tell_owner": 0
+        }
+      }
+    }
+  ]
+}

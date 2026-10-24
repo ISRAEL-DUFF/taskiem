@@ -1,0 +1,16 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "secret_key": "FLWSECK_TEST-xyz"
+  },
+  "input": {
+    "customer": {
+      "name": "Ebube Eze",
+      "email": "ebube.eze@greenfield.example"
+    }
+  },
+  "keys": {
+    "create_static_account": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "error": "fatal"
+}

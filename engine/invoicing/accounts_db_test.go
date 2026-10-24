@@ -14,6 +14,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 )
 
 // fakeRails is a payments rail that opens accounts and reports them paid
@@ -69,6 +70,7 @@ func TestAccountsIssuedAndPaid(t *testing.T) {
 	ctx := context.Background()
 	rails := &fakeRails{paid: map[string]int64{}}
 	w.inv.Rails = rails
+	w.inv.MoneyLog = &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}
 	var signalled []string
 	sig := w.inv.Signal
 	w.inv.Signal = func(ctx context.Context, tenant uuid.UUID, env, event, corr, key string, payload any) ([]uuid.UUID, bool, error) {
@@ -138,6 +140,20 @@ func TestAccountsIssuedAndPaid(t *testing.T) {
 	}
 	if len(signalled) != 1 || signalled[0] != "invoice.paid:"+x.Number {
 		t.Errorf("signals %v", signalled)
+	}
+	// The money log has the payment once, and the rail's own event for it
+	// later adds nothing.
+	if _, err := w.inv.MoneyLog.RecordEvent(ctx, w.env.Tenant, "prod", "paystack", "main", "payment.received",
+		map[string]any{"payment_id": a.PaymentID, "amount_kobo": int64(2500000)}); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	var source string
+	w.in(func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*), min(source) FROM money_entries WHERE reference = $1`, a.PaymentID).Scan(&n, &source)
+	})
+	if n != 1 || source != "lookup" {
+		t.Errorf("money log: %d entries, source %q", n, source)
 	}
 	// A paid invoice takes no new account.
 	if _, err := w.inv.Issue(ctx, w.env.Tenant, x.ID, "link", 0); !errors.Is(err, invoicing.ErrState) {

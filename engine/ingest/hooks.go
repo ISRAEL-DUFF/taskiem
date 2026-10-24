@@ -31,6 +31,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/httpsec"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
@@ -72,6 +73,9 @@ type Handler struct {
 	// Egress guards calls a connector's enricher makes to its provider
 	// before a run starts (a truncated event's row); nil refuses them.
 	Egress *egress.Guard
+	// MoneyLog records every normalised money event heard in prod (decision
+	// 0045); nil records none.
+	MoneyLog *moneylog.Log
 
 	once    sync.Once
 	router  http.Handler

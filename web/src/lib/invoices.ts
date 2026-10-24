@@ -1,7 +1,9 @@
 // Invoices a business sends its customers (decision 0045, T3;
 // docs/invoices.md; GET/POST /v1/invoices, /v1/invoices/{id}, /send,
-// /void, /payments/{payment}/undo, /v1/invoice-settings): the API's
-// shapes, the form a draft is made in, and how an invoice reads.
+// /void, /payments/{payment}/undo, /v1/invoice-settings) and matching money
+// to them (T5; docs/matching.md; /v1/money/suggestions, /confirm, /reject,
+// /v1/money/entries/{id}/match): the API's shapes, the form a draft is made
+// in, and how an invoice and a suggested match read.
 // Nothing here marks an invoice paid: only payments counted towards it do.
 
 import { formatPrice } from "./storefront";
@@ -15,12 +17,33 @@ export interface InvoiceCustomer {
   name: string;
   phone?: string;
   email?: string;
+  /** The business's own key for the customer ("student:42"): invoices with the same key are one customer's. */
+  key?: string;
 }
 
 export interface InvoiceLine {
   description: string;
   quantity: number;
+  /** Negative for a discount and for an amendment taking a line out. */
   unit_kobo: number;
+  /** Who a pass-through line is collected for (WAEC): not the business's income. */
+  pass_through_for?: string;
+  kind?: "discount" | "removal";
+  reason?: string;
+  /** The amendment that added the line to a sent invoice. */
+  amendment?: string;
+}
+
+/** A recorded change to a sent invoice (InvoiceAmendment). */
+export interface InvoiceAmendment {
+  id: string;
+  kind: "add" | "remove" | "discount";
+  line: InvoiceLine;
+  amount_kobo: number;
+  removes?: number;
+  reason: string;
+  by: string;
+  created_at: string;
 }
 
 /** A payment counted towards an invoice (InvoicePayment). A row with
@@ -61,6 +84,7 @@ export interface CustomerInvoice {
   created_by: string;
   created_at: string;
   payments?: InvoicePayment[] | null;
+  amendments?: InvoiceAmendment[] | null;
 }
 
 /** The POST /v1/invoices and PUT /v1/invoices/{id} body (InvoiceDraft). */
@@ -82,6 +106,8 @@ export interface InvoiceSent {
   link?: string;
   queued: ("sms" | "email")[] | null;
   sms_over_allowance?: boolean;
+  /** How much of the customer's credit this send counted towards the invoice. */
+  credit_kobo?: number;
 }
 
 export interface InvoiceSettings {
@@ -90,6 +116,8 @@ export interface InvoiceSettings {
   connection: string;
   fee_paid_by: FeePaidBy;
   allow_part_payments: boolean;
+  /** A strong suggestion is matched without asking (off by default). */
+  auto_match?: boolean;
 }
 
 /** The limits the server holds an invoice to (engine/invoicing, openapi InvoiceDraft). */
@@ -183,6 +211,8 @@ export interface InvoiceActions {
   void: boolean;
   undo: boolean;
   reveal: boolean;
+  /** A sent invoice changes only by amendment, with a reason. */
+  amend: boolean;
 }
 
 /** The actions an invoice offers, by its status and the person's permissions. */
@@ -195,7 +225,64 @@ export function invoiceActions(status: InvoiceStatus | string, can: (perm: strin
     void: manage && status !== "paid" && status !== "void",
     undo: manage,
     reveal: can("pii.reveal"),
+    amend: manage && status !== "draft" && status !== "void",
   };
+}
+
+// --- amendments ---
+
+export type AmendmentKind = "add" | "remove" | "discount";
+
+/** The amendment form: amount as typed in naira; line the position of the item a removal takes out. */
+export interface AmendmentForm {
+  kind: AmendmentKind;
+  description: string;
+  amount: string;
+  passThroughFor: string;
+  line: string;
+  reason: string;
+}
+
+export function emptyAmendment(): AmendmentForm {
+  return { kind: "add", description: "", amount: "", passThroughFor: "", line: "", reason: "" };
+}
+
+/** The items a removal may take out: their position and words. Discounts, removals and lines taken out already are not offered. */
+export function removableLines(x: Pick<CustomerInvoice, "lines" | "amendments">): { index: number; label: string }[] {
+  const gone = new Set((x.amendments ?? []).map((a) => a.removes).filter((n): n is number => typeof n === "number"));
+  return (x.lines ?? []).flatMap((l, index) =>
+    !l.kind && l.unit_kobo > 0 && !gone.has(index) ? [{ index, label: `${l.description} (${naira(l.quantity * l.unit_kobo)})` }] : [],
+  );
+}
+
+/** Why the amendment would be refused here, or null. A total below what was paid is the server's to refuse. */
+export function amendmentProblem(f: AmendmentForm): string | null {
+  if (!f.reason.trim()) return "Say why the invoice is amended. The customer's page shows the reason.";
+  if (f.reason.trim().length > 300) return "The reason is at most 300 characters.";
+  if (f.kind === "remove") return f.line === "" ? "Choose the item to take out." : null;
+  const k = toKobo(f.amount);
+  if (k === undefined || Number.isNaN(k) || k < 100) return "Give the amount, at least ₦1.";
+  if (f.kind === "add" && !f.description.trim()) return "Say what the added line is for.";
+  return null;
+}
+
+/** The POST /v1/invoices/{id}/amendments body. */
+export function amendmentRequest(f: AmendmentForm): Record<string, unknown> {
+  const reason = f.reason.trim();
+  if (f.kind === "remove") return { kind: "remove", line: Number(f.line), reason };
+  const body: Record<string, unknown> = { kind: f.kind, amount_kobo: toKobo(f.amount), reason };
+  if (f.description.trim()) body.description = f.description.trim();
+  if (f.kind === "add" && f.passThroughFor.trim()) body.pass_through_for = f.passThroughFor.trim();
+  return body;
+}
+
+/** What a line says beside its description: who a pass-through line is collected for, and why a discount or an amendment was given. */
+export function lineNote(l: InvoiceLine): string {
+  const out: string[] = [];
+  if (l.pass_through_for) out.push(`Collected on behalf of ${l.pass_through_for}.`);
+  if (l.amendment && !l.kind) out.push("Added after the invoice was sent.");
+  if (l.reason) out.push(l.reason);
+  return out.join(" ");
 }
 
 /** Why a void would be refused here, or null. */
@@ -208,12 +295,13 @@ export function voidProblem(reason: string): string | null {
 // --- sending ---
 
 /** What Send did, in words: the channels it queued, and SMS held back by the plan. */
-export function sentLines(s: Pick<InvoiceSent, "queued" | "sms_over_allowance">): string[] {
+export function sentLines(s: Pick<InvoiceSent, "queued" | "sms_over_allowance" | "credit_kobo">): string[] {
   const q = s.queued ?? [];
   const out: string[] = [];
   const by = [q.includes("sms") ? "SMS" : "", q.includes("email") ? "email" : ""].filter(Boolean);
   out.push(by.length ? `Sent by ${by.join(" and ")}.` : "Nothing was sent: the customer has no phone number or email we can use.");
   if (s.sms_over_allowance) out.push("SMS not sent: plan allowance used.");
+  if (s.credit_kobo) out.push(`${naira(s.credit_kobo)} of the customer's credit counts towards it.`);
   return out;
 }
 
@@ -226,14 +314,21 @@ export function newRequestKey(): string {
 
 // --- payments ---
 
-export const HOW_MATCHED: Record<string, string> = {
-  exact: "Exactly, by its reference",
-  suggested: "Suggested, then confirmed",
-  suggested_auto: "Suggested and counted",
-  manual: "By a person",
-};
-
-export const howMatched = (how: string) => HOW_MATCHED[how] ?? how.replaceAll("_", " ");
+/** How a payment was matched to the invoice, in words. */
+export function howMatched(how: string, by = ""): string {
+  switch (how) {
+    case "exact":
+      return "Paid into the account Taskiem gave";
+    case "suggested":
+      return by ? `Suggested, confirmed by ${by}` : "Suggested, then confirmed";
+    case "suggested_auto":
+      return "Matched automatically";
+    case "manual":
+      return "Matched by hand";
+    default:
+      return how.replaceAll("_", " ");
+  }
+}
 
 export interface PaymentRow {
   payment: InvoicePayment;
@@ -397,10 +492,18 @@ export interface SettingsForm {
   connection: string;
   feePaidBy: FeePaidBy;
   partPayments: boolean;
+  autoMatch: boolean;
 }
 
 export function settingsForm(s: InvoiceSettings): SettingsForm {
-  return { prefix: s.prefix, nextNumber: String(s.next_number), connection: s.connection, feePaidBy: s.fee_paid_by, partPayments: s.allow_part_payments };
+  return {
+    prefix: s.prefix,
+    nextNumber: String(s.next_number),
+    connection: s.connection,
+    feePaidBy: s.fee_paid_by,
+    partPayments: s.allow_part_payments,
+    autoMatch: !!s.auto_match,
+  };
 }
 
 /** Why the settings will be refused, or null; the next number only moves forward from what was saved. */
@@ -421,6 +524,7 @@ export function settingsRequest(f: SettingsForm): InvoiceSettings {
     connection: f.connection.trim() || "main",
     fee_paid_by: f.feePaidBy,
     allow_part_payments: f.partPayments,
+    auto_match: f.autoMatch,
   };
 }
 
@@ -433,3 +537,345 @@ export const FEE_CHOICES: { value: FeePaidBy; label: string; help: string }[] = 
   { value: "business", label: "The business", help: "The customer pays the invoice's amount; the fee comes out of what you receive." },
   { value: "customer", label: "The customer", help: "The fee is added to what the customer pays, where the payments provider allows it." },
 ];
+
+// --- matching money to invoices (T5) ---
+
+/** One open suggestion: money received that may be for an invoice or a storefront order (MoneySuggestion). */
+export interface MoneySuggestion {
+  id: string;
+  entry_id: string;
+  /** invoice or order; target names it as money_matches does ("order:AK-7QX4KD"). */
+  target_kind?: "invoice" | "order";
+  target?: string;
+  invoice_id: string | null;
+  order_id?: string;
+  /** The invoice's number, or the order's reference. */
+  number: string;
+  /** What is due on the invoice, or paid online for the order. */
+  due_kobo?: number;
+  /** The customer's name, masked. */
+  customer?: string;
+  score: number;
+  reasons: string[] | null;
+  status: string;
+  amount_kobo: number | null;
+  /** What is left of the payment to match. */
+  left_kobo?: number | null;
+  /** How the payment could be split across the customer's open invoices, oldest first, when it is more than is due. */
+  split?: SplitProposal;
+  channel: string;
+  reference: string;
+  received_at: string;
+  kind: string;
+}
+
+/** A split the server offers (MoneySplitProposal): each invoice with what of the payment would count towards it, and what would be left as the customer's credit. */
+export interface SplitProposal {
+  parts: { invoice?: string; amount_kobo: number; number: string; due_kobo: number }[] | null;
+  credit_kobo: number;
+}
+
+/** One editable row of a split: an invoice, what is due on it and the amount typed. */
+export interface SplitRow {
+  invoice: string;
+  due_kobo: number;
+  amount: string;
+}
+
+/** A proposal as editable rows. */
+export function splitRows(p: SplitProposal | undefined): SplitRow[] {
+  return (p?.parts ?? []).map((x) => ({ invoice: x.number, due_kobo: x.due_kobo, amount: koboInput(x.amount_kobo) }));
+}
+
+/** What the rows add up to, in kobo; NaN when one is not an amount. */
+export function splitTotal(rows: SplitRow[]): number {
+  let sum = 0;
+  for (const r of rows) {
+    const k = toKobo(r.amount);
+    if (k === undefined) continue;
+    if (Number.isNaN(k)) return NaN;
+    sum += k;
+  }
+  return sum;
+}
+
+/** Why rows cannot be matched, or "": every amount a number, at least one part, the parts no more than is left. */
+export function splitProblem(rows: SplitRow[], leftKobo: number): string {
+  const total = splitTotal(rows);
+  if (Number.isNaN(total)) return "Type each amount as naira, like 20,000.";
+  if (rows.some((r) => (toKobo(r.amount) ?? 0) < 0)) return "An amount cannot be less than nothing.";
+  if (total <= 0) return "Give at least one invoice an amount.";
+  if (total > leftKobo) return `The parts add up to ${naira(total)}, more than the ${naira(leftKobo)} received.`;
+  return "";
+}
+
+/** The POST body confirming a suggestion in parts: rows with an amount, and whether the rest is the customer's credit. */
+export function splitRequest(rows: SplitRow[], creditRest: boolean): { parts: { invoice: string; amount_kobo: number }[]; credit_rest: boolean } {
+  return {
+    parts: rows.map((r) => ({ invoice: r.invoice, amount_kobo: toKobo(r.amount) ?? 0 })).filter((x) => x.amount_kobo > 0),
+    credit_rest: creditRest,
+  };
+}
+
+/** What a payment split answers (MoneySplit). */
+export interface MoneySplit {
+  parts: { target: string; amount_kobo: number }[] | null;
+  left_kobo: number;
+  credit_kobo: number;
+}
+
+/** What the To match view says after a split. */
+export function splitLine(s: MoneySplit): string {
+  const parts = (s.parts ?? []).map((x) => `${x.target.replace(/^invoice:/, "").replace(/^order:/, "order ")} ${naira(x.amount_kobo)}`);
+  let line = `Matched in parts: ${parts.join(", ")}.`;
+  if (s.credit_kobo > 0) line += ` ${naira(s.credit_kobo)} is the customer's credit, counted towards their next invoice.`;
+  if (s.left_kobo > 0) line += ` ${naira(s.left_kobo)} is left to match.`;
+  return line;
+}
+
+export const SUGGESTIONS_PATH = "/v1/money/suggestions";
+export const suggestionPath = (id: string, action: "confirm" | "reject") => `/v1/money/suggestions/${encodeURIComponent(id)}/${action}`;
+export const entryMatchPath = (entry: string) => `/v1/money/entries/${encodeURIComponent(entry)}/match`;
+
+/** Where a score's words change: 85 and up is strong (the least automatic matching takes), 60 and up likely. */
+export const SCORE_STRONG = 85;
+export const SCORE_LIKELY = 60;
+
+/** A suggestion's score (0 to 100) in words. */
+export function scoreWords(score: number): { label: string; tone: Tone } {
+  if (score >= SCORE_STRONG) return { label: "Strong", tone: "ok" };
+  if (score >= SCORE_LIKELY) return { label: "Likely", tone: "info" };
+  return { label: "Possible", tone: "muted" };
+}
+
+const KIND_WORDS: Record<string, string> = {
+  payment: "Payment",
+  account_credit: "Transfer into an account",
+  pos_sale: "POS sale",
+  statement: "Line of a bank statement",
+  cash: "Cash",
+};
+
+/** A money log entry's kind in words. */
+export const kindWords = (kind: string) => KIND_WORDS[kind] ?? kind.replaceAll("_", " ");
+
+/** Where the money came: "paystack/main" is "Paystack (main)"; "upload" an uploaded statement. */
+export function channelWords(channel: string): string {
+  if (channel === "upload") return "Uploaded statement";
+  if (channel === "cash") return "Cash";
+  const i = channel.indexOf("/");
+  const rail = i < 0 ? channel : channel.slice(0, i);
+  const name = i < 0 ? "" : channel.slice(i + 1);
+  const r = rail ? rail.charAt(0).toUpperCase() + rail.slice(1) : channel;
+  return name ? `${r} (${name})` : r;
+}
+
+/** A payment waiting to be matched, with the invoices it may be for, strongest first. */
+export interface WaitingPayment {
+  entry_id: string;
+  amount_kobo: number | null;
+  /** What is left of it to match, when part of it counts already. */
+  left_kobo?: number | null;
+  /** Why matching held it for a person. */
+  held_reason?: string;
+  channel: string;
+  reference: string;
+  received_at: string;
+  kind: string;
+  candidates: MoneySuggestion[];
+}
+
+/** The suggestions as the To match view shows them: one card per payment, in the order the server sent them (newest payment first). */
+export function groupSuggestions(list: MoneySuggestion[] | null | undefined): WaitingPayment[] {
+  const out: WaitingPayment[] = [];
+  const by = new Map<string, WaitingPayment>();
+  for (const s of list ?? []) {
+    let g = by.get(s.entry_id);
+    if (!g) {
+      g = { entry_id: s.entry_id, amount_kobo: s.amount_kobo, left_kobo: s.left_kobo, channel: s.channel, reference: s.reference, received_at: s.received_at, kind: s.kind, candidates: [] };
+      by.set(s.entry_id, g);
+      out.push(g);
+    }
+    g.candidates.push(s);
+  }
+  for (const g of out) g.candidates.sort((a, b) => b.score - a.score);
+  return out;
+}
+
+export const UNMATCHED_PATH = "/v1/money/unmatched";
+
+/** Money received that matching left for a person (GET /v1/money/unmatched). */
+export interface UnmatchedMoney {
+  entry_id: string;
+  amount_kobo: number | null;
+  left_kobo?: number | null;
+  held_reason?: string;
+  channel: string;
+  reference: string;
+  received_at: string;
+  kind: string;
+}
+
+/** Unmatched payments as To match cards, with nothing suggested. */
+export function unmatchedPayments(list: UnmatchedMoney[] | null | undefined): WaitingPayment[] {
+  return (list ?? []).map((u) => ({ ...u, candidates: [] }));
+}
+
+/** What is left of a payment to match, in words, when part of it counts already; "" when all of it is left. */
+export function leftWords(p: Pick<WaitingPayment, "amount_kobo" | "left_kobo">): string {
+  if (p.left_kobo === null || p.left_kobo === undefined || p.amount_kobo === null || p.left_kobo >= p.amount_kobo) return "";
+  return `${naira(p.left_kobo)} of it is left to match; the rest counts towards other invoices or orders.`;
+}
+
+// --- the invoice's customer in matching ---
+
+/** A customer's permanent account number (CustomerAccount). */
+export interface CustomerAccount {
+  id: string;
+  channel: string;
+  account_number: string;
+  bank_name?: string;
+  reference: string;
+}
+
+/** A payer remembered for a customer (MoneyPayer). */
+export interface RememberedPayer {
+  id: string;
+  kind: "name" | "account";
+  payer: string;
+  times: number;
+  last_at: string;
+}
+
+/** GET /v1/invoices/{id}/customer. */
+export interface InvoiceCustomerView {
+  credit_kobo: number;
+  accounts: CustomerAccount[] | null;
+  payers: RememberedPayer[] | null;
+  revealed: boolean;
+}
+
+export const invoiceCustomerPath = (id: string) => `/v1/invoices/${encodeURIComponent(id)}/customer`;
+export const payerPath = (id: string) => `/v1/money/payers/${encodeURIComponent(id)}`;
+
+/** A remembered payer in words: "A••• (name), paid 2 times". */
+export function payerWords(p: RememberedPayer): string {
+  const what = p.kind === "account" ? "paying account" : "name";
+  return `${p.payer} (${what}), paid ${p.times === 1 ? "once" : `${p.times} times`}`;
+}
+
+/** A customer's credit in words. */
+export const creditWords = (kobo: number) =>
+  kobo > 0 ? `${naira(kobo)}: paid and not yet counted towards an invoice. It counts towards the next invoice sent to this customer.` : "None";
+
+/** An amount that may be missing, in words. */
+export const amountWords = (kobo: number | null | undefined) => (kobo === null || kobo === undefined ? "Amount not known" : naira(kobo));
+
+/** The invoices a payment can be matched to: sent and not yet fully paid. */
+export function openInvoices(list: CustomerInvoice[] | null | undefined): CustomerInvoice[] {
+  return (list ?? []).filter((x) => x.status === "sent" || x.status === "part_paid" || x.status === "overdue");
+}
+
+/** What the To match view says after a match. */
+export function matchedLine(amountKobo: number | null, number: string, kind: "invoice" | "order" = "invoice"): string {
+  if (kind === "order") return `${amountWords(amountKobo)} matched to order ${number}. If that is wrong, undo it on the order.`;
+  return `${amountWords(amountKobo)} matched to ${number}. If that is wrong, undo it on the invoice.`;
+}
+
+/** What the To match view says after "Not this one". */
+export function rejectedLine(number: string, kind: "invoice" | "order" = "invoice"): string {
+  return `${kind === "order" ? `Order ${number}` : number} will not be suggested for this payment again.`;
+}
+
+/** A storefront order money can be matched to by hand (MoneyOpenOrder, in GET /v1/money/unmatched). */
+export interface MoneyOpenOrder {
+  target_kind: "order";
+  target: string;
+  number: string;
+  due_kobo: number;
+  customer: string;
+  placed_at: string;
+}
+
+/** Whether a suggestion is for a storefront order. */
+export const isOrder = (c: Pick<MoneySuggestion, "target_kind">) => c.target_kind === "order";
+
+/** A suggestion's invoice or order as the To match view names it: "INV-0104", "Order AK-7QX4KD". */
+export const targetLabel = (c: Pick<MoneySuggestion, "target_kind" | "number">) => (isOrder(c) ? `Order ${c.number}` : c.number);
+
+/** Where a suggestion's invoice or order is shown in the app. */
+export const targetPath = (c: Pick<MoneySuggestion, "target_kind" | "number">) =>
+  isOrder(c) ? `/storefront/orders/${encodeURIComponent(c.number)}` : `/invoices/${encodeURIComponent(c.number)}`;
+
+/** One choice of the "match by hand" picker: an invoice (value its id) or an order (value "order:<reference>"). */
+export interface MatchChoice {
+  value: string;
+  kind: "invoice" | "order";
+  number: string;
+  label: string;
+}
+
+/** The invoices and orders a payment can be matched to by hand, those already suggested for it left out. */
+export function matchChoices(invoices: CustomerInvoice[], orders: MoneyOpenOrder[] | null | undefined, candidates: MoneySuggestion[]): MatchChoice[] {
+  const out: MatchChoice[] = invoices
+    .filter((x) => !candidates.some((c) => !isOrder(c) && c.invoice_id === x.id))
+    .map((x) => ({ value: x.id, kind: "invoice", number: x.number, label: `${x.number} · ${naira(x.due_kobo)} due · ${x.customer.name}` }));
+  for (const o of orders ?? []) {
+    if (candidates.some((c) => isOrder(c) && c.number === o.number)) continue;
+    const who = o.customer ? ` · ${o.customer}` : "";
+    out.push({ value: `order:${o.number}`, kind: "order", number: o.number, label: `Order ${o.number} · ${naira(o.due_kobo)} to pay${who}` });
+  }
+  return out;
+}
+
+/** The POST /v1/money/entries/{id}/match body for a picker choice. */
+export function matchRequest(value: string): { invoice: string } | { order: string } {
+  return value.startsWith("order:") ? { order: value.slice("order:".length) } : { invoice: value };
+}
+
+/** The picker's words: about invoices only while the business has no order waiting for money. */
+export function pickerWords(orders: boolean) {
+  return orders
+    ? {
+        summary: "Match to another invoice or order…",
+        label: "Invoice or order",
+        hint: "Invoices sent and not yet fully paid, and storefront orders waiting for their payment.",
+        empty: "Choose an invoice or order",
+        submit: "Match to this one",
+        none: "No other invoice or order is waiting for payment.",
+        missing: "Choose the invoice or order this payment is for.",
+      }
+    : {
+        summary: "Match to another invoice…",
+        label: "Invoice",
+        hint: "Invoices sent and not yet fully paid.",
+        empty: "Choose an invoice",
+        submit: "Match to this invoice",
+        none: "No other invoice is waiting for payment.",
+        missing: "Choose the invoice this payment is for.",
+      };
+}
+
+/** A payment matched to a storefront order (StorefrontOrderPayment, in GET /v1/storefront/orders/{reference}). */
+export interface OrderPayment {
+  id: string;
+  entry_id: string;
+  amount_kobo: number;
+  how: string;
+  by: string;
+  reasons: string[] | null;
+  undoes?: string;
+  undone_by?: string;
+  undoable: boolean;
+  created_at: string;
+}
+
+export const orderPaymentUndoPath = (id: string) => `/v1/money/order-payments/${encodeURIComponent(id)}/undo`;
+
+/** How money was matched to an order, in words. */
+export const howMatchedOrder = (how: string, by = "") => (how === "exact" ? "Paid through the order's checkout page" : howMatched(how, by));
+
+/** The money matched to an order, as the order lists it: each match, not its undoings, and whether it was undone. */
+export function orderPaymentRows(list: OrderPayment[] | null | undefined): { payment: OrderPayment; undone: boolean }[] {
+  return (list ?? []).filter((p) => !p.undoes).map((p) => ({ payment: p, undone: !!p.undone_by }));
+}

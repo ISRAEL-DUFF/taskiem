@@ -415,7 +415,7 @@ POST /v1/partner/sub-tenants/{sub}/invitations
 - **Someone new** gets an email with a link (`/accept-invitation#token=…`) that works once, for seven days. It opens a page where they create a passkey and join, signed in, in one step. The link goes only to their address.
 - **Someone with a Taskiem account** gets an email asking them to sign in and accept (Account > Invitations); a link never adds a passkey to an account someone already uses.
 - The answer is the same either way. `delivery` is `email`, or `none` when this deployment cannot send email (then nothing was sent, and someone new cannot set up an account; ask your operator to configure email).
-- **Roles** are the built-in ones (`owner`, `admin`, `builder`, `operator`, `approver`, `auditor`, `viewer`) and the sub-tenant's custom roles. A role nobody defined is refused: create it first (below).
+- **Roles** are the built-in ones (`owner`, `admin`, `builder`, `operator`, `approver`, `auditor`, `viewer`, `gate`) and the sub-tenant's custom roles. A role nobody defined is refused: create it first (below).
 - **Owner.** You may make a sub-tenant's first owner (its account holder), and only that one: once it has an owner, or one is invited, `owner` is refused with 409 and its owners make more. The owner runs the sub-tenant like any organisation: invites colleagues, sets secrets, changes governance.
 - Inviting the same person again adds the roles to the pending invitation and sends a new link (the old one stops). An address gets at most five invitations in ten minutes (429 beyond, nothing changed). The email names the sub-tenant and you, unless a name reads as a link or an address, which Taskiem leaves out of its email.
 

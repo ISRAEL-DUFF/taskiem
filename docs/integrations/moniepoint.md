@@ -23,7 +23,7 @@ Moniepoint's developer API is Monnify, its payment gateway. The connector is `co
 | `resolve_account` | `GET /api/v1/disbursements/account/validate` | read | Run before paying a new account |
 | `transfer` | `POST /api/v2/disbursements/single` | idempotent write | NGN from the wallet. Usually final at once; `async` answers `PENDING` |
 | `get_transfer` | `GET /api/v2/disbursements/single/summary` | read | By reference |
-| `create_reserved_account` | `POST /api/v2/bank-transfer/reserved-accounts` | idempotent write | Permanent account numbers for a customer; key is `account_reference` |
+| `create_reserved_account` | `POST /api/v2/bank-transfer/reserved-accounts` | idempotent write | Permanent account numbers for a customer; key is `account_reference`. `account_name` is what payers see when they check the number (the customer's name when left out); Monnify documents no length limit ([schools rail facts](../spec/schools-rail-facts.md#moniepoint-naming-only)) |
 | `get_reserved_account` | `GET /api/v2/bank-transfer/reserved-accounts/{ref}` | read | |
 | `init_transaction` | `POST /api/v1/merchant/transactions/init-transaction` | idempotent write | Checkout URL (40 minutes); key is `payment_reference` |
 | `get_transaction` | `GET /api/v2/merchant/transactions/query` | read | By `payment_reference` or Monnify's `transaction_reference` |

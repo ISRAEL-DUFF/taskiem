@@ -1,0 +1,55 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "customer": {
+      "name": "Ebube Eze",
+      "email": "ebube.eze@greenfield.example"
+    }
+  },
+  "exchanges": [
+    {
+      "name": "fetch_customer_with_account",
+      "request": {
+        "method": "GET",
+        "path": "/customer/ebube.eze@greenfield.example"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": true,
+          "message": "Customer retrieved",
+          "data": {
+            "first_name": "Ebube",
+            "last_name": "Eze",
+            "email": "ebube.eze@greenfield.example",
+            "customer_code": "CUS_2f1qk3pyyx1nb5b",
+            "id": 7454289,
+            "integration": 100043,
+            "domain": "test",
+            "metadata": null,
+            "dedicated_account": {
+              "id": 253,
+              "account_name": "GREENFIELD COURT/EBUBE EZE",
+              "account_number": "9930000902",
+              "assigned": true,
+              "active": true,
+              "currency": "NGN",
+              "bank": {
+                "name": "Test Bank",
+                "id": 24,
+                "slug": "test-bank"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "account_number": "9930000902",
+    "reference": "CUS_2f1qk3pyyx1nb5b"
+  }
+}

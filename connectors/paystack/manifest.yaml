@@ -21,6 +21,10 @@ auth:
         - { prefix: sk_test_, mode: test, label: Test (practice) }
       refuse:
         - { prefix: pk_, message: "That is your public key. Copy the secret key from the same page: it starts with sk_." }
+    - key: dedicated_account_bank
+      label: Bank for customers' account numbers
+      required: false
+      help: Only to give customers their own account numbers. wema-bank or titan-paystack; left empty, the first bank Paystack offers your business (test-bank with a test key).
   test: { action: check_balance }
 rate_limit: { requests: 50, per: 1s, scope: connection }
 base_url: https://api.paystack.co
@@ -263,6 +267,65 @@ actions:
         refund_id: { type: integer }
         amount:    { type: integer, description: Kobo }
         status:    { type: string, description: "pending, processing, processed or failed; already when it had been refunded" }
+  # Dedicated virtual accounts, from Paystack's public documentation, read
+  # 23 October 2026 (docs/spec/schools-rail-facts.md):
+  #   https://docs-v2.paystack.com/docs/payments/dedicated-virtual-accounts/
+  #   https://docs-v2.paystack.com/docs/api/dedicated-virtual-account/
+  #   https://docs-v2.paystack.com/docs/api/customer/
+  #   https://docs-v2.paystack.com/docs/api/transaction/ (List Transactions)
+  #   https://support.paystack.com/hc/en-us/articles/360009881760 (fees, limits, naming)
+  create_dedicated_account:
+    title: Give a customer their own account number
+    description: >-
+      A dedicated virtual account: a permanent account number for one customer,
+      known by their email. A customer who has one already is answered with it.
+      Paystack names it "<your business name>/<customer's name>". Only for
+      registered Nigerian businesses that have gone live; at most 1,000 a
+      business unless Paystack raises it. Each transfer into it arrives as
+      charge.success (channel dedicated_nuban); Paystack charges 1%, capped
+      at NGN 300.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [email]
+      properties:
+        email:      { type: string, description: The customer's email; one account per email }
+        first_name: { type: string }
+        last_name:  { type: string }
+        phone:      { type: string }
+    output:
+      type: object
+      properties:
+        customer_code:  { type: string, description: The customer's code; each payment into the account carries it }
+        account_number: { type: string }
+        account_name:   { type: string }
+        bank_name:      { type: string }
+        id:             { type: string, description: The dedicated account's id }
+    pii:
+      - { field: email, category: email }
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
+      - { field: phone, category: phone }
+      - { field: output.account_number, category: account_number }
+      - { field: output.account_name, category: name }
+  list_payments:
+    title: List successful payments in a window
+    description: Successful payments between two times (GET /transaction), every page up to 2,000; truncated beyond.
+    class: read
+    input:
+      type: object
+      required: [from]
+      properties:
+        from: { type: string, format: date-time }
+        to:   { type: string, format: date-time }
+    output:
+      type: object
+      properties:
+        data:      { type: array, items: { type: object }, description: "Paystack transaction objects, as its charge.success webhook carries them" }
+        truncated: { type: boolean }
+    pii:
+      - { field: output.data, category: other }
   refund_status:
     title: Check whether a payment was refunded
     description: Reads the payment; not found while it has not been refunded (reversed).
@@ -279,6 +342,8 @@ actions:
 triggers:
   transfer_event:
     type: webhook
+    title: Transfers you send
+    where: "Paystack keeps one webhook address: give it the payments one. Transfers still reach Taskiem, which checks Paystack for them."
     verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
     events: [transfer.success, transfer.failed, transfer.reversed]
     event_type: =body.event
@@ -290,11 +355,25 @@ triggers:
     poll: { action: list_transfers, since: from, items: =output.data, event: "='transfer.' + item.status", every: 5m }
   charge_event:
     type: webhook
+    title: Payments you receive
+    where: "Paystack dashboard → Settings → API Keys & Webhooks → Live Webhook URL (Paystack keeps one address: use this one)"
     verify: { scheme: hmac_sha512, header: x-paystack-signature, secret_field: secret_key }
-    events: [charge.success, bank.transfer.rejected]
+    # Refund events come to the same address (Paystack sends every event to
+    # its one webhook URL). They name the payment refunded in
+    # transaction_reference, not reference (docs-v2.paystack.com/docs/payments/refunds/,
+    # "Listen to notifications").
+    events: [charge.success, bank.transfer.rejected, refund.pending, refund.processing, refund.processed, refund.failed]
     event_type: =body.event
-    dedup: =body.data.reference + ':' + body.event
-    correlation: =body.data.reference
+    dedup: "=body.event.startsWith('refund.') ? body.data.transaction_reference + ':' + body.event + ':' + string(body.data.amount) : body.data.reference + ':' + body.event"
+    # A payment into a customer's dedicated account (authorization.channel
+    # dedicated_nuban, as Paystack's dedicated virtual accounts guide shows
+    # it) correlates on the customer's code, the account's reference.
+    correlation: >-
+      =body.event.startsWith('refund.') ? body.data.transaction_reference
+      : body.event == 'charge.success' && has(body.data.authorization) && type(body.data.authorization) == map
+      && has(body.data.authorization.channel) && body.data.authorization.channel == 'dedicated_nuban'
+      && has(body.data.customer) && type(body.data.customer) == map && has(body.data.customer.customer_code) ? body.data.customer.customer_code
+      : body.data.reference
     poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", every: 5m }
 # What Paystack can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
 capabilities:
@@ -346,7 +425,7 @@ capabilities:
       metadata: "={'description': input.description}"
     output: { payment_url: "=output.authorization_url", payment_id: "=output.reference" }
     requires: [customer.email]
-    ignores: [customer.name, customer.phone, customer.bvn]
+    ignores: [customer.name, customer.phone, customer.bvn, customer.nin]
   collect_transfer:
     action: pay_with_transfer
     input:
@@ -362,7 +441,7 @@ capabilities:
       amount_kobo: =output.amount
       expires_at: =output.expires_at
     requires: [customer.email]
-    ignores: [customer.name, customer.phone, customer.bvn]
+    ignores: [customer.name, customer.phone, customer.bvn, customer.nin]
     fixed: { currency: NGN }
     transfer: { on_late: returned, on_wrong_amount: returned, min_minutes: 15, max_minutes: 480, default_minutes: 480 }
     notes: >-
@@ -385,6 +464,53 @@ capabilities:
       status: "=output.status in ['processed', 'already'] ? 'refunded' : output.status == 'failed' ? 'failed' : 'pending'"
       amount_kobo: =output.?amount
     unsupported: [amount_kobo]
+  virtual_account:
+    # Paystack names the account "<business name>/<customer's name>" itself
+    # (custom naming is a request to its support), so the customer's name
+    # is the child's or tenant's and account_name is not sent. The first
+    # word is the first name, the rest the last.
+    action: create_dedicated_account
+    input:
+      email: =input.customer.email
+      first_name: "=input.customer.name.split(' ').filter(w, w != '')[0]"
+      last_name: "=[input.customer.name.split(' ').filter(w, w != '')].map(ws, size(ws) > 1 ? ws.slice(1, size(ws)).join(' ') : ws[0])[0]"
+      phone: =input.customer.?phone
+    output:
+      account_number: =output.account_number
+      bank_name: =output.bank_name
+      account_name: =output.?account_name
+      reference: =output.customer_code
+    requires: [customer.email]
+    ignores: [account_name, account, customer.bvn, customer.nin]
+    unsafe: true
+    notes: >-
+      One account per customer email, so each customer (each student) needs an email of
+      their own. Only for registered Nigerian businesses that have gone live; businesses in
+      financial services, betting and general services must validate each customer first,
+      which Taskiem does not do. At most 1,000 accounts unless Paystack raises the limit.
+      Paystack charges 1%, capped at NGN 300, per payment.
+  list_credits:
+    # Payments into dedicated accounts among the business's successful
+    # payments: channel dedicated_nuban, known by the customer's code. Each
+    # is the transaction Paystack sends as charge.success, with the same
+    # reference (credit_id). The fee (fees) is not mapped: its unit and
+    # whether it is taken from the amount are not documented.
+    action: list_payments
+    input: { from: "=input.since", to: "=input.?until" }
+    output:
+      credits: >-
+        =output.data.filter(t, has(t.authorization) && type(t.authorization) == map && has(t.authorization.channel)
+        && t.authorization.channel == 'dedicated_nuban' && has(t.customer) && type(t.customer) == map && has(t.customer.customer_code))
+        .map(t, {'reference': t.customer.customer_code, 'credit_id': t.reference, 'amount_kobo': int(t.amount),
+        ?'currency': has(t.currency) && t.currency != null ? optional.of(t.currency) : optional.none(),
+        ?'account_number': has(t.authorization.receiver_bank_account_number) && t.authorization.receiver_bank_account_number != null ? optional.of(t.authorization.receiver_bank_account_number) : optional.none(),
+        ?'payer_name': has(t.authorization.sender_name) && t.authorization.sender_name != null ? optional.of(t.authorization.sender_name) : optional.none(),
+        ?'payer_account': has(t.authorization.sender_bank_account_number) && t.authorization.sender_bank_account_number != null ? optional.of(t.authorization.sender_bank_account_number) : optional.none(),
+        ?'payer_bank': has(t.authorization.sender_bank) && t.authorization.sender_bank != null ? optional.of(t.authorization.sender_bank) : optional.none(),
+        ?'narration': has(t.authorization.narration) && t.authorization.narration != null ? optional.of(t.authorization.narration) : optional.none(),
+        ?'occurred_at': has(t.paid_at) && t.paid_at != null ? optional.of(t.paid_at) : optional.none()})
+      truncated: =output.?truncated
+    unsupported: [account]
 events:
   payout.settled:
     trigger: transfer_event
@@ -400,8 +526,37 @@ events:
     fields: { payout_id: "=body.data.reference", reason: "=body.data.?reason" }
   payment.received:
     trigger: charge_event
-    when: =body.event == 'charge.success'
+    # Not a payment into a customer's dedicated account: that is
+    # virtual_account.credited.
+    when: >-
+      =body.event == 'charge.success' && !(has(body.data.authorization) && type(body.data.authorization) == map
+      && has(body.data.authorization.channel) && body.data.authorization.channel == 'dedicated_nuban'
+      && has(body.data.customer) && type(body.data.customer) == map && has(body.data.customer.customer_code))
     fields: { payment_id: "=body.data.reference", amount_kobo: "=body.data.amount", currency: "=body.data.?currency", paid_at: "=body.data.?paid_at" }
+  virtual_account.credited:
+    # A transfer into a customer's dedicated account: charge.success with
+    # authorization.channel dedicated_nuban, and the payer in the
+    # authorization (sender_name, sender_bank, sender_bank_account_number,
+    # masked, narration, receiver_bank_account_number), as the dedicated
+    # virtual accounts guide's example shows. amount is in kobo as for
+    # every Paystack charge; fees is not mapped (unit and whether it is
+    # deducted from the amount are not documented).
+    trigger: charge_event
+    when: >-
+      =body.event == 'charge.success' && has(body.data.authorization) && type(body.data.authorization) == map
+      && has(body.data.authorization.channel) && body.data.authorization.channel == 'dedicated_nuban'
+      && has(body.data.customer) && type(body.data.customer) == map && has(body.data.customer.customer_code)
+    fields:
+      reference: =body.data.customer.customer_code
+      credit_id: =body.data.reference
+      amount_kobo: =body.data.amount
+      currency: =body.data.?currency
+      account_number: =body.data.authorization.?receiver_bank_account_number
+      payer_name: =body.data.authorization.?sender_name
+      payer_account: =body.data.authorization.?sender_bank_account_number
+      payer_bank: =body.data.authorization.?sender_bank
+      narration: =body.data.authorization.?narration
+      occurred_at: =body.data.?paid_at
   payment.returned:
     # Paystack's documentation describes the event (an incorrect amount, or
     # a payer its fraud checks flagged) without an example body; the
@@ -409,3 +564,40 @@ events:
     trigger: charge_event
     when: =body.event == 'bank.transfer.rejected'
     fields: { payment_id: "=body.data.reference", amount_kobo: "=body.data.?amount", reason: "='other'" }
+  # Refunds, from Paystack's public documentation (docs-v2.paystack.com,
+  # read 23 October 2026): the events are listed on
+  # https://docs-v2.paystack.com/docs/payments/webhooks/ (refund.pending,
+  # refund.processing, refund.processed, refund.failed), and one example
+  # body, refund.pending, is on
+  # https://docs-v2.paystack.com/docs/payments/refunds/#listen-to-notifications
+  # (data: status, transaction_reference, refund_reference (null there),
+  # amount as a string, currency, processor, customer). The other three are
+  # read the same way. amount is read in the currency's subunit, as the
+  # Create Refund API takes it (https://docs-v2.paystack.com/docs/api/refund/);
+  # the webhook example does not say. A failed refund's reason is not
+  # documented and is left out. refund.processing (the processor has it) is
+  # still pending. Confirm in sandbox.
+  refund.pending:
+    trigger: charge_event
+    when: =body.event in ['refund.pending', 'refund.processing']
+    fields:
+      payment_id: =body.data.transaction_reference
+      refund_id: =body.data.?refund_reference
+      amount_kobo: "=has(body.data.amount) && body.data.amount != null ? optional.of(int(body.data.amount)) : optional.none()"
+      currency: =body.data.?currency
+  refund.processed:
+    trigger: charge_event
+    when: =body.event == 'refund.processed'
+    fields:
+      payment_id: =body.data.transaction_reference
+      refund_id: =body.data.?refund_reference
+      amount_kobo: "=has(body.data.amount) && body.data.amount != null ? optional.of(int(body.data.amount)) : optional.none()"
+      currency: =body.data.?currency
+  refund.failed:
+    trigger: charge_event
+    when: =body.event == 'refund.failed'
+    fields:
+      payment_id: =body.data.transaction_reference
+      refund_id: =body.data.?refund_reference
+      amount_kobo: "=has(body.data.amount) && body.data.amount != null ? optional.of(int(body.data.amount)) : optional.none()"
+      currency: =body.data.?currency

@@ -1,28 +1,25 @@
 import { Link } from "react-router-dom";
 import { get, put } from "../api";
+import { groupRows, type Choice, type NotificationSetting } from "../lib/notifications";
 import { ErrorBox, PageHeader, useAction, useLoad } from "../ui";
-
-interface Setting {
-  group: "failures" | "setup" | "finished";
-  chat: boolean;
-  email: boolean;
-}
-
-const GROUPS: Record<Setting["group"], { title: string; hint: string }> = {
-  failures: { title: "Failed runs", hint: "A run failed, or needs a person to check something. Owners, whoever started it and whoever published it." },
-  setup: { title: "Setup problems", hint: "Something Taskiem needs you to fix: a domain, a connection, your data tables. Owners." },
-  finished: { title: "Your runs that finish", hint: "A run you started yourself finished." },
-};
 
 /**
  * How a person hears beyond the app (no-technical-steps N12). The bell
  * always shows everything; chat is the WhatsApp or Telegram they linked,
- * and email is used when they linked neither.
+ * and email is used when they linked neither. The money group (people who
+ * can see invoices) is the daily money summary on chat and the monthly
+ * money email. A group this page does not know is shown with plain labels.
  */
 export function NotificationSettings() {
-  const view = useLoad(() => get<{ settings: Setting[] }>("/v1/me/notification-settings"), []);
+  const view = useLoad(() => get<{ settings: NotificationSetting[] }>("/v1/me/notification-settings"), []);
   const act = useAction();
-  const save = (next: Setting) => void act.run(async () => (await put("/v1/me/notification-settings", { settings: [next] }), view.reload()), "Saved");
+  const save = (next: NotificationSetting) => void act.run(async () => (await put("/v1/me/notification-settings", { settings: [next] }), view.reload()), "Saved");
+  const box = (c: Choice, checked: boolean, change: (on: boolean) => void) => (
+    <label style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+      <input type="checkbox" aria-label={c.label} checked={checked} disabled={act.busy} onChange={(e) => change(e.target.checked)} />
+      {c.caption && <span className="hint">{c.caption}</span>}
+    </label>
+  );
   return (
     <>
       <PageHeader title="Notifications" description="What you hear beyond the bell. The bell always shows everything." />
@@ -37,18 +34,14 @@ export function NotificationSettings() {
             </tr>
           </thead>
           <tbody>
-            {(view.data?.settings ?? []).map((s) => (
-              <tr key={s.group}>
+            {groupRows(view.data?.settings).map((r) => (
+              <tr key={r.setting.group}>
                 <td>
-                  <strong>{GROUPS[s.group].title}</strong>
-                  <div className="hint">{GROUPS[s.group].hint}</div>
+                  <strong>{r.title}</strong>
+                  {r.hint && <div className="hint">{r.hint}</div>}
                 </td>
-                <td>
-                  <input type="checkbox" aria-label={`${GROUPS[s.group].title} on WhatsApp or Telegram`} checked={s.chat} disabled={act.busy} onChange={(e) => save({ ...s, chat: e.target.checked })} />
-                </td>
-                <td>
-                  <input type="checkbox" aria-label={`${GROUPS[s.group].title} by email`} checked={s.email} disabled={act.busy} onChange={(e) => save({ ...s, email: e.target.checked })} />
-                </td>
+                <td>{box(r.chat, r.setting.chat, (on) => save({ ...r.setting, chat: on }))}</td>
+                <td>{box(r.email, r.setting.email, (on) => save({ ...r.setting, email: on }))}</td>
               </tr>
             ))}
           </tbody>

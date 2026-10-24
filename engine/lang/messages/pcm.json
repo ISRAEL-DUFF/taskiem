@@ -84,6 +84,14 @@
       "text": "Fill am",
       "reviewed": false
     },
+    "button.match_no": {
+      "text": "No",
+      "reviewed": false
+    },
+    "button.match_yes": {
+      "text": "Yes, match am",
+      "reviewed": false
+    },
     "button.new_account": {
       "text": "New account number",
       "reviewed": false
@@ -254,6 +262,54 @@
     },
     "lang.unavailable": {
       "text": "{name} no dey here. Languages wey dey here: {languages}.",
+      "reviewed": false
+    },
+    "money.channel.cash": {
+      "text": "cash",
+      "reviewed": false
+    },
+    "money.channel.upload": {
+      "text": "bank statement",
+      "reviewed": false
+    },
+    "money.daily": {
+      "text": "Yesterday: {in}; {out} comot; {invoices}; {leaks}.",
+      "reviewed": false
+    },
+    "money.daily.in": {
+      "text": "{amount} enter",
+      "reviewed": false
+    },
+    "money.daily.in_pending": {
+      "text": "{amount} enter ({pending} still dey wait)",
+      "reviewed": false
+    },
+    "money.daily.invoices": {
+      "text": "{n} invoices don pay ({amount})",
+      "reviewed": false
+    },
+    "money.daily.invoices_none": {
+      "text": "no invoice pay",
+      "reviewed": false
+    },
+    "money.daily.invoices_one": {
+      "text": "1 invoice don pay ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks": {
+      "text": "{n} new money leak ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks_none": {
+      "text": "no new money leak",
+      "reviewed": false
+    },
+    "money.daily.leaks_one": {
+      "text": "1 new money leak ({amount})",
+      "reviewed": false
+    },
+    "money.daily.link": {
+      "text": "Money page: {link}",
       "reviewed": false
     },
     "reach.about": {
@@ -925,11 +981,15 @@
       "reviewed": false
     },
     "wa.help.invoice": {
-      "text": "• *invoice* wit name, amount and wetin e be for (*invoice Ada 25,000 for 5 bags of rice*): e go send invoice give your customer",
+      "text": "• *invoice* (or *send invoice give*) wit name, amount and wetin e be for (*invoice Ada 25,000 for 5 bags of rice*): e go send invoice give your customer",
       "reviewed": false
     },
     "wa.help.language": {
       "text": "• *language* and the language name: make I reply you for {languages}",
+      "reviewed": false
+    },
+    "wa.help.money": {
+      "text": "• *spent* (or *I spend*) plus how much and wetin e be for (*spent 12,000 on diesel at Total*), or *cash in* (*cash enter*) or *cash out* (*cash comot*) plus how much (*cash in 20,000 till*): I go write am for your money log",
       "reviewed": false
     },
     "wa.help.run": {
@@ -1014,6 +1074,130 @@
     },
     "wa.linked": {
       "text": "This number don join your Taskiem account. Send *help* make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "wa.match.already_decided": {
+      "text": "Dem don already decide dis one for the web app.",
+      "reviewed": false
+    },
+    "wa.match.already_matched": {
+      "text": "E don already match {number}.",
+      "reviewed": false
+    },
+    "wa.match.already_rejected": {
+      "text": "Dem don already reject am.",
+      "reviewed": false
+    },
+    "wa.match.ask": {
+      "text": "{amount} enter for {when} through {channel}.\n\nNa for {number} be dis, {due} wey the customer owe? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.ask_order": {
+      "text": "{amount} enter for {when} through {channel}.\n\nNa for shop order {number} be dis, {due} to pay? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.ask_split": {
+      "text": "{amount} enter for {when} through {channel}.\n\nNa from the customer wey get {number} be dis, {due} wey dem owe? E pass am, so e go share am for the customer open invoice dem, the old one first: {parts}. {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.channel.cash": {
+      "text": "cash",
+      "reviewed": false
+    },
+    "wa.match.channel.upload": {
+      "text": "statement wey dem upload",
+      "reviewed": false
+    },
+    "wa.match.denied": {
+      "text": "You no fit match payment for {org}.",
+      "reviewed": false
+    },
+    "wa.match.matched_order": {
+      "text": "E don match order {number}. Dem don pay am now.",
+      "reviewed": false
+    },
+    "wa.match.matched_paid": {
+      "text": "E don match {number}. Dem don pay am finish.",
+      "reviewed": false
+    },
+    "wa.match.matched_part": {
+      "text": "E don match {number}. Dem don pay part ({due} still remain).",
+      "reviewed": false
+    },
+    "wa.match.matched_split": {
+      "text": "E don match am in parts: {parts}.",
+      "reviewed": false
+    },
+    "wa.match.more": {
+      "text": "If no be am, No go show the next invoice wey fit be.",
+      "reviewed": false
+    },
+    "wa.match.other_person": {
+      "text": "Na another person dem send dis button give.",
+      "reviewed": false
+    },
+    "wa.match.refused": {
+      "text": "E no match: {reason}",
+      "reviewed": false
+    },
+    "wa.match.rejected_left": {
+      "text": "Okay, no be am. The payment dey wait make you match am for the web app, under Invoices.",
+      "reviewed": false
+    },
+    "wa.match.rejected_left_link": {
+      "text": "Okay, no be am. The payment dey wait make you match am for the web app: {link}",
+      "reviewed": false
+    },
+    "wa.match.rejected_next": {
+      "text": "Okay, no be am. We no go suggest am again.",
+      "reviewed": false
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} go remain as the customer credit",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "Make I write {amount} cash wey enter: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "Make I write {amount} cash wey comot: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense": {
+      "text": "Make I write say you spend {amount} for {what} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "Make I write say you spend {amount} for {what} for {vendor} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Reply *yes* make I write am or *no* make I leave am.",
+      "reviewed": false
+    },
+    "wa.money.denied": {
+      "text": "You no fit write money for {org}.",
+      "reviewed": false
+    },
+    "wa.money.how": {
+      "text": "Talk how much and wetin e be for, like this: *spent 12,000 on diesel at Total*, or *cash in 20,000 till*",
+      "reviewed": false
+    },
+    "wa.money.not_recorded": {
+      "text": "I no write am.",
+      "reviewed": false
+    },
+    "wa.money.recorded_in": {
+      "text": "I don write am. {amount} enter, {category}.",
+      "reviewed": false
+    },
+    "wa.money.recorded_out": {
+      "text": "I don write am. {amount} comot, {category}.",
+      "reviewed": false
+    },
+    "wa.money.refused": {
+      "text": "I no fit write am: {reason}",
       "reviewed": false
     },
     "wa.no_org": {
@@ -1800,6 +1984,10 @@
       "text": "One phone number with the country code, like 2348012345678",
       "reviewed": false
     },
+    "wa.table.kept": {
+      "text": "Na Taskiem dey keep {table}: na only Taskiem dey add rows, you no fit change or delete dem for here. Correction na new row.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Data tables for {org}:",
       "reviewed": false
@@ -2106,6 +2294,10 @@
     },
     "wd.trigger.form_members": {
       "text": "When person fill the form “{title}” (na only members)",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_paid": {
+      "text": "When person pay one of your invoice finish",
       "reviewed": false
     },
     "wd.trigger.manual": {

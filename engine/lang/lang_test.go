@@ -285,6 +285,15 @@ func TestMatchIntent(t *testing.T) {
 		{"wetin people order", []lang.Tag{lang.PCM, lang.EN}, lang.IntentOrders, ""},
 		{"publish Visitors log", all, lang.IntentPublish, "Visitors log"},
 		{"my page", all, lang.IntentMyPage, ""},
+		// Invoices and the money log (T8); English's are the API's own.
+		{"ìwé owó Ada 25,000 fún ìrẹsì", []lang.Tag{lang.YO, lang.EN}, lang.IntentInvoice, "Ada 25,000 fún ìrẹsì"},
+		{"abeg send bill give Chi 10k", []lang.Tag{lang.PCM, lang.EN}, lang.IntentInvoice, "Chi 10k"},
+		{"Takardar Kudi Musa 3000", []lang.Tag{lang.HA, lang.EN}, lang.IntentInvoice, "Musa 3000"},
+		{"emefuru m 12,000 maka diesel", []lang.Tag{lang.IG, lang.EN}, lang.IntentExpense, "12,000 maka diesel"},
+		{"kuɗi ya fita 3000", []lang.Tag{lang.HA, lang.EN}, lang.IntentCashOut, "3000"},
+		{"owo wole 20000", []lang.Tag{lang.YO, lang.EN}, lang.IntentCashIn, "20000"},
+		{"invoice Ada 25000", []lang.Tag{lang.YO, lang.EN}, lang.IntentNone, ""},
+		{"ìwé owó Ada 25000", all, lang.IntentNone, ""},
 		// Another language's words mean nothing unless it is that person's.
 		{"fagilé", all, lang.IntentNone, ""},
 		{"please pay salaries every friday", all, lang.IntentNone, ""},

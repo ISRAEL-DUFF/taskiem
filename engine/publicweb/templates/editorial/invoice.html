@@ -4,7 +4,7 @@
 <h1>Invoice {{.Number}}</h1>
 {{with .Message}}<p class="notice" role="status">{{.}}</p>{{end}}
 <div class="inv">
-{{range .Lines}}<div class="inv-row"><div class="inv-what"><span class="line-name">{{.Description}}</span> <span class="line-price">{{.Each}}</span></div><span>{{.Amount}}</span></div>
+{{range .Lines}}<div class="inv-row"><div class="inv-what"><span class="line-name">{{.Description}}</span> {{with .Each}}<span class="line-price">{{.}}</span>{{end}}{{with .Note}} <span class="line-price">{{.}}</span>{{end}}</div><span>{{.Amount}}</span></div>
 {{end}}</div>
 <div class="receipt">
 <dl class="inv-sums">

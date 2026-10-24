@@ -1,0 +1,140 @@
+{
+  "capability": "list_credits",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "since": "2026-10-21T12:00:00Z",
+    "until": "2026-10-23T12:00:00Z",
+    "account": "6f1e"
+  },
+  "exchanges": [
+    {
+      "name": "transactions_page_1",
+      "request": {
+        "method": "GET",
+        "path": "/v1/wallets/6f1e/transactions",
+        "query": {
+          "from": "2026-10-21T12:00:00Z",
+          "to": "2026-10-23T12:00:00Z",
+          "limit": "100"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "wallet_id": "6f1e",
+          "currency": "NGN",
+          "total": 3,
+          "transactions": [
+            {
+              "txn_id": "t-1",
+              "type": "debit",
+              "direction": "out",
+              "status": "confirmed",
+              "amount": 500000,
+              "fee": 5350,
+              "currency": "NGN",
+              "occurred_at": "2026-10-23T08:00:00Z"
+            },
+            {
+              "txn_id": "t-2",
+              "type": "credit",
+              "direction": "in",
+              "status": "confirmed",
+              "amount": 4930000,
+              "amount_credited": 4930000,
+              "fee_charged": 70000,
+              "currency": "NGN",
+              "narration": "SCHOOL FEES EBUBE",
+              "occurred_at": "2026-10-23T09:14:02Z",
+              "provider_reference": "100004261023091402123456",
+              "counterparty": {
+                "type": "bank_account",
+                "name": "ADA EZE",
+                "account_number": "0123456789",
+                "bank_code": "058",
+                "bank_name": "GTBank"
+              },
+              "virtual_account": {
+                "account_number": "9901234567",
+                "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+              }
+            }
+          ],
+          "pagination": {
+            "has_more": true,
+            "next_cursor": "t-2"
+          }
+        }
+      }
+    },
+    {
+      "name": "transactions_page_2",
+      "request": {
+        "method": "GET",
+        "path": "/v1/wallets/6f1e/transactions",
+        "query": {
+          "cursor": "t-2",
+          "limit": "100"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "wallet_id": "6f1e",
+          "currency": "NGN",
+          "total": 3,
+          "transactions": [
+            {
+              "txn_id": "t-3",
+              "type": "credit",
+              "direction": "in",
+              "status": "confirmed",
+              "amount": 2000000,
+              "amount_credited": 2000000,
+              "currency": "NGN",
+              "occurred_at": "2026-10-23T11:00:00Z",
+              "provider_reference": "100004261023110000999999",
+              "virtual_account": {
+                "account_number": "9901234568",
+                "reference": "tsk_zz12cd34ef56gh78ij90kl12mn34op56"
+              }
+            }
+          ],
+          "pagination": {
+            "has_more": false
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "truncated": false,
+    "credits": [
+      {
+        "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+        "credit_id": "100004261023091402123456",
+        "amount_kobo": 5000000,
+        "settled_kobo": 4930000,
+        "fee_kobo": 70000,
+        "currency": "NGN",
+        "account_number": "9901234567",
+        "payer_name": "ADA EZE",
+        "payer_account": "0123456789",
+        "payer_bank": "GTBank",
+        "narration": "SCHOOL FEES EBUBE",
+        "occurred_at": "2026-10-23T09:14:02Z"
+      },
+      {
+        "reference": "tsk_zz12cd34ef56gh78ij90kl12mn34op56",
+        "credit_id": "100004261023110000999999",
+        "amount_kobo": 2000000,
+        "settled_kobo": 2000000,
+        "currency": "NGN",
+        "account_number": "9901234568",
+        "occurred_at": "2026-10-23T11:00:00Z"
+      }
+    ]
+  }
+}
