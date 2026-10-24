@@ -115,6 +115,12 @@ func (s Service) ListTermInvoices(ctx context.Context, tenant, term uuid.UUID, c
 	return out, err
 }
 
+// IssueAccount issues a student's account number on the school's issuing
+// connection, once per student and connection (IssueOne).
+func (s Service) IssueAccount(ctx context.Context, tenant uuid.UUID, student string, in IssueIn, by string) (StudentAccount, error) {
+	return s.IssueOne(ctx, tenant, student, in, by)
+}
+
 // Current is the current term; ok false when none runs.
 func (s Service) Current(ctx context.Context, tenant uuid.UUID) (Term, bool, error) {
 	var out Term

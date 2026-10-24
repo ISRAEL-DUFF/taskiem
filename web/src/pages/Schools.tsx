@@ -4,6 +4,7 @@ import { ApiError, get, patch, post, put } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { StudentFeesPanel } from "./SchoolFees";
+import { IssuingSettings, StudentAccountPanel } from "./SchoolAccountParts";
 import {
   PROMOTION_ACTIONS,
   STATUS_FILTERS,
@@ -79,6 +80,7 @@ export function SchoolTabs() {
       </NavLink>
       <NavLink to="/schools/families">Families</NavLink>
       <NavLink to="/schools/classes">Classes and terms</NavLink>
+      <NavLink to="/schools/accounts">Account numbers</NavLink>
       {me?.roles.includes("owner") && <NavLink to="/settings/schools">Settings</NavLink>}
     </nav>
   );
@@ -554,6 +556,7 @@ export function SchoolStudentPage() {
             <h2 id="student-family">Family</h2>
             {s.family ? <FamilyCard family={s.family} /> : <p className="hint">No family yet: add one on the Families page.</p>}
           </section>
+          <StudentAccountPanel studentID={s.id} />
           <StudentFeesPanel studentID={s.id} />
           <section className="card" aria-labelledby="student-history">
             <h2 id="student-history">Class history</h2>
@@ -1120,9 +1123,10 @@ export function SchoolSettingsPage() {
   const { me } = useAuth();
   return (
     <>
-      <PageHeader title="Schools settings" description="Turn the Schools area on or off for the business." />
+      <PageHeader title="Schools settings" description="Turn the Schools area on or off for the business, choose who issues students' account numbers, and set the discount threshold." />
       {me?.schools && <SchoolTabs />}
       <SchoolsSwitch />
+      {me?.schools && me.roles.includes("owner") && <IssuingSettings />}
       {me?.schools && me.roles.includes("owner") && <DiscountThreshold />}
     </>
   );

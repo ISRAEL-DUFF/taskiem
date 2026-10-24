@@ -17,6 +17,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/billing"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/schools"
 )
 
@@ -76,12 +77,27 @@ func (s *Server) schoolRoutes(r chi.Router) {
 	r.With(read).Get("/schools/families/{id}", s.getSchoolFamily)
 	r.With(manage, s.tenantWide).Post("/schools/families/{id}/guardians", s.addSchoolGuardian)
 	r.With(manage, s.tenantWide).Put("/schools/families/{id}/guardians/{guardian}", s.changeSchoolGuardian)
-	s.schoolFeeRoutes(r) // fees and term invoices (schools_fees.go)
+	s.schoolFeeRoutes(r)     // fees and term invoices (schools_fees.go)
+	s.schoolAccountRoutes(r) // students' account numbers (schools_accounts.go)
 	r.With(manage, s.tenantWide).Delete("/schools/families/{id}/guardians/{guardian}", s.removeSchoolGuardian)
 }
 
 func (s *Server) schoolsSvc() *schools.Schools {
-	return &schools.Schools{Pool: s.Store.Pool, Vault: s.Vault, Invoices: s.Invoices}
+	return &schools.Schools{Pool: s.Store.Pool, Vault: s.Vault, Invoices: s.Invoices, Rails: s.accountRails(), Logger: s.Logger}
+}
+
+// accountRails are AccountRails, else the invoices' rails when they can
+// issue accounts; nil without either.
+func (s *Server) accountRails() invoicing.CapabilityRails {
+	if s.AccountRails != nil {
+		return s.AccountRails
+	}
+	if s.Invoices != nil {
+		if r, ok := s.Invoices.Rails.(invoicing.CapabilityRails); ok {
+			return r
+		}
+	}
+	return nil
 }
 
 func schoolErr(err error) error {
@@ -116,6 +132,7 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var on, bursar bool
 	var threshold int64
+	var issuing schools.Issuing
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if on, err = schools.Enabled(r.Context(), tx, p.TenantID); err != nil {
@@ -124,12 +141,21 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		if threshold, err = schools.DiscountThreshold(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
+		if issuing, err = schools.GetIssuing(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
 		return tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM roles WHERE name = $1)`, bursarRole.Name).Scan(&bursar)
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": on, "bursar_role": bursar, "discount_threshold_naira": threshold / 100})
+	issuers, err := s.schoolsSvc().Issuers(r.Context(), p.TenantID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": on, "bursar_role": bursar, "discount_threshold_naira": threshold / 100,
+		"issuing": issuing, "issuers": issuers})
 }
 
 // putSchoolSettings answers PUT /v1/settings/schools: only an owner turns
@@ -148,16 +174,29 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		// threshold in whole naira (0: none). Discounts at or above it
 		// need a second person (B5; refused until then).
 		DiscountThresholdNaira *int64 `json:"discount_threshold_naira"`
+		// Issuing, when given, sets the connection that issues students'
+		// account numbers (and its wallet), and whether siblings share
+		// family credit.
+		Issuing *schools.Issuing `json:"issuing"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if req.Issuing != nil && req.Enabled {
+		checked, err := s.schoolsSvc().CheckIssuing(r.Context(), p.TenantID, *req.Issuing)
+		if err != nil {
+			s.fail(w, r, schoolErr(err))
+			return
+		}
+		req.Issuing = &checked
 	}
 	addBursar := req.Enabled && req.BursarRole
 	if addBursar && s.Billing.Require(r.Context(), p.TenantID, billing.FeatureCustomRoles) != nil {
 		addBursar = false // the plan has no custom roles: the area still turns on
 	}
 	bursar, threshold := false, int64(0)
+	var issuing schools.Issuing
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		changed, err := schools.SetEnabled(r.Context(), tx, p.TenantID, req.Enabled, p.Actor())
 		if err != nil {
@@ -197,7 +236,21 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		if req.Issuing != nil && req.Enabled {
+			was, err := schools.SetIssuing(r.Context(), tx, p.TenantID, *req.Issuing, p.Actor())
+			if err != nil {
+				return err
+			}
+			if was != *req.Issuing {
+				if err := auditTx(r, tx, "settings.schools.issuing", p.TenantID.String(), map[string]any{"from": was, "to": *req.Issuing}); err != nil {
+					return err
+				}
+			}
+		}
 		if threshold, err = schools.DiscountThreshold(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		if issuing, err = schools.GetIssuing(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
 		return tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM roles WHERE name = $1)`, bursarRole.Name).Scan(&bursar)
@@ -205,7 +258,13 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": req.Enabled, "bursar_role": bursar, "discount_threshold_naira": threshold / 100})
+	issuers, err := s.schoolsSvc().Issuers(r.Context(), p.TenantID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": req.Enabled, "bursar_role": bursar, "discount_threshold_naira": threshold / 100,
+		"issuing": issuing, "issuers": issuers})
 }
 
 // --- masking ---

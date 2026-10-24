@@ -38,6 +38,7 @@ import { InvoiceEdit, InvoiceMatch, InvoiceNew, InvoicePage, InvoiceSettingsPage
 import { MoneyEntries, MoneyFees, MoneyLeaks, MoneyOverview, MoneyStatements } from "./pages/Money";
 import { GateHome, SchoolClasses, SchoolFamilies, SchoolImport, SchoolPromotionPage, SchoolSettingsPage, SchoolStudentNew, SchoolStudentPage, Schools } from "./pages/Schools";
 import { SchoolTermFees, SchoolTermInvoices } from "./pages/SchoolFees";
+import { SchoolAccountsPage } from "./pages/SchoolAccounts";
 import { showSchools } from "./lib/schools";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
@@ -331,6 +332,7 @@ function SignedIn() {
           <Route path="/schools/sessions/:id/promotion" element={<SchoolPromotionPage />} />
           <Route path="/schools/terms/:id/fees" element={<SchoolTermFees />} />
           <Route path="/schools/terms/:id/invoices" element={<SchoolTermInvoices />} />
+          <Route path="/schools/accounts" element={<SchoolAccountsPage />} />
           <Route path="/settings/schools" element={<SchoolSettingsPage />} />
           <Route path="/forms" element={<Forms />} />
           <Route path="/forms/requests" element={<FormRequests />} />
