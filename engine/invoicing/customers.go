@@ -295,10 +295,7 @@ func (s *Invoices) applyCredit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		if x.DueKobo <= 0 {
 			break
 		}
-		if _, err := tx.Exec(ctx, moneylog.EntryLockSQL, c.entry); err != nil {
-			return x, applied, became, err
-		}
-		left, ok, err := moneylog.EntryLeft(ctx, tx, c.entry)
+		left, ok, err := moneylog.LockLeft(ctx, tx, c.entry)
 		if err != nil {
 			return x, applied, became, err
 		}

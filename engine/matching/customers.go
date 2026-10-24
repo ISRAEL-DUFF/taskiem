@@ -60,10 +60,10 @@ func (m *Matcher) permanent(ctx context.Context, tenant uuid.UUID, e entry) (boo
 	case e.AmountKobo <= 0:
 		return true, m.hold(ctx, tenant, e.ID, "unmatched", HeldNoAmount)
 	}
-	var paid []invoicing.Invoice
+	var done []counted
 	err = db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		paid = paid[:0]
-		if _, err := tx.Exec(ctx, moneylog.EntryLockSQL, e.ID); err != nil {
+		done = done[:0]
+		if err := moneylog.LockEntry(ctx, tx, e.ID); err != nil {
 			return err
 		}
 		if err := invoicing.MarkCustomers(ctx, tx, tenant, e.ID, acct.CustomerID(), &acct.ID, "account", "system:"+e.Channel); err != nil {
@@ -87,14 +87,12 @@ func (m *Matcher) permanent(ctx context.Context, tenant uuid.UUID, e entry) (boo
 				continue
 			}
 			id := e.ID
-			y, became, err := m.Invoices.RecordPayment(ctx, tx, tenant, x.ID.String(), invoicing.PaymentIn{AmountKobo: part, PaymentID: id.String(), EntryID: &id,
+			k, err := m.countPart(ctx, tx, tenant, Part{Invoice: x.ID.String()}, invoicing.PaymentIn{AmountKobo: part, PaymentID: id.String(), EntryID: &id,
 				Connection: e.Channel, How: "exact", By: "system:" + e.Channel, Reasons: []string{ReasonOwnAccount, reason}})
 			if err != nil {
 				return err
 			}
-			if became {
-				paid = append(paid, y)
-			}
+			done = append(done, k)
 			reason = ReasonNext
 		}
 		// Matched: what is left is the customer's credit.
@@ -103,10 +101,5 @@ func (m *Matcher) permanent(ctx context.Context, tenant uuid.UUID, e entry) (boo
 	if err != nil {
 		return true, err
 	}
-	for _, x := range paid {
-		if err := m.Invoices.Paid(ctx, tenant, x); err != nil {
-			return true, err
-		}
-	}
-	return true, nil
+	return true, m.paid(ctx, tenant, done)
 }

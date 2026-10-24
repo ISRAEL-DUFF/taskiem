@@ -15,7 +15,8 @@ import (
 // storefront_order_payments) undone on its own. The parts never add up to
 // more than the entry counts for (CountableKobo); the database refuses a
 // part that would (00210), under the lock both writers take
-// (EntryLockSQL).
+// (EntryLockSQL). Both count and undo parts along one path (Parts.Count,
+// Parts.Undo, count.go).
 
 // EntryLockSQL takes the lock one money log entry is counted under ($1 the
 // entry's id), shared by invoicing, storefront orders and the database's

@@ -2,7 +2,6 @@ package storefront
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/israel-duff/taskiem/engine/moneylog"
 )
@@ -66,21 +64,6 @@ type OrderPayment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// EntryLock is the lock one money log entry is counted under, shared with
-// invoicing.RecordPayment and the database's check of an entry's parts
-// (moneylog.EntryLockSQL).
-func EntryLock(ctx context.Context, tx pgx.Tx, entry uuid.UUID) error {
-	_, err := tx.Exec(ctx, moneylog.EntryLockSQL, entry)
-	return err
-}
-
-// CountedTowards names what a money log entry counts towards now
-// ("invoice INV-0104", "invoice INV-0104 and order AK-7QX4KD" for a split),
-// or "" for nothing. Call it under EntryLock.
-func CountedTowards(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID) (string, error) {
-	return moneylog.CountedTowards(ctx, tx, tenant, entry)
-}
-
 // Matchable is whether an order waits for money: an order or booking with
 // something to pay, not paid, that waits for its checkout payment
 // (awaiting_payment), or was taken without online payment (payment none)
@@ -99,10 +82,12 @@ const matchableSQL = `paid_at IS NULL AND kind IN ('order', 'booking') AND COALE
 // CountPayment counts a payment towards the order with this reference, in
 // the caller's transaction, and moves the order to paid when it is not
 // yet: an order paid at once (or not yet accepted) is received and its run
-// starts; one accepted is paid and its waiting run is woken. The same
-// entry again is a no-op. Refused (ErrDecision) for an entry counted
-// elsewhere, an order paid by another payment, cancelled, expired or
-// decided against, or less money than is due.
+// starts; one accepted is paid and its waiting run is woken. A payment
+// with a money log entry is a part of it, counted along the path invoices
+// take too (moneylog.Parts.Count). The same entry again is a no-op.
+// Refused (ErrDecision) for an entry counted elsewhere, an order paid by
+// another payment, cancelled, expired or decided against, or less money
+// than is due.
 func (o *Orders) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, reference string, p PaymentIn) (Counted, error) {
 	switch p.How {
 	case "exact", "suggested", "suggested_auto", "manual":
@@ -112,101 +97,87 @@ func (o *Orders) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if p.AmountKobo <= 0 {
 		return Counted{}, fmt.Errorf("%w: a payment needs an amount", ErrInvalid)
 	}
-	if p.EntryID != nil {
-		if err := EntryLock(ctx, tx, *p.EntryID); err != nil {
-			return Counted{}, err
-		}
-	}
-	ord, err := scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND reference = $2 FOR UPDATE`, tenant, reference))
+	var c Counted
+	k, err := moneylog.OrderParts.Count(ctx, tx, moneylog.Counting{Tenant: tenant, Entry: p.EntryID, AmountKobo: p.AmountKobo, How: p.How, By: p.By, Reasons: p.Reasons,
+		Open: func() (uuid.UUID, error) {
+			ord, err := scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND reference = $2 FOR UPDATE`, tenant, reference))
+			c.Order = ord
+			return ord.ID, err
+		},
+		Refused: func(why string) error { return fmt.Errorf("%w: %s", ErrDecision, why) },
+		Decide: func() (moneylog.Cols, bool, error) {
+			from, err := o.payOrder(ctx, tx, tenant, &c, p)
+			return moneylog.Cols{"from_status": from, "woke_run": c.wake}, err == nil && p.EntryID != nil, err
+		}})
 	if err != nil {
-		return Counted{}, err
+		return c, err
 	}
-	c := Counted{Order: ord}
+	if k.Already {
+		return c, o.open(ctx, tx, tenant, &c.Order)
+	}
+	c.PaymentID = k.ID
+	c.Order, err = o.GetOrder(ctx, tx, tenant, c.Order.Reference)
+	return c, err
+}
+
+// payOrder applies an order's own rules to a payment the entry has room
+// for, and moves the order to paid when it is not yet; from is the status
+// it moved from (nil when it was paid already).
+func (o *Orders) payOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *Counted, p PaymentIn) (*string, error) {
+	ord := c.Order
 	if p.EntryID != nil {
-		var here bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
-			AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id))`, ord.ID, *p.EntryID).Scan(&here); err != nil {
-			return c, err
-		}
-		if here {
-			return c, o.open(ctx, tx, tenant, &c.Order)
-		}
-		// One entry may count towards several invoices and orders (a
-		// split), its parts never more than it counts for (the database
-		// checks it too).
-		why, err := moneylog.EntryHas(ctx, tx, tenant, *p.EntryID, p.AmountKobo)
+		paidBy, err := moneylog.OrderParts.Paid(ctx, tx, ord.ID)
 		if err != nil {
-			return c, err
-		}
-		if why != "" {
-			return c, fmt.Errorf("%w: %s", ErrDecision, why)
-		}
-		var paidBy bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = $1 AND p.undoes IS NULL
-			AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id))`, ord.ID).Scan(&paidBy); err != nil {
-			return c, err
+			return nil, err
 		}
 		if paidBy {
-			return c, fmt.Errorf("%w: %s is already paid by another payment", ErrDecision, ord.Reference)
+			return nil, fmt.Errorf("%w: %s is already paid by another payment", ErrDecision, ord.Reference)
 		}
 	}
 	if ord.Kind != "order" && ord.Kind != "booking" {
-		return c, fmt.Errorf("%w: %s takes no payment", ErrDecision, ord.Reference)
+		return nil, fmt.Errorf("%w: %s takes no payment", ErrDecision, ord.Reference)
 	}
 	if p.AmountKobo < ord.Payable() {
-		return c, fmt.Errorf("%w: %s is less than the %s due on %s", ErrDecision, FormatNaira(p.AmountKobo), FormatNaira(ord.Payable()), ord.Reference)
+		return nil, fmt.Errorf("%w: %s is less than the %s due on %s", ErrDecision, FormatNaira(p.AmountKobo), FormatNaira(ord.Payable()), ord.Reference)
 	}
-	var from *string
-	if ord.PaidAt == nil {
-		if !ord.Matchable() {
-			return c, fmt.Errorf("%w: %s is not waiting for a payment (%s)", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
-		}
-		decided := ord.DecidedAt != nil
-		next := ord.Status
-		switch {
-		case ord.Status == "awaiting_payment" && !decided:
-			next = "received"
-		case ord.Status == "awaiting_payment", ord.Status == "accepted":
-			next = "paid"
-		}
-		// As the payment check always did, for an order waiting for its
-		// checkout payment: one not yet decided starts its run; one
-		// accepted wakes the run waiting for its payment, but a booking's
-		// run carries on to the appointment. An order taken without online
-		// payment has its run already, waiting for nothing.
-		switch {
-		case ord.Status != "awaiting_payment":
-		case !decided:
-			c.wake, c.start = true, true
-		case ord.Kind != "booking":
-			c.wake = true
-		}
-		if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $3, paid_at = now(), expires_at = NULL, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
-			tenant, ord.ID, next); err != nil {
-			return c, err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE storefront_holds SET expires_at = NULL WHERE reference = $1`, ord.Reference); err != nil {
-			return c, err
-		}
-		if err := audit(ctx, tx, tenant, "storefront.order_paid", ord.Reference, map[string]any{"total_kobo": ord.Payable(), "how": p.How, "by": p.By}); err != nil {
-			return c, err
-		}
-		from, c.Became = &ord.Status, true
+	if ord.PaidAt != nil {
+		return nil, nil
 	}
-	if p.EntryID != nil {
-		reasons := p.Reasons
-		if reasons == nil {
-			reasons = []string{}
-		}
-		raw, _ := json.Marshal(reasons)
-		c.PaymentID = uuid.New()
-		if _, err := tx.Exec(ctx, `INSERT INTO storefront_order_payments (id, tenant_id, order_id, entry_id, amount_kobo, how, by, reasons, from_status, woke_run)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, c.PaymentID, tenant, ord.ID, *p.EntryID, p.AmountKobo, p.How, p.By, raw, from, c.wake); err != nil {
-			return c, err
-		}
+	if !ord.Matchable() {
+		return nil, fmt.Errorf("%w: %s is not waiting for a payment (%s)", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
 	}
-	c.Order, err = o.GetOrder(ctx, tx, tenant, ord.Reference)
-	return c, err
+	decided := ord.DecidedAt != nil
+	next := ord.Status
+	switch {
+	case ord.Status == "awaiting_payment" && !decided:
+		next = "received"
+	case ord.Status == "awaiting_payment", ord.Status == "accepted":
+		next = "paid"
+	}
+	// As the payment check always did, for an order waiting for its
+	// checkout payment: one not yet decided starts its run; one accepted
+	// wakes the run waiting for its payment, but a booking's run carries on
+	// to the appointment. An order taken without online payment has its
+	// run already, waiting for nothing.
+	switch {
+	case ord.Status != "awaiting_payment":
+	case !decided:
+		c.wake, c.start = true, true
+	case ord.Kind != "booking":
+		c.wake = true
+	}
+	if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $3, paid_at = now(), expires_at = NULL, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
+		tenant, ord.ID, next); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE storefront_holds SET expires_at = NULL WHERE reference = $1`, ord.Reference); err != nil {
+		return nil, err
+	}
+	if err := audit(ctx, tx, tenant, "storefront.order_paid", ord.Reference, map[string]any{"total_kobo": ord.Payable(), "how": p.How, "by": p.By}); err != nil {
+		return nil, err
+	}
+	c.Became = true
+	return &ord.Status, nil
 }
 
 // Paid runs an order's paid flow after the transaction that counted its
@@ -302,71 +273,63 @@ func PaymentsOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, order uuid.UUI
 }
 
 // UndoPayment undoes a payment counted towards an order (a wrong match):
-// its row stays, and a row naming it takes it out. When that payment moved
-// the order to paid, the order goes back to unpaid (received, or accepted)
-// — refused when the order went on: its run was started or woken by the
-// payment, it was paid through its checkout page, or it has been decided
-// since (completed, declined, refund due). It returns the order and the
-// entry the payment counted, to be matched again.
+// its row stays, and a row naming it takes it out (moneylog.Parts.Undo).
+// When that payment moved the order to paid, the order goes back to unpaid
+// (received, or accepted) — refused when the order went on: its run was
+// started or woken by the payment, it was paid through its checkout page,
+// or it has been decided since (completed, declined, refund due). It
+// returns the order and the entry the payment counted, to be matched
+// again.
 func (o *Orders) UndoPayment(ctx context.Context, tx pgx.Tx, tenant, payment uuid.UUID, by string) (Order, uuid.UUID, error) {
-	var orderID, entry uuid.UUID
-	var amount int64
+	var ord Order
 	var from *string
-	var woke bool
-	var undoes *uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT order_id, entry_id, amount_kobo, from_status, woke_run, undoes FROM storefront_order_payments WHERE tenant_id = $1 AND id = $2`,
-		tenant, payment).Scan(&orderID, &entry, &amount, &from, &woke, &undoes)
-	if errors.Is(err, pgx.ErrNoRows) || err == nil && undoes != nil {
+	part, undone, err := moneylog.OrderParts.Undo(ctx, tx, moneylog.Undoing{Tenant: tenant, Part: payment, By: by,
+		Open: func(p moneylog.Part) error {
+			var err error
+			ord, err = scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, p.Target))
+			return err
+		},
+		Decide: func(p moneylog.Part) (moneylog.Cols, error) {
+			var woke bool
+			if err := tx.QueryRow(ctx, `SELECT from_status, woke_run FROM storefront_order_payments WHERE id = $1`, p.ID).Scan(&from, &woke); err != nil {
+				return nil, err
+			}
+			if from != nil {
+				want := *from
+				if want == "accepted" {
+					want = "paid"
+				}
+				switch {
+				case woke:
+					return nil, fmt.Errorf("%w: %s went on with this payment (its workflow was started or told it was paid); cancel or refund the order instead", ErrDecision, ord.Reference)
+				case *from == "awaiting_payment":
+					return nil, fmt.Errorf("%w: %s was waiting for its checkout payment, which this payment completed; cancel or refund the order instead", ErrDecision, ord.Reference)
+				case ord.Status != want:
+					return nil, fmt.Errorf("%w: %s has moved on (now %s), so it cannot go back to unpaid", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
+				}
+				if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $3, paid_at = NULL, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
+					tenant, ord.ID, *from); err != nil {
+					return nil, err
+				}
+			}
+			return moneylog.Cols{"entry_id": p.Entry}, nil
+		}})
+	var entry uuid.UUID
+	if part.Entry != nil {
+		entry = *part.Entry
+	}
+	switch {
+	case errors.Is(err, moneylog.ErrNoPart):
 		return Order{}, uuid.Nil, ErrNoOrder
-	}
-	if err != nil {
+	case err != nil && ord.ID == uuid.Nil:
 		return Order{}, uuid.Nil, err
-	}
-	if err := EntryLock(ctx, tx, entry); err != nil {
-		return Order{}, uuid.Nil, err
-	}
-	ord, err := scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, orderID))
-	if err != nil {
-		return Order{}, uuid.Nil, err
-	}
-	var undone bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefront_order_payments WHERE undoes = $1)`, payment).Scan(&undone); err != nil {
-		return Order{}, uuid.Nil, err
+	case err != nil:
+		return ord, entry, err
 	}
 	if undone {
-		ord, err = o.GetOrder(ctx, tx, tenant, ord.Reference)
-		return ord, entry, err
-	}
-	if from != nil {
-		want := *from
-		if want == "accepted" {
-			want = "paid"
-		}
-		switch {
-		case woke:
-			return ord, entry, fmt.Errorf("%w: %s went on with this payment (its workflow was started or told it was paid); cancel or refund the order instead", ErrDecision, ord.Reference)
-		case *from == "awaiting_payment":
-			return ord, entry, fmt.Errorf("%w: %s was waiting for its checkout payment, which this payment completed; cancel or refund the order instead", ErrDecision, ord.Reference)
-		case ord.Status != want:
-			return ord, entry, fmt.Errorf("%w: %s has moved on (now %s), so it cannot go back to unpaid", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
-		}
-		if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $3, paid_at = NULL, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
-			tenant, ord.ID, *from); err != nil {
+		if err := audit(ctx, tx, tenant, "storefront.order_payment_undone", ord.Reference, map[string]any{"amount_kobo": part.AmountKobo, "by": by, "reopened": from != nil}); err != nil {
 			return ord, entry, err
 		}
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO storefront_order_payments (id, tenant_id, order_id, entry_id, amount_kobo, how, by, undoes)
-		VALUES ($1, $2, $3, $4, $5, 'manual', $6, $7)`, uuid.New(), tenant, ord.ID, entry, amount, by, payment)
-	var pe *pgconn.PgError
-	if errors.As(err, &pe) && pe.Code == "23505" {
-		ord, err = o.GetOrder(ctx, tx, tenant, ord.Reference) // undone meanwhile
-		return ord, entry, err
-	}
-	if err != nil {
-		return ord, entry, err
-	}
-	if err := audit(ctx, tx, tenant, "storefront.order_payment_undone", ord.Reference, map[string]any{"amount_kobo": amount, "by": by, "reopened": from != nil}); err != nil {
-		return ord, entry, err
 	}
 	ord, err = o.GetOrder(ctx, tx, tenant, ord.Reference)
 	return ord, entry, err
