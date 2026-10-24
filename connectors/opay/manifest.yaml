@@ -251,7 +251,7 @@ capabilities:
       bank_name: =output.bank_name
       amount_kobo: =output.amount
       expires_at: =output.expires_at_rfc3339
-    ignores: [customer.bvn]
+    ignores: [customer.bvn, customer.nin]
     fixed: { currency: NGN }
     transfer: { on_late: unknown, on_wrong_amount: unknown, min_minutes: 1, max_minutes: 30, default_minutes: 30 }
     notes: >-

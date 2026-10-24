@@ -59,6 +59,8 @@ func New(o Options) *connector.Connector {
 		"get_transfer_by_reference": connector.ActionFunc(c.getTransferByReference),
 		"verify_payment":            connector.ActionFunc(c.verifyPayment),
 		"create_dynamic_account":    connector.ActionFunc(c.createDynamicAccount),
+		"create_static_account":     connector.ActionFunc(c.createStaticAccount),
+		"list_transactions":         connector.ActionFunc(c.listTransactions),
 	}}
 }
 
@@ -411,6 +413,131 @@ func (c *client) verifyPayment(ctx context.Context, req connector.Request) (conn
 		return connector.Response{}, unreadable(rd.Err)
 	}
 	return connector.Response{Output: out}, nil
+}
+
+// StaticRefPrefix starts the tx_ref of every static (permanent) account
+// Taskiem opens: Flutterwave returns the tx_ref with each transfer into
+// it, and the prefix tells such a credit from a one-time account's
+// payment, which carries the engine's key as it is (tsk_).
+const StaticRefPrefix = "tva_"
+
+// createStaticAccount opens a permanent account number for a customer
+// (POST /virtual-account-numbers, is_permanent true; developer.flutterwave.com
+// /v3.0/docs/ngn-virtual-accounts). Flutterwave needs the customer's email
+// and BVN or NIN. tx_ref "should be returned whenever a transfer is made
+// into the account", so it is the account's reference: tva_ and the
+// step's key. Flutterwave's v3 API cannot look a single account up, so
+// the action is unsafe: an unknown outcome parks rather than risk a
+// second account.
+func (c *client) createStaticAccount(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	key := req.IdempotencyKey
+	if key == "" {
+		return connector.Response{}, fmt.Errorf("flutterwave: create_static_account needs the engine's key: %w", effects.ErrFatal)
+	}
+	if str(in, "bvn") == "" && str(in, "nin") == "" {
+		return connector.Response{}, fmt.Errorf("flutterwave: a permanent account needs the customer's BVN or NIN: %w", effects.ErrFatal)
+	}
+	ref := StaticRefPrefix + strings.TrimPrefix(key, "tsk_")
+	body := map[string]any{"email": str(in, "email"), "is_permanent": true, "tx_ref": ref, "currency": "NGN"}
+	for _, k := range []string{"bvn", "nin", "firstname", "lastname", "phonenumber", "narration"} {
+		if v := str(in, k); v != "" {
+			body[k] = v
+		}
+	}
+	var a struct {
+		AccountNumber string `json:"account_number"`
+		BankName      string `json:"bank_name"`
+		OrderRef      string `json:"order_ref"`
+		FlwRef        string `json:"flw_ref"`
+		Note          string `json:"note"`
+	}
+	if err := c.do(ctx, req, http.MethodPost, "/virtual-account-numbers", body, &a); err != nil {
+		return connector.Response{}, err
+	}
+	if a.AccountNumber == "" {
+		return connector.Response{}, fmt.Errorf("flutterwave: no account number in the answer: %w", effects.ErrUnknownOutcome)
+	}
+	out := map[string]any{"tx_ref": ref, "account_number": a.AccountNumber, "bank_name": a.BankName, "order_ref": a.OrderRef, "flw_ref": a.FlwRef}
+	if a.Note != "" {
+		out["note"] = a.Note
+	}
+	return connector.Response{Output: out}, nil
+}
+
+// maxTransactionPages bounds one listing of transactions.
+const maxTransactionPages = 50
+
+// listTransactions lists successful collections between two days
+// (GET /transactions with from and to as YYYY-MM-DD, status successful),
+// page by page until a page comes back empty, amounts in minor units.
+// Flutterwave documents no page size, hence the empty page.
+func (c *client) listTransactions(ctx context.Context, req connector.Request) (connector.Response, error) {
+	day := func(k string, def time.Time) (string, error) {
+		v := str(req.Input, k)
+		if v == "" {
+			return def.UTC().Format("2006-01-02"), nil
+		}
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return "", fmt.Errorf("flutterwave: %s must be a time (RFC 3339): %w", k, effects.ErrFatal)
+		}
+		return t.UTC().Format("2006-01-02"), nil
+	}
+	if str(req.Input, "from") == "" {
+		return connector.Response{}, fmt.Errorf("flutterwave: list_transactions needs from: %w", effects.ErrFatal)
+	}
+	from, err := day("from", time.Time{})
+	if err != nil {
+		return connector.Response{}, err
+	}
+	to, err := day("to", c.now())
+	if err != nil {
+		return connector.Response{}, err
+	}
+	list := []any{}
+	truncated := false
+	for page := 1; ; page++ {
+		if page > maxTransactionPages {
+			truncated = true
+			break
+		}
+		q := url.Values{"from": {from}, "to": {to}, "status": {"successful"}, "page": {strconv.Itoa(page)}}
+		var items []struct {
+			ID          json.RawMessage `json:"id"` // a string here, a number in webhooks
+			TxRef       string          `json:"tx_ref"`
+			FlwRef      string          `json:"flw_ref"`
+			Amount      any             `json:"amount"`
+			Currency    string          `json:"currency"`
+			Narration   string          `json:"narration"`
+			Status      string          `json:"status"`
+			PaymentType string          `json:"payment_type"`
+			CreatedAt   string          `json:"created_at"`
+		}
+		if err := c.do(ctx, req, http.MethodGet, "/transactions?"+q.Encode(), nil, &items); err != nil {
+			return connector.Response{}, err
+		}
+		if len(items) == 0 {
+			break
+		}
+		for _, it := range items {
+			cur := it.Currency
+			if cur == "" {
+				cur = "NGN"
+			}
+			var rd money.Reader
+			t := map[string]any{"id": strings.Trim(string(it.ID), `"`), "tx_ref": it.TxRef, "flw_ref": it.FlwRef, "amount": rd.Minor(it.Amount, scaleOf(cur)),
+				"currency": cur, "status": it.Status, "payment_type": it.PaymentType, "created_at": it.CreatedAt}
+			if rd.Err != nil {
+				return connector.Response{}, fmt.Errorf("flutterwave: transaction %s: unreadable amount: %w", it.ID, rd.Err)
+			}
+			if it.Narration != "" {
+				t["narration"] = it.Narration
+			}
+			list = append(list, t)
+		}
+	}
+	return connector.Response{Output: map[string]any{"transactions": list, "truncated": truncated}}, nil
 }
 
 // A dynamic account takes payments for 60 seconds to about two months

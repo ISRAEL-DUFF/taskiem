@@ -7,13 +7,16 @@ import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTim
 import { Icon } from "../icons";
 import {
   COLUMN_TYPES,
-  TABLE_ACTIONS,
   TYPE_HELP,
   cellText,
   cellValue,
   columnErrors,
   exampleStep,
   importError,
+  isKept,
+  keptNotice,
+  tableActions,
+  tableControls,
   matchHeaders,
   tableFromCSV,
   nameError,
@@ -100,6 +103,7 @@ export function Tables() {
                   <Link to={`/tables/${t.id}`}>{t.title || t.name}</Link>
                   <div className="hint">
                     <code>{t.name}</code>
+                    {isKept(t) && " · kept by Taskiem"}
                   </div>
                 </td>
                 <td>{t.columns.map((c) => c.name).join(", ")}</td>
@@ -290,12 +294,16 @@ export function TablePage() {
   const { can } = useAuth();
   const navigate = useNavigate();
   const table = useLoad(() => get<Table>(`/v1/tables/${id}`), [id]);
+  const status = useLoad(() => get<TablesStatus>("/v1/tables/status"), []);
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const edit = can("table.edit");
   if (table.error) return <ErrorBox error={table.error} />;
   if (!table.data) return <Skeleton />;
   const t = table.data;
+  // A kept table is read-only here, whoever looks (docs/data-tables.md#kept-tables).
+  const controls = tableControls(t, can("table.edit"));
+  const edit = controls.columns;
+  const notice = keptNotice(t, status.data);
   return (
     <>
       <PageHeader
@@ -310,13 +318,13 @@ export function TablePage() {
         actions={
           <>
             <Link to="/tables">All tables</Link>
-            {edit && (
+            {controls.columns && (
               <button onClick={() => setAdding(true)}>
                 <Icon name="plus" />
                 Add a column
               </button>
             )}
-            {edit && (
+            {controls.deleteTable && (
               <button onClick={() => setDeleting(true)} className="danger">
                 Delete table
               </button>
@@ -324,7 +332,14 @@ export function TablePage() {
           </>
         }
       />
-      <Rows table={t} edit={edit} onChanged={table.reload} />
+      {notice && (
+        <div className="notice" role="note">
+          {notice.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      )}
+      <Rows table={t} edit={controls.editRows} onChanged={table.reload} />
       <section className="card" style={{ marginTop: 24 }}>
         <h2>Columns</h2>
         <table>
@@ -662,9 +677,10 @@ function UseInWorkflow({ table }: { table: Table }) {
       <h2>Use in a workflow</h2>
       <p className="hint">
         Workflows reach this table like any Xenibase table: connector <code>xenibase@1</code>, connection <code>{table.connection}</code>, table <code>{table.name}</code>. The AI builder knows its columns.
+        {isKept(table) && " Taskiem keeps it, so workflows only read it: a step that adds, changes or deletes its rows fails."}
       </p>
       <dl className="kv">
-        {TABLE_ACTIONS.map((a) => (
+        {tableActions(table).map((a) => (
           <div key={a.action}>
             <dt>
               <code>{a.action}</code>

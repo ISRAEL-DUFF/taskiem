@@ -30,6 +30,7 @@ import (
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/notify"
+	schconn "github.com/israel-duff/taskiem/connectors/schools"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
@@ -50,12 +51,15 @@ import (
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/moneydigest"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/status"
@@ -486,6 +490,9 @@ type engine struct {
 	orders *storefront.Orders
 	// forms are hosted forms' api side (S7); nil without the public key.
 	forms *forms.Service
+	// schoolInboxKey opens what school families send from their pages
+	// (B6); nil without the public key.
+	schoolInboxKey []byte
 	// email is inbound email's api side (N10); nil without the public key.
 	email *inmail.Service
 	// invoices are the business's invoices to its customers (decision
@@ -545,8 +552,10 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
+	schoolOps := &schconn.Late{}
 	copts := cfg.Connectors
 	copts.Invoices = invoiceOps
+	copts.Schools = schoolOps
 	copts.Storefront = orders
 	copts.Forms = formOps
 	copts.Email = emailOps
@@ -573,7 +582,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		BYOK:         &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate},
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
-		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On}}
+		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, HooksURL: cfg.HooksURL}}
 	if e.orders, err = storefrontOrders(cfg, e, log); err != nil {
 		pool.Close()
 		return nil, err
@@ -623,7 +632,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	tell.Set(n)
 	// Invoices (decision 0045): their pages are on the form host.
-	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Logger: log.With("component", "invoices")}
+	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Start: e.store.Start, Logger: log.With("component", "invoices")}
 	// A customer who asked for the business's updates on a chat app gets
 	// its invoices there too, with their buttons (decision 0045 point 7).
 	e.invoices.Reach, e.invoices.Chat = e.reach, n.Chat
@@ -634,7 +643,33 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// payments connection, its prod credentials.
 	e.invoices.Rails = &invoicing.RegistryRails{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log, Loopback: connectorLoopback(reg, log)}}
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
+	// The Schools area's record (decision 0046), read by schools@1. Every
+	// payment part counted towards a school's invoice gets a receipt, and
+	// one undone has it voided (B5).
+	if len(cfg.Public.Key) > 0 {
+		if e.schoolInboxKey, err = storefront.InboxKey(cfg.Public.Key); err != nil {
+			return nil, err
+		}
+	}
+	schoolOps.Set(schools.Service{Schools: e.schools()})
+	schools.WireReceipts(e.invoices, e.schools())
 	return e, nil
+}
+
+// schools is the Schools area's record (decision 0046).
+func (e *engine) schools() *schools.Schools {
+	s := &schools.Schools{Pool: e.pool, Vault: e.vault, Invoices: e.invoices, InboxKey: e.schoolInboxKey, Logger: e.log.With("component", "schools")}
+	if e.invoices != nil {
+		// Students' account numbers are issued on the same rails as
+		// invoices' payments (the vault's credentials, the egress guard).
+		s.Rails, _ = e.invoices.Rails.(invoicing.CapabilityRails)
+	}
+	return s
+}
+
+// moneyLog is the money log's writer (decision 0045).
+func (e *engine) moneyLog() *moneylog.Log {
+	return &moneylog.Log{Pool: e.pool, PII: e.vault}
 }
 
 // connectorLoopback lets a connector the operator pointed at a loopback
@@ -667,7 +702,7 @@ func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]str
 }
 
 func (e *engine) hooks() *ingest.Handler {
-	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log,
+	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
 		Egress: &egress.Guard{Logger: e.log}}
 }
 
@@ -817,6 +852,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
 		srv.PublicURL = cfg.PublicURL
+		srv.HooksURL = cfg.HooksURL
 		if srv.OAuthClients, err = oauthClients(e.registry, log); err != nil {
 			return err
 		}
@@ -879,6 +915,9 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.Email = e.email
 		srv.Invoices = e.invoices
+		// What school families send from their pages is taken from the
+		// inbox with the public host's key (docs/schools.md#the-family-page).
+		srv.SchoolInboxKey = e.schoolInboxKey
 		// Account numbers asked for with an invoice's chat buttons are
 		// answered in the chat.
 		e.invoices.Answered = srv.InvoiceAnswered
@@ -973,10 +1012,26 @@ func serve(ctx context.Context, args []string) error {
 		// they expire (docs/data-tables.md#token-renewal).
 		// Connector events without a webhook: Taskiem asks the provider
 		// (Paystack) itself for businesses that never set one up.
-		poller := &ingest.Poller{Store: e.store, Registry: e.registry, Connections: e.vault, Hooks: e.hooks(), Egress: &egress.Guard{Logger: log}, Logger: log}
+		poller := &ingest.Poller{Store: e.store, Registry: e.registry, Connections: e.vault, Hooks: e.hooks(), MoneyLog: true, Egress: &egress.Guard{Logger: log}, Logger: log}
 		// Pages closed for the day open again the next morning.
 		reopener := &storefront.Reopener{Pool: e.pool, Logger: log}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run)
+		// The money log, copied to each business's kept money_log table.
+		mirror := &moneylog.Mirror{Log: e.moneyLog(), Tables: e.tables(), Logger: log.With("component", "moneylog"),
+			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
+		// The schools' students and classes, copied to their kept tables.
+		schoolCopies := &schools.Mirror{Schools: e.schools(), Tables: e.tables(), Logger: log.With("component", "schools"),
+			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
+		// Money summaries: yesterday's to owners on chat each morning,
+		// last month's by email on the 1st (docs/money-reports.md).
+		money := &moneydigest.Digester{Pool: e.pool, Mailer: alerter.Mailer, From: alerter.From, PublicURL: cfg.PublicURL, Logger: log.With("component", "moneydigest")}
+		if e.wa != nil {
+			money.Channels = append(money.Channels, "whatsapp")
+		}
+		if e.tg != nil {
+			money.Channels = append(money.Channels, "telegram")
+		}
+		log.Info("money summaries", "daily_chat", len(money.Channels) > 0, "monthly_email", money.Mailer != nil && money.From != "")
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, schoolCopies.Run, money.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

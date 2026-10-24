@@ -15,6 +15,8 @@ import { useAdvanced } from "../auth";
 import { isExpression } from "../lib/schema";
 import type { Source } from "../lib/plaincanvas";
 import { DurationPicker, RulesBuilder, ValuePicker } from "./PlainPickers";
+import { ParamField } from "../pages/Templates";
+import { effectWords, toParams, type CallableWorkflow, type Template } from "../lib/templates";
 
 const ID = /^[a-z][a-z0-9_]{0,62}$/;
 
@@ -123,7 +125,8 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       <h3>Configuration</h3>
       {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "capability" && <CapabilityConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
-      {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel"].includes(step.type) && <ByHand />}
+      {step.type === "template" && <TemplateConfig step={step} set={set} advanced={advanced} sources={sources} />}
+      {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel", "callback", "respond"].includes(step.type) && <ByHand />}
       {advanced && step.type === "http" && (
         <>
           <div className="row">
@@ -261,7 +264,13 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           problems={problems.filter((p) => p.path.startsWith("/config")).map((p) => ({ ...p, path: p.path.slice("/config".length) }))}
         />
       )}
-      {advanced && (step.type === "branch" || step.type === "foreach" || step.type === "parallel") && (
+      {advanced && step.type === "callback" && (
+        <p className="hint">
+          The run pauses here until another system calls <code>run.callbacks.{step.id}</code>: send that address with an earlier step. The call's body and query are this step's output.
+        </p>
+      )}
+      {advanced && step.type === "respond" && <p className="hint">The caller of the webhook that started this run gets this status, headers and body. The trigger needs respond: true.</p>}
+      {advanced && (step.type === "branch" || step.type === "foreach" || step.type === "parallel" || step.type === "callback" || step.type === "respond") && (
         <Field label="Configuration (JSON)" hint="Nested steps are edited here.">
           <JsonInput value={cfg} onChange={(v) => v && set({ config: v })} rows={14} />
         </Field>
@@ -437,6 +446,100 @@ function CapabilityConfig({ step, connectors, set, advanced, sources }: { step: 
       )}
     </>
   );
+}
+
+/**
+ * A template step: which callable template, its parameters, and its run
+ * inputs from this workflow (decision 0047). Its steps run in this run; the
+ * panel shows them, what the step gives back, and what the template does.
+ */
+function TemplateConfig({ step, set, advanced, sources }: { step: Extract<Step, { type: "template" }>; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {
+  const list = useLoad(() => get<{ templates: Template[] }>("/v1/templates?callable=true"), []);
+  const own = useLoad(() => get<{ workflows: CallableWorkflow[] }>("/v1/workflows/callable"), []);
+  // The step uses a library template, or one of the business's own
+  // workflows (decision 0048), which has no settings.
+  const wf = step.workflow !== undefined ? own.data?.workflows.find((w) => w.id === step.workflow) : undefined;
+  const tpl = step.template !== undefined ? list.data?.templates.find((t) => t.id === step.template) : undefined;
+  const iface = tpl?.callable ?? wf;
+  const params = (tpl?.params ?? []).filter((p) => tpl?.callable?.params.includes(p.name));
+  const given = (step.params ?? {}) as Record<string, unknown>;
+  const values = Object.fromEntries(params.map((p) => [p.name, given[p.name] === undefined ? "" : String(given[p.name])]));
+  const chosen = step.workflow !== undefined ? `workflow:${step.workflow}` : `template:${step.template ?? ""}`;
+  const choose = (v: string) => {
+    if (v.startsWith("workflow:")) set({ workflow: v.slice("workflow:".length), template: undefined, params: undefined, input: {} });
+    else set({ template: v.slice("template:".length), workflow: undefined, params: undefined, input: {} });
+  };
+  return (
+    <>
+      <Field label="Template" hint="A ready workflow from the library, or one of your own workflows that gives something back, used as one step: its approvals, payments and waits run in this workflow's run.">
+        <select value={chosen} onChange={(e) => choose(e.target.value)}>
+          {!tpl && !wf && <option value={chosen}>{step.workflow ?? step.template}</option>}
+          <optgroup label="From the library">
+            {(list.data?.templates ?? []).map((t) => (
+              <option key={t.id} value={`template:${t.id}`}>
+                {t.title}
+              </option>
+            ))}
+          </optgroup>
+          {(own.data?.workflows ?? []).length > 0 && (
+            <optgroup label="Your workflows">
+              {(own.data?.workflows ?? []).map((w) => (
+                <option key={w.id} value={`workflow:${w.id}`}>
+                  {w.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </Field>
+      {iface && <p className="hint">{effectWords(iface.effect)}</p>}
+      {wf && <p className="hint">Version {wf.version}, the published one. Publishing a new version of it changes this step when this workflow is next saved.</p>}
+      {params.length > 0 && <h3>Settings</h3>}
+      {params.map((p) => (
+        <ParamField
+          key={p.name}
+          param={p}
+          value={values[p.name] ?? ""}
+          params={params}
+          values={values}
+          onChange={(v) => set({ params: nonEmpty({ ...given, ...toParams([p], { [p.name]: v }), ...(v.trim() === "" ? { [p.name]: undefined } : {}) }) })}
+          onOther={(name, v) => set({ params: nonEmpty({ ...given, ...toParams(params.filter((x) => x.name === name), { [name]: v }) }) })}
+        />
+      ))}
+      <h3>What it starts with</h3>
+      <SchemaForm schema={iface?.inputs as never} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
+      {iface && iface.outputs.length > 0 && (
+        <>
+          <h3>What it gives back</h3>
+          <ul className="plain-list">
+            {iface.outputs.map((o) => (
+              <li key={o.name}>
+                <strong>{o.title}</strong>: {o.description} {advanced && <code>steps.{step.id}.output.{o.name}</code>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {tpl && (
+        <details>
+          <summary>Its steps ({tpl.steps.length})</summary>
+          <ol className="plain-list">
+            {tpl.steps.map((l) => (
+              <li key={l.number} style={{ marginLeft: l.depth * 16 }}>
+                {l.text}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+    </>
+  );
+}
+
+/** params without the ones left blank. */
+function nonEmpty(o: Record<string, unknown>): Record<string, unknown> | undefined {
+  const out = Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ""));
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function ConnectorConfig({ step, connectors, set, advanced, sources }: { step: Extract<Step, { type: "connector" }>; connectors: ConnectorInfo[]; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {

@@ -99,6 +99,11 @@ func (s *Server) putStorefront(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return fmt.Errorf("%w: the catalogue table: %w", errBadRequest, err)
 			}
+			if t.Kept() {
+				// A kept table is Taskiem's record (the money log): never a
+				// public page's, and never written by the storefront.
+				return fmt.Errorf("%w: the catalogue cannot be a table Taskiem keeps (%s)", errBadRequest, t.Name)
+			}
 			known := func(name string) (string, bool) {
 				for _, c := range t.Columns {
 					if c.Name == name {

@@ -1,13 +1,17 @@
 package wdtext_test
 
 import (
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtext"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 func TestSchedule(t *testing.T) {
@@ -96,5 +100,53 @@ func TestDescribeForms(t *testing.T) {
 		if got := wdtext.Text(wdtext.Describe(def, nil)); got != c.want {
 			t.Errorf("got\n%s\nwant\n%s", got, c.want)
 		}
+	}
+}
+
+// A template step reads as the template it uses (decision 0047).
+func TestDescribeTemplateStep(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_x","version":1,"name":"x","trigger":{"type":"manual"},
+	 "steps":[{"id":"pay","type":"template","template":"run-payroll","params":{"business_name":"Ada Foods"}},
+	          {"id":"inv","type":"template","template":"send-invoice","needs":["pay"],"input":{"name":"Ada","amount_naira":5000,"for":"Rice"}}]}`
+	def, err := wd.Load([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := wdtext.Describe(def, connector.NewRegistry())
+	var got []string
+	for _, l := range lines {
+		got = append(got, l.Text)
+	}
+	text := strings.Join(got, "\n")
+	if !strings.Contains(text, "Use the template: Run payroll from any payments account, which moves money, waits for a person to approve or answer and waits for something to happen") ||
+		!strings.Contains(text, "Use the template: Send an invoice and hear when it is paid, which changes things in your services and waits for something to happen") {
+		t.Errorf("read back:\n%s", text)
+	}
+	// A step that uses one of the business's own workflows (decision 0048)
+	// reads as that workflow, found through the resolver.
+	const id = "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12"
+	own := templates.Template{ID: id, Title: "Double it", Summary: "S", Description: "D", Category: "workflow", Callable: true,
+		Outputs: []templates.Output{{Name: "kobo", Type: "integer", Title: "Total", Description: "Twice", Value: "=steps.total.output.kobo"}},
+		Definition: json.RawMessage(`{"schema":"wd/v1","id":"wf_d","version":1,"name":"Double it","trigger":{"type":"manual"},
+		  "inputs":{"schema":{"type":"object","properties":{"amount_kobo":{"type":"integer"}}}},
+		  "steps":[{"id":"total","type":"transform","config":{"output":{"kobo":"=trigger.body.amount_kobo * 2"}}}]}`)}
+	def, err = wd.Load([]byte(`{"schema":"wd/v1","id":"wf_y","version":1,"name":"y","trigger":{"type":"manual"},
+	 "steps":[{"id":"sub","type":"template","workflow":"` + id + `","input":{"amount_kobo":21}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines = wdtext.DescribeWith(def, connector.NewRegistry(), lang.EN, func(want string) (*templates.Template, error) {
+		if want == id {
+			return &own, nil
+		}
+		return nil, errors.New("unknown")
+	})
+	if len(lines) == 0 || lines[len(lines)-1].Text != "Use your workflow: Double it, which only reads" {
+		t.Errorf("read back a workflow step: %+v", lines)
+	}
+	// Hausa too.
+	lines = wdtext.DescribeWith(def, connector.NewRegistry(), lang.HA, func(string) (*templates.Template, error) { return &own, nil })
+	if len(lines) == 0 || lines[len(lines)-1].Text != "Yi amfani da aikinka: Double it, wanda karantawa kawai yake" {
+		t.Errorf("read back in Hausa: %+v", lines)
 	}
 }

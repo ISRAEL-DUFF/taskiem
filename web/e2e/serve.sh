@@ -19,8 +19,15 @@ tenant=$(psql "$dsn" -tAc "SELECT id FROM tenants WHERE name = 'E2E'")
 bin/taskiem tenants partner "$tenant" --capabilities white_label,custom_domains >/dev/null
 # It builds by hand: the technical parts are shown (no-technical-steps N0-5).
 psql "$dsn" -qc "UPDATE tenants SET advanced = true WHERE id = '$tenant'"
+# It has the Schools area on (schools.spec.ts, accessibility.spec.ts).
+psql "$dsn" -qc "INSERT INTO school_settings (tenant_id, enabled, updated_by) VALUES ('$tenant', true, 'e2e')"
 # It also publishes a connector in the public catalogue (catalogue.spec.ts).
 bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant"
+# A table Taskiem keeps, as the money log makes it (tables.spec.ts): its
+# record only, as the superuser may write it; no Xenibase serves its rows.
+psql "$dsn" -v ON_ERROR_STOP=1 -q \
+  -c "INSERT INTO data_tables (id, tenant_id, name, title, created_by, kept_by) VALUES ('0192e2e0-0000-7000-8000-000000000001', '$tenant', 'money_log', 'Money log', 'taskiem:money_log', 'money_log')" \
+  -c "INSERT INTO data_table_columns (tenant_id, table_id, name, type, required, position) VALUES ('$tenant', '0192e2e0-0000-7000-8000-000000000001', 'entry_id', 'text', true, 0), ('$tenant', '0192e2e0-0000-7000-8000-000000000001', 'amount_kobo', 'integer', false, 1)"
 # An operator for ops.spec.ts: on the reviewer list, with a one-time link
 # to enrol a passkey (bin/ is not committed).
 TASKIEM_PUBLIC_URL=http://localhost:18080 bin/taskiem operators add ops@taskiem.test --name Ops | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-enrol.txt"
@@ -40,8 +47,17 @@ export TASKIEM_LOGIN_BURST=100
 # Self-serve signup, and Termii pointed at the fake onboarding.spec.ts runs
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
+# Every spec that wants a business of its own signs one up from this
+# address (cash, family, accessibility): more than the daily limit allows.
+export TASKIEM_SIGNUP_PER_ADDRESS=100
+# Students' account numbers (accounts.spec.ts) are issued by a fake iswallet
+# (loopback is allowed only because the URL names it).
+export TASKIEM_ISWALLET_URL=http://127.0.0.1:12828
 # Storefront orders (storefront.spec.ts): the public host's key turns on the inbox.
 export TASKIEM_PUBLIC_KEY=ZTJlLXB1YmxpYy1rZXktMzItYnl0ZXMtbG9uZy0hISE=
+# The public host itself (family.spec.ts): school families' pages on the
+# form host, which answers as 127.0.0.1 on 18082 (links say https://127.0.0.1).
+export TASKIEM_PUBLIC_ENABLED=true TASKIEM_PUBLIC_LISTEN=127.0.0.1:18082 TASKIEM_PUBLIC_DOMAINS=e2e.test TASKIEM_PUBLIC_FORM_HOST=127.0.0.1
 # Email triggers (email.spec.ts): the mail role takes mail for in.e2e.test
 # on a local port instead of 25.
 export TASKIEM_MAIL_ENABLED=true TASKIEM_MAIL_DOMAIN=in.e2e.test TASKIEM_MAIL_LISTEN=127.0.0.1:12825

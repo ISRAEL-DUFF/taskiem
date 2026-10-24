@@ -31,7 +31,7 @@ info:
     | 401 | — | Authentication required, or sign-in refused (`passkey_required`, `sso_required` say why) |
     | 402 | `plan_feature_required` | The plan lacks `feature` |
     | 402 | `billing_degraded` | Unpaid or cancelled: payment lifts it |
-    | 403 | — | A permission is missing (`requires workflow.publish`), a step-up is needed (`step_up`), or a factor change needs a proof (`reauth`) |
+    | 403 | — | A permission is missing (`requires workflow.publish`), a step-up is needed (`step_up`), a factor change needs a proof (`reauth`), or a gate session called anything but who it is and sign-out (`gate_only`) |
     | 404 | — | Not found, or not visible to the caller |
     | 409 | `downgrade_blocked` | A plan change the tenant's use does not fit, with `blockers`; other conflicts have no code |
     | 422 | — | A definition or run input is not valid, with `problems` |
@@ -112,6 +112,9 @@ tags:
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
+- name: Schools
+  description: "The Schools area: classes, sessions and terms, students, families, enrollments, importing students and promotion."
+  x-taskiem-guide: schools
 - name: Field agents
   description: Agents who sign businesses up in person, the owner's consent, and support visits the owner invites.
   x-taskiem-guide: agents
@@ -1329,6 +1332,67 @@ paths:
                 $ref: '#/components/schemas/CustomerInvoice'
         default:
           $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/amendments:
+    post:
+      operationId: amendInvoice
+      tags:
+      - Invoices
+      summary: Amend a sent invoice
+      description: 'A recorded change with a reason, added as a line of its own: a line added (add, with description and amount_kobo, optionally pass_through_for), an earlier item taken out (remove, with line, its position from 0) or a discount (discount, with amount_kobo; never of money collected for others). The total and status follow from the lines and the payments counted: the total never goes below what was paid (409), and a paid invoice whose total rises is part-paid again. A draft is changed instead (409). Where the Schools area is on, a discount at or above the school''s discount threshold waits for a second person instead: 202 with code needs_approval and the request recorded; the invoice is amended when someone with school.approve approves it. Audited.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The invoice's id or number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, reason]
+              properties:
+                kind:
+                  type: string
+                  enum: [add, remove, discount]
+                description:
+                  type: string
+                  maxLength: 200
+                amount_kobo:
+                  type: integer
+                pass_through_for:
+                  type: string
+                  maxLength: 60
+                line:
+                  type: integer
+                  minimum: 0
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '201':
+          description: The invoice and the amendment
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoice, amendment]
+                properties:
+                  invoice:
+                    $ref: '#/components/schemas/CustomerInvoice'
+                  amendment:
+                    $ref: '#/components/schemas/InvoiceAmendment'
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoices/{id}/payments/{payment}/undo:
     post:
       operationId: undoInvoicePayment
@@ -1361,6 +1425,2782 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/suggestions:
+    get:
+      operationId: listMoneySuggestions
+      tags:
+      - Invoices
+      summary: Suggested matches waiting for a person
+      description: "Money received that may be for an open invoice or storefront order, with each suggestion's score and reasons, newest payment first (docs/matching.md). Customers' names are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The open suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions]
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneySuggestion'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/unmatched:
+    get:
+      operationId: listUnmatchedMoney
+      tags:
+      - Invoices
+      summary: Money received that matching left for a person
+      description: "Payments with no open suggestion that count towards no invoice or order, newest first, to match by hand, and the storefront orders they can be matched to (docs/matching.md). Customers' names are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The payments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payments]
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UnmatchedMoney'
+                  orders:
+                    type: array
+                    description: Storefront orders not yet paid, cancelled, expired or decided against, newest first
+                    items:
+                      $ref: '#/components/schemas/MoneyOpenOrder'
+                  claims:
+                    type: array
+                    description: A school's open "I have paid" claims, oldest first (docs/schools.md#the-family-page)
+                    items:
+                      $ref: '#/components/schemas/MoneyClaim'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/suggestions/{id}/confirm:
+    post:
+      operationId: confirmMoneySuggestion
+      tags:
+      - Invoices
+      summary: Match a payment to the invoice or order suggested
+      description: "With no body, what is left of the payment (all of it, unless part of it counts elsewhere) counts towards the invoice or storefront order; the payment's other suggestions close, and the payer is remembered for the invoice's customer. With parts, the payment is split: each part counts towards its invoice or order (the suggested one among them, or not), never more in all than is left of the payment; credit_rest leaves what the parts do not count as the customer's credit (every part must then be for one customer's invoices), else it waits in To match. split: true splits it as the suggestion's split offers (the customer's open invoices oldest first, the rest as their credit). Undo each part as any payment of its invoice, or with /v1/money/order-payments/{id}/undo (docs/matching.md#split-payments)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parts:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items:
+                    $ref: '#/components/schemas/MoneyPart'
+                credit_rest:
+                  type: boolean
+                split:
+                  type: boolean
+      responses:
+        '200':
+          description: The invoice, or the order; with parts or split, each part
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/CustomerInvoice'
+                - $ref: '#/components/schemas/MatchedOrder'
+                - $ref: '#/components/schemas/MoneySplit'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/suggestions/{id}/reject:
+    post:
+      operationId: rejectMoneySuggestion
+      tags:
+      - Invoices
+      summary: Turn a suggestion down
+      description: "It is not offered again."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rejected:
+                    type: boolean
+                  at:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/entries/{id}/match:
+    post:
+      operationId: matchMoneyEntry
+      tags:
+      - Invoices
+      summary: Match a payment to an invoice or order by hand
+      description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both, and what is left of the payment counts towards it; or give parts to split the payment across invoices and orders (credit_rest leaves the rest as the customer's credit). The parts of a payment never add up to more than it; an order takes one payment of at least what is due. The payer is remembered for the invoices' customers."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              oneOf:
+              - required: [invoice]
+              - required: [order]
+              - required: [parts]
+              properties:
+                invoice:
+                  type: string
+                  description: The invoice's id or number
+                order:
+                  type: string
+                  description: The storefront order's reference, like AK-7QX4KD
+                parts:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items:
+                    $ref: '#/components/schemas/MoneyPart'
+                credit_rest:
+                  type: boolean
+      responses:
+        '200':
+          description: The invoice, or the order; with parts, each part
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/CustomerInvoice'
+                - $ref: '#/components/schemas/MatchedOrder'
+                - $ref: '#/components/schemas/MoneySplit'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/order-payments/{id}/undo:
+    post:
+      operationId: undoMoneyOrderPayment
+      tags:
+      - Invoices
+      summary: Undo a payment matched to a storefront order
+      description: "The payment stays, and a row naming it takes it out; the money goes back to be matched. When that payment paid the order, the order goes back to unpaid. Refused (409) when the order went on: its workflow was started or told it was paid, it was paid through its checkout page, or it has been decided since (docs/matching.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchedOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/payers/{id}:
+    delete:
+      operationId: forgetMoneyPayer
+      tags:
+      - Invoices
+      summary: Forget a remembered payer
+      description: "A payer remembered for a customer (GET /v1/invoices/{id}/customer) is forgotten: their next payment is suggested as anyone's would be (docs/matching.md#payer-memory). Audited."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Forgotten
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  forgotten:
+                    type: boolean
+                  at:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/customer:
+    get:
+      operationId: getInvoiceCustomer
+      tags:
+      - Invoices
+      summary: The invoice's customer in matching
+      description: "The customer's credit (what they paid that no invoice counts yet, counted towards the next invoice sent to them), their permanent account numbers, and the payers remembered for them (docs/matching.md). Names and payers are masked unless the caller holds pii.reveal and asks with reveal=true, which is audited."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: The invoice's id or number
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The customer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [credit_kobo, accounts, payers, revealed]
+                properties:
+                  credit_kobo:
+                    type: integer
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerAccount'
+                  payers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneyPayer'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-accounts:
+    post:
+      operationId: registerCustomerAccount
+      tags:
+      - Invoices
+      summary: Register a customer's permanent account
+      description: "Links a customer's permanent account (a virtual_account issued for them on a connection) to the customer, so money paid into it is matched exactly to their oldest open invoice, then the next, the rest kept as their credit (docs/matching.md#customers-own-account-numbers). The customer is as their invoices have them: by key when given, else by phone, else email. The same account for the same customer again returns it; an account already another customer's, or registered with another number or reference, is refused (409)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customer, channel, account_number, reference]
+              properties:
+                customer:
+                  $ref: '#/components/schemas/InvoiceCustomer'
+                channel:
+                  type: string
+                  description: The connection the account is on, as the money log names it, like paystack/main
+                account_number:
+                  type: string
+                reference:
+                  type: string
+                  description: The account's reference, which the rail's credit events carry
+                bank_name:
+                  type: string
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAccount'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/leaks:
+    get:
+      operationId: listMoneyLeaks
+      tags:
+      - Invoices
+      summary: Leaks Taskiem found
+      description: "Money the business may be losing, newest first, with the open total and the amount recovered (docs/leaks.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [open, closed, all]
+      responses:
+        '200':
+          description: The leaks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [leaks, totals]
+                properties:
+                  leaks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneyLeak'
+                  totals:
+                    type: object
+                    required: [open, open_kobo, recovered_kobo]
+                    properties:
+                      open:
+                        type: integer
+                      open_kobo:
+                        type: integer
+                      recovered_kobo:
+                        type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/leaks/{id}/assign:
+    post:
+      operationId: assignMoneyLeak
+      tags:
+      - Invoices
+      summary: Give a leak to a member
+      description: "member null gives it to no one."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                member:
+                  type:
+                  - string
+                  - 'null'
+                  format: uuid
+      responses:
+        '200':
+          description: The leak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyLeak'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/leaks/{id}/close:
+    post:
+      operationId: closeMoneyLeak
+      tags:
+      - Invoices
+      summary: Close a leak
+      description: "As recovered (with the amount got back), written_off or not_a_leak."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [recovered, written_off, not_a_leak]
+                recovered_kobo:
+                  type: integer
+                  minimum: 1
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The leak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyLeak'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/fee-rates:
+    get:
+      operationId: listMoneyFeeRates
+      tags:
+      - Invoices
+      summary: Fees agreed with each connection
+      description: "A fee above these is a leak."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The rates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fee_rates]
+                properties:
+                  fee_rates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneyFeeRate'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putMoneyFeeRate
+      tags:
+      - Invoices
+      summary: Set the fee agreed with a connection
+      description: "Percent in basis points of the amount, plus a flat fee, up to a cap."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyFeeRate'
+      responses:
+        '200':
+          description: The rate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyFeeRate'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/statement-format:
+    get:
+      operationId: getMoneyStatementFormat
+      tags:
+      - Invoices
+      summary: A channel's statement columns
+      description: "The columns last matched to the common format for the channel's statements, or the common format's own."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: channel
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The columns
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channel, columns]
+                properties:
+                  channel:
+                    type: string
+                  columns:
+                    $ref: '#/components/schemas/MoneyStatementFormat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/statements:
+    post:
+      operationId: uploadMoneyStatement
+      tags:
+      - Invoices
+      summary: Upload a bank statement
+      description: "A CSV in the common format (date, description, amount, and optionally reference and balance), or with its columns matched to it. A file with any line Taskiem cannot read adds nothing and answers 422 with the lines and why. Lines already in the log are skipped."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, csv]
+              properties:
+                channel:
+                  type: string
+                  description: The account the statement is for, such as gtbank/current
+                csv:
+                  type: string
+                columns:
+                  $ref: '#/components/schemas/MoneyStatementFormat'
+      responses:
+        '200':
+          description: What was added
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channel, added, skipped, columns]
+                properties:
+                  channel:
+                    type: string
+                  added:
+                    type: integer
+                  skipped:
+                    type: integer
+                  columns:
+                    $ref: '#/components/schemas/MoneyStatementFormat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/entries:
+    post:
+      operationId: enterMoney
+      tags:
+      - Invoices
+      summary: Enter cash or an expense
+      description: "Once per Idempotency-Key. An expense is money out; cash goes in or out."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, amount_kobo, description]
+              properties:
+                kind:
+                  type: string
+                  enum: [cash, expense]
+                direction:
+                  type: string
+                  enum: [in, out]
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                occurred_at:
+                  type: string
+                  description: A date (2026-10-23) or a time (RFC 3339); now when left out
+                description:
+                  type: string
+                  maxLength: 300
+                vendor:
+                  type: string
+                  maxLength: 120
+                category:
+                  type: string
+                  maxLength: 60
+                channel:
+                  type: string
+                  description: cash (the default) or an account such as gtbank/current
+      responses:
+        '201':
+          description: The entry
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry_id, created]
+                properties:
+                  entry_id:
+                    type: string
+                    format: uuid
+                  created:
+                    type: boolean
+        '200':
+          description: The same entry, from an earlier request with this Idempotency-Key
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry_id, created]
+                properties:
+                  entry_id:
+                    type: string
+                    format: uuid
+                  created:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/summary:
+    get:
+      operationId: getMoneySummary
+      tags:
+      - Invoices
+      summary: A period's money
+      description: "Money in and out, settled and pending, by channel, with fees and the effective fee rate, invoices paid and leaks; each movement counted once at its latest status (docs/money-reports.md)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The first day (Lagos time); today when left out
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The last day, included
+      - name: month
+        in: query
+        schema:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}$'
+        description: A whole month (2026-10), in place of from and to
+      responses:
+        '200':
+          description: The summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySummary'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/exports/{kind}:
+    get:
+      operationId: exportMoney
+      tags:
+      - Invoices
+      summary: Export the money log, invoices or a journal
+      description: "A CSV of the period: log (one line per movement, its latest status), invoices (sent in the period; customers named only with reveal), or journal (double-entry postings, debits equal to credits). Audited."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [log, invoices, journal]
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The first day (Lagos time); today when left out
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The last day, included
+      - name: month
+        in: query
+        schema:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}$'
+        description: A whole month (2026-10), in place of from and to
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+        description: invoices only, with pii.reveal - the customers' names
+      responses:
+        '200':
+          description: The CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/classes:
+    get:
+      operationId: listSchoolClasses
+      tags:
+      - Schools
+      summary: The school's classes
+      description: In their order, with how many active students each has.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      responses:
+        '200':
+          description: The classes
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - classes
+                properties:
+                  classes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClass'
+        default: &id001
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addSchoolClass
+      tags:
+      - Schools
+      summary: Add a class
+      description: 'A name (JSS 1) and arm (A) unique in the school, and its order: promotion moves students to the next order up. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolClassIn'
+      responses:
+        '201':
+          description: The class
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolClass'
+        default: *id001
+  /v1/schools/classes/{id}:
+    put:
+      operationId: changeSchoolClass
+      tags:
+      - Schools
+      summary: Rename a class or move it in the order
+      description: Its students and enrollments stay its own. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolClassIn'
+      responses:
+        '200':
+          description: The class
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolClass'
+        default: *id001
+    delete:
+      operationId: removeSchoolClass
+      tags:
+      - Schools
+      summary: Remove a class
+      description: Only a class no student was ever in (409 otherwise). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204': &id002
+          $ref: '#/components/responses/NoContent'
+        default: *id001
+  /v1/schools/sessions:
+    get:
+      operationId: listSchoolSessions
+      tags:
+      - Schools
+      summary: The school's sessions and terms
+      description: Oldest first, each with its terms in date order and whether it was promoted.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      responses:
+        '200':
+          description: The sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - sessions
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolSession'
+        default: *id001
+    post:
+      operationId: addSchoolSession
+      tags:
+      - Schools
+      summary: Add a session
+      description: A school year written as two years, such as 2026/2027. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - label
+              properties:
+                label:
+                  type: string
+                  pattern: ^[0-9]{4}/[0-9]{4}$
+      responses:
+        '201':
+          description: The session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolSession'
+        default: *id001
+  /v1/schools/sessions/{id}/terms:
+    post:
+      operationId: addSchoolTerm
+      tags:
+      - Schools
+      summary: Add a term to a session
+      description: With its start, end and the date fees are due. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolTermIn'
+      responses:
+        '201':
+          description: The term
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolTerm'
+        default: *id001
+  /v1/schools/sessions/{id}/promotion:
+    get:
+      operationId: getSchoolPromotion
+      tags:
+      - Schools
+      summary: A session's promotion
+      description: What promoting it would do with no exceptions (every active student up one class, the last class graduating), or, once done, what it did. Names masked.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The promotion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolPromotion'
+        default: *id001
+    post:
+      operationId: promoteSchoolSession
+      tags:
+      - Schools
+      summary: Promote a session
+      description: 'Once per session (409 again): every active student moves up one class, with the exceptions chosen (repeat, leave, graduate). Refused once a later session has a term started. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                exceptions:
+                  type: object
+                  description: Student id to promote, repeat, leave or graduate
+                  additionalProperties:
+                    type: string
+                    enum:
+                    - promote
+                    - repeat
+                    - leave
+                    - graduate
+      responses:
+        '200':
+          description: What was done
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolPromotion'
+        default: *id001
+  /v1/schools/terms/{id}:
+    put:
+      operationId: changeSchoolTerm
+      tags:
+      - Schools
+      summary: Change a term's name or dates
+      description: A past term is read-only (409). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolTermIn'
+      responses:
+        '200':
+          description: The term
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolTerm'
+        default: *id001
+    delete:
+      operationId: removeSchoolTerm
+      tags:
+      - Schools
+      summary: Remove a term
+      description: Only a term that has not started (409 otherwise). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204': *id002
+        default: *id001
+  /v1/schools/terms/{id}/start:
+    post:
+      operationId: startSchoolTerm
+      tags:
+      - Schools
+      summary: Start a term
+      description: 'Makes it the current term (the one before becomes past and read-only) and enrols every active student in their class, each once: starting it again enrols nobody twice. A past term, or
+        one starting before the current one, is refused (409). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The term and how many were enrolled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolTermStarted'
+        default: *id001
+  /v1/schools/terms/{id}/enrollments:
+    get:
+      operationId: listSchoolEnrollments
+      tags:
+      - Schools
+      summary: A term's enrollments
+      description: Each student in their class for the term, by class and admission number.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The enrollments
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - enrollments
+                properties:
+                  enrollments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolEnrollment'
+        default: *id001
+  /v1/schools/students:
+    get:
+      operationId: listSchoolStudents
+      tags:
+      - Schools
+      summary: The school's students
+      description: By admission number, of a class and status. q matches the admission number, and the name when revealed. Names masked unless the caller holds pii.reveal and asks with reveal=true, which
+        is audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: class
+        in: query
+        schema:
+          type: string
+          format: uuid
+        description: A class's id
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - active
+          - withdrawn
+          - graduated
+      - name: q
+        in: query
+        schema: &id004
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+      - &id005
+        name: reveal
+        in: query
+        schema: &id003
+          type: boolean
+        description: 'With pii.reveal: the details unmasked (audited)'
+      responses:
+        '200':
+          description: The students
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - students
+                - total
+                - revealed
+                properties:
+                  students:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolStudent'
+                  total:
+                    type: integer
+                  revealed: *id003
+        default: *id001
+    post:
+      operationId: addSchoolStudent
+      tags:
+      - Schools
+      summary: Add a student
+      description: 'With their class, and their family: an existing one (family_id) or a new one with its guardians. Enrolled in the current term when one runs. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolStudentIn'
+      responses:
+        '201':
+          description: The student, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentDetail'
+        default: *id001
+  /v1/schools/students/import:
+    post:
+      operationId: importSchoolStudents
+      tags:
+      - Schools
+      summary: Import students from a CSV
+      description: 'Columns: name, admission number, class, guardian name, phone, and optionally email, relationship and date of birth. Every line is checked first: a file with any line that cannot be taken
+        saves nothing and answers 422 with each line and why (problems, total). Without confirm the answer is the plan (who is added and updated, families grouped by guardians'' phones) and its hash; sending
+        the same csv with confirm set to the hash saves it. Students already in the record are updated by admission number, never added twice. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - csv
+              properties:
+                csv: *id004
+                confirm:
+                  type: string
+                  description: The plan's hash, to save it
+      responses:
+        '200':
+          description: The plan, saved when confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolImportPlan'
+        default: *id001
+  /v1/schools/students/{id}:
+    get:
+      operationId: getSchoolStudent
+      tags:
+      - Schools
+      summary: One student
+      description: By id or admission number, with their family and class history. Details masked unless the caller holds pii.reveal and asks with reveal=true, which is audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The student's id or admission number
+      - *id005
+      responses:
+        '200':
+          description: The student
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - student
+                - revealed
+                properties:
+                  student:
+                    $ref: '#/components/schemas/SchoolStudentDetail'
+                  revealed: *id003
+        default: *id001
+    patch:
+      operationId: changeSchoolStudent
+      tags:
+      - Schools
+      summary: Change a student
+      description: 'Only what is given: name, admission number, class, date of birth, status, family. A class change while a term runs moves the student''s enrollment for it; a past term''s stays. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolStudentChange'
+      responses:
+        '200':
+          description: The student, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentDetail'
+        default: *id001
+  /v1/schools/families:
+    get:
+      operationId: listSchoolFamilies
+      tags:
+      - Schools
+      summary: The school's families
+      description: Newest first, with guardians and students; details masked unless revealed (pii.reveal, audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - *id005
+      responses:
+        '200':
+          description: The families
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - families
+                - revealed
+                properties:
+                  families:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolFamily'
+                  revealed: *id003
+        default: *id001
+    post:
+      operationId: addSchoolFamily
+      tags:
+      - Schools
+      summary: Add a family
+      description: 'With 1 to 6 guardians. A guardian belongs to one family: a phone already in another family is refused (409). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - guardians
+              properties:
+                guardians:
+                  type: array
+                  minItems: 1
+                  maxItems: 6
+                  items:
+                    $ref: '#/components/schemas/SchoolGuardianIn'
+      responses:
+        '201':
+          description: The family, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFamily'
+        default: *id001
+  /v1/schools/families/{id}:
+    get:
+      operationId: getSchoolFamily
+      tags:
+      - Schools
+      summary: One family
+      description: With guardians and students; details masked unless revealed (pii.reveal, audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - *id005
+      responses:
+        '200':
+          description: The family
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - family
+                - revealed
+                properties:
+                  family:
+                    $ref: '#/components/schemas/SchoolFamily'
+                  revealed: *id003
+        default: *id001
+  /v1/schools/families/{id}/guardians:
+    post:
+      operationId: addSchoolGuardian
+      tags:
+      - Schools
+      summary: Add a guardian to a family
+      description: A phone already in another family is refused (409). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolGuardianIn'
+      responses:
+        '201':
+          description: The family, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFamily'
+        default: *id001
+  /v1/schools/families/{id}/guardians/{guardian}:
+    put:
+      operationId: changeSchoolGuardian
+      tags:
+      - Schools
+      summary: Change a guardian's details
+      description: A new phone must be no other guardian's (409). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: guardian
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolGuardianIn'
+      responses:
+        '200':
+          description: The family, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFamily'
+        default: *id001
+    delete:
+      operationId: removeSchoolGuardian
+      tags:
+      - Schools
+      summary: Take a guardian out of a family
+      description: Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: guardian
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The family, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFamily'
+        default: *id001
+  /v1/schools/terms/{id}/fees:
+    get:
+      operationId: listSchoolFees
+      tags:
+      - Schools
+      summary: A term's fee structures
+      description: Every class's fee items for the term, in the classes' order (a class with none has an empty list), and the term before it, to copy from.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [classes]
+                properties:
+                  classes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClassFees'
+                  previous_term:
+                    description: The term before this one, null for the first
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/SchoolTerm'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/terms/{id}/fees/{class}:
+    put:
+      operationId: setSchoolFees
+      tags:
+      - Schools
+      summary: Set a class's fees for a term
+      description: 'The whole structure: items matched by name (an item kept keeps the students who chose it), an item left out removed. Changes reach the term''s draft invoices for the class, rebuilt; sent invoices change only by amendment. A past term''s fees are read-only (409). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: class
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 40
+                  items:
+                    $ref: '#/components/schemas/SchoolFeeItemIn'
+      responses:
+        '200':
+          description: The structure, and how many drafts were rebuilt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFeesSet'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/terms/{id}/fees/{class}/copy:
+    post:
+      operationId: copySchoolFees
+      tags:
+      - Schools
+      summary: Copy a class's fees from another term or class
+      description: Sets the structure to that of from_class (default the same class) in from_term (default the term before). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: class
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from_term:
+                  type: string
+                  format: uuid
+                from_class:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: The structure, and how many drafts were rebuilt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFeesSet'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/terms/{id}/invoice:
+    post:
+      operationId: invoiceSchoolTerm
+      tags:
+      - Schools
+      summary: Invoice the term
+      description: 'Without confirm, the plan: how many students, the total, who is invoiced already and who is left out and why (no guardian to send to, no fees for their class, nothing to pay, a discount needing approval), with its hash. With confirm (the plan''s hash; 409 when the plan has changed) it makes one invoice per enrolled student exactly once (key term:<term>:student:<student>), the family''s, customer key student:<id>, due on the term''s fees_due_on, as drafts, and with send sends the term''s drafts (counting each family''s credit first). Running it again invoices only students added since. The current term only. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirm:
+                  type: string
+                  description: The plan's hash
+                send:
+                  type: boolean
+                  description: Send the invoices now (else they are drafts)
+      responses:
+        '200':
+          description: The plan ({plan}), or what was done (the plan's fields with created, send, sent and failed)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - type: object
+                  required: [plan]
+                  properties:
+                    plan:
+                      $ref: '#/components/schemas/SchoolTermPlan'
+                - $ref: '#/components/schemas/SchoolTermInvoiced'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/terms/{id}/invoices:
+    get:
+      operationId: listSchoolTermInvoices
+      tags:
+      - Schools
+      summary: A term's invoices
+      description: Each student's invoice for the term, by class and admission number, optionally of one class and status. Names are masked unless the caller holds pii.reveal and asks with ?reveal=true (audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: class
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [draft, sent, part_paid, paid, overdue, void]
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoices, revealed]
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolTermInvoice'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/fees:
+    get:
+      operationId: getSchoolStudentFees
+      tags:
+      - Schools
+      summary: A student's fees for a term
+      description: Their class's items for the term (?term=, default the current one), the optional ones they take, their standing discounts, the invoice these make now, and the term's invoice when they have one.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentFees'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/accounts:
+    get:
+      operationId: listSchoolStudentAccounts
+      tags:
+      - Schools
+      summary: A student's account numbers
+      description: The student's own account numbers (one per issuing connection), and issues that failed or must be checked, with the rail's reason. The account number is the school's collection account, meant for parents; the account's name has the child's name, so it is masked unless the caller holds pii.reveal and asks with ?reveal=true (audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: The student's id or admission number (escaped when it holds a slash)
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accounts, issuing_connection, revealed]
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolStudentAccount'
+                  issuing_connection:
+                    type: string
+                    description: The school's issuing connection; empty when none is chosen
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/account:
+    post:
+      operationId: issueSchoolStudentAccount
+      tags:
+      - Schools
+      summary: Issue a student's account number
+      description: 'Issues the student''s own account number on the school''s issuing connection, exactly once per student and connection (the rail''s key is student:<id>:acct:<connection>): a student who has one is answered it, and the rail is not asked again. Named "SCHOOL / CHILD" where the rail lets the school name it, the school''s name shortened to fit. bvn or nin (11 digits) is a parent''s, for rails that need one per account (Flutterwave): sent to the rail, never kept. retry asks again after a lost answer on a rail where asking again could open a second account, once a person checked with the rail. 422 with code rail_refused when the rail refused (its reason, also recorded on the student); 409 when no issuing connection is chosen, or the account is being issued now. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bvn:
+                  type: string
+                  pattern: '^[0-9]{11}$'
+                nin:
+                  type: string
+                  pattern: '^[0-9]{11}$'
+                retry:
+                  type: boolean
+      responses:
+        '200':
+          description: The student's account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentAccount'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/accounts/issue:
+    post:
+      operationId: issueSchoolAccounts
+      tags:
+      - Schools
+      summary: Issue account numbers to every student without one
+      description: 'Without confirm, the plan: the issuing connection and what it needs, how many active students have an account already, how many this batch issues (at most 500; later says how many more a next batch can), who cannot be issued and why (no guardian email where the rail needs one, an email a sibling''s Paystack account has, Flutterwave''s BVN or NIN), and who waits on an issue being made or a lost answer to check, with its hash. With confirm (the plan''s hash; 409 when it changed, or while another batch runs) it starts the batch (202), which issues each student once in the background; a batch interrupted is picked up where it stopped and never issues twice. The same plan confirmed twice is one batch. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirm:
+                  type: string
+                  description: The plan's hash
+      responses:
+        '200':
+          description: The plan
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plan]
+                properties:
+                  plan:
+                    $ref: '#/components/schemas/SchoolAccountPlan'
+        '202':
+          description: The batch, started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolAccountJob'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/accounts/jobs:
+    get:
+      operationId: listSchoolAccountJobs
+      tags:
+      - Schools
+      summary: The latest batches of account numbers
+      description: The school's 10 latest batches, newest first, each with its progress and the students it did not issue, with the rail's reason.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobs]
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolAccountJob'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/accounts/jobs/{id}:
+    get:
+      operationId: getSchoolAccountJob
+      tags:
+      - Schools
+      summary: A batch of account numbers
+      description: Its progress (issued, failed, unknown, pending) and the students it did not issue, with the rail's reason.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolAccountJob'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/payments:
+    post:
+      operationId: postSchoolPayment
+      tags:
+      - Schools
+      summary: Post money a family paid at the desk
+      description: 'Cash, a transfer to the school''s own account, a POS payment or another way, for a student (by id or admission number): a money log entry that is the student''s money, counted towards their open term invoices oldest first (then their siblings'' where the school shares family credit), with a receipt per part; what is left is the family''s credit. At or above the school''s cash threshold the posting is recorded as pending instead (202, code needs_approval, with the request): nothing reaches the fees until someone with school.approve who is not the requester approves it. An Idempotency-Key header makes a retry the same posting. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 200
+        description: 'Makes the request safe to retry: the same key answers the same posting'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [student, amount_kobo, how]
+              properties:
+                student:
+                  type: string
+                  description: The student's id or admission number
+                amount_kobo:
+                  type: integer
+                  minimum: 100
+                how:
+                  type: string
+                  enum: [cash, transfer, pos, other]
+                date:
+                  type: string
+                  format: date
+                  description: When it was paid; today when left out
+                note:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: Posted, with its parts and receipts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [posting]
+                properties:
+                  posting:
+                    $ref: '#/components/schemas/SchoolPosting'
+        '200':
+          description: The same key again, the posting as it was
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [posting]
+                properties:
+                  posting:
+                    $ref: '#/components/schemas/SchoolPosting'
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listSchoolPayments
+      tags:
+      - Schools
+      summary: List cash postings and the other requests
+      description: Newest first, at most limit (default 100); filtered by status (pending, posted, declined), kind (cash_posting, discount, discount_amendment, term_invoice) and student (id). Names masked unless ?reveal=true with pii.reveal (audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [pending, posted, declined]
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [cash_posting, discount, discount_amendment, term_invoice]
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [postings, revealed]
+                properties:
+                  postings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPosting'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/approvals:
+    get:
+      operationId: listSchoolApprovals
+      tags:
+      - Schools
+      summary: The school's requests waiting for a second person
+      description: Cash postings at or above the cash threshold, discounts and discount amendments at or above the discount threshold, and term invoices held for such a discount; each says whether the caller asked for it (yours), in which case they cannot decide it. Names masked.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.approve
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPosting'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/approvals/{id}:
+    post:
+      operationId: decideSchoolApproval
+      tags:
+      - Schools
+      summary: Approve or decline a request
+      description: 'By a person (not an API key) with school.approve who did not ask for it: the requester never decides their own (409). Approving posts the cash (the entry, its parts and receipts), gives the discount, amends the invoice or makes the held term invoice, exactly once; declining needs a reason and changes nothing. The requester is told either way. A request is decided once (409 after). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      x-taskiem-permission: school.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approved, declined]
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The request as decided
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    $ref: '#/components/schemas/SchoolPosting'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/receipts:
+    get:
+      operationId: listSchoolReceipts
+      tags:
+      - Schools
+      summary: List receipts
+      description: Newest first, at most limit (default 100); filtered by student, term or invoice (ids) or found by number. Each carries its verification link. Names masked unless ?reveal=true with pii.reveal (audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: invoice
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: number
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [receipts, revealed]
+                properties:
+                  receipts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolReceipt'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/receipts/{id}:
+    get:
+      operationId: getSchoolReceipt
+      tags:
+      - Schools
+      summary: A receipt, by id or number
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [receipt, revealed]
+                properties:
+                  receipt:
+                    $ref: '#/components/schemas/SchoolReceipt'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/receipts/{id}/pdf:
+    get:
+      operationId: getSchoolReceiptPDF
+      tags:
+      - Schools
+      summary: A receipt's PDF
+      description: 'A5, with an embedded font: the school, the student and class, the amount and date, what it paid (the invoice and its lines), the invoice''s balance after it, the receipt number and a QR code of the verification link. Made on demand; nothing is kept. It carries the student''s name, so each rendering is in the audit log.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/claims:
+    get:
+      operationId: listSchoolClaims
+      tags:
+      - Schools
+      summary: List families' "I have paid" claims
+      description: 'What families said on their page they paid some other way (docs/schools.md#the-family-page): open ones by default (status=any for all, or matched or dismissed), by student or family, newest first. A claim is never a payment; it is resolved when a payment for the student is counted, or dismissed with a reason. Names masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: family
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [open, matched, dismissed, any]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The claims
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claims, revealed]
+                properties:
+                  claims:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClaim'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/claims/{id}/resolve:
+    post:
+      operationId: resolveSchoolClaim
+      tags:
+      - Schools
+      summary: Dismiss a claim
+      description: 'The bursar looked and found no such payment (or found it another way): the open claim is dismissed with a reason, once (409 after). A claim a payment answered is matched by itself when the payment is counted. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The claim as resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claim]
+                properties:
+                  claim:
+                    $ref: '#/components/schemas/SchoolClaim'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/plans:
+    get:
+      operationId: listSchoolPlans
+      tags:
+      - Schools
+      summary: List payment plan requests
+      description: 'Families'' requests for a payment plan from their page (docs/schools.md#the-family-page): undecided ones by default (status=any for all, or approved or declined), by student or family, with the parent''s instalments and words and, once decided, the decision. Names masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: family
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [requested, approved, declined, any]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The plan requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plans, revealed]
+                properties:
+                  plans:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPlanRequest'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/plans/{id}:
+    post:
+      operationId: decideSchoolPlan
+      tags:
+      - Schools
+      summary: Approve or decline a payment plan request
+      description: 'By a person (not an API key) with school.approve. Approving takes the instalments as decided (the parent''s when none are given: 1 to 6, each an amount by a date from today on, in order); declining needs a note. The family is told either way, with a fresh link to its page. A request is decided once (409 after). Its effects on reminders and clearance come with chasing. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      x-taskiem-permission: school.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approved, declined]
+                instalments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SchoolInstalment'
+                note:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The request as decided, and how the family was told
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plan]
+                properties:
+                  plan:
+                    $ref: '#/components/schemas/SchoolPlanRequest'
+                  sent:
+                    $ref: '#/components/schemas/SchoolFamilySent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/families/{id}/link:
+    post:
+      operationId: sendSchoolFamilyLink
+      tags:
+      - Schools
+      summary: Send a family a link to its page
+      description: 'Mints a fresh link to the family''s fees page (valid for the school''s family_link_days) and sends it to each guardian on WhatsApp or Telegram where they get the business''s updates there, otherwise by SMS, with an optional message before it. The link is answered too, for the bursar to pass on by hand. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The link and where it went
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/SchoolFamilySent'
+                - type: object
+                  required: [link]
+                  properties:
+                    link:
+                      type: string
+                      format: uri
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/options:
+    put:
+      operationId: setSchoolStudentOptions
+      tags:
+      - Schools
+      summary: Set the optional items a student takes in a term
+      description: All of them (an item left out is no longer taken); each one of the optional items of the student's class for the term. Their draft invoice for the term is rebuilt. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [term, items]
+              properties:
+                term:
+                  type: string
+                  format: uuid
+                items:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: The student's fees
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentFees'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/discounts:
+    get:
+      operationId: listSchoolDiscounts
+      tags:
+      - Schools
+      summary: A student's standing discounts
+      description: The discounts given, the ended ones too, and the school's discount threshold.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discounts, discount_threshold_kobo]
+                properties:
+                  discounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolDiscount'
+                  discount_threshold_kobo:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addSchoolDiscount
+      tags:
+      - Schools
+      summary: Give a student a standing discount
+      description: 'A percent of the school''s own fees (never of money collected for others) or an amount, with a reason, taken off each term invoice made while it stands; their drafts are rebuilt. One at or above the school''s discount threshold waits for a second person instead: 202 with code needs_approval and the request recorded (a percent is weighed against the current term''s fees); the discount is given when someone with school.approve approves it. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, reason]
+              properties:
+                kind:
+                  type: string
+                  enum: [sibling, staff_child, scholarship, hardship, other]
+                percent:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                amount_kobo:
+                  type: integer
+                  minimum: 100
+                reason:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: The discount
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discount, drafts_updated]
+                properties:
+                  discount:
+                    $ref: '#/components/schemas/SchoolDiscount'
+                  drafts_updated:
+                    type: integer
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/discounts/{discount}:
+    delete:
+      operationId: endSchoolDiscount
+      tags:
+      - Schools
+      summary: End a standing discount
+      description: Invoices already sent keep it; drafts are rebuilt without it. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: discount
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The discount, ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discount, drafts_updated]
+                properties:
+                  discount:
+                    $ref: '#/components/schemas/SchoolDiscount'
+                  drafts_updated:
+                    type: integer
         default:
           $ref: '#/components/responses/Error'
   /v1/invoice-settings:
@@ -1487,6 +4327,11 @@ paths:
                 properties:
                   order:
                     $ref: '#/components/schemas/StorefrontOrder'
+                  payments:
+                    type: array
+                    description: Money matched to the order, and undoings of it (docs/matching.md)
+                    items:
+                      $ref: '#/components/schemas/StorefrontOrderPayment'
                   revealed:
                     type: boolean
         default:
@@ -6391,7 +9236,7 @@ paths:
       tags:
       - Notifications
       summary: How the caller hears beyond the app
-      description: Per group (failures, setup, finished), whether chat (the WhatsApp or Telegram they linked) and email are on. The app always shows everything.
+      description: Per group (failures, setup, finished, and money for people with invoice.read), whether chat (the WhatsApp or Telegram they linked) and email are on. The app always shows everything.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -6453,7 +9298,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/NotificationSetting'
         '403':
-          description: An API key has no notifications.
+          description: An API key has no notifications, or a money setting from someone without invoice.read.
           content:
             application/json:
               schema:
@@ -10610,6 +13455,74 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/schools:
+    get:
+      operationId: getSchoolSettings
+      tags:
+      - Schools
+      summary: Whether the Schools area is on
+      description: Any member. bursar_role says whether the business has a custom role named bursar; issuing is the connection that issues students' account numbers, and issuers the connections that can, with what each rail needs.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolSettings'
+        default: &id002
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putSchoolSettings
+      tags:
+      - Schools
+      summary: Turn the Schools area on or off, and set its settings
+      description: Owners only (403 otherwise). Off hides it; nothing is deleted. Turning it on with bursar_role also adds the Bursar custom role (school.read, school.manage, invoice.read, invoice.manage)
+        when the plan has custom roles and no role is named bursar. issuing, while the area is on, sets the connection that issues students' account numbers (an active prod connection whose rail can; with its wallet where the rail needs one; 400 otherwise) and whether siblings share family credit. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - enabled
+              properties:
+                enabled: &id001
+                  type: boolean
+                bursar_role: *id001
+                discount_threshold_naira:
+                  type: integer
+                  minimum: 0
+                  description: The owner's discount threshold in whole naira (0 for none); set while the area is on. Audited.
+                cash_threshold_naira:
+                  type: [integer, 'null']
+                  minimum: 0
+                  description: The owner's cash threshold in whole naira (0 for every posting, null for none); set while the area is on. Audited.
+                family_link_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                  description: How many days a link to a family's page works (3 by default); set while the area is on. Audited.
+                issuing:
+                  $ref: '#/components/schemas/SchoolIssuing'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolSettings'
+        default: *id002
   /v1/settings/brand:
     get:
       operationId: getBrand
@@ -10981,6 +13894,11 @@ paths:
         in: query
         schema:
           type: string
+      - name: callable
+        in: query
+        schema:
+          type: boolean
+        description: Only templates another workflow can use as a step (decision 0047).
   /v1/templates/{id}:
     get:
       operationId: getTemplate
@@ -11673,6 +14591,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VersionSaved'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/workflows/callable:
+    get:
+      operationId: listCallableWorkflows
+      tags:
+      - Workflows
+      summary: List callable workflows
+      description: 'The business''s workflows another workflow may use as a template step (decision 0048): those whose published version declares outputs, by name, with their interface.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      responses:
+        '200':
+          description: The callable workflows, by name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallableWorkflowList'
         default:
           $ref: '#/components/responses/Error'
   /v1/workflows/{wf}:
@@ -12640,7 +15579,7 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: >-
-            A table of that name exists, or the project is being created (`tables_provisioning`, with Retry-After), or the platform's Xenibase organisation is at its project quota (`xenibase_quota`).
+            A table of that name exists, or the name is one Taskiem keeps for its own table (`table_kept`, as `money_log`), or the project is being created (`tables_provisioning`, with Retry-After), or the platform's Xenibase organisation is at its project quota (`xenibase_quota`).
           content:
             application/json:
               schema:
@@ -12739,6 +15678,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
     delete:
@@ -12792,6 +15738,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/tables/{id}/columns:
@@ -12838,7 +15791,7 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: >-
-            The table already has that column.
+            The table already has that column. Or `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -12917,6 +15870,13 @@ paths:
         '503':
           description: >-
             `tables_unavailable`: no platform Xenibase is configured and the organisation brought no project; `tables_project_failed`; `xenibase_unavailable` (with Retry-After).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -13040,7 +16000,7 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: >-
-            A unique constraint (`xenibase_conflict`).
+            A unique constraint (`xenibase_conflict`). Or `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -13166,6 +16126,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
     delete:
@@ -13211,6 +16178,13 @@ paths:
         '404':
           description: >-
             No such table or row.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -13278,6 +16252,13 @@ paths:
         '404':
           description: >-
             No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
           content:
             application/json:
               schema:
@@ -13728,6 +16709,21 @@ components:
             $ref: '#/components/schemas/Error'
     NoContent:
       description: Done; no body.
+    SchoolApprovalNeeded:
+      description: 'Recorded for a second person (docs/schools.md): at or above the school''s threshold, the posting or discount waits as a request, which people with school.approve decide; nothing reaches the fees meanwhile.'
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, code, request]
+            properties:
+              error:
+                type: string
+              code:
+                type: string
+                enum: [needs_approval]
+              request:
+                $ref: '#/components/schemas/SchoolPosting'
   schemas:
     Agent:
       type: object
@@ -13970,10 +16966,15 @@ components:
     NotificationSetting:
       type: object
       required: [group, chat, email]
+      description: >-
+        One group's choice. For the money group (the money summaries, docs/money-reports.md), chat is the daily
+        money summary and email the monthly money email, each on its own; it is listed, and may be set, only
+        for people with invoice.read, and defaults to on for owners and off for others.
       properties:
         group:
           type: string
-          enum: [failures, setup, finished]
+          description: More groups may be added; a client shows a group it does not know generically or skips it.
+          enum: [failures, setup, finished, money]
         chat:
           type: boolean
         email:
@@ -14216,6 +17217,92 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkflowSummary'
+    CallableWorkflowList:
+      type: object
+      required:
+      - workflows
+      properties:
+        workflows:
+          type: array
+          items:
+            $ref: '#/components/schemas/CallableWorkflow'
+      additionalProperties: false
+    CallableWorkflow:
+      type: object
+      description: A workflow of the business another workflow may use as a template step (its published version declares outputs), with its interface.
+      required:
+      - id
+      - name
+      - version
+      - inputs
+      - outputs
+      - effect
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        version:
+          type: integer
+          description: The published version a template step uses.
+        inputs:
+          type: object
+          description: The run inputs a template step gives, as a JSON Schema.
+        outputs:
+          type: array
+          description: What the step's output holds, by name.
+          items:
+            type: object
+            required:
+            - name
+            - type
+            - title
+            - description
+            - value
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+                enum:
+                - string
+                - integer
+                - number
+                - boolean
+                - list
+                - object
+              title:
+                type: string
+              description:
+                type: string
+              value:
+                type: string
+                description: The expression over the workflow's own steps that fills it.
+            additionalProperties: false
+        effect:
+          type: object
+          description: What the workflow does at most, computed from its steps.
+          required:
+          - class
+          - waits_for_person
+          - waits_for_event
+          properties:
+            class:
+              type: string
+              enum:
+              - read
+              - write
+              - moves_money
+            waits_for_person:
+              type: boolean
+            waits_for_event:
+              type: boolean
+            timeout:
+              type: string
+              description: The workflow's run timeout.
+          additionalProperties: false
+      additionalProperties: false
     VersionInfo:
       type: object
       required:
@@ -14325,6 +17412,26 @@ components:
             title:
               type: string
           additionalProperties: false
+        template_updates:
+          type: array
+          description: The callable templates the latest version's template steps use (decision 0047) that the library has changed since that version was saved. Saving a new version takes them; until then every version runs the template as it pinned it.
+          items:
+            type: object
+            required:
+            - template
+            - title
+            - changes
+            properties:
+              template:
+                type: string
+              title:
+                type: string
+              changes:
+                type: array
+                description: What changed, as the version history lists it (`+ step id`, `- step id`, `~ step id`, `~ output name`, `+ parameter name`).
+                items:
+                  type: string
+            additionalProperties: false
     VersionRequest:
       type: object
       required:
@@ -14832,8 +17939,1210 @@ components:
         tenant_name:
           type: string
           description: The business's name, as the web app's sidebar shows it.
+        schools:
+          type: boolean
+          description: Whether the business has the Schools area on (docs/schools.md).
+        gate_only:
+          type: boolean
+          description: "A gate session: the gate role's school.gate and nothing else. Every route but GET /v1/me and sign-out answers 403 with gate_only."
         factors:
           description: What the person proves themselves with to change their factors.
+    SchoolSettings:
+      type: object
+      required:
+      - enabled
+      - bursar_role
+      properties:
+        enabled: &id001
+          type: boolean
+        bursar_role: *id001
+        discount_threshold_naira:
+          type: integer
+          description: Discounts at or above it wait for a second person; 0 for none
+        cash_threshold_naira:
+          type: [integer, 'null']
+          description: Cash postings at or above it wait for a second person; 0 for every posting, null for none
+        family_link_days:
+          type: integer
+          description: How many days a link to a family's page works (1 to 30; 3 by default)
+        issuing:
+          $ref: '#/components/schemas/SchoolIssuing'
+        issuers:
+          type: array
+          description: The business's prod connections that can issue students' account numbers, and what each needs
+          items:
+            $ref: '#/components/schemas/SchoolIssuer'
+    SchoolInstalment:
+      type: object
+      required: [amount_kobo, due_on]
+      properties:
+        amount_kobo:
+          type: integer
+        due_on:
+          type: string
+          format: date
+    SchoolClaim:
+      type: object
+      description: 'An "I have paid" claim a family made on its page (docs/schools.md#the-family-page): what a parent says they paid some other way. Never a payment.'
+      required: [id, family_id, student_id, admission_number, amount_kobo, paid_on, how, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        family_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class:
+          type: string
+        amount_kobo:
+          type: integer
+        paid_on:
+          type: string
+          format: date
+        how:
+          type: string
+          enum: [transfer, cash, pos, other]
+        reference:
+          type: string
+        note:
+          type: string
+        status:
+          type: string
+          enum: [open, matched, dismissed]
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+        resolved_by:
+          type: string
+        resolution_reason:
+          type: string
+    SchoolPlanRequest:
+      type: object
+      description: 'A family''s request for a payment plan from its page, and the decision (docs/schools.md#the-family-page).'
+      required: [id, family_id, student_id, admission_number, instalments, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        family_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class:
+          type: string
+        instalments:
+          type: array
+          description: The parent's instalments
+          items:
+            $ref: '#/components/schemas/SchoolInstalment'
+        message:
+          type: string
+          description: The parent's words
+        status:
+          type: string
+          enum: [requested, approved, declined]
+        created_at:
+          type: string
+          format: date-time
+        decided_at:
+          type: string
+          format: date-time
+        decided_by:
+          type: string
+        decided_user:
+          type: string
+          format: uuid
+        decision_note:
+          type: string
+        decided_instalments:
+          type: array
+          description: The instalments as approved
+          items:
+            $ref: '#/components/schemas/SchoolInstalment'
+    SchoolFamilySent:
+      type: object
+      description: How a family was reached with a fresh link to its page
+      required: [channels, expires_at]
+      properties:
+        channels:
+          type: object
+          description: How many guardians were reached on each channel (whatsapp, telegram, sms)
+          additionalProperties:
+            type: integer
+        expires_at:
+          type: string
+          format: date-time
+        nobody:
+          type: boolean
+          description: No guardian could be reached (no phone, over the limits)
+    SchoolPosting:
+      type: object
+      description: 'A request of the school (docs/schools.md#cash-and-transfers): a cash posting (pending, posted at once or after approval, or declined), or a discount, a discount amendment or a held term invoice waiting for a second person.'
+      required: [id, kind, status, amount_kobo, details, requested_by, requested_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [cash_posting, discount, discount_amendment, term_invoice]
+        status:
+          type: string
+          enum: [pending, posted, declined]
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class:
+          type: string
+        invoice_id:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+        term_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        details:
+          type: object
+          description: 'What was asked: how, date and note for a posting; kind, percent or amount_kobo and reason for a discount; the amendment; send for a held invoice'
+          additionalProperties: true
+        requested_by:
+          type: string
+        requested_user:
+          type: string
+          format: uuid
+        requested_email:
+          type: string
+          description: The requester's sign-in email, when a person asked
+        requested_at:
+          type: string
+          format: date-time
+        decided_by:
+          type: string
+        decided_email:
+          type: string
+        decided_at:
+          type: string
+          format: date-time
+        decision_reason:
+          type: string
+        result:
+          $ref: '#/components/schemas/SchoolPostingResult'
+        yours:
+          type: boolean
+          description: The caller asked for it, so they cannot decide it
+    SchoolPostingResult:
+      type: object
+      description: What a posting did, or an approved request made.
+      properties:
+        entry_id:
+          type: string
+          format: uuid
+        parts:
+          type: array
+          items:
+            type: object
+            required: [invoice_id, number, amount_kobo]
+            properties:
+              invoice_id:
+                type: string
+                format: uuid
+              number:
+                type: string
+              amount_kobo:
+                type: integer
+              receipt_id:
+                type: string
+                format: uuid
+              receipt_number:
+                type: string
+        credit_kobo:
+          type: integer
+          description: What was left as the family's credit
+        discount_id:
+          type: string
+          format: uuid
+        amendment_id:
+          type: string
+          format: uuid
+        invoice_id:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+    SchoolReceipt:
+      type: object
+      description: 'A receipt for one payment part counted towards a term invoice (docs/schools.md#receipts), numbered per business and term; voided, never deleted, when the part is undone.'
+      required: [id, number, term_id, term, student_id, admission_number, name, class_id, class, invoice_id, invoice_number, part_id, amount_kobo, balance_after_kobo, how, paid_at, issued_by, issued_at, voided]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          description: RCT-2026T1-0079
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class_id:
+          type: string
+          format: uuid
+        class:
+          type: string
+        invoice_id:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+        part_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        balance_after_kobo:
+          type: integer
+        how:
+          type: string
+          enum: [exact, suggested, suggested_auto, manual]
+        paid_at:
+          type: string
+          format: date-time
+        issued_by:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        voided:
+          type: boolean
+        voided_at:
+          type: string
+          format: date-time
+        void_reason:
+          type: string
+        link:
+          type: string
+          description: The public verification page, /r/<token> on the form host
+    SchoolIssuing:
+      type: object
+      description: The connection that issues students' account numbers (and its wallet, on rails that hold several), and whether siblings share family credit.
+      required: [connection]
+      properties:
+        connection:
+          type: string
+          description: connector/name, such as iswallet/main; empty for none
+        account:
+          type: string
+          description: The wallet the numbers pay into (iswallet)
+        siblings_share_credit:
+          type: boolean
+          description: What a student's account takes beyond their own invoices counts towards their brothers' and sisters' open invoices, oldest first (off by default, and when left out)
+    SchoolIssuer:
+      type: object
+      description: A prod connection that can issue students' account numbers, and what its rail needs, in plain words.
+      required: [connection, rail, requirement, names_itself, needs_account, look_back, webhook]
+      properties:
+        connection:
+          type: string
+        rail:
+          type: string
+        requirement:
+          type: string
+        fee:
+          type: string
+        names_itself:
+          type: boolean
+          description: The rail names the account itself
+        name_limit:
+          type: integer
+        one_account_per_email:
+          type: boolean
+        needs_bvn:
+          type: boolean
+        needs_account:
+          type: boolean
+          description: The wallet the numbers pay into must be chosen
+        look_back:
+          type: boolean
+          description: Its credits are read back every 15 minutes
+        webhook:
+          type: boolean
+          description: Its credits also arrive as events when its webhook is set up
+    SchoolStudentAccount:
+      type: object
+      required: [student_id, connection, status, named_by_rail, attempts, updated_at]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        connection:
+          type: string
+        status:
+          type: string
+          enum: [issuing, issued, failed, unknown]
+          description: unknown is a lost answer on a rail where asking again could open a second account; check with the rail, then issue with retry
+        account_number:
+          type: string
+        bank_name:
+          type: string
+        account_name:
+          type: string
+          description: The name the rail answered, else the one asked for (masked unless revealed)
+        named_by_rail:
+          type: boolean
+        reference:
+          type: string
+        shortened:
+          type: boolean
+          description: The school's name was shortened to fit the rail's limit
+        flagged:
+          type: boolean
+          description: The child's name alone did not fit, and was cut
+        error:
+          type: string
+          description: Why it failed or is unknown, in the rail's words
+        attempts:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+    SchoolAccountPlan:
+      type: object
+      required: [issuer, active, already_issued, to_issue, later, waiting, cannot, hash]
+      properties:
+        issuer:
+          $ref: '#/components/schemas/SchoolIssuer'
+        active:
+          type: integer
+        already_issued:
+          type: integer
+        to_issue:
+          type: integer
+        later:
+          type: integer
+          description: More students a next batch can issue (each batch is at most 500)
+        waiting:
+          type: array
+          items:
+            type: object
+            required: [student_id, admission_number, status]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              admission_number:
+                type: string
+              status:
+                type: string
+              reason:
+                type: string
+        cannot:
+          type: array
+          items:
+            type: object
+            required: [student_id, admission_number, reason]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              admission_number:
+                type: string
+              reason:
+                type: string
+        running:
+          type: string
+          format: uuid
+          description: The batch still running, when one is
+        hash:
+          type: string
+    SchoolAccountJob:
+      type: object
+      required: [id, connection, status, total, issued, failed, unknown, pending, created_by, created_at, problems]
+      properties:
+        id:
+          type: string
+          format: uuid
+        connection:
+          type: string
+        status:
+          type: string
+          enum: [running, done]
+        total:
+          type: integer
+        issued:
+          type: integer
+        failed:
+          type: integer
+        unknown:
+          type: integer
+        pending:
+          type: integer
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        problems:
+          type: array
+          items:
+            type: object
+            required: [student_id, admission_number, status, reason]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              admission_number:
+                type: string
+              status:
+                type: string
+              reason:
+                type: string
+    SchoolFeeItemIn:
+      type: object
+      required: [name, amount_kobo]
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        amount_kobo:
+          type: integer
+          minimum: 100
+        kind:
+          type: string
+          enum: [required, optional]
+          description: required by default
+        pass_through_for:
+          type: string
+          maxLength: 60
+          description: Who the item is collected for (WAEC, NECO), for money that is not the school's income
+    SchoolFeeItem:
+      type: object
+      required: [id, term_id, class_id, name, amount_kobo, kind, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        term_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        amount_kobo:
+          type: integer
+        kind:
+          type: string
+          enum: [required, optional]
+        pass_through_for:
+          type: string
+        position:
+          type: integer
+    SchoolClassFees:
+      type: object
+      required: [class_id, class, items, required_kobo, pass_through_kobo]
+      properties:
+        class_id:
+          type: string
+          format: uuid
+        class:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolFeeItem'
+        required_kobo:
+          type: integer
+          description: What every student of the class pays before optional items and discounts
+        pass_through_kobo:
+          type: integer
+    SchoolFeesSet:
+      type: object
+      required: [fees, drafts_updated]
+      properties:
+        fees:
+          $ref: '#/components/schemas/SchoolClassFees'
+        drafts_updated:
+          type: integer
+    SchoolDiscount:
+      type: object
+      required: [id, student_id, kind, reason, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [sibling, staff_child, scholarship, hardship, other]
+        percent:
+          type: integer
+        amount_kobo:
+          type: integer
+        reason:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+    SchoolPlanStudent:
+      type: object
+      required: [id, admission_number, name, class]
+      properties:
+        id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: Masked
+        class:
+          type: string
+        total_kobo:
+          type: integer
+    SchoolTermPlan:
+      type: object
+      required: [term, enrolled, to_invoice, total_kobo, pass_through_kobo, classes, already_invoiced, no_contact, no_fees, nothing_to_pay, needs_approval, hash]
+      properties:
+        term:
+          $ref: '#/components/schemas/SchoolTerm'
+        enrolled:
+          type: integer
+        to_invoice:
+          type: integer
+        total_kobo:
+          type: integer
+        pass_through_kobo:
+          type: integer
+        classes:
+          type: array
+          items:
+            type: object
+            required: [class_id, class, students, total_kobo]
+            properties:
+              class_id:
+                type: string
+                format: uuid
+              class:
+                type: string
+              students:
+                type: integer
+              total_kobo:
+                type: integer
+        already_invoiced:
+          type: integer
+        no_contact:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolPlanStudent'
+        no_fees:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolPlanStudent'
+        nothing_to_pay:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolPlanStudent'
+        needs_approval:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolPlanStudent'
+        hash:
+          type: string
+    SchoolTermInvoiced:
+      allOf:
+      - $ref: '#/components/schemas/SchoolTermPlan'
+      - type: object
+        required: [created, send, sent, failed]
+        properties:
+          requested:
+            type: integer
+            description: Students held for a discount and sent to a second person; their invoice is made on approval
+          created:
+            type: integer
+          send:
+            type: boolean
+          sent:
+            type: integer
+          failed:
+            type: integer
+    SchoolTermInvoice:
+      type: object
+      required: [invoice_id, number, status, term_id, term, student_id, admission_number, name, class_id, class, total_kobo, paid_kobo, due_kobo]
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        status:
+          type: string
+          enum: [draft, sent, part_paid, paid, overdue, void]
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+        class_id:
+          type: string
+          format: uuid
+        class:
+          type: string
+        total_kobo:
+          type: integer
+        paid_kobo:
+          type: integer
+        due_kobo:
+          type: integer
+        sent_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+    SchoolStudentFees:
+      type: object
+      required: [student_id, term_id, class_id, items, chosen, discounts, lines, total_kobo]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        term_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolFeeItem'
+        chosen:
+          type: array
+          items:
+            type: string
+            format: uuid
+        discounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolDiscount'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+        total_kobo:
+          type: integer
+        invoice:
+          $ref: '#/components/schemas/SchoolTermInvoice'
+    InvoiceAmendment:
+      type: object
+      required: [id, kind, line, amount_kobo, reason, by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [add, remove, discount]
+        line:
+          $ref: '#/components/schemas/InvoiceLine'
+        amount_kobo:
+          type: integer
+          description: What it changed the total by
+        removes:
+          type: integer
+          description: The line a removal took out
+        reason:
+          type: string
+        by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    SchoolClass:
+      type: object
+      required:
+      - id
+      - name
+      - arm
+      - order
+      - label
+      - students
+      - created_at
+      properties:
+        id: &id003
+          type: string
+          format: uuid
+        name: &id002
+          type: string
+        arm: *id002
+        order: &id007
+          type: integer
+        label:
+          type: string
+          description: 'The name, then the arm: JSS 1 A'
+        students:
+          type: integer
+          description: Active students in it now
+        created_at: &id004
+          type: string
+          format: date-time
+    SchoolClassIn:
+      type: object
+      required:
+      - name
+      - order
+      properties:
+        name:
+          type: string
+          maxLength: 60
+        arm:
+          type: string
+          maxLength: 20
+        order:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: The order classes go up in
+    SchoolSession:
+      type: object
+      required:
+      - id
+      - label
+      - terms
+      - promoted_at
+      - created_at
+      properties:
+        id: *id003
+        label: *id002
+        terms:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolTerm'
+        promoted_at: &id006
+          $ref: '#/components/schemas/NullableTimestamp'
+        created_at: *id004
+    SchoolTerm:
+      type: object
+      required:
+      - id
+      - session_id
+      - session
+      - name
+      - starts_on
+      - ends_on
+      - fees_due_on
+      - state
+      - started_at
+      - enrolled
+      properties:
+        id: *id003
+        session_id: *id003
+        session: *id002
+        name: *id002
+        starts_on: &id005
+          type: string
+          format: date
+        ends_on: *id005
+        fees_due_on: *id005
+        state:
+          type: string
+          enum:
+          - planned
+          - current
+          - past
+          description: A past term is read-only
+        started_at: *id006
+        enrolled: *id007
+    SchoolTermIn:
+      type: object
+      required:
+      - name
+      - starts_on
+      - ends_on
+      - fees_due_on
+      properties:
+        name:
+          type: string
+          maxLength: 40
+        starts_on: *id005
+        ends_on: *id005
+        fees_due_on: *id005
+    SchoolTermStarted:
+      type: object
+      required:
+      - term
+      - enrolled
+      properties:
+        term:
+          $ref: '#/components/schemas/SchoolTerm'
+        previous:
+          $ref: '#/components/schemas/SchoolTerm'
+        enrolled:
+          type: integer
+          description: Students this call enrolled
+    SchoolEnrollment:
+      type: object
+      required:
+      - id
+      - term_id
+      - term
+      - session
+      - term_state
+      - student_id
+      - admission_number
+      - class_id
+      - class
+      - created_at
+      - updated_at
+      properties:
+        id: *id003
+        term_id: *id003
+        term: *id002
+        session: *id002
+        term_state:
+          type: string
+          enum:
+          - current
+          - past
+        student_id: *id003
+        admission_number: *id002
+        class_id: *id003
+        class: *id002
+        created_at: *id004
+        updated_at: *id004
+    SchoolStudent:
+      type: object
+      required:
+      - id
+      - admission_number
+      - name
+      - class_id
+      - class
+      - status
+      - family_id
+      - created_at
+      - updated_at
+      properties:
+        id: *id003
+        admission_number: *id002
+        name: &id008
+          type: string
+          description: Masked unless revealed
+        date_of_birth: &id009
+          type: string
+          format: date
+          description: Only when revealed
+        class_id: *id003
+        class: *id002
+        status: &id010
+          type: string
+          enum:
+          - active
+          - withdrawn
+          - graduated
+        family_id: &id011
+          type:
+          - string
+          - 'null'
+          format: uuid
+        created_at: *id004
+        updated_at: *id004
+    SchoolStudentDetail:
+      type: object
+      required:
+      - id
+      - admission_number
+      - name
+      - class_id
+      - class
+      - status
+      - family_id
+      - created_at
+      - updated_at
+      - family
+      - enrollments
+      properties:
+        id: *id003
+        admission_number: *id002
+        name: *id008
+        date_of_birth: *id009
+        class_id: *id003
+        class: *id002
+        status: *id010
+        family_id: *id011
+        created_at: *id004
+        updated_at: *id004
+        family:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/SchoolFamily'
+        enrollments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolEnrollment'
+          description: Class history, newest term first
+    SchoolStudentIn:
+      type: object
+      required:
+      - name
+      - admission_number
+      - class_id
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        admission_number:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9/_.-]{0,39}$
+        class_id: *id003
+        date_of_birth: *id005
+        family_id: *id003
+        guardians:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/SchoolGuardianIn'
+    SchoolStudentChange:
+      type: object
+      properties:
+        name: *id002
+        admission_number: *id002
+        class_id: *id003
+        date_of_birth: *id002
+        status:
+          type: string
+          enum:
+          - active
+          - withdrawn
+          - graduated
+        family_id: *id003
+    SchoolGuardian:
+      type: object
+      required:
+      - id
+      - name
+      - phone
+      properties:
+        id: *id003
+        name: *id002
+        phone: *id002
+        email: *id002
+        relationship: *id002
+    SchoolGuardianIn:
+      type: object
+      required:
+      - name
+      - phone
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        phone: *id002
+        email: *id002
+        relationship:
+          type: string
+          maxLength: 40
+    SchoolFamily:
+      type: object
+      required:
+      - id
+      - guardians
+      - students
+      - created_at
+      properties:
+        id: *id003
+        guardians:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolGuardian'
+        students:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - admission_number
+            - name
+            - class
+            - status
+            properties:
+              id: *id003
+              admission_number: *id002
+              name: *id002
+              class: *id002
+              status: *id002
+        created_at: *id004
+    SchoolPromotion:
+      type: object
+      required:
+      - session_id
+      - session
+      - classes
+      - students
+      - counts
+      - promoted_at
+      - done
+      properties:
+        session_id: *id003
+        session: *id002
+        classes:
+          type: array
+          items:
+            type: object
+            required:
+            - class_id
+            - class
+            - next_id
+            - next
+            - students
+            properties:
+              class_id: *id003
+              class: *id002
+              next_id: *id011
+              next:
+                type: string
+                description: 'Empty: its students graduate'
+              students: *id007
+        students:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - admission_number
+            - name
+            - class
+            - action
+            - next_id
+            - next
+            properties:
+              id: *id003
+              admission_number: *id002
+              name: *id002
+              class: *id002
+              action:
+                type: string
+                enum:
+                - promote
+                - repeat
+                - leave
+                - graduate
+              next_id: *id011
+              next: *id002
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+        promoted_at: *id006
+        done: *id001
+    SchoolImportPlan:
+      type: object
+      required:
+      - hash
+      - added
+      - updated
+      - students
+      - families
+      - saved
+      properties:
+        hash: *id002
+        added: *id007
+        updated: *id007
+        students:
+          type: array
+          items:
+            type: object
+            required:
+            - row
+            - admission_number
+            - name
+            - class
+            - action
+            - family
+            properties:
+              row: *id007
+              admission_number: *id002
+              name: *id002
+              class: *id002
+              action:
+                type: string
+                enum:
+                - add
+                - update
+              family:
+                type: integer
+                description: Its index in families
+        families:
+          type: array
+          items:
+            type: object
+            required:
+            - index
+            - family_id
+            - existing
+            - guardians
+            - students
+            properties:
+              index: *id007
+              family_id: *id011
+              existing: *id001
+              guardians:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SchoolGuardianIn'
+              students:
+                type: array
+                items: *id002
+        saved: *id001
     AdvancedSetting:
       type: object
       required: [advanced, chosen]
@@ -16473,6 +20782,11 @@ components:
           type: string
         email:
           type: string
+        key:
+          type: string
+          maxLength: 100
+          pattern: '^[A-Za-z0-9:._/-]*$'
+          description: "The business's own key for the customer, like student:42: invoices with the same key are one customer's in matching (else the phone, else the email, is)"
     InvoiceLine:
       type: object
       required: [description, quantity, unit_kobo]
@@ -16485,7 +20799,21 @@ components:
           minimum: 1
         unit_kobo:
           type: integer
-          minimum: 1
+          description: At least 1, but negative for a discount (quantity 1) and for an amendment taking a line out
+        pass_through_for:
+          type: string
+          maxLength: 60
+          description: Who the line is collected for (WAEC); money that is not the business's income
+        kind:
+          type: string
+          enum: [discount, removal]
+          description: Absent for an item
+        reason:
+          type: string
+          maxLength: 300
+        amendment:
+          type: string
+          description: The amendment that added the line to a sent invoice
     InvoiceDraft:
       type: object
       required: [customer]
@@ -16606,6 +20934,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InvoicePayment'
+        amendments:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceAmendment'
     InvoiceSent:
       type: object
       required: [invoice, queued]
@@ -16623,6 +20955,468 @@ components:
             enum: [sms, email, whatsapp, telegram]
         sms_over_allowance:
           type: boolean
+        credit_kobo:
+          type: integer
+          description: How much of the customer's credit this send counted towards the invoice
+    MoneyPart:
+      type: object
+      required: [amount_kobo]
+      oneOf:
+      - required: [invoice]
+      - required: [order]
+      properties:
+        invoice:
+          type: string
+          description: The invoice's id or number
+        order:
+          type: string
+          description: The storefront order's reference
+        amount_kobo:
+          type: integer
+          minimum: 1
+    MoneySplit:
+      type: object
+      required: [parts, left_kobo, credit_kobo]
+      properties:
+        parts:
+          type: array
+          items:
+            type: object
+            required: [target, amount_kobo]
+            properties:
+              target:
+                type: string
+              amount_kobo:
+                type: integer
+              invoice:
+                $ref: '#/components/schemas/CustomerInvoice'
+              order:
+                type: object
+        left_kobo:
+          type: integer
+          description: What is left of the payment to match (it waits in To match)
+        credit_kobo:
+          type: integer
+          description: What was left as the customer's credit
+    MoneySplitProposal:
+      type: object
+      required: [parts, credit_kobo]
+      properties:
+        parts:
+          type: array
+          items:
+            type: object
+            required: [amount_kobo, number, due_kobo]
+            properties:
+              invoice:
+                type: string
+              amount_kobo:
+                type: integer
+              number:
+                type: string
+              due_kobo:
+                type: integer
+        credit_kobo:
+          type: integer
+    CustomerAccount:
+      type: object
+      required: [id, channel, account_number, reference, customer, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+        account_number:
+          type: string
+        bank_name:
+          type: string
+        reference:
+          type: string
+        customer:
+          $ref: '#/components/schemas/InvoiceCustomer'
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    MoneyPayer:
+      type: object
+      required: [id, kind, payer, times, first_by, created_at, last_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [name, account]
+        payer:
+          type: string
+          description: The payer's name or paying account as the rail sent it, masked unless revealed
+        times:
+          type: integer
+        first_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_at:
+          type: string
+          format: date-time
+    MoneySuggestion:
+      type: object
+      required: [id, entry_id, target_kind, target, invoice_id, number, due_kobo, score, reasons, status, amount_kobo, channel, reference, received_at, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        entry_id:
+          type: string
+          format: uuid
+        target_kind:
+          type: string
+          enum: [invoice, order]
+        target:
+          type: string
+          description: "What the payment may be for, as money_matches names it: invoice:INV-0104 or order:AK-7QX4KD"
+        invoice_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          description: The invoice's number, or the order's reference
+        due_kobo:
+          type: integer
+          description: What is due on the invoice, or paid online for the order (its deposit, or its total)
+        customer:
+          type: string
+          description: The customer's name, masked unless revealed
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        reasons:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [open]
+        amount_kobo:
+          type:
+          - integer
+          - 'null'
+        left_kobo:
+          type:
+          - integer
+          - 'null'
+          description: What is left of the payment to match
+        split:
+          $ref: '#/components/schemas/MoneySplitProposal'
+        channel:
+          type: string
+        reference:
+          type: string
+        received_at:
+          type: string
+          format: date-time
+        kind:
+          type: string
+    MoneyClaim:
+      type: object
+      description: 'An "I have paid" claim a school family made on its page, beside the unmatched money: what the parent says they paid, never a payment itself.'
+      required: [id, family_id, student_id, student, amount_kobo, paid_on, how, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        family_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        student:
+          type: string
+          description: The admission number
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class:
+          type: string
+        amount_kobo:
+          type: integer
+        paid_on:
+          type: string
+          format: date
+        how:
+          type: string
+          enum: [transfer, cash, pos, other]
+        reference:
+          type: string
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    MoneyOpenOrder:
+      type: object
+      required: [target_kind, target, number, due_kobo, customer, placed_at]
+      properties:
+        target_kind:
+          type: string
+          enum: [order]
+        target:
+          type: string
+        number:
+          type: string
+          description: The order's reference
+        due_kobo:
+          type: integer
+        customer:
+          type: string
+          description: The customer's name, masked unless revealed
+        placed_at:
+          type: string
+          format: date-time
+    MatchedOrder:
+      type: object
+      required: [target, reference, status, paid_at, due_kobo, total_kobo, customer, payments]
+      properties:
+        target:
+          type: string
+        reference:
+          type: string
+        status:
+          type: string
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        due_kobo:
+          type: integer
+        total_kobo:
+          type: integer
+        customer:
+          type: string
+          description: The customer's name, masked
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorefrontOrderPayment'
+    StorefrontOrderPayment:
+      type: object
+      required: [id, entry_id, amount_kobo, how, by, reasons, undoable, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        entry_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        how:
+          type: string
+          enum: [exact, suggested, suggested_auto, manual]
+        by:
+          type: string
+        reasons:
+          type: array
+          items:
+            type: string
+        undoes:
+          type: string
+          format: uuid
+        undone_by:
+          type: string
+          format: uuid
+        undoable:
+          type: boolean
+          description: False once the order went on to be fulfilled
+        created_at:
+          type: string
+          format: date-time
+    UnmatchedMoney:
+      type: object
+      required: [entry_id, amount_kobo, channel, reference, received_at, kind]
+      properties:
+        entry_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type:
+          - integer
+          - 'null'
+        left_kobo:
+          type:
+          - integer
+          - 'null'
+          description: What is left of it to match, less than the amount when part of it counts already
+        channel:
+          type: string
+        reference:
+          type: string
+        received_at:
+          type: string
+          format: date-time
+        kind:
+          type: string
+        held_reason:
+          type: string
+          description: Why matching held it for a person, such as a credit to a customer's account whose account number or reference disagrees with what was registered
+    MoneyLeak:
+      type: object
+      required: [id, kind, amount_kobo, detail, status, opened_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [unmatched, overdue, duplicate, overpaid, void_paid, fee]
+        entry_id:
+          type: string
+          format: uuid
+        invoice_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        detail:
+          type: string
+        status:
+          type: string
+          enum: [open, recovered, written_off, not_a_leak, resolved]
+        assigned_to:
+          type: string
+          format: uuid
+        recovered_kobo:
+          type: integer
+        note:
+          type: string
+        opened_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+        closed_by:
+          type: string
+    MoneyFeeRate:
+      type: object
+      required: [channel, percent_bp, flat_kobo]
+      properties:
+        channel:
+          type: string
+        percent_bp:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        flat_kobo:
+          type: integer
+          minimum: 0
+        cap_kobo:
+          type: integer
+          minimum: 0
+    MoneyStatementFormat:
+      type: object
+      properties:
+        date:
+          type: string
+        description:
+          type: string
+        amount:
+          type: string
+        in:
+          type: string
+        out:
+          type: string
+        reference:
+          type: string
+        balance:
+          type: string
+    MoneySummary:
+      type: object
+      required: [from, to, in_settled_kobo, in_pending_kobo, out_settled_kobo, out_pending_kobo, fees_kobo, channels, invoices_paid, invoices_paid_kobo, leaks_opened, leaks_opened_kobo, leaks_open, leaks_open_kobo, recovered_kobo]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        in_settled_kobo:
+          type: integer
+        in_pending_kobo:
+          type: integer
+        out_settled_kobo:
+          type: integer
+        out_pending_kobo:
+          type: integer
+        fees_kobo:
+          type: integer
+        fee_rate_bp:
+          type: integer
+          description: Fees over the money in they were taken on, in basis points
+        channels:
+          type: array
+          items:
+            type: object
+            required: [channel, in_settled_kobo, in_pending_kobo, out_settled_kobo, out_pending_kobo, fees_kobo, movements]
+            properties:
+              channel:
+                type: string
+              in_settled_kobo:
+                type: integer
+              in_pending_kobo:
+                type: integer
+              out_settled_kobo:
+                type: integer
+              out_pending_kobo:
+                type: integer
+              fees_kobo:
+                type: integer
+              fee_rate_bp:
+                type: integer
+              movements:
+                type: integer
+        invoices_paid:
+          type: integer
+        invoices_paid_kobo:
+          type: integer
+        leaks_opened:
+          type: integer
+        leaks_opened_kobo:
+          type: integer
+        leaks_open:
+          type: integer
+        leaks_open_kobo:
+          type: integer
+        recovered_kobo:
+          type: integer
+        collected_for_others_kobo:
+          type: integer
+          description: The share of the settled money in that counts towards pass-through lines (collected on others' behalf; the business's own lines are paid first)
+        collected_for:
+          type: array
+          items:
+            type: object
+            required: [body, kobo]
+            properties:
+              body:
+                type: string
+              kobo:
+                type: integer
+        own_in_settled_kobo:
+          type: integer
+          description: The settled money in less what was collected for others
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]
@@ -16640,6 +21434,9 @@ components:
           enum: [business, customer]
         allow_part_payments:
           type: boolean
+        auto_match:
+          type: boolean
+          description: A strong suggestion is matched to its invoice without asking (docs/matching.md)
     StorefrontOrder:
       type: object
       required: [id, reference, kind, status, customer, basket, total_kobo, payment, created_at]
@@ -18965,6 +23762,77 @@ components:
         product:
           type: string
           description: The product the template works around (payrolla); the Start page offers it to organisations that connected the product, and retrieval only for goals that name it.
+        callable:
+          type: object
+          description: For a template another workflow can use as a step (decision 0047), its interface.
+          required:
+          - inputs
+          - params
+          - outputs
+          - effect
+          properties:
+            inputs:
+              type: object
+              description: The run inputs a template step gives, as a JSON Schema.
+            params:
+              type: array
+              description: The parameters a template step fills (those only the template's trigger uses are left out).
+              items:
+                type: string
+            outputs:
+              type: array
+              description: What the step's output holds, by name.
+              items:
+                type: object
+                required:
+                - name
+                - type
+                - title
+                - description
+                - value
+                properties:
+                  name:
+                    type: string
+                  type:
+                    type: string
+                    enum:
+                    - string
+                    - integer
+                    - number
+                    - boolean
+                    - list
+                    - object
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  value:
+                    type: string
+                    description: The expression over the template's own steps that fills it.
+                additionalProperties: false
+            effect:
+              type: object
+              description: What the template does at most, computed from its steps.
+              required:
+              - class
+              - waits_for_person
+              - waits_for_event
+              properties:
+                class:
+                  type: string
+                  enum:
+                  - read
+                  - write
+                  - moves_money
+                waits_for_person:
+                  type: boolean
+                waits_for_event:
+                  type: boolean
+                timeout:
+                  type: string
+                  description: The template's run timeout.
+              additionalProperties: false
+          additionalProperties: false
         definition:
           description: The template's definition, with placeholders (one template only).
       additionalProperties: false
@@ -19439,6 +24307,47 @@ components:
               items:
                 $ref: '#/components/schemas/RemoteSubscription'
           additionalProperties: false
+        money_log_webhooks:
+          type: array
+          description: For a prod connection of a rail whose events the money log records, the addresses to set in the provider's dashboard so Taskiem hears them without a workflow, one per trigger (triggers Taskiem registers itself are left out). Never carries a secret.
+          items:
+            $ref: '#/components/schemas/MoneyLogWebhook'
+      additionalProperties: false
+    MoneyLogWebhook:
+      type: object
+      required:
+      - trigger
+      - title
+      - url
+      - events
+      - verification
+      - where
+      properties:
+        trigger:
+          type: string
+        title:
+          type: string
+          description: What it hears, in plain words.
+        url:
+          type: string
+          description: The absolute address, under the server's hooks URL.
+        events:
+          type: array
+          items:
+            type: string
+          description: The normalised events it carries, e.g. `payment.received`.
+        verification:
+          type: string
+          description: How Taskiem checks deliveries, naming the connection field used (never its value).
+        placeholder:
+          type: string
+          description: When the address must carry a secret, the part of `url` to replace with the connection field Taskiem does not show again.
+        where:
+          type: string
+          description: Where in the provider's dashboard it is pasted.
+        poll_minutes:
+          type: integer
+          description: Taskiem also asks the provider this often, so setting the address is optional.
       additionalProperties: false
     ConnectionList:
       type: object
@@ -22644,6 +27553,8 @@ components:
                 - notice
                 - message
                 - invoice
+                - match
+                - money_daily
               status:
                 type: string
                 enum:
@@ -23633,6 +28544,7 @@ components:
       - postgres_table
       - connection
       - created_by
+      - kept_by
       - created_at
       - updated_at
       properties:
@@ -23660,6 +28572,10 @@ components:
           description: Estimated, when Xenibase answered.
         created_by:
           type: string
+        kept_by:
+          type: [string, 'null']
+          description: >-
+            The Taskiem feature that keeps the table (`money_log`), or null for an ordinary table. A kept table's rows are added only by Taskiem: its rows, columns, title and the table itself cannot be changed or deleted through the API, chat or workflows (409 `table_kept`), and it is read, searched and exported like any table.
         created_at:
           $ref: '#/components/schemas/Timestamp'
         updated_at:

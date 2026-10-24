@@ -10,6 +10,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Context is what a tenant contributes to a prompt. The API fills it from
@@ -29,6 +30,19 @@ type Context struct {
 	// each (never who); Members is how many active members it has.
 	Roles   []Role `json:"roles,omitempty"`
 	Members int    `json:"members,omitempty"`
+	// CallableWorkflows are the business's own workflows a template step
+	// may use (decision 0048): their id, name, inputs, outputs and effect.
+	CallableWorkflows []CallableWorkflow `json:"callable_workflows,omitempty"`
+}
+
+// CallableWorkflow is one of the business's workflows another may use as
+// a step, as the prompt lists it.
+type CallableWorkflow struct {
+	ID      string          `json:"id"`
+	Name    string          `json:"name"`
+	Inputs  json.RawMessage `json:"inputs"`
+	Outputs []wd.Output     `json:"outputs"`
+	Effect  string          `json:"effect"`
 }
 
 // Role is a membership role and how many active members hold it.
@@ -43,6 +57,9 @@ type DataTable struct {
 	Name    string            `json:"name"`
 	Title   string            `json:"title,omitempty"`
 	Columns []DataTableColumn `json:"columns"`
+	// Kept: Taskiem keeps the table (the money log); workflows read it
+	// and never write it.
+	Kept bool `json:"kept,omitempty"`
 }
 
 // DataTableColumn is a column's name and type.
@@ -131,6 +148,9 @@ var synonyms = map[string][]string{
 	"spreadsheet": {"googlesheets", "productivity"}, "database": {"database", "query"}, "sql": {"database", "query"},
 	"file": {"storage"}, "upload": {"storage"}, "bucket": {"s3", "storage"}, "statement": {"open_banking"},
 	"bank": {"open_banking", "payments"}, "airtime": {"airtime"}, "chat": {"slack", "telegram"},
+	// Invoices to customers are invoices@1's (rule 17) however they are
+	// worded; "invoice" itself already names it.
+	"billing": {"invoices"}, "owe": {"invoices"}, "owes": {"invoices"}, "owed": {"invoices"},
 }
 
 var stop = map[string]bool{"the": true, "and": true, "for": true, "with": true, "when": true, "then": true, "that": true,
@@ -255,7 +275,60 @@ func Catalogue(reg connector.Lookup) string {
 		b.WriteString(".\n")
 	}
 	b.WriteString(capabilities(reg))
+	b.WriteString(callableTemplates(reg))
 	return b.String()
+}
+
+// callableTemplates lists the library's callable templates (decision
+// 0047), which a "template" step uses inside a workflow (rule 18): the
+// parameters a step fills, its run inputs, its outputs and its effect.
+func callableTemplates(reg connector.Lookup) string {
+	var b strings.Builder
+	b.WriteString("\n# Callable templates\n\nReady, tested workflows a \"template\" step uses inside a workflow (rule 18). `id` (title): params (fill as values); input (* required; expressions over this workflow); output fields, read as steps.<step id>.output.<field>; what it does.\n\n")
+	for _, t := range templates.Default().Offered() {
+		if !t.Callable {
+			continue
+		}
+		doc, err := t.Instantiate(t.Examples(), "")
+		if err != nil {
+			continue
+		}
+		def, err := wd.Load(doc)
+		if err != nil || def.RawInputs == nil {
+			continue
+		}
+		var params []string
+		for _, p := range t.StepParams() {
+			n := p.Name + ":" + p.Type
+			if p.Required && p.Default == nil {
+				n += "*"
+			}
+			params = append(params, n)
+		}
+		var inputs []string
+		for _, f := range capability.Fields(def.RawInputs.Schema) {
+			if len(f.Path) == 1 {
+				n := f.Name()
+				if f.Required {
+					n += "*"
+				}
+				inputs = append(inputs, n)
+			}
+		}
+		var outs []string
+		for _, o := range t.Outputs {
+			outs = append(outs, o.Name+":"+o.Type)
+		}
+		fmt.Fprintf(&b, "- %s (%s): params %s; input %s; output %s; %s.\n", t.ID, t.Title, orNone(params), orNone(inputs), strings.Join(outs, ", "), templates.EffectOf(def, reg).Words())
+	}
+	return b.String()
+}
+
+func orNone(list []string) string {
+	if len(list) == 0 {
+		return "none"
+	}
+	return strings.Join(list, ", ")
 }
 
 // capabilities lists what rails can do in Taskiem's words (capability
@@ -294,7 +367,6 @@ func capabilities(reg connector.Lookup) string {
 	}
 	b.WriteString("- await_settlement (" + capability.WaitTitle("await_settlement") + "): payout_id* and a step timeout -> status (settled, failed or unconfirmed), settled_at, reason; any rail above that pays.\n")
 	b.WriteString("- await_reversal (" + capability.WaitTitle("await_reversal") + "): payout_id* and a step timeout -> status (reversed or none), reason.\n")
-	b.WriteString("- await_payment (" + capability.WaitTitle("await_payment") + "): payment_id* (a collect_link's or collect_transfer's) and a step timeout -> status (paid, failed or unpaid), amount_kobo, paid_at; any rail above with collect_link or collect_transfer and payment events.\n")
 	b.WriteString("- await_payment (" + capability.WaitTitle("await_payment") + "): payment_id* (a collect_link's or collect_transfer's) and a step timeout -> status (paid, failed or unpaid), amount_kobo, paid_at; any rail above with collect_link or collect_transfer.\n")
 	return b.String()
 }

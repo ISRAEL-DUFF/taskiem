@@ -66,7 +66,9 @@ The checklist is worked out from what the organisation has done, not from stored
 | Run it once | It has a completed run |
 | Invite a teammate | It has a second member, or an invitation waiting |
 
-The guided first workflow (`/start/guide?template=<id>`) takes one [template](templates.md) through four steps on one page: its details; what it connects, on the guided screen (saved as the name the template uses, `main` by default, in prod), and the variables it reads; create and publish; and a test run with an input sampled from the workflow's inputs schema, whose status updates until it ends. Starter templates are offered first: the first, **Remind me every day**, needs nothing connected, and templates that need a developer come last. A template's page in **Templates** links to the same guide.
+The guided first workflow (`/start/guide?template=<id>`) takes one [template](templates.md) through four steps on one page: its details; what it connects, on the guided screen (saved as the name the template uses, `main` by default, in prod), and the variables it reads; create and publish; and a test run with an input sampled from the workflow's inputs schema, whose status updates until it ends. Starter templates are offered first: the first, **Remind me every day**, needs nothing connected, **Send an invoice** and **Chase overdue invoices** are among the first six, and templates that need a developer come last. A template's page in **Templates** links to the same guide.
+
+Beside the checklist, **Get paid and see your money** offers **Send your first invoice** (to [New invoice](invoices.md#making-and-sending-one), for members with `invoice.manage`) and **See your money** (to [Money](money-log.md#money), for `invoice.read`). They are links, not steps: not every business invoices, so they do not count towards the checklist.
 
 ## In-product help
 

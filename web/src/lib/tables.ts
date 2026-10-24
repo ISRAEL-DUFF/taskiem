@@ -35,6 +35,8 @@ export interface Table {
   postgres_table: string;
   connection: string;
   row_count?: number;
+  /** The Taskiem feature that keeps the table (money_log), or null: a kept table is read-only here. */
+  kept_by?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -234,6 +236,32 @@ export function exampleStep(table: Table): string {
   const filters = filter ? `, "filters": [{"column": "${filter.name}", "op": "gt", "value": 0}]` : "";
   return `{"id": "read_${table.name}", "type": "connector", "connector": "xenibase@1", "action": "read_rows",
  "connection": "${table.connection}", "input": {"table": "${table.name}"${filters}, "limit": 1000}}`;
+}
+
+/** What the table page says of a kept table (docs/data-tables.md#kept-tables). */
+export const KEPT_MESSAGE = "This table is kept by Taskiem: rows are added by Taskiem and cannot be changed or deleted. Corrections are new rows.";
+
+/** The note for a business that brought its own Xenibase project, where a kept table can still be edited. */
+export const KEPT_OWN_NOTE = "Your organisation uses its own Xenibase project, so the table can still be edited there, outside Taskiem.";
+
+/** Whether Taskiem keeps the table. */
+export const isKept = (table: Pick<Table, "kept_by">) => !!table.kept_by;
+
+/** What the table page offers: a kept table only reads, searches and exports, whoever looks. */
+export function tableControls(table: Pick<Table, "kept_by">, canEdit: boolean): { addRow: boolean; editRows: boolean; importCSV: boolean; columns: boolean; deleteTable: boolean; export: boolean; search: boolean } {
+  const edit = canEdit && !isKept(table);
+  return { addRow: edit, editRows: edit, importCSV: edit, columns: edit, deleteTable: edit, export: true, search: true };
+}
+
+/** The kept table's notice: the sentence, and the own-project note when the business brought its own project; null for an ordinary table. */
+export function keptNotice(table: Pick<Table, "kept_by">, status?: Pick<TablesStatus, "own"> | null): string[] | null {
+  if (!isKept(table)) return null;
+  return status?.own ? [KEPT_MESSAGE, KEPT_OWN_NOTE] : [KEPT_MESSAGE];
+}
+
+/** The xenibase@1 actions a workflow uses on a table: only reads for a kept one. */
+export function tableActions(table: Pick<Table, "kept_by">): { action: string; what: string }[] {
+  return isKept(table) ? TABLE_ACTIONS.filter((a) => a.action === "read_rows" || a.action.startsWith("row_changed")) : TABLE_ACTIONS;
 }
 
 /** The xenibase@1 actions a workflow uses on a table. */

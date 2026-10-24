@@ -219,6 +219,8 @@ type chatData struct {
 	Shop *chatShop `json:"shop,omitempty"`
 	// Invoice is an invoice being made (whatsapp_invoices.go).
 	Invoice *chatInvoice `json:"invoice,omitempty"`
+	// Money is cash or an expense being recorded (whatsapp_money.go).
+	Money *chatMoney `json:"money,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -322,6 +324,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// A tapped approval button carries a signed decision token.
 	if strings.HasPrefix(in.Reply, "tk1.") {
 		return s.waDecide(ctx, c, in.Reply)
+	}
+	// So does a payment's Yes, match or No (whatsapp_matching.go).
+	if strings.HasPrefix(in.Reply, matchButtonPrefix) {
+		return s.matchPress(ctx, c, in.Reply)
 	}
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
@@ -480,6 +486,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Invoice != nil && c.state != stateIdle {
 		return s.waInvoiceReply(ctx, c, text, cmd)
 	}
+	if c.data.Money != nil && c.state != stateIdle {
+		return s.waMoneyReply(ctx, c, cmd)
+	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
 	case stateCollecting:
@@ -529,6 +538,27 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
 			return err
+		}
+		if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
+			return err
+		}
+		// The same in the person's language (English's are read above).
+		if matched && m.Language != lang.EN {
+			switch m.Intent {
+			case lang.IntentInvoice:
+				if done, err := s.waInvoiceWords(ctx, c, m); done || err != nil {
+					return err
+				}
+			case lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut:
+				if done, err := s.waMoneyWords(ctx, c, m); done || err != nil {
+					return err
+				}
+			}
+		}
+		// Words that only looked like one ("I spend the whole day…") are
+		// ordinary chat, which the model may still route.
+		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut}, m.Intent) {
+			matched = false
 		}
 		// A way into the web app for someone with no password (N6).
 		switch cmd {
@@ -648,6 +678,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermInvoiceManage) && s.Invoices != nil {
 		lines = append(lines, c.t("wa.help.invoice"))
+	}
+	if c.p.Can(PermInvoiceManage) {
+		lines = append(lines, c.t("wa.help.money"))
 	}
 	if len(c.tenants) > 1 {
 		lines = append(lines, c.t("wa.help.switch"))

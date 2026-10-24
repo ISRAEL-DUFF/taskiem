@@ -240,3 +240,7 @@ func TestDeliveriesAreVerified(t *testing.T) {
 		}
 	}
 }
+
+func TestCapabilities(t *testing.T) {
+	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+}

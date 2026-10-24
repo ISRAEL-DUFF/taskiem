@@ -1,6 +1,6 @@
 # Invoices and the money log: specification and build plan
 
-Status: **Accepted**; T0 partly done (§4.3), **T1 and T3 built** · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
+Status: **Accepted**; T0 partly done (§4.3), **T1 to T8 built** · Decision: [0045](../decisions/0045-tally-in-taskiem.md) · Workstream **T0 to T8**, one pull request per milestone · Source: [Tally overview](../strategy/tally-overview.md)
 
 What a small business needed from Tally, built in Taskiem: invoices that settle themselves, an account number per invoice that the customer asks for when they are ready to pay, one record of every naira that moved, payments matched to what they pay for, and the leaks and summaries that come from that record. Lending is out of scope.
 
@@ -23,6 +23,9 @@ Contents:
 15. [Out of scope](#15-out-of-scope)
 
 ---
+
+
+What is not covered yet, across the milestones built, is listed in [open items](invoices-open-items.md).
 
 ## 1. Summary
 
@@ -253,7 +256,7 @@ Readers take the latest row per movement, as `pos_sales` readers do.
 
 ### 7.3 Where rows come from
 
-- **Every connected rail's normalised events** (`payment.received`, `virtual_account.credited`, `payout.settled`, `.failed`, `.reversed`), whether or not a workflow listens. Each rail connection gets the log's own intake: a remote subscription where the rail allows it (as Xenibase does), polling where it offers lookups (as storefront payments poll Paystack), otherwise the URL on the connection page.
+- **Every connected rail's normalised events** (`payment.received`, `payment.returned`, `virtual_account.credited`, `payout.settled`, `.failed`, `.reversed`, `pos.sale`), whether or not a workflow listens. Each rail connection gets the log's own intake: a remote subscription where the rail allows it (as Xenibase does), polling where it offers lookups (as storefront payments poll Paystack), otherwise the URL on the connection page. Built: each prod connection of a rail with events carries `money_log_webhooks` in `GET /v1/connections` (one address per trigger its events come from, under `TASKIEM_HOOKS_URL`, with the events, how deliveries are verified, the manifest trigger's `title` and `where`, and `poll_minutes` when Taskiem also polls; remotely registered triggers are left out, and an address that would carry a secret shows a placeholder instead), shown under **Webhook for the money log** below the Connections page's list.
 - **POS sales** from `moniepoint_pos@1` and `opay_business@1`, alongside the `pos_sales` rows they already write.
 - **Payouts Taskiem makes** (Run payroll, Pay a list, refunds) through the same events.
 
@@ -368,6 +371,15 @@ Kept tables in data tables; `money_log` and its writer; the log's intake per rai
 
 **Done when:** every event from a connected rail writes exactly one row whether or not a workflow listens; a replayed or duplicated event writes none; no person or workflow can change a row through Taskiem (tests on the page, the API, chat and the tables connector).
 
+**Built** (T2): migration 00200 (`money_entries`, inserted once and never changed, keyed by connection, event and reference) and `engine/moneylog` (the writer, and the copy to the kept `money_log` table); migration 00201 and `engine/datatables` kept tables (`kept_by`, `EnsureKept`), refused for writes and schema changes on the tables page and API, in chat, as a storefront's catalogue, and in workflow steps (checked in the worker on the resolved input, so a table named by an expression is refused too); the normalised event `pos.sale` for `moniepoint_pos@1` and `opay_business@1`; the poller asks every active prod connection whose triggers it can poll ([money log](../money-log.md), [kept tables](../data-tables.md#kept-tables)). Differences from §7:
+
+- **The record of reference is `money_entries` in Taskiem's database**, and `money_log` is its copy, as T3 did for payments: data tables have no unique constraint, so "exactly once" is kept where one exists. The copy looks for an entry by its id before inserting it and carries a key derived from the id, so a lost answer does not copy it twice.
+- **Each status is its own entry**, keyed by its event (`payout.settled`, then `payout.reversed` naming it); a POS sale's status is part of its key (`pos.sale.settled`).
+- **Only prod is recorded**; sandbox and staging events are not the business's money.
+- **Remote subscriptions for the log** are not needed for any rail today: no rail registers webhooks remotely. Paystack is polled; the others need the URL set in their dashboard.
+- **OPay deliveries are decrypted before they are read** as events (the trigger's enricher now runs for the normalised event too).
+- **Not recorded yet**: payouts a rail settles at once with no event after (no event reaches Taskiem), and refunds (the capability set has no refund event).
+
 ### T3: invoices (L)
 
 The record, numbering, statuses, `invoices@1`, the Invoices pages (list, new, detail, void), and the `send-invoice` template.
@@ -406,17 +418,55 @@ Exact matching, suggestions with reasons, confirm, reject and undo in the web ap
 
 **Done when:** a one-time account payment marks its invoice paid with no person involved; an unreferenced transfer gets a suggestion with its reason; an undo moves the invoice back and leaves both rows.
 
+**Built** (T5): migration 00202 (payments name their money log entry; `money_suggestions`; `money_match_state`; `auto_match` in the settings); `engine/matching` (exact matches from one-time accounts and links, scored suggestions with reasons, automatic matching, confirm, reject, match by hand); `/v1/money/suggestions` and `/v1/money/entries/{id}/match`; matches copied to the kept table `money_matches` ([matching](../matching.md)). Differences from §8:
+
+- **A match is a row of `customer_invoice_payments`**, as T3 built it, naming the entry it counts; `money_matches` is its copy, as `money_log` is of the entries. One entry counts towards one invoice at a time, checked under a lock on the entry.
+- **An undone payment may count again.** 00197's unique index made a payment count towards an invoice once ever, so an undone match could not be redone; it is replaced by a check under a lock.
+- **The score is Taskiem's own**, not Tally's: amount, a reference naming the invoice, the payer's name against the customer's, and days since sending, with fixed weights listed in [matching](../matching.md). Automatic matching needs 85 and a 15-point lead.
+- **Reasons never quote a name**, since they are stored and shown as they are.
+- **Not yet**: storefront orders (matched by their own payment check), and the permanent-account rule (no customer's permanent account is linked to invoices yet).
+
 ### T6: leaks, statements, cash and expenses (M; needs T5)
 
 The first five leaks, their lifecycle and the amount recovered; statement upload for the first formats; cash and expense entry; `chase-overdue-invoices` and `invoice-paid-receipt`.
+
+**Built** (T6): migration 00204 (entries' description, vendor, category and who entered them; `money_statement_formats`; `money_fee_rates`; `money_leaks`); `engine/moneylog` statements (the common format, a bank's own columns matched once and remembered per account, money in and out in one column or two) and cash and expenses; `engine/leaks` (the first five leaks of §9.1, as six kinds, every 15 minutes; assign, close as recovered, written off or not a leak; resolved by itself when the cause goes away); `/v1/money/leaks`, `/fee-rates`, `/statements`, `/entries` ([leaks](../leaks.md), [money log](../money-log.md#statements-cash-and-expenses)). Differences from §7.4 and §9.1:
+
+- **A file with any unreadable line adds nothing**, so a wrong match of columns cannot fill the log with wrong lines; the answer lists the lines and why.
+- **The first statement formats are the common one and any bank's columns matched to it**; formats parsed from a bank's own export without matching (Tally's parsers) can follow.
+- **"Overpayment, and money for a void invoice" are two kinds** (overpaid, void_paid), and money for a void invoice is not also "money in with nothing to match".
+- **POS sales and cash are not "money in with nothing to match"**: they are takings, not money owed.
+- **A duplicate is one movement reported as two kinds of event** on one connection; the log already keeps each event once, and statement lines without a reference repeat by nature.
+- **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`) for now.
+- **Expenses in chat**: "spent 12k on diesel at Total", "expense 5000 fuel", "cash in 20,000 till", confirmed with Yes and recorded once; categories from a short word list.
+- **`invoice-paid-receipt` runs hourly** over invoices paid in the last 3 hours, because nothing starts a run when an invoice is paid (the `invoice.paid` signal only resumes runs waiting on it); `chase-overdue-invoices` runs daily. Both use a new read-only `invoices@1` action, `list`. Their keywords are only "chase" and "receipt" so the offline builder's other cases are not taken over.
 
 ### T7: summaries and exports (M)
 
 The daily summary, the Money page, monthly exports (log, invoices, journal).
 
+**Built** (T7): `engine/moneyreport` (a period's summary, each movement counted once at its latest status; the money log, invoices and a balanced double-entry journal as CSV, guarded against formulas); `GET /v1/money/summary` and `/v1/money/exports/{log|invoices|journal}`, audited; the web app's **Money > Overview** with a period picker, totals, by channel and the three downloads (Leaks moved to `/money/leaks`); `engine/moneydigest` and migration 00205 (`money_digests`, sent once per business and period): yesterday's money in chat to owners after 08:00 Lagos, and last month's by email on the 1st after 09:00 ([money reports](../money-reports.md)). Differences from §9.2 and §9.3:
+
+- **The monthly email links to the exports** instead of attaching them: Taskiem's mail has no attachments, and the link needs a sign-in.
+- **Summaries go to owners only**, with no opt-out yet (the notification settings have no money group).
+- **Outside WhatsApp's 24-hour window** the daily summary goes as the `taskiem_alert` template, cut to one line.
+- **The journal's accounts are fixed names** (Accounts receivable, Sales, Money in to identify, Bank: <channel>, Expenses: <category>, …); no chart of accounts is set per business, and no VAT export.
+
 ### T8: templates and AI (S)
 
 Start page entries, the AI builder's knowledge of invoices and the log (an `invoice` request uses `invoices@1`, never a data table with a status column), eval cases, `invoice-follow-up` superseded.
+
+**Built** (T8): the builder's instructions gain rule 17 (invoices to customers are `invoices@1`'s, sent, chased and receipted with its actions, paid only by payments counted towards them and waited for with a `signal` step on `invoice.paid`; never a data table with a status or paid column, never a payment link or account number made per invoice) and rule 12 describes the money log's kept tables, `money_log` and `money_matches`, with their columns, to read and never write; "billing" and "owe" reach `invoices@1` in retrieval, and the best starting template brings its connectors' schemas; the builder warns of a proposed invoice table with a status (`invoice_as_table`) and never proposes the money log's tables. Templates can `require` words (or phrases) a goal must name: the three invoice templates require "invoice" (`send-invoice` also "bill a customer", "bill a client" or "bill someone"), which makes them distinctive and adds 8 to their score, and their keywords now include "invoice" (`send-invoice`), "overdue", "unpaid", "remind" and "nudge" (`chase-overdue-invoices`) and "receipts" (`invoice-paid-receipt`). `invoice-follow-up` is superseded by `chase-overdue-invoices`. Seven builder eval cases in `evals/builder/invoices.jsonl` (an invoice sent on WhatsApp, a customer billed, overdue invoices chased, a receipt when paid, who paid from the money log, money not matched, POS totals from the log), and the offline baseline regenerated ([AI](../ai.md#what-it-does), [templates](../templates.md)). Differences from §11's T8:
+
+- **The data-table check is a warning, not a correction.** A proposed table named with `invoice` and a status or paid column is flagged for the reviewer, as the other table warnings are; it is not fed back to the model, and an existing table, or one named otherwise, is not checked. A hand-made payment link per invoice is in the instructions only: from the definition it cannot be told from a storefront's link per order.
+- **The money log in the eval runs without data tables**: the eval's context has no tables, so the model is told the log's tables may be read before they appear in its context.
+- **`sme-chase-unpaid-invoice` expects `invoices@1`**, no longer a wait and a branch: with invoices in Taskiem, "remind them if they have not paid" is `chase-overdue-invoices`.
+- **Invoice requests naming another system** (a Remita RRR paid, an invoice in MySQL or a billing system) now meet the invoice templates too; the offline heuristic then starts from one, which moved its ungated connector recall on two such cases from 0.33 to 0. Over the 249 cases the old baseline shares, the gated measures did not move and connector recall went from 0.537 to 0.536, step recall from 0.744 to 0.741 and trigger accuracy from 0.554 to 0.550 (cases that started from `invoice-follow-up` now start elsewhere or from nothing).
+
+Also built for T8 (Start page and chat):
+
+- **Get started** (`/start`) has a "Get paid and see your money" list beside the checklist: **Send your first invoice** (`/invoices/new`, for `invoice.manage`) and **See your money** (`/money`, for `invoice.read`). They are links, not checklist steps, since not every business invoices: the checklist and its count (`GET /v1/onboarding`) are unchanged. `send-invoice` and `chase-overdue-invoices` are starter templates, third and sixth, so both are among the first six cards ([onboarding](../onboarding.md#getting-started)).
+- **Chat command words in Pidgin, Yoruba, Hausa and Igbo** for an invoice, an expense, cash in and cash out, and each language's word for "for", are new intents in `engine/lang/intents/<language>.json` (`invoice`, `expense`, `cash_in`, `cash_out`, `for_words`), matched like the other commands (without case or accents, after a polite word, in the person's language), and read by the same parsers as English. English's words work in every language. An expense or cash word counts only with an amount right after it, so ordinary chat that starts with it is left to the model as before. All the words are unreviewed drafts ([languages](../languages.md#how-it-works)); Yes and No were already in every word list.
 
 ## 12. Order and timing
 

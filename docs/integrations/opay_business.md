@@ -58,6 +58,8 @@ Because the connection's public key is the trigger's "secret", a connection with
 
 [`pos-opay-sales-record`](../templates.md) keeps every notification in the `pos_sales` table (the same table as Moniepoint's, with `fee` and `settled` filled); `pos-opay-nightly-sync` and `pos-opay-backfill` use `list_terminal_transactions` to add a terminal's successful payments the notifications missed, tonight or for past days; `pos-opay-settlement-check` is the evening gross-against-net message with the balance. The evening summary, the alert and the cash-up over `pos_sales` need no change.
 
+**Money log.** Each decrypted notification is also the normalised event `pos.sale` (reference `payNo`, else `orderNo`; `amount_kobo`, `fee_kobo` and `settled_kobo` from the naira text; `status` approved, pending, declined or reversed; `sn`, the time, how the customer paid, `senderName`), so sales reach Taskiem's money log as well as `pos_sales`. The mapping reads the plain notification, so the delivery must be decrypted before it is normalised; the envelope as received is no event.
+
 ## To confirm with OPay before go-live
 
 1. **That the general payment webhook fires for walk-up terminal sales** (a card tapped on a terminal with no API order), not only for orders created through the API, and for transfers into a terminal's TN account. OPay's words are "all types of transactions"; a test business settles it.

@@ -108,7 +108,16 @@ interface StepLike {
   needs?: string[];
   connector?: string;
   action?: string;
+  template?: string;
+  workflow?: string;
   config?: unknown;
+}
+
+/** A callable template's outputs, as the template list gives them, or a callable workflow's (decision 0048), as its list gives them. */
+interface CallableLike {
+  id: string;
+  callable?: { outputs: { name: string; type: string; title: string }[] };
+  outputs?: { name: string; type: string; title: string }[];
 }
 
 interface DefLike {
@@ -143,7 +152,7 @@ export function earlierSteps(steps: StepLike[], id: string): StepLike[] {
 }
 
 /** The values a step can use: what started the run and what the steps before it gave. */
-export function sourcesFor(def: DefLike, id: string, connectors: ConnectorLike[]): Source[] {
+export function sourcesFor(def: DefLike, id: string, connectors: ConnectorLike[], templates: CallableLike[] = []): Source[] {
   const out: Source[] = [];
   const props = (def.inputs?.schema as JSONSchema | undefined)?.properties ?? {};
   for (const [k, s] of Object.entries(props)) {
@@ -162,6 +171,11 @@ export function sourcesFor(def: DefLike, id: string, connectors: ConnectorLike[]
       const o = (s.config as { output?: unknown } | undefined)?.output;
       if (o && typeof o === "object" && !Array.isArray(o)) {
         for (const k of Object.keys(o)) out.push({ label: `${from}: ${words(k)}`, expr: `=steps.${s.id}.output.${k}` });
+      }
+    } else if (s.type === "template") {
+      const t = templates.find((t) => t.id === (s.workflow ?? s.template));
+      for (const o of t?.callable?.outputs ?? t?.outputs ?? []) {
+        out.push({ label: `${from}: ${o.title}`, expr: `=steps.${s.id}.output.${o.name}`, number: o.type === "integer" || o.type === "number" });
       }
     } else if (s.type === "connector") {
       const output = connectors.find((c) => c.ref === s.connector)?.actions[s.action ?? ""]?.output;

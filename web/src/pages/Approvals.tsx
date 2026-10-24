@@ -4,9 +4,10 @@ import { passkeysSupported, stepUpAssert } from "../passkeys";
 import { ApiError, del, get, post, type Approval, type Delegation, type PublishRequest } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, Json, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { requestDetails, requestTitle, type Posting } from "../lib/schoolPayments";
 
 export function Approvals() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const { data, error, reload } = useLoad(() => get<{ approvals: Approval[] }>("/v1/approvals"), [], true);
   const [deciding, setDeciding] = useState<{ a: Approval; decision: "approved" | "rejected" } | null>(null);
   return (
@@ -63,9 +64,87 @@ export function Approvals() {
         </div>
       ))}
       {deciding && <Decide {...deciding} onClose={() => setDeciding(null)} onDone={() => (setDeciding(null), reload())} />}
+      {me?.schools && can("school.approve") && <SchoolRequests />}
       {can("workflow.publish") && <PublishReviews />}
       <Delegations />
     </>
+  );
+}
+
+/** A school's cash postings and discounts waiting for a second person (docs/schools.md#cash-and-transfers): never decided by the person who asked. */
+function SchoolRequests() {
+  const { data, error, reload } = useLoad(() => get<{ requests: Posting[] }>("/v1/schools/approvals"), [], true);
+  const [declining, setDeclining] = useState<Posting | null>(null);
+  const [reason, setReason] = useState("");
+  const act = useAction();
+  const decide = (p: Posting, decision: "approved" | "declined") =>
+    act.run(async () => {
+      await post(`/v1/schools/approvals/${p.id}`, { decision, ...(decision === "declined" && { reason }) });
+      setDeclining(null);
+      setReason("");
+      reload();
+    }, decision === "approved" ? "Approved and applied" : "Declined");
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  return (
+    <section className="card" aria-labelledby="school-requests">
+      <h2 id="school-requests" style={{ marginTop: 0 }}>
+        School postings and discounts
+      </h2>
+      <p className="hint">
+        Cash and transfers posted at the desk, and discounts, at or above the school's thresholds. Approving posts the money (with its receipt) or gives the discount; declining records your reason
+        and changes nothing. The person who asked cannot decide their own.
+      </p>
+      <ErrorBox error={error ?? act.error} />
+      {data.requests.length === 0 && <p className="hint">Nothing is waiting.</p>}
+      {data.requests.map((p) => (
+        <div className="card" key={p.id} data-testid="school-request" data-kind={p.kind}>
+          <div className="toolbar">
+            <strong className="grow">{requestTitle(p)}</strong>
+            <span className="hint">asked {fmtTime(p.requested_at)}</span>
+          </div>
+          <ul>
+            {requestDetails(p).map((d) => (
+              <li key={d}>{d}</li>
+            ))}
+          </ul>
+          {p.yours ? (
+            <p className="hint">You asked for this, so a second person decides it.</p>
+          ) : (
+            <div className="toolbar">
+              <button className="primary" disabled={act.busy} onClick={() => void decide(p, "approved")}>
+                Approve
+              </button>
+              <button className="danger" disabled={act.busy} onClick={() => setDeclining(p)}>
+                Decline
+              </button>
+              {p.student_id && (
+                <>
+                  <span className="grow" />
+                  <Link to={`/schools/students/${encodeURIComponent(p.student_id)}`}>Open the student</Link>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      {declining && (
+        <Modal title="Decline" onClose={() => setDeclining(null)}>
+          <p>
+            Decline <strong>{requestTitle(declining)}</strong>? Nothing reaches the fees; the person who asked is told why.
+          </p>
+          <Field label="Why (required, audited)">
+            <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Field>
+          <ErrorBox error={act.error} />
+          <div className="toolbar">
+            <button className="danger" disabled={act.busy || !reason.trim()} onClick={() => void decide(declining, "declined")}>
+              Decline it
+            </button>
+            <button onClick={() => setDeclining(null)}>Cancel</button>
+          </div>
+        </Modal>
+      )}
+    </section>
   );
 }
 
@@ -165,7 +244,7 @@ function Delegations() {
   const { data, error, reload } = useLoad(() => get<{ delegations: Delegation[] }>("/v1/delegations"), []);
   const [form, setForm] = useState({ to: "", roles: "", ends: "", reason: "" });
   const act = useAction();
-  const approvalRoles = (me?.roles ?? []).filter((r) => !["owner", "admin", "builder", "operator", "auditor", "viewer", "approver"].includes(r));
+  const approvalRoles = (me?.roles ?? []).filter((r) => !["owner", "admin", "builder", "operator", "auditor", "viewer", "approver", "gate"].includes(r));
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Delegations</h2>

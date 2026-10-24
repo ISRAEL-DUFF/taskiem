@@ -11,6 +11,7 @@ import (
 	"hash/fnv"
 	"math/rand/v2"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,9 +26,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/lru"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Store is the engine's view of Postgres. Every method runs in a tenant-scoped
@@ -49,6 +52,17 @@ type Store struct {
 	// Read is the optional read replica for staleness-tolerant reads
 	// (ReadTx); nil reads from Pool (decision 0024).
 	Read *db.Replica
+	// MoneyLog, when set, records a payout a payment step's rail answered
+	// settled at once in the money log, with the step's outcome (prod
+	// only; docs/money-log.md); nil records nothing.
+	MoneyLog *moneylog.Log
+	// Templates is the template library template steps are expanded from
+	// (decision 0047); nil is the embedded library.
+	Templates *templates.Library
+	// HooksURL is where the outside reaches /hooks (TASKIEM_HOOKS_URL):
+	// the base of callback steps' addresses. Empty, a workflow with
+	// callback steps cannot start.
+	HooksURL string
 
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache
@@ -229,7 +243,18 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 				Version: req.Version, Environment: req.Environment, StartedAt: history.FormatTime(startedAt)},
 			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
-		sealed, err := s.sealPayload(ctx, tx, req.TenantID, payload, triggerPaths(def), pii.Taint{})
+		paths := triggerPaths(def)
+		if def.HasCallbacks() {
+			// Callback steps' addresses: their key is sealed in history
+			// like personal data, so run.read never shows it.
+			if s.HooksURL == "" {
+				return errors.New("callback steps need TASKIEM_HOOKS_URL: where the outside reaches this Taskiem")
+			}
+			payload.Run.CallbacksAt = strings.TrimRight(s.HooksURL, "/") + "/" + req.TenantID.String() + "/callbacks/" + ref.ID.String()
+			payload.Run.CallbackKey = newCallbackKey()
+			paths = append(paths, callbackKeyPath)
+		}
+		sealed, err := s.sealPayload(ctx, tx, req.TenantID, payload, paths, pii.Taint{})
 		if err != nil {
 			return err
 		}

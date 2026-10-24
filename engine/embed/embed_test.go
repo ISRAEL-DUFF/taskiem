@@ -32,6 +32,27 @@ func TestUses(t *testing.T) {
 	}
 }
 
+// A template step uses what its template's steps use (decision 0047).
+func TestUsesTemplateSteps(t *testing.T) {
+	doc := `{"schema":"wd/v1","trigger":{"type":"manual"},"steps":[
+	  {"id":"inv","type":"template","template":"send-invoice","input":{}},
+	  {"id":"t","type":"transform","config":{"output":{}}}]}`
+	got, err := Uses([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"invoices", "notify"}; !slices.Equal(got, want) {
+		t.Errorf("Uses = %v, want %v", got, want)
+	}
+	var root map[string]any
+	if err := json.Unmarshal([]byte(doc), &root); err != nil {
+		t.Fatal(err)
+	}
+	if got := TemplatesOf(root["steps"]); !slices.Equal(got, []string{"send-invoice"}) {
+		t.Errorf("TemplatesOf = %v", got)
+	}
+}
+
 func TestOrigin(t *testing.T) {
 	for in, want := range map[string]string{
 		"https://App.Example.com":       "https://app.example.com",

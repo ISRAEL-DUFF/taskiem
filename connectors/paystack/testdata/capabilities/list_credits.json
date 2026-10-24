@@ -1,0 +1,153 @@
+{
+  "capability": "list_credits",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "since": "2026-10-21T12:00:00Z",
+    "until": "2026-10-23T12:00:00Z"
+  },
+  "exchanges": [
+    {
+      "name": "payments_page_1",
+      "request": {
+        "method": "GET",
+        "path": "/transaction",
+        "query": {
+          "from": "2026-10-21T12:00:00Z",
+          "to": "2026-10-23T12:00:00Z",
+          "status": "success",
+          "perPage": "100",
+          "page": "1"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": true,
+          "message": "Transactions retrieved",
+          "data": [
+            {
+              "id": 4099260517,
+              "status": "success",
+              "reference": "T685312322670591",
+              "amount": 20000,
+              "paid_at": "2026-10-23T10:00:00.000Z",
+              "channel": "card",
+              "currency": "NGN",
+              "authorization": {
+                "authorization_code": "AUTH_8dfhjjdt",
+                "channel": "card",
+                "card_type": "visa",
+                "bank": "TEST BANK",
+                "reusable": true
+              },
+              "customer": {
+                "id": 1,
+                "email": "ada@example.com",
+                "customer_code": "CUS_xnxdt6s1zg1f4nx"
+              }
+            }
+          ],
+          "meta": {
+            "total": 2,
+            "skipped": 0,
+            "perPage": 1,
+            "page": 1,
+            "pageCount": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "payments_page_2",
+      "request": {
+        "method": "GET",
+        "path": "/transaction",
+        "query": {
+          "page": "2"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": true,
+          "message": "Transactions retrieved",
+          "data": [
+            {
+              "id": 4099260516,
+              "domain": "live",
+              "status": "success",
+              "reference": "1123344343-44343231232",
+              "amount": 5000000,
+              "message": null,
+              "gateway_response": "Approved",
+              "paid_at": "2026-10-23T09:14:02.000Z",
+              "created_at": "2026-10-23T09:14:02.000Z",
+              "channel": "dedicated_nuban",
+              "currency": "NGN",
+              "ip_address": null,
+              "metadata": "",
+              "fees": 30000,
+              "authorization": {
+                "authorization_code": "AUTH_0ozsafcpdf",
+                "bin": "413XXX",
+                "last4": "X011",
+                "exp_month": "10",
+                "exp_year": "2026",
+                "channel": "dedicated_nuban",
+                "card_type": "transfer",
+                "bank": "First City Monument Bank",
+                "country_code": "NG",
+                "brand": "Managed Account",
+                "reusable": false,
+                "signature": null,
+                "sender_bank": "First City Monument Bank",
+                "sender_bank_account_number": "XXXXXX0011",
+                "sender_country": "NG",
+                "sender_name": "ADA EZE",
+                "narration": "NIP: ADA EZE -1123344343/44343231232",
+                "receiver_bank_account_number": "9930000902",
+                "receiver_bank": "Wema Bank"
+              },
+              "customer": {
+                "id": 7454289,
+                "first_name": "Ebube",
+                "last_name": "Eze",
+                "email": "ebube.eze@greenfield.example",
+                "customer_code": "CUS_2f1qk3pyyx1nb5b",
+                "phone": "+2348100000000",
+                "metadata": null,
+                "risk_action": "default"
+              }
+            }
+          ],
+          "meta": {
+            "total": 2,
+            "skipped": 1,
+            "perPage": 1,
+            "page": 2,
+            "pageCount": 2
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "truncated": false,
+    "credits": [
+      {
+        "reference": "CUS_2f1qk3pyyx1nb5b",
+        "credit_id": "1123344343-44343231232",
+        "amount_kobo": 5000000,
+        "currency": "NGN",
+        "account_number": "9930000902",
+        "payer_name": "ADA EZE",
+        "payer_account": "XXXXXX0011",
+        "payer_bank": "First City Monument Bank",
+        "narration": "NIP: ADA EZE -1123344343/44343231232",
+        "occurred_at": "2026-10-23T09:14:02.000Z"
+      }
+    ]
+  }
+}

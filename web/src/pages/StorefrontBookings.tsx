@@ -4,7 +4,7 @@ import { ApiError, del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
-import type { Table } from "../lib/tables";
+import { isKept, type Table } from "../lib/tables";
 import { DAYS, MAX_OPENINGS, columnsFor, thumb, tidy, type Storefront as SF } from "../lib/storefront";
 import { customerLine, orderStatus, type Order } from "../lib/orders";
 import {
@@ -75,7 +75,7 @@ export function StorefrontBookings() {
       {sf.data && (
         <>
           <BookingList />
-          <BookingSettings initial={sf.data} tables={tables.data?.tables} tablesError={tables.error} />
+          <BookingSettings initial={sf.data} tables={tables.data?.tables.filter((t) => !isKept(t))} tablesError={tables.error} />
         </>
       )}
     </>

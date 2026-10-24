@@ -1,0 +1,87 @@
+{
+  "schema": "wd-test/v1",
+  "template": "invoice-paid-receipt",
+  "params": {
+    "tell_me": true
+  },
+  "cases": [
+    {
+      "name": "the customer whose invoice was paid is thanked with its link, and the owner told",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {"event": "paid", "id": "0192f0a8-0000-7000-8000-000000000007", "number": "INV-0007", "status": "paid", "amount_kobo": 2500050, "amount": "₦25,000.50",
+                 "paid_kobo": 2500050, "currency": "NGN", "customer": {"name": "Ada Obi", "phone": "+2348031234567"}, "paid_at": "2026-10-23T08:10:00Z",
+                 "link": "https://forms.example/i/abc"}
+      },
+      "mocks": {
+        "receipt": {"output": {"number": "INV-0007", "queued": ["sms", "email"]}},
+        "tell_owner": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "receipt": {
+            "number": "INV-0007",
+            "text": "Thank you: we have received your payment for invoice {number}. See it, marked paid: {link}",
+            "subject": "INV-0007 is paid: thank you"
+          },
+          "tell_owner": {
+            "title": "Invoice paid",
+            "message": "Invoice INV-0007 (₦25,000.50) is paid in full."
+          }
+        },
+        "steps": {
+          "receipt": "completed",
+          "tell_owner": "completed"
+        },
+        "calls": {
+          "receipt": 1,
+          "tell_owner": 1
+        }
+      }
+    },
+    {
+      "name": "with tell me off only the customer hears",
+      "params": {
+        "tell_me": false
+      },
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {"event": "paid", "id": "0192f0a8-0000-7000-8000-000000000007", "number": "INV-0007", "status": "paid", "amount_kobo": 2500050, "amount": "₦25,000.50",
+                 "paid_kobo": 2500050, "currency": "NGN", "customer": {"name": "Ada Obi"}, "paid_at": "2026-10-23T08:10:00Z", "link": "https://forms.example/i/abc"}
+      },
+      "mocks": {
+        "receipt": {"output": {"number": "INV-0007", "queued": ["sms"]}}
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "receipt": "completed",
+          "tell_owner": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a thank-you that cannot go is noted and the owner is still told",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {"event": "paid", "id": "0192f0a8-0000-7000-8000-000000000009", "number": "INV-0009", "status": "paid", "amount_kobo": 400000, "amount": "₦4,000",
+                 "paid_kobo": 400000, "currency": "NGN", "customer": {"name": "Chi"}, "paid_at": "2026-10-23T08:40:00Z", "link": "https://forms.example/i/def"}
+      },
+      "mocks": {
+        "receipt": {"error": {"kind": "fatal", "message": "the customer has no phone or email"}},
+        "tell_owner": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "receipt_failed": "completed",
+          "tell_owner": "completed"
+        }
+      }
+    }
+  ]
+}

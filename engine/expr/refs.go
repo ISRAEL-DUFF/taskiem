@@ -129,3 +129,65 @@ func pathOf(x celast.Expr) []string {
 	}
 	return nil
 }
+
+// StepRead is one read of a step in an expression: steps.<id>,
+// steps.?<id> (Optional), steps["<id>"], or has(steps.<id>) (Test). Field
+// is the field read from the step (output, error), or "" when the
+// expression uses the step whole.
+type StepRead struct {
+	Step     string
+	Field    string
+	Optional bool
+	Test     bool
+}
+
+// StepReads parses an expression and reports each place it reads a step.
+func (e *Engine) StepReads(src string) ([]StepRead, error) {
+	src = strings.TrimPrefix(src, "=")
+	ast, iss := e.env.Compile(src)
+	if iss.Err() != nil {
+		return nil, &Error{Expr: src, Err: iss.Err()}
+	}
+	reads := map[int64]*StepRead{}
+	var order []int64
+	var all []celast.Expr
+	celast.PreOrderVisit(ast.NativeRep().Expr(), celast.NewExprVisitor(func(x celast.Expr) {
+		all = append(all, x)
+		if op, f, opt, test, ok := selection(x); ok && op.Kind() == celast.IdentKind && op.AsIdent() == "steps" {
+			reads[x.ID()] = &StepRead{Step: f, Optional: opt, Test: test}
+			order = append(order, x.ID())
+		}
+	}))
+	for _, x := range all {
+		if op, f, _, _, ok := selection(x); ok {
+			if r := reads[op.ID()]; r != nil && r.Field == "" {
+				r.Field = f
+			}
+		}
+	}
+	out := make([]StepRead, 0, len(order))
+	for _, id := range order {
+		out = append(out, *reads[id])
+	}
+	return out, nil
+}
+
+// selection reports the operand and field of a select (a.f, a.?f,
+// a["f"], has(a.f)).
+func selection(x celast.Expr) (operand celast.Expr, field string, optional, test, ok bool) {
+	switch x.Kind() {
+	case celast.SelectKind:
+		s := x.AsSelect()
+		return s.Operand(), s.FieldName(), false, s.IsTestOnly(), true
+	case celast.CallKind:
+		c := x.AsCall()
+		if (c.FunctionName() == "_[_]" || c.FunctionName() == "_?._" || c.FunctionName() == "_[?_]") && len(c.Args()) == 2 {
+			if lit := c.Args()[1]; lit.Kind() == celast.LiteralKind {
+				if f, isStr := lit.AsLiteral().Value().(string); isStr {
+					return c.Args()[0], f, c.FunctionName() != "_[_]", false, true
+				}
+			}
+		}
+	}
+	return nil, "", false, false, false
+}

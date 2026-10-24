@@ -28,6 +28,7 @@ const paths: Record<string, string> = {
   inbox: "M4 13l2-8h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5",
   storefront: "M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9a2.7 2.7 0 005.3 0 2.7 2.7 0 005.4 0A2.7 2.7 0 0020 9M10 20v-5h4v5",
   home: "M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z",
+  schools: "M2 9l10-5 10 5-10 5zm4 2v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5M22 9v6",
   activity: "M3 12h4l3-8 4 16 3-8h4",
   orders: "M6 7h12l-1 13H7zM9 7a3 3 0 016 0",
   chevron: "M9 6l6 6-6 6",
@@ -38,6 +39,7 @@ const paths: Record<string, string> = {
   clock: "M12 7v5l3 2M12 21a9 9 0 100-18 9 9 0 000 18z",
   bolt: "M13 3L5 14h6l-1 7 8-11h-6z",
   invoices: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
+  money: "M3 6h18v12H3zM12 9a3 3 0 100 6 3 3 0 000-6zM6.5 9.5v.01M17.5 14.5v.01",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {

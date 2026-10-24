@@ -117,6 +117,50 @@ describe("round trip edge cases", () => {
     expect(evaluate(code)).toEqual(def);
   });
 
+  it("writes template steps unexpanded, and back", () => {
+    const def = base([
+      { id: "names", type: "transform", config: { output: { batch: "may-1" } } },
+      { id: "pay", type: "template", template: "pay-a-list", needs: ["names"], params: { approver_role: "finance", approval_hours: 12 },
+        input: { batch: "=steps.names.output.batch" } },
+      { id: "inv", type: "template", template: "send-invoice", input: { name: "Ada", amount_naira: 5000, for: "Rice" } },
+      { id: "tell", type: "transform", needs: ["pay"], config: { output: { paid: "=steps.pay.output.paid" } } },
+    ]);
+    const code = sdk.generate(def, opts);
+    expect(code).toContain(`template("pay-a-list", {`);
+    expect(code).toContain(`template("send-invoice", undefined, {`);
+    expect(evaluate(code)).toEqual(def);
+  });
+
+  it("writes a workflow's outputs and callWorkflow steps, and back", () => {
+    const def = {
+      ...base([
+        { id: "total", type: "transform", config: { output: { kobo: "=trigger.body.amount_kobo * 2" } } },
+        { id: "sub", type: "template", workflow: "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12", needs: ["total"], input: { amount_kobo: "=steps.total.output.kobo" } },
+      ]),
+      inputs: { schema: { type: "object", properties: { amount_kobo: { type: "integer" } }, required: ["amount_kobo"] } },
+      outputs: [{ name: "kobo", type: "integer", title: "Total", description: "Twice the amount", value: "=steps.total.output.kobo" }],
+    } as WorkflowDefinition;
+    const code = sdk.generate(def, opts);
+    expect(code).toContain(`callWorkflow("2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12", {`);
+    expect(code).toContain("outputs:");
+    expect(evaluate(code)).toEqual(def);
+  });
+
+  it("writes callback and respond steps, and back", () => {
+    const def = base([
+      { id: "send", type: "transform", config: { output: { url: "=run.callbacks.verified" } } },
+      { id: "verified", type: "callback", needs: ["send"], config: { timeout: "2h", on_timeout: "continue" } },
+      { id: "plain", type: "callback", needs: ["send"] },
+      { id: "answer", type: "respond", needs: ["verified"], config: { status: 201, headers: { "X-Ref": "=run.id" }, body: { ok: true, status: "=steps.verified.output.body.status" } } },
+    ]);
+    def.trigger = { type: "webhook", config: { path: "/kyc", auth: "hmac", respond: true } };
+    const code = sdk.generate(def, opts);
+    expect(code).toContain(`callback({ timeout: "2h", on_timeout: "continue" })`);
+    expect(code).toContain(`callback()`);
+    expect(code).toContain(`respond({`);
+    expect(evaluate(code)).toEqual(def);
+  });
+
   it("types numbers in code by value, so bundling cannot change them", () => {
     // What esbuild prints for 100000 and 2.0.
     expect(sdk.compileFunction("({ trigger }) => trigger.body.amount > 1e5")).toBe("trigger.body.amount > 100000");
@@ -213,6 +257,20 @@ describe("forms", () => {
     const code = sdk.generate(def);
     expect(code).toContain("formTrigger(");
     expect(code).toContain("form(");
+    expect(evaluate(code)).toEqual(def);
+    expect(sdk.generate(evaluate(code))).toBe(code);
+  });
+});
+
+describe("invoice trigger", () => {
+  it("builds a workflow that starts when an invoice is paid and prints back to it", () => {
+    const def = sdk
+      .workflow({ id: "wf_receipt", name: "receipt", trigger: sdk.invoiceTrigger({ event: "paid" }) })
+      .step("thanks", sdk.connector("invoices@1", "notify_customer", { number: "=trigger.body.number", text: "Thank you: {link}" }))
+      .build();
+    expect(def.trigger).toEqual({ type: "invoice", config: { event: "paid" } });
+    const code = sdk.generate(def);
+    expect(code).toContain("invoiceTrigger(");
     expect(evaluate(code)).toEqual(def);
     expect(sdk.generate(evaluate(code))).toBe(code);
   });

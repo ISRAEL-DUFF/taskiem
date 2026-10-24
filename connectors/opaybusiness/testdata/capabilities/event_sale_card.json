@@ -1,0 +1,26 @@
+{
+  "name": "the documentation's notification, decrypted, is an approved sale",
+  "trigger": "payment",
+  "body": {
+    "outOrderNo": "2334345345345211", "orderNo": "20220704741380171865833472", "payNo": "2334345345345245",
+    "headMerchantId": "256622022480363", "merchantId": "256622022480364", "status": "SUCCESS", "errorMsg": "",
+    "senderName": "LUJUN SUN", "senderBank": "ubaBank", "senderAccount": "2131****09", "recipientName": "LUJUN SUN",
+    "receiptBank": "opay", "receiptAccount": "6119787331", "amount": "300.00", "fee": "1.50", "feePattern": "IN_DEDUCT",
+    "payMethod": "BankCard", "settlementAmount": "298.50", "settlementFee": "0.00", "settlementFeePattern": "OUT_DEDUCT",
+    "currency": "NGN", "isSplit": "N", "productInfo": "", "sn": "POS-SN-001", "remark": "static virtual account",
+    "transactionTime": "1692773950143", "completedTime": "1692773950143",
+    "additionalInformation": "{\"pnr\":\"123\",\"rrn\":\"310137872249\"}"
+  },
+  "event": "pos.sale",
+  "expect": {
+    "reference": "2334345345345245",
+    "amount_kobo": 30000,
+    "fee_kobo": 150,
+    "settled_kobo": 29850,
+    "status": "approved",
+    "terminal": "POS-SN-001",
+    "occurred_at": "2023-08-23T06:59:10.143Z",
+    "method": "card",
+    "payer_name": "LUJUN SUN"
+  }
+}

@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, put, type CapabilityInfo, type ConnectorInfo, type JSONSchema, type Problem } from "../api";
 import { useAuth } from "../auth";
 import { Help, useOnboarding } from "../onboarding";
-import { CHECKLIST, formatDuration, sampleInput, starterTemplates } from "../lib/onboarding";
+import { CHECKLIST, firstThings, formatDuration, sampleInput, starterTemplates } from "../lib/onboarding";
 import { initialValues, toParams, type Template } from "../lib/templates";
 import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from "../ui";
 import { ParamField } from "./Templates";
@@ -28,6 +28,7 @@ export function Start() {
   const [sent, setSent] = useState<string | null>(null);
   const nav = useNavigate();
   if (!data) return <Skeleton />;
+  const more = firstThings(can);
   return (
     <>
       <div className="toolbar">
@@ -74,6 +75,22 @@ export function Start() {
         })}
       </ol>
       {sent && <p role="status">{sent}</p>}
+      {more.length > 0 && (
+        <section aria-labelledby="get-paid">
+          <h2 id="get-paid">Get paid and see your money</h2>
+          <ul className="checklist">
+            {more.map((f) => (
+              <li key={f.id} data-testid={`first-${f.id}`}>
+                <div className="grow">
+                  <strong>{f.title}</strong>
+                  <div className="hint">{f.text}</div>
+                </div>
+                <Link to={f.href}>{f.action}</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {can("workflow.edit") && (
         <section>
           <h2>Your first workflow</h2>

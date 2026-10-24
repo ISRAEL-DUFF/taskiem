@@ -363,7 +363,7 @@ func (s *Server) promote(w http.ResponseWriter, r *http.Request) {
 				return fmt.Errorf("%w: promotion needs a second person: not the version's author, nor whoever deployed it to %s", errForbidden, req.From)
 			}
 		}
-		if probs = s.check(ctx, p.TenantID, def); len(probs) > 0 {
+		if probs = s.checkVersion(ctx, tx, p.TenantID, wf, v, def); len(probs) > 0 {
 			return errInvalid
 		}
 		if probs, err = missingPolicies(ctx, tx, def); err != nil || len(probs) > 0 {

@@ -24,6 +24,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 	"github.com/israel-duff/taskiem/templates"
@@ -111,6 +112,9 @@ type Builder struct {
 	// (retrieval context: templates first, then free drafting). Nil offers
 	// none.
 	Templates *templates.Library
+	// Find finds a template step's template beyond the library: the
+	// business's callable workflows (decision 0048). Nil is the library.
+	Find expansion.Templates
 }
 
 // TemplateUse is the template a draft started from.
@@ -344,7 +348,7 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 			findings = nil
 			if len(problems) == 0 {
 				if def, err := wd.Load(doc); err == nil {
-					findings = PolicyFindings(def, reg)
+					findings = PolicyFindingsWith(def, reg, b.Find)
 				}
 			}
 		}
@@ -416,7 +420,7 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 		for _, pol := range req.Context.Policies {
 			policies[pol.Name] = pol.Document
 		}
-		file, results, err := DryRun(doc, reg, policies, proposed)
+		file, results, err := DryRunWith(doc, reg, policies, proposed, b.Find)
 		if err == nil {
 			p.Tests, p.Results = &file, results
 			for _, r := range results {
@@ -569,6 +573,25 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 			refs = append(refs, r.Ref)
 		}
 	}
+	offered := []string{}
+	var tpls []map[string]any
+	if b.Templates != nil && len(req.Base) == 0 {
+		for i, m := range b.Templates.Match(req.Goal, 2) {
+			tc := TemplateContext(m.Template)
+			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
+			tpls = append(tpls, tc)
+			offered = append(offered, m.Template.ID)
+			// The best template brings its connectors' schemas, after the
+			// ranked ones: "bill a customer" names no connector, but
+			// send-invoice is written with invoices@1.
+			for _, ref := range m.Template.Connectors {
+				if _, ok := reg.Get(ref); ok && i == 0 && !seen[ref] {
+					seen[ref] = true
+					refs = append(refs, ref)
+				}
+			}
+		}
+	}
 	var details []map[string]any
 	for _, ref := range refs {
 		if c, ok := reg.Get(ref); ok {
@@ -591,16 +614,11 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	if refs == nil {
 		refs = []string{}
 	}
-	offered := []string{}
 	if b.Templates != nil && len(req.Base) == 0 {
-		var tpls []map[string]any
-		for _, m := range b.Templates.Match(req.Goal, 2) {
-			tc := TemplateContext(m.Template)
-			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
-			tpls = append(tpls, tc)
-			offered = append(offered, m.Template.ID)
-		}
 		doc["starting_templates"] = nonNil(tpls)
+	}
+	if len(req.Context.CallableWorkflows) > 0 {
+		doc["callable_workflows"] = req.Context.CallableWorkflows
 	}
 	return doc, refs, offered
 }
@@ -624,8 +642,18 @@ func TemplateContext(t *templates.Template) map[string]any {
 	for _, v := range t.Variables {
 		vars = append(vars, v.Name)
 	}
-	return map[string]any{"id": t.ID, "title": t.Title, "description": t.Description, "connectors": t.Connectors,
+	out := map[string]any{"id": t.ID, "title": t.Title, "description": t.Description, "connectors": t.Connectors,
 		"variables": vars, "params": params, "definition": t.Definition}
+	if t.Callable {
+		// It can also be a template step (rule 18): what that step gives
+		// back.
+		outs := make([]map[string]any, 0, len(t.Outputs))
+		for _, o := range t.Outputs {
+			outs = append(outs, map[string]any{"name": o.Name, "type": o.Type, "description": o.Description})
+		}
+		out["callable"] = map[string]any{"outputs": outs}
+	}
+	return out
 }
 
 func nonNil[T any](s []T) []T {

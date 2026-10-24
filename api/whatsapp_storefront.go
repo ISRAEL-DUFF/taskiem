@@ -540,7 +540,7 @@ func (s *Server) makeOwnTable(ctx context.Context, tenant uuid.UUID, actor strin
 			taken[x.Name] = true
 		}
 		for _, n := range names {
-			if !taken[n] && datatables.CheckName("table", n) == nil {
+			if !taken[n] && datatables.CheckTableName(n) == nil {
 				t.Name = n
 				return nil
 			}

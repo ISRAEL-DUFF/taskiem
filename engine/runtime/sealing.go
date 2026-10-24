@@ -22,6 +22,9 @@ func triggerPaths(def *wd.Definition) []pii.Path {
 	if def.Trigger.Type == "email" {
 		out = append(out, emailPaths...)
 	}
+	if def.Trigger.Type == "invoice" {
+		out = append(out, invoicePaths...)
+	}
 	schema, types := def.InputsSchema()
 	if schema == nil {
 		return out
@@ -30,6 +33,22 @@ func triggerPaths(def *wd.Definition) []pii.Path {
 		out = append(out, pii.Path{Segments: append([]string{"trigger", "body"}, p.Segments...), Category: p.Category})
 	}
 	return out
+}
+
+// invoicePaths are an invoice trigger's personal parts (docs/invoices.md):
+// the customer, as the invoice keeps them sealed, and the page link, which
+// opens the invoice to whoever holds it.
+var invoicePaths = []pii.Path{
+	{Segments: []string{"trigger", "body", "customer", "name"}, Category: "name"},
+	{Segments: []string{"trigger", "body", "customer", "phone"}, Category: "phone"},
+	{Segments: []string{"trigger", "body", "customer", "email"}, Category: "email"},
+	{Segments: []string{"trigger", "body", "link"}, Category: "other"},
+	// The payment event's receipt link opens the receipt's verification
+	// page to whoever holds it (docs/schools.md#receipts).
+	{Segments: []string{"trigger", "body", "receipt", "link"}, Category: "other"},
+	// The payment event's family page link opens the family's fees to
+	// whoever holds it (docs/schools.md#the-family-page).
+	{Segments: []string{"trigger", "body", "family_link"}, Category: "other"},
 }
 
 // emailPaths are an email trigger's personal parts (decision 0038): who

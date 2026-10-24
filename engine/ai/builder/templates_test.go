@@ -13,6 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/templates"
 )
 
@@ -160,6 +161,48 @@ func TestNoEvalRequestInPrompts(t *testing.T) {
 	}
 }
 
+// The builder knows invoices and the money log: the instructions say
+// invoices are invoices@1's and paid only by payments (waited for with
+// invoice.paid, or started on by the invoice trigger), and that the money log is read, never written; a goal
+// about invoices however worded carries invoices@1's schema and starts
+// from the invoice templates.
+func TestInvoiceKnowledge(t *testing.T) {
+	for goal, tpl := range map[string]string{
+		"bill a customer for 5 bags of rice and tell me when they pay": "send-invoice",
+		"remind customers about overdue invoices":                      "chase-overdue-invoices",
+		"send a receipt when an invoice is paid":                       "invoice-paid-receipt",
+		"text me every week who still owes me money":                   "",
+	} {
+		f := &ai.Fake{Script: []ai.Response{envelope(t, builder.ExampleWD)}}
+		b := &builder.Builder{Provider: f, Connectors: fullRegistry(t), Templates: templates.Default()}
+		if _, err := b.Build(context.Background(), builder.Request{Goal: goal}); err != nil {
+			t.Fatal(err)
+		}
+		req := f.Requests()[0]
+		sys := req.System[0].Text
+		for _, want := range []string{"use invoices@1", `"event": "invoice.paid"`, `uses the "invoice" trigger ({"event": "paid"})`, "Never keep customers' invoices in a data table with a status or paid column",
+			"never make a payment link or account number for an invoice yourself", "money_matches has one row per match", "never insert_rows"} {
+			if !strings.Contains(sys, want) {
+				t.Errorf("the instructions do not say %q", want)
+			}
+		}
+		ctxDoc, _ := builder.ContextFrom(req.Messages[0].Text)
+		found := false
+		for _, c := range ctxDoc["relevant_connectors"].([]any) {
+			found = found || c.(map[string]any)["ref"] == "invoices@1"
+		}
+		if !found {
+			t.Errorf("%q: invoices@1 is not among the relevant connectors", goal)
+		}
+		if tpl != "" {
+			tpls, _ := ctxDoc["starting_templates"].([]any)
+			if len(tpls) == 0 || tpls[0].(map[string]any)["id"] != tpl {
+				t.Errorf("%q: starting templates %v, want %s first", goal, tpls, tpl)
+			}
+		}
+	}
+}
+
 func normalise(s string) string {
 	s = strings.ToLower(s)
 	s = strings.Map(func(r rune) rune {
@@ -169,4 +212,45 @@ func normalise(s string) string {
 		return ' '
 	}, s)
 	return " " + strings.Join(strings.Fields(s), " ") + " "
+}
+
+// The business's own callable workflows (decision 0048) are listed in the
+// context, and a draft that uses one is dry-run with its steps through the
+// builder's resolver.
+func TestCallableWorkflowsBuild(t *testing.T) {
+	const id = "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12"
+	own := templates.Template{ID: id, Title: "Double it", Summary: "S", Description: "D", Category: "workflow", Tags: []string{}, Connectors: []string{}, Params: []templates.Param{},
+		Callable: true, Outputs: []templates.Output{{Name: "kobo", Type: "integer", Title: "Total", Description: "Twice", Value: "=steps.total.output.kobo"}},
+		Definition: json.RawMessage(`{"schema":"wd/v1","id":"wf_d","version":1,"name":"Double it","trigger":{"type":"manual"},
+		  "inputs":{"schema":{"type":"object","required":["amount_kobo"],"properties":{"amount_kobo":{"type":"integer"}}}},
+		  "steps":[{"id":"total","type":"transform","config":{"output":{"kobo":"=trigger.body.amount_kobo * 2"}}}]}`)}
+	draft := `{"schema":"wd/v1","id":"wf_use","version":1,"name":"Use it","trigger":{"type":"manual"},
+	 "inputs":{"schema":{"type":"object","required":["amount_kobo"],"properties":{"amount_kobo":{"type":"integer"}}}},
+	 "steps":[{"id":"sub","type":"template","workflow":"` + id + `","input":{"amount_kobo":"=trigger.body.amount_kobo"}},
+	          {"id":"after","type":"transform","needs":["sub"],"config":{"output":{"kobo":"=steps.sub.output.kobo"}}}]}`
+	f := &ai.Fake{Script: []ai.Response{envelope(t, draft)}}
+	b, _ := newBuilder(t, f)
+	lib := expansion.Library(templates.Default())
+	b.Find = func(want string) (*templates.Template, error) {
+		if want == id {
+			return &own, nil
+		}
+		return lib(want)
+	}
+	p, err := b.Build(context.Background(), builder.Request{Goal: "double the amount with my Double it workflow", Context: builder.Context{
+		CallableWorkflows: []builder.CallableWorkflow{{ID: id, Name: "Double it", Inputs: json.RawMessage(`{"type":"object"}`), Outputs: own.Outputs, Effect: "only reads"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Valid() || !p.TestsPassed() {
+		t.Fatalf("valid %v, tests %+v, problems %v", p.Valid(), p.Tests, p.Problems)
+	}
+	ctxDoc, _ := builder.ContextFrom(f.Requests()[0].Messages[0].Text)
+	if raw, _ := json.Marshal(ctxDoc["callable_workflows"]); !strings.Contains(string(raw), `"Double it"`) || !strings.Contains(string(raw), `"only reads"`) {
+		t.Errorf("the context lacks the callable workflows: %s", raw)
+	}
+	if !strings.Contains(f.Requests()[0].System[0].Text, "callable_workflows") {
+		t.Errorf("the prompt does not say how to use them")
+	}
 }

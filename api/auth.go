@@ -20,58 +20,52 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/argon2"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/db"
 )
 
-// Permissions (spec 13.3).
+// Permissions (spec 13.3): engine/access holds them and the built-in
+// roles, for the API and the engine packages that decide who gets what.
 const (
-	PermWorkflowRead     = "workflow.read"
-	PermWorkflowEdit     = "workflow.edit"
-	PermWorkflowPublish  = "workflow.publish"
-	PermRunRead          = "run.read"
-	PermRunStart         = "run.start"
-	PermRunCancel        = "run.cancel"
-	PermRunResolve       = "run.resolve"
-	PermApprovalDecide   = "approval.decide"
-	PermPIIReveal        = "pii.reveal"
-	PermPIIErase         = "pii.erase"
-	PermSecretManage     = "secret.manage"
-	PermConnectionManage = "connection.manage"
-	PermMemberManage     = "member.manage"
-	PermAuditRead        = "audit.read"
-	PermGitManage        = "git.manage"
-	PermPolicyManage     = "policy.manage"
-	PermConnectorManage  = "connector.manage"
-	PermRoleManage       = "role.manage"
-	PermSCIM             = "scim.provision" // an identity provider's key
-	PermAlertManage      = "alert.manage"
+	PermWorkflowRead     = access.WorkflowRead
+	PermWorkflowEdit     = access.WorkflowEdit
+	PermWorkflowPublish  = access.WorkflowPublish
+	PermRunRead          = access.RunRead
+	PermRunStart         = access.RunStart
+	PermRunCancel        = access.RunCancel
+	PermRunResolve       = access.RunResolve
+	PermApprovalDecide   = access.ApprovalDecide
+	PermPIIReveal        = access.PIIReveal
+	PermPIIErase         = access.PIIErase
+	PermSecretManage     = access.SecretManage
+	PermConnectionManage = access.ConnectionManage
+	PermMemberManage     = access.MemberManage
+	PermAuditRead        = access.AuditRead
+	PermGitManage        = access.GitManage
+	PermPolicyManage     = access.PolicyManage
+	PermConnectorManage  = access.ConnectorManage
+	PermRoleManage       = access.RoleManage
+	PermSCIM             = access.SCIM // an identity provider's key
+	PermAlertManage      = access.AlertManage
 	// Data tables (decision 0033): reading a table's rows, and creating
 	// and changing tables and rows.
-	PermTableRead = "table.read"
-	PermTableEdit = "table.edit"
+	PermTableRead = access.TableRead
+	PermTableEdit = access.TableEdit
 	// Storefronts and hosted forms (decisions 0036, 0037): the public
 	// pages and the websites allowed to embed them.
-	PermStorefrontManage = "storefront.manage"
+	PermStorefrontManage = access.StorefrontManage
 	// PermFormLinks mints one-time links to a link form (forms 8.4).
-	PermFormLinks = "form.links"
+	PermFormLinks = access.FormLinks
 )
 
-var allPermissions = []string{PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel,
-	PermRunResolve, PermApprovalDecide, PermPIIReveal, PermPIIErase, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage,
-	PermTableRead, PermTableEdit, PermStorefrontManage, PermFormLinks}
+// allPermissions are every permission, in the role editor's order.
+var allPermissions = access.All
 
-// rolePermissions are the built-in roles (spec 13.3). Any other membership
-// role (e.g. "credit_officer") is a business role that only qualifies the
-// member for approval steps naming it, on top of approval.decide.
-var rolePermissions = map[string][]string{
-	"owner":    allPermissions,
-	"admin":    {PermWorkflowRead, PermWorkflowEdit, PermWorkflowPublish, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermSecretManage, PermConnectionManage, PermMemberManage, PermAuditRead, PermGitManage, PermPolicyManage, PermConnectorManage, PermRoleManage, PermSCIM, PermAlertManage, PermTableRead, PermTableEdit, PermStorefrontManage, PermFormLinks},
-	"builder":  {PermWorkflowRead, PermWorkflowEdit, PermRunRead, PermRunStart, PermTableRead, PermTableEdit},
-	"operator": {PermWorkflowRead, PermRunRead, PermRunStart, PermRunCancel, PermRunResolve, PermTableRead},
-	"approver": {PermWorkflowRead, PermRunRead, PermApprovalDecide},
-	"auditor":  {PermWorkflowRead, PermRunRead, PermAuditRead, PermTableRead},
-	"viewer":   {PermWorkflowRead, PermRunRead, PermTableRead},
-}
+// rolePermissions are the built-in roles (spec 13.3, engine/access). Any
+// other membership role (e.g. "credit_officer") is a custom role or a
+// business role that only qualifies the member for approval steps naming
+// it, on top of approval.decide.
+var rolePermissions = access.Roles
 
 // Principal is who is calling.
 type Principal struct {
@@ -265,6 +259,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		}
 		if p.Agent != nil && !agentAllowed(r.Method, r.URL.Path) {
 			writeErr(w, http.StatusForbidden, "in a business, a field agent works on its page and the tables behind it only")
+			return
+		}
+		if p.Agent == nil && access.GateOnly(p.Permissions) && !gateAllowed(r.Method, r.URL.Path) {
+			// The gate role: one screen, every other route refused (schools.go).
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "the gate role sees the gate screen only", "gate_only": true})
 			return
 		}
 		if p.Agent == nil && p.EnrolOnly && !enrolOnly[r.Method+" "+r.URL.Path] {
@@ -552,6 +551,9 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		if err := tx.QueryRow(r.Context(), `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&business); err == nil {
 			out["tenant_name"] = business
 		}
+		// The Schools area, when the business turned it on (schools.go).
+		out["schools"] = s.schoolsOn(r.Context(), tx, p.TenantID)
+		out["gate_only"] = access.GateOnly(p.Permissions)
 		return nil
 	})
 	// A field agent signed in as themselves lands on the agent app (N6).

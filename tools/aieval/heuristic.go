@@ -14,7 +14,8 @@ import (
 )
 
 // heuristic is the evaluation's offline "model": it reads the context
-// document the builder put in the prompt; when a starting template is
+// document the builder put in the prompt; when the goal sequences what two
+// callable starting templates do, it composes them (compose); when a starting template is
 // offered with a strong retrieval score it answers with that template and no parameters (the builder
 // instantiates it and lists what is missing); otherwise it wires the
 // best-matching action of up to two retrieved connectors into a manual
@@ -25,6 +26,9 @@ func heuristic(req ai.Request) (*ai.Response, error) {
 	prompt := req.Messages[0].Text
 	goal := strings.ToLower(builder.GoalFrom(prompt))
 	ctxDoc, _ := builder.ContextFrom(prompt)
+	if resp := compose(goal, ctxDoc); resp != nil {
+		return resp, nil
+	}
 	if tpls, _ := ctxDoc["starting_templates"].([]any); len(tpls) > 0 && templateScore(tpls[0]) >= heuristicTemplateScore {
 		t, _ := tpls[0].(map[string]any)
 		id, _ := t["id"].(string)
@@ -111,6 +115,82 @@ func heuristic(req ai.Request) (*ai.Response, error) {
 	env, _ := json.Marshal(map[string]any{"summary": "Heuristic draft.", "assumptions": []string{}, "workflow": string(doc), "tests": []any{},
 		"template": "", "template_params": ""})
 	return &ai.Response{Text: string(env)}, nil
+}
+
+// sequenced are the words of a goal that asks for one piece of work after
+// another.
+var sequenced = regexp.MustCompile(`\b(then|after that|afterwards|once that is done|once it is done)\b`)
+
+// compose answers a goal that sequences work two strongly matched callable
+// templates do (decision 0047) with a template step for each, in order,
+// their required run inputs taken from the run's own: the floor for the
+// composition suite.
+func compose(goal string, ctxDoc map[string]any) *ai.Response {
+	tpls, _ := ctxDoc["starting_templates"].([]any)
+	if len(tpls) < 2 || !sequenced.MatchString(goal) {
+		return nil
+	}
+	props, required := map[string]any{}, []string{}
+	var steps []map[string]any
+	for _, raw := range tpls[:2] {
+		t, _ := raw.(map[string]any)
+		id, _ := t["id"].(string)
+		if _, callable := t["callable"]; !callable || templateScore(t) < heuristicTemplateScore {
+			return nil
+		}
+		var def struct {
+			Inputs struct {
+				Schema struct {
+					Properties map[string]any `json:"properties"`
+					Required   []string       `json:"required"`
+				} `json:"schema"`
+			} `json:"inputs"`
+		}
+		raw, _ := json.Marshal(t["definition"])
+		_ = json.Unmarshal(raw, &def)
+		input := map[string]any{}
+		for _, r := range def.Inputs.Schema.Required {
+			props[r] = def.Inputs.Schema.Properties[r]
+			required = append(required, r)
+			input[r] = "=trigger.body." + r
+		}
+		// Required parameters without a default get a placeholder: the
+		// person fills them in on review.
+		params := map[string]any{}
+		ps, _ := t["params"].([]any)
+		for _, raw := range ps {
+			p, _ := raw.(map[string]any)
+			name, _ := p["name"].(string)
+			if req, _ := p["required"].(bool); !req || p["default"] != nil || name == "" {
+				continue
+			}
+			switch p["type"] {
+			case "integer", "number":
+				params[name] = 1
+			case "boolean":
+				params[name] = false
+			default:
+				params[name] = "Sample"
+			}
+		}
+		step := map[string]any{"id": fmt.Sprintf("part%d", len(steps)+1), "type": "template", "template": id, "input": input}
+		if len(params) > 0 {
+			step["params"] = params
+		}
+		if len(steps) > 0 {
+			step["needs"] = []string{steps[len(steps)-1]["id"].(string)}
+		}
+		steps = append(steps, step)
+	}
+	def := map[string]any{"schema": "wd/v1", "id": "wf_draft", "version": 1, "name": "Draft", "trigger": map[string]any{"type": "manual"}, "steps": steps}
+	if len(required) > 0 {
+		sort.Strings(required)
+		def["inputs"] = map[string]any{"schema": map[string]any{"type": "object", "required": required, "properties": props}}
+	}
+	doc, _ := json.Marshal(def)
+	env, _ := json.Marshal(map[string]any{"summary": "Composes two templates.", "assumptions": []string{}, "workflow": string(doc), "tests": []any{},
+		"template": "", "template_params": ""})
+	return &ai.Response{Text: string(env)}
 }
 
 // heuristicTemplateScore is the retrieval score above which the

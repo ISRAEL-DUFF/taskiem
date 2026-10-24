@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,7 +29,56 @@ type Rail struct {
 	Transfer *connector.TransferFacts
 	// Link: the rail makes payment pages (collect_link).
 	Link bool
-	conn *connector.Connector
+	// Caps are the capabilities the rail maps, by name (virtual_account,
+	// list_credits); Events the normalised events its webhooks carry.
+	Caps   map[string]connector.CapabilityMap
+	Events map[string]bool
+	conn   *connector.Connector
+}
+
+// Channel names the rail's connection as the money log does:
+// "iswallet/main".
+func (r Rail) Channel() string { return r.Connector + "/" + r.Connection }
+
+// Maps reports whether the rail maps capability.
+func (r Rail) Maps(capability string) bool {
+	_, ok := r.Caps[capability]
+	return ok
+}
+
+// Takes reports whether the rail's mapping of capability uses an input
+// field (account_name, account, customer.email): not ignored or
+// unsupported.
+func (r Rail) Takes(capability, field string) bool {
+	cm, ok := r.Caps[capability]
+	return ok && !slices.Contains(cm.Ignores, field) && !slices.Contains(cm.Unsupported, field)
+}
+
+// Needs reports whether the rail cannot do capability without an input
+// field.
+func (r Rail) Needs(capability, field string) bool {
+	cm, ok := r.Caps[capability]
+	return ok && slices.Contains(cm.Requires, field)
+}
+
+// Unsafe reports whether the rail's capability is an unsafe write: an
+// answer that never came may have opened something, and must not be sent
+// again without a person checking.
+func (r Rail) Unsafe(capability string) bool {
+	cm, ok := r.Caps[capability]
+	return ok && cm.Unsafe
+}
+
+func railOf(id, connection string, c *connector.Connector) Rail {
+	rl := Rail{Connector: id, Connection: connection, Name: c.Manifest.Name, conn: c, Caps: c.Manifest.Capabilities, Events: map[string]bool{}}
+	if cm, ok := c.Manifest.Capabilities["collect_transfer"]; ok {
+		rl.Transfer = cm.Transfer
+	}
+	_, rl.Link = c.Manifest.Capabilities["collect_link"]
+	for ev := range c.Manifest.Events {
+		rl.Events[ev] = true
+	}
+	return rl
 }
 
 // Rails reaches the business's payment rails outside a workflow run.
@@ -43,6 +93,22 @@ type Rails interface {
 	// call so a payment can be found even when the answer is lost.
 	Key(r Rail, capability string, key effects.KeyInput) (string, error)
 }
+
+// CapabilityRails reaches the business's rails for capabilities other than
+// an invoice's payment, outside a workflow run: issuing customers' account
+// numbers (virtual_account, engine/schools) and reading their credits
+// back (list_credits, engine/lookback). RegistryRails is one.
+type CapabilityRails interface {
+	// Capable lists the active prod connections whose rail maps capability.
+	Capable(ctx context.Context, tenant uuid.UUID, capability string) ([]Rail, error)
+	// ResolveChannel finds the active prod connection a channel names
+	// ("iswallet/main") whose rail maps capability; ErrNoRail when none.
+	ResolveChannel(ctx context.Context, tenant uuid.UUID, channel, capability string) (Rail, error)
+	// Call does capability with the rail, each write keyed from key.
+	Call(ctx context.Context, tenant uuid.UUID, r Rail, capability string, input map[string]any, key effects.KeyInput) (map[string]any, error)
+}
+
+var _ CapabilityRails = (*RegistryRails)(nil)
 
 // ErrNoRail is a connection that is missing or cannot take payments for
 // invoices; the message says which and what to do.
@@ -87,11 +153,7 @@ func (r *RegistryRails) Resolve(ctx context.Context, tenant uuid.UUID, connectio
 			if c == nil {
 				continue
 			}
-			rl := Rail{Connector: id, Connection: name, Name: c.Manifest.Name, conn: c}
-			if cm, ok := c.Manifest.Capabilities["collect_transfer"]; ok {
-				rl.Transfer = cm.Transfer
-			}
-			_, rl.Link = c.Manifest.Capabilities["collect_link"]
+			rl := railOf(id, name, c)
 			if rl.Transfer != nil || rl.Link {
 				found = append(found, rl)
 			}
@@ -127,7 +189,11 @@ func (r *RegistryRails) Call(ctx context.Context, tenant uuid.UUID, rl Rail, cap
 		return nil, fmt.Errorf("%w: the rail was not resolved", ErrNoRail)
 	}
 	m := rl.conn.Manifest
-	creds, err := r.Vault.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: "invoices.payment"}), tenant, "prod", m.ID, rl.Connection)
+	purpose := "invoices.payment"
+	if p, ok := callPurpose[capability]; ok {
+		purpose = p
+	}
+	creds, err := r.Vault.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose}), tenant, "prod", m.ID, rl.Connection)
 	if errors.Is(err, secrets.ErrNotFound) {
 		return nil, fmt.Errorf("%w: the %s connection %q is missing in prod", ErrNoRail, m.Name, rl.Connection)
 	}
@@ -147,6 +213,59 @@ func (r *RegistryRails) Call(ctx context.Context, tenant uuid.UUID, rl Rail, cap
 	return connector.CallCapability(ctx, rl.conn, capability, input, base, func(step string) (string, error) {
 		return stepKey(m, capability, step, key)
 	})
+}
+
+// callPurpose is what the vault records a call's credentials were read for,
+// for capabilities other than an invoice's payment.
+var callPurpose = map[string]string{"virtual_account": "schools.account", "list_credits": "money.lookback"}
+
+// Capable lists the tenant's active prod connections whose rail maps
+// capability, by connector and name.
+func (r *RegistryRails) Capable(ctx context.Context, tenant uuid.UUID, capability string) ([]Rail, error) {
+	reg, err := r.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return nil, err
+	}
+	var out []Rail
+	err = db.InTenantTx(ctx, r.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		out = out[:0]
+		rows, err := tx.Query(ctx, `SELECT connector, name FROM connections WHERE environment = 'prod' AND status = 'active' ORDER BY connector, name`)
+		if err != nil {
+			return err
+		}
+		type cn struct{ id, name string }
+		list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (cn, error) {
+			var c cn
+			return c, row.Scan(&c.id, &c.name)
+		})
+		if err != nil {
+			return err
+		}
+		for _, c := range list {
+			if conn := latest(reg, c.id); conn != nil {
+				if rl := railOf(c.id, c.name, conn); rl.Maps(capability) {
+					out = append(out, rl)
+				}
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+
+// ResolveChannel finds the tenant's active prod connection a channel
+// names ("iswallet/main") whose rail maps capability.
+func (r *RegistryRails) ResolveChannel(ctx context.Context, tenant uuid.UUID, channel, capability string) (Rail, error) {
+	list, err := r.Capable(ctx, tenant, capability)
+	if err != nil {
+		return Rail{}, err
+	}
+	for _, rl := range list {
+		if rl.Channel() == channel {
+			return rl, nil
+		}
+	}
+	return Rail{}, fmt.Errorf("%w: no active connection %q in prod can %s", ErrNoRail, channel, strings.ReplaceAll(capability, "_", " "))
 }
 
 // Key implements Rails.

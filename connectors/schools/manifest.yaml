@@ -1,0 +1,266 @@
+# The schools platform connector (docs/schools.md, decision 0046): what
+# workflows read of the business's school record (students, classes, the
+# current term, fees and term invoices), and invoices a term. It acts on
+# Taskiem's own records, for the run's tenant only, and needs no
+# connection. The record itself changes through the Schools pages and the
+# API; invoice_term makes each enrolled student's term invoice, exactly
+# once, and issue_account issues a student their own account number,
+# once per student and connection (B4).
+manifest: connector/v1
+id: schools
+version: 1.0.0
+name: Schools
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  list_students:
+    title: List students
+    description: The school's students by admission number, optionally of one class (its id, or as written, such as JSS 1 A) and status (active by default).
+    class: read
+    input:
+      type: object
+      properties:
+        class:  { type: string, description: "A class's id or label, such as JSS 1 A" }
+        status: { type: string, enum: [active, withdrawn, graduated, any], description: "active by default; any for every status" }
+        limit:  { type: integer, minimum: 1, maximum: 1000, description: At most this many (default 200) }
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        total: { type: integer, description: How many match in all }
+        students:
+          type: array
+          items:
+            type: object
+            properties:
+              id:               { type: string }
+              admission_number: { type: string }
+              name:             { type: string }
+              class:            { type: string }
+              class_id:         { type: string }
+              status:           { type: string, enum: [active, withdrawn, graduated] }
+              family_id:        { type: string }
+    pii:
+      - { field: output.students.*.name, category: name }
+  get_student:
+    title: Read a student
+    description: One student by id or admission number, with their class, status and family's guardians (name, phone, email, relationship).
+    class: read
+    input:
+      type: object
+      required: [student]
+      properties:
+        student: { type: string, description: "The student's id or admission number" }
+    output:
+      type: object
+      properties:
+        id:               { type: string }
+        admission_number: { type: string }
+        name:             { type: string }
+        date_of_birth:    { type: string }
+        class:            { type: string }
+        class_id:         { type: string }
+        status:           { type: string, enum: [active, withdrawn, graduated] }
+        family_id:        { type: string }
+        guardians:
+          type: array
+          items:
+            type: object
+            properties:
+              name:         { type: string }
+              phone:        { type: string }
+              email:        { type: string }
+              relationship: { type: string }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.guardians.*.name, category: name }
+      - { field: output.guardians.*.phone, category: phone }
+      - { field: output.guardians.*.email, category: email }
+      - { field: output.guardians.*.relationship, category: other }
+  list_classes:
+    title: List classes
+    description: The school's classes in their order, with how many active students each has.
+    class: read
+    input:
+      type: object
+      properties: {}
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        classes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:       { type: string }
+              name:     { type: string }
+              arm:      { type: string }
+              label:    { type: string }
+              order:    { type: integer }
+              students: { type: integer }
+  current_term:
+    title: The current term
+    description: The term the school is in now (found false when none runs), with its session and dates.
+    class: read
+    input:
+      type: object
+      properties: {}
+    output:
+      type: object
+      properties:
+        found:       { type: boolean }
+        id:          { type: string }
+        name:        { type: string }
+        session:     { type: string }
+        starts_on:   { type: string }
+        ends_on:     { type: string }
+        fees_due_on: { type: string }
+        enrolled:    { type: integer }
+  list_fee_items:
+    title: List fee items
+    description: A term's fee structures (the current term by default), each class's items with their amount in kobo, kind (required or optional) and, for money collected for someone else, who it is for; optionally of one class (its id or label).
+    class: read
+    input:
+      type: object
+      properties:
+        term:  { type: string, description: "A term's id; the current term by default" }
+        class: { type: string, description: "A class's id or label, such as JSS 1 A" }
+    output:
+      type: object
+      properties:
+        term_id: { type: string }
+        term:    { type: string }
+        classes:
+          type: array
+          items:
+            type: object
+            properties:
+              class_id:          { type: string }
+              class:             { type: string }
+              required_kobo:     { type: integer }
+              pass_through_kobo: { type: integer }
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:               { type: string }
+                    name:             { type: string }
+                    amount_kobo:      { type: integer }
+                    kind:             { type: string, enum: [required, optional] }
+                    pass_through_for: { type: string }
+  term_invoices:
+    title: List a term's invoices
+    description: Each student's invoice for a term (the current term by default) by class and admission number, optionally of one class and status, with what is paid and due in kobo. No names; read a student with get_student.
+    class: read
+    input:
+      type: object
+      properties:
+        term:   { type: string, description: "A term's id; the current term by default" }
+        class:  { type: string, description: "A class's id or label, such as JSS 1 A" }
+        status: { type: string, enum: [draft, sent, part_paid, paid, overdue, void] }
+        limit:  { type: integer, minimum: 1, maximum: 1000, description: At most this many (default 200) }
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        total: { type: integer, description: How many match in all }
+        invoices:
+          type: array
+          items:
+            type: object
+            properties:
+              number:           { type: string }
+              status:           { type: string, enum: [draft, sent, part_paid, paid, overdue, void] }
+              student_id:       { type: string }
+              admission_number: { type: string }
+              class:            { type: string }
+              class_id:         { type: string }
+              total_kobo:       { type: integer }
+              paid_kobo:        { type: integer }
+              due_kobo:         { type: integer }
+  invoice_term:
+    title: Invoice the term
+    description: Invoices a term (the current term by default) once per enrolled student, from their class's fees, their optional items and standing discounts, due on the term's fees due date, and with send sends them (each family's credit counted first). The plan and its confirmation in one step, exactly once for the step; running it again later invoices only students added since. Students with no guardian to send to, no fees for their class or nothing to pay are counted and left out.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      properties:
+        term: { type: string, description: "A term's id; the current term by default" }
+        send: { type: boolean, description: Send the invoices now (else they are drafts for a person to send) }
+    output:
+      type: object
+      properties:
+        term_id:           { type: string }
+        term:              { type: string }
+        enrolled:          { type: integer }
+        to_invoice:        { type: integer }
+        created:           { type: integer }
+        already_invoiced:  { type: integer }
+        total_kobo:        { type: integer }
+        pass_through_kobo: { type: integer }
+        no_contact:        { type: integer, description: Students left out with no guardian to send to }
+        no_fees:           { type: integer, description: Students left out whose class has no fees for the term }
+        nothing_to_pay:    { type: integer }
+        needs_approval:    { type: integer, description: Students left out whose standing discount waits for a second person }
+        requested:         { type: integer, description: Of them, how many this step sent to a second person (their invoice is made on approval) }
+        sent:              { type: integer }
+        failed:            { type: integer }
+  issue_account:
+    title: Issue a student's account number
+    description: Issues a student's own bank account number on the school's issuing connection (Schools > Settings), named for the school and the child where the rail lets the school name it, exactly once per student and connection, so running the step again, or for a student who has one already, answers the same account. Payments into it are matched to the student's own invoices, oldest first. Flutterwave needs a parent's bvn or nin for each account (sent to Flutterwave, never kept). A rail's refusal (a missing guardian email, the business not set up with the rail) fails the step with the rail's reason.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [student]
+      properties:
+        student: { type: string, description: The student's id or admission number }
+        bvn:     { type: string, description: "A parent's BVN (11 digits), for rails that need one per account (Flutterwave)" }
+        nin:     { type: string, description: "Or a parent's NIN (11 digits)" }
+    output:
+      type: object
+      properties:
+        student_id:     { type: string }
+        connection:     { type: string, description: "The connection the account is on, such as iswallet/main" }
+        status:         { type: string, description: issued }
+        account_number: { type: string }
+        bank_name:      { type: string }
+        account_name:   { type: string, description: "The name the rail answered, else the one asked for" }
+        named_by_rail:  { type: boolean, description: "The rail names the account itself: payers may see another name" }
+        reference:      { type: string, description: The account's reference, which its payments carry }
+    pii:
+      - { field: bvn, category: bvn }
+      - { field: nin, category: nin }
+      - { field: output.account_name, category: name }
+  family_link:
+    title: A family's fees page link
+    description: Mints a fresh link to a family's fees page on the public host (each child's fees, payments, receipts and account number; "I have paid"; a payment plan request), for a family by id or for a student's family (the student's id or admission number). The link works for the school's family_link_days (3 by default), so every message mints its own; an expired one offers the family a new link. Put it in a notify@1 message or an invoices@1 notice.
+    class: read
+    input:
+      type: object
+      properties:
+        family:  { type: string, description: The family's id }
+        student: { type: string, description: "Or a student's id or admission number: their family's link" }
+    output:
+      type: object
+      properties:
+        link:       { type: string, description: The page's address }
+        expires_at: { type: string, description: When the link stops working }
+    pii:
+      - { field: output.link, category: other }

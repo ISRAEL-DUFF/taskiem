@@ -75,6 +75,9 @@ type connectionInfo struct {
 	// Remote is the state of the subscriptions Taskiem keeps at the
 	// provider through this connection (decision 0021), when there are any.
 	Remote *remoteSummary `json:"remote,omitempty" db:"-"`
+	// MoneyLogWebhooks are the addresses to set in a rail's dashboard so
+	// the money log hears this prod connection's events (decision 0045).
+	MoneyLogWebhooks []moneyWebhook `json:"money_log_webhooks,omitempty" db:"-"`
 }
 
 func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +100,14 @@ func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	p := principalFrom(r.Context())
+	if reg, err := s.Registry.For(r.Context(), p.TenantID.String()); err == nil {
+		for i, c := range out {
+			if c.Environment == "prod" && c.ProvisionedBy == nil {
+				out[i].MoneyLogWebhooks = moneyWebhooks(latestConnector(reg, c.Connector), s.hooksBase(), p.TenantID, c.Name)
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connections": nonNil(out)})
 }

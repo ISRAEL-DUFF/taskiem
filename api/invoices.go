@@ -13,7 +13,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/leaks"
 	"github.com/israel-duff/taskiem/engine/sender"
 )
 
@@ -22,24 +24,11 @@ import (
 
 const (
 	// PermInvoiceRead lists and reads the business's invoices.
-	PermInvoiceRead = "invoice.read"
+	PermInvoiceRead = access.InvoiceRead
 	// PermInvoiceManage creates, sends and voids them, changes their
 	// settings and undoes a wrong payment.
-	PermInvoiceManage = "invoice.manage"
+	PermInvoiceManage = access.InvoiceManage
 )
-
-func init() {
-	allPermissions = append(allPermissions, PermInvoiceRead, PermInvoiceManage)
-	rolePermissions["owner"] = allPermissions
-	for _, role := range []string{"admin", "operator"} {
-		rolePermissions[role] = append(rolePermissions[role], PermInvoiceRead, PermInvoiceManage)
-	}
-	for _, role := range []string{"auditor", "viewer"} {
-		rolePermissions[role] = append(rolePermissions[role], PermInvoiceRead)
-	}
-	permissionInfo[PermInvoiceRead] = "See the invoices sent to customers"
-	permissionInfo[PermInvoiceManage] = "Create, send and void invoices to customers, and change their settings"
-}
 
 // invoiceRoutes mounts /v1/invoices and /v1/invoice-settings inside the
 // authenticated group.
@@ -51,9 +40,13 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/invoices/{id}", s.updateInvoice)
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/send", s.sendInvoice)
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/void", s.voidInvoice)
+	r.With(manage, s.tenantWide).Post("/invoices/{id}/amendments", s.amendInvoice) // schools_fees.go
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/payments/{payment}/undo", s.undoInvoicePayment)
 	r.With(read).Get("/invoice-settings", s.getInvoiceSettings)
 	r.With(manage, s.tenantWide).Put("/invoice-settings", s.putInvoiceSettings)
+	s.matchingRoutes(r)
+	s.moneyRoutes(r)
+	s.moneyReportRoutes(r)
 }
 
 func invoiceErr(err error) error {
@@ -297,7 +290,7 @@ func (s *Server) putInvoiceSettings(w http.ResponseWriter, r *http.Request) {
 			return invoiceErr(err)
 		}
 		return auditTx(r, tx, "invoice.settings", "invoices", map[string]any{"prefix": st.Prefix, "connection": st.Connection,
-			"fee_paid_by": st.FeePaidBy, "allow_part_payments": st.AllowPartPayments})
+			"fee_paid_by": st.FeePaidBy, "allow_part_payments": st.AllowPartPayments, "auto_match": st.AutoMatch})
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -313,6 +306,8 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 		return nil
 	}
 	go s.runInvoicePayments(ctx)
+	go s.runSchoolAccounts(ctx)
+	go s.runSchoolFamilyInbox(ctx)
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
 	for {
@@ -328,12 +323,17 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 }
 
 // runInvoicePayments issues the accounts and links invoice pages and
-// chat ask for (every second) and looks their payments up (every 30
-// seconds).
+// chat ask for and starts the runs invoices being paid queued (every
+// second), looks their payments up (every 30
+// seconds), matches the money that came in (every 10 seconds) and looks
+// for leaks (every 15 minutes).
 func (s *Server) runInvoicePayments(ctx context.Context) {
-	drain, check := time.NewTicker(time.Second), time.NewTicker(30*time.Second)
+	drain, check, match, leak := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(10*time.Second), time.NewTicker(15*time.Minute)
 	defer drain.Stop()
 	defer check.Stop()
+	defer match.Stop()
+	defer leak.Stop()
+	detector := &leaks.Detector{Pool: s.Invoices.Pool, Logger: s.Logger}
 	for {
 		select {
 		case <-ctx.Done():
@@ -342,9 +342,23 @@ func (s *Server) runInvoicePayments(ctx context.Context) {
 			if err := s.Invoices.Drain(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("invoices: requests", "err", err)
 			}
+			if err := s.Invoices.StartPaid(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: runs on paid", "err", err)
+			}
+			if err := s.Invoices.StartPayments(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: runs on payments", "err", err)
+			}
 		case <-check.C:
 			if err := s.Invoices.CheckPayments(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("invoices: payments", "err", err)
+			}
+		case <-match.C:
+			if err := s.matcher().Tick(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: matching", "err", err)
+			}
+		case <-leak.C:
+			if err := detector.Tick(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: leaks", "err", err)
 			}
 		}
 	}

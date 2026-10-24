@@ -27,6 +27,10 @@ type Definition struct {
 		Schema json.RawMessage `json:"schema"`
 	} `json:"inputs,omitempty"`
 	RawTypes map[string]json.RawMessage `json:"types,omitempty"`
+	// Outputs make the workflow callable (decision 0048): what a template
+	// step using it gets back, each an expression over its top-level
+	// steps.
+	Outputs []Output `json:"outputs,omitempty"`
 
 	byID   map[string]*Step
 	parent map[string]*Step // nested step id -> enclosing control (or on_error owner) step
@@ -108,6 +112,16 @@ type Step struct {
 	// Input is then the capability's input, and Capability the rail's
 	// mapping between it and the action (engine/expansion).
 	Capability *Expanded `json:"capability,omitempty"`
+	// Template and Params are a template step's callable template and its
+	// parameters (decision 0047); its RawInput is the template's run
+	// inputs.
+	Template string         `json:"template,omitempty"`
+	Params   map[string]any `json:"params,omitempty"`
+	// Workflow is a template step's callable workflow of the business,
+	// instead of a library template (decision 0048).
+	Workflow string `json:"workflow,omitempty"`
+	// Origin marks a step expanded from a template step (engine/expansion).
+	Origin *Origin `json:"origin,omitempty"`
 
 	Input     map[string]any   `json:"-"`
 	HTTP      *HTTPConfig      `json:"-"`
@@ -121,6 +135,24 @@ type Step struct {
 	Approval  *ApprovalConfig  `json:"-"`
 	Form      *FormConfig      `json:"-"`
 	Transform *TransformConfig `json:"-"`
+	Callback  *CallbackConfig  `json:"-"`
+	Respond   *RespondConfig   `json:"-"`
+}
+
+// CallbackConfig is a callback step's wait: how long another system has
+// to call the run back at the step's address (run.callbacks.<id>), and
+// what happens when it does not.
+type CallbackConfig struct {
+	Timeout   string `json:"timeout,omitempty"`
+	OnTimeout string `json:"on_timeout,omitempty"` // fail (default) | continue
+}
+
+// RespondConfig is a respond step's answer to the webhook call that
+// started the run: a status, headers and a body, values or expressions.
+type RespondConfig struct {
+	Status  int            `json:"status,omitempty"`
+	Headers map[string]any `json:"headers,omitempty"`
+	Body    any            `json:"body"`
 }
 
 type HTTPConfig struct {
@@ -355,6 +387,21 @@ func (s *Step) parse() error {
 		}
 		s.Transform = &TransformConfig{Output: v.(map[string]any)["output"]}
 		return nil
+	case "callback":
+		s.Callback = &CallbackConfig{}
+		target = s.Callback
+	case "respond":
+		v, err := expr.DecodeJSON(s.RawConfig)
+		if err != nil {
+			return err
+		}
+		m := v.(map[string]any)
+		s.Respond = &RespondConfig{Body: m["body"]}
+		if st, ok := m["status"].(int64); ok {
+			s.Respond.Status = int(st)
+		}
+		s.Respond.Headers, _ = m["headers"].(map[string]any)
+		return nil
 	default:
 		return nil
 	}
@@ -379,6 +426,27 @@ func (s *Step) parse() error {
 		s.Form.Prefill, _ = m["prefill"].(map[string]any)
 	}
 	return nil
+}
+
+// Origin is where an expanded step came from: the template, the template
+// step it replaced (its id in the expanded definition), and its own id
+// inside the template. ID is empty for a step the expansion added.
+type Origin struct {
+	Template string `json:"template"`
+	Step     string `json:"step"`
+	ID       string `json:"id,omitempty"`
+}
+
+// Key is the name a step's output has in its scope's results (a foreach
+// iteration, a branch's or parallel branch's steps, a handled step's
+// on_error outputs): its id, or for a step expanded from a template its id
+// inside the template, so the template's own expressions read it as they
+// were written.
+func (s *Step) Key() string {
+	if s.Origin != nil && s.Origin.ID != "" {
+		return s.Origin.ID
+	}
+	return s.ID
 }
 
 // Children returns the nested scopes of a step, in definition order.

@@ -1,0 +1,18 @@
+{
+  "name": "a failed transfer to the terminal is a declined sale, its naira turned to kobo exactly",
+  "trigger": "payment",
+  "body": {
+    "orderNo": "20220704741380171865833499", "payNo": "", "status": "FAIL", "errorMsg": "declined",
+    "amount": "1000.29", "currency": "NGN", "payMethod": "BankTransfer", "sn": "POS-SN-002",
+    "transactionTime": "1692773950000"
+  },
+  "event": "pos.sale",
+  "expect": {
+    "reference": "20220704741380171865833499",
+    "amount_kobo": 100029,
+    "status": "declined",
+    "terminal": "POS-SN-002",
+    "occurred_at": "2023-08-23T06:59:10Z",
+    "method": "transfer"
+  }
+}

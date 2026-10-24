@@ -5,7 +5,7 @@
 {{template "fmain" .}}
 {{with .Message}}<p class="notice" role="status">{{.}}</p>{{end}}
 <div class="basket inv">
-{{range .Lines}}<div class="line"><div class="inv-what"><span>{{.Description}}</span> <span class="line-price">{{.Each}}</span></div><strong>{{.Amount}}</strong></div>
+{{range .Lines}}<div class="line"><div class="inv-what"><span>{{.Description}}</span> {{with .Each}}<span class="line-price">{{.}}</span>{{end}}{{with .Note}} <span class="line-price">{{.}}</span>{{end}}</div><strong>{{.Amount}}</strong></div>
 {{end}}</div>
 <div class="dark">
 <dl class="inv-sums">

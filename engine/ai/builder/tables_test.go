@@ -102,3 +102,72 @@ func TestTableFor(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A draft writing a table Taskiem keeps is warned about; one reading it
+// is not.
+func TestReviewTablesWarnsOfKeptWrites(t *testing.T) {
+	existing := []DataTable{{Name: "leave", Kept: true}, {Name: "staff", Kept: true}, {Name: "audit_notes"}}
+	_, warns := reviewTables(nil, existing, []byte(leaveWF), nil)
+	var kept []string
+	for _, w := range warns {
+		if strings.Contains(w.Message, "which Taskiem keeps") {
+			kept = append(kept, w.Message)
+		}
+	}
+	if len(kept) != 1 || !strings.Contains(kept[0], `"leave"`) {
+		t.Fatalf("warnings %v", warns)
+	}
+}
+
+// The money log's tables are never proposed from a draft, and a draft
+// reading them before they exist is told Taskiem makes them.
+func TestReviewTablesMoneyLog(t *testing.T) {
+	doc := []byte(`{"schema":"wd/v1","id":"wf_paid","version":1,"name":"Paid","trigger":{"type":"manual"},"steps":[
+ {"id":"log","type":"connector","connector":"xenibase@1","action":"read_rows","connection":"data_tables","input":{"table":"money_log"}},
+ {"id":"matches","type":"connector","connector":"xenibase@1","action":"read_rows","connection":"data_tables","input":{"table":"money_matches"}}]}`)
+	keep, warns := reviewTables([]TableSpec{{Name: "money_log", Columns: []ColumnSpec{{Name: "amount", Type: "number"}}}}, nil, doc, nil)
+	if len(keep) != 0 || len(warns) != 2 {
+		t.Fatalf("kept %+v warnings %+v", keep, warns)
+	}
+	for _, w := range warns {
+		if !strings.Contains(w.Message, "Taskiem makes and fills itself") || strings.Contains(w.Message, "create it on the Tables page") {
+			t.Errorf("warning %q", w.Message)
+		}
+	}
+}
+
+// A proposed table of customers' invoices with a status is flagged;
+// suppliers' bills, and invoice tables without a status, are not.
+func TestReviewTablesInvoiceTable(t *testing.T) {
+	doc := func(name string) []byte {
+		return []byte(`{"schema":"wd/v1","id":"wf_inv","version":1,"name":"Inv","trigger":{"type":"manual"},"steps":[
+ {"id":"add","type":"connector","connector":"xenibase@1","action":"insert_rows","connection":"data_tables","input":{"table":"` + name + `","rows":[]}}]}`)
+	}
+	cols := func(names ...string) []ColumnSpec {
+		var out []ColumnSpec
+		for _, n := range names {
+			out = append(out, ColumnSpec{Name: n, Title: n, Type: "text"})
+		}
+		return out
+	}
+	for _, c := range []struct {
+		table TableSpec
+		flag  bool
+	}{
+		{TableSpec{Name: "invoices", Columns: cols("customer", "amount", "status")}, true},
+		{TableSpec{Name: "customer_invoices", Columns: cols("customer", "paid")}, true},
+		{TableSpec{Name: "supplier_invoices", Columns: cols("supplier", "status")}, false},
+		{TableSpec{Name: "invoices", Columns: cols("customer", "amount")}, false},
+		{TableSpec{Name: "invoicing_notes", Columns: cols("note", "status")}, false},
+		{TableSpec{Name: "orders", Columns: cols("customer", "status")}, false},
+	} {
+		keep, warns := reviewTables([]TableSpec{c.table}, nil, doc(c.table.Name), nil)
+		flagged := false
+		for _, w := range warns {
+			flagged = flagged || (w.Rule == RuleInvoiceTable && strings.Contains(w.Message, "invoices@1"))
+		}
+		if flagged != c.flag || len(keep) != 1 {
+			t.Errorf("%s %v: flagged %v, kept %d (%+v)", c.table.Name, c.table.Columns, flagged, len(keep), warns)
+		}
+	}
+}

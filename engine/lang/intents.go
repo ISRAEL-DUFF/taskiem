@@ -46,11 +46,20 @@ const (
 	IntentQR        Intent = "qr"
 	IntentReady     Intent = "order_ready"
 	IntentDelivered Intent = "order_delivered"
+	// Invoices and the money log from chat (docs/invoices.md#from-chat,
+	// docs/money-log.md#from-chat) in the other languages. English's own
+	// words ("invoice", "bill", "spent", "expense", "cash in", "cash out")
+	// are read by the API as before, so en.json lists none.
+	IntentInvoice Intent = "invoice"
+	IntentExpense Intent = "expense"
+	IntentCashIn  Intent = "cash_in"
+	IntentCashOut Intent = "cash_out"
 )
 
 // Intents are every intent, in a fixed order.
 var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
-	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered}
+	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered,
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut}
 
 // Word lists live in intents/<tag>.json: whole messages that mean an
 // intent (phrases), words that start one and are followed by what it is
@@ -72,10 +81,15 @@ type Words struct {
 	// "abeg run payroll" is "run payroll".
 	Fillers []string `json:"fillers"`
 	Markers []string `json:"markers"`
+	// ForWords mean "for" in an invoice or an expense ("fún" in "ìwé owó
+	// Ada 25,000 fún ìrẹsì"), besides English's "for" and "on", which
+	// every language keeps.
+	ForWords []string `json:"for_words,omitempty"`
 }
 
 // prefixIntents take what follows them; the others are whole messages.
-var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered}
+var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered,
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut}
 
 var (
 	wordsOnce sync.Once
@@ -123,6 +137,7 @@ func LoadWords() (map[Tag]*Words, error) {
 			}
 			w.Markers = foldAll(w.Markers)
 			w.Fillers = foldAll(w.Fillers)
+			w.ForWords = foldAll(w.ForWords)
 			words[w.Language] = &w
 		}
 		if words[EN] == nil {
@@ -148,6 +163,16 @@ func mustWords() map[Tag]*Words {
 		panic(err)
 	}
 	return w
+}
+
+// ForWords are the words for "for" in a language's invoice and expense
+// commands, folded (see Fold); none for English or a language without a
+// list.
+func ForWords(t Tag) []string {
+	if w := mustWords()[t]; w != nil {
+		return w.ForWords
+	}
+	return nil
 }
 
 // Match is what a message asks for.

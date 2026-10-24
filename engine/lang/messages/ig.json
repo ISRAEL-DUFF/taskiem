@@ -84,6 +84,14 @@
       "text": "Dejupụta",
       "reviewed": false
     },
+    "button.match_no": {
+      "text": "Mba",
+      "reviewed": false
+    },
+    "button.match_yes": {
+      "text": "Ee, jikọta",
+      "reviewed": false
+    },
     "button.new_account": {
       "text": "Nọmba akaụntụ ọhụrụ",
       "reviewed": false
@@ -254,6 +262,54 @@
     },
     "lang.unavailable": {
       "text": "{name} adịghị ebe a. Asụsụ dị ebe a: {languages}.",
+      "reviewed": false
+    },
+    "money.channel.cash": {
+      "text": "ego nkịtị",
+      "reviewed": false
+    },
+    "money.channel.upload": {
+      "text": "statement ụlọ akụ",
+      "reviewed": false
+    },
+    "money.daily": {
+      "text": "Ụnyaahụ: {in}; {out} pụrụ; {invoices}; {leaks}.",
+      "reviewed": false
+    },
+    "money.daily.in": {
+      "text": "{amount} batara",
+      "reviewed": false
+    },
+    "money.daily.in_pending": {
+      "text": "{amount} batara ({pending} na-eche)",
+      "reviewed": false
+    },
+    "money.daily.invoices": {
+      "text": "akwụọla invoice {n} ({amount})",
+      "reviewed": false
+    },
+    "money.daily.invoices_none": {
+      "text": "akwụghị invoice ọ bụla",
+      "reviewed": false
+    },
+    "money.daily.invoices_one": {
+      "text": "akwụọla invoice 1 ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks": {
+      "text": "ọpụpụ ego ọhụrụ {n} ({amount})",
+      "reviewed": false
+    },
+    "money.daily.leaks_none": {
+      "text": "enweghị ọpụpụ ego ọhụrụ",
+      "reviewed": false
+    },
+    "money.daily.leaks_one": {
+      "text": "ọpụpụ ego ọhụrụ 1 ({amount})",
+      "reviewed": false
+    },
+    "money.daily.link": {
+      "text": "Peeji ego: {link}",
       "reviewed": false
     },
     "reach.about": {
@@ -925,11 +981,15 @@
       "reviewed": false
     },
     "wa.help.invoice": {
-      "text": "• *invoice* ya na aha, ego na ihe ọ bụ maka ya (*invoice Ada 25,000 for 5 bags of rice*): ọ ga-eziga onye ahịa gị akwụkwọ ụgwọ",
+      "text": "• *invoice* (ma ọ bụ *akwụkwọ ụgwọ*) ya na aha, ego na ihe ọ bụ maka ya (*invoice Ada 25,000 for 5 bags of rice*): ọ ga-eziga onye ahịa gị akwụkwọ ụgwọ",
       "reviewed": false
     },
     "wa.help.language": {
       "text": "• *language* na aha asụsụ: azịza n'asụsụ {languages}",
+      "reviewed": false
+    },
+    "wa.help.money": {
+      "text": "• *spent* (ma ọ bụ *emefuru m*) na ego ole na ihe e ji ya mee (*spent 12,000 on diesel at Total*), ma ọ bụ *cash in* (*ego batara*) ma ọ bụ *cash out* (*ego pụrụ*) na ego ole (*cash in 20,000 till*): m ga-edenye ya n'akwụkwọ ego unu",
       "reviewed": false
     },
     "wa.help.run": {
@@ -1014,6 +1074,130 @@
     },
     "wa.linked": {
       "text": "Ejikọọla nọmba a na akaụntụ Taskiem gị. Ziga *help* ka ị hụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false
+    },
+    "wa.match.already_decided": {
+      "text": "E kpebiela nke a na web app.",
+      "reviewed": false
+    },
+    "wa.match.already_matched": {
+      "text": "Ejikọtalarị ya na {number}.",
+      "reviewed": false
+    },
+    "wa.match.already_rejected": {
+      "text": "Ajụlarị ya.",
+      "reviewed": false
+    },
+    "wa.match.ask": {
+      "text": "{amount} batara na {when} site na {channel}.\n\nỌ bụ maka {number}, {due} onye ahịa ji? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.ask_order": {
+      "text": "{amount} batara na {when} site na {channel}.\n\nỌ bụ maka ọda ụlọ ahịa {number}, {due} a ga-akwụ? {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.ask_split": {
+      "text": "{amount} batara na {when} site na {channel}.\n\nỌ sitere n'aka onye ahịa nwere {number}, {due} ọ ji? Ọ karịrị nke ahụ, ya mere a ga-ekesa ya n'akwụkwọ ụgwọ onye ahịa ndị a na-akwụbeghị, nke ochie mbụ: {parts}. {reasons}.",
+      "reviewed": false
+    },
+    "wa.match.channel.cash": {
+      "text": "ego n'aka",
+      "reviewed": false
+    },
+    "wa.match.channel.upload": {
+      "text": "statement e bugoro",
+      "reviewed": false
+    },
+    "wa.match.denied": {
+      "text": "Ị nweghị ike ijikọta ego na {org}.",
+      "reviewed": false
+    },
+    "wa.match.matched_order": {
+      "text": "Ejikọtala ya na ọda {number}. A kwụọla ya ugbu a.",
+      "reviewed": false
+    },
+    "wa.match.matched_paid": {
+      "text": "Ejikọtala ya na {number}. A kwụchala ya.",
+      "reviewed": false
+    },
+    "wa.match.matched_part": {
+      "text": "Ejikọtala ya na {number}. A kwụọla akụkụ ({due} ka fọdụrụ).",
+      "reviewed": false
+    },
+    "wa.match.matched_split": {
+      "text": "Ejikọtala ya n'akụkụ: {parts}.",
+      "reviewed": false
+    },
+    "wa.match.more": {
+      "text": "Ọ bụrụ na ọ bụghị ya, Mba ga-egosi akwụkwọ ụgwọ ọzọ.",
+      "reviewed": false
+    },
+    "wa.match.other_person": {
+      "text": "E zigara onye ọzọ bọtịnụ a.",
+      "reviewed": false
+    },
+    "wa.match.refused": {
+      "text": "Ejikọtaghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.match.rejected_left": {
+      "text": "Ọ dị mma, ọ bụghị ya. Ego ahụ na-eche ka ị jikọta ya na web app, n'okpuru Invoices.",
+      "reviewed": false
+    },
+    "wa.match.rejected_left_link": {
+      "text": "Ọ dị mma, ọ bụghị ya. Ego ahụ na-eche ka ị jikọta ya na web app: {link}",
+      "reviewed": false
+    },
+    "wa.match.rejected_next": {
+      "text": "Ọ dị mma, ọ bụghị ya. A gaghị atụ aro ya ọzọ.",
+      "reviewed": false
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} ga-afọdụ dị ka ego onye ahịa n'aka anyị",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_in": {
+      "text": "Ka m dee {amount} ego batara: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_cash_out": {
+      "text": "Ka m dee {amount} ego pụrụ: {what}?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense": {
+      "text": "Ka m dee na e mefuru {amount} na {what} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_expense_at": {
+      "text": "Ka m dee na e mefuru {amount} na {what} na {vendor} ({category})?",
+      "reviewed": false
+    },
+    "wa.money.confirm_reminder": {
+      "text": "Zaa *yes* ka m dee ya ma ọ bụ *no* ka m hapụ ya.",
+      "reviewed": false
+    },
+    "wa.money.denied": {
+      "text": "Unu enweghị ike ide ego na {org}.",
+      "reviewed": false
+    },
+    "wa.money.how": {
+      "text": "Kwuo ego ole na ihe ọ bụ maka ya, dị ka nke a: *spent 12,000 on diesel at Total*, ma ọ bụ *cash in 20,000 till*",
+      "reviewed": false
+    },
+    "wa.money.not_recorded": {
+      "text": "E deghị ya.",
+      "reviewed": false
+    },
+    "wa.money.recorded_in": {
+      "text": "E dere ya. {amount} batara, {category}.",
+      "reviewed": false
+    },
+    "wa.money.recorded_out": {
+      "text": "E dere ya. {amount} pụrụ, {category}.",
+      "reviewed": false
+    },
+    "wa.money.refused": {
+      "text": "Enweghị m ike ide nke ahụ: {reason}",
       "reviewed": false
     },
     "wa.no_org": {
@@ -1202,6 +1386,54 @@
     },
     "wa.run.which": {
       "text": "Kedu nke?\n{list}\nZiga *run* na aha ya zuru oke.",
+      "reviewed": false
+    },
+    "wa.school.cash_posting": {
+      "text": "{amount} a kwụrụ {how} maka {student} ({class}), {by} tinyere ya.",
+      "reviewed": false
+    },
+    "wa.school.discount": {
+      "text": "Mbelata {kind} nke {amount} maka {student} ({class}): {reason}. {by} rịọrọ ya.",
+      "reviewed": false
+    },
+    "wa.school.discount_amendment": {
+      "text": "Mbelata nke {amount} na invoice {number}: {reason}. {by} rịọrọ ya.",
+      "reviewed": false
+    },
+    "wa.school.how.cash": {
+      "text": "n'ego aka",
+      "reviewed": false
+    },
+    "wa.school.how.other": {
+      "text": "n'ụzọ ọzọ",
+      "reviewed": false
+    },
+    "wa.school.how.pos": {
+      "text": "site na POS",
+      "reviewed": false
+    },
+    "wa.school.how.transfer": {
+      "text": "site na nyefe n'akaụntụ ụlọ akwụkwọ",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_posting": {
+      "text": "ego e tinyere n'oche",
+      "reviewed": false
+    },
+    "wa.school.kind.discount": {
+      "text": "mbelata ụgwọ",
+      "reviewed": false
+    },
+    "wa.school.kind.discount_amendment": {
+      "text": "mbelata ụgwọ na invoice",
+      "reviewed": false
+    },
+    "wa.school.kind.term_invoice": {
+      "text": "invoice nke oge ụlọ akwụkwọ nwere mbelata",
+      "reviewed": false
+    },
+    "wa.school.term_invoice": {
+      "text": "Invoice oge nke {student} ({class}), {amount}, nwere mbelata ruru oke ụlọ akwụkwọ. {by} rịọrọ ya.",
       "reviewed": false
     },
     "wa.shop.add_failed": {
@@ -1800,6 +2032,10 @@
       "text": "Nọmba ekwentị nwere koodu mba, dị ka 2348012345678",
       "reviewed": false
     },
+    "wa.table.kept": {
+      "text": "Taskiem na-edebe {table}: ọ bụ naanị Taskiem na-agbakwunye ahịrị, enweghị ike ịgbanwe ma ọ bụ ihichapụ ha ebe a. Mmezi bụ ahịrị ọhụrụ.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Tebụl data na {org}:",
       "reviewed": false
@@ -1900,6 +2136,14 @@
       "text": "Kpebie ihe a ga-eme:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Chere ka sistemụ ọzọ kpọghachi",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Chere ruo {duration} ka sistemụ ọzọ kpọghachi",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} site na akaụntụ ịkwụ ụgwọ ejikọrọ",
       "reviewed": false
@@ -1954,6 +2198,30 @@
     },
     "wd.day.wednesday": {
       "text": "Wenezdee",
+      "reviewed": false
+    },
+    "wd.effect.and": {
+      "text": "na",
+      "reviewed": false
+    },
+    "wd.effect.event": {
+      "text": "na-echere ka ihe mee",
+      "reviewed": false
+    },
+    "wd.effect.moves_money": {
+      "text": "na-ebugharị ego",
+      "reviewed": false
+    },
+    "wd.effect.person": {
+      "text": "na-echere mmadụ ka ọ kwado ma ọ bụ zaa",
+      "reviewed": false
+    },
+    "wd.effect.read": {
+      "text": "na-agụ naanị",
+      "reviewed": false
+    },
+    "wd.effect.write": {
+      "text": "na-agbanwe ihe na ọrụ gị",
       "reviewed": false
     },
     "wd.foreach": {
@@ -2020,6 +2288,10 @@
       "text": "Mee ihe ndị a n'otu oge:",
       "reviewed": false
     },
+    "wd.respond": {
+      "text": "Zaa arịrịọ malitere nke a",
+      "reviewed": false
+    },
     "wd.schedule.daily": {
       "text": "Kwa ụbọchị n'elekere {time} (oge {tz})",
       "reviewed": false
@@ -2072,6 +2344,14 @@
       "text": "Chere {event}",
       "reviewed": false
     },
+    "wd.template": {
+      "text": "Jiri ụdị: {template}",
+      "reviewed": false
+    },
+    "wd.template.does": {
+      "text": "Jiri ụdị: {template}, nke {does}",
+      "reviewed": false
+    },
     "wd.transform": {
       "text": "Kwadebe data maka nzọụkwụ ndị ọzọ",
       "reviewed": false
@@ -2106,6 +2386,14 @@
     },
     "wd.trigger.form_members": {
       "text": "Mgbe mmadụ dejupụtara fọm “{title}” (naanị ndị otu)",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_paid": {
+      "text": "Mgbe akwụchara otu n'ime invoice gị",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_payment": {
+      "text": "Mgbe a gụrụ ụgwọ a kwụrụ n'otu n'ime invoice gị",
       "reviewed": false
     },
     "wd.trigger.manual": {
@@ -2186,6 +2474,14 @@
     },
     "wd.wait_until": {
       "text": "Chere ruo oge e debere",
+      "reviewed": false
+    },
+    "wd.workflow": {
+      "text": "Jiri ọrụ gị: {template}",
+      "reviewed": false
+    },
+    "wd.workflow.does": {
+      "text": "Jiri ọrụ gị: {template}, nke {does}",
       "reviewed": false
     }
   }

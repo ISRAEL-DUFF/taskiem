@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // EndUserCeiling is every permission an end-user token may ever carry. An
@@ -38,7 +40,8 @@ var Events = []string{"run.completed", "run.failed", "workflow.published", "usag
 // Uses lists what a definition needs its embed app to allow, sorted:
 // connector ids (a reference's part before "@") and "http", "code", "container" or "ai"
 // for steps of those types. It reads the trigger and the steps (nested ones
-// too), and drafts as well as valid definitions: anything that is JSON.
+// too, and those of the templates its template steps use), and drafts as
+// well as valid definitions: anything that is JSON.
 func Uses(doc []byte) ([]string, error) {
 	var root map[string]any
 	if err := json.Unmarshal(doc, &root); err != nil {
@@ -47,6 +50,28 @@ func Uses(doc []byte) ([]string, error) {
 	set := map[string]bool{}
 	walk(root["trigger"], set)
 	walk(root["steps"], set)
+	// A template step uses what its template uses (decision 0047), at any
+	// depth: its steps run in the workflow.
+	seen := map[string]bool{}
+	var inside func(v any)
+	inside = func(v any) {
+		for _, id := range TemplatesOf(v) {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			t, ok := templates.Default().Get(id)
+			if !ok {
+				continue
+			}
+			var def map[string]any
+			if json.Unmarshal(t.Definition, &def) == nil {
+				walk(def["steps"], set)
+				inside(def["steps"])
+			}
+		}
+	}
+	inside(root["steps"])
 	out := make([]string, 0, len(set))
 	for k := range set {
 		out = append(out, k)
@@ -75,6 +100,57 @@ func walk(v any, set map[string]bool) {
 			walk(c, set)
 		}
 	}
+}
+
+// TemplatesOf lists the templates the template steps in v name, in order.
+func TemplatesOf(v any) []string {
+	var out []string
+	var find func(v any)
+	find = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if x["type"] == "template" {
+				if id, ok := x["template"].(string); ok && !slices.Contains(out, id) {
+					out = append(out, id)
+				}
+			}
+			for _, c := range x {
+				find(c)
+			}
+		case []any:
+			for _, c := range x {
+				find(c)
+			}
+		}
+	}
+	find(v)
+	return out
+}
+
+// WorkflowsOf lists the workflows (decision 0048) the template steps in a
+// decoded definition's steps name, at any depth, each once.
+func WorkflowsOf(v any) []string {
+	var out []string
+	var find func(v any)
+	find = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if x["type"] == "template" {
+				if id, ok := x["workflow"].(string); ok && !slices.Contains(out, id) {
+					out = append(out, id)
+				}
+			}
+			for _, c := range x {
+				find(c)
+			}
+		case []any:
+			for _, c := range x {
+				find(c)
+			}
+		}
+	}
+	find(v)
+	return out
 }
 
 // Disallowed returns the uses not in allowed, sorted.
