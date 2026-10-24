@@ -57,6 +57,30 @@ type Entry struct {
 	Category    string     `json:"category,omitempty"`
 	EnteredBy   string     `json:"entered_by,omitempty"`
 	Corrects    *uuid.UUID `json:"corrects,omitempty"`
+
+	// Net says AmountKobo is what landed, the rail's fee (FeeKobo) taken
+	// before it: what the payer sent is the two together (CountableKobo).
+	Net bool `json:"net,omitempty"`
+	// AccountNumber is the account a credit was paid into (a customer's
+	// permanent account), when the rail says.
+	AccountNumber string `json:"account_number,omitempty"`
+}
+
+// CountableKobo is what an entry counts for towards invoices and orders:
+// what the payer sent (decision 0046 point 7; docs/spec/schools.md 7.4).
+// It reads AmountKobo, and adds FeeKobo when Net says the amount is what
+// landed with the rail's fee already taken; 0 without an amount. The
+// database says the same (taskiem_money_entry_countable, 00210), and
+// checks the parts of an entry against it.
+func CountableKobo(e Entry) int64 {
+	if e.AmountKobo == nil {
+		return 0
+	}
+	n := *e.AmountKobo
+	if e.Net && e.FeeKobo != nil {
+		n += *e.FeeKobo
+	}
+	return n
 }
 
 // Key is what makes an entry one movement (and status): where, what and
@@ -167,13 +191,13 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 	}
 	id = uuid.New()
 	tag, err := tx.Exec(ctx, `INSERT INTO money_entries (id, tenant_id, entry_key, occurred_at, recorded_at, direction, kind, amount_kobo, fee_kobo, currency,
-		status, channel, reference, event, payer, source, note, corrects, description, vendor, category, entered_by)
+		status, channel, reference, event, payer, source, note, corrects, description, vendor, category, entered_by, account_number, net)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''), $15, $16, NULLIF($17, ''), $18,
-		NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''), NULLIF($22, ''))
+		NULLIF($19, ''), NULLIF($20, ''), NULLIF($21, ''), NULLIF($22, ''), NULLIF($23, ''), $24)
 		ON CONFLICT (tenant_id, entry_key) DO NOTHING`,
 		id, tenant, key, e.OccurredAt, l.now(), e.Direction, e.Kind, e.AmountKobo, e.FeeKobo, e.Currency,
 		e.Status, e.Channel, e.Reference, e.Event, payer, e.Source, e.Note, e.Corrects,
-		clip(e.Description, 300), clip(e.Vendor, 120), clip(e.Category, 60), e.EnteredBy)
+		clip(e.Description, 300), clip(e.Vendor, 120), clip(e.Category, 60), e.EnteredBy, clip(e.AccountNumber, 40), e.Net && e.FeeKobo != nil)
 	if err != nil {
 		return uuid.Nil, false, err
 	}

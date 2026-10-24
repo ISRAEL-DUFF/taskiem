@@ -1096,6 +1096,10 @@
       "text": "{amount} batara na {when} site na {channel}.\n\nỌ bụ maka ọda ụlọ ahịa {number}, {due} a ga-akwụ? {reasons}.",
       "reviewed": false
     },
+    "wa.match.ask_split": {
+      "text": "{amount} batara na {when} site na {channel}.\n\nỌ sitere n'aka onye ahịa nwere {number}, {due} ọ ji? Ọ karịrị nke ahụ, ya mere a ga-ekesa ya n'akwụkwọ ụgwọ onye ahịa ndị a na-akwụbeghị, nke ochie mbụ: {parts}. {reasons}.",
+      "reviewed": false
+    },
     "wa.match.channel.cash": {
       "text": "ego n'aka",
       "reviewed": false
@@ -1120,6 +1124,10 @@
       "text": "Ejikọtala ya na {number}. A kwụọla akụkụ ({due} ka fọdụrụ).",
       "reviewed": false
     },
+    "wa.match.matched_split": {
+      "text": "Ejikọtala ya n'akụkụ: {parts}.",
+      "reviewed": false
+    },
     "wa.match.more": {
       "text": "Ọ bụrụ na ọ bụghị ya, Mba ga-egosi akwụkwọ ụgwọ ọzọ.",
       "reviewed": false
@@ -1142,6 +1150,10 @@
     },
     "wa.match.rejected_next": {
       "text": "Ọ dị mma, ọ bụghị ya. A gaghị atụ aro ya ọzọ.",
+      "reviewed": false
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} ga-afọdụ dị ka ego onye ahịa n'aka anyị",
       "reviewed": false
     },
     "wa.money.confirm_cash_in": {

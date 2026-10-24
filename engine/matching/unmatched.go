@@ -13,10 +13,18 @@ import (
 type Payment struct {
 	EntryID    uuid.UUID `json:"entry_id"`
 	AmountKobo *int64    `json:"amount_kobo"`
-	Channel    string    `json:"channel"`
-	Reference  string    `json:"reference"`
-	When       time.Time `json:"received_at"`
-	Kind       string    `json:"kind"`
+	// LeftKobo is what is left of it to match: less than the amount when
+	// part of it counts towards an invoice or order already (a split, or a
+	// part undone).
+	LeftKobo  *int64    `json:"left_kobo"`
+	Channel   string    `json:"channel"`
+	Reference string    `json:"reference"`
+	When      time.Time `json:"received_at"`
+	Kind      string    `json:"kind"`
+	// HeldReason says why matching held it for a person, when it did: a
+	// credit to a customer's account whose account number or reference
+	// disagrees with what Taskiem registered.
+	HeldReason string `json:"held_reason,omitempty"`
 }
 
 // Unmatched lists the money-in entries matching looked at and left for a
@@ -26,20 +34,22 @@ func Unmatched(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]P
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := tx.Query(ctx, `SELECT e.id, e.amount_kobo, e.channel, e.reference, COALESCE(e.occurred_at, e.recorded_at), e.kind
+	// Left for a person: what is not counted yet of money matching did not
+	// match, held, or a person matched only part of; never a customer's
+	// credit (money_entry_customers), which counts towards their invoices.
+	rows, err := tx.Query(ctx, `SELECT e.id, e.amount_kobo, taskiem_money_entry_left(e.id), e.channel, e.reference, COALESCE(e.occurred_at, e.recorded_at), e.kind,
+			COALESCE(s.held_reason, '')
 		FROM money_match_state s JOIN money_entries e ON e.id = s.entry_id
 		WHERE s.tenant_id = $1 AND s.state = 'unmatched'
-		  AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.entry_id = e.id AND p.undoes IS NULL
-		                    AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))
-		  AND NOT EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.entry_id = e.id AND p.undoes IS NULL
-		                    AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id))
+		  AND (taskiem_money_entry_left(e.id) > 0 OR e.amount_kobo IS NULL AND taskiem_money_entry_counted(e.id) = 0)
+		  AND NOT EXISTS (SELECT 1 FROM money_entry_customers c WHERE c.entry_id = e.id)
 		ORDER BY e.recorded_at DESC LIMIT $2`, tenant, limit)
 	if err != nil {
 		return nil, err
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Payment, error) {
 		var p Payment
-		return p, r.Scan(&p.EntryID, &p.AmountKobo, &p.Channel, &p.Reference, &p.When, &p.Kind)
+		return p, r.Scan(&p.EntryID, &p.AmountKobo, &p.LeftKobo, &p.Channel, &p.Reference, &p.When, &p.Kind, &p.HeldReason)
 	})
 	if out == nil {
 		out = []Payment{}
