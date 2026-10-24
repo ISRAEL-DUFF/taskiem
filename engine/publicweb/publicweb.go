@@ -181,6 +181,9 @@ type Server struct {
 	// Receipts reads a school receipt for its verification page (receipt.go);
 	// nil: /r/<token> is a form link only.
 	Receipts Receipts
+	// Families reads a school family's page and takes what its forms
+	// send (family.go); nil: /s/<token> is a form status link only.
+	Families Families
 
 	hosts         *lru.Cache[string, hostEntry]
 	formCache     *lru.Cache[string, formEntry]

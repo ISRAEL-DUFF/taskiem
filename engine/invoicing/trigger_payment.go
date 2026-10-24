@@ -137,7 +137,7 @@ func ReceiptTokenHash(token string) []byte {
 // why none was started (a note), or an error to try again.
 func (s *Invoices) startPayment(ctx context.Context, tenant, part, invoice, workflow uuid.UUID, version int) (uuid.UUID, string, error) {
 	var x Invoice
-	var link string
+	var link, familyLink string
 	var p *Payment
 	var receipt *Receipt
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -158,6 +158,11 @@ func (s *Invoices) startPayment(ctx context.Context, tenant, part, invoice, work
 		} else if ok {
 			receipt = &r
 		}
+		if s.FamilyLink != nil {
+			if familyLink, err = s.FamilyLink(ctx, tx, tenant, x.ID, "receipt"); err != nil {
+				return err
+			}
+		}
 		link, err = s.PageLink(ctx, tx, tenant, x)
 		return err
 	})
@@ -168,7 +173,7 @@ func (s *Invoices) startPayment(ctx context.Context, tenant, part, invoice, work
 		return uuid.Nil, noLongerCounted, nil
 	}
 	st, err := s.Start(ctx, runtime.StartRequest{TenantID: tenant, WorkflowID: workflow, Version: version, Environment: "prod",
-		Trigger: PaymentTrigger(x, *p, receipt, link), StartedBy: "invoice:" + x.Number, TriggerID: "invoice/" + workflow.String(), DedupKey: "payment:" + part.String()})
+		Trigger: PaymentTrigger(x, *p, receipt, link, familyLink), StartedBy: "invoice:" + x.Number, TriggerID: "invoice/" + workflow.String(), DedupKey: "payment:" + part.String()})
 	if le, ok := runtime.IsLimit(err); ok {
 		return uuid.Nil, "Not started: the plan's limit " + le.Limit + " was reached.", nil
 	}
@@ -191,10 +196,10 @@ func (s *Invoices) startPayment(ctx context.Context, tenant, part, invoice, work
 // status as the invoice is now, due_kobo what is still due), with the
 // payment (its part's id, amount, how it was matched and when) and, for
 // a school's invoice, its receipt (id, number and the verification link,
-// which a template sends the family). The receipt link is sealed in the
-// run's history as the invoice link is (engine/runtime: invoice trigger
-// paths).
-func PaymentTrigger(x Invoice, p Payment, r *Receipt, link string) map[string]any {
+// which a template sends the family) and family_link, a fresh link to the
+// family's page. The receipt and family links are sealed in the run's
+// history as the invoice link is (engine/runtime: invoice trigger paths).
+func PaymentTrigger(x Invoice, p Payment, r *Receipt, link, familyLink string) map[string]any {
 	t := PaidTrigger(x, link)
 	body := t["body"].(map[string]any)
 	body["event"] = "payment"
@@ -207,6 +212,9 @@ func PaymentTrigger(x Invoice, p Payment, r *Receipt, link string) map[string]an
 			rec["link"] = r.Link
 		}
 		body["receipt"] = rec
+	}
+	if familyLink != "" {
+		body["family_link"] = familyLink
 	}
 	t["event"] = "payment"
 	return t

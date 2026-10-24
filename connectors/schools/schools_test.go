@@ -44,6 +44,12 @@ func (o *ops) ListClasses(context.Context, uuid.UUID) ([]schools.Class, error) {
 func (o *ops) Current(context.Context, uuid.UUID) (schools.Term, bool, error) {
 	return schools.Term{}, false, schools.ErrOff
 }
+func (o *ops) FamilyLinkFor(_ context.Context, _ uuid.UUID, family, student string) (schools.FamilyLinkMinted, error) {
+	if family == "" && student != "GCA/001" {
+		return schools.FamilyLinkMinted{}, schools.ErrNotFound
+	}
+	return schools.FamilyLinkMinted{URL: "https://forms.test/s/" + family + student}, nil
+}
 
 var first = schools.Term{ID: uuid.New(), Name: "First term", Session: "2026/2027"}
 
@@ -109,6 +115,26 @@ func TestIssueAccount(t *testing.T) {
 	}
 	if _, err := c.Actions["issue_account"].Execute(ctx, connector.Request{Input: map[string]any{"student": "GCA/002"}, IdempotencyKey: "tsk_step3"}); !errors.Is(err, effects.ErrFatal) {
 		t.Errorf("an unknown student: %v", err)
+	}
+}
+
+// family_link: a family's page link by family or by student; neither is
+// fatal, as is a student the school does not have.
+func TestFamilyLink(t *testing.T) {
+	c := conn.New(&ops{})
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New(), Step: "s"})
+	r, err := c.Actions["family_link"].Execute(ctx, connector.Request{Input: map[string]any{"student": "GCA/001"}})
+	if err != nil || r.Output.(map[string]any)["link"] != "https://forms.test/s/GCA/001" {
+		t.Fatalf("by student: %v %v", r.Output, err)
+	}
+	if r, err := c.Actions["family_link"].Execute(ctx, connector.Request{Input: map[string]any{"family": "fam-1"}}); err != nil || r.Output.(map[string]any)["link"] != "https://forms.test/s/fam-1" {
+		t.Fatalf("by family: %v %v", r.Output, err)
+	}
+	if _, err := c.Actions["family_link"].Execute(ctx, connector.Request{Input: map[string]any{}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("neither: %v", err)
+	}
+	if _, err := c.Actions["family_link"].Execute(ctx, connector.Request{Input: map[string]any{"student": "GCA/009"}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("unknown student: %v", err)
 	}
 }
 

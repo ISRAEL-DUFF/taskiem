@@ -22,12 +22,17 @@ func (s *Server) listUnmatched(w http.ResponseWriter, r *http.Request) {
 	tenant := principalFrom(r.Context()).TenantID
 	var list []matching.Payment
 	var orders []matching.OpenOrder
+	var claims []matching.Claim
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if list, err = matching.Unmatched(r.Context(), tx, tenant, 100); err != nil {
 			return err
 		}
-		if orders, err = s.matcher().OpenOrders(r.Context(), tx, tenant, 100); err != nil || !reveal {
+		if orders, err = s.matcher().OpenOrders(r.Context(), tx, tenant, 100); err != nil {
+			return err
+		}
+		// A school's "I have paid" claims, beside the money (B6).
+		if claims, err = s.matcher().OpenClaims(r.Context(), tx, tenant, 100); err != nil || !reveal {
 			return err
 		}
 		return auditTx(r, tx, "pii.reveal", "money_unmatched", nil)
@@ -39,6 +44,9 @@ func (s *Server) listUnmatched(w http.ResponseWriter, r *http.Request) {
 		for i := range orders {
 			orders[i].Customer = maskName(orders[i].Customer)
 		}
+		for i := range claims {
+			claims[i].Name = schoolName(claims[i].Name)
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"payments": list, "orders": orders, "revealed": reveal})
+	writeJSON(w, http.StatusOK, map[string]any{"payments": list, "orders": orders, "claims": claims, "revealed": reveal})
 }

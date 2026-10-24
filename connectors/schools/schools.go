@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -37,6 +38,7 @@ type Ops interface {
 	ListTermInvoices(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID, status string) ([]schools.TermInvoice, error)
 	InvoiceTermOnce(ctx context.Context, tenant, term uuid.UUID, key string, send bool, by string) (schools.TermInvoiced, error)
 	IssueAccount(ctx context.Context, tenant uuid.UUID, student string, in schools.IssueIn, by string) (schools.StudentAccount, error)
+	FamilyLinkFor(ctx context.Context, tenant uuid.UUID, family, student string) (schools.FamilyLinkMinted, error)
 }
 
 var _ Ops = schools.Service{}
@@ -54,6 +56,7 @@ func New(ops Ops) *connector.Connector {
 		"term_invoices":  connector.ActionFunc(a.termInvoices),
 		"invoice_term":   connector.ActionFunc(a.invoiceTerm),
 		"issue_account":  connector.ActionFunc(a.issueAccount),
+		"family_link":    connector.ActionFunc(a.familyLink),
 	}}
 }
 
@@ -335,6 +338,25 @@ func (a *actions) currentTerm(ctx context.Context, _ connector.Request) (connect
 		"starts_on": t.StartsOn, "ends_on": t.EndsOn, "fees_due_on": t.FeesDueOn, "enrolled": t.Enrolled}}, nil
 }
 
+// familyLink mints a fresh link to a family's page, for a message or a
+// template: by family id, or by a student's id or admission number.
+func (a *actions) familyLink(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	family, _ := req.Input["family"].(string)
+	student, _ := req.Input["student"].(string)
+	if strings.TrimSpace(family) == "" && strings.TrimSpace(student) == "" {
+		return connector.Response{}, fmt.Errorf("family_link needs a family or a student: %w", effects.ErrFatal)
+	}
+	l, err := a.ops.FamilyLinkFor(ctx, c.Tenant, strings.TrimSpace(family), strings.TrimSpace(student))
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"link": l.URL, "expires_at": l.ExpiresAt.UTC().Format(time.RFC3339)}}, nil
+}
+
 // intIn reads a whole number from a step's input (JSON numbers arrive as
 // float64).
 func intIn(v any) (int, bool) {
@@ -387,6 +409,15 @@ func (l *Late) IssueAccount(ctx context.Context, t uuid.UUID, student string, in
 		return schools.StudentAccount{}, err
 	}
 	return o.IssueAccount(ctx, t, student, in, by)
+}
+
+// FamilyLinkFor implements Ops.
+func (l *Late) FamilyLinkFor(ctx context.Context, t uuid.UUID, family, student string) (schools.FamilyLinkMinted, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.FamilyLinkMinted{}, err
+	}
+	return o.FamilyLinkFor(ctx, t, family, student)
 }
 
 // FindClass implements Ops.

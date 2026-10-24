@@ -248,3 +248,19 @@ actions:
       - { field: bvn, category: bvn }
       - { field: nin, category: nin }
       - { field: output.account_name, category: name }
+  family_link:
+    title: A family's fees page link
+    description: Mints a fresh link to a family's fees page on the public host (each child's fees, payments, receipts and account number; "I have paid"; a payment plan request), for a family by id or for a student's family (the student's id or admission number). The link works for the school's family_link_days (3 by default), so every message mints its own; an expired one offers the family a new link. Put it in a notify@1 message or an invoices@1 notice.
+    class: read
+    input:
+      type: object
+      properties:
+        family:  { type: string, description: The family's id }
+        student: { type: string, description: "Or a student's id or admission number: their family's link" }
+    output:
+      type: object
+      properties:
+        link:       { type: string, description: The page's address }
+        expires_at: { type: string, description: When the link stops working }
+    pii:
+      - { field: output.link, category: other }

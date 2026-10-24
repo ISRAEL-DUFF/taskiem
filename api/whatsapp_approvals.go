@@ -22,6 +22,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -232,6 +233,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.waSendApprovalItem(ctx, it)
 		case outboxSchoolApproval:
 			sendErr = s.sendSchoolApprovalItem(ctx, it)
+		case schools.OutboxFamily:
+			sendErr = s.sendSchoolFamilyItem(ctx, it)
 		case whatsapp.OutboxRunOutcome:
 			sendErr = s.waSendRunOutcome(ctx, it)
 		case whatsapp.OutboxAlert:
