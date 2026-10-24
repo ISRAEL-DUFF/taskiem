@@ -646,7 +646,7 @@ func TestTemplateWorkflowTests(t *testing.T) {
 // oneRail are the rail templates that run on one built-in rail for now
 // (decision 0044): no other rail declares what they need yet.
 var oneRail = map[string]string{
-	"refund-with-approval":         "only Paystack refunds (OPay's refund is not declared yet)",
+	"refund-with-approval": "only Paystack refunds (OPay's refund is not declared yet)",
 }
 
 // Every template on rails expands, as a run would, on each built-in rail
