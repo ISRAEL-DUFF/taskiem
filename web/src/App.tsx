@@ -36,12 +36,13 @@ import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import { InvoiceEdit, InvoiceMatch, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
 import { MoneyEntries, MoneyFees, MoneyLeaks, MoneyOverview, MoneyStatements } from "./pages/Money";
-import { GateHome, SchoolClasses, SchoolFamilies, SchoolImport, SchoolPromotionPage, SchoolSettingsPage, SchoolStudentNew, SchoolStudentPage, Schools } from "./pages/Schools";
+import { SchoolClasses, SchoolFamilies, SchoolImport, SchoolPromotionPage, SchoolSettingsPage, SchoolStudentNew, SchoolStudentPage, Schools } from "./pages/Schools";
 import { SchoolTermFees, SchoolTermInvoices } from "./pages/SchoolFees";
 import { SchoolAccountsPage } from "./pages/SchoolAccounts";
 import { SchoolPaymentsPage } from "./pages/SchoolPayments";
 import { SchoolReceiptsPage } from "./pages/SchoolReceipts";
 import { SchoolDebtorsPage } from "./pages/SchoolDebtors";
+import { GateHome, SchoolClearancePage, SchoolGatePage } from "./pages/SchoolClearance";
 import { showSchools } from "./lib/schools";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
@@ -126,8 +127,8 @@ function Shell() {
   }
   if (me.invitations_only) return alone(<InviteeHome />);
   if (me.enrol_passkey) return alone(<EnrolPasskey />);
-  // The gate role: one screen, the server refuses every other route (B8 adds the screen).
-  if (me.gate_only) return alone(<GateHome />);
+  // The gate role: one screen, whatever the address; the server refuses every other route.
+  if (me.gate_only) return <GateHome />;
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || (me.field_agent ? "/agent" : "/home")} replace />;
   // A field agent's home is the agent app, not the workspace's workflows (N6).
   if (me.field_agent && !agentSession && (loc.pathname === "/" || loc.pathname === "/home" || loc.pathname === "/workflows")) return <Navigate to="/agent" replace />;
@@ -339,6 +340,8 @@ function SignedIn() {
           <Route path="/schools/payments" element={<SchoolPaymentsPage />} />
           <Route path="/schools/receipts" element={<SchoolReceiptsPage />} />
           <Route path="/schools/debtors" element={<SchoolDebtorsPage />} />
+          <Route path="/schools/clearance" element={<SchoolClearancePage />} />
+          <Route path="/schools/gate" element={<SchoolGatePage />} />
           <Route path="/settings/schools" element={<SchoolSettingsPage />} />
           <Route path="/forms" element={<Forms />} />
           <Route path="/forms/requests" element={<FormRequests />} />

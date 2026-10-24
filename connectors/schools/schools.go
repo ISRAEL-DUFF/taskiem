@@ -44,6 +44,8 @@ type Ops interface {
 	SendRemindersOnce(ctx context.Context, tenant uuid.UUID, in schools.RemindIn, by string) (schools.Reminded, error)
 	ListPlanDecisions(ctx context.Context, tenant uuid.UUID, f schools.PlanDecisionFilter) ([]schools.PlanRequest, error)
 	TellPlan(ctx context.Context, tenant uuid.UUID, plan string) (schools.PlanTold, error)
+	ClearanceOf(ctx context.Context, tenant uuid.UUID, student string, term uuid.UUID) (schools.ClearanceRow, error)
+	ListClearance(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID) (schools.ClearanceList, error)
 }
 
 var _ Ops = schools.Service{}
@@ -66,6 +68,8 @@ func New(ops Ops) *connector.Connector {
 		"send_reminders":     connector.ActionFunc(a.sendReminders),
 		"plan_decisions":     connector.ActionFunc(a.planDecisions),
 		"tell_plan_decision": connector.ActionFunc(a.tellPlanDecision),
+		"clearance":          connector.ActionFunc(a.clearance),
+		"clearance_list":     connector.ActionFunc(a.clearanceList),
 	}}
 }
 
@@ -553,4 +557,22 @@ func (l *Late) InvoiceTermOnce(ctx context.Context, t, term uuid.UUID, key strin
 		return schools.TermInvoiced{}, err
 	}
 	return o.InvoiceTermOnce(ctx, t, term, key, send, by)
+}
+
+// ClearanceOf implements Ops.
+func (l *Late) ClearanceOf(ctx context.Context, t uuid.UUID, student string, term uuid.UUID) (schools.ClearanceRow, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.ClearanceRow{}, err
+	}
+	return o.ClearanceOf(ctx, t, student, term)
+}
+
+// ListClearance implements Ops.
+func (l *Late) ListClearance(ctx context.Context, t, term uuid.UUID, class *uuid.UUID) (schools.ClearanceList, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.ClearanceList{}, err
+	}
+	return o.ListClearance(ctx, t, term, class)
 }

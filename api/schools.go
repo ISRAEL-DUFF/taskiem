@@ -37,13 +37,19 @@ const (
 )
 
 // gateRoutes are what a gate session (the gate role's school.gate and
-// nothing else) may call: who it is, and signing out. Everything else is
+// nothing else) may call: who it is, signing out, and the gate screen's
+// own routes under /v1/gate/ (schools_clearance.go). Everything else is
 // refused, centrally in authenticate, not only hidden (docs/spec/
-// schools.md 12.3); the gate screen's own routes join these in B8.
+// schools.md 12.3).
 var gateRoutes = map[string]bool{"GET /v1/me": true, "POST /v1/auth/logout": true}
 
+// gatePrefix is the gate screen's routes: a name search and one
+// student's answer, nothing else (TestGateResponsesCarryNoAmount walks
+// them).
+const gatePrefix = "/v1/gate/"
+
 func gateAllowed(method, path string) bool {
-	return gateRoutes[method+" "+strings.TrimSuffix(path, "/")]
+	return gateRoutes[method+" "+strings.TrimSuffix(path, "/")] || (method == http.MethodGet && strings.HasPrefix(path, gatePrefix))
 }
 
 // bursarRole is the custom role offered when the area is turned on.
@@ -78,11 +84,13 @@ func (s *Server) schoolRoutes(r chi.Router) {
 	r.With(read).Get("/schools/families/{id}", s.getSchoolFamily)
 	r.With(manage, s.tenantWide).Post("/schools/families/{id}/guardians", s.addSchoolGuardian)
 	r.With(manage, s.tenantWide).Put("/schools/families/{id}/guardians/{guardian}", s.changeSchoolGuardian)
-	s.schoolFeeRoutes(r)     // fees and term invoices (schools_fees.go)
-	s.schoolAccountRoutes(r) // students' account numbers (schools_accounts.go)
-	s.schoolCashRoutes(r)    // cash at the desk, approvals, receipts (schools_cash.go)
-	s.schoolFamilyRoutes(r)  // the family page's claims, plans and links (schools_family.go)
-	s.schoolChasingRoutes(r) // debtors, reminders, promises, plan standing (schools_chasing.go)
+	s.schoolFeeRoutes(r)       // fees and term invoices (schools_fees.go)
+	s.schoolAccountRoutes(r)   // students' account numbers (schools_accounts.go)
+	s.schoolCashRoutes(r)      // cash at the desk, approvals, receipts (schools_cash.go)
+	s.schoolFamilyRoutes(r)    // the family page's claims, plans and links (schools_family.go)
+	s.schoolChasingRoutes(r)   // debtors, reminders, promises, plan standing (schools_chasing.go)
+	s.schoolClearanceRoutes(r) // clearance, overrides (schools_clearance.go)
+	s.gateScreenRoutes(r)      // the gate's two routes, under /v1/gate (schools_clearance.go)
 	r.With(manage, s.tenantWide).Delete("/schools/families/{id}/guardians/{guardian}", s.removeSchoolGuardian)
 }
 
