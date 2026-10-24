@@ -177,6 +177,15 @@ export function sourcesFor(def: DefLike, id: string, connectors: ConnectorLike[]
       for (const o of t?.callable?.outputs ?? t?.outputs ?? []) {
         out.push({ label: `${from}: ${o.title}`, expr: `=steps.${s.id}.output.${o.name}`, number: o.type === "integer" || o.type === "number" });
       }
+    } else if (s.type === "subflow") {
+      // The child run's outputs (when it declares any), its id and status.
+      const c = s.config as { workflow?: string; wait?: boolean } | undefined;
+      if (c?.wait !== false) {
+        for (const o of templates.find((t) => t.id === c?.workflow)?.outputs ?? []) {
+          out.push({ label: `${from}: ${o.title}`, expr: `=steps.${s.id}.output.outputs.${o.name}`, number: o.type === "integer" || o.type === "number" });
+        }
+      }
+      out.push({ label: `${from}: run id`, expr: `=steps.${s.id}.output.run_id` });
     } else if (s.type === "connector") {
       const output = connectors.find((c) => c.ref === s.connector)?.actions[s.action ?? ""]?.output;
       for (const [k, p] of Object.entries(output?.properties ?? {})) {

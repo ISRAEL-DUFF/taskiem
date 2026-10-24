@@ -288,7 +288,7 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	forks.Children = nonNil(forks.Children)
+	forks.Children, forks.Subflows = nonNil(forks.Children), nonNil(forks.Subflows)
 	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal, "forks": forks,
 		"plain_errors": s.plainRunErrors(r, ref.ID, events)})
 }

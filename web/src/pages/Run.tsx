@@ -13,8 +13,8 @@ interface RunDoc {
   run: RunSummary;
   events: RunEvent[];
   revealed: boolean;
-  /** The run this one resumed from a failed step, and the runs that resumed it. */
-  forks?: { parent_run_id: string | null; resumed_step: string | null; resumed_by: string[] };
+  /** The run this one resumed from a failed step (or whose subflow step started it: parent_step), the runs that resumed it, and the child runs its subflow steps started. */
+  forks?: { parent_run_id: string | null; resumed_step: string | null; parent_step?: string | null; resumed_by: string[]; subflows?: string[] };
   /** Each failed step's error in plain words (no-technical-steps N5). */
   plain_errors?: Record<string, string>;
 }
@@ -155,7 +155,30 @@ export function RunPage() {
           <dd>
             <code>{r.id}</code>
           </dd>
-          {data.forks?.parent_run_id && (
+          {data.forks?.parent_run_id && data.forks.parent_step && (
+            <>
+              <dt>Started by</dt>
+              <dd data-testid="started-by-run">
+                step <code>{data.forks.parent_step}</code> of run{" "}
+                <Link to={`/runs/${data.forks.parent_run_id}`}>
+                  <code>{data.forks.parent_run_id}</code>
+                </Link>
+              </dd>
+            </>
+          )}
+          {(data.forks?.subflows?.length ?? 0) > 0 && (
+            <>
+              <dt>Started runs</dt>
+              <dd data-testid="started-runs">
+                {data.forks?.subflows?.map((c) => (
+                  <Link key={c} to={`/runs/${c}`} style={{ marginRight: 10 }}>
+                    <code>{c}</code>
+                  </Link>
+                ))}
+              </dd>
+            </>
+          )}
+          {data.forks?.parent_run_id && !data.forks.parent_step && (
             <>
               <dt>Resumed from</dt>
               <dd data-testid="resumed-from">

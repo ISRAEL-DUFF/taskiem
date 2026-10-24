@@ -620,6 +620,9 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	if len(req.Context.CallableWorkflows) > 0 {
 		doc["callable_workflows"] = req.Context.CallableWorkflows
 	}
+	if len(req.Context.Startable) > 0 {
+		doc["startable_workflows"] = req.Context.Startable
+	}
 	return doc, refs, offered
 }
 

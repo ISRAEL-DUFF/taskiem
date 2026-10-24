@@ -139,6 +139,8 @@ export function newStep(type: Step["type"], id: string): Step {
       return { id, type, template: "send-invoice", input: {} };
     case "callback":
       return { id, type, config: { timeout: "24h" } };
+    case "subflow":
+      return { id, type, config: { workflow: "" }, input: {} };
     case "respond":
       return { id, type, config: { status: 200, body: { ok: true } } };
     case "http":

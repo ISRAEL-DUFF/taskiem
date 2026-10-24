@@ -50,7 +50,11 @@ func Validate(doc []byte) []Problem {
 	if err != nil {
 		return []Problem{{Path: "/", Message: err.Error()}}
 	}
-	return append(append(append(append(append(append(checkExpressions(d), checkUSSD(d)...), checkForms(d)...), checkCapabilities(d)...), checkTemplates(d)...), checkCallbacks(d)...), checkOutputs(d)...)
+	var out []Problem
+	for _, probs := range [][]Problem{checkExpressions(d), checkUSSD(d), checkForms(d), checkCapabilities(d), checkTemplates(d), checkCallbacks(d), checkSubflows(d), checkOutputs(d)} {
+		out = append(out, probs...)
+	}
+	return out
 }
 
 type validator struct {

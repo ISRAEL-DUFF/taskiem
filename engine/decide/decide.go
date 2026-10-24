@@ -319,7 +319,12 @@ func (d *decider) run() {
 		}
 		d.compensate(why)
 	case done:
-		d.emit(history.RunCompleted, "", 0, map[string]any{})
+		outs, err := d.runOutputs()
+		if err != nil {
+			d.emit(history.RunFailed, "", 0, history.RunFailedPayload{Error: history.Error{Kind: "expression", Message: err.Error(), Next: "fail"}})
+			return
+		}
+		d.emit(history.RunCompleted, "", 0, history.RunCompletedPayload{Outputs: outs})
 	}
 }
 
@@ -503,6 +508,8 @@ func (d *decider) begin(sc scope, s *wd.Step, inst string, act map[string]any) s
 		return d.formBegin(sc, s, inst, act)
 	case s.Type == "callback":
 		return d.callbackBegin(s, inst)
+	case s.Type == "subflow":
+		return d.subflowBegin(sc, s, inst, act)
 	case s.Type == "respond":
 		return d.respondBegin(sc, s, inst, act)
 	case s.Type == "approval":
@@ -595,6 +602,8 @@ func (d *decider) progress(sc scope, s *wd.Step, inst string, f *facts, start bo
 		return d.formProgress(s, inst, f)
 	case s.Type == "callback":
 		return d.callbackProgress(s, inst, f)
+	case s.Type == "subflow":
+		return d.subflowProgress(s, inst, f)
 	case s.Type == "approval":
 		return d.approvalProgress(s, inst, f)
 	case s.Type == "branch":

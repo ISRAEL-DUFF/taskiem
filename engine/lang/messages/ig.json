@@ -2344,6 +2344,14 @@
       "text": "Chere {event}",
       "reviewed": false
     },
+    "wd.subflow": {
+      "text": "Gbaa ọrụ gị: {workflow}, chere ka ọ gwụ",
+      "reviewed": false
+    },
+    "wd.subflow.nowait": {
+      "text": "Malite ọrụ gị: {workflow}, gaa n'ihu",
+      "reviewed": false
+    },
     "wd.template": {
       "text": "Jiri ụdị: {template}",
       "reviewed": false

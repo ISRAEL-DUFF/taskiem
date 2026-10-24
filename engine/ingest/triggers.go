@@ -182,6 +182,9 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 	case "email":
 		// The senders and attachments are checked by the schema.
 		return nil
+	case "subflow":
+		// Started by another workflow's subflow step (decision 0049).
+		return nil
 	}
 	return fmt.Errorf("%s triggers are not available yet", def.Trigger.Type)
 }

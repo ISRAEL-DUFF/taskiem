@@ -196,10 +196,11 @@ export interface FormStep extends StepBase {
   };
 }
 
+/** Runs another workflow of the business as a child run (docs/contracts/wd-v1.md, subflow steps): workflow is its id; without version, the version published when the step starts; wait (the default) makes the step wait for the run to end, its output then {run_id, status, outputs}. */
 export interface SubflowStep extends StepBase {
   type: "subflow";
   input?: Values;
-  config: { workflow: `wf_${string}`; version: number; wait?: boolean };
+  config: { workflow: string; version?: number; wait?: boolean };
 }
 
 export interface TransformStep extends StepBase {
