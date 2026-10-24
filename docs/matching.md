@@ -18,9 +18,13 @@ A customer can have a permanent account number of their own: a `virtual_account`
 
 Money paid into a registered account is matched **exactly**, with no one asked, when its connection, its account number and its reference all agree with the registration (a payment service that does not say which account number was paid into, as Flutterwave's and Moniepoint's notices do not, is taken at the reference it issued for the account): to the customer's oldest open invoice (sent, part-paid or overdue, by due date, then when sent), as much as is due, then the next, until the money runs out. Each invoice's part says "paid into the customer's own account number" and "the customer's oldest open invoice" (or "what was left after the customer's older open invoices"); reasons never name anyone.
 
-What is left is the customer's **credit**. It is shown on each of their invoices (**The customer's money**, and `GET /v1/invoices/{id}/customer`), and counted towards the next invoice sent to them: when an invoice is sent, the customer's credit pays it first, oldest money first, each part a match of the money it came from ("the customer's credit from an earlier payment"); the message sent says what is left to pay, or that nothing is. Undoing a part of a customer's money makes it their credit again, rather than money to match.
+For a school's students, where the school shares family credit (**Schools > Settings**, off by default; [schools](schools.md#brothers-and-sisters)), what is left after the student's own open invoices then counts towards their brothers' and sisters' open invoices (the other students of their family, by admission number), each one's oldest first: "for a sibling (the school shares family credit)". Each part is counted once, however often the money is looked at.
+
+What is left is the customer's **credit**. It is shown on each of their invoices (**The customer's money**, and `GET /v1/invoices/{id}/customer`), and counted towards the next invoice sent to them: when an invoice is sent, the customer's credit pays it first, oldest money first, each part a match of the money it came from ("the customer's credit from an earlier payment"), and then, where the school shares family credit, a brother's or sister's ("a sibling's credit from an earlier payment"); the message sent says what is left to pay, or that nothing is. Undoing a part of a customer's money makes it their credit again, rather than money to match.
 
 A credit naming a registered account by its reference but paid into another account number, paid into a registered account number with another account's reference, or naming the account by its reference without saying which account number it was paid into, is **held** for a person: it waits under **No invoice suggested** in To match with the reason, and nothing is counted. A credit into an account Taskiem does not know is suggested as any other money. Another business's accounts are never looked at.
+
+Issuing students' account numbers registers each one ([schools](schools.md#account-numbers)); credits that never arrive as a webhook are read back from the rail every 15 minutes ([the look-back](schools.md#the-look-back)) and matched the same way.
 
 ## Split payments
 
@@ -89,6 +93,18 @@ Under **Invoices > Settings**, **Match strong suggestions automatically** is off
 
 A payment's parts are undone one by one; to move money elsewhere, undo its part first.
 
+## Money that went back
+
+Money can go back to the payer after it counted: the rail returns or reverses a payment (`payment.returned`, a POS sale reversed), or the business refunds it (a refund that settled, `refund.processed`, naming the payment by its reference, or a credit into a customer's account by the rail's own id for it). Taskiem takes each such movement once, against the payment it takes back (decided in the [schools plan](spec/schools.md#18-risks-and-open-questions), for every business):
+
+- **its matches are undone**, newest first, each invoice back to sent, part-paid or overdue, with the payment and its undoing kept in the invoice's history ("system:reversal");
+- the payment now counts for what it was **less what went back**, in the database too, so nothing can count it again, and it is never anyone's credit: refunded all, it leaves To match ("the money went back to the payer"); refunded in part, what is left is matched again by the permanent-account rule when it was paid into a customer's account (oldest open invoice first), otherwise it waits in To match with the reason "part of this payment went back to the payer; match what is left";
+- **the owners are told** (in their notifications, on their linked chat, and on the business's alert channels), and so are the people who match money (those with `invoice.manage`, such as the Bursar), naming the invoices now open again, never anyone's name; once per movement;
+- receipts for the undone matches no longer stand: voiding them comes with receipts (the matcher's `Reversed` hook);
+- a payment heard to have gone back before it was ever looked at is never offered for matching.
+
+Parts of the payment counted towards storefront orders are left: an order has its own [refunds](storefronts.md#refunds).
+
 ## The money_matches table
 
 Every match, and every undoing of one, is copied to a [kept table](data-tables.md#kept-tables) named `money_matches`, alongside `money_log`:
@@ -112,7 +128,7 @@ An invoice's paid amount is the sum of its matches that are not undone; an order
 - An order paid after acceptance is not suggested until its payment link is made: its workflow sends the link and waits for that payment.
 - Money matched to an order by bank transfer has no Paystack payment to refund: an order declined after it is refunded by the business itself.
 - Seeing and confirming orders' suggestions uses the invoice permissions (`invoice.read`, `invoice.manage`), not `storefront.manage`.
-- Siblings' invoices are not offered what is left of a customer's money (a school setting, off by default, in the Schools plan); it is held as the customer's credit.
-- A customer's credit can be used only by the next invoice sent to them, or matched by hand; it cannot yet be refunded from Taskiem.
+- A customer's credit can be used only by the next invoice sent to them (or a sibling's, where the school shares family credit), or matched by hand; it cannot yet be refunded from Taskiem.
+- Two partial refunds of one payment are one movement in the money log (a refund is known by the payment it refunds), so only the first one's amount is taken back.
 - Payers are remembered only for invoices' customers, not storefront orders'.
 - Leaks, statements, cash and expenses come in the next milestone (T6).

@@ -78,7 +78,7 @@ func TestSiblingsShareCredit(t *testing.T) {
 		t.Fatalf("second payment: %s, credit %d", z.Status, w.creditOf("key:"+a.Key))
 	}
 	next := w.invoiceFor(b, 400000, "")
-	if next = w.read(next.Number); next.Status != "paid" || next.Payments[0].Reasons[0] != invoicing.SiblingCreditReason {
+	if next = w.read(next.Number); next.Status != "paid" || next.Payments[0].Reasons[0] != invoicing.FamilyShareReason {
 		t.Fatalf("sent with the sibling's credit: %s %+v", next.Status, next.Payments)
 	}
 }

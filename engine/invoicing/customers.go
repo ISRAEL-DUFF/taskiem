@@ -264,9 +264,9 @@ func MarkCustomers(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID, cust
 // CreditReason is the reason a payment from a customer's credit gives.
 const CreditReason = "the customer's credit from an earlier payment"
 
-// SiblingCreditReason is the reason a payment from a sibling's credit
+// FamilyShareReason is the reason a payment from a sibling's credit
 // gives, where the school shares family credit (SharedWith).
-const SiblingCreditReason = "a sibling's credit from an earlier payment (the school shares family credit)"
+const FamilyShareReason = "a sibling's credit from an earlier payment (the school shares family credit)"
 
 // SharedWith lists the customers whose open invoices a customer's credit
 // may also count towards, after the customer's own: for a student of a
@@ -278,9 +278,9 @@ func SharedWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, customer strin
 	if !ok {
 		return nil, nil
 	}
-	student, err := uuid.Parse(rest)
-	if err != nil {
-		return nil, nil
+	student, perr := uuid.Parse(rest)
+	if perr != nil {
+		return nil, nil //nolint:nilerr // a key naming no student shares with no one
 	}
 	rows, err := tx.Query(ctx, `SELECT 'key:student:' || o.id::text FROM school_students s
 		JOIN school_settings st ON st.tenant_id = s.tenant_id AND st.enabled AND st.siblings_share_credit
@@ -341,7 +341,7 @@ func (s *Invoices) applyCredit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		entry := c.entry
 		reason := CreditReason
 		if !c.own {
-			reason = SiblingCreditReason
+			reason = FamilyShareReason
 		}
 		y, b, err := s.RecordPayment(ctx, tx, tenant, x.ID.String(), PaymentIn{AmountKobo: part, PaymentID: entry.String(), EntryID: &entry,
 			Connection: c.channel, How: "exact", By: "system:credit", Reasons: []string{reason}})

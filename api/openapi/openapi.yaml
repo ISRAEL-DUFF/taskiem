@@ -17236,7 +17236,7 @@ components:
     SchoolIssuing:
       type: object
       description: The connection that issues students' account numbers (and its wallet, on rails that hold several), and whether siblings share family credit.
-      required: [connection, siblings_share_credit]
+      required: [connection]
       properties:
         connection:
           type: string
@@ -17246,7 +17246,7 @@ components:
           description: The wallet the numbers pay into (iswallet)
         siblings_share_credit:
           type: boolean
-          description: What a student's account takes beyond their own invoices counts towards their brothers' and sisters' open invoices, oldest first (off by default)
+          description: What a student's account takes beyond their own invoices counts towards their brothers' and sisters' open invoices, oldest first (off by default, and when left out)
     SchoolIssuer:
       type: object
       description: A prod connection that can issue students' account numbers, and what its rail needs, in plain words.

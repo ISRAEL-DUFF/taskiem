@@ -47,6 +47,9 @@ export TASKIEM_LOGIN_BURST=100
 # Self-serve signup, and Termii pointed at the fake onboarding.spec.ts runs
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
+# Students' account numbers (accounts.spec.ts) are issued by a fake iswallet
+# (loopback is allowed only because the URL names it).
+export TASKIEM_ISWALLET_URL=http://127.0.0.1:12828
 # Storefront orders (storefront.spec.ts): the public host's key turns on the inbox.
 export TASKIEM_PUBLIC_KEY=ZTJlLXB1YmxpYy1rZXktMzItYnl0ZXMtbG9uZy0hISE=
 # Email triggers (email.spec.ts): the mail role takes mail for in.e2e.test

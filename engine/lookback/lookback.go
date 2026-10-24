@@ -1,6 +1,6 @@
 // Package lookback reads credits to customers' account numbers back from
 // the rails that issued them (docs/spec/schools.md 6.5, B4;
-// docs/money-log.md#the-look-back): for each prod connection that issued
+// docs/schools.md#the-look-back): for each prod connection that issued
 // customers' accounts and maps list_credits, every 15 minutes, the last
 // 48 hours, an overlapping window. Each credit is recorded through the
 // money log's writer as the rail's virtual_account.credited event would
