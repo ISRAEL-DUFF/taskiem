@@ -22,23 +22,25 @@ func TestSubflowSteps(t *testing.T) {
 			"steps": []any{map[string]any{"id": "sub", "type": "subflow", "config": cfg, "input": input},
 				map[string]any{"id": "after", "type": "transform", "needs": []string{"sub"}, "config": map[string]any{"output": "=steps.sub.output.outputs.kobo"}}}}
 	}
-	// What the save-time checks refuse.
-	for name, c := range map[string]struct {
+	// What the save-time checks refuse, in order: the child is published
+	// before the last case.
+	for _, c := range []struct {
+		name  string
 		cfg   map[string]any
 		input map[string]any
 		want  string
 	}{
-		"missing":     {map[string]any{"workflow": "00000000-0000-4000-8000-000000000000"}, map[string]any{"amount_kobo": 1}, "there is no workflow"},
-		"unpublished": {map[string]any{"workflow": cid}, map[string]any{"amount_kobo": 1}, "no published version"},
-		"no version":  {map[string]any{"workflow": cid, "version": 7}, map[string]any{"amount_kobo": 1}, "no version 7"},
-		"input":       {map[string]any{"workflow": cid}, map[string]any{"amount": 1}, "needs amount_kobo"},
+		{"missing", map[string]any{"workflow": "00000000-0000-4000-8000-000000000000"}, map[string]any{"amount_kobo": 1}, "there is no workflow"},
+		{"unpublished", map[string]any{"workflow": cid}, map[string]any{"amount_kobo": 1}, "no published version"},
+		{"no version", map[string]any{"workflow": cid, "version": 7}, map[string]any{"amount_kobo": 1}, "no version 7"},
+		{"input", map[string]any{"workflow": cid}, map[string]any{"amount": 1}, "needs amount_kobo"},
 	} {
-		if name == "input" {
+		if c.name == "input" {
 			owner.must(200, "POST", "/v1/workflows/"+cid+"/versions/1/publish", nil)
 		}
-		out := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "x " + name, "definition": parent(c.cfg, c.input)})
+		out := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "x " + c.name, "definition": parent(c.cfg, c.input)})
 		if probs := toJSON(out["problems"]); !strings.Contains(probs, c.want) {
-			t.Errorf("%s: %s, want %q", name, probs, c.want)
+			t.Errorf("%s: %s, want %q", c.name, probs, c.want)
 		}
 	}
 	// A workflow that starts on its own cannot be run by another.
