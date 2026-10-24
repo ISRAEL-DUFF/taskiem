@@ -1,7 +1,8 @@
 {{template "fhead" .}}{{with .CopyScript}}<script src="{{.}}" defer></script>
 {{end}}{{template "fbody" .}}
+<p class="kicker">{{.Business}}</p>
 <h1>School fees</h1>
-<p class="hint">From {{.Business}}. This link works until {{.Expires}}; every message from the school carries a new one.</p>
+<p class="hint">This link works until {{.Expires}}; every message from the school carries a new one.</p>
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
 {{if .Children}}<nav class="chips fam-children" aria-label="Children">
 {{range .Children}}<a class="chip{{if .Current}} is-current{{end}}" href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Name}}</a>

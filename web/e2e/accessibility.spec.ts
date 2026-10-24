@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
+import { PUBLIC, familyLink, familySchool } from "./familyschool";
 
 // Automated accessibility checks (axe: WCAG 2.1 A/AA and best practices)
 // on the console's pages, in the light and the dark theme, plus keyboard
@@ -119,6 +120,29 @@ for (const scheme of ["light", "dark"] as const) {
     expect(found, found.join("\n\n")).toEqual([]);
   });
 }
+
+// The family page on the public host (docs/schools.md "The family page")
+// is drawn in the school's theme: every theme passes, as does the page an
+// expired or unknown link answers.
+test("the family page passes axe in every public theme", async ({ page, browser }) => {
+  test.setTimeout(240_000);
+  const parent = await (await browser.newContext()).newPage();
+  for (const theme of ["clean", "bold", "editorial"]) {
+    await familySchool(page, `Axe ${theme} Academy`, theme);
+    const link = await familyLink(page);
+    for (const path of [link, `${link}?done=paid`, `${link}?err=amount&for=paid`]) {
+      await parent.goto(path);
+      await expect(parent.getByRole("heading", { level: 1, name: "School fees" })).toBeVisible();
+      await expect(parent.locator(`link[href*="theme-${theme}."]`)).toHaveCount(1);
+      const vs = await axe(parent);
+      expect(vs, describe(`${path} (${theme})`, vs)).toEqual([]);
+    }
+    await parent.goto(`${PUBLIC}/s/${"B".repeat(32)}`);
+    await expect(parent.getByRole("heading", { level: 1, name: "Ask the school for a new link" })).toBeVisible();
+    const vs = await axe(parent);
+    expect(vs, describe(`an unknown link (${theme})`, vs)).toEqual([]);
+  }
+});
 
 test("dialogs keep focus inside and give it back when they close", async ({ page }) => {
   await signIn(page);

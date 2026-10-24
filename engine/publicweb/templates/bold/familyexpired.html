@@ -1,5 +1,6 @@
 {{template "fhead" .}}{{template "fbody" .}}
 <h1>{{.Title}}</h1>
+{{template "fmain" .}}
 <p class="notice" role="status">{{.Message}}</p>
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
 {{with .Action}}<form method="post" action="{{.}}" class="fields">

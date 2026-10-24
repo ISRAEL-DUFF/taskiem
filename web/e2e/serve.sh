@@ -52,6 +52,9 @@ export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
 export TASKIEM_ISWALLET_URL=http://127.0.0.1:12828
 # Storefront orders (storefront.spec.ts): the public host's key turns on the inbox.
 export TASKIEM_PUBLIC_KEY=ZTJlLXB1YmxpYy1rZXktMzItYnl0ZXMtbG9uZy0hISE=
+# The public host itself (family.spec.ts): school families' pages on the
+# form host, which answers as 127.0.0.1 on 18082 (links say https://127.0.0.1).
+export TASKIEM_PUBLIC_ENABLED=true TASKIEM_PUBLIC_LISTEN=127.0.0.1:18082 TASKIEM_PUBLIC_DOMAINS=e2e.test TASKIEM_PUBLIC_FORM_HOST=127.0.0.1
 # Email triggers (email.spec.ts): the mail role takes mail for in.e2e.test
 # on a local port instead of 25.
 export TASKIEM_MAIL_ENABLED=true TASKIEM_MAIL_DOMAIN=in.e2e.test TASKIEM_MAIL_LISTEN=127.0.0.1:12825

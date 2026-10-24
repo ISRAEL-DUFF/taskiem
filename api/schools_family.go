@@ -62,9 +62,10 @@ func (s *Server) listSchoolClaims(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := schools.ClaimFilter{Status: r.URL.Query().Get("status")}
-	if f.Status == "" {
+	switch f.Status {
+	case "":
 		f.Status = "open"
-	} else if f.Status == "any" {
+	case "any":
 		f.Status = ""
 	}
 	var err error
@@ -141,9 +142,10 @@ func (s *Server) listSchoolPlans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := schools.PlanFilter{Status: r.URL.Query().Get("status")}
-	if f.Status == "" {
+	switch f.Status {
+	case "":
 		f.Status = "requested"
-	} else if f.Status == "any" {
+	case "any":
 		f.Status = ""
 	}
 	var err error

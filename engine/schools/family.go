@@ -360,9 +360,8 @@ func (s *Schools) SendFamily(ctx context.Context, tx pgx.Tx, tenant, family uuid
 		short = m.Short(link.URL)
 	}
 	type guardian struct {
-		id    uuid.UUID
-		env   map[string]any
-		phone string
+		id  uuid.UUID
+		env map[string]any
 	}
 	rows, err := tx.Query(ctx, `SELECT id, details FROM school_guardians WHERE tenant_id = $1 AND family_id = $2 ORDER BY created_at, id`, tenant, family)
 	if err != nil {

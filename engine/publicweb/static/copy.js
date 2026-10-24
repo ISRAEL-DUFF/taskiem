@@ -2,7 +2,7 @@
 // page works without this script: the number is plain text to select.
 (function () {
   "use strict";
-  if (!navigator.clipboard || !window.isSecureContext && location.hostname !== "localhost") return;
+  if (!window.navigator.clipboard || (!window.isSecureContext && window.location.hostname !== "localhost")) return;
   var nodes = document.querySelectorAll("[data-copy]");
   for (var i = 0; i < nodes.length; i++) {
     (function (node) {
@@ -12,7 +12,7 @@
       btn.textContent = "Copy";
       btn.setAttribute("aria-label", "Copy the account number " + node.textContent.trim());
       btn.addEventListener("click", function () {
-        navigator.clipboard.writeText(node.textContent.trim()).then(function () {
+        window.navigator.clipboard.writeText(node.textContent.trim()).then(function () {
           btn.textContent = "Copied";
           setTimeout(function () { btn.textContent = "Copy"; }, 2000);
         });

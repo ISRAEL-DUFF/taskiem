@@ -1,4 +1,5 @@
 {{template "fhead" .}}{{template "fbody" .}}
+<p class="kicker">{{.Business}}</p>
 <h1>{{.Title}}</h1>
 <p class="notice" role="status">{{.Message}}</p>
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}

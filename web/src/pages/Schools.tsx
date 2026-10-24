@@ -6,6 +6,7 @@ import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, 
 import { StudentFeesPanel } from "./SchoolFees";
 import { IssuingSettings, StudentAccountPanel } from "./SchoolAccountParts";
 import { StudentReceiptsPanel } from "./SchoolReceipts";
+import { FamilyLinkDays, SendFamilyLink, StudentClaimsPanel, StudentPlansPanel } from "./SchoolFamily";
 import {
   PROMOTION_ACTIONS,
   STATUS_FILTERS,
@@ -562,6 +563,8 @@ export function SchoolStudentPage() {
           <StudentAccountPanel studentID={s.id} />
           <StudentFeesPanel studentID={s.id} />
           <StudentReceiptsPanel studentID={s.id} />
+          <StudentClaimsPanel studentID={s.id} manage={may.manage} />
+          <StudentPlansPanel studentID={s.id} />
           <section className="card" aria-labelledby="student-history">
             <h2 id="student-history">Class history</h2>
             {s.enrollments.length === 0 ? (
@@ -651,6 +654,7 @@ export function SchoolFamilies() {
       {families?.map((f) => (
         <section className="card" key={f.id}>
           <FamilyCard family={f} top />
+          {may.manage && <SendFamilyLink familyID={f.id} />}
         </section>
       ))}
     </>
@@ -1133,6 +1137,7 @@ export function SchoolSettingsPage() {
       {me?.schools && me.roles.includes("owner") && <IssuingSettings />}
       {me?.schools && me.roles.includes("owner") && <DiscountThreshold />}
       {me?.schools && me.roles.includes("owner") && <CashThreshold />}
+      {me?.schools && me.roles.includes("owner") && <FamilyLinkDays />}
     </>
   );
 }
