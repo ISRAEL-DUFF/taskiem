@@ -91,6 +91,38 @@ func (w *world) post(t *testing.T, path string, body []byte, hdr ...string) (int
 	return resp.StatusCode, out
 }
 
+// rawResponse is an HTTP answer as the caller sees it.
+type rawResponse struct {
+	status  int
+	headers http.Header
+	body    string
+}
+
+func (r rawResponse) header(k string) string { return r.headers.Get(k) }
+
+func (w *world) rawPost(t *testing.T, path string, body []byte) rawResponse {
+	t.Helper()
+	req, _ := http.NewRequest("POST", w.srv.URL+"/hooks/"+w.Tenant.String()+path, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, _ := io.ReadAll(resp.Body)
+	return rawResponse{status: resp.StatusCode, headers: resp.Header, body: string(raw)}
+}
+
+// validate is what publishing checks of a definition: the contract's
+// problems, as strings.
+func (w *world) validate(doc string) []string {
+	var out []string
+	for _, p := range wd.Validate([]byte(doc)) {
+		out = append(out, p.String())
+	}
+	return out
+}
+
 func sign(h func() hash.Hash, key string, body []byte) string {
 	m := hmac.New(h, []byte(key))
 	m.Write(body)

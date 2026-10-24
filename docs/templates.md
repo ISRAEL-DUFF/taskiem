@@ -99,11 +99,25 @@ A template is a JSON file in `templates/library/<id>.json` with `id`, `title`, `
 
 Modifiers: `:hour` and `:minute` of a time, `:cron` of a weekday (0 for Sunday to 6), `:kobo` of a naira amount (× 100). Text parameters are best put in a `transform` step's output (`{"business_name": "{{business_name}}"}`) and read by expressions from there: values stay data, and flow code keeps them as written. The library refuses to load a template whose markers name no parameter or whose parameters are unused; ids are lowercase letters, digits, `.`, `_` and `-` (the pattern embed apps' `allowed_templates` accept). Never copy a request of the [evaluation suite](ai.md#evaluation) into a template's text.
 
+## Callable templates
+
+A template marked `callable` can be a step of another workflow ([decision 0047](decisions/0047-composable-templates.md)): a [`template` step](contracts/wd-v1.md#template-steps) names it, fills its parameters, and gives its run inputs from the calling workflow's data. Its steps run in the caller's run, with their ids prefixed by the step's, so one run keeps one history and one set of exactly-once rules, and every approval, payment and wait inside it is the caller's own. Pay a list, Run payroll, Send an invoice, and the Payrolla payroll summary and records are callable.
+
+A callable template's interface is:
+
+- **Run inputs**: its definition's `inputs` schema, which a callable template must have. Its expressions read them as `trigger.body`; any other trigger field it reads only under `has()`, since used as a step it reads the calling workflow's trigger (Run payroll names the month from a schedule's fire time when there is one, and otherwise from its `period` input or the run's start).
+- **Outputs**: `outputs`, each with a `name`, a `type` (`string`, `integer`, `number`, `boolean`, `list` or `object`), a `title`, a `description` and a `value`, an expression over the template's own top-level steps read as `steps.<id>.output`. A step that may not run (it has a `when` or an `on_error`, or needs one that may not run) is read with an optional chain, `steps.?<id>.output…orValue(…)`, so the result never fails on a step that was skipped. The step's output in the calling workflow is these values by name.
+- **Effect**: computed from its steps, never declared: `read`, `write` or `moves_money`, whether it waits for a person (an approval or a form) or for an event, and its run timeout.
+
+A workflow keeps each template it uses as the library had it when the version was saved, so a library update never changes it; the workflow's page offers the update with its differences, and the next version saved takes it. What a template needs (its connections, capabilities, tables and variables) is the workflow's readiness, and what it does is the workflow's: a payment inside it is checked as the workflow's own, and a workflow around a product such as Payrolla cannot use a template that moves money.
+
+The library refuses to load a callable template that breaks these rules. Its step ids are at most 31 characters, its capability steps' at most 8, none contains `__`, and none is `input` or `body` (the ids expansion gives its own steps), so two templates' prefixes always fit. Each callable template's [workflow tests](#the-library) (`templates/tests/<id>.test.json`) also run with the template used as a step, and its outputs are checked against their types.
+
 ## API
 
 | Route | Permission | What it does |
 | --- | --- | --- |
-| `GET /v1/templates` | any member | Every template: summary, parameters, variables, its steps in plain words (filled with the examples), and `available` (every connector it uses is available to the tenant). `?q=` ranks by keyword match, `?category=` filters |
+| `GET /v1/templates` | any member | Every template: summary, parameters, variables, its steps in plain words (filled with the examples), and `available` (every connector it uses is available to the tenant). `?q=` ranks by keyword match, `?category=` filters, `?callable=true` keeps the [callable](#callable-templates) ones. A callable template also has `callable`: its `inputs` (a JSON Schema), the `params` a template step fills (those only its trigger uses are left out), its `outputs` and its computed `effect` |
 | `GET /v1/templates/{id}` | any member | One template, with its definition (markers included) |
 | `POST /v1/templates/{id}/instantiate` | `workflow.edit` | `{"params": {...}, "name"?}`: a new workflow with a `draft` version 1, `created_by` the person, the template recorded on the version (`workflow_versions.template_id`), `workflow.create` audited with the template; answers the draft's `problems`, its `variables`, and `tables`: what became of each data table the template declares (above) (publishing checks) and the variables to set. Plan limits apply (`max_workflows`). Never publishes |
 | `GET /v1/embed/{app}/templates` | end user | The app's `allowed_templates`, `available` only when the app also allows every connector they use |
@@ -114,3 +128,7 @@ Registering or updating an embed app refuses an `allowed_templates` id that is n
 ## Web
 
 **Templates** in the navigation (every member): templates by category, a search box, and for each its description, steps in plain words, the variables to set, and a form for its parameters that creates the draft and opens it in the editor. "Set it up step by step" opens the guided first workflow instead: details, connection and variables, publish, and a test run on one page ([onboarding](onboarding.md#getting-started)). The AI panel says when a draft started from a template, and which details the goal did not give.
+
+In the editor, **Use a ready workflow** adds a template step: choose a callable template, fill its settings (as on the Start page) and what it starts with (values, or what earlier steps gave), and the panel shows what it gives back, what it does ("Moves money · waits for a person to approve or answer") and its steps. The canvas shows it as one step; the steps after it can use what it gives back. When the library has changed a template the workflow uses, the editor says so with what changed; saving the workflow again takes it. A run's timeline shows each template step's own steps together under it, and the run canvas colours the template step by them.
+
+In flow code, `template(id, params, input)` is a template step (`template("pay-a-list", { approver_role: "finance" }, { batch: ({ steps }) => steps.names.output.batch })`), kept unexpanded both ways; `flows/examples/month-end-pay-and-tell.flow.ts` runs payroll and then pays suppliers with two templates.

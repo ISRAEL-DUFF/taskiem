@@ -98,3 +98,23 @@ func TestDescribeForms(t *testing.T) {
 		}
 	}
 }
+
+// A template step reads as the template it uses (decision 0047).
+func TestDescribeTemplateStep(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_x","version":1,"name":"x","trigger":{"type":"manual"},
+	 "steps":[{"id":"pay","type":"template","template":"run-payroll","params":{"business_name":"Ada Foods"}},
+	          {"id":"inv","type":"template","template":"send-invoice","needs":["pay"],"input":{"name":"Ada","amount_naira":5000,"for":"Rice"}}]}`
+	def, err := wd.Load([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := wdtext.Describe(def, connector.NewRegistry())
+	var got []string
+	for _, l := range lines {
+		got = append(got, l.Text)
+	}
+	text := strings.Join(got, "\n")
+	if !strings.Contains(text, "Use the template: Run payroll from any payments account") || !strings.Contains(text, "Use the template: Send an invoice and hear when it is paid") {
+		t.Errorf("read back:\n%s", text)
+	}
+}

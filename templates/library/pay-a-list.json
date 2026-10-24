@@ -83,6 +83,58 @@
       "maximum": 72
     }
   ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "approved",
+      "type": "boolean",
+      "title": "Approved",
+      "description": "Whether the payments were approved. Nobody is paid otherwise.",
+      "value": "=steps.approve.output.decision == 'approved'"
+    },
+    {
+      "name": "paid",
+      "type": "integer",
+      "title": "People paid",
+      "description": "How many people were paid and the payment confirmed.",
+      "value": "=steps.?summary.output.paid.orValue(0)"
+    },
+    {
+      "name": "failed",
+      "type": "integer",
+      "title": "Payments that failed",
+      "description": "How many payments failed.",
+      "value": "=steps.?summary.output.failed.orValue(0)"
+    },
+    {
+      "name": "unconfirmed",
+      "type": "integer",
+      "title": "Payments not confirmed",
+      "description": "How many payments were sent but not confirmed by the bank yet.",
+      "value": "=steps.?summary.output.unconfirmed.orValue(0)"
+    },
+    {
+      "name": "paid_naira",
+      "type": "number",
+      "title": "Naira paid",
+      "description": "The total paid, in naira.",
+      "value": "=double(steps.?summary.output.paid_naira.orValue(0.0))"
+    },
+    {
+      "name": "not_paid",
+      "type": "list",
+      "title": "Not paid",
+      "description": "Each person not paid, with why.",
+      "value": "=steps.?summary.output.not_paid.orValue([])"
+    },
+    {
+      "name": "lines",
+      "type": "list",
+      "title": "Each payment",
+      "description": "One row per person: batch, name, amount_naira, status (paid, failed or unconfirmed), payout_id and reason.",
+      "value": "=steps.?lines.output.rows.orValue([])"
+    }
+  ],
   "tables": [
     {
       "name": "{{list_table}}",

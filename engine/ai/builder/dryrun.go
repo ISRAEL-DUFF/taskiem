@@ -9,8 +9,10 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // The dry run (spec 12.1 step 6) runs a draft through engine/wdtest: the
@@ -101,6 +103,13 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 		}
 	}
 	c.Trigger = trig
+	// A template step's steps are mocked as the workflow's own, by their
+	// expanded ids (decision 0047).
+	if def.HasTemplates() {
+		if exp, err := expansion.ExpandDefinition(def, expansion.Library(templates.Default())); err == nil {
+			def = exp
+		}
+	}
 	// Tenant variables the definition reads get a placeholder value: the
 	// dry run checks the workflow's shape, not the tenant's settings.
 	if raw, err := json.Marshal(def.Steps); err == nil {
@@ -153,6 +162,8 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}
 			case "signal":
 				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{}}
+			case "callback":
+				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{"body": map[string]any{}, "query": map[string]any{}, "received_at": "2026-01-01T09:00:00Z"}}
 			case "form":
 				answers := map[string]any{}
 				if st.Form != nil {
@@ -283,10 +294,10 @@ func sample(s any, types map[string]any, m *connector.Manifest, depth int) any {
 		}
 		// A pattern the plain sample misses: try the shapes patterns most
 		// often ask for (digits of common lengths: phone numbers, BVNs,
-		// account numbers).
+		// account numbers, a month).
 		if p, ok := sm["pattern"].(string); ok {
 			if re, err := regexp.Compile(p); err == nil && !re.MatchString(s) {
-				for _, c := range []string{"00000000000", "0000000000", "2348000000000", "000000", "0000", "sample_1", "Sample1"} {
+				for _, c := range []string{"00000000000", "0000000000", "2348000000000", "000000", "0000", "2026-01", "sample_1", "Sample1"} {
 					if re.MatchString(c) {
 						return c
 					}

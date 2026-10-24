@@ -52,8 +52,22 @@ type templateView struct {
 	SupersededBy string `json:"superseded_by,omitempty"`
 	// Product is the product the template works around (payrolla): the
 	// Start page offers it to businesses that connected the product.
-	Product    string          `json:"product,omitempty"`
+	Product string `json:"product,omitempty"`
+	// Callable is, for a template another workflow can use as a step
+	// (decision 0047), its interface: run inputs, outputs and effect.
+	Callable   *callableView   `json:"callable,omitempty"`
 	Definition json.RawMessage `json:"definition,omitempty"`
+}
+
+// callableView is a callable template's interface: the run inputs a
+// template step gives (a JSON Schema), the parameters it fills (those only
+// the template's trigger uses are left out), its outputs, and its effect,
+// computed from its steps.
+type callableView struct {
+	Inputs  json.RawMessage    `json:"inputs"`
+	Params  []string           `json:"params"`
+	Outputs []templates.Output `json:"outputs"`
+	Effect  templates.Effect   `json:"effect"`
 }
 
 func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templateView {
@@ -74,6 +88,13 @@ func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templa
 	if doc, err := t.Instantiate(t.Examples(), ""); err == nil {
 		if def, err := wd.Load(doc); err == nil {
 			v.Steps = wdtext.Describe(def, reg)
+			if t.Callable && def.RawInputs != nil {
+				c := &callableView{Inputs: def.RawInputs.Schema, Params: []string{}, Outputs: t.Outputs, Effect: templates.EffectOf(def, reg)}
+				for _, p := range t.StepParams() {
+					c.Params = append(c.Params, p.Name)
+				}
+				v.Callable = c
+			}
 		}
 	}
 	var head struct {
@@ -103,6 +124,15 @@ func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
 		for _, m := range lib.Match(q, 0) {
 			list = append(list, m.Template)
 		}
+	}
+	if r.URL.Query().Get("callable") == "true" {
+		var kept []*templates.Template
+		for _, t := range list {
+			if t.Callable {
+				kept = append(kept, t)
+			}
+		}
+		list = kept
 	}
 	if c := r.URL.Query().Get("category"); c != "" {
 		var kept []*templates.Template

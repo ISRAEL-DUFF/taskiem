@@ -184,6 +184,8 @@ A WD is a directed graph of steps plus metadata. Loops and parallelism are expli
 | `foreach` | Map a sub-flow over a list with a concurrency cap |
 | `wait` | Sleep for a duration or until a timestamp |
 | `signal` | Pause until an external event arrives (webhook, WhatsApp reply) |
+| `callback` | Pause until another system calls the run back at `run.callbacks.<id>` ([wd-v1](../contracts/wd-v1.md#callbacks-and-responses)) |
+| `respond` | Answer the webhook call that started the run (a trigger with `respond: true`) |
 | `approval` | Human decision under a governance policy |
 | `subflow` | Call another workflow, pinned to a version |
 | `form` (proposed) | Send a person a one-time form link and wait for their answers ([forms](forms.md)) |

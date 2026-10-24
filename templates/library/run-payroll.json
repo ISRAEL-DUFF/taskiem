@@ -131,6 +131,65 @@
       "maximum": 60
     }
   ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "period",
+      "type": "string",
+      "title": "Month",
+      "description": "The month paid, as YYYY-MM.",
+      "value": "=steps.settings.output.period"
+    },
+    {
+      "name": "approved",
+      "type": "boolean",
+      "title": "Approved",
+      "description": "Whether the payroll was approved. Nobody is paid otherwise.",
+      "value": "=steps.approve.output.decision == 'approved'"
+    },
+    {
+      "name": "paid",
+      "type": "integer",
+      "title": "Staff paid",
+      "description": "How many staff were paid and the payment confirmed.",
+      "value": "=steps.?summary.output.paid.orValue(0)"
+    },
+    {
+      "name": "failed",
+      "type": "integer",
+      "title": "Payments that failed",
+      "description": "How many payments failed.",
+      "value": "=steps.?summary.output.failed.orValue(0)"
+    },
+    {
+      "name": "unconfirmed",
+      "type": "integer",
+      "title": "Payments not confirmed",
+      "description": "How many payments were sent but not confirmed by the bank yet.",
+      "value": "=steps.?summary.output.unconfirmed.orValue(0)"
+    },
+    {
+      "name": "paid_naira",
+      "type": "number",
+      "title": "Naira paid",
+      "description": "The total paid, in naira.",
+      "value": "=double(steps.?summary.output.paid_naira.orValue(0.0))"
+    },
+    {
+      "name": "fees_naira",
+      "type": "number",
+      "title": "Fees",
+      "description": "The fees the payments account charged, in naira.",
+      "value": "=double(steps.?summary.output.fees_naira.orValue(0.0))"
+    },
+    {
+      "name": "not_paid",
+      "type": "list",
+      "title": "Not paid",
+      "description": "Each member of staff not paid, with why.",
+      "value": "=steps.?summary.output.not_paid.orValue([])"
+    }
+  ],
   "tables": [
     {
       "name": "{{staff_table}}",
@@ -292,6 +351,20 @@
       "config": {
         "cron": "0 8 {{pay_day}} * *",
         "timezone": "Africa/Lagos"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "period": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "description": "The month to pay, as YYYY-MM. Left out, the month the run starts in, or the schedule fired in."
+          }
+        }
       }
     },
     "steps": [

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Step } from "@sdk/wd";
 import { autoLayout, connect, disconnect, freshId, removeStep, renameStep, toGraph } from "./graph";
 import { coerce, kindOf } from "./schema";
-import { redact, timeline, topLevelStatus, type StepRow } from "./timeline";
+import { redact, templateGroups, timeline, topLevelStatus, type StepRow } from "./timeline";
 
 const steps: Step[] = [
   { id: "a", type: "transform", config: { output: 1 } },
@@ -96,5 +96,26 @@ describe("topLevelStatus", () => {
   });
   it("lets a finished step speak for itself", () => {
     expect(topLevelStatus([row("loop", "completed"), row("loop[0].s", "failed")], ["loop"])).toEqual({ loop: "completed" });
+  });
+  it("counts a template step's expanded steps as its own", () => {
+    const got = topLevelStatus([row("pay__body", "running"), row("pay__input", "completed"), row("pay__approve", "waiting"), row("pay__pay_all[0].pay__pay", "completed")], ["pay"]);
+    expect(got).toEqual({ pay: "running" });
+  });
+});
+
+describe("templateGroups", () => {
+  const row = (id: string, status: StepRow["status"] = "completed"): StepRow => ({ id, status, attempts: 1, firstAt: "", lastAt: "", events: [] });
+  it("puts a template step's rows under it, in order", () => {
+    const rows = [row("names"), row("pay__body"), row("pay__input"), row("pay__read_list"), row("pay__pay_all[0].pay__pay"), row("pay"), row("after"), row("pay_extra")];
+    const got = templateGroups(rows).map((g) => [g.template, g.rows.map((r) => r.id)]);
+    expect(got).toEqual([
+      [null, ["names"]],
+      ["pay", ["pay__body", "pay__input", "pay__read_list", "pay__pay_all[0].pay__pay", "pay"]],
+      [null, ["after"]],
+      [null, ["pay_extra"]],
+    ]);
+  });
+  it("leaves a capability step's composite rows alone", () => {
+    expect(templateGroups([row("pay__recipient"), row("pay")]).every((g) => g.template === null)).toBe(true);
   });
 });

@@ -2136,6 +2136,14 @@
       "text": "Pinnu ohun tí a ó ṣe:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Dúró kí ètò mìíràn pè padà",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Dúró tó {duration} kí ètò mìíràn pè padà",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} pẹ̀lú àkáǹtì ìsanwó tí a so",
       "reviewed": false
@@ -2256,6 +2264,10 @@
       "text": "Ṣe àwọn wọ̀nyí ní àkókò kan náà:",
       "reviewed": false
     },
+    "wd.respond": {
+      "text": "Dáhùn ìbéèrè tó bẹ̀rẹ̀ èyí",
+      "reviewed": false
+    },
     "wd.schedule.daily": {
       "text": "Lójoojúmọ́ ní {time} (àkókò {tz})",
       "reviewed": false
@@ -2306,6 +2318,10 @@
     },
     "wd.signal_named": {
       "text": "Dúró de {event}",
+      "reviewed": false
+    },
+    "wd.template": {
+      "text": "Lo àwòṣe: {template}",
       "reviewed": false
     },
     "wd.transform": {

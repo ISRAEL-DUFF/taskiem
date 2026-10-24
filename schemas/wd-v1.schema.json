@@ -205,7 +205,10 @@
             "transform",
             "ai",
             "form",
-            "capability"
+            "capability",
+            "template",
+            "callback",
+            "respond"
           ]
         },
         "name": {
@@ -234,6 +237,27 @@
         },
         "on_error": {
           "$ref": "#/$defs/subflow"
+        },
+        "origin": {
+          "description": "Set when a template step is expanded (docs/contracts/wd-v1.md, template steps): the template a step came from, the template step it came from, and its id inside the template, under which its output is kept in its scope's results. Never written by hand.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "template",
+            "step"
+          ],
+          "properties": {
+            "template": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            },
+            "step": {
+              "$ref": "#/$defs/stepId"
+            },
+            "id": {
+              "$ref": "#/$defs/stepId"
+            }
+          }
         }
       }
     },
@@ -466,6 +490,51 @@
           },
           "then": {
             "$ref": "#/$defs/capabilityStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "template"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/templateStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "callback"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/callbackStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "respond"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/respondStep"
           }
         }
       ]
@@ -1366,7 +1435,8 @@
                   },
                   "respond": {
                     "type": "boolean",
-                    "default": false
+                    "default": false,
+                    "description": "The caller waits (up to 30 seconds) for a respond step's answer instead of a 202 with the run id."
                   }
                 }
               }
@@ -2141,6 +2211,115 @@
         },
         "effect": {
           "$ref": "#/$defs/effect"
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "templateStep": {
+      "description": "A callable template (templates/, decision 0047) used as a step: expanded into the template's steps when the workflow is deployed, its ids prefixed with this step's id and two underscores; the step's output is the template's outputs (docs/contracts/wd-v1.md, template steps).",
+      "type": "object",
+      "required": [
+        "type",
+        "template"
+      ],
+      "properties": {
+        "type": {
+          "const": "template"
+        },
+        "template": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "description": "The callable template's id."
+        },
+        "params": {
+          "type": "object",
+          "description": "The template's parameters, as the Start page takes them: values, never expressions."
+        },
+        "input": {
+          "$ref": "#/$defs/values",
+          "description": "The template's run inputs, as literals or expressions over this workflow."
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "callbackStep": {
+      "description": "Waits for another system to call the run back (docs/contracts/wd-v1.md, callback steps): the step's address, run.callbacks.<id>, is sent to that system by an earlier step; a POST to it is the step's output.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "callback"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "$ref": "#/$defs/duration",
+              "description": "How long to wait for the call (default 7d)."
+            },
+            "on_timeout": {
+              "enum": [
+                "fail",
+                "continue"
+              ],
+              "default": "fail",
+              "description": "continue: the step completes with {timed_out: true} instead of failing."
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "respondStep": {
+      "description": "Answers the webhook call that started the run (docs/contracts/wd-v1.md, respond steps): only in a workflow whose webhook trigger has respond: true. The caller gets this status, headers and body; the run carries on.",
+      "type": "object",
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "respond"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "body"
+          ],
+          "properties": {
+            "status": {
+              "type": "integer",
+              "minimum": 200,
+              "maximum": 599,
+              "default": 200
+            },
+            "headers": {
+              "$ref": "#/$defs/values",
+              "description": "Response headers; only Content-Type, Location, Cache-Control and X- headers are sent."
+            },
+            "body": {
+              "description": "The response body: an object or list is sent as JSON, a string as text; values may be expressions."
+            }
+          }
         }
       },
       "unevaluatedProperties": false,

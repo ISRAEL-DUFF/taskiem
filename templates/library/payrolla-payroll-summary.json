@@ -49,6 +49,30 @@
       "picker": "role"
     }
   ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "paid",
+      "type": "integer",
+      "title": "Staff paid",
+      "description": "How many staff Payrolla's payments reached.",
+      "value": "=steps.summary.output.paid"
+    },
+    {
+      "name": "paid_naira",
+      "type": "number",
+      "title": "Naira paid",
+      "description": "The total net pay that reached staff, in naira.",
+      "value": "=double(steps.summary.output.paid_naira)"
+    },
+    {
+      "name": "not_paid",
+      "type": "list",
+      "title": "Not paid",
+      "description": "Each member of staff whose payment failed or was reversed, with why.",
+      "value": "=steps.summary.output.not_paid"
+    }
+  ],
   "definition": {
     "schema": "wd/v1",
     "id": "wf_payrollaPayrollSummary",

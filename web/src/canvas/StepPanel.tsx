@@ -15,6 +15,8 @@ import { useAdvanced } from "../auth";
 import { isExpression } from "../lib/schema";
 import type { Source } from "../lib/plaincanvas";
 import { DurationPicker, RulesBuilder, ValuePicker } from "./PlainPickers";
+import { ParamField } from "../pages/Templates";
+import { effectWords, toParams, type Template } from "../lib/templates";
 
 const ID = /^[a-z][a-z0-9_]{0,62}$/;
 
@@ -123,7 +125,8 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       <h3>Configuration</h3>
       {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "capability" && <CapabilityConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
-      {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel"].includes(step.type) && <ByHand />}
+      {step.type === "template" && <TemplateConfig step={step} set={set} advanced={advanced} sources={sources} />}
+      {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel", "callback", "respond"].includes(step.type) && <ByHand />}
       {advanced && step.type === "http" && (
         <>
           <div className="row">
@@ -261,7 +264,13 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           problems={problems.filter((p) => p.path.startsWith("/config")).map((p) => ({ ...p, path: p.path.slice("/config".length) }))}
         />
       )}
-      {advanced && (step.type === "branch" || step.type === "foreach" || step.type === "parallel") && (
+      {advanced && step.type === "callback" && (
+        <p className="hint">
+          The run pauses here until another system calls <code>run.callbacks.{step.id}</code>: send that address with an earlier step. The call's body and query are this step's output.
+        </p>
+      )}
+      {advanced && step.type === "respond" && <p className="hint">The caller of the webhook that started this run gets this status, headers and body. The trigger needs respond: true.</p>}
+      {advanced && (step.type === "branch" || step.type === "foreach" || step.type === "parallel" || step.type === "callback" || step.type === "respond") && (
         <Field label="Configuration (JSON)" hint="Nested steps are edited here.">
           <JsonInput value={cfg} onChange={(v) => v && set({ config: v })} rows={14} />
         </Field>
@@ -437,6 +446,78 @@ function CapabilityConfig({ step, connectors, set, advanced, sources }: { step: 
       )}
     </>
   );
+}
+
+/**
+ * A template step: which callable template, its parameters, and its run
+ * inputs from this workflow (decision 0047). Its steps run in this run; the
+ * panel shows them, what the step gives back, and what the template does.
+ */
+function TemplateConfig({ step, set, advanced, sources }: { step: Extract<Step, { type: "template" }>; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {
+  const list = useLoad(() => get<{ templates: Template[] }>("/v1/templates?callable=true"), []);
+  const tpl = list.data?.templates.find((t) => t.id === step.template);
+  const params = (tpl?.params ?? []).filter((p) => tpl?.callable?.params.includes(p.name));
+  const given = (step.params ?? {}) as Record<string, unknown>;
+  const values = Object.fromEntries(params.map((p) => [p.name, given[p.name] === undefined ? "" : String(given[p.name])]));
+  return (
+    <>
+      <Field label="Template" hint="A ready workflow from the library, used as one step: its approvals, payments and waits run in this workflow's run.">
+        <select value={step.template} onChange={(e) => set({ template: e.target.value, params: undefined, input: {} })}>
+          {!tpl && <option value={step.template}>{step.template}</option>}
+          {(list.data?.templates ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.title}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {tpl?.callable && <p className="hint">{effectWords(tpl.callable.effect)}</p>}
+      {params.length > 0 && <h3>Settings</h3>}
+      {params.map((p) => (
+        <ParamField
+          key={p.name}
+          param={p}
+          value={values[p.name] ?? ""}
+          params={params}
+          values={values}
+          onChange={(v) => set({ params: nonEmpty({ ...given, ...toParams([p], { [p.name]: v }), ...(v.trim() === "" ? { [p.name]: undefined } : {}) }) })}
+          onOther={(name, v) => set({ params: nonEmpty({ ...given, ...toParams(params.filter((x) => x.name === name), { [name]: v }) }) })}
+        />
+      ))}
+      <h3>What it starts with</h3>
+      <SchemaForm schema={tpl?.callable?.inputs as never} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
+      {tpl?.callable && tpl.callable.outputs.length > 0 && (
+        <>
+          <h3>What it gives back</h3>
+          <ul className="plain-list">
+            {tpl.callable.outputs.map((o) => (
+              <li key={o.name}>
+                <strong>{o.title}</strong>: {o.description} {advanced && <code>steps.{step.id}.output.{o.name}</code>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {tpl && (
+        <details>
+          <summary>Its steps ({tpl.steps.length})</summary>
+          <ol className="plain-list">
+            {tpl.steps.map((l) => (
+              <li key={l.number} style={{ marginLeft: l.depth * 16 }}>
+                {l.text}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+    </>
+  );
+}
+
+/** params without the ones left blank. */
+function nonEmpty(o: Record<string, unknown>): Record<string, unknown> | undefined {
+  const out = Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ""));
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function ConnectorConfig({ step, connectors, set, advanced, sources }: { step: Extract<Step, { type: "connector" }>; connectors: ConnectorInfo[]; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {

@@ -117,6 +117,35 @@ describe("round trip edge cases", () => {
     expect(evaluate(code)).toEqual(def);
   });
 
+  it("writes template steps unexpanded, and back", () => {
+    const def = base([
+      { id: "names", type: "transform", config: { output: { batch: "may-1" } } },
+      { id: "pay", type: "template", template: "pay-a-list", needs: ["names"], params: { approver_role: "finance", approval_hours: 12 },
+        input: { batch: "=steps.names.output.batch" } },
+      { id: "inv", type: "template", template: "send-invoice", input: { name: "Ada", amount_naira: 5000, for: "Rice" } },
+      { id: "tell", type: "transform", needs: ["pay"], config: { output: { paid: "=steps.pay.output.paid" } } },
+    ]);
+    const code = sdk.generate(def, opts);
+    expect(code).toContain(`template("pay-a-list", {`);
+    expect(code).toContain(`template("send-invoice", undefined, {`);
+    expect(evaluate(code)).toEqual(def);
+  });
+
+  it("writes callback and respond steps, and back", () => {
+    const def = base([
+      { id: "send", type: "transform", config: { output: { url: "=run.callbacks.verified" } } },
+      { id: "verified", type: "callback", needs: ["send"], config: { timeout: "2h", on_timeout: "continue" } },
+      { id: "plain", type: "callback", needs: ["send"] },
+      { id: "answer", type: "respond", needs: ["verified"], config: { status: 201, headers: { "X-Ref": "=run.id" }, body: { ok: true, status: "=steps.verified.output.body.status" } } },
+    ]);
+    def.trigger = { type: "webhook", config: { path: "/kyc", auth: "hmac", respond: true } };
+    const code = sdk.generate(def, opts);
+    expect(code).toContain(`callback({ timeout: "2h", on_timeout: "continue" })`);
+    expect(code).toContain(`callback()`);
+    expect(code).toContain(`respond({`);
+    expect(evaluate(code)).toEqual(def);
+  });
+
   it("types numbers in code by value, so bundling cannot change them", () => {
     // What esbuild prints for 100000 and 2.0.
     expect(sdk.compileFunction("({ trigger }) => trigger.body.amount > 1e5")).toBe("trigger.body.amount > 100000");

@@ -20,14 +20,16 @@ import { SchemaForm } from "../forms/SchemaForm";
 import { NeedsList } from "./Readiness";
 import { ProblemLine } from "../forms/ProblemLine";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
+import type { Template } from "../lib/templates";
 
 const nodeTypes = { step: StepNode, trigger: TriggerNode };
-const PALETTE: Step["type"][] = ["connector", "capability", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
+const PALETTE: Step["type"][] = ["connector", "capability", "template", "http", "code", "transform", "approval", "form", "signal", "callback", "respond", "wait", "branch", "parallel", "foreach"];
 
 /** The steps an owner adds without Advanced, in their words. */
 const PLAIN_PALETTE: [Step["type"], string][] = [
   ["connector", "Use a service"],
   ["capability", "Pay or get paid"],
+  ["template", "Use a ready workflow"],
   ["approval", "Ask for approval"],
   ["form", "Ask someone to fill in a form"],
   ["wait", "Wait"],
@@ -39,6 +41,8 @@ interface Loaded {
   deployments: Deployment[];
   /** Made from a template another now replaces. */
   upgrade?: { template: string; title: string };
+  /** Templates its template steps use that the library has changed since the latest version was saved (decision 0047). */
+  template_updates?: { template: string; title: string; changes: string[] }[];
 }
 interface VersionDoc {
   version: VersionInfo;
@@ -68,6 +72,7 @@ export function Editor() {
   const advanced = useAdvanced();
   const wf = useLoad(() => get<Loaded>(`/v1/workflows/${id}`), [id]);
   const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
+  const callables = useLoad(() => get<{ templates: Template[] }>("/v1/templates?callable=true"), []);
   const version = Number(params.get("v")) || wf.data?.workflow.latest_version || 0;
   const doc = useLoad(() => (version ? get<VersionDoc>(`/v1/workflows/${id}/versions/${version}`) : Promise.resolve(undefined)), [id, version]);
 
@@ -393,6 +398,19 @@ export function Editor() {
           <Link to={`/start/guide?template=${encodeURIComponent(wf.data.upgrade.template)}`}>Set it up</Link>, then turn this one off. This one keeps working until you do.
         </div>
       )}
+      {(wf.data.template_updates ?? []).map((u) => (
+        <div className="notice" role="status" key={u.template}>
+          <strong>{u.title}</strong> has an update. This workflow keeps the version it was saved with; save it again to take the update, then publish.
+          <details>
+            <summary>What changed ({u.changes.length})</summary>
+            <ul className="plain-list mono">
+              {u.changes.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      ))}
       {managed && (
         <div className="notice" role="status">
           This workflow is managed in Git (<code>{managed}</code>). Change it in the repository: a push to the connected branch deploys it once its
@@ -510,7 +528,7 @@ export function Editor() {
                 step={sel}
                 others={def.steps.filter((s) => s.id !== sel.id).map((s) => s.id)}
                 names={Object.fromEntries(def.steps.map((s) => [s.id, s.name ?? ""]))}
-                sources={sourcesFor(def as Parameters<typeof sourcesFor>[0], sel.id, connectors.data?.connectors ?? [])}
+                sources={sourcesFor(def as Parameters<typeof sourcesFor>[0], sel.id, connectors.data?.connectors ?? [], callables.data?.templates ?? [])}
                 connectors={connectors.data?.connectors ?? []}
                 onChange={(s) => editSteps(def.steps.map((x) => (x.id === sel.id ? s : x)))}
                 onRename={(to) => {

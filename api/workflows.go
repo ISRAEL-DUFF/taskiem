@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,8 +20,10 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
+	"github.com/israel-duff/taskiem/engine/wddiff"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -37,6 +40,27 @@ func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []prob
 		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
 	}
 	return append(s.checkWith(ctx, tenant, doc, reg), s.keptProblems(ctx, tenant, doc)...)
+}
+
+// checkVersion is check for a saved version: its template steps are
+// checked with the templates it pinned when it was saved (decision 0047).
+func (s *Server) checkVersion(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, doc []byte) []problem {
+	if !strings.Contains(string(doc), `"template"`) {
+		return s.check(ctx, tenant, doc)
+	}
+	find, _, err := runtime.PinnedTemplates(ctx, tx, wf, v, templates.Default())
+	if err != nil {
+		return []problem{{Path: "/", Message: "the version's templates could not be loaded: " + err.Error()}}
+	}
+	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), tenant.String())
+	if err != nil {
+		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
+	}
+	var out []problem
+	if err := s.withCodeSlot(ctx, tenant, func() { out = wdcheck.CheckWith(doc, reg, find) }); err != nil {
+		return []problem{{Path: "/", Message: "the definition could not be checked: " + err.Error()}}
+	}
+	return append(out, s.keptProblems(ctx, tenant, doc)...)
 }
 
 // checkWith is wdcheck.Check holding a tenant-code slot: checking code
@@ -233,9 +257,13 @@ func insertVersionTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int
 	if len(layout) > 0 {
 		lay = layout
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by, git_commit)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`, wf, v, tenant, doc, lay, sum[:], by, commit)
-	return err
+	if _, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by, git_commit)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`, wf, v, tenant, doc, lay, sum[:], by, commit); err != nil {
+		return err
+	}
+	// The templates its template steps use, as the library has them now:
+	// a later library update is offered, never taken (decision 0047).
+	return runtime.PinTemplates(ctx, tx, tenant, wf, v, doc, templates.Default())
 }
 
 func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +363,7 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	var versions []versionInfo
 	var deployments []deployment
 	var from string // the template its first version was made from
+	var updates []runtime.TemplateUpdate
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path, `+liveTrigger+`
@@ -362,6 +391,13 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 		if err := tx.QueryRow(ctx, `SELECT template_id FROM workflow_versions WHERE workflow_id = $1 AND template_id IS NOT NULL ORDER BY version LIMIT 1`, wf).Scan(&from); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
+		// The templates the latest version's template steps pinned that
+		// the library has changed since: the next version saved takes them.
+		_, pinned, err := runtime.PinnedTemplates(ctx, tx, wf, sum.LatestVersion, templates.Default())
+		if err != nil {
+			return err
+		}
+		updates = runtime.TemplateUpdates(pinned, templates.Default(), func(a, b []byte) []string { return wddiff.Diff(a, b) })
 		return nil
 	})
 	if err != nil {
@@ -369,6 +405,9 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := map[string]any{"workflow": sum, "versions": versions, "deployments": deployments}
+	if len(updates) > 0 {
+		out["template_updates"] = updates
+	}
 	// Made from a template another now replaces: offer the new one.
 	if t, ok := templates.Default().Get(from); ok && t.SupersededBy != "" {
 		if next, ok := templates.Default().Get(t.SupersededBy); ok {
@@ -398,16 +437,21 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	var info versionInfo
 	var def, layout []byte
+	var probs []problem
 	err = s.tx(r, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id, definition, layout
+		if err := tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id, definition, layout
 			FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
-			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &info.AIBuild, &def, &layout)
+			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &info.AIBuild, &def, &layout); err != nil {
+			return err
+		}
+		probs = s.checkVersion(r.Context(), tx, principalFrom(r.Context()).TenantID, wf, v, def)
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(s.checkFor(r, def))}
+	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(probs)}
 	if layout != nil {
 		out["layout"] = json.RawMessage(layout)
 	}
@@ -571,7 +615,7 @@ func (s *Server) publishToTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUI
 	if state != "draft" {
 		return nil, "", false, fmt.Errorf("%w: version %d is %s", errConflict, v, state)
 	}
-	if probs = s.check(ctx, tenant, def); len(probs) > 0 {
+	if probs = s.checkVersion(ctx, tx, tenant, wf, v, def); len(probs) > 0 {
 		return probs, "", false, errInvalid
 	}
 	if probs, err = missingPolicies(ctx, tx, def); err != nil || len(probs) > 0 {

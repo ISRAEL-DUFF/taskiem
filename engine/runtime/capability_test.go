@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // railManifest is a rail with pay_bank (a queued payout), get_payout and
@@ -343,5 +345,85 @@ func TestCapabilityRetryKeepsTheKey(t *testing.T) {
 	defer r.mu.Unlock()
 	if len(keys) != 2 {
 		t.Errorf("%d keys for 2 people over %d attempts: %v (%s)", len(keys), lost, keys, types(events(t, e, ref)))
+	}
+}
+
+// payPeople is a callable template that pays each person through a rail
+// and waits for each payment to settle.
+const payPeople = `{"id":"pay-people","title":"Pay people","summary":"S","description":"D","category":"payments","tags":[],"connectors":["capability:pay_bank"],"params":[],
+ "callable":true,
+ "outputs":[{"name":"count","type":"integer","title":"Count","description":"How many were paid","value":"=size(steps.pay_all.output)"},
+            {"name":"statuses","type":"list","title":"Statuses","description":"Each payment's outcome","value":"=steps.pay_all.output.map(o, has(o.settle) ? o.settle.status : o.pay.status)"}],
+ "definition":{"schema":"wd/v1","id":"wf_payPeople","version":1,"name":"Pay people","trigger":{"type":"manual"},
+  "inputs":{"schema":{"type":"object","required":["people"],"properties":{"people":{"type":"array"}}}},
+  "steps":[{"id":"pay_all","type":"foreach","config":{"items":"=trigger.body.people","max_concurrency":5,"steps":[
+    {"id":"pay","type":"capability","uses":"pay_bank","connection":"rail",
+     "input":{"amount_kobo":"=item.kobo","bank_code":"058","account_number":"=item.account","account_name":"=item.name","narration":"Salary"},
+     "effect":{"idempotency_seed":"='payroll-1:' + item.id"},"retry":{"max":3,"initial":"10ms","backoff":"fixed"}},
+    {"id":"settle","type":"capability","uses":"await_settlement","needs":["pay"],"timeout":"72h",
+     "when":"=steps.pay.output.status == 'pending'","input":{"payout_id":"=steps.pay.output.payout_id"}}]}}]}}`
+
+// A template step runs the template's steps in the calling run: its
+// capability steps on the rail, each payment once under its own key, the
+// run pinned to the expansion, and the step's output the template's.
+func TestTemplateStepRunsInTheRun(t *testing.T) {
+	e := rt.New(t)
+	r := newRail(t, e, "testrail", "Test Rail")
+	connect(t, e, "rail", "testrail")
+	lib, err := templates.Load(fstest.MapFS{"library/pay-people.json": {Data: []byte(payPeople)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Store.Templates = lib
+	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_c","version":1,"name":"C","trigger":{"type":"manual"},"steps":[
+	  {"id":"staff","type":"template","template":"pay-people","input":{"people":"=trigger.people"}},
+	  {"id":"done","type":"transform","needs":["staff"],"config":{"output":{"paid":"=steps.staff.output.count"}}}]}`)
+	ref := e.Start(t, wf, people)
+	e.Drain(t)
+	r.mu.Lock()
+	if len(r.paid) != 2 {
+		t.Fatalf("paid %v", r.paid)
+	}
+	r.mu.Unlock()
+	var payouts []string
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.StepCompleted && strings.HasSuffix(ev.StepID, ".staff__pay") {
+			var p struct {
+				Output map[string]any `json:"output"`
+			}
+			_ = json.Unmarshal(ev.Payload, &p)
+			payouts = append(payouts, p.Output["payout_id"].(string))
+		}
+	}
+	if len(payouts) != 2 {
+		t.Fatalf("payouts %v: %s", payouts, types(events(t, e, ref)))
+	}
+	for _, p := range payouts {
+		if woke, err := e.Store.DeliverSignal(ctx, e.Tenant, "prod", "testrail@1:payout.settled", p, map[string]any{"event": "payout.settled", "fields": map[string]any{"payout_id": p}}); err != nil || len(woke) != 1 {
+			t.Fatalf("settled: %v %v", woke, err)
+		}
+	}
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
+	}
+	var digest []byte
+	if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT expansion FROM runs WHERE id = $1`, ref.ID).Scan(&digest)
+	}); err != nil || len(digest) != 32 {
+		t.Fatalf("expansion %x %v", digest, err)
+	}
+	got := map[string]map[string]any{}
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.StepCompleted && (ev.StepID == "staff" || ev.StepID == "done") {
+			var p struct {
+				Output map[string]any `json:"output"`
+			}
+			_ = json.Unmarshal(ev.Payload, &p)
+			got[ev.StepID] = p.Output
+		}
+	}
+	if got["done"]["paid"] != float64(2) || len(got["staff"]["statuses"].([]any)) != 2 || got["staff"]["statuses"].([]any)[0] != "settled" {
+		t.Errorf("outputs %v", got)
 	}
 }

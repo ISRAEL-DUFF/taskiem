@@ -38,6 +38,37 @@
       "maximum": 90
     }
   ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "number",
+      "type": "string",
+      "title": "Invoice number",
+      "description": "The invoice's number, as the customer sees it.",
+      "value": "=steps.invoice.output.number"
+    },
+    {
+      "name": "total",
+      "type": "string",
+      "title": "Total",
+      "description": "The invoice's total, written for people (NGN 25,000.00).",
+      "value": "=steps.invoice.output.total"
+    },
+    {
+      "name": "total_kobo",
+      "type": "integer",
+      "title": "Total (kobo)",
+      "description": "The invoice's total in kobo.",
+      "value": "=steps.invoice.output.total_kobo"
+    },
+    {
+      "name": "paid",
+      "type": "boolean",
+      "title": "Paid",
+      "description": "Whether the invoice was paid in full before the days to wait ran out.",
+      "value": "=steps.?paid.output.hasValue()"
+    }
+  ],
   "definition": {
     "schema": "wd/v1",
     "id": "wf_sendInvoice",

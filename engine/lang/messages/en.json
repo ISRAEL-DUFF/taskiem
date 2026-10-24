@@ -2669,6 +2669,16 @@
       "reviewed": true,
       "context": "Read-back: a decision between paths"
     },
+    "wd.callback": {
+      "text": "Wait for the other system to call back",
+      "reviewed": true,
+      "context": "Read-back: a callback step with the default wait"
+    },
+    "wd.callback_for": {
+      "text": "Wait up to {duration} for the other system to call back",
+      "reviewed": true,
+      "context": "Read-back: a callback step; {duration} is read aloud (wd.unit.*)"
+    },
     "wd.capability": {
       "text": "{what} with whichever payments account is connected",
       "reviewed": true,
@@ -2819,6 +2829,11 @@
       "reviewed": true,
       "context": "Read-back: branches run at the same time"
     },
+    "wd.respond": {
+      "text": "Answer the request that started this",
+      "reviewed": true,
+      "context": "Read-back: a respond step (the webhook caller gets this answer)"
+    },
     "wd.schedule.daily": {
       "text": "Every day at {time} ({tz} time)",
       "reviewed": true,
@@ -2883,6 +2898,11 @@
       "text": "Wait for {event}",
       "reviewed": true,
       "context": "Read-back: waits for a named event; {event} is the tenant's"
+    },
+    "wd.template": {
+      "text": "Use the template: {template}",
+      "reviewed": true,
+      "context": "Read-back: a template step (a callable template used inside the workflow); {template} is the template's title, e.g. Run payroll"
     },
     "wd.transform": {
       "text": "Prepare the data for the next steps",

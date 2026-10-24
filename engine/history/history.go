@@ -3,9 +3,11 @@
 package history
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -84,6 +86,34 @@ type RunInfo struct {
 	Version     int    `json:"version"`
 	Environment string `json:"environment"`
 	StartedAt   string `json:"started_at"`
+	// CallbacksAt and CallbackKey are set for a workflow with callback
+	// steps (wd-v1 callback steps): the address its callbacks share
+	// (<hooks>/<tenant>/callbacks/<run>) and the key each step's token is
+	// derived from (CallbackToken). The key is sealed in history, as
+	// personal data is, and never shown to expressions.
+	CallbacksAt string `json:"callbacks_at,omitempty"`
+	CallbackKey string `json:"callback_key,omitempty"`
+}
+
+// CallbackEvent is the signal a callback step waits for, correlated by the
+// run and step instance (CallbackCorrelation).
+const CallbackEvent = "callback"
+
+// CallbackCorrelation is the correlation a callback step instance waits on.
+func CallbackCorrelation(run, inst string) string { return run + "/" + inst }
+
+// CallbackToken is the token in a callback step instance's address: an
+// HMAC of the instance under the run's key, so each step has its own and
+// none reveals the key.
+func CallbackToken(key, inst string) string {
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte(inst))
+	return hex.EncodeToString(m.Sum(nil))[:32]
+}
+
+// CallbackURL is a callback step instance's address.
+func CallbackURL(at, key, inst string) string {
+	return at + "/" + CallbackToken(key, inst) + "/" + url.PathEscape(inst)
 }
 
 // Kinds of StepScheduled.

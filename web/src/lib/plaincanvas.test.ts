@@ -77,3 +77,14 @@ describe("a workflow made without typing an expression", () => {
     expect(when).toBe("=steps.approve.output.decision == 'approved'");
   });
 });
+
+describe("template step sources", () => {
+  it("offers a template step's outputs to the steps after it", () => {
+    const steps = [
+      { id: "pay", type: "template", template: "pay-a-list" },
+      { id: "tell", type: "transform", needs: ["pay"], config: { output: {} } },
+    ];
+    const got = sourcesFor({ steps }, "tell", [], [{ id: "pay-a-list", callable: { outputs: [{ name: "paid", type: "integer", title: "People paid" }] } }]);
+    expect(got).toEqual([{ label: "From “pay”: People paid", expr: "=steps.pay.output.paid", number: true }]);
+  });
+});

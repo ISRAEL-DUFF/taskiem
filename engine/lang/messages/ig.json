@@ -2136,6 +2136,14 @@
       "text": "Kpebie ihe a ga-eme:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Chere ka sistemụ ọzọ kpọghachi",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Chere ruo {duration} ka sistemụ ọzọ kpọghachi",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} site na akaụntụ ịkwụ ụgwọ ejikọrọ",
       "reviewed": false
@@ -2256,6 +2264,10 @@
       "text": "Mee ihe ndị a n'otu oge:",
       "reviewed": false
     },
+    "wd.respond": {
+      "text": "Zaa arịrịọ malitere nke a",
+      "reviewed": false
+    },
     "wd.schedule.daily": {
       "text": "Kwa ụbọchị n'elekere {time} (oge {tz})",
       "reviewed": false
@@ -2306,6 +2318,10 @@
     },
     "wd.signal_named": {
       "text": "Chere {event}",
+      "reviewed": false
+    },
+    "wd.template": {
+      "text": "Jiri ụdị: {template}",
       "reviewed": false
     },
     "wd.transform": {

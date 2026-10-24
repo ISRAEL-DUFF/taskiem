@@ -308,7 +308,18 @@ func checkUses(eu *EndUser, doc []byte) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return embed.Disallowed(uses, eu.AllowedConnectors), nil
+	bad := embed.Disallowed(uses, eu.AllowedConnectors)
+	// A template step's template must be one the app allows, as for
+	// instantiating it (decision 0047).
+	var root map[string]any
+	if json.Unmarshal(doc, &root) == nil {
+		for _, id := range embed.TemplatesOf(root["steps"]) {
+			if !slices.Contains(eu.AllowedTemplates, id) {
+				bad = append(bad, "template:"+id)
+			}
+		}
+	}
+	return bad, nil
 }
 
 // embedGuardBody checks a request carrying a definition (create, save,

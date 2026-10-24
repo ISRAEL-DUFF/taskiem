@@ -165,6 +165,10 @@ class Gen {
         this.use("capability");
         return call("capability", uses, optional(s.input), extraArg);
       }
+      case "template":
+        take("template", "params", "input");
+        this.use("template");
+        return call("template", s.template, optional(s.params), optional(s.input));
       case "http":
         take("config", "effect");
         this.use("http");
@@ -189,9 +193,14 @@ class Gen {
       case "signal":
       case "approval":
       case "form":
+      case "respond":
         take("config");
         this.use(s.type);
         return call(s.type, cfg);
+      case "callback":
+        take("config");
+        this.use("callback");
+        return call("callback", optional(cfg));
       case "subflow":
       case "ai":
         take("config", "input");

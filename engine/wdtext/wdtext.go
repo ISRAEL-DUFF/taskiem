@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Line is one step of the description. Depth is 0 for top-level steps and
@@ -268,6 +269,19 @@ func (d describer) what(st *wd.Step) string {
 			return d.t("wd.capability.via", "what", what, "connection", st.Connection)
 		}
 		return d.t("wd.capability", "what", what)
+	case "callback":
+		if c := st.Callback; c != nil && c.Timeout != "" {
+			return d.t("wd.callback_for", "duration", DurationIn(c.Timeout, d.lang))
+		}
+		return d.t("wd.callback")
+	case "respond":
+		return d.t("wd.respond")
+	case "template":
+		title := st.Template
+		if t, ok := templates.Default().Get(st.Template); ok {
+			title = t.Title
+		}
+		return d.t("wd.template", "template", title)
 	case "approval":
 		a := st.Approval
 		if a == nil {
