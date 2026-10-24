@@ -344,6 +344,9 @@ func (s *Server) runInvoicePayments(ctx context.Context) {
 			if err := s.Invoices.StartPaid(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("invoices: runs on paid", "err", err)
 			}
+			if err := s.Invoices.StartPayments(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("invoices: runs on payments", "err", err)
+			}
 		case <-check.C:
 			if err := s.Invoices.CheckPayments(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("invoices: payments", "err", err)

@@ -171,8 +171,8 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 		}
 		return fmt.Errorf("a storefront trigger's action is order, enquiry, callback or booking")
 	case "invoice":
-		if str(c, "event") != "paid" {
-			return fmt.Errorf("an invoice trigger's event is paid")
+		if e := str(c, "event"); e != "paid" && e != "payment" {
+			return fmt.Errorf("an invoice trigger's event is paid or payment")
 		}
 		return nil
 	case "form":

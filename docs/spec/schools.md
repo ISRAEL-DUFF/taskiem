@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; **B0 to B4 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 to B5 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 
@@ -368,6 +368,15 @@ The school's issuing connection; issuing one and in batches, resumable, with a d
 ### B5: cash, approvals and receipts (M)
 
 Cash postings, thresholds and approvals for cash and discounts; receipts as records, the PDF, the QR verification page; the `invoice` trigger's `payment` event; `school-receipt`.
+
+**Built** (B5): migration 00214 (`school_pending_postings` for cash postings, standing discounts, discount amendments and held term invoices, with their decisions; `school_receipts` and `school_receipt_counters`; the cash threshold; the `school_approval` outbox kind; `invoice_payment_starts`); `engine/schools` cash postings counted through the one payment path, approvals (the requester never decides), receipts issued once per payment part and voided on undo or reversal; `engine/pdf`, a small PDF writer with an embedded font so ₦ prints; the public check at `/r/<token>`; the `invoice` trigger's `payment` event; approvals in chat; the Payments, Receipts and Approvals pages ([schools](../schools.md), [invoices](../invoices.md)). Differences from §8 and §9:
+
+- **B3's refusals became requests**: a discount or posting at or above a threshold answers 202 with the recorded request, and approving a held term invoice creates it under the same once-only key.
+- **The cash threshold is unset by default** (no second person); 0 means every posting waits for one. Four-eyes is strict, with no exception for a one-person business.
+- **Receipt numbers** are `RCT-<session's first year>T<term's ordinal>-<sequence>`; the PDF shows the student's name to anyone with `school.read`, audited per render, while lists stay masked.
+- **The font is a subset of Liberation Sans** renamed "Taskiem Receipt Sans" under the OFL, two small files committed with their licence: the one exception to the rule against binaries in the repository, accepted by the founder on 2026-10-24.
+- **`/r/<token>` shares its path with form links**: a receipt token is tried first; a guess gets the form link's not-found.
+- **Not yet**: the `school-receipt` template (B9); requests older than 7 days are no longer pushed to approvers' phones, though still decidable in the web app.
 
 ### B6: the family page (M)
 

@@ -79,6 +79,7 @@ func (s *Server) schoolRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/schools/families/{id}/guardians/{guardian}", s.changeSchoolGuardian)
 	s.schoolFeeRoutes(r)     // fees and term invoices (schools_fees.go)
 	s.schoolAccountRoutes(r) // students' account numbers (schools_accounts.go)
+	s.schoolCashRoutes(r)    // cash at the desk, approvals, receipts (schools_cash.go)
 	r.With(manage, s.tenantWide).Delete("/schools/families/{id}/guardians/{guardian}", s.removeSchoolGuardian)
 }
 
@@ -132,6 +133,7 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var on, bursar bool
 	var threshold int64
+	var cash *int64
 	var issuing schools.Issuing
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
@@ -139,6 +141,9 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if threshold, err = schools.DiscountThreshold(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		if cash, err = schools.CashThreshold(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
 		if issuing, err = schools.GetIssuing(r.Context(), tx, p.TenantID); err != nil {
@@ -154,8 +159,17 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": on, "bursar_role": bursar, "discount_threshold_naira": threshold / 100,
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": on, "bursar_role": bursar, "discount_threshold_naira": threshold / 100, "cash_threshold_naira": nairaOrNil(cash),
 		"issuing": issuing, "issuers": issuers})
+}
+
+// nairaOrNil is a nullable threshold in whole naira.
+func nairaOrNil(kobo *int64) *int64 {
+	if kobo == nil {
+		return nil
+	}
+	n := *kobo / 100
+	return &n
 }
 
 // putSchoolSettings answers PUT /v1/settings/schools: only an owner turns
@@ -174,6 +188,9 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		// threshold in whole naira (0: none). Discounts at or above it
 		// need a second person (B5; refused until then).
 		DiscountThresholdNaira *int64 `json:"discount_threshold_naira"`
+		// CashThresholdNaira, when given, sets the school's cash threshold
+		// in whole naira: null for none, 0 for every posting (B5).
+		CashThresholdNaira json.RawMessage `json:"cash_threshold_naira"`
 		// Issuing, when given, sets the connection that issues students'
 		// account numbers (and its wallet), and whether siblings share
 		// family credit.
@@ -196,6 +213,7 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		addBursar = false // the plan has no custom roles: the area still turns on
 	}
 	bursar, threshold := false, int64(0)
+	var cash *int64
 	var issuing schools.Issuing
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		changed, err := schools.SetEnabled(r.Context(), tx, p.TenantID, req.Enabled, p.Actor())
@@ -236,6 +254,26 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		if len(req.CashThresholdNaira) > 0 && req.Enabled {
+			var kobo *int64
+			if string(req.CashThresholdNaira) != "null" {
+				var n int64
+				if err := json.Unmarshal(req.CashThresholdNaira, &n); err != nil || n < 0 || n > 1_000_000_000 {
+					return errors.Join(errBadRequest, errors.New("cash_threshold_naira is null (none), 0 (every posting) or up to 1,000,000,000"))
+				}
+				n *= 100
+				kobo = &n
+			}
+			was, err := schools.SetCashThreshold(r.Context(), tx, p.TenantID, kobo, p.Actor())
+			if err != nil {
+				return schoolErr(err)
+			}
+			if (was == nil) != (kobo == nil) || was != nil && *was != *kobo {
+				if err := auditTx(r, tx, "settings.schools.cash_threshold", p.TenantID.String(), map[string]any{"from_kobo": was, "to_kobo": kobo}); err != nil {
+					return err
+				}
+			}
+		}
 		if req.Issuing != nil && req.Enabled {
 			was, err := schools.SetIssuing(r.Context(), tx, p.TenantID, *req.Issuing, p.Actor())
 			if err != nil {
@@ -248,6 +286,9 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if threshold, err = schools.DiscountThreshold(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		if cash, err = schools.CashThreshold(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
 		if issuing, err = schools.GetIssuing(r.Context(), tx, p.TenantID); err != nil {
@@ -263,7 +304,7 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": req.Enabled, "bursar_role": bursar, "discount_threshold_naira": threshold / 100,
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": req.Enabled, "bursar_role": bursar, "discount_threshold_naira": threshold / 100, "cash_threshold_naira": nairaOrNil(cash),
 		"issuing": issuing, "issuers": issuers})
 }
 

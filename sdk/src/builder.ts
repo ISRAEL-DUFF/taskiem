@@ -100,8 +100,8 @@ export function ussd(config: UssdMenuSpec): Trigger {
 export function formTrigger(config: FormTriggerConfig): Trigger {
   return { type: "form", config: config as unknown as Record<string, unknown> };
 }
-/** Starts once per invoice of the business paid in full, in prod; trigger.body is the invoice (docs/invoices.md). */
-export function invoiceTrigger(config: { event: "paid" }): Trigger {
+/** Starts in prod on the business's invoices (docs/invoices.md): "paid" once per invoice paid in full, "payment" once per payment counted towards one; trigger.body is the invoice (with the payment and its receipt for "payment"). */
+export function invoiceTrigger(config: { event: "paid" | "payment" }): Trigger {
   return { type: "invoice", config };
 }
 /** Any trigger type, for those without a helper. */

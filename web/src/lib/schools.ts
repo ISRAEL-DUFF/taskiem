@@ -120,6 +120,8 @@ export interface SchoolSettings {
   bursar_role: boolean;
   /** Discounts at or above it, in naira, need a second person; 0 for none. */
   discount_threshold_naira?: number;
+  /** Cash postings at or above it, in naira, need a second person; 0 for every posting, null for none. */
+  cash_threshold_naira?: number | null;
 }
 
 // --- what a person may do ---

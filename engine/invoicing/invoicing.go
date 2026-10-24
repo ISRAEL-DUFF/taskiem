@@ -201,10 +201,17 @@ type Invoices struct {
 	// WhatsApp or Telegram (decision 0039); Send then also queues the
 	// invoice there, with its buttons, on one of Chat (the channels this
 	// deployment runs). Nil: SMS and email only.
-	Reach  *reach.Book
-	Chat   []string
-	Logger *slog.Logger
-	Now    func() time.Time
+	Reach *reach.Book
+	Chat  []string
+	// Counted, when set, is told in the transaction of every part counted
+	// towards an invoice (CountPayment), after it is written: a school
+	// issues the payment's receipt here (docs/spec/schools.md 9). Undone
+	// is told of a part undone (UndoPayment), a wrong match or money that
+	// went back: the receipt is voided. Nil: nothing.
+	Counted func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, k Counted, p PaymentIn) error
+	Undone  func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Invoice, part uuid.UUID, by string) error
+	Logger  *slog.Logger
+	Now     func() time.Time
 }
 
 func (s *Invoices) now() time.Time {
@@ -987,15 +994,24 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		return Counted{}, err
 	}
 	became := x.Status == "paid" && cur.Status != "paid"
+	out := Counted{Invoice: x, PaymentID: k.ID, Became: became}
+	if s.Counted != nil {
+		if err := s.Counted(ctx, tx, tenant, out, p); err != nil {
+			return Counted{}, err
+		}
+	}
+	// Workflows that start on a payment counted, and on an invoice being
+	// paid: queued here, in the payment's transaction, so the payment and
+	// its runs commit together (StartPayments and StartPaid start them).
+	if err := queuePaymentStarts(ctx, tx, tenant, x.ID, k.ID); err != nil {
+		return Counted{}, err
+	}
 	if became {
-		// Workflows that start on an invoice being paid: queued here, in
-		// the payment's transaction, so the payment and its runs commit
-		// together (StartPaid starts them).
 		if err := queuePaidStarts(ctx, tx, tenant, x.ID); err != nil {
 			return Counted{}, err
 		}
 	}
-	return Counted{Invoice: x, PaymentID: k.ID, Became: became}, nil
+	return out, nil
 }
 
 // UndoPayment undoes a counted payment (a wrong match): its row stays,
@@ -1037,7 +1053,16 @@ func (s *Invoices) UndoPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	if err := ReopenPart(ctx, tx, tenant, moneylog.InvoiceParts, part); err != nil {
 		return Invoice{}, err
 	}
-	return s.Get(ctx, tx, tenant, cur.ID.String())
+	x, err := s.Get(ctx, tx, tenant, cur.ID.String())
+	if err != nil {
+		return Invoice{}, err
+	}
+	if s.Undone != nil {
+		if err := s.Undone(ctx, tx, tenant, x, p.ID, by); err != nil {
+			return Invoice{}, err
+		}
+	}
+	return x, nil
 }
 
 // ReopenPart puts the money of an undone part, of an invoice or an order,

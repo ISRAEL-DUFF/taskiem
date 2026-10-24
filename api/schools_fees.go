@@ -34,11 +34,11 @@ func (s *Server) schoolFeeRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Delete("/schools/students/{id}/discounts/{discount}", s.endSchoolDiscount)
 }
 
-// schoolFail answers a discount needing a second person as 409
-// needs_approval, and anything else as fail does.
+// schoolFail answers a discount recorded for a second person as 202
+// needs_approval with the request (schools_cash.go), and anything else as
+// fail does.
 func (s *Server) schoolFail(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, schools.ErrNeedsApproval) {
-		writeJSON(w, http.StatusConflict, map[string]any{"error": schools.Plain(err), "code": "needs_approval"})
+	if approvalNeeded(w, err) {
 		return
 	}
 	s.fail(w, r, schoolErr(err))
@@ -376,15 +376,25 @@ func (s *Server) addSchoolDiscount(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var d schools.Discount
 	var n int
+	var needs *schools.ApprovalNeeded
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if d, n, err = s.schoolsSvc().AddDiscount(r.Context(), tx, p.TenantID, id, in, p.Actor()); err != nil {
+		d, n, err = s.schoolsSvc().AddDiscount(r.Context(), tx, p.TenantID, id, in, p.Actor())
+		if errors.As(err, &needs) {
+			// The request is recorded in this transaction: it commits.
+			return auditTx(r, tx, "school.approval.request", needs.Request.ID.String(), map[string]any{"kind": needs.Request.Kind, "amount_kobo": needs.Request.AmountKobo, "student": id, "reason": in.Reason})
+		}
+		if err != nil {
 			return err
 		}
 		return auditTx(r, tx, "school.discount.add", id.String(), map[string]any{"discount": d.ID, "kind": d.Kind, "percent": d.Percent,
 			"amount_kobo": d.AmountKobo, "reason": d.Reason, "drafts_updated": n})
 	}); err != nil {
 		s.schoolFail(w, r, err)
+		return
+	}
+	if needs != nil {
+		approvalNeeded(w, needs)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"discount": d, "drafts_updated": n})
@@ -433,22 +443,31 @@ func (s *Server) amendInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var out invoicing.Amended
+	var needs *schools.ApprovalNeeded
 	err := s.tx(r, func(tx pgx.Tx) error {
 		if in.Kind == invoicing.AmendDiscount && s.schoolsOn(r.Context(), tx, p.TenantID) {
-			if err := s.schoolsSvc().CheckDiscount(r.Context(), tx, p.TenantID, in.AmountKobo); err != nil {
-				return err
+			// At or above the school's discount threshold the amendment is
+			// recorded for a second person instead (schools_cash.go); the
+			// request commits with this transaction.
+			err := s.schoolsSvc().RequestDiscountAmendment(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"), in, p.Actor())
+			if errors.As(err, &needs) {
+				return auditTx(r, tx, "school.approval.request", needs.Request.ID.String(), map[string]any{"kind": needs.Request.Kind, "amount_kobo": needs.Request.AmountKobo,
+					"invoice": needs.Request.InvoiceNumber, "reason": in.Reason})
+			}
+			if err != nil {
+				return invoiceErr(schoolErr(err))
 			}
 		}
 		var err error
 		out, err = s.Invoices.Amend(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"), in, p.Actor())
 		return invoiceErr(err)
 	})
-	if errors.Is(err, schools.ErrNeedsApproval) {
-		s.schoolFail(w, r, err)
-		return
-	}
 	if err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if needs != nil {
+		approvalNeeded(w, needs)
 		return
 	}
 	if out.Became {

@@ -58,7 +58,7 @@ func TestSchoolFeesAndTermInvoices(t *testing.T) {
 		t.Fatalf("threshold %v", got)
 	}
 	code, out := owner.do("POST", "/v1/schools/students/"+ebube["id"].(string)+"/discounts", map[string]any{"kind": "hardship", "amount_kobo": 2_000_000, "reason": "Hard year"})
-	if code != 409 || out["code"] != "needs_approval" {
+	if code != 202 || out["code"] != "needs_approval" {
 		t.Fatalf("over the threshold: %d %v", code, out)
 	}
 	chidi := owner.must(200, "GET", "/v1/schools/students/GCA%2F002", nil)["student"].(map[string]any)
@@ -97,7 +97,7 @@ func TestSchoolFeesAndTermInvoices(t *testing.T) {
 		t.Fatalf("amended %v", am)
 	}
 	code, out = owner.do("POST", "/v1/invoices/"+number+"/amendments", map[string]any{"kind": "discount", "amount_kobo": 2_000_000, "reason": "Hardship"})
-	if code != 409 || out["code"] != "needs_approval" {
+	if code != 202 || out["code"] != "needs_approval" {
 		t.Fatalf("an amendment over the threshold: %d %v", code, out)
 	}
 	owner.must(201, "POST", "/v1/invoices/"+number+"/amendments", map[string]any{"kind": "discount", "amount_kobo": 100_000, "reason": "Goodwill"})

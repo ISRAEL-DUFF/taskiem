@@ -1388,6 +1388,54 @@
       "text": "Which one?\n{list}\nSend *run* and the full name.",
       "reviewed": false
     },
+    "wa.school.cash_posting": {
+      "text": "{amount} wey dem pay {how} for {student} ({class}), na {by} post am.",
+      "reviewed": false
+    },
+    "wa.school.discount": {
+      "text": "{kind} discount of {amount} for {student} ({class}): {reason}. Na {by} ask.",
+      "reviewed": false
+    },
+    "wa.school.discount_amendment": {
+      "text": "Discount of {amount} on top invoice {number}: {reason}. Na {by} ask.",
+      "reviewed": false
+    },
+    "wa.school.how.cash": {
+      "text": "with cash",
+      "reviewed": false
+    },
+    "wa.school.how.other": {
+      "text": "another way",
+      "reviewed": false
+    },
+    "wa.school.how.pos": {
+      "text": "by POS",
+      "reviewed": false
+    },
+    "wa.school.how.transfer": {
+      "text": "by transfer to the school account",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_posting": {
+      "text": "cash wey dem post for desk",
+      "reviewed": false
+    },
+    "wa.school.kind.discount": {
+      "text": "discount",
+      "reviewed": false
+    },
+    "wa.school.kind.discount_amendment": {
+      "text": "discount on top invoice",
+      "reviewed": false
+    },
+    "wa.school.kind.term_invoice": {
+      "text": "term invoice wey get discount",
+      "reviewed": false
+    },
+    "wa.school.term_invoice": {
+      "text": "Term invoice for {student} ({class}), {amount}, get discount wey reach the school limit. Na {by} ask.",
+      "reviewed": false
+    },
     "wa.shop.add_failed": {
       "text": "We no fit save am ({reason}). Reply *yes* to try again, or *cancel*.",
       "reviewed": false
@@ -2314,6 +2362,10 @@
     },
     "wd.trigger.invoice_paid": {
       "text": "When person pay one of your invoice finish",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_payment": {
+      "text": "When dem count one payment for one of your invoice",
       "reviewed": false
     },
     "wd.trigger.manual": {

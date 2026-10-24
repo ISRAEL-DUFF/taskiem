@@ -1631,7 +1631,7 @@
             ],
             "properties": {
               "config": {
-                "description": "Starts a run in prod when one of the business's invoices is paid in full, once per invoice (docs/invoices.md); trigger.body is the invoice.",
+                "description": "Starts a run in prod on one of the business's invoices (docs/invoices.md): event paid, when it is paid in full, once per invoice; event payment, for every payment counted towards it, once per payment part. trigger.body is the invoice, with the payment and its receipt for the payment event.",
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
@@ -1640,7 +1640,8 @@
                 "properties": {
                   "event": {
                     "enum": [
-                      "paid"
+                      "paid",
+                      "payment"
                     ]
                   }
                 }
