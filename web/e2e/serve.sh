@@ -47,6 +47,9 @@ export TASKIEM_LOGIN_BURST=100
 # Self-serve signup, and Termii pointed at the fake onboarding.spec.ts runs
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
+# Every spec that wants a business of its own signs one up from this
+# address (cash, family, accessibility): more than the daily limit allows.
+export TASKIEM_SIGNUP_PER_ADDRESS=100
 # Students' account numbers (accounts.spec.ts) are issued by a fake iswallet
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ISWALLET_URL=http://127.0.0.1:12828
