@@ -31,7 +31,7 @@ info:
     | 401 | — | Authentication required, or sign-in refused (`passkey_required`, `sso_required` say why) |
     | 402 | `plan_feature_required` | The plan lacks `feature` |
     | 402 | `billing_degraded` | Unpaid or cancelled: payment lifts it |
-    | 403 | — | A permission is missing (`requires workflow.publish`), a step-up is needed (`step_up`), or a factor change needs a proof (`reauth`) |
+    | 403 | — | A permission is missing (`requires workflow.publish`), a step-up is needed (`step_up`), a factor change needs a proof (`reauth`), or a gate session called anything but who it is and sign-out (`gate_only`) |
     | 404 | — | Not found, or not visible to the caller |
     | 409 | `downgrade_blocked` | A plan change the tenant's use does not fit, with `blockers`; other conflicts have no code |
     | 422 | — | A definition or run input is not valid, with `problems` |
@@ -112,6 +112,9 @@ tags:
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
+- name: Schools
+  description: "The Schools area: classes, sessions and terms, students, families, enrollments, importing students and promotion."
+  x-taskiem-guide: schools
 - name: Field agents
   description: Agents who sign businesses up in person, the owner's consent, and support visits the owner invites.
   x-taskiem-guide: agents
@@ -2147,6 +2150,802 @@ paths:
                 type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/schools/classes:
+    get:
+      operationId: listSchoolClasses
+      tags:
+      - Schools
+      summary: The school's classes
+      description: In their order, with how many active students each has.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      responses:
+        '200':
+          description: The classes
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - classes
+                properties:
+                  classes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClass'
+        default: &id001
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addSchoolClass
+      tags:
+      - Schools
+      summary: Add a class
+      description: 'A name (JSS 1) and arm (A) unique in the school, and its order: promotion moves students to the next order up. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolClassIn'
+      responses:
+        '201':
+          description: The class
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolClass'
+        default: *id001
+  /v1/schools/classes/{id}:
+    put:
+      operationId: changeSchoolClass
+      tags:
+      - Schools
+      summary: Rename a class or move it in the order
+      description: Its students and enrollments stay its own. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolClassIn'
+      responses:
+        '200':
+          description: The class
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolClass'
+        default: *id001
+    delete:
+      operationId: removeSchoolClass
+      tags:
+      - Schools
+      summary: Remove a class
+      description: Only a class no student was ever in (409 otherwise). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204': &id002
+          $ref: '#/components/responses/NoContent'
+        default: *id001
+  /v1/schools/sessions:
+    get:
+      operationId: listSchoolSessions
+      tags:
+      - Schools
+      summary: The school's sessions and terms
+      description: Oldest first, each with its terms in date order and whether it was promoted.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      responses:
+        '200':
+          description: The sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - sessions
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolSession'
+        default: *id001
+    post:
+      operationId: addSchoolSession
+      tags:
+      - Schools
+      summary: Add a session
+      description: A school year written as two years, such as 2026/2027. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - label
+              properties:
+                label:
+                  type: string
+                  pattern: ^[0-9]{4}/[0-9]{4}$
+      responses:
+        '201':
+          description: The session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolSession'
+        default: *id001
+  /v1/schools/sessions/{id}/terms:
+    post:
+      operationId: addSchoolTerm
+      tags:
+      - Schools
+      summary: Add a term to a session
+      description: With its start, end and the date fees are due. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolTermIn'
+      responses:
+        '201':
+          description: The term
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolTerm'
+        default: *id001
+  /v1/schools/sessions/{id}/promotion:
+    get:
+      operationId: getSchoolPromotion
+      tags:
+      - Schools
+      summary: A session's promotion
+      description: What promoting it would do with no exceptions (every active student up one class, the last class graduating), or, once done, what it did. Names masked.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The promotion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolPromotion'
+        default: *id001
+    post:
+      operationId: promoteSchoolSession
+      tags:
+      - Schools
+      summary: Promote a session
+      description: 'Once per session (409 again): every active student moves up one class, with the exceptions chosen (repeat, leave, graduate). Refused once a later session has a term started. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                exceptions:
+                  type: object
+                  description: Student id to promote, repeat, leave or graduate
+                  additionalProperties:
+                    type: string
+                    enum:
+                    - promote
+                    - repeat
+                    - leave
+                    - graduate
+      responses:
+        '200':
+          description: What was done
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolPromotion'
+        default: *id001
+  /v1/schools/terms/{id}:
+    put:
+      operationId: changeSchoolTerm
+      tags:
+      - Schools
+      summary: Change a term's name or dates
+      description: A past term is read-only (409). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolTermIn'
+      responses:
+        '200':
+          description: The term
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolTerm'
+        default: *id001
+    delete:
+      operationId: removeSchoolTerm
+      tags:
+      - Schools
+      summary: Remove a term
+      description: Only a term that has not started (409 otherwise). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204': *id002
+        default: *id001
+  /v1/schools/terms/{id}/start:
+    post:
+      operationId: startSchoolTerm
+      tags:
+      - Schools
+      summary: Start a term
+      description: 'Makes it the current term (the one before becomes past and read-only) and enrols every active student in their class, each once: starting it again enrols nobody twice. A past term, or
+        one starting before the current one, is refused (409). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The term and how many were enrolled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolTermStarted'
+        default: *id001
+  /v1/schools/terms/{id}/enrollments:
+    get:
+      operationId: listSchoolEnrollments
+      tags:
+      - Schools
+      summary: A term's enrollments
+      description: Each student in their class for the term, by class and admission number.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The enrollments
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - enrollments
+                properties:
+                  enrollments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolEnrollment'
+        default: *id001
+  /v1/schools/students:
+    get:
+      operationId: listSchoolStudents
+      tags:
+      - Schools
+      summary: The school's students
+      description: By admission number, of a class and status. q matches the admission number, and the name when revealed. Names masked unless the caller holds pii.reveal and asks with reveal=true, which
+        is audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: class
+        in: query
+        schema:
+          type: string
+          format: uuid
+        description: A class's id
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - active
+          - withdrawn
+          - graduated
+      - name: q
+        in: query
+        schema: &id004
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+      - &id005
+        name: reveal
+        in: query
+        schema: &id003
+          type: boolean
+        description: 'With pii.reveal: the details unmasked (audited)'
+      responses:
+        '200':
+          description: The students
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - students
+                - total
+                - revealed
+                properties:
+                  students:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolStudent'
+                  total:
+                    type: integer
+                  revealed: *id003
+        default: *id001
+    post:
+      operationId: addSchoolStudent
+      tags:
+      - Schools
+      summary: Add a student
+      description: 'With their class, and their family: an existing one (family_id) or a new one with its guardians. Enrolled in the current term when one runs. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolStudentIn'
+      responses:
+        '201':
+          description: The student, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentDetail'
+        default: *id001
+  /v1/schools/students/import:
+    post:
+      operationId: importSchoolStudents
+      tags:
+      - Schools
+      summary: Import students from a CSV
+      description: 'Columns: name, admission number, class, guardian name, phone, and optionally email, relationship and date of birth. Every line is checked first: a file with any line that cannot be taken
+        saves nothing and answers 422 with each line and why (problems, total). Without confirm the answer is the plan (who is added and updated, families grouped by guardians'' phones) and its hash; sending
+        the same csv with confirm set to the hash saves it. Students already in the record are updated by admission number, never added twice. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - csv
+              properties:
+                csv: *id004
+                confirm:
+                  type: string
+                  description: The plan's hash, to save it
+      responses:
+        '200':
+          description: The plan, saved when confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolImportPlan'
+        default: *id001
+  /v1/schools/students/{id}:
+    get:
+      operationId: getSchoolStudent
+      tags:
+      - Schools
+      summary: One student
+      description: By id or admission number, with their family and class history. Details masked unless the caller holds pii.reveal and asks with reveal=true, which is audited.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The student's id or admission number
+      - *id005
+      responses:
+        '200':
+          description: The student
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - student
+                - revealed
+                properties:
+                  student:
+                    $ref: '#/components/schemas/SchoolStudentDetail'
+                  revealed: *id003
+        default: *id001
+    patch:
+      operationId: changeSchoolStudent
+      tags:
+      - Schools
+      summary: Change a student
+      description: 'Only what is given: name, admission number, class, date of birth, status, family. A class change while a term runs moves the student''s enrollment for it; a past term''s stays. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolStudentChange'
+      responses:
+        '200':
+          description: The student, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentDetail'
+        default: *id001
+  /v1/schools/families:
+    get:
+      operationId: listSchoolFamilies
+      tags:
+      - Schools
+      summary: The school's families
+      description: Newest first, with guardians and students; details masked unless revealed (pii.reveal, audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - *id005
+      responses:
+        '200':
+          description: The families
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - families
+                - revealed
+                properties:
+                  families:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolFamily'
+                  revealed: *id003
+        default: *id001
+    post:
+      operationId: addSchoolFamily
+      tags:
+      - Schools
+      summary: Add a family
+      description: 'With 1 to 6 guardians. A guardian belongs to one family: a phone already in another family is refused (409). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - guardians
+              properties:
+                guardians:
+                  type: array
+                  minItems: 1
+                  maxItems: 6
+                  items:
+                    $ref: '#/components/schemas/SchoolGuardianIn'
+      responses:
+        '201':
+          description: The family, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFamily'
+        default: *id001
+  /v1/schools/families/{id}:
+    get:
+      operationId: getSchoolFamily
+      tags:
+      - Schools
+      summary: One family
+      description: With guardians and students; details masked unless revealed (pii.reveal, audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - *id005
+      responses:
+        '200':
+          description: The family
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - family
+                - revealed
+                properties:
+                  family:
+                    $ref: '#/components/schemas/SchoolFamily'
+                  revealed: *id003
+        default: *id001
+  /v1/schools/families/{id}/guardians:
+    post:
+      operationId: addSchoolGuardian
+      tags:
+      - Schools
+      summary: Add a guardian to a family
+      description: A phone already in another family is refused (409). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolGuardianIn'
+      responses:
+        '201':
+          description: The family, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFamily'
+        default: *id001
+  /v1/schools/families/{id}/guardians/{guardian}:
+    put:
+      operationId: changeSchoolGuardian
+      tags:
+      - Schools
+      summary: Change a guardian's details
+      description: A new phone must be no other guardian's (409). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: guardian
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolGuardianIn'
+      responses:
+        '200':
+          description: The family, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFamily'
+        default: *id001
+    delete:
+      operationId: removeSchoolGuardian
+      tags:
+      - Schools
+      summary: Take a guardian out of a family
+      description: Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: guardian
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The family, details masked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFamily'
+        default: *id001
   /v1/invoice-settings:
     get:
       operationId: getInvoiceSettings
@@ -11399,6 +12198,59 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/schools:
+    get:
+      operationId: getSchoolSettings
+      tags:
+      - Schools
+      summary: Whether the Schools area is on
+      description: Any member. bursar_role says whether the business has a custom role named bursar.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolSettings'
+        default: &id002
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putSchoolSettings
+      tags:
+      - Schools
+      summary: Turn the Schools area on or off
+      description: Owners only (403 otherwise). Off hides it; nothing is deleted. Turning it on with bursar_role also adds the Bursar custom role (school.read, school.manage, invoice.read, invoice.manage)
+        when the plan has custom roles and no role is named bursar. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - enabled
+              properties:
+                enabled: &id001
+                  type: boolean
+                bursar_role: *id001
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolSettings'
+        default: *id002
   /v1/settings/brand:
     get:
       operationId: getBrand
@@ -15668,8 +16520,459 @@ components:
         tenant_name:
           type: string
           description: The business's name, as the web app's sidebar shows it.
+        schools:
+          type: boolean
+          description: Whether the business has the Schools area on (docs/schools.md).
+        gate_only:
+          type: boolean
+          description: "A gate session: the gate role's school.gate and nothing else. Every route but GET /v1/me and sign-out answers 403 with gate_only."
         factors:
           description: What the person proves themselves with to change their factors.
+    SchoolSettings:
+      type: object
+      required:
+      - enabled
+      - bursar_role
+      properties:
+        enabled: &id001
+          type: boolean
+        bursar_role: *id001
+    SchoolClass:
+      type: object
+      required:
+      - id
+      - name
+      - arm
+      - order
+      - label
+      - students
+      - created_at
+      properties:
+        id: &id003
+          type: string
+          format: uuid
+        name: &id002
+          type: string
+        arm: *id002
+        order: &id007
+          type: integer
+        label:
+          type: string
+          description: 'The name, then the arm: JSS 1 A'
+        students:
+          type: integer
+          description: Active students in it now
+        created_at: &id004
+          type: string
+          format: date-time
+    SchoolClassIn:
+      type: object
+      required:
+      - name
+      - order
+      properties:
+        name:
+          type: string
+          maxLength: 60
+        arm:
+          type: string
+          maxLength: 20
+        order:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: The order classes go up in
+    SchoolSession:
+      type: object
+      required:
+      - id
+      - label
+      - terms
+      - promoted_at
+      - created_at
+      properties:
+        id: *id003
+        label: *id002
+        terms:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolTerm'
+        promoted_at: &id006
+          $ref: '#/components/schemas/NullableTimestamp'
+        created_at: *id004
+    SchoolTerm:
+      type: object
+      required:
+      - id
+      - session_id
+      - session
+      - name
+      - starts_on
+      - ends_on
+      - fees_due_on
+      - state
+      - started_at
+      - enrolled
+      properties:
+        id: *id003
+        session_id: *id003
+        session: *id002
+        name: *id002
+        starts_on: &id005
+          type: string
+          format: date
+        ends_on: *id005
+        fees_due_on: *id005
+        state:
+          type: string
+          enum:
+          - planned
+          - current
+          - past
+          description: A past term is read-only
+        started_at: *id006
+        enrolled: *id007
+    SchoolTermIn:
+      type: object
+      required:
+      - name
+      - starts_on
+      - ends_on
+      - fees_due_on
+      properties:
+        name:
+          type: string
+          maxLength: 40
+        starts_on: *id005
+        ends_on: *id005
+        fees_due_on: *id005
+    SchoolTermStarted:
+      type: object
+      required:
+      - term
+      - enrolled
+      properties:
+        term:
+          $ref: '#/components/schemas/SchoolTerm'
+        previous:
+          $ref: '#/components/schemas/SchoolTerm'
+        enrolled:
+          type: integer
+          description: Students this call enrolled
+    SchoolEnrollment:
+      type: object
+      required:
+      - id
+      - term_id
+      - term
+      - session
+      - term_state
+      - student_id
+      - admission_number
+      - class_id
+      - class
+      - created_at
+      - updated_at
+      properties:
+        id: *id003
+        term_id: *id003
+        term: *id002
+        session: *id002
+        term_state:
+          type: string
+          enum:
+          - current
+          - past
+        student_id: *id003
+        admission_number: *id002
+        class_id: *id003
+        class: *id002
+        created_at: *id004
+        updated_at: *id004
+    SchoolStudent:
+      type: object
+      required:
+      - id
+      - admission_number
+      - name
+      - class_id
+      - class
+      - status
+      - family_id
+      - created_at
+      - updated_at
+      properties:
+        id: *id003
+        admission_number: *id002
+        name: &id008
+          type: string
+          description: Masked unless revealed
+        date_of_birth: &id009
+          type: string
+          format: date
+          description: Only when revealed
+        class_id: *id003
+        class: *id002
+        status: &id010
+          type: string
+          enum:
+          - active
+          - withdrawn
+          - graduated
+        family_id: &id011
+          type:
+          - string
+          - 'null'
+          format: uuid
+        created_at: *id004
+        updated_at: *id004
+    SchoolStudentDetail:
+      type: object
+      required:
+      - id
+      - admission_number
+      - name
+      - class_id
+      - class
+      - status
+      - family_id
+      - created_at
+      - updated_at
+      - family
+      - enrollments
+      properties:
+        id: *id003
+        admission_number: *id002
+        name: *id008
+        date_of_birth: *id009
+        class_id: *id003
+        class: *id002
+        status: *id010
+        family_id: *id011
+        created_at: *id004
+        updated_at: *id004
+        family:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/SchoolFamily'
+        enrollments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolEnrollment'
+          description: Class history, newest term first
+    SchoolStudentIn:
+      type: object
+      required:
+      - name
+      - admission_number
+      - class_id
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        admission_number:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9/_.-]{0,39}$
+        class_id: *id003
+        date_of_birth: *id005
+        family_id: *id003
+        guardians:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/SchoolGuardianIn'
+    SchoolStudentChange:
+      type: object
+      properties:
+        name: *id002
+        admission_number: *id002
+        class_id: *id003
+        date_of_birth: *id002
+        status:
+          type: string
+          enum:
+          - active
+          - withdrawn
+          - graduated
+        family_id: *id003
+    SchoolGuardian:
+      type: object
+      required:
+      - id
+      - name
+      - phone
+      properties:
+        id: *id003
+        name: *id002
+        phone: *id002
+        email: *id002
+        relationship: *id002
+    SchoolGuardianIn:
+      type: object
+      required:
+      - name
+      - phone
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        phone: *id002
+        email: *id002
+        relationship:
+          type: string
+          maxLength: 40
+    SchoolFamily:
+      type: object
+      required:
+      - id
+      - guardians
+      - students
+      - created_at
+      properties:
+        id: *id003
+        guardians:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolGuardian'
+        students:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - admission_number
+            - name
+            - class
+            - status
+            properties:
+              id: *id003
+              admission_number: *id002
+              name: *id002
+              class: *id002
+              status: *id002
+        created_at: *id004
+    SchoolPromotion:
+      type: object
+      required:
+      - session_id
+      - session
+      - classes
+      - students
+      - counts
+      - promoted_at
+      - done
+      properties:
+        session_id: *id003
+        session: *id002
+        classes:
+          type: array
+          items:
+            type: object
+            required:
+            - class_id
+            - class
+            - next_id
+            - next
+            - students
+            properties:
+              class_id: *id003
+              class: *id002
+              next_id: *id011
+              next:
+                type: string
+                description: 'Empty: its students graduate'
+              students: *id007
+        students:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - admission_number
+            - name
+            - class
+            - action
+            - next_id
+            - next
+            properties:
+              id: *id003
+              admission_number: *id002
+              name: *id002
+              class: *id002
+              action:
+                type: string
+                enum:
+                - promote
+                - repeat
+                - leave
+                - graduate
+              next_id: *id011
+              next: *id002
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+        promoted_at: *id006
+        done: *id001
+    SchoolImportPlan:
+      type: object
+      required:
+      - hash
+      - added
+      - updated
+      - students
+      - families
+      - saved
+      properties:
+        hash: *id002
+        added: *id007
+        updated: *id007
+        students:
+          type: array
+          items:
+            type: object
+            required:
+            - row
+            - admission_number
+            - name
+            - class
+            - action
+            - family
+            properties:
+              row: *id007
+              admission_number: *id002
+              name: *id002
+              class: *id002
+              action:
+                type: string
+                enum:
+                - add
+                - update
+              family:
+                type: integer
+                description: Its index in families
+        families:
+          type: array
+          items:
+            type: object
+            required:
+            - index
+            - family_id
+            - existing
+            - guardians
+            - students
+            properties:
+              index: *id007
+              family_id: *id011
+              existing: *id001
+              guardians:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SchoolGuardianIn'
+              students:
+                type: array
+                items: *id002
+        saved: *id001
     AdvancedSetting:
       type: object
       required: [advanced, chosen]

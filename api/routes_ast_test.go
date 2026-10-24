@@ -55,14 +55,35 @@ func routeSource(t *testing.T) map[string]routeMeta {
 				vs := sp.(*ast.ValueSpec)
 				for i, n := range vs.Names {
 					if i < len(vs.Values) {
-						if bl, ok := vs.Values[i].(*ast.BasicLit); ok && bl.Kind == token.STRING {
-							v, _ := strconv.Unquote(bl.Value)
-							consts[pkg+n.Name] = v
+						switch x := vs.Values[i].(type) {
+						case *ast.BasicLit:
+							if x.Kind == token.STRING {
+								v, _ := strconv.Unquote(x.Value)
+								consts[pkg+n.Name] = v
+							}
+						case *ast.SelectorExpr: // PermTableRead = access.TableRead
+							if id, ok := x.X.(*ast.Ident); ok {
+								if v, ok := consts[id.Name+"."+x.Sel.Name]; ok {
+									consts[pkg+n.Name] = v
+								}
+							}
 						}
 					}
 				}
 			}
 		}
+	}
+	// The permissions are engine/access's, named here as api constants.
+	accessFiles, _ := filepath.Glob("../engine/access/*.go")
+	for _, name := range accessFiles {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		addConsts(f, "access.")
 	}
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {

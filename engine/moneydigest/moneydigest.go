@@ -38,6 +38,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
@@ -215,26 +216,16 @@ func take(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, kind string, period 
 	return id, err == nil && tag.RowsAffected() == 1, err
 }
 
-// Roles are the built-in roles and whether each may read invoices
-// (invoice.read): the api's role table, kept equal to it by a test there.
-// Any other role is a custom one, which may read invoices when its
-// permissions say so, or a business role, which may not.
-var Roles = map[string]bool{"owner": true, "admin": true, "builder": false, "operator": true, "approver": false, "auditor": true, "viewer": true}
-
-// readers are the tenant's active members who may read invoices.
+// readers are the tenant's active members who may read invoices: a
+// built-in role holding invoice.read (engine/access), or a custom role
+// whose permissions say so. A business role may not.
 func readers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]uuid.UUID, error) {
-	var builtin, read []string
-	for r, ok := range Roles {
-		builtin = append(builtin, r)
-		if ok {
-			read = append(read, r)
-		}
-	}
+	builtin, read := access.BuiltinNames(), access.Holding(access.InvoiceRead)
 	rows, err := tx.Query(ctx, `SELECT DISTINCT ms.user_id FROM memberships ms JOIN users u ON u.id = ms.user_id
 		WHERE ms.tenant_id = $1 AND u.status = 'active'
 		  AND CASE WHEN ms.role = ANY ($2) THEN ms.role = ANY ($3)
-		      ELSE EXISTS (SELECT 1 FROM roles r WHERE r.tenant_id = ms.tenant_id AND r.name = ms.role AND 'invoice.read' = ANY (r.permissions)) END
-		ORDER BY ms.user_id`, tenant, builtin, read)
+		      ELSE EXISTS (SELECT 1 FROM roles r WHERE r.tenant_id = ms.tenant_id AND r.name = ms.role AND $4 = ANY (r.permissions)) END
+		ORDER BY ms.user_id`, tenant, builtin, read, access.InvoiceRead)
 	if err != nil {
 		return nil, err
 	}

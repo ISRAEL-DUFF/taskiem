@@ -165,7 +165,7 @@ function Delegations() {
   const { data, error, reload } = useLoad(() => get<{ delegations: Delegation[] }>("/v1/delegations"), []);
   const [form, setForm] = useState({ to: "", roles: "", ends: "", reason: "" });
   const act = useAction();
-  const approvalRoles = (me?.roles ?? []).filter((r) => !["owner", "admin", "builder", "operator", "auditor", "viewer", "approver"].includes(r));
+  const approvalRoles = (me?.roles ?? []).filter((r) => !["owner", "admin", "builder", "operator", "auditor", "viewer", "approver", "gate"].includes(r));
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Delegations</h2>

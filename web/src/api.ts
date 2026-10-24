@@ -219,6 +219,10 @@ export interface Me {
   advanced?: boolean;
   /** The business's name, for the sidebar. */
   tenant_name?: string;
+  /** Whether the business has the Schools area on (docs/schools.md). */
+  schools?: boolean;
+  /** A gate session: the gate screen only; the server refuses the rest. */
+  gate_only?: boolean;
 }
 
 /** A tenant inviting the signed-in person (GET /v1/me/invitations). */

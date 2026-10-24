@@ -31,6 +31,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/prembly"
 	"github.com/israel-duff/taskiem/connectors/remita"
 	"github.com/israel-duff/taskiem/connectors/s3"
+	"github.com/israel-duff/taskiem/connectors/schools"
 	"github.com/israel-duff/taskiem/connectors/sftp"
 	"github.com/israel-duff/taskiem/connectors/slack"
 	"github.com/israel-duff/taskiem/connectors/storefront"
@@ -72,6 +73,9 @@ type Options struct {
 	// Invoices binds the invoices platform connector (docs/invoices.md);
 	// nil: its actions fail plainly.
 	Invoices invoices.Ops
+	// Schools binds the schools platform connector (docs/schools.md);
+	// nil: its actions fail plainly.
+	Schools schools.Ops
 	// Email binds the inbound email platform connector (docs/email.md);
 	// nil: its actions fail plainly.
 	Email email.Ops
@@ -116,6 +120,7 @@ func Register(r *connector.Registry, o Options) error {
 		sftp.New(),
 		storefront.New(o.Storefront),
 		invoices.New(o.Invoices),
+		schools.New(o.Schools),
 		form.New(o.Forms),
 		email.New(o.Email),
 		notify.New(o.Notify),
