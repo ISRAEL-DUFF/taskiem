@@ -24,6 +24,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 	"github.com/israel-duff/taskiem/templates"
@@ -111,6 +112,9 @@ type Builder struct {
 	// (retrieval context: templates first, then free drafting). Nil offers
 	// none.
 	Templates *templates.Library
+	// Find finds a template step's template beyond the library: the
+	// business's callable workflows (decision 0048). Nil is the library.
+	Find expansion.Templates
 }
 
 // TemplateUse is the template a draft started from.
@@ -344,7 +348,7 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 			findings = nil
 			if len(problems) == 0 {
 				if def, err := wd.Load(doc); err == nil {
-					findings = PolicyFindings(def, reg)
+					findings = PolicyFindingsWith(def, reg, b.Find)
 				}
 			}
 		}
@@ -416,7 +420,7 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 		for _, pol := range req.Context.Policies {
 			policies[pol.Name] = pol.Document
 		}
-		file, results, err := DryRun(doc, reg, policies, proposed)
+		file, results, err := DryRunWith(doc, reg, policies, proposed, b.Find)
 		if err == nil {
 			p.Tests, p.Results = &file, results
 			for _, r := range results {
@@ -612,6 +616,9 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	}
 	if b.Templates != nil && len(req.Base) == 0 {
 		doc["starting_templates"] = nonNil(tpls)
+	}
+	if len(req.Context.CallableWorkflows) > 0 {
+		doc["callable_workflows"] = req.Context.CallableWorkflows
 	}
 	return doc, refs, offered
 }

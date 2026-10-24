@@ -43,6 +43,9 @@ func checkTemplates(d *Definition) []Problem {
 		if len(s.ID) > MaxTemplateStepID {
 			add("a template step's id is at most %d characters", MaxTemplateStepID)
 		}
+		if (s.Template == "") == (s.Workflow == "") {
+			add("a template step names a template or a workflow of the business, not both")
+		}
 		if s.Origin == nil && strings.Contains(s.ID, "__") {
 			add("a template step's id may not contain __ (expansion uses it)")
 		}

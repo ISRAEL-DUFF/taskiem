@@ -25,11 +25,11 @@ export default workflow({
 
 | Piece | Meaning |
 | --- | --- |
-| `workflow({ id, name, trigger, description?, version?, inputs?, types?, settings? })` | The definition's header |
+| `workflow({ id, name, trigger, description?, version?, inputs?, types?, settings?, outputs? })` | The definition's header; `outputs` makes the workflow usable as a step of the business's other workflows once published ([callable workflows](contracts/wd-v1.md#callable-workflows)) |
 | `.step(id, spec, opts?)` | A step. It starts as soon as the steps in `opts.needs` have settled; with no `needs` it starts at once, as in the definition |
 | `.next(id, spec, opts?)` | A step that needs the step before it (plus any in `opts.needs`) |
 | `opts` | `name`, `description`, `needs`, `when`, `retry`, `timeout`, `on_error: steps()...` |
-| Step helpers | `transform`, `http`, `code`, `wait`, `signal`, `callback`, `respond`, `approval`, `form`, `template`, `branch`, `parallel`, `foreach`, `subflow`, `ai`, and `connector(ref, action, input, extra)` |
+| Step helpers | `transform`, `http`, `code`, `wait`, `signal`, `callback`, `respond`, `approval`, `form`, `template`, `callWorkflow(id, input)` (one of the business's own callable workflows as a step), `branch`, `parallel`, `foreach`, `subflow`, `ai`, and `connector(ref, action, input, extra)` |
 | Connector helpers | `@taskiem/connectors` has one typed helper per action of every built-in connector: `iswallet.transfer(input, { effect, compensate, connection })` |
 | Triggers | `webhook`, `schedule`, `connectorEvent`, `manual`, and `trigger(type, config)` |
 | Nested steps | `steps().step(...)` for foreach bodies, branch paths, parallel branches, and `on_error` |

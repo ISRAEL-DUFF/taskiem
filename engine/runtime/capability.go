@@ -141,7 +141,8 @@ func (s *Store) Expand(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUI
 			return nil, nil, nil, err
 		}
 	}
-	out, choices := raw, []expansion.Choice(nil)
+	// Choices stays a list when only template steps were expanded.
+	out, choices := raw, []expansion.Choice{}
 	if expansion.HasCapabilities(d) {
 		if s.Registry == nil {
 			return nil, nil, nil, &CapabilityError{Err: errors.New("capability steps need the platform's connectors")}

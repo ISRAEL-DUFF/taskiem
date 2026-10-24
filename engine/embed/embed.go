@@ -127,6 +127,32 @@ func TemplatesOf(v any) []string {
 	return out
 }
 
+// WorkflowsOf lists the workflows (decision 0048) the template steps in a
+// decoded definition's steps name, at any depth, each once.
+func WorkflowsOf(v any) []string {
+	var out []string
+	var find func(v any)
+	find = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if x["type"] == "template" {
+				if id, ok := x["workflow"].(string); ok && !slices.Contains(out, id) {
+					out = append(out, id)
+				}
+			}
+			for _, c := range x {
+				find(c)
+			}
+		case []any:
+			for _, c := range x {
+				find(c)
+			}
+		}
+	}
+	find(v)
+	return out
+}
+
 // Disallowed returns the uses not in allowed, sorted.
 func Disallowed(uses, allowed []string) []string {
 	var out []string

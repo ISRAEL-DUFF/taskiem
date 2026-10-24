@@ -85,7 +85,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	written := d
 	if d.HasTemplates() {
 		if find == nil {
-			find = expansion.Library(templates.Default())
+			find = runtime.Callables(ctx, tx, templates.Default())
 		}
 		exp, err := expansion.ExpandDefinition(d, find)
 		if err != nil {
@@ -498,7 +498,7 @@ func (s *Server) checkReady(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID
 	if err != nil {
 		return err
 	}
-	find, _, err := runtime.PinnedTemplates(ctx, tx, wf, v, templates.Default())
+	find, _, err := runtime.PinnedTemplates(ctx, tx, wf, v, runtime.Callables(ctx, tx, templates.Default()))
 	if err != nil {
 		return err
 	}
@@ -530,7 +530,7 @@ func (s *Server) versionReadiness(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		find, _, err := runtime.PinnedTemplates(r.Context(), tx, wf, v, templates.Default())
+		find, _, err := runtime.PinnedTemplates(r.Context(), tx, wf, v, runtime.Callables(r.Context(), tx, templates.Default()))
 		if err != nil {
 			return err
 		}

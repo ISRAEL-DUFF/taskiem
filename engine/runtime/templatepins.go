@@ -18,11 +18,12 @@ import (
 // pinned copies, so a library update never changes a version, and the
 // workflow's page offers the update instead (TemplateUpdates).
 
-// PinTemplates keeps with a version every template its template steps use.
-// A template the library does not have is not pinned: checking the version
+// PinTemplates keeps with a version every template its template steps use,
+// library templates and the business's callable workflows alike (find:
+// Callables). One find cannot give is not pinned: checking the version
 // says so.
-func PinTemplates(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUID, version int, doc []byte, lib *templates.Library) error {
-	for _, t := range UsedTemplates(doc, lib) {
+func PinTemplates(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUID, version int, doc []byte, find expansion.Templates) error {
+	for _, t := range UsedTemplates(doc, find) {
 		raw, digest, err := t.Pinned()
 		if err != nil {
 			return err
@@ -35,9 +36,9 @@ func PinTemplates(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUID, ve
 	return nil
 }
 
-// UsedTemplates are the library's templates a definition's template steps
-// use, at any depth, in id order.
-func UsedTemplates(doc []byte, lib *templates.Library) []*templates.Template {
+// UsedTemplates are the templates a definition's template steps use, at
+// any depth, in id order.
+func UsedTemplates(doc []byte, find expansion.Templates) []*templates.Template {
 	seen := map[string]*templates.Template{}
 	var visit func(raw []byte)
 	visit = func(raw []byte) {
@@ -49,8 +50,8 @@ func UsedTemplates(doc []byte, lib *templates.Library) []*templates.Template {
 			if _, ok := seen[id]; ok {
 				continue
 			}
-			t, ok := lib.Get(id)
-			if !ok {
+			t, err := find(id)
+			if err != nil {
 				continue
 			}
 			seen[id] = t
@@ -74,7 +75,9 @@ func templateIDs(v any) []string {
 		switch t := v.(type) {
 		case map[string]any:
 			if t["type"] == "template" {
-				if id, ok := t["template"].(string); ok {
+				if id, ok := t["template"].(string); ok && id != "" {
+					out = append(out, id)
+				} else if id, ok := t["workflow"].(string); ok && id != "" {
 					out = append(out, id)
 				}
 			}
@@ -92,8 +95,9 @@ func templateIDs(v any) []string {
 }
 
 // PinnedTemplates are the templates a version pinned. A template it did
-// not pin (a version saved another way) is found in lib.
-func PinnedTemplates(ctx context.Context, tx pgx.Tx, workflow uuid.UUID, version int, lib *templates.Library) (expansion.Templates, map[string]*templates.Template, error) {
+// not pin (a version saved another way) is found with fallback
+// (Callables, or a library).
+func PinnedTemplates(ctx context.Context, tx pgx.Tx, workflow uuid.UUID, version int, fallback expansion.Templates) (expansion.Templates, map[string]*templates.Template, error) {
 	rows, err := tx.Query(ctx, `SELECT template FROM workflow_template_pins WHERE workflow_id = $1 AND version = $2`, workflow, version)
 	if err != nil {
 		return nil, nil, err
@@ -110,7 +114,6 @@ func PinnedTemplates(ctx context.Context, tx pgx.Tx, workflow uuid.UUID, version
 		}
 		pinned[t.ID] = t
 	}
-	fallback := expansion.Library(lib)
 	return func(id string) (*templates.Template, error) {
 		if t, ok := pinned[id]; ok {
 			return t, nil
@@ -127,10 +130,11 @@ type TemplateUpdate struct {
 	Changes  []string `json:"changes"`
 }
 
-// TemplateUpdates lists the templates a version pinned that the library
-// has changed since, with their differences: the definition's (wddiff
-// lines, by step id), its outputs' and its parameters'.
-func TemplateUpdates(pinned map[string]*templates.Template, lib *templates.Library, diff func(old, new []byte) []string) []TemplateUpdate {
+// TemplateUpdates lists the templates a version pinned that have changed
+// since (the library's, or a workflow's published version: find), with
+// their differences: the definition's (wddiff lines, by step id), its
+// outputs' and its parameters'.
+func TemplateUpdates(pinned map[string]*templates.Template, find expansion.Templates, diff func(old, new []byte) []string) []TemplateUpdate {
 	ids := make([]string, 0, len(pinned))
 	for id := range pinned {
 		ids = append(ids, id)
@@ -139,8 +143,8 @@ func TemplateUpdates(pinned map[string]*templates.Template, lib *templates.Libra
 	var out []TemplateUpdate
 	for _, id := range ids {
 		old := pinned[id]
-		cur, ok := lib.Get(id)
-		if !ok {
+		cur, err := find(id)
+		if err != nil {
 			continue
 		}
 		_, a, err1 := old.Pinned()
@@ -199,12 +203,12 @@ func named(kind string, old, cur map[string]string) []string {
 }
 
 // definitionTemplates is a version's templates for expansion: the pinned
-// ones, and lib for any not pinned.
+// ones, and the library or the business's workflows for any not pinned.
 func (s *Store) definitionTemplates(ctx context.Context, tx pgx.Tx, workflow uuid.UUID, version int) (expansion.Templates, error) {
 	lib := s.Templates
 	if lib == nil {
 		lib = templates.Default()
 	}
-	find, _, err := PinnedTemplates(ctx, tx, workflow, version, lib)
+	find, _, err := PinnedTemplates(ctx, tx, workflow, version, Callables(ctx, tx, lib))
 	return find, err
 }

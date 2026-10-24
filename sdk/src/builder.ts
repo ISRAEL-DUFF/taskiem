@@ -10,7 +10,7 @@
 // functions over the expression context, compiled to CEL by build().
 
 import { compileFunction, ExpressionError } from "./expr.js";
-import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
+import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Output, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
 
 /** What an expression can read (wd/v1 rule 10). Values are untyped. */
 export interface Context {
@@ -150,6 +150,15 @@ export function capability(uses: string, input?: object, extra?: CapabilityExtra
  * the Start page takes them) and its run inputs (expressions over this
  * workflow). Its output is the template's outputs.
  */
+/**
+ * A template step that uses one of the business's own callable workflows
+ * (one with outputs and a published version), by its id, with its run
+ * inputs. Its output is the workflow's outputs.
+ */
+export function callWorkflow(id: string, input?: object): StepSpec {
+  return { type: "template", workflow: id, ...(input === undefined ? {} : { input }) };
+}
+
 export function template(id: string, params?: Record<string, unknown>, input?: object): StepSpec {
   return {
     type: "template", template: id,
@@ -322,6 +331,8 @@ export interface WorkflowOptions {
   inputs?: { schema?: object | boolean };
   types?: Record<string, object | boolean>;
   settings?: { timeout?: Duration; concurrency_key?: Expr; max_concurrency?: number; retention?: Duration };
+  /** What this workflow gives back when another of the business's workflows uses it as a step (callWorkflow); it needs inputs too. */
+  outputs?: (Omit<Output, "value"> & { value: Expr })[];
 }
 
 export class Workflow extends Steps {
@@ -342,6 +353,7 @@ export class Workflow extends Steps {
     def.steps = super.build("steps");
     if (o.types !== undefined) def.types = o.types;
     if (o.settings !== undefined) def.settings = lowerAt(o.settings, "settings");
+    if (o.outputs !== undefined) def.outputs = lowerAt(o.outputs, "outputs");
     return def as unknown as WorkflowDefinition;
   }
 
@@ -356,7 +368,7 @@ export function workflow(options: WorkflowOptions): Workflow {
 
 // Key order of a built step, so the JSON committed next to the code is
 // stable and reads in the order an author thinks.
-const STEP_KEYS = ["id", "name", "description", "type", "needs", "when", "connector", "action", "uses", "template", "params", "connection", "input", "effect", "compensate", "config", "retry", "timeout", "on_error"];
+const STEP_KEYS = ["id", "name", "description", "type", "needs", "when", "connector", "action", "uses", "template", "workflow", "params", "connection", "input", "effect", "compensate", "config", "retry", "timeout", "on_error"];
 
 function buildStep(id: string, spec: StepSpec, opts: StepOptions, path: string): Step {
   const raw: Record<string, unknown> = { id, ...spec };

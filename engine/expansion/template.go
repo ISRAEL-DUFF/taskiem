@@ -174,6 +174,11 @@ func eachScope(st map[string]any, fn func([]any) ([]any, error)) error {
 func (x *templater) template(st map[string]any, depth int, chain []string) ([]any, error) {
 	id, _ := st["id"].(string)
 	tid, _ := st["template"].(string)
+	if tid == "" {
+		// A callable workflow of the business (decision 0048) is found
+		// by its id, as a template is.
+		tid, _ = st["workflow"].(string)
+	}
 	refuse := func(format string, args ...any) error {
 		return &Refusal{Step: id, Message: fmt.Sprintf(format, args...)}
 	}

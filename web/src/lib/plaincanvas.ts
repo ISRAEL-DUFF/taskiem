@@ -109,13 +109,15 @@ interface StepLike {
   connector?: string;
   action?: string;
   template?: string;
+  workflow?: string;
   config?: unknown;
 }
 
-/** A callable template's outputs, as the template list gives them. */
+/** A callable template's outputs, as the template list gives them, or a callable workflow's (decision 0048), as its list gives them. */
 interface CallableLike {
   id: string;
   callable?: { outputs: { name: string; type: string; title: string }[] };
+  outputs?: { name: string; type: string; title: string }[];
 }
 
 interface DefLike {
@@ -171,7 +173,8 @@ export function sourcesFor(def: DefLike, id: string, connectors: ConnectorLike[]
         for (const k of Object.keys(o)) out.push({ label: `${from}: ${words(k)}`, expr: `=steps.${s.id}.output.${k}` });
       }
     } else if (s.type === "template") {
-      for (const o of templates.find((t) => t.id === s.template)?.callable?.outputs ?? []) {
+      const t = templates.find((t) => t.id === (s.workflow ?? s.template));
+      for (const o of t?.callable?.outputs ?? t?.outputs ?? []) {
         out.push({ label: `${from}: ${o.title}`, expr: `=steps.${s.id}.output.${o.name}`, number: o.type === "integer" || o.type === "number" });
       }
     } else if (s.type === "connector") {

@@ -20,7 +20,7 @@ import { SchemaForm } from "../forms/SchemaForm";
 import { NeedsList } from "./Readiness";
 import { ProblemLine } from "../forms/ProblemLine";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
-import type { Template } from "../lib/templates";
+import type { CallableWorkflow, Template } from "../lib/templates";
 
 const nodeTypes = { step: StepNode, trigger: TriggerNode };
 const PALETTE: Step["type"][] = ["connector", "capability", "template", "http", "code", "transform", "approval", "form", "signal", "callback", "respond", "wait", "branch", "parallel", "foreach"];
@@ -73,6 +73,7 @@ export function Editor() {
   const wf = useLoad(() => get<Loaded>(`/v1/workflows/${id}`), [id]);
   const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
   const callables = useLoad(() => get<{ templates: Template[] }>("/v1/templates?callable=true"), []);
+  const ownCallables = useLoad(() => get<{ workflows: CallableWorkflow[] }>("/v1/workflows/callable"), []);
   const version = Number(params.get("v")) || wf.data?.workflow.latest_version || 0;
   const doc = useLoad(() => (version ? get<VersionDoc>(`/v1/workflows/${id}/versions/${version}`) : Promise.resolve(undefined)), [id, version]);
 
@@ -528,7 +529,7 @@ export function Editor() {
                 step={sel}
                 others={def.steps.filter((s) => s.id !== sel.id).map((s) => s.id)}
                 names={Object.fromEntries(def.steps.map((s) => [s.id, s.name ?? ""]))}
-                sources={sourcesFor(def as Parameters<typeof sourcesFor>[0], sel.id, connectors.data?.connectors ?? [], callables.data?.templates ?? [])}
+                sources={sourcesFor(def as Parameters<typeof sourcesFor>[0], sel.id, connectors.data?.connectors ?? [], [...(callables.data?.templates ?? []), ...(ownCallables.data?.workflows ?? [])])}
                 connectors={connectors.data?.connectors ?? []}
                 onChange={(s) => editSteps(def.steps.map((x) => (x.id === sel.id ? s : x)))}
                 onRename={(to) => {
@@ -776,6 +777,11 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
           <h2>Inputs schema</h2>
           <p className="hint">JSON Schema for trigger.body; fields marked "x-pii" are encrypted per data subject.</p>
           <JsonInput value={def.inputs?.schema} onChange={(v) => onChange({ ...def, inputs: v === undefined ? undefined : { schema: v as object } } as WorkflowDefinition)} rows={8} />
+          <h2>What it gives back</h2>
+          <p className="hint">
+            Outputs make this workflow usable as a step of your other workflows once it is published: a list of {"{name, type, title, description, value}"}, each value an expression over this workflow's steps (steps.&lt;id&gt;.output). It needs an inputs schema too.
+          </p>
+          <JsonInput value={def.outputs} onChange={(v) => onChange({ ...def, outputs: v === undefined ? undefined : (v as WorkflowDefinition["outputs"]) } as WorkflowDefinition)} rows={6} />
         </>
       )}
       {advanced && (

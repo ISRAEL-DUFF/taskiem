@@ -318,6 +318,11 @@ func checkUses(eu *EndUser, doc []byte) ([]string, error) {
 				bad = append(bad, "template:"+id)
 			}
 		}
+		// A business's own workflow as a step (decision 0048) is the
+		// partner's customer's, outside what an app lists: refused.
+		for _, id := range embed.WorkflowsOf(root["steps"]) {
+			bad = append(bad, "workflow:"+id)
+		}
 	}
 	return bad, nil
 }

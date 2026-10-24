@@ -27,6 +27,10 @@ type Definition struct {
 		Schema json.RawMessage `json:"schema"`
 	} `json:"inputs,omitempty"`
 	RawTypes map[string]json.RawMessage `json:"types,omitempty"`
+	// Outputs make the workflow callable (decision 0048): what a template
+	// step using it gets back, each an expression over its top-level
+	// steps.
+	Outputs []Output `json:"outputs,omitempty"`
 
 	byID   map[string]*Step
 	parent map[string]*Step // nested step id -> enclosing control (or on_error owner) step
@@ -113,6 +117,9 @@ type Step struct {
 	// inputs.
 	Template string         `json:"template,omitempty"`
 	Params   map[string]any `json:"params,omitempty"`
+	// Workflow is a template step's callable workflow of the business,
+	// instead of a library template (decision 0048).
+	Workflow string `json:"workflow,omitempty"`
 	// Origin marks a step expanded from a template step (engine/expansion).
 	Origin *Origin `json:"origin,omitempty"`
 

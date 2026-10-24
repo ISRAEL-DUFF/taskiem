@@ -257,11 +257,21 @@ func RunCase(def *wd.Definition, reg connector.Lookup, env map[string]any, c Cas
 
 // RunCaseWithPolicies runs one case with approval policies in force.
 func RunCaseWithPolicies(def *wd.Definition, reg connector.Lookup, env map[string]any, policies map[string]json.RawMessage, c Case) Result {
+	return RunCaseWith(def, reg, env, policies, nil, c)
+}
+
+// RunCaseWith is RunCaseWithPolicies with the templates a template step
+// may name (find: the library, or the business's callable workflows too);
+// nil is the library.
+func RunCaseWith(def *wd.Definition, reg connector.Lookup, env map[string]any, policies map[string]json.RawMessage, find expansion.Templates, c Case) Result {
 	start := time.Now()
+	if find == nil {
+		find = expansion.Library(templates.Default())
+	}
 	// Template steps run as the template's steps (decision 0047): the case
 	// mocks and expects them by their expanded ids (<step>__<id>).
 	if def.HasTemplates() {
-		exp, err := expansion.ExpandDefinition(def, expansion.Library(templates.Default()))
+		exp, err := expansion.ExpandDefinition(def, find)
 		if err != nil {
 			return Result{Case: c.Name, Failures: []string{"template steps: " + err.Error()}, Duration: time.Since(start)}
 		}
