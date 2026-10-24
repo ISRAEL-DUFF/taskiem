@@ -124,10 +124,10 @@ Some tables are **kept** by Taskiem (decision 0045; [the money log spec](spec/in
 - The rows API (insert, update, delete, import) and the schema routes (changing the title, adding or dropping a column, deleting the table) answer 409 `table_kept`. Tables list `kept_by`, the feature keeping each one (`money_log`), null for an ordinary table.
 - On WhatsApp, `add to <table>` answers why instead of collecting a row.
 - A workflow step on the project (the `data_tables` connection, or another xenibase connection to the same project) that would insert, upsert, update or delete its rows fails before anything is sent, as does `call_function` there while any table is kept. The editor flags a step that names a kept table outright, and the AI builder is told to read it only.
-- It cannot be a storefront's catalogue or services table, and the names Taskiem keeps (`money_log`, `money_matches`) cannot be taken by a table of your own, even before Taskiem makes them.
+- It cannot be a storefront's catalogue or services table, and the names Taskiem keeps (`money_log`, `money_matches`, and the [Schools](schools.md#kept-copies-for-workflows) copies `school_students` and `school_classes`) cannot be taken by a table of your own, even before Taskiem makes them.
 - Kept tables do not count towards `max_data_tables`.
 
-A correction is a new row that Taskiem adds, naming the row it corrects. The guarantee is against changes through Taskiem: a business that [brought its own Xenibase project](#bringing-your-own-project) can still edit the rows there, outside Taskiem, and the table's page says so.
+In the money log a correction is a new row that Taskiem adds, naming the row it corrects; the Schools copies are a copy of the school's record, which Taskiem changes in place when the record changes. The guarantee is against changes through Taskiem: a business that [brought its own Xenibase project](#bringing-your-own-project) can still edit the rows there, outside Taskiem, and the table's page says so.
 
 For developers: `datatables.EnsureKept` makes a kept table (provisioning the project first when needed) and adds columns it lacks; it never takes over an ordinary table of the same name, which it reports instead. Every refusal wraps `datatables.ErrKept`. In Postgres (migration 00201) the app role can neither set nor clear `kept_by`, nor change or delete a kept table's record or columns; only the keeping functions `EnsureKept` calls can.
 

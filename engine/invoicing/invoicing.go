@@ -25,7 +25,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
@@ -861,78 +860,81 @@ type PaymentIn struct {
 	Reasons    []string
 }
 
-// RecordPayment counts a payment towards an invoice, once: the same
-// payment again is a no-op. Matching (T5) and one-time accounts (T4) call
-// it; nothing else marks an invoice paid. When the invoice becomes paid,
-// the runs of the workflows that start on it are queued in tx (once per
-// invoice and workflow; StartPaid starts them), and a run waiting on it
-// is signalled after the transaction commits (the caller's commit: call
-// Paid with what this returns).
+// Counted is what counting a payment towards an invoice did. Pass the
+// invoice to Paid once the transaction commits when Became.
+type Counted struct {
+	Invoice Invoice
+	// PaymentID is the customer_invoice_payments row written (uuid.Nil
+	// when the payment already counted towards the invoice).
+	PaymentID uuid.UUID
+	// Became is true when this payment made the invoice paid.
+	Became bool
+}
+
+// RecordPayment counts a payment towards an invoice (CountPayment) and
+// says whether that made it paid.
 func (s *Invoices) RecordPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber string, p PaymentIn) (Invoice, bool, error) {
+	c, err := s.CountPayment(ctx, tx, tenant, idOrNumber, p)
+	return c.Invoice, c.Became, err
+}
+
+// CountPayment counts a payment towards an invoice, once: the same
+// payment again is a no-op. Matching (T5) and one-time accounts (T4) call
+// it; nothing else marks an invoice paid. A payment with a money log
+// entry is a part of it, counted along the path orders take too
+// (moneylog.Parts.Count). When the invoice becomes paid, the runs of the
+// workflows that start on it are queued in tx (once per invoice and
+// workflow; StartPaid starts them), and a run waiting on it is signalled
+// after the transaction commits (the caller's commit: call Paid with the
+// invoice this returns).
+func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber string, p PaymentIn) (Counted, error) {
 	cur, err := s.Get(ctx, tx, tenant, idOrNumber)
 	if err != nil {
-		return Invoice{}, false, err
+		return Counted{}, err
 	}
 	if p.AmountKobo <= 0 || p.PaymentID == "" {
-		return Invoice{}, false, invalid("a payment needs an amount and its id")
+		return Counted{}, invalid("a payment needs an amount and its id")
 	}
 	switch p.How {
 	case "exact", "suggested", "suggested_auto", "manual":
 	default:
-		return Invoice{}, false, invalid("how is exact, suggested, suggested_auto or manual")
+		return Counted{}, invalid("how is exact, suggested, suggested_auto or manual")
 	}
 	if cur.Status == "draft" {
-		return Invoice{}, false, fmt.Errorf("%w: invoice %s has not been sent", ErrState, cur.Number)
+		return Counted{}, fmt.Errorf("%w: invoice %s has not been sent", ErrState, cur.Number)
 	}
-	if p.EntryID != nil {
-		// One entry may count towards several invoices and orders (a
-		// split), each part once, the parts never more than the entry
-		// counts for: checked under the entry's lock here, and by the
-		// database whoever writes (00210).
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem money entry ' || $1::text, 0))`, *p.EntryID); err != nil {
-			return Invoice{}, false, err
-		}
-		var here bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
-			AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, *p.EntryID).Scan(&here); err != nil {
-			return Invoice{}, false, err
-		}
-		if here {
-			return cur, false, nil
-		}
-		why, err := moneylog.EntryHas(ctx, tx, tenant, *p.EntryID, p.AmountKobo)
-		if err != nil {
-			return Invoice{}, false, err
-		}
-		if why != "" {
-			return Invoice{}, false, fmt.Errorf("%w: %s", ErrState, why)
-		}
+	// One entry may count towards several invoices and orders (a split),
+	// each part once, the parts never more than the entry counts for:
+	// checked under the entry's lock, and by the database whoever writes
+	// (00210).
+	k, err := moneylog.InvoiceParts.Count(ctx, tx, moneylog.Counting{Tenant: tenant, Entry: p.EntryID, AmountKobo: p.AmountKobo, How: p.How, By: p.By, Reasons: p.Reasons,
+		Open:    func() (uuid.UUID, error) { return cur.ID, nil },
+		Refused: func(why string) error { return fmt.Errorf("%w: %s", ErrState, why) },
+		Decide: func() (moneylog.Cols, bool, error) {
+			// The same payment counts towards an invoice once while it
+			// is not undone.
+			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem invoice payment ' || $1::text || ' ' || $2, 0))`, cur.ID, p.PaymentID); err != nil {
+				return nil, false, err
+			}
+			var counted bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
+				AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, p.PaymentID).Scan(&counted); err != nil || counted {
+				return nil, false, err
+			}
+			return moneylog.Cols{"payment_id": p.PaymentID, "connection": nullable(p.Connection)}, true, nil
+		}})
+	if err != nil {
+		return Counted{}, err
 	}
-	// The same payment counts towards an invoice once while it is not
-	// undone.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem invoice payment ' || $1::text || ' ' || $2, 0))`, cur.ID, p.PaymentID); err != nil {
-		return Invoice{}, false, err
-	}
-	var counted bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
-		AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, p.PaymentID).Scan(&counted); err != nil {
-		return Invoice{}, false, err
-	}
-	if counted {
-		return cur, false, nil
-	}
-	reasons, _ := json.Marshal(nonNil(p.Reasons))
-	if _, err := tx.Exec(ctx, `INSERT INTO customer_invoice_payments (id, tenant_id, invoice_id, amount_kobo, payment_id, connection, how, by, reasons, entry_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		uuid.New(), tenant, cur.ID, p.AmountKobo, p.PaymentID, nullable(p.Connection), p.How, p.By, reasons, p.EntryID); err != nil {
-		return Invoice{}, false, err
+	if k.ID == uuid.Nil {
+		return Counted{Invoice: cur}, nil
 	}
 	if err := audit(ctx, tx, tenant, p.By, "invoice.payment", cur.Number, map[string]any{"amount_kobo": p.AmountKobo, "payment_id": p.PaymentID, "how": p.How}); err != nil {
-		return Invoice{}, false, err
+		return Counted{}, err
 	}
 	x, err := s.Get(ctx, tx, tenant, cur.ID.String())
 	if err != nil {
-		return Invoice{}, false, err
+		return Counted{}, err
 	}
 	became := x.Status == "paid" && cur.Status != "paid"
 	if became {
@@ -940,14 +942,15 @@ func (s *Invoices) RecordPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 		// the payment's transaction, so the payment and its runs commit
 		// together (StartPaid starts them).
 		if err := queuePaidStarts(ctx, tx, tenant, x.ID); err != nil {
-			return Invoice{}, false, err
+			return Counted{}, err
 		}
 	}
-	return x, became, nil
+	return Counted{Invoice: x, PaymentID: k.ID, Became: became}, nil
 }
 
 // UndoPayment undoes a counted payment (a wrong match): its row stays,
-// and a row naming it takes it out of the invoice's total.
+// and a row naming it takes it out of the invoice's total
+// (moneylog.Parts.Undo). The money goes back to be matched (ReopenPart).
 func (s *Invoices) UndoPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber string, payment uuid.UUID, by string) (Invoice, error) {
 	cur, err := s.Get(ctx, tx, tenant, idOrNumber)
 	if err != nil {
@@ -965,36 +968,40 @@ func (s *Invoices) UndoPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	if p.UndoneBy != nil {
 		return cur, nil
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO customer_invoice_payments (id, tenant_id, invoice_id, amount_kobo, payment_id, connection, how, by, undoes)
-		VALUES ($1, $2, $3, $4, $5, $6, 'manual', $7, $8)`, uuid.New(), tenant, cur.ID, p.AmountKobo, p.PaymentID, nullable(p.Connection), by, p.ID)
-	var pe *pgconn.PgError
-	if errors.As(err, &pe) && pe.Code == "23505" {
-		return s.Get(ctx, tx, tenant, cur.ID.String()) // undone meanwhile
+	part, undone, err := moneylog.InvoiceParts.Undo(ctx, tx, moneylog.Undoing{Tenant: tenant, Part: p.ID, By: by,
+		Decide: func(moneylog.Part) (moneylog.Cols, error) {
+			return moneylog.Cols{"payment_id": p.PaymentID, "connection": nullable(p.Connection)}, nil
+		}})
+	if errors.Is(err, moneylog.ErrNoPart) {
+		return Invoice{}, ErrNotFound
 	}
 	if err != nil {
 		return Invoice{}, err
 	}
+	if !undone {
+		return s.Get(ctx, tx, tenant, cur.ID.String()) // undone meanwhile
+	}
 	if err := audit(ctx, tx, tenant, by, "invoice.payment_undone", cur.Number, map[string]any{"amount_kobo": p.AmountKobo, "payment_id": p.PaymentID}); err != nil {
 		return Invoice{}, err
 	}
-	if err := reopenEntry(ctx, tx, tenant, p.ID); err != nil {
+	if err := ReopenPart(ctx, tx, tenant, moneylog.InvoiceParts, part); err != nil {
 		return Invoice{}, err
 	}
 	return s.Get(ctx, tx, tenant, cur.ID.String())
 }
 
-// reopenEntry puts the money of an undone match back to be matched (T5):
-// the suggestion it came from is not offered again, the entry's other
-// suggestions are, and with none it waits for a person.
-func reopenEntry(ctx context.Context, tx pgx.Tx, tenant, payment uuid.UUID) error {
-	var entry *uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT entry_id FROM customer_invoice_payments WHERE tenant_id = $1 AND id = $2`, tenant, payment).Scan(&entry); err != nil || entry == nil {
+// ReopenPart puts the money of an undone part, of an invoice or an order,
+// back to be matched (T5): the suggestion it came from is not offered
+// again, and what its entry is now is decided again (ReopenEntry).
+// Nothing for money with no entry.
+func ReopenPart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, parts moneylog.Parts, part moneylog.Part) error {
+	if part.Entry == nil {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'rejected', decided_at = now() WHERE tenant_id = $1 AND `+parts.Suggestion+` = $2`, tenant, part.ID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'rejected', decided_at = now() WHERE tenant_id = $1 AND payment_id = $2`, tenant, payment); err != nil {
-		return err
-	}
-	return ReopenEntry(ctx, tx, tenant, *entry)
+	return ReopenEntry(ctx, tx, tenant, *part.Entry)
 }
 
 // ReopenEntry decides what an entry is after one of its parts was undone.
@@ -1004,8 +1011,8 @@ func reopenEntry(ctx context.Context, tx pgx.Tx, tenant, payment uuid.UUID) erro
 // does. Other money with parts still counted waits for a person for the
 // rest (To match lists what is left). Money counting towards nothing goes
 // back to be matched: its closed suggestions are offered again, and with
-// none it waits for a person. Engine/matching calls it for an order's
-// undone payment too.
+// none it waits for a person. ReopenPart calls it for an invoice's or an
+// order's undone part.
 func ReopenEntry(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, entry uuid.UUID) error {
 	var how *string
 	var counted int64
@@ -1067,13 +1074,6 @@ func (s *Invoices) Overdue(ctx context.Context) (int, error) {
 		s.log().Info("invoices overdue", "count", n)
 	}
 	return n, rows.Err()
-}
-
-func nonNil(v []string) []string {
-	if v == nil {
-		return []string{}
-	}
-	return v
 }
 
 func audit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actor, action, target string, detail map[string]any) error {

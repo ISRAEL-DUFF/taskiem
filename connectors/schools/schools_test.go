@@ -1,0 +1,97 @@
+package schools_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/google/uuid"
+
+	conn "github.com/israel-duff/taskiem/connectors/schools"
+	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/schools"
+)
+
+type ops struct {
+	class  *uuid.UUID
+	status string
+}
+
+var jss1 = schools.Class{ID: uuid.New(), Name: "JSS 1", Arm: "A", Label: "JSS 1 A", Order: 7, Students: 1}
+
+func (o *ops) FindClass(_ context.Context, _ uuid.UUID, s string) (schools.Class, error) {
+	if s == "JSS 1 A" || s == jss1.ID.String() {
+		return jss1, nil
+	}
+	return schools.Class{}, schools.ErrNotFound
+}
+func (o *ops) ListStudents(_ context.Context, _ uuid.UUID, class *uuid.UUID, status string, _ int) ([]schools.Student, int, error) {
+	o.class, o.status = class, status
+	return []schools.Student{{ID: uuid.New(), AdmissionNumber: "GCA/001", Name: "Ebube Eze", ClassID: jss1.ID, Class: "JSS 1 A", Status: "active"}}, 1, nil
+}
+func (o *ops) GetStudent(_ context.Context, _ uuid.UUID, id string) (schools.StudentDetail, error) {
+	if id != "GCA/001" {
+		return schools.StudentDetail{}, schools.ErrNotFound
+	}
+	fam := uuid.New()
+	return schools.StudentDetail{Student: schools.Student{ID: uuid.New(), AdmissionNumber: "GCA/001", Name: "Ebube Eze", Class: "JSS 1 A", Status: "active", FamilyID: &fam},
+		Family: &schools.Family{ID: fam, Guardians: []schools.Guardian{{Name: "Ngozi Eze", Phone: "+2348031234567", Relationship: "Mother"}}}}, nil
+}
+func (o *ops) ListClasses(context.Context, uuid.UUID) ([]schools.Class, error) {
+	return []schools.Class{jss1}, nil
+}
+func (o *ops) Current(context.Context, uuid.UUID) (schools.Term, bool, error) {
+	return schools.Term{}, false, schools.ErrOff
+}
+
+func TestActions(t *testing.T) {
+	reg := connector.NewRegistry()
+	if err := reg.Register(conn.New(nil)); err != nil {
+		t.Fatal(err)
+	}
+	o := &ops{}
+	c := conn.New(o)
+	// Outside a run, nothing.
+	if _, err := c.Actions["list_classes"].Execute(context.Background(), connector.Request{}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("outside a run: %v", err)
+	}
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New(), Step: "s"})
+	r, err := c.Actions["list_students"].Execute(ctx, connector.Request{Input: map[string]any{"class": "JSS 1 A"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := r.Output.(map[string]any)
+	if out["count"] != 1 || o.class == nil || *o.class != jss1.ID || o.status != "active" {
+		t.Fatalf("list %v %v %q", out, o.class, o.status)
+	}
+	if _, err := c.Actions["list_students"].Execute(ctx, connector.Request{Input: map[string]any{"status": "any"}}); err != nil || o.status != "" || o.class != nil {
+		t.Fatalf("any: %v %q", err, o.status)
+	}
+	if _, err := c.Actions["list_students"].Execute(ctx, connector.Request{Input: map[string]any{"class": "JSS 9"}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("an unknown class: %v", err)
+	}
+	r, err = c.Actions["get_student"].Execute(ctx, connector.Request{Input: map[string]any{"student": "GCA/001"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := r.Output.(map[string]any)["guardians"].([]any)[0].(map[string]any); g["phone"] != "+2348031234567" || g["relationship"] != "Mother" {
+		t.Fatalf("guardian %v", g)
+	}
+	if _, err := c.Actions["get_student"].Execute(ctx, connector.Request{Input: map[string]any{"student": "X"}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("missing student: %v", err)
+	}
+	// The area turned off fails the step.
+	if _, err := c.Actions["current_term"].Execute(ctx, connector.Request{}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("off: %v", err)
+	}
+	// The personal data is declared, so a run's history seals it.
+	m := c.Manifest
+	if len(m.Actions["get_student"].PII) < 3 || len(m.Actions["list_students"].PII) != 1 {
+		t.Errorf("pii %v %v", m.Actions["get_student"].PII, m.Actions["list_students"].PII)
+	}
+	late := &conn.Late{}
+	if _, err := conn.New(late).Actions["list_classes"].Execute(ctx, connector.Request{}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("unbound: %v", err)
+	}
+}

@@ -143,6 +143,12 @@ func (v *Vault) SubjectFor(ctx context.Context, tenant uuid.UUID, category strin
 	return s, err
 }
 
+// SubjectForTx is SubjectFor in the caller's transaction: the subject a
+// value would be sealed under, without sealing anything.
+func (v *Vault) SubjectForTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
+	return v.subjectID(ctx, tx, tenant, category, value)
+}
+
 // Erase destroys a subject's key (NDPA erasure, spec 9.4). It is one-way.
 func (v *Vault) Erase(ctx context.Context, tenant uuid.UUID, subject, by string) error {
 	return db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {

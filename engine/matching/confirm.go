@@ -147,10 +147,9 @@ type counting struct {
 // and an order's paid flow runs.
 func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Split, error) {
 	var out Split
-	var paid []invoicing.Invoice
-	var counted []storefront.Counted
+	var done []counted
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		out, paid, counted = Split{}, nil, nil
+		out, done = Split{}, nil
 		parts, reasons := c.parts, c.reasons
 		var sugInvoice, sugOrder *uuid.UUID
 		if c.suggestion != nil {
@@ -194,10 +193,7 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 		if direction != "in" || status != "settled" || amount == nil || *amount <= 0 {
 			return fmt.Errorf("%w: only money received and settled, with its amount, can be matched to an invoice or order", invoicing.ErrState)
 		}
-		if _, err := tx.Exec(ctx, moneylog.EntryLockSQL, c.entry); err != nil {
-			return err
-		}
-		left, _, err := moneylog.EntryLeft(ctx, tx, c.entry)
+		left, _, err := moneylog.LockLeft(ctx, tx, c.entry)
 		if err != nil {
 			return err
 		}
@@ -217,39 +213,30 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 			if len(parts) > 1 && c.suggestion != nil && !p.isSuggested(ctx, tx, tenant, sugInvoice, sugOrder) {
 				why = []string{SplitReason}
 			}
-			if p.Order != "" {
-				orders, err := m.orders()
-				if err != nil {
-					return err
-				}
-				k, err := orders.CountPayment(ctx, tx, tenant, p.Order, storefront.PaymentIn{EntryID: &c.entry, AmountKobo: p.AmountKobo, How: c.how, By: c.by, Reasons: why})
-				if err != nil {
-					return orderErr(err)
-				}
-				counted = append(counted, k)
-				o := k.Order
-				out.Parts, out.PartKobo = append(out.Parts, Result{Order: &o}), append(out.PartKobo, p.AmountKobo)
-				if sugOrder != nil && *sugOrder == o.ID && k.PaymentID != uuid.Nil {
-					id := k.PaymentID
-					sugOrderPayment = &id
-				}
-				continue
-			}
-			x, became, err := m.Invoices.RecordPayment(ctx, tx, tenant, p.Invoice, invoicing.PaymentIn{AmountKobo: p.AmountKobo, PaymentID: reference,
+			k, err := m.countPart(ctx, tx, tenant, p, invoicing.PaymentIn{AmountKobo: p.AmountKobo, PaymentID: reference,
 				EntryID: &c.entry, Connection: channel, How: c.how, By: c.by, Reasons: why})
 			if err != nil {
 				return err
 			}
-			if became {
-				paid = append(paid, x)
+			done = append(done, k)
+			out.Parts, out.PartKobo = append(out.Parts, k.Result), append(out.PartKobo, p.AmountKobo)
+			if o := k.Order; o != nil {
+				if sugOrder != nil && *sugOrder == o.ID && k.paymentID != uuid.Nil {
+					id := k.paymentID
+					sugOrderPayment = &id
+				}
+				continue
 			}
-			out.Parts, out.PartKobo = append(out.Parts, Result{Invoice: &x}), append(out.PartKobo, p.AmountKobo)
+			x := k.Invoice
 			customers = append(customers, x.CustomerID())
 			if sugInvoice != nil && *sugInvoice == x.ID {
-				var pay uuid.UUID
-				if err := tx.QueryRow(ctx, `SELECT id FROM customer_invoice_payments WHERE tenant_id = $1 AND entry_id = $2 AND invoice_id = $3 AND undoes IS NULL
-					ORDER BY created_at DESC LIMIT 1`, tenant, c.entry, x.ID).Scan(&pay); err != nil {
-					return err
+				pay := k.paymentID
+				if pay == uuid.Nil {
+					// Counted already: the part counting it.
+					if err := tx.QueryRow(ctx, `SELECT id FROM customer_invoice_payments WHERE tenant_id = $1 AND entry_id = $2 AND invoice_id = $3 AND undoes IS NULL
+						ORDER BY created_at DESC LIMIT 1`, tenant, c.entry, x.ID).Scan(&pay); err != nil {
+						return err
+					}
 				}
 				sugPayment = &pay
 			}
@@ -308,17 +295,65 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 	if err != nil {
 		return out, err
 	}
-	for _, x := range paid {
-		if err := m.Invoices.Paid(ctx, tenant, x); err != nil {
-			return out, err
+	return out, m.paid(ctx, tenant, done)
+}
+
+// counted is a part counted towards an invoice or an order.
+type counted struct {
+	Result
+	// paymentID is the payment row written; uuid.Nil when none was (the
+	// entry counted towards it already).
+	paymentID uuid.UUID
+	// became: the payment made the invoice paid.
+	became bool
+	// order is what counting towards the order did.
+	order storefront.Counted
+}
+
+// countPart counts a part of a payment towards its invoice or order,
+// along the target's own CountPayment (both moneylog.Parts.Count
+// underneath), in the caller's transaction. Pass what it returns to paid
+// once the transaction commits.
+func (m *Matcher) countPart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p Part, in invoicing.PaymentIn) (counted, error) {
+	if p.Order != "" {
+		orders, err := m.orders()
+		if err != nil {
+			return counted{}, err
+		}
+		k, err := orders.CountPayment(ctx, tx, tenant, p.Order, storefront.PaymentIn{EntryID: in.EntryID, AmountKobo: in.AmountKobo, How: in.How, By: in.By, Reasons: in.Reasons})
+		if err != nil {
+			return counted{}, orderErr(err)
+		}
+		o := k.Order
+		return counted{Result: Result{Order: &o}, paymentID: k.PaymentID, order: k}, nil
+	}
+	k, err := m.Invoices.CountPayment(ctx, tx, tenant, p.Invoice, in)
+	if err != nil {
+		return counted{}, err
+	}
+	x := k.Invoice
+	return counted{Result: Result{Invoice: &x}, paymentID: k.PaymentID, became: k.Became}, nil
+}
+
+// paid runs what the parts' targets do on being paid, after the
+// transaction that counted them commits: a run waiting on an invoice a
+// part paid is told, then each order's paid flow runs.
+func (m *Matcher) paid(ctx context.Context, tenant uuid.UUID, done []counted) error {
+	for _, k := range done {
+		if k.Invoice != nil && k.became {
+			if err := m.Invoices.Paid(ctx, tenant, *k.Invoice); err != nil {
+				return err
+			}
 		}
 	}
-	for _, k := range counted {
-		if err := m.Orders.Paid(ctx, tenant, k); err != nil {
-			return out, err
+	for _, k := range done {
+		if k.Order != nil {
+			if err := m.Orders.Paid(ctx, tenant, k.order); err != nil {
+				return err
+			}
 		}
 	}
-	return out, nil
+	return nil
 }
 
 // isSuggested reports whether a part is for the suggestion's own invoice
@@ -598,8 +633,8 @@ func OrderTarget(reference string) string { return TargetOrder + ":" + reference
 
 // UndoOrderPayment undoes a payment counted towards an order (a wrong
 // match): the order goes back to unpaid when that payment paid it, and is
-// refused when the order went on to be fulfilled (storefront.UndoPayment).
-// The money goes back to be matched (invoicing.ReopenEntry): the
+// refused when the order went on to be fulfilled (storefront.Orders.UndoPayment).
+// The money goes back to be matched (invoicing.ReopenPart): the
 // suggestion that led to the match is not offered again, the payment's
 // other suggestions are; the other parts of a split stay.
 func (m *Matcher) UndoOrderPayment(ctx context.Context, tenant, payment uuid.UUID, by string) (storefront.Order, error) {
@@ -614,10 +649,7 @@ func (m *Matcher) UndoOrderPayment(ctx context.Context, tenant, payment uuid.UUI
 		if ord, entry, err = orders.UndoPayment(ctx, tx, tenant, payment, by); err != nil {
 			return orderErr(err)
 		}
-		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'rejected', decided_at = now() WHERE tenant_id = $1 AND order_payment_id = $2`, tenant, payment); err != nil {
-			return err
-		}
-		return invoicing.ReopenEntry(ctx, tx, tenant, entry)
+		return invoicing.ReopenPart(ctx, tx, tenant, moneylog.OrderParts, moneylog.Part{ID: payment, Entry: &entry})
 	})
 	return ord, err
 }

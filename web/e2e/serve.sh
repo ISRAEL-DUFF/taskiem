@@ -19,6 +19,8 @@ tenant=$(psql "$dsn" -tAc "SELECT id FROM tenants WHERE name = 'E2E'")
 bin/taskiem tenants partner "$tenant" --capabilities white_label,custom_domains >/dev/null
 # It builds by hand: the technical parts are shown (no-technical-steps N0-5).
 psql "$dsn" -qc "UPDATE tenants SET advanced = true WHERE id = '$tenant'"
+# It has the Schools area on (schools.spec.ts, accessibility.spec.ts).
+psql "$dsn" -qc "INSERT INTO school_settings (tenant_id, enabled, updated_by) VALUES ('$tenant', true, 'e2e')"
 # It also publishes a connector in the public catalogue (catalogue.spec.ts).
 bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant"
 # A table Taskiem keeps, as the money log makes it (tables.spec.ts): its

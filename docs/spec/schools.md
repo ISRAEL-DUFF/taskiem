@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; **B0 and B1 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 to B2 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 
@@ -329,6 +329,14 @@ The permanent-account rule (§7.1), split payments (§7.2), payer memory (§7.3)
 ### B2: the Schools area and its record (M)
 
 Turning the area on; permissions and the gate role (the role only; its screen is B8); classes, sessions and terms, students, families, enrollments; import, one by one, promotion; the Schools pages for students and families; `schools@1` read actions; kept copies for templates.
+
+**Built** (B2): migration 00211 (classes, sessions and terms, families and guardians, students, enrollments, promotions, the area's setting; past terms read-only by trigger); `engine/schools`; `/v1/schools/…` and `/v1/settings/schools`; `schools@1` with `list_students`, `get_student`, `list_classes`, `current_term`; kept copies `school_students` and `school_classes`; the Schools pages; the permissions, the **gate** role and the Bursar role; the role table moved to `engine/access` as the one source ([schools](../schools.md)). Differences from §4:
+
+- **The kept copies are named `school_students` and `school_classes`**: kept names are reserved in every business, so plain `classes` would stop any business making a table of that name.
+- **A gate session is refused everywhere but `/v1/me` and signing out** until B8 adds its screen; only owners can give the gate role, since only owners hold `school.gate` besides it.
+- **A guardian needs a phone**: it is what makes a guardian belong to one family. A student with two guardians is two lines in an import.
+- **Unlike the money log, the copies are updated in place** (a student changes class); the kept table's page still says corrections are new rows, which the guide explains.
+- **Not yet**: the parent self-registration form (a later template) and the AI builder's knowledge of the record (B9).
 
 ### B3: fees and term invoices (M)
 
