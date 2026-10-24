@@ -31,7 +31,7 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | `supplier-payment-approval` | Check the name on a supplier's account, pay the invoice after approval, follow it until the bank confirms, and tell the owner | Any rail that pays bank accounts (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), Tell me |
 | `pay-a-list` | Pay each row of a batch (suppliers, refunds owed, prizes, commissions) once after one approval, follow each to its end and record it | Any rail that pays bank accounts (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), data tables, Tell me |
 | `payment-link-per-order` | Send a customer a payment link for an order, remind them once, and record the order as paid or unpaid | Any rail that makes payment pages (Paystack, Moniepoint), data tables, Tell me |
-| `virtual-account-per-customer` | Open a customer their own account number to pay into, record it and send it to them | Moniepoint, data tables, Tell me |
+| `virtual-account-per-customer` | Open a customer their own account number to pay into, record it and send it to them | Moniepoint, Paystack, Flutterwave or iswallet, data tables, Tell me |
 | `refund-with-approval` | Look a payment up, refund it once after approval, and tell the owner | Paystack, Tell me |
 | `payrolla-tell-staff` | When Payrolla pays an employee, tell them the amount and send their payslip link | Payrolla, Tell me |
 | `payrolla-payroll-summary` | When Payrolla finishes a payroll, tell the owner who was paid, the total, and who was not and why | Payrolla, Tell me |

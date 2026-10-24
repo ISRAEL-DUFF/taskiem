@@ -646,7 +646,6 @@ func TestTemplateWorkflowTests(t *testing.T) {
 // oneRail are the rail templates that run on one built-in rail for now
 // (decision 0044): no other rail declares what they need yet.
 var oneRail = map[string]string{
-	"virtual-account-per-customer": "only Moniepoint opens account numbers (Lenco's is unsafe, OPay's temporary)",
 	"refund-with-approval":         "only Paystack refunds (OPay's refund is not declared yet)",
 }
 
